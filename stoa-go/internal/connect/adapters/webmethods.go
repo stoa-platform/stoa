@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -559,6 +560,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if err != nil {
 			return fmt.Errorf("sync webmethods api: %w", err)
 		}
+		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 
 		if resp.StatusCode == http.StatusConflict {
@@ -568,11 +570,81 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			return fmt.Errorf("webmethods api sync failed (%d)", resp.StatusCode)
 		}
 
+		// Determine API ID for post-deploy verification
+		var apiID string
+		if existingID, exists := existingAPIs[wmName]; exists {
+			apiID = existingID
+		} else {
+			// Parse response body from POST to extract new API ID
+			var createResp struct {
+				APIResponse struct {
+					API struct {
+						ID string `json:"id"`
+					} `json:"api"`
+				} `json:"apiResponse"`
+				ID string `json:"id"`
+			}
+			if err := json.Unmarshal(respBody, &createResp); err == nil {
+				if createResp.APIResponse.API.ID != "" {
+					apiID = createResp.APIResponse.API.ID
+				} else if createResp.ID != "" {
+					apiID = createResp.ID
+				}
+			}
+			if apiID == "" {
+				log.Printf("webmethods: could not parse API ID from POST response for %s, skipping activation verify", wmName)
+			}
+		}
+
+		// Verify the API is actually active on webMethods
+		if apiID != "" {
+			if err := w.verifyAndActivate(ctx, adminURL, apiID, wmName); err != nil {
+				return err
+			}
+		}
+
 		if route.SpecHash != "" {
 			w.syncedHashes[wmName] = route.SpecHash
 		}
 	}
 
+	return nil
+}
+
+// verifyAndActivate checks that an API is active on webMethods after PUT/POST,
+// and activates it if not. Returns error if activation fails.
+func (w *WebMethodsAdapter) verifyAndActivate(ctx context.Context, adminURL, apiID, apiName string) error {
+	detailURL := fmt.Sprintf("%s/rest/apigateway/apis/%s", adminURL, apiID)
+	body, err := w.doGet(ctx, detailURL)
+	if err != nil {
+		return fmt.Errorf("verify webmethods api %s (%s): %w", apiName, apiID, err)
+	}
+
+	// Parse response — try nested shape first, then flat
+	var wrapper struct {
+		APIResponse wmAPIWrapper `json:"apiResponse"`
+	}
+	var isActive bool
+	if err := json.Unmarshal(body, &wrapper); err == nil && wrapper.APIResponse.API.ID != "" {
+		isActive = wrapper.APIResponse.API.IsActive
+	} else {
+		var flat wmAPI
+		if err := json.Unmarshal(body, &flat); err == nil && flat.ID != "" {
+			isActive = flat.IsActive
+		} else {
+			// Cannot determine status — treat as active to avoid false negatives
+			return nil
+		}
+	}
+
+	if isActive {
+		return nil
+	}
+
+	// API is not active — attempt activation
+	if err := w.ActivateAPI(ctx, adminURL, apiID); err != nil {
+		return fmt.Errorf("API created but activation failed on webMethods: %s (%s): %w", apiName, apiID, err)
+	}
 	return nil
 }
 

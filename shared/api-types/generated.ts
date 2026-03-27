@@ -91,6 +91,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workers Status
+         * @description Background workers health status.
+         */
+        get: operations["workers_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/telemetry/ingest": {
         parameters: {
             query?: never;
@@ -303,6 +323,66 @@ export interface paths {
         get: operations["list_access_requests"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/argocd/diff/{app_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Application Diff
+         * @description Get diff between desired and live state. cpi-admin only.
+         */
+        get: operations["get_application_diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/argocd/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Platform Status
+         * @description Get aggregated platform status for all ArgoCD applications. cpi-admin only.
+         */
+        get: operations["get_platform_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/argocd/sync/{app_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Sync
+         * @description Trigger an ArgoCD sync for an application. cpi-admin only.
+         */
+        post: operations["trigger_sync"];
         delete?: never;
         options?: never;
         head?: never;
@@ -609,7 +689,7 @@ export interface paths {
         };
         /**
          * Get Deployment
-         * @description Get deployment details.
+         * @description Get deployment details with gateway info.
          */
         get: operations["get_deployment"];
         put?: never;
@@ -638,6 +718,29 @@ export interface paths {
          * @description Force re-sync a deployment.
          */
         post: operations["force_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/deployments/{deployment_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Deployment
+         * @description Test that a deployment is actually reachable through its gateway.
+         *
+         *     Sends a HEAD request to the gateway at the expected API path and
+         *     reports back status code, latency, and any errors.
+         */
+        post: operations["test_deployment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -737,6 +840,7 @@ export interface paths {
          *
          *     CPI admins see all servers.
          *     Tenant admins see platform-wide servers and their tenant's servers.
+         *     Supports environment filtering for multi-dataplane deployments.
          */
         get: operations["list_servers"];
         put?: never;
@@ -815,6 +919,29 @@ export interface paths {
          * @description Test connection to an external MCP server.
          */
         post: operations["test_connection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/external-mcp-servers/{server_id}/tools-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tools Summary
+         * @description Get per-tool observability data for an MCP server (CAB-1821).
+         *
+         *     Returns tool metadata, gateway binding info, and server health status.
+         *     Used by Console to display which gateway runs each MCP server and tool status.
+         */
+        get: operations["get_tools_summary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -948,6 +1075,7 @@ export interface paths {
          *     - sidecar: Policy enforcement behind existing gateway
          *     - proxy: Inline request/response transformation
          *     - shadow: Passive traffic capture and analysis
+         *     - connect: Lightweight agent bridging third-party gateways
          */
         get: operations["get_gateway_mode_stats"];
         put?: never;
@@ -978,7 +1106,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Gateway
-         * @description Deregister a gateway instance.
+         * @description Soft-delete a gateway instance. Protected gateways cannot be deleted.
          */
         delete: operations["delete_gateway"];
         options?: never;
@@ -1085,6 +1213,26 @@ export interface paths {
         get: operations["get_gateway_metrics"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/gateways/{gateway_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Gateway
+         * @description Restore a soft-deleted gateway instance.
+         */
+        post: operations["restore_gateway"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1265,6 +1413,31 @@ export interface paths {
          * @description Disconnect a connector — remove the server and Vault credentials.
          */
         delete: operations["disconnect_connector"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/mcp-connectors/{slug}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Connector
+         * @description Promote a connector from its current environment to a target environment.
+         *
+         *     Clones the server record and Vault credentials. Idempotent — re-promoting
+         *     updates the existing target record.
+         *
+         *     High-risk connectors (stripe, cloudflare) require ``confirm: true`` for production.
+         */
+        post: operations["promote_connector"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2028,6 +2201,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/audit/users/{user_id}/pii": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Erase User Pii
+         * @description GDPR Article 17 — Right to Erasure (CAB-1794).
+         *
+         *     Pseudonymizes PII in PostgreSQL audit records and deletes matching
+         *     documents from OpenSearch for the specified user.
+         *
+         *     Requires cpi-admin role. Creates a meta-audit record of the erasure.
+         */
+        delete: operations["erase_user_pii"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/audit/{tenant_id}": {
         parameters: {
             query?: never;
@@ -2570,239 +2768,6 @@ export interface paths {
          *     (tenant_id, consumer_id, plan_slug).
          */
         post: operations["exchange_consumer_token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Contracts
-         * @description List contracts for the user's tenant (cached, TTL 60s).
-         */
-        get: operations["list_contracts"];
-        put?: never;
-        /**
-         * Create Contract
-         * @description Create a new Universal API Contract.
-         *
-         *     Creates the contract and initializes all protocol bindings as disabled.
-         */
-        post: operations["create_contract"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/by-name/{contract_name}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Contract Versions
-         * @description List all versions of a contract by name.
-         *
-         *     Returns version history including deprecation status, ordered by creation date
-         *     (latest first).
-         */
-        get: operations["list_contract_versions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Contract
-         * @description Get a specific contract by ID.
-         */
-        get: operations["get_contract"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Contract
-         * @description Delete a contract and all its bindings.
-         */
-        delete: operations["delete_contract"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Contract
-         * @description Update a contract.
-         */
-        patch: operations["update_contract"];
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/bindings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Bindings
-         * @description List all protocol bindings for a contract.
-         *
-         *     Returns all 5 protocols (REST, MCP, GraphQL, gRPC, Kafka) with their status.
-         *     Used by the Protocol Switcher UI component.
-         */
-        get: operations["list_bindings"];
-        put?: never;
-        /**
-         * Enable Binding
-         * @description Enable a protocol binding for a contract.
-         *
-         *     This triggers the UAC engine to generate the binding (endpoint, tool, etc.).
-         */
-        post: operations["enable_binding"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/bindings/{protocol}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Disable Binding
-         * @description Disable a protocol binding for a contract.
-         *
-         *     The binding is soft-disabled (keeps history). The endpoint becomes inactive.
-         */
-        delete: operations["disable_binding"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/deprecate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Deprecate Contract
-         * @description Deprecate a published contract with optional sunset date.
-         *
-         *     Sets the contract status to 'deprecated' and records deprecation metadata
-         *     including reason, sunset date (RFC 8594), and optional replacement contract.
-         */
-        post: operations["deprecate_contract"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/deprecation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Deprecation Info
-         * @description Get deprecation details for a contract.
-         */
-        get: operations["get_deprecation_info"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/mcp-tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List MCP tools for a contract
-         * @description List all generated MCP tools for a contract.
-         */
-        get: operations["list_mcp_tools"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/mcp-tools/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate MCP tools from UAC contract
-         * @description Trigger MCP tool generation from a UAC contract's endpoints.
-         */
-        post: operations["generate_mcp_tools"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/contracts/{contract_id}/reactivate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reactivate Contract
-         * @description Reactivate a deprecated contract (undo deprecation).
-         *
-         *     Only allowed if the sunset date has not passed.
-         */
-        post: operations["reactivate_contract"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3395,6 +3360,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/internal/gateways/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cleanup Stale Gateways
+         * @description Manually trigger cleanup of stale gateway instances (CAB-1897).
+         *
+         *     Soft-deletes instances that have been OFFLINE for longer than
+         *     GATEWAY_PURGE_AFTER_DAYS (default 7 days). Protected instances are skipped.
+         */
+        post: operations["cleanup_stale_gateways"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/internal/gateways/register": {
         parameters: {
             query?: never;
@@ -3414,6 +3402,77 @@ export interface paths {
          *     Returns the assigned gateway ID for subsequent heartbeat calls.
          */
         post: operations["register_gateway"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/internal/gateways/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Gateway Routes
+         * @description Return all synced deployment routes in stoa-gateway ApiRoute format.
+         *
+         *     Used by the gateway route hot-reload loop (CAB-1828) to pull the full
+         *     route table from the control plane. No JWT auth — uses X-Gateway-Key.
+         */
+        get: operations["list_gateway_routes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/internal/gateways/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Internal Tools
+         * @description Internal tool discovery for gateways/sidecars (CAB-1817).
+         *
+         *     Returns UAC-generated tools in the gateway's expected format (ToolsListResponse),
+         *     authenticated via X-Gateway-Key. Allows STOA Link sidecars to discover tools
+         *     without OIDC client credentials.
+         */
+        get: operations["get_internal_tools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/internal/gateways/tools/generated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Internal Generated Tools
+         * @description Internal tool discovery for gateways/sidecars (CAB-1817).
+         *
+         *     Returns UAC-generated tools for a tenant, authenticated via X-Gateway-Key
+         *     instead of user JWT. This allows STOA Link sidecars to discover tools
+         *     without needing OIDC client credentials.
+         */
+        get: operations["get_internal_generated_tools"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3443,6 +3502,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/internal/gateways/{gateway_id}/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Discovery
+         * @description Receive API discovery report from stoa-connect.
+         *
+         *     Called periodically by stoa-connect agents to report APIs/services
+         *     discovered on the local gateway's admin API.
+         */
+        post: operations["report_discovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/internal/gateways/{gateway_id}/heartbeat": {
         parameters: {
             query?: never;
@@ -3460,6 +3542,52 @@ export interface paths {
          *     If no heartbeat received for 90s, gateway is marked OFFLINE by the health worker.
          */
         post: operations["gateway_heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/internal/gateways/{gateway_id}/route-sync-ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Route Sync Ack
+         * @description Acknowledge route sync results from stoa-connect.
+         *
+         *     Called by stoa-connect after pushing routes to the local gateway.
+         *     Updates GatewayDeployment sync_status based on the results.
+         */
+        post: operations["route_sync_ack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/internal/gateways/{gateway_id}/sync-ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Ack
+         * @description Acknowledge policy sync results from stoa-connect (CAB-1817 Phase 3).
+         *
+         *     Called by stoa-connect after applying/removing policies on the local gateway.
+         *     Stores sync results in the gateway's health_details for observability.
+         */
+        post: operations["sync_ack"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5864,6 +5992,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/apis/{api_id}/deploy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deploy To Environment
+         * @description Deploy an API to gateways in a specific environment.
+         *
+         *     api_id can be a UUID (catalog entry ID) or a string (Git API name).
+         *     If the API is not in the catalog, it will be synced from Git on-demand.
+         *     Validates promotion prerequisites (staging/prod require active promotion).
+         *     If gateway_ids is omitted, uses auto-deploy assignments for the environment.
+         */
+        post: operations["deploy_to_environment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/apis/{api_id}/deployable-environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Deployable Environments
+         * @description Get environments where this API can be deployed.
+         *
+         *     api_id can be a UUID (catalog entry ID) or a string (Git API name).
+         *     Dev is always available. Staging/prod require an active promotion.
+         */
+        get: operations["get_deployable_environments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/apis/{api_id}/gateway-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Assignments
+         * @description List gateway assignments for an API, optionally filtered by environment.
+         */
+        get: operations["list_assignments"];
+        put?: never;
+        /**
+         * Create Assignment
+         * @description Assign a default gateway target for an API in a specific environment.
+         */
+        post: operations["create_assignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/apis/{api_id}/gateway-assignments/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Assignment
+         * @description Remove a gateway assignment.
+         */
+        delete: operations["delete_assignment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/apis/{api_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Api Versions
+         * @description List version history (git commits) for a specific API.
+         */
+        get: operations["list_api_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/applications": {
         parameters: {
             query?: never;
@@ -6059,6 +6299,379 @@ export interface paths {
          * @description Delete a department budget.
          */
         delete: operations["delete_budget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ca": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tenant Ca
+         * @description Get the active CA certificate for a tenant.
+         *
+         *     Returns the public CA certificate only. Private key is never exposed.
+         */
+        get: operations["get_tenant_ca"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Tenant Ca
+         * @description Revoke the active CA for a tenant.
+         *
+         *     Requires cpi-admin role only. This is a destructive operation —
+         *     all certificates signed by this CA will no longer be trusted.
+         */
+        delete: operations["revoke_tenant_ca"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ca/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Issued Certificates
+         * @description List all certificates issued by this tenant's CA.
+         */
+        get: operations["list_issued_certificates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ca/certificates/{cert_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Issued Certificate
+         * @description Revoke a single issued certificate.
+         *
+         *     Requires cpi-admin or tenant-admin role.
+         */
+        post: operations["revoke_issued_certificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ca/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Tenant Ca
+         * @description Generate a new CA keypair for a tenant.
+         *
+         *     Requires cpi-admin or tenant-admin role.
+         *     Only one active CA per tenant is allowed.
+         */
+        post: operations["generate_tenant_ca"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ca/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Consumer Csr
+         * @description Sign a CSR with the tenant's CA private key.
+         *
+         *     Requires cpi-admin or tenant-admin role.
+         *     The CSR must have a valid signature.
+         *     The signed certificate is persisted for lifecycle management.
+         */
+        post: operations["sign_consumer_csr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Contracts
+         * @description List contracts for the specified tenant (cached, TTL 60s).
+         */
+        get: operations["list_contracts"];
+        put?: never;
+        /**
+         * Create Contract
+         * @description Create a new Universal API Contract.
+         *
+         *     Creates the contract and initializes all protocol bindings as disabled.
+         */
+        post: operations["create_contract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/by-name/{contract_name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Contract Versions
+         * @description List all versions of a contract by name.
+         *
+         *     Returns version history including deprecation status, ordered by creation date
+         *     (latest first).
+         */
+        get: operations["list_contract_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contract
+         * @description Get a specific contract by ID.
+         */
+        get: operations["get_contract"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Contract
+         * @description Delete a contract and all its bindings.
+         */
+        delete: operations["delete_contract"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Contract
+         * @description Update a contract.
+         */
+        patch: operations["update_contract"];
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Bindings
+         * @description List all protocol bindings for a contract.
+         *
+         *     Returns all 5 protocols (REST, MCP, GraphQL, gRPC, Kafka) with their status.
+         *     Used by the Protocol Switcher UI component.
+         */
+        get: operations["list_bindings"];
+        put?: never;
+        /**
+         * Enable Binding
+         * @description Enable a protocol binding for a contract.
+         *
+         *     This triggers the UAC engine to generate the binding (endpoint, tool, etc.).
+         */
+        post: operations["enable_binding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/bindings/{protocol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disable Binding
+         * @description Disable a protocol binding for a contract.
+         *
+         *     The binding is soft-disabled (keeps history). The endpoint becomes inactive.
+         */
+        delete: operations["disable_binding"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/deprecate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deprecate Contract
+         * @description Deprecate a published contract with optional sunset date.
+         *
+         *     Sets the contract status to 'deprecated' and records deprecation metadata
+         *     including reason, sunset date (RFC 8594), and optional replacement contract.
+         */
+        post: operations["deprecate_contract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/deprecation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Deprecation Info
+         * @description Get deprecation details for a contract.
+         */
+        get: operations["get_deprecation_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/mcp-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List MCP tools for a contract
+         * @description List all generated MCP tools for a contract.
+         */
+        get: operations["list_mcp_tools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/mcp-tools/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate MCP tools from UAC contract
+         * @description Trigger MCP tool generation from a UAC contract's endpoints.
+         */
+        post: operations["generate_mcp_tools"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Contract
+         * @description Publish a draft contract.
+         *
+         *     Sets status to 'published' and enables REST + MCP bindings with generated endpoints.
+         */
+        post: operations["publish_contract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/contracts/{contract_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate Contract
+         * @description Reactivate a deprecated contract (undo deprecation).
+         *
+         *     Only allowed if the sunset date has not passed.
+         */
+        post: operations["reactivate_contract"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7012,6 +7625,146 @@ export interface paths {
         patch: operations["toggle_tenant_mcp_server_tool"];
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/promotions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Promotions
+         * @description List promotions for a tenant with optional filtering.
+         */
+        get: operations["list_promotions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/promotions/{api_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Promotion
+         * @description Create a promotion request for an API (dev→staging or staging→production).
+         */
+        post: operations["create_promotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Promotion
+         * @description Get promotion details.
+         */
+        get: operations["get_promotion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Promotion
+         * @description Approve a pending promotion — triggers the promoting pipeline.
+         */
+        post: operations["approve_promotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Promotion
+         * @description Manually mark a promoting promotion as completed (deployed).
+         */
+        post: operations["complete_promotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Promotion Diff
+         * @description Get the spec diff between source and target environments.
+         */
+        get: operations["get_promotion_diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/promotions/{promotion_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rollback Promotion
+         * @description Rollback a completed promotion — creates a reverse promotion.
+         */
+        post: operations["rollback_promotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/provisioning-status": {
         parameters: {
             query?: never;
@@ -7903,6 +8656,52 @@ export interface components {
             trigger_type: string;
         };
         /**
+         * AISessionStatsResponse
+         * @description AI session statistics with per-worker and daily breakdowns.
+         */
+        AISessionStatsResponse: {
+            /**
+             * By Model
+             * @default []
+             */
+            by_model: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Daily
+             * @default []
+             */
+            daily: {
+                [key: string]: unknown;
+            }[];
+            /** Days */
+            days: number;
+            /**
+             * @default {
+             *       "avg_cost_per_session": 0,
+             *       "avg_duration_ms": 0,
+             *       "cost_delta_pct": 0,
+             *       "cost_delta_usd": 0,
+             *       "prev_cost_usd": 0,
+             *       "sessions": 0,
+             *       "success_count": 0,
+             *       "success_rate": 0,
+             *       "tokens_delta": 0,
+             *       "total_cost_usd": 0,
+             *       "total_duration_ms": 0,
+             *       "total_tokens": 0
+             *     }
+             */
+            totals: components["schemas"]["AISessionTotals"];
+            /**
+             * Workers
+             * @default []
+             */
+            workers: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
          * AISessionStep
          * @description A step in an AI session trace.
          */
@@ -7922,6 +8721,72 @@ export interface components {
              * @default success
              */
             status: string;
+        };
+        /**
+         * AISessionTotals
+         * @description AI session aggregated totals.
+         */
+        AISessionTotals: {
+            /**
+             * Avg Cost Per Session
+             * @default 0
+             */
+            avg_cost_per_session: number;
+            /**
+             * Avg Duration Ms
+             * @default 0
+             */
+            avg_duration_ms: number;
+            /**
+             * Cost Delta Pct
+             * @default 0
+             */
+            cost_delta_pct: number;
+            /**
+             * Cost Delta Usd
+             * @default 0
+             */
+            cost_delta_usd: number;
+            /**
+             * Prev Cost Usd
+             * @default 0
+             */
+            prev_cost_usd: number;
+            /**
+             * Sessions
+             * @default 0
+             */
+            sessions: number;
+            /**
+             * Success Count
+             * @default 0
+             */
+            success_count: number;
+            /**
+             * Success Rate
+             * @default 0
+             */
+            success_rate: number;
+            /**
+             * Tokens Delta
+             * @default 0
+             */
+            tokens_delta: number;
+            /**
+             * Total Cost Usd
+             * @default 0
+             */
+            total_cost_usd: number;
+            /**
+             * Total Duration Ms
+             * @default 0
+             */
+            total_duration_ms: number;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
         };
         /** APICreate */
         APICreate: {
@@ -7959,8 +8824,15 @@ export interface components {
              * @default public
              */
             audience: string;
+            /** Auth Type */
+            auth_type?: string | null;
             /** Category */
             category?: string | null;
+            /**
+             * Deployed Environments
+             * @default []
+             */
+            deployed_environments: string[];
             /**
              * Description
              * @default
@@ -7968,6 +8840,11 @@ export interface components {
             description: string;
             /** Display Name */
             display_name: string;
+            /**
+             * Endpoint Count
+             * @default 0
+             */
+            endpoint_count: number;
             /** Id */
             id: string;
             /**
@@ -8047,6 +8924,20 @@ export interface components {
             tags?: string[] | null;
             /** Version */
             version?: string | null;
+        };
+        /**
+         * APIVersionEntry
+         * @description A single version entry from git history.
+         */
+        APIVersionEntry: {
+            /** Author */
+            author: string;
+            /** Date */
+            date: string;
+            /** Message */
+            message: string;
+            /** Sha */
+            sha: string;
         };
         /**
          * AccessRequestCreate
@@ -8305,6 +9196,135 @@ export interface components {
             /** Step Index */
             step_index: number;
         };
+        /** ArgoCDDiffResource */
+        ArgoCDDiffResource: {
+            /** Diff */
+            diff?: {
+                [key: string]: unknown;
+            } | null;
+            /** Group */
+            group?: string | null;
+            /** Health */
+            health?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Namespace */
+            namespace?: string | null;
+            /** Status */
+            status?: string | null;
+        };
+        /** ArgoCDDiffResponse */
+        ArgoCDDiffResponse: {
+            /** Application */
+            application: string;
+            /** Diff Count */
+            diff_count: number;
+            /** Resources */
+            resources: components["schemas"]["ArgoCDDiffResource"][];
+            /** Total Resources */
+            total_resources: number;
+        };
+        /** ArgoCDPlatformStatusResponse */
+        ArgoCDPlatformStatusResponse: {
+            /** Checked At */
+            checked_at: string;
+            /** Components */
+            components: {
+                [key: string]: unknown;
+            }[];
+            /** Status */
+            status: string;
+        };
+        /** ArgoCDSyncRequest */
+        ArgoCDSyncRequest: {
+            /**
+             * Prune
+             * @description Prune resources no longer in Git
+             * @default false
+             */
+            prune: boolean;
+            /**
+             * Revision
+             * @description Git revision to sync to
+             * @default HEAD
+             */
+            revision: string;
+        };
+        /** ArgoCDSyncResponse */
+        ArgoCDSyncResponse: {
+            /** Application */
+            application: string;
+            /** Message */
+            message: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * AssignmentCreate
+         * @description Create a default gateway target for an API/environment.
+         */
+        AssignmentCreate: {
+            /**
+             * Auto Deploy
+             * @default false
+             */
+            auto_deploy: boolean;
+            /** Environment */
+            environment: string;
+            /**
+             * Gateway Id
+             * Format: uuid
+             */
+            gateway_id: string;
+        };
+        /**
+         * AssignmentListResponse
+         * @description Paginated assignment list.
+         */
+        AssignmentListResponse: {
+            /** Items */
+            items: components["schemas"]["AssignmentResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * AssignmentResponse
+         * @description API gateway assignment response.
+         */
+        AssignmentResponse: {
+            /**
+             * Api Id
+             * Format: uuid
+             */
+            api_id: string;
+            /** Auto Deploy */
+            auto_deploy: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Environment */
+            environment: string;
+            /** Gateway Display Name */
+            gateway_display_name?: string | null;
+            /**
+             * Gateway Id
+             * Format: uuid
+             */
+            gateway_id: string;
+            /** Gateway Name */
+            gateway_name?: string | null;
+            /** Gateway Type */
+            gateway_type?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /**
          * AudienceUpdateRequest
          * @description Request to update an API's audience visibility level.
@@ -8404,6 +9424,16 @@ export interface components {
          * @description Request to initiate an OAuth authorization flow.
          */
         AuthorizeRequest: {
+            /**
+             * Client Id
+             * @description OAuth app client_id (saved for future use)
+             */
+            client_id?: string | null;
+            /**
+             * Client Secret
+             * @description OAuth app client_secret (stored in Vault)
+             */
+            client_secret?: string | null;
             /**
              * Redirect After
              * @description UI URL to redirect after callback
@@ -8804,6 +9834,87 @@ export interface components {
             /** Total Tokens */
             total_tokens: number;
         };
+        /** CAGenerateResponse */
+        CAGenerateResponse: {
+            /** Ca Certificate Pem */
+            ca_certificate_pem: string;
+            /** Fingerprint Sha256 */
+            fingerprint_sha256: string;
+            /** Key Algorithm */
+            key_algorithm: string;
+            /** Not After */
+            not_after: string;
+            /** Not Before */
+            not_before: string;
+            /** Serial Number */
+            serial_number: string;
+            /** Status */
+            status: string;
+            /** Subject Dn */
+            subject_dn: string;
+            /** Tenant Id */
+            tenant_id: string;
+        };
+        /** CAInfoResponse */
+        CAInfoResponse: {
+            /** Ca Certificate Pem */
+            ca_certificate_pem: string;
+            /** Created At */
+            created_at: string;
+            /** Fingerprint Sha256 */
+            fingerprint_sha256: string;
+            /** Key Algorithm */
+            key_algorithm: string;
+            /** Not After */
+            not_after: string;
+            /** Not Before */
+            not_before: string;
+            /** Serial Number */
+            serial_number: string;
+            /** Status */
+            status: string;
+            /** Subject Dn */
+            subject_dn: string;
+            /** Tenant Id */
+            tenant_id: string;
+        };
+        /** CSRSignRequest */
+        CSRSignRequest: {
+            /**
+             * Csr Pem
+             * @description PEM-encoded Certificate Signing Request
+             */
+            csr_pem: string;
+            /**
+             * Validity Days
+             * @description Certificate validity in days
+             * @default 365
+             */
+            validity_days: number;
+        };
+        /** CSRSignResponse */
+        CSRSignResponse: {
+            /** Fingerprint Sha256 */
+            fingerprint_sha256: string;
+            /** Id */
+            id: string;
+            /** Issuer Dn */
+            issuer_dn: string;
+            /** Not After */
+            not_after: string;
+            /** Not Before */
+            not_before: string;
+            /** Serial Number */
+            serial_number: string;
+            /** Signed Certificate Pem */
+            signed_certificate_pem: string;
+            /** Status */
+            status: string;
+            /** Subject Dn */
+            subject_dn: string;
+            /** Validity Days */
+            validity_days: number;
+        };
         /**
          * CallStatus
          * @description Status of an MCP tool call
@@ -8850,12 +9961,15 @@ export interface components {
              */
             tools_sync_triggered: boolean;
         };
-        /** CatalogResponse */
+        /**
+         * CatalogResponse
+         * @description Full catalog response with categories and flat entry list.
+         */
         CatalogResponse: {
             /** Categories */
             categories: string[];
             /** Entries */
-            entries: components["schemas"]["src__routers__discovery__CatalogEntry"][];
+            entries: components["schemas"]["src__catalog__loader__CatalogEntry"][];
             /** Total */
             total: number;
         };
@@ -8929,6 +10043,16 @@ export interface components {
             total_apis: number;
             /** Unpublished Apis */
             unpublished_apis: number;
+        };
+        /**
+         * CatalogTool
+         * @description A tool exposed by a catalog API entry.
+         */
+        CatalogTool: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name: string;
         };
         /**
          * CertificateBindRequest
@@ -9109,6 +10233,22 @@ export interface components {
              */
             warnings?: string[];
         };
+        /**
+         * CleanupResult
+         * @description Result of the manual gateway cleanup.
+         */
+        CleanupResult: {
+            /**
+             * Purged Count
+             * @description Number of stale instances soft-deleted
+             */
+            purged_count: number;
+            /**
+             * Purged Instances
+             * @description Names of purged instances
+             */
+            purged_instances?: string[];
+        };
         /** CommitInfo */
         CommitInfo: {
             /** Author */
@@ -9201,6 +10341,8 @@ export interface components {
         ConnectorTemplateResponse: {
             /** Category */
             category: string;
+            /** Connected Environment */
+            connected_environment?: string | null;
             /** Connected Server Id */
             connected_server_id?: string | null;
             /** Connection Health */
@@ -9235,6 +10377,11 @@ export interface components {
             is_featured: boolean;
             /** Mcp Base Url */
             mcp_base_url: string;
+            /**
+             * Needs Setup
+             * @default false
+             */
+            needs_setup: boolean;
             /**
              * Oauth Pkce Required
              * @default false
@@ -10039,6 +11186,16 @@ export interface components {
             /** Warning Threshold Pct */
             warning_threshold_pct?: number | null;
         };
+        /**
+         * DeployToEnvRequest
+         * @description Request to deploy an API to gateways in a specific environment.
+         */
+        DeployToEnvRequest: {
+            /** Environment */
+            environment: string;
+            /** Gateway Ids */
+            gateway_ids?: string[] | null;
+        };
         /** DeploymentCreate */
         DeploymentCreate: {
             /** Api Id */
@@ -10452,6 +11609,61 @@ export interface components {
             server_id?: string | null;
             /** Slug */
             slug: string;
+        };
+        /**
+         * DiscoveredAPIItem
+         * @description A single API discovered by stoa-connect on a gateway.
+         */
+        DiscoveredAPIItem: {
+            /**
+             * Backend Url
+             * @description Backend URL
+             * @default
+             */
+            backend_url: string;
+            /**
+             * Is Active
+             * @description Whether the API is active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Methods
+             * @description HTTP methods
+             */
+            methods?: string[];
+            /**
+             * Name
+             * @description API/service name
+             */
+            name: string;
+            /**
+             * Paths
+             * @description Exposed paths
+             */
+            paths?: string[];
+            /**
+             * Policies
+             * @description Active policies
+             */
+            policies?: string[];
+            /**
+             * Version
+             * @description API version
+             * @default
+             */
+            version: string;
+        };
+        /**
+         * DiscoveryPayload
+         * @description Discovery report from stoa-connect.
+         */
+        DiscoveryPayload: {
+            /**
+             * Apis
+             * @description Discovered APIs
+             */
+            apis?: components["schemas"]["DiscoveredAPIItem"][];
         };
         /** DocsSearchResponse */
         DocsSearchResponse: {
@@ -11273,6 +12485,7 @@ export interface components {
          *       },
          *       "description": "Linear issue tracking integration",
          *       "display_name": "Linear",
+         *       "environment": "dev",
          *       "name": "linear",
          *       "tool_prefix": "linear",
          *       "transport": "sse"
@@ -11289,7 +12502,7 @@ export interface components {
              * @description Base URL of the MCP server
              */
             base_url: string;
-            /** @description Credentials (stored in Vault) */
+            /** @description Credentials (stored securely) */
             credentials?: components["schemas"]["CredentialsInput"] | null;
             /**
              * Description
@@ -11301,6 +12514,17 @@ export interface components {
              * @description Display name
              */
             display_name: string;
+            /**
+             * Environment
+             * @description Target environment (dev/staging/production)
+             * @default dev
+             */
+            environment: string;
+            /**
+             * Gateway Instance Id
+             * @description Bound gateway instance for dataplane routing
+             */
+            gateway_instance_id?: string | null;
             /**
              * Icon
              * @description URL to server icon
@@ -11351,6 +12575,13 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Environment
+             * @default dev
+             */
+            environment: string | null;
+            /** Gateway Instance Id */
+            gateway_instance_id?: string | null;
             /** @default unknown */
             health_status: components["schemas"]["HealthStatusEnum"];
             /** Icon */
@@ -11401,6 +12632,13 @@ export interface components {
             credentials?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Environment
+             * @default dev
+             */
+            environment: string | null;
+            /** Gateway Instance Id */
+            gateway_instance_id?: string | null;
             /**
              * Id
              * Format: uuid
@@ -11457,6 +12695,13 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Environment
+             * @default dev
+             */
+            environment: string | null;
+            /** Gateway Instance Id */
+            gateway_instance_id?: string | null;
             /** @default unknown */
             health_status: components["schemas"]["HealthStatusEnum"];
             /** Icon */
@@ -11548,7 +12793,7 @@ export interface components {
             auth_type?: components["schemas"]["AuthTypeEnum"] | null;
             /** Base Url */
             base_url?: string | null;
-            /** @description New credentials (updates Vault) */
+            /** @description New credentials (updates securely) */
             credentials?: components["schemas"]["CredentialsInput"] | null;
             /** Description */
             description?: string | null;
@@ -11556,6 +12801,16 @@ export interface components {
             display_name?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /**
+             * Environment
+             * @description Target environment
+             */
+            environment?: string | null;
+            /**
+             * Gateway Instance Id
+             * @description Bound gateway instance
+             */
+            gateway_instance_id?: string | null;
             /** Icon */
             icon?: string | null;
             /** Tool Prefix */
@@ -11695,6 +12950,25 @@ export interface components {
              */
             total: number;
         };
+        /** FileActionResponse */
+        FileActionResponse: {
+            /** Action */
+            action: string;
+            /** Path */
+            path: string;
+        };
+        /** FileContent */
+        FileContent: {
+            /** Content */
+            content: string;
+            /**
+             * Encoding
+             * @default text
+             */
+            encoding: string;
+            /** Path */
+            path: string;
+        };
         /** FileCreateUpdate */
         FileCreateUpdate: {
             /** Content */
@@ -11739,6 +13013,36 @@ export interface components {
             count: number;
             /** Stage */
             stage: string;
+        };
+        /**
+         * GatewayAPIDetailResponse
+         * @description Gateway API detail (passthrough from gateway admin API).
+         */
+        GatewayAPIDetailResponse: {
+            /**
+             * Apiname
+             * @default
+             */
+            apiName: string;
+            /**
+             * Apiversion
+             * @default
+             */
+            apiVersion: string;
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Isactive
+             * @default false
+             */
+            isActive: boolean;
+            /** Type */
+            type?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** GatewayAPIResponse */
         GatewayAPIResponse: {
@@ -11787,6 +13091,34 @@ export interface components {
             name: string;
         };
         /**
+         * GatewayBindingInfo
+         * @description Gateway instance binding information for an MCP server.
+         */
+        GatewayBindingInfo: {
+            /**
+             * Gateway Environment
+             * @description Gateway environment
+             */
+            gateway_environment?: string | null;
+            /** Gateway Instance Id */
+            gateway_instance_id?: string | null;
+            /**
+             * Gateway Name
+             * @description Gateway instance display name
+             */
+            gateway_name?: string | null;
+            /**
+             * Gateway Status
+             * @description Gateway health status
+             */
+            gateway_status?: string | null;
+            /**
+             * Gateway Type
+             * @description Gateway type (stoa, kong, etc.)
+             */
+            gateway_type?: string | null;
+        };
+        /**
          * GatewayDeploymentCreate
          * @description Schema for deploying an API to gateway(s).
          */
@@ -11805,9 +13137,9 @@ export interface components {
          */
         GatewayDeploymentResponse: {
             /** Actual At */
-            actual_at: string | null;
+            actual_at?: string | null;
             /** Actual State */
-            actual_state: {
+            actual_state?: {
                 [key: string]: unknown;
             } | null;
             /**
@@ -11829,26 +13161,34 @@ export interface components {
             desired_state: {
                 [key: string]: unknown;
             };
+            /** Gateway Display Name */
+            gateway_display_name?: string | null;
+            /** Gateway Environment */
+            gateway_environment?: string | null;
             /**
              * Gateway Instance Id
              * Format: uuid
              */
             gateway_instance_id: string;
+            /** Gateway Name */
+            gateway_name?: string | null;
             /** Gateway Resource Id */
-            gateway_resource_id: string | null;
+            gateway_resource_id?: string | null;
+            /** Gateway Type */
+            gateway_type?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /** Last Sync Attempt */
-            last_sync_attempt: string | null;
+            last_sync_attempt?: string | null;
             /** Last Sync Success */
-            last_sync_success: string | null;
+            last_sync_success?: string | null;
             /** Sync Attempts */
             sync_attempts: number;
             /** Sync Error */
-            sync_error: string | null;
+            sync_error?: string | null;
             /** Sync Status */
             sync_status: string;
             /**
@@ -11953,6 +13293,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Deleted At
+             * @description Soft-delete timestamp (null = active)
+             */
+            deleted_at?: string | null;
+            /**
+             * Deleted By
+             * @description User ID who deleted this gateway
+             */
+            deleted_by?: string | null;
             /** Display Name */
             display_name: string;
             /** Environment */
@@ -11977,6 +13327,12 @@ export interface components {
             mode?: string | null;
             /** Name */
             name: string;
+            /**
+             * Protected
+             * @description Whether this gateway is protected from deletion
+             * @default false
+             */
+            protected: boolean;
             /** Status */
             status: string;
             /** Tags */
@@ -12008,6 +13364,11 @@ export interface components {
             display_name?: string | null;
             /** Environment */
             environment?: string | null;
+            /**
+             * Protected
+             * @description Toggle deletion protection
+             */
+            protected?: boolean | null;
             /** Tags */
             tags?: string[] | null;
         };
@@ -12165,6 +13526,44 @@ export interface components {
              */
             version: string;
         };
+        /**
+         * GatewayRouteItem
+         * @description Route in stoa-gateway ApiRoute format for hot-reload.
+         */
+        GatewayRouteItem: {
+            /**
+             * Activated
+             * @default true
+             */
+            activated: boolean;
+            /** Backend Url */
+            backend_url: string;
+            /**
+             * Deployment Id
+             * @default
+             */
+            deployment_id: string;
+            /** Id */
+            id: string;
+            /**
+             * Methods
+             * @default []
+             */
+            methods: string[];
+            /** Name */
+            name: string;
+            /** Openapi Spec */
+            openapi_spec?: string | null;
+            /** Path Prefix */
+            path_prefix: string;
+            /**
+             * Spec Hash
+             * @default
+             */
+            spec_hash: string;
+            /** Tenant Id */
+            tenant_id: string;
+        };
         /** GatewayScopeResponse */
         GatewayScopeResponse: {
             /** Audience */
@@ -12173,6 +13572,73 @@ export interface components {
             scopeDescription?: string | null;
             /** Scopename */
             scopeName: string;
+        };
+        /**
+         * GeneratedBindingResponse
+         * @description A binding generated during contract publication.
+         */
+        GeneratedBindingResponse: {
+            /** Endpoint */
+            endpoint: string;
+            /** Protocol */
+            protocol: string;
+            /** Tool Name */
+            tool_name?: string | null;
+        };
+        /**
+         * GitLabHealthResponse
+         * @description GitLab connection health status.
+         */
+        GitLabHealthResponse: {
+            /** Default Branch */
+            default_branch?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Project */
+            project?: string | null;
+            /** Project Id */
+            project_id?: number | null;
+            /** Status */
+            status: string;
+        };
+        /**
+         * GitLabServerSummary
+         * @description Summary of a GitLab-defined MCP server.
+         */
+        GitLabServerSummary: {
+            /** Category */
+            category?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Git Path */
+            git_path?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Tenant Id */
+            tenant_id?: string | null;
+            /**
+             * Tools Count
+             * @default 0
+             */
+            tools_count: number;
+        };
+        /**
+         * GitLabServersResponse
+         * @description List of MCP servers found in GitLab.
+         */
+        GitLabServersResponse: {
+            /**
+             * Servers
+             * @default []
+             */
+            servers: components["schemas"]["GitLabServerSummary"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         };
         /**
          * GitOpsStatus
@@ -12283,6 +13749,12 @@ export interface components {
          * @description Heartbeat payload with optional metrics.
          */
         HeartbeatPayload: {
+            /**
+             * Discovered Apis
+             * @description Number of discovered APIs
+             * @default 0
+             */
+            discovered_apis: number;
             /**
              * Error Rate
              * @description Error rate (0.0-1.0)
@@ -12591,6 +14063,64 @@ export interface components {
         InternalAPIsResponse: {
             /** Apis */
             apis: components["schemas"]["InternalAPIItem"][];
+        };
+        /**
+         * InternalToolDef
+         * @description Tool definition in the format expected by the gateway (ToolsListResponse).
+         */
+        InternalToolDef: {
+            /** Description */
+            description: string;
+            /** Inputschema */
+            inputSchema?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+        };
+        /**
+         * InternalToolsListResponse
+         * @description Response matching the gateway's ToolsListResponse format.
+         */
+        InternalToolsListResponse: {
+            /** Tools */
+            tools: components["schemas"]["InternalToolDef"][];
+        };
+        /** IssuedCertificateListResponse */
+        IssuedCertificateListResponse: {
+            /** Items */
+            items: components["schemas"]["IssuedCertificateResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** IssuedCertificateResponse */
+        IssuedCertificateResponse: {
+            /** Consumer Id */
+            consumer_id: string | null;
+            /** Created At */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Fingerprint Sha256 */
+            fingerprint_sha256: string;
+            /** Id */
+            id: string;
+            /** Issuer Dn */
+            issuer_dn: string;
+            /** Key Algorithm */
+            key_algorithm: string;
+            /** Not After */
+            not_after: string;
+            /** Not Before */
+            not_before: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Serial Number */
+            serial_number: string;
+            /** Status */
+            status: string;
+            /** Subject Dn */
+            subject_dn: string;
         };
         /**
          * KeyRotationRequest
@@ -13813,6 +15343,18 @@ export interface components {
             /** Web Url */
             web_url: string;
         };
+        /** MergeResultResponse */
+        MergeResultResponse: {
+            /** Iid */
+            iid: number;
+            /** Message */
+            message: string;
+        };
+        /** MessageResponse */
+        MessageResponse: {
+            /** Message */
+            message: string;
+        };
         /**
          * ModeStatItem
          * @description Statistics for a single gateway mode.
@@ -14270,6 +15812,20 @@ export interface components {
             tenant_id: string;
         };
         /**
+         * PiiErasureResponse
+         * @description Response for GDPR Article 17 PII erasure (CAB-1794).
+         */
+        PiiErasureResponse: {
+            /** Os Records Deleted */
+            os_records_deleted: number;
+            /** Pg Records Affected */
+            pg_records_affected: number;
+            /** Pseudo Id */
+            pseudo_id: string;
+            /** User Id */
+            user_id: string;
+        };
+        /**
          * PlanCreate
          * @description Schema for creating a new subscription plan.
          * @example {
@@ -14440,6 +15996,11 @@ export interface components {
          * @description Complete platform status response.
          */
         PlatformStatusResponse: {
+            /**
+             * Demo Mode
+             * @default false
+             */
+            demo_mode: boolean;
             /** Events */
             events: components["schemas"]["PlatformEvent"][];
             external_links: components["schemas"]["ExternalLinks"];
@@ -14649,6 +16210,163 @@ export interface components {
             synced_at?: string | null;
             /** Total */
             total: number;
+        };
+        /**
+         * PromoteRequest
+         * @description Request to promote a connector to a target environment.
+         */
+        PromoteRequest: {
+            /**
+             * Confirm
+             * @description Required for high-risk connectors promoting to production
+             * @default false
+             */
+            confirm: boolean;
+            /**
+             * Target Environment
+             * @description Target environment: dev, staging, production
+             */
+            target_environment: string;
+            /**
+             * Tenant Id
+             * @description Tenant to promote for (cpi-admin only)
+             */
+            tenant_id?: string | null;
+        };
+        /**
+         * PromoteResponse
+         * @description Response after promoting a connector to a target environment.
+         */
+        PromoteResponse: {
+            /**
+             * Credentials Cloned
+             * @default false
+             */
+            credentials_cloned: boolean;
+            /**
+             * Server Id
+             * Format: uuid
+             */
+            server_id: string;
+            /** Server Name */
+            server_name: string;
+            /** Slug */
+            slug: string;
+            /** Source Environment */
+            source_environment: string;
+            /** Target Environment */
+            target_environment: string;
+        };
+        /** PromotionCreate */
+        PromotionCreate: {
+            /**
+             * Message
+             * @description Mandatory audit trail message explaining the promotion reason
+             */
+            message: string;
+            /**
+             * Source Environment
+             * @description Source environment (dev, staging)
+             */
+            source_environment: string;
+            /**
+             * Target Environment
+             * @description Target environment (staging, production)
+             */
+            target_environment: string;
+        };
+        /** PromotionDiffResponse */
+        PromotionDiffResponse: {
+            /** Diff Summary */
+            diff_summary?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Promotion Id
+             * Format: uuid
+             */
+            promotion_id: string;
+            /** Source Environment */
+            source_environment: string;
+            /** Source Spec */
+            source_spec?: {
+                [key: string]: unknown;
+            } | null;
+            /** Target Environment */
+            target_environment: string;
+            /** Target Spec */
+            target_spec?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PromotionListResponse */
+        PromotionListResponse: {
+            /** Items */
+            items: components["schemas"]["PromotionResponse"][];
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @default 50
+             */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** PromotionResponse */
+        PromotionResponse: {
+            /** Api Id */
+            api_id: string;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Message */
+            message: string;
+            /** Requested By */
+            requested_by: string;
+            /** Source Deployment Id */
+            source_deployment_id?: string | null;
+            /** Source Environment */
+            source_environment: string;
+            /** Spec Diff */
+            spec_diff?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+            /** Target Deployment Id */
+            target_deployment_id?: string | null;
+            /** Target Environment */
+            target_environment: string;
+            /** Tenant Id */
+            tenant_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PromotionRollbackRequest */
+        PromotionRollbackRequest: {
+            /**
+             * Message
+             * @description Mandatory audit trail message explaining the rollback reason
+             */
+            message: string;
         };
         /**
          * ProspectDetail
@@ -15096,6 +16814,15 @@ export interface components {
             current: string;
             /** Environments */
             environments: components["schemas"]["PublicEnvironmentSummary"][];
+        };
+        /**
+         * PublishContractResponse
+         * @description Response after publishing a contract.
+         */
+        PublishContractResponse: {
+            /** Bindings Generated */
+            bindings_generated: components["schemas"]["GeneratedBindingResponse"][];
+            contract: components["schemas"]["ContractResponse"];
         };
         /**
          * QuotaCounters
@@ -15576,6 +17303,22 @@ export interface components {
             summary: string;
         };
         /**
+         * RouteSyncAckPayload
+         * @description Payload from stoa-connect reporting route sync results.
+         */
+        RouteSyncAckPayload: {
+            /**
+             * Sync Timestamp
+             * @description ISO timestamp of sync completion
+             */
+            sync_timestamp: string;
+            /**
+             * Synced Routes
+             * @description Sync results per route
+             */
+            synced_routes?: components["schemas"]["SyncedRouteResult"][];
+        };
+        /**
          * RoutingInfo
          * @description API routing information at time of error.
          */
@@ -15742,10 +17485,13 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** SearchResult */
+        /**
+         * SearchResult
+         * @description Search result response.
+         */
         SearchResult: {
             /** Entries */
-            entries: components["schemas"]["src__routers__discovery__CatalogEntry"][];
+            entries: components["schemas"]["src__catalog__loader__CatalogEntry"][];
             /** Query */
             query: string;
             /** Total */
@@ -16624,6 +18370,22 @@ export interface components {
             took_ms: number;
         };
         /**
+         * SyncAckPayload
+         * @description Payload from stoa-connect reporting policy sync results.
+         */
+        SyncAckPayload: {
+            /**
+             * Sync Timestamp
+             * @description ISO timestamp of sync completion
+             */
+            sync_timestamp: string;
+            /**
+             * Synced Policies
+             * @description Sync results per policy
+             */
+            synced_policies?: components["schemas"]["SyncedPolicyResult"][];
+        };
+        /**
          * SyncDirection
          * @description Direction of data flow between source and replicas.
          * @enum {string}
@@ -16719,6 +18481,48 @@ export interface components {
          * @enum {string}
          */
         SyncTypeEnum: "full" | "tenant" | "api";
+        /**
+         * SyncedPolicyResult
+         * @description Result of syncing a single policy on the gateway.
+         */
+        SyncedPolicyResult: {
+            /**
+             * Error
+             * @description Error message if failed
+             */
+            error?: string | null;
+            /**
+             * Policy Id
+             * @description Policy ID from CP
+             */
+            policy_id: string;
+            /**
+             * Status
+             * @description Sync result: applied, removed, failed
+             */
+            status: string;
+        };
+        /**
+         * SyncedRouteResult
+         * @description Result of syncing a single route deployment on the gateway.
+         */
+        SyncedRouteResult: {
+            /**
+             * Deployment Id
+             * @description GatewayDeployment UUID
+             */
+            deployment_id: string;
+            /**
+             * Error
+             * @description Error message if failed
+             */
+            error?: string | null;
+            /**
+             * Status
+             * @description Sync result: applied or failed
+             */
+            status: string;
+        };
         /**
          * SystemInfoResponse
          * @description Platform system information — public endpoint.
@@ -17052,6 +18856,7 @@ export interface components {
          *       },
          *       "description": "Team's Linear integration",
          *       "display_name": "My Linear",
+         *       "environment": "dev",
          *       "tool_prefix": "linear",
          *       "transport": "sse"
          *     }
@@ -17067,7 +18872,7 @@ export interface components {
              * @description Base URL of the MCP server
              */
             base_url: string;
-            /** @description Credentials (stored in Vault) */
+            /** @description Credentials (stored securely) */
             credentials?: components["schemas"]["CredentialsInput"] | null;
             /**
              * Description
@@ -17079,6 +18884,17 @@ export interface components {
              * @description Display name
              */
             display_name: string;
+            /**
+             * Environment
+             * @description Target environment (dev/staging/production)
+             * @default dev
+             */
+            environment: string;
+            /**
+             * Gateway Instance Id
+             * @description Bound gateway instance for dataplane routing
+             */
+            gateway_instance_id?: string | null;
             /**
              * Icon
              * @description URL to server icon
@@ -17117,6 +18933,13 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Environment
+             * @default dev
+             */
+            environment: string | null;
+            /** Gateway Instance Id */
+            gateway_instance_id?: string | null;
             /**
              * Has Credentials
              * @default false
@@ -17195,6 +19018,13 @@ export interface components {
              */
             enabled: boolean;
             /**
+             * Environment
+             * @default dev
+             */
+            environment: string | null;
+            /** Gateway Instance Id */
+            gateway_instance_id?: string | null;
+            /**
              * Has Credentials
              * @default false
              */
@@ -17238,7 +19068,7 @@ export interface components {
             auth_type?: components["schemas"]["AuthTypeEnum"] | null;
             /** Base Url */
             base_url?: string | null;
-            /** @description New credentials (updates Vault) */
+            /** @description New credentials (stored securely) */
             credentials?: components["schemas"]["CredentialsInput"] | null;
             /** Description */
             description?: string | null;
@@ -17246,6 +19076,16 @@ export interface components {
             display_name?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /**
+             * Environment
+             * @description Target environment
+             */
+            environment?: string | null;
+            /**
+             * Gateway Instance Id
+             * @description Bound gateway instance
+             */
+            gateway_instance_id?: string | null;
             /** Icon */
             icon?: string | null;
             /** Tool Prefix */
@@ -17406,6 +19246,24 @@ export interface components {
             success: boolean;
             /** Tools Discovered */
             tools_discovered?: number | null;
+        };
+        /**
+         * TestResult
+         * @description Result of a deployment connectivity test.
+         */
+        TestResult: {
+            /** Error */
+            error?: string | null;
+            /** Gateway Url */
+            gateway_url?: string | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Path */
+            path?: string | null;
+            /** Reachable */
+            reachable: boolean;
+            /** Status Code */
+            status_code?: number | null;
         };
         /**
          * TimingBreakdown
@@ -17629,6 +19487,45 @@ export interface components {
             isError: boolean;
         };
         /**
+         * ToolObservabilityItem
+         * @description Per-tool observability data: metadata + gateway binding.
+         */
+        ToolObservabilityItem: {
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Name
+             * @description Original tool name
+             */
+            name: string;
+            /**
+             * Namespaced Name
+             * @description Prefixed tool name
+             */
+            namespaced_name: string;
+            /**
+             * Synced At
+             * Format: date-time
+             */
+            synced_at: string;
+        };
+        /**
          * ToolSearchResult
          * @description Single tool search result.
          */
@@ -17706,6 +19603,48 @@ export interface components {
             tool_name: string;
         };
         /**
+         * ToolsObservabilityResponse
+         * @description Response for tools-summary endpoint — tool metadata + gateway binding (CAB-1821).
+         */
+        ToolsObservabilityResponse: {
+            /**
+             * Enabled Count
+             * @default 0
+             */
+            enabled_count: number;
+            /**
+             * Environment
+             * @default dev
+             */
+            environment: string | null;
+            gateway: components["schemas"]["GatewayBindingInfo"];
+            /** @default unknown */
+            health_status: components["schemas"]["HealthStatusEnum"];
+            /** Last Health Check */
+            last_health_check?: string | null;
+            /** Last Sync At */
+            last_sync_at?: string | null;
+            /** Server Display Name */
+            server_display_name: string;
+            /**
+             * Server Id
+             * Format: uuid
+             */
+            server_id: string;
+            /** Server Name */
+            server_name: string;
+            /**
+             * Tools
+             * @default []
+             */
+            tools: components["schemas"]["ToolObservabilityItem"][];
+            /**
+             * Tools Count
+             * @default 0
+             */
+            tools_count: number;
+        };
+        /**
          * TopAPI
          * @description Top API/tool by usage.
          */
@@ -17729,6 +19668,57 @@ export interface components {
             consumer_id: string;
             /** Request Count Monthly */
             request_count_monthly: number;
+        };
+        /**
+         * TraceDetailResponse
+         * @description Full trace detail.
+         */
+        TraceDetailResponse: {
+            /** Api Id */
+            api_id?: string | null;
+            /** Api Name */
+            api_name?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Environment */
+            environment?: string | null;
+            /** Error Summary */
+            error_summary?: string | null;
+            /** Git Author */
+            git_author?: string | null;
+            /** Git Author Email */
+            git_author_email?: string | null;
+            /** Git Branch */
+            git_branch?: string | null;
+            /** Git Commit Message */
+            git_commit_message?: string | null;
+            /** Git Commit Sha */
+            git_commit_sha?: string | null;
+            /** Git Files Changed */
+            git_files_changed?: string[] | null;
+            /** Git Project */
+            git_project?: string | null;
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /**
+             * Steps
+             * @default []
+             */
+            steps: {
+                [key: string]: unknown;
+            }[];
+            /** Tenant Id */
+            tenant_id?: string | null;
+            /** Total Duration Ms */
+            total_duration_ms?: number | null;
+            /** Trigger Source */
+            trigger_source?: string | null;
+            /** Trigger Type */
+            trigger_type?: string | null;
         };
         /**
          * TraceIngestResponse
@@ -17777,6 +19767,34 @@ export interface components {
             traces: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * TraceStatsResponse
+         * @description Aggregated trace statistics.
+         */
+        TraceStatsResponse: {
+            /**
+             * Avg Duration Ms
+             * @default 0
+             */
+            avg_duration_ms: number;
+            /**
+             * By Status
+             * @default {}
+             */
+            by_status: {
+                [key: string]: number;
+            };
+            /**
+             * Success Rate
+             * @default 0
+             */
+            success_rate: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         };
         /**
          * TraceTimelineResponse
@@ -17852,6 +19870,60 @@ export interface components {
             type?: string | null;
         };
         /**
+         * TransactionDetailWithDemoResponse
+         * @description Transaction detail with demo mode indicator.
+         */
+        TransactionDetailWithDemoResponse: {
+            /** Api Name */
+            api_name: string;
+            /** Client Ip */
+            client_ip?: string | null;
+            /**
+             * Demo Mode
+             * @default false
+             */
+            demo_mode: boolean;
+            /** Error Message */
+            error_message?: string | null;
+            /** Error Source */
+            error_source?: string | null;
+            /** Id */
+            id: string;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Request Headers */
+            request_headers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Response Headers */
+            response_headers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Spans */
+            spans: components["schemas"]["TransactionSpan"][];
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Status Code */
+            status_code: number;
+            /**
+             * Status Text
+             * @default
+             */
+            status_text: string;
+            /** Tenant Id */
+            tenant_id?: string | null;
+            /** Total Duration Ms */
+            total_duration_ms: number;
+            /** Trace Id */
+            trace_id: string;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /**
          * TransactionListResponse
          * @description Transaction list with demo mode indicator.
          */
@@ -17874,12 +19946,81 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** TransactionSpan */
+        TransactionSpan: {
+            /** Duration Ms */
+            duration_ms: number;
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /** Service */
+            service: string;
+            /** Start Offset Ms */
+            start_offset_ms: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * TransactionStatsWithDemoResponse
+         * @description Transaction stats with demo mode indicator.
+         */
+        TransactionStatsWithDemoResponse: {
+            /** Avg Latency Ms */
+            avg_latency_ms: number;
+            /** By Api */
+            by_api: {
+                [key: string]: unknown;
+            };
+            /** By Status Code */
+            by_status_code: {
+                [key: string]: unknown;
+            };
+            /**
+             * Demo Mode
+             * @default false
+             */
+            demo_mode: boolean;
+            /** Error Count */
+            error_count: number;
+            /** P95 Latency Ms */
+            p95_latency_ms: number;
+            /** P99 Latency Ms */
+            p99_latency_ms: number;
+            /** Requests Per Minute */
+            requests_per_minute: number;
+            /** Success Count */
+            success_count: number;
+            /** Timeout Count */
+            timeout_count: number;
+            /** Total Requests */
+            total_requests: number;
+        };
         /**
          * TransportTypeEnum
          * @description Transport protocol for external MCP server.
          * @enum {string}
          */
         TransportTypeEnum: "sse" | "http" | "websocket";
+        /** TreeItem */
+        TreeItem: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Type */
+            type: string;
+        };
+        /** TreeListResponse */
+        TreeListResponse: {
+            /** Items */
+            items: components["schemas"]["TreeItem"][];
+        };
         /**
          * UniverseResponse
          * @description Universe metadata for Portal filtering (CAB-848).
@@ -18301,6 +20442,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Environment */
+            environment?: string | null;
             /**
              * Error Count
              * @default 0
@@ -18536,6 +20679,28 @@ export interface components {
          */
         WebhookDeliveryStatusEnum: "pending" | "success" | "failed" | "retrying";
         /**
+         * WebhookHealthResponse
+         * @description Webhook endpoint health status.
+         */
+        WebhookHealthResponse: {
+            /** Endpoint */
+            endpoint: string;
+            /** Status */
+            status: string;
+            /**
+             * Supported Events
+             * @default []
+             */
+            supported_events: string[];
+            /**
+             * Trace Stats
+             * @default {}
+             */
+            trace_stats: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * WebhookListResponse
          * @description Schema for webhook list response
          */
@@ -18544,6 +20709,22 @@ export interface components {
             items: components["schemas"]["WebhookResponse"][];
             /** Total */
             total: number;
+        };
+        /**
+         * WebhookProcessedResponse
+         * @description GitLab webhook processing result.
+         */
+        WebhookProcessedResponse: {
+            /** Author */
+            author?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Event */
+            event: string;
+            /** Status */
+            status: string;
+            /** Trace Id */
+            trace_id: string;
         };
         /**
          * WebhookResponse
@@ -18656,6 +20837,67 @@ export interface components {
             /** Api Key */
             api_key: string;
         };
+        /**
+         * CatalogEntry
+         * @description A single API/MCP connector in the curated catalog.
+         */
+        src__catalog__loader__CatalogEntry: {
+            /**
+             * Auth Type
+             * @description none | api_key | oauth2 | basic
+             * @default none
+             */
+            auth_type: string;
+            /** Category */
+            category: string;
+            /**
+             * Country
+             * @description ISO 3166-1 alpha-2 or 'EU' for pan-European
+             */
+            country: string;
+            /** Description */
+            description: string;
+            /** Display Name */
+            display_name: string;
+            /** Documentation Url */
+            documentation_url?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /** Id */
+            id: string;
+            /** Mcp Endpoint */
+            mcp_endpoint?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Protocol
+             * @description openapi | mcp | graphql
+             */
+            protocol: string;
+            /**
+             * Region
+             * @default EU
+             */
+            region: string;
+            /** Spec Url */
+            spec_url?: string | null;
+            /**
+             * Status
+             * @description verified | community | experimental
+             * @default community
+             */
+            status: string;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /**
+             * Tools
+             * @default []
+             */
+            tools: components["schemas"]["CatalogTool"][];
+        };
         /** ApplicationResponse */
         src__routers__applications__ApplicationResponse: {
             /**
@@ -18710,42 +20952,6 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
-        };
-        /** CatalogEntry */
-        src__routers__discovery__CatalogEntry: {
-            /** Category */
-            category: string;
-            /** Description */
-            description: string;
-            /** Display Name */
-            display_name: string;
-            /** Documentation Url */
-            documentation_url?: string | null;
-            /** Icon */
-            icon?: string | null;
-            /** Id */
-            id: string;
-            /** Mcp Endpoint */
-            mcp_endpoint?: string | null;
-            /** Name */
-            name: string;
-            /**
-             * Protocol
-             * @description openapi | mcp | graphql
-             */
-            protocol: string;
-            /**
-             * Region
-             * @default EU
-             */
-            region: string;
-            /** Spec Url */
-            spec_url?: string | null;
-            /**
-             * Tags
-             * @default []
-             */
-            tags: string[];
         };
         /**
          * CatalogEntry
@@ -19017,6 +21223,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthCheck"];
+                };
+            };
+        };
+    };
+    workers_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -19456,6 +21682,92 @@ export interface operations {
             };
         };
     };
+    get_application_diff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArgoCDDiffResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_platform_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArgoCDPlatformStatusResponse"];
+                };
+            };
+        };
+    };
+    trigger_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ArgoCDSyncRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArgoCDSyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     invalidate_cache: {
         parameters: {
             query?: never;
@@ -19707,6 +22019,8 @@ export interface operations {
                 gateway_instance_id?: string | null;
                 /** @description Filter by gateway environment (dev/staging/prod) */
                 environment?: string | null;
+                /** @description Filter by gateway type (stoa, kong, gravitee, etc.) */
+                gateway_type?: string | null;
                 page?: number;
                 page_size?: number;
             };
@@ -19900,6 +22214,37 @@ export interface operations {
             };
         };
     };
+    test_deployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deployment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_diagnostic_summary: {
         parameters: {
             query?: {
@@ -20034,6 +22379,8 @@ export interface operations {
             query?: {
                 /** @description Filter to enabled servers only */
                 enabled_only?: boolean;
+                /** @description Filter by environment (dev/staging/production) */
+                environment?: string | null;
                 page?: number;
                 page_size?: number;
             };
@@ -20253,6 +22600,37 @@ export interface operations {
             };
         };
     };
+    get_tools_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolsObservabilityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_tool: {
         parameters: {
             query?: never;
@@ -20298,6 +22676,8 @@ export interface operations {
                 environment?: string | null;
                 /** @description Filter by tenant */
                 tenant_id?: string | null;
+                /** @description Include soft-deleted gateways (cpi-admin only) */
+                include_deleted?: boolean;
                 page?: number;
                 page_size?: number;
             };
@@ -20690,6 +23070,37 @@ export interface operations {
             };
         };
     };
+    restore_gateway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_governance_drift_report: {
         parameters: {
             query?: never;
@@ -20771,6 +23182,8 @@ export interface operations {
             query?: {
                 /** @description Tenant to check connection status for */
                 tenant_id?: string | null;
+                /** @description Filter by environment (dev, staging, production) */
+                environment?: string | null;
             };
             header?: never;
             path?: never;
@@ -20836,6 +23249,8 @@ export interface operations {
             query?: {
                 /** @description Tenant to check connection status for */
                 tenant_id?: string | null;
+                /** @description Filter by environment (dev, staging, production) */
+                environment?: string | null;
             };
             header?: never;
             path: {
@@ -20921,6 +23336,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DisconnectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_connector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromoteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22212,6 +24662,40 @@ export interface operations {
             };
         };
     };
+    erase_user_pii: {
+        parameters: {
+            query?: {
+                /** @description Scope erasure to a specific tenant */
+                tenant_id?: string | null;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PiiErasureResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_entries: {
         parameters: {
             query?: {
@@ -23119,456 +25603,6 @@ export interface operations {
             };
         };
     };
-    list_contracts: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-                /** @description Filter by status */
-                status?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_contract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContractCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_contract_versions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractVersionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_contract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_contract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_contract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContractUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_bindings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BindingsListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enable_binding: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnableBindingRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnableBindingResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    disable_binding: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-                protocol: components["schemas"]["ProtocolType"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DisableBindingResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    deprecate_contract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeprecateContractRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractDeprecationInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_deprecation_info: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractDeprecationInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_mcp_tools: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["McpToolsListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    generate_mcp_tools: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["McpToolsGenerateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reactivate_contract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContractResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_dashboard_activity: {
         parameters: {
             query?: {
@@ -23630,6 +25664,10 @@ export interface operations {
                 region?: string | null;
                 /** @description Filter by protocol: openapi | mcp */
                 protocol?: string | null;
+                /** @description Filter by country (ISO 3166-1 alpha-2) */
+                country?: string | null;
+                /** @description Filter by status: verified | community | experimental */
+                status?: string | null;
             };
             header?: never;
             path?: never;
@@ -24033,7 +26071,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GatewayAPIDetailResponse"];
                 };
             };
             /** @description Validation Error */
@@ -24329,6 +26367,37 @@ export interface operations {
             };
         };
     };
+    cleanup_stale_gateways: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     register_gateway: {
         parameters: {
             query?: never;
@@ -24351,6 +26420,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GatewayInstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gateway_routes: {
+        parameters: {
+            query?: {
+                /** @description Filter by gateway instance name */
+                gateway_name?: string | null;
+            };
+            header?: {
+                "x-gateway-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayRouteItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_internal_tools: {
+        parameters: {
+            query?: {
+                /** @description Tenant ID (optional filter) */
+                tenant_id?: string;
+            };
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalToolsListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_internal_generated_tools: {
+        parameters: {
+            query: {
+                /** @description Tenant ID */
+                tenant_id: string;
+            };
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantToolsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -24397,6 +26568,43 @@ export interface operations {
             };
         };
     };
+    report_discovery: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     gateway_heartbeat: {
         parameters: {
             query?: never;
@@ -24420,6 +26628,80 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    route_sync_ack: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteSyncAckPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_ack: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncAckPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -24639,7 +26921,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GitLabHealthResponse"];
                 };
             };
         };
@@ -24659,7 +26941,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GitLabServersResponse"];
                 };
             };
         };
@@ -25576,7 +27858,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TransactionStatsWithDemoResponse"];
                 };
             };
             /** @description Validation Error */
@@ -25607,7 +27889,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TransactionDetailWithDemoResponse"];
                 };
             };
             /** @description Validation Error */
@@ -26208,6 +28490,12 @@ export interface operations {
                 universe?: string | null;
                 /** @description Filter by audience: public, internal, partner */
                 audience?: string | null;
+                /** @description Filter by deployment environment (optional, for subscription/test pages) */
+                environment?: string | null;
+                /** @description Sort field: name (default), updated_at, created_at */
+                sort_by?: string | null;
+                /** @description Filter by auth type: oauth2, api_key, mtls, basic */
+                auth_type?: string | null;
             };
             header?: never;
             path?: never;
@@ -28481,6 +30769,210 @@ export interface operations {
             };
         };
     };
+    deploy_to_environment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeployToEnvRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deployable_environments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_assignments: {
+        parameters: {
+            query?: {
+                environment?: string | null;
+            };
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_assignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_assignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_api_versions: {
+        parameters: {
+            query?: {
+                /** @description Max commits to return */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIVersionEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_applications: {
         parameters: {
             query?: {
@@ -29070,6 +31562,702 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_ca: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_tenant_ca: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_issued_certificates: {
+        parameters: {
+            query?: {
+                /** @description Filter by status: active, revoked */
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedCertificateListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_issued_certificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                cert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_tenant_ca: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAGenerateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_consumer_csr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CSRSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CSRSignResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_contracts: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Filter by status */
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_contract_versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingsListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_binding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnableBindingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnableBindingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_binding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+                protocol: components["schemas"]["ProtocolType"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisableBindingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deprecate_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeprecateContractRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractDeprecationInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deprecation_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractDeprecationInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mcp_tools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpToolsListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_mcp_tools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpToolsGenerateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishContractResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                contract_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -30301,7 +33489,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FileContent"];
                 };
             };
             /** @description Validation Error */
@@ -30340,7 +33528,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FileActionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -30375,7 +33563,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -30475,7 +33663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MergeResultResponse"];
                 };
             };
             /** @description Validation Error */
@@ -30509,7 +33697,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TreeListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -30921,6 +34109,8 @@ export interface operations {
     list_tenant_mcp_servers: {
         parameters: {
             query?: {
+                /** @description Filter by environment (dev/staging/production) */
+                environment?: string | null;
                 page?: number;
                 page_size?: number;
             };
@@ -31173,6 +34363,243 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExternalMCPServerToolResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_promotions: {
+        parameters: {
+            query?: {
+                api_id?: string | null;
+                status?: string | null;
+                target_environment?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_promotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromotionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_promotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                promotion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_promotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                promotion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_promotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                promotion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_promotion_diff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                promotion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDiffResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_promotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                promotion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromotionRollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32190,7 +35617,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TraceStatsResponse"];
                 };
             };
         };
@@ -32214,7 +35641,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AISessionStatsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32245,7 +35672,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TraceDetailResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32297,6 +35724,8 @@ export interface operations {
                 api_id: string;
                 /** @description Period type: daily or monthly */
                 period?: string;
+                /** @description Filter by environment */
+                environment?: string | null;
             };
             header?: never;
             path?: never;
@@ -32503,6 +35932,8 @@ export interface operations {
                 api_id?: string | null;
                 /** @description Period type: daily or monthly */
                 period?: string;
+                /** @description Filter by environment */
+                environment?: string | null;
                 /** @description Max results per page */
                 limit?: number;
                 /** @description Pagination offset */
@@ -32616,7 +36047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WebhookProcessedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32645,7 +36076,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WebhookHealthResponse"];
                 };
             };
         };

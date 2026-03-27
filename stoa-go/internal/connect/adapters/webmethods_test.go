@@ -207,6 +207,9 @@ func TestWebMethodsApplyPolicy(t *testing.T) {
 					{"id": "api-123", "apiName": "Petstore", "apiVersion": "1.0", "isActive": true},
 				},
 			})
+		case r.URL.Path == "/rest/apigateway/apis/api-123/policyActions" && r.Method == http.MethodGet:
+			// No existing policies — triggers POST (create)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"policyActions": []interface{}{}})
 		case r.URL.Path == "/rest/apigateway/policyActions" && r.Method == http.MethodPost:
 			receivedPath = r.URL.Path
 			body, _ := io.ReadAll(r.Body)
@@ -286,6 +289,8 @@ func TestWebMethodsApplyPolicyCORS(t *testing.T) {
 					{"id": "api-cors", "apiName": "MyAPI", "apiVersion": "2.0", "isActive": true},
 				},
 			})
+		case r.URL.Path == "/rest/apigateway/apis/api-cors/policyActions" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"policyActions": []interface{}{}})
 		case r.URL.Path == "/rest/apigateway/policyActions" && r.Method == http.MethodPost:
 			body, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(body, &receivedPayload)
@@ -1075,5 +1080,201 @@ func TestWebMethodsEventNormalization(t *testing.T) {
 	event2 := NormalizeEvent(rawNoMethod)
 	if event2.Method != "getPets" {
 		t.Errorf("expected operationName fallback, got %s", event2.Method)
+	}
+}
+
+// --- Robustness Tests (CAB-1927) ---
+
+func TestWebMethodsApplyPolicyIdempotent(t *testing.T) {
+	var method string
+	var requestPath string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "api-upsert", "apiName": "Petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case r.URL.Path == "/rest/apigateway/apis/api-upsert/policyActions" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"policyActions": []map[string]interface{}{
+					{"id": "pa-existing", "templateKey": "throttlingPolicy", "policyActionName": "stoa-Petstore-rate_limit"},
+				},
+			})
+		case strings.HasPrefix(r.URL.Path, "/rest/apigateway/policyActions"):
+			method = r.Method
+			requestPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"policyAction": map[string]interface{}{"id": "pa-existing"}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "manage"})
+	err := adapter.ApplyPolicy(context.Background(), server.URL, "Petstore", PolicyAction{
+		Type:   "rate_limit",
+		Config: map[string]interface{}{"maxRequests": 500, "intervalSeconds": 60},
+	})
+	if err != nil {
+		t.Fatalf("apply policy error: %v", err)
+	}
+	if method != http.MethodPut {
+		t.Errorf("expected PUT (update existing), got %s", method)
+	}
+	if requestPath != "/rest/apigateway/policyActions/pa-existing" {
+		t.Errorf("expected PUT to pa-existing, got %s", requestPath)
+	}
+}
+
+func TestWebMethodsDeleteAPI(t *testing.T) {
+	var deactivated, deleted bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "api-del-1", "apiName": "Petstore", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case r.URL.Path == "/rest/apigateway/apis/api-del-1/deactivate" && r.Method == http.MethodPut:
+			deactivated = true
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/rest/apigateway/apis/api-del-1" && r.Method == http.MethodDelete:
+			deleted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "manage"})
+	err := adapter.DeleteAPI(context.Background(), server.URL, "Petstore")
+	if err != nil {
+		t.Fatalf("delete api error: %v", err)
+	}
+	if !deactivated {
+		t.Error("expected deactivate to be called before delete")
+	}
+	if !deleted {
+		t.Error("expected delete to be called")
+	}
+}
+
+func TestWebMethodsDeleteAPINotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"apiResponse": []interface{}{}})
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{})
+	err := adapter.DeleteAPI(context.Background(), server.URL, "NonExistent")
+	if err != nil {
+		t.Fatalf("expected idempotent success for non-existent API, got error: %v", err)
+	}
+}
+
+func TestWebMethodsOpenAPI31Downgrade(t *testing.T) {
+	spec31 := []byte(`{"openapi": "3.1.0", "info": {"title": "Test"}}`)
+	result := downgradeOpenAPI31(spec31)
+	expected := `{"openapi": "3.0.3", "info": {"title": "Test"}}`
+	if string(result) != expected {
+		t.Errorf("expected %s, got %s", expected, string(result))
+	}
+
+	spec311 := []byte(`{"openapi": "3.1.1", "info": {"title": "Test"}}`)
+	result311 := downgradeOpenAPI31(spec311)
+	if !strings.Contains(string(result311), `"3.0.3"`) {
+		t.Errorf("expected 3.0.3, got %s", string(result311))
+	}
+
+	spec30 := []byte(`{"openapi": "3.0.2", "info": {"title": "Test"}}`)
+	result30 := downgradeOpenAPI31(spec30)
+	if string(result30) != string(spec30) {
+		t.Errorf("expected 3.0.2 unchanged, got %s", string(result30))
+	}
+}
+
+func TestWebMethodsActivateDeactivate(t *testing.T) {
+	var activateCalled, deactivateCalled bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis/api-lifecycle/activate" && r.Method == http.MethodPut:
+			activateCalled = true
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/rest/apigateway/apis/api-lifecycle/deactivate" && r.Method == http.MethodPut:
+			deactivateCalled = true
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "manage"})
+
+	if err := adapter.ActivateAPI(context.Background(), server.URL, "api-lifecycle"); err != nil {
+		t.Fatalf("activate error: %v", err)
+	}
+	if !activateCalled {
+		t.Error("expected activate to be called")
+	}
+
+	if err := adapter.DeactivateAPI(context.Background(), server.URL, "api-lifecycle"); err != nil {
+		t.Fatalf("deactivate error: %v", err)
+	}
+	if !deactivateCalled {
+		t.Error("expected deactivate to be called")
+	}
+}
+
+func TestWebMethodsSyncRoutesWithDeactivation(t *testing.T) {
+	var deactivateCalled bool
+	var createCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"apiResponse": []map[string]interface{}{
+					{"id": "existing-deact", "apiName": "stoa-old-route", "apiVersion": "1.0", "isActive": true},
+				},
+			})
+		case r.URL.Path == "/rest/apigateway/apis/existing-deact/deactivate" && r.Method == http.MethodPut:
+			deactivateCalled = true
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			createCount++
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "new-1"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "manage"})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "old-route", BackendURL: "http://example.com", PathPrefix: "/old", Methods: []string{"GET"}, Activated: false},
+		{Name: "new-route", BackendURL: "http://example.com", PathPrefix: "/new", Methods: []string{"POST"}, Activated: true},
+	})
+	if err != nil {
+		t.Fatalf("sync routes error: %v", err)
+	}
+	if !deactivateCalled {
+		t.Error("expected deactivate to be called for inactive route")
+	}
+	if createCount != 1 {
+		t.Errorf("expected 1 create for active route, got %d", createCount)
 	}
 }

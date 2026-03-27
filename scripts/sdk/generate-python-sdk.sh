@@ -18,7 +18,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SPEC_FILE="${REPO_ROOT}/control-plane-api/openapi-snapshot.json"
-CONFIG_FILE="${REPO_ROOT}/scripts/sdk/config.yaml"
+CONFIG_FILE="${REPO_ROOT}/scripts/sdk/openapi-python-client-config.yaml"
 OUTPUT_DIR="${REPO_ROOT}/control-plane-api/sdk/python"
 PACKAGE_DIR="${OUTPUT_DIR}/stoa-platform-client"
 

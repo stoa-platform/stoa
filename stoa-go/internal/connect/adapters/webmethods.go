@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -245,8 +246,8 @@ func (w *WebMethodsAdapter) resolveAPIID(ctx context.Context, adminURL string, a
 	return "", fmt.Errorf("webmethods API not found: %s", apiName)
 }
 
-// ApplyPolicy pushes a policy action to a webMethods API.
-// Flow: resolve API ID → map type → POST /rest/apigateway/policyActions
+// ApplyPolicy upserts a policy action on a webMethods API.
+// Flow: resolve API ID → list existing policies → PUT if exists, POST if new.
 func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName string, policy PolicyAction) error {
 	apiID, err := w.resolveAPIID(ctx, adminURL, apiName)
 	if err != nil {
@@ -256,6 +257,12 @@ func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, ap
 	wmType, ok := wmPolicyTypeMapping[policy.Type]
 	if !ok {
 		wmType = policy.Type
+	}
+
+	// Check for existing policy of this type on the API
+	existingID, err := w.findPolicyByType(ctx, adminURL, apiID, wmType, policy.Type)
+	if err != nil {
+		return fmt.Errorf("find existing policy: %w", err)
 	}
 
 	policyAction := map[string]interface{}{
@@ -274,8 +281,16 @@ func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, ap
 		return fmt.Errorf("marshal policy action: %w", err)
 	}
 
-	url := adminURL + "/rest/apigateway/policyActions"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	var method, reqURL string
+	if existingID != "" {
+		method = http.MethodPut
+		reqURL = fmt.Sprintf("%s/rest/apigateway/policyActions/%s", adminURL, existingID)
+	} else {
+		method = http.MethodPost
+		reqURL = adminURL + "/rest/apigateway/policyActions"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -294,6 +309,29 @@ func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, ap
 	}
 
 	return nil
+}
+
+// findPolicyByType searches for an existing policy action by type on a given API.
+func (w *WebMethodsAdapter) findPolicyByType(ctx context.Context, adminURL string, apiID string, wmType string, stoaType string) (string, error) {
+	policiesURL := fmt.Sprintf("%s/rest/apigateway/apis/%s/policyActions", adminURL, apiID)
+	body, err := w.doGet(ctx, policiesURL)
+	if err != nil {
+		return "", err
+	}
+
+	var policies struct {
+		PolicyActions []wmPolicyAction `json:"policyActions"`
+	}
+	if err := json.Unmarshal(body, &policies); err != nil {
+		return "", err
+	}
+
+	for _, p := range policies.PolicyActions {
+		if p.TemplateKey == wmType || p.TemplateKey == stoaType {
+			return p.ID, nil
+		}
+	}
+	return "", nil
 }
 
 // RemovePolicy removes a policy action from a webMethods API by type.
@@ -350,28 +388,127 @@ func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, a
 	return nil
 }
 
+// ActivateAPI activates a webMethods API by ID.
+func (w *WebMethodsAdapter) ActivateAPI(ctx context.Context, adminURL string, apiID string) error {
+	reqURL := fmt.Sprintf("%s/rest/apigateway/apis/%s/activate", adminURL, apiID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, reqURL, nil)
+	if err != nil {
+		return err
+	}
+	w.setAuth(req)
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("activate webmethods api: %w", err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("webmethods api activate failed (%d)", resp.StatusCode)
+	}
+	return nil
+}
+
+// DeactivateAPI deactivates a webMethods API by ID.
+func (w *WebMethodsAdapter) DeactivateAPI(ctx context.Context, adminURL string, apiID string) error {
+	reqURL := fmt.Sprintf("%s/rest/apigateway/apis/%s/deactivate", adminURL, apiID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, reqURL, nil)
+	if err != nil {
+		return err
+	}
+	w.setAuth(req)
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("deactivate webmethods api: %w", err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("webmethods api deactivate failed (%d)", resp.StatusCode)
+	}
+	return nil
+}
+
+// DeleteAPI removes an API from webMethods (2-step: deactivate then delete).
+// Idempotent: returns nil if the API does not exist.
+func (w *WebMethodsAdapter) DeleteAPI(ctx context.Context, adminURL string, apiName string) error {
+	apiID, err := w.resolveAPIID(ctx, adminURL, apiName)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil // idempotent
+		}
+		return err
+	}
+
+	// Step 1: deactivate (ignore errors, may already be inactive)
+	_ = w.DeactivateAPI(ctx, adminURL, apiID)
+
+	// Step 2: delete
+	reqURL := fmt.Sprintf("%s/rest/apigateway/apis/%s", adminURL, apiID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
+	if err != nil {
+		return err
+	}
+	w.setAuth(req)
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete webmethods api: %w", err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("webmethods api delete failed (%d)", resp.StatusCode)
+	}
+	return nil
+}
+
+// openAPI31Re matches OpenAPI 3.1.x version strings.
+var openAPI31Re = regexp.MustCompile(`"openapi"\s*:\s*"3\.1\.\d+"`)
+
+// downgradeOpenAPI31 rewrites an OpenAPI 3.1.x spec to 3.0.3.
+// webMethods only accepts OpenAPI 3.0.x.
+func downgradeOpenAPI31(spec []byte) []byte {
+	if !openAPI31Re.Match(spec) {
+		return spec
+	}
+	return openAPI31Re.ReplaceAll(spec, []byte(`"openapi": "3.0.3"`))
+}
+
 // SyncRoutes pushes CP routes to webMethods via REST API import.
 // Idempotent: checks if API exists by name, uses PUT to update if so, POST only for new APIs.
-// Skips unchanged routes based on SpecHash reconciliation.
+// Deactivated routes are deactivated on the gateway. Skips unchanged routes via SpecHash.
 func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
-	// Build index of existing APIs by name → ID (single HTTP call)
 	existingAPIs, err := w.listAPIsIndexedByName(ctx, adminURL)
 	if err != nil {
 		return fmt.Errorf("list existing apis: %w", err)
 	}
 
 	for _, route := range routes {
+		wmName := "stoa-" + route.Name
+
+		// Deactivated route: deactivate on gateway if it exists
 		if !route.Activated {
+			if existingID, exists := existingAPIs[wmName]; exists {
+				if err := w.DeactivateAPI(ctx, adminURL, existingID); err != nil {
+					return fmt.Errorf("deactivate route %s: %w", route.Name, err)
+				}
+			}
 			continue
 		}
-
-		wmName := "stoa-" + route.Name
 
 		// SpecHash reconciliation: skip if unchanged since last sync
 		if route.SpecHash != "" {
 			if lastHash, ok := w.syncedHashes[wmName]; ok && lastHash == route.SpecHash {
 				continue
 			}
+		}
+
+		// Downgrade OpenAPI 3.1 spec if present
+		spec := route.OpenAPISpec
+		if len(spec) > 0 {
+			spec = downgradeOpenAPI31(spec)
 		}
 
 		apiPayload := map[string]interface{}{
@@ -392,6 +529,10 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			"tags": []string{"stoa-managed"},
 		}
 
+		if len(spec) > 0 {
+			apiPayload["apiDefinition"] = json.RawMessage(spec)
+		}
+
 		data, err := json.Marshal(apiPayload)
 		if err != nil {
 			return fmt.Errorf("marshal webmethods api: %w", err)
@@ -400,11 +541,9 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		var method string
 		var apiURL string
 		if existingID, exists := existingAPIs[wmName]; exists {
-			// Update existing API
 			method = http.MethodPut
 			apiURL = fmt.Sprintf("%s/rest/apigateway/apis/%s", adminURL, existingID)
 		} else {
-			// Create new API
 			method = http.MethodPost
 			apiURL = adminURL + "/rest/apigateway/apis"
 		}
@@ -422,7 +561,6 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		}
 		_ = resp.Body.Close()
 
-		// 409 Conflict on POST = API already exists, treat as success
 		if resp.StatusCode == http.StatusConflict {
 			continue
 		}
@@ -430,7 +568,6 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			return fmt.Errorf("webmethods api sync failed (%d)", resp.StatusCode)
 		}
 
-		// Track synced hash
 		if route.SpecHash != "" {
 			w.syncedHashes[wmName] = route.SpecHash
 		}

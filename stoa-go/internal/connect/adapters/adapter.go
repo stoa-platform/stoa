@@ -31,8 +31,9 @@ type Route struct {
 	PathPrefix string   `json:"path_prefix"`
 	BackendURL string   `json:"backend_url"`
 	Methods    []string `json:"methods,omitempty"`
-	SpecHash   string   `json:"spec_hash,omitempty"`
-	Activated  bool     `json:"activated"`
+	SpecHash    string   `json:"spec_hash,omitempty"`
+	OpenAPISpec []byte   `json:"openapi_spec,omitempty"`
+	Activated   bool     `json:"activated"`
 }
 
 // Credential represents a consumer credential fetched from Vault for injection.

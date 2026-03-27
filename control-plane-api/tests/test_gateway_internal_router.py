@@ -638,11 +638,11 @@ class TestListGatewayRoutes:
         routes = resp.json()
         assert len(routes) == 1
 
-        # Pydantic serialises bytes as base64 in JSON
-        raw_b64 = routes[0]["openapi_spec"]
-        assert raw_b64 is not None, "openapi_spec must be present"
+        # FastAPI jsonable_encoder decodes bytes → str for JSON response
+        raw_spec = routes[0]["openapi_spec"]
+        assert raw_spec is not None, "openapi_spec must be present"
 
-        decoded = json.loads(base64.b64decode(raw_b64).decode())
+        decoded = json.loads(raw_spec)
         assert decoded["openapi"] == "3.1.0"
         assert decoded["info"]["title"] == "Petstore"
 

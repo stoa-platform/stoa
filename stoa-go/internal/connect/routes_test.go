@@ -287,11 +287,11 @@ func TestRunRouteSyncNoAckWithoutDeploymentIDs(t *testing.T) {
 	}
 
 	cpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/v1/internal/gateways/routes":
+		switch r.URL.Path {
+		case "/v1/internal/gateways/routes":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(routes)
-		case r.URL.Path == "/v1/internal/gateways/gw-test/route-sync-ack":
+		case "/v1/internal/gateways/gw-test/route-sync-ack":
 			ackCalled = true
 			w.WriteHeader(http.StatusOK)
 		default:

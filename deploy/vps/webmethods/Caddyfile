@@ -1,0 +1,14 @@
+# webMethods Production — OVH VPS (51.255.201.17)
+# Canonical copy at /opt/webmethods-caddy/Caddyfile on VPS
+
+webmethods.gostoa.dev {
+	reverse_proxy localhost:5555
+}
+
+connect-webmethods.gostoa.dev {
+	reverse_proxy localhost:8090
+}
+
+link-webmethods.gostoa.dev {
+	reverse_proxy localhost:9200
+}

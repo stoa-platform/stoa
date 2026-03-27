@@ -124,6 +124,11 @@ const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 // Routes redirect to home. Pages retained in codebase for reintroduction when implemented.
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
 
+// CAB-1639: EU Public API Catalog
+const EUApiCatalog = lazy(() =>
+  import('./pages/EUApiCatalog/EUApiCatalog').then((m) => ({ default: m.EUApiCatalog }))
+);
+
 // CAB-1922: Backend API detail view
 const backendApisModule = () => import('./pages/BackendApis');
 const BackendApiDetail = lazy(() =>
@@ -352,6 +357,7 @@ function ProtectedRoutes() {
                   element={<Navigate to="/apis?tab=backends" replace />}
                 />
                 <Route path="/backend-apis/:id" element={<BackendApiDetail />} />
+                <Route path="/eu-catalog" element={<EUApiCatalog />} />
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />

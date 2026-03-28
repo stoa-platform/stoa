@@ -13553,7 +13553,9 @@ export interface components {
             /** Name */
             name: string;
             /** Openapi Spec */
-            openapi_spec?: string | null;
+            openapi_spec?: {
+                [key: string]: unknown;
+            } | null;
             /** Path Prefix */
             path_prefix: string;
             /**

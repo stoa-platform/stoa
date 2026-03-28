@@ -131,6 +131,8 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 	if len(results) > 0 {
 		if ackErr := a.ReportRouteSyncAck(ctx, results); ackErr != nil {
 			log.Printf("route-sync: report ack error: %v", ackErr)
+		} else {
+			log.Printf("route-sync: reported %d ack results to CP", len(results))
 		}
 	}
 

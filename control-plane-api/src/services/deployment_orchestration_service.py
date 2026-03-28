@@ -322,6 +322,14 @@ class DeploymentOrchestrationService:
                 if not gateway or gateway.status.value == "offline":
                     continue
 
+                if gateway.source and gateway.source.value == "self_register":
+                    logger.info(
+                        "Skipping inline sync for agent-managed gateway %s (deployment %s)",
+                        gateway.name,
+                        dep.id,
+                    )
+                    continue
+
                 adapter = await create_adapter_with_credentials(
                     gateway.gateway_type.value,
                     gateway.base_url,

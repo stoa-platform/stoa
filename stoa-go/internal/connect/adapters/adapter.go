@@ -3,6 +3,7 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -33,7 +34,7 @@ type Route struct {
 	BackendURL   string   `json:"backend_url"`
 	Methods      []string `json:"methods,omitempty"`
 	SpecHash     string   `json:"spec_hash,omitempty"`
-	OpenAPISpec  []byte   `json:"openapi_spec,omitempty"`
+	OpenAPISpec  json.RawMessage `json:"openapi_spec,omitempty"`
 	Activated    bool     `json:"activated"`
 }
 

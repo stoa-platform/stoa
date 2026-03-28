@@ -70,6 +70,7 @@ class GatewayDeploymentService:
             "backend_url": backend_url,
             "methods": sorted(methods) if methods else ["GET", "POST", "PUT", "DELETE"],
             "activated": True,
+            "openapi_spec": spec_data if spec_data else None,
         }
 
     async def deploy_api(

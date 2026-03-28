@@ -512,26 +512,39 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			spec = downgradeOpenAPI31(spec)
 		}
 
-		apiPayload := map[string]interface{}{
-			"apiName":        wmName,
-			"apiVersion":     "1.0",
-			"apiDescription": fmt.Sprintf("STOA managed route %s", route.Name),
-			"type":           "REST",
-			"isActive":       true,
-			"nativeEndpoint": []map[string]interface{}{
-				{"uri": route.BackendURL},
-			},
-			"resources": []map[string]interface{}{
-				{
-					"resourcePath": route.PathPrefix,
-					"methods":      route.Methods,
-				},
-			},
-			"tags": []string{"stoa-managed"},
-		}
-
+		var apiPayload map[string]interface{}
 		if len(spec) > 0 {
-			apiPayload["apiDefinition"] = json.RawMessage(spec)
+			// Detect spec type: swagger 2.0 vs openapi 3.x
+			specType := "openapi"
+			if bytes.Contains(spec, []byte(`"swagger"`)) {
+				specType = "swagger"
+			}
+			// When we have an OpenAPI spec, let wM derive endpoints/resources from it
+			apiPayload = map[string]interface{}{
+				"apiName":       wmName,
+				"apiVersion":    "1.0",
+				"type":          specType,
+				"apiDefinition": json.RawMessage(spec),
+			}
+		} else {
+			// No spec — build minimal REST API definition manually
+			apiPayload = map[string]interface{}{
+				"apiName":        wmName,
+				"apiVersion":     "1.0",
+				"apiDescription": fmt.Sprintf("STOA managed route %s", route.Name),
+				"type":           "REST",
+				"isActive":       true,
+				"nativeEndpoint": []map[string]interface{}{
+					{"uri": route.BackendURL},
+				},
+				"resources": []map[string]interface{}{
+					{
+						"resourcePath": route.PathPrefix,
+						"methods":      route.Methods,
+					},
+				},
+				"tags": []string{"stoa-managed"},
+			}
 		}
 
 		data, err := json.Marshal(apiPayload)
@@ -567,6 +580,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			continue
 		}
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			log.Printf("webmethods: sync %s failed (%d): %s", wmName, resp.StatusCode, string(respBody))
 			return fmt.Errorf("webmethods api sync failed (%d)", resp.StatusCode)
 		}
 
@@ -638,13 +652,16 @@ func (w *WebMethodsAdapter) verifyAndActivate(ctx context.Context, adminURL, api
 	}
 
 	if isActive {
+		log.Printf("webmethods: verifyAndActivate %s (%s): already active", apiName, apiID)
 		return nil
 	}
 
 	// API is not active — attempt activation
+	log.Printf("webmethods: verifyAndActivate %s (%s): isActive=false, activating...", apiName, apiID)
 	if err := w.ActivateAPI(ctx, adminURL, apiID); err != nil {
 		return fmt.Errorf("API created but activation failed on webMethods: %s (%s): %w", apiName, apiID, err)
 	}
+	log.Printf("webmethods: verifyAndActivate %s (%s): activated successfully", apiName, apiID)
 	return nil
 }
 

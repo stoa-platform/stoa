@@ -605,14 +605,13 @@ class TestListGatewayRoutes:
         assert routes[0]["spec_hash"] == "abc123"
         assert routes[0]["openapi_spec"] is None
 
-    def test_regression_openapi_spec_bytes_delivered_to_connect(self, client):
-        """openapi_spec dict in desired_state is serialised to JSON bytes for stoa-connect.
+    def test_regression_openapi_spec_dict_delivered_to_connect(self, client):
+        """openapi_spec dict in desired_state is delivered as JSON object to stoa-connect.
 
-        CAB-1929: outbound-only model — CP delivers spec bytes so stoa-connect
-        can push them to the on-premise gateway without any inbound call-back.
+        CAB-1929: outbound-only model — CP delivers spec as a dict so stoa-connect
+        can push it to the on-premise gateway without any inbound call-back.
+        webMethods requires apiDefinition as a JSON object (not a string).
         """
-        import base64, json
-
         spec_dict = {"openapi": "3.1.0", "info": {"title": "Petstore", "version": "1.0.0"}}
         dep = _make_deployment({
             "api_catalog_id": "cat-2",
@@ -638,13 +637,12 @@ class TestListGatewayRoutes:
         routes = resp.json()
         assert len(routes) == 1
 
-        # FastAPI jsonable_encoder decodes bytes → str for JSON response
-        raw_spec = routes[0]["openapi_spec"]
-        assert raw_spec is not None, "openapi_spec must be present"
-
-        decoded = json.loads(raw_spec)
-        assert decoded["openapi"] == "3.1.0"
-        assert decoded["info"]["title"] == "Petstore"
+        # openapi_spec is a JSON object (dict), not a string or base64
+        spec = routes[0]["openapi_spec"]
+        assert spec is not None, "openapi_spec must be present"
+        assert isinstance(spec, dict), f"Expected dict, got {type(spec)}"
+        assert spec["openapi"] == "3.1.0"
+        assert spec["info"]["title"] == "Petstore"
 
     def test_routes_skips_deployment_without_backend_url(self, client):
         """Deployments with no backend_url are excluded from the route list."""

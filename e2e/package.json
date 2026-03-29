@@ -21,6 +21,7 @@
     "report": "playwright show-report reports/html",
     "test:audit": "bddgen && playwright test --reporter=json,html && node scripts/generate-audit.js",
     "bddgen": "bddgen",
+    "test:smoke-api": "playwright test --project=smoke-api",
     "test:smoke-mock": "playwright test --config=smoke-mock/playwright.config.ts"
   },
   "devDependencies": {

@@ -157,6 +157,10 @@ class GatewayRegistration(BaseModel):
     )
     admin_url: str = Field(..., description="Gateway admin API URL for CP to call back")
     tenant_id: str | None = Field(default=None, description="Optional tenant restriction")
+    target_gateway_url: str | None = Field(
+        default=None,
+        description="URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)",
+    )
 
 
 class HeartbeatPayload(BaseModel):
@@ -290,6 +294,8 @@ async def register_gateway(
         # Preserve manually-set HTTPS base_url over auto-detected internal URL
         if not (existing.base_url and existing.base_url.startswith("https://")):
             existing.base_url = payload.admin_url
+        if payload.target_gateway_url:
+            existing.target_gateway_url = payload.target_gateway_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
         existing.mode = normalized_mode
@@ -327,6 +333,8 @@ async def register_gateway(
         argocd_entry.version = payload.version
         argocd_entry.capabilities = payload.capabilities
         argocd_entry.base_url = payload.admin_url
+        if payload.target_gateway_url:
+            argocd_entry.target_gateway_url = payload.target_gateway_url
         argocd_entry.status = GatewayInstanceStatus.ONLINE
         argocd_entry.last_health_check = now
         argocd_entry.mode = normalized_mode
@@ -349,6 +357,7 @@ async def register_gateway(
         environment=payload.environment,
         tenant_id=payload.tenant_id,
         base_url=payload.admin_url,
+        target_gateway_url=payload.target_gateway_url,
         auth_config={"type": "gateway_key"},
         status=GatewayInstanceStatus.ONLINE,
         last_health_check=now,

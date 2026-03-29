@@ -1,6 +1,6 @@
 from .argocd_service import ArgoCDService, argocd_service
 from .gateway_service import GatewayAdminService, gateway_service
-from .git_provider import GitProvider, git_provider_factory
+from .git_provider import GitProvider, get_git_provider, git_provider_factory
 from .git_service import GitLabService, git_service
 from .github_service import GitHubService
 from .iam_sync_service import IAMSyncService
@@ -26,6 +26,7 @@ __all__ = [
     "VariableResolver",
     "argocd_service",
     "gateway_service",
+    "get_git_provider",
     "git_provider_factory",
     "git_service",
     "kafka_service",

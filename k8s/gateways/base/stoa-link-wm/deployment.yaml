@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stoa-sidecar-kong
+  name: stoa-link-wm
   labels:
-    app: stoa-sidecar-kong
+    app: stoa-link-wm
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: stoa-sidecar-kong
+      app: stoa-link-wm
   template:
     metadata:
       labels:
-        app: stoa-sidecar-kong
+        app: stoa-link-wm
     spec:
       imagePullSecrets:
         - name: ghcr-creds
@@ -46,7 +46,7 @@ spec:
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
             - name: STOA_SIDECAR_UPSTREAM_URL
-              value: "http://kong-gateway:8001"
+              value: "https://webmethods.gostoa.dev"
             - name: STOA_RATE_LIMIT_DEFAULT
               value: "1000"
             - name: STOA_POLICY_ENABLED

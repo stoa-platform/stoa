@@ -1558,6 +1558,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_admin_health_reports_github_provider() {
+        let config = Config {
+            admin_api_token: Some("secret".into()),
+            git_provider: "github".into(),
+            ..Config::default()
+        };
+        let state = AppState::new(config);
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["git_provider"], "github");
+    }
+
+    #[tokio::test]
     async fn test_upsert_and_list_api() {
         let state = create_test_state(Some("secret"));
         let app = build_admin_router(state);

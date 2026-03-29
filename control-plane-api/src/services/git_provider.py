@@ -5,6 +5,7 @@ Implementations: GitLabService (existing), GitHubService (Wave 2).
 """
 
 from abc import ABC, abstractmethod
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -134,3 +135,14 @@ def git_provider_factory() -> GitProvider:
         return GitHubService()
 
     raise ValueError(f"Unsupported GIT_PROVIDER: '{settings.GIT_PROVIDER}'. " f"Supported values: 'gitlab', 'github'.")
+
+
+@lru_cache(maxsize=1)
+def get_git_provider() -> GitProvider:
+    """FastAPI dependency — cached GitProvider singleton.
+
+    Use with ``Depends(get_git_provider)`` in router endpoints.
+    The instance is created once via ``git_provider_factory()`` and reused
+    across all requests for the lifetime of the process.
+    """
+    return git_provider_factory()

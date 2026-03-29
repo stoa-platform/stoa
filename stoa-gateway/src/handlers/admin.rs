@@ -88,6 +88,7 @@ pub struct AdminHealthResponse {
     pub version: String,
     pub routes_count: usize,
     pub policies_count: usize,
+    pub git_provider: String,
 }
 
 pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResponse> {
@@ -96,6 +97,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResp
         version: env!("CARGO_PKG_VERSION").to_string(),
         routes_count: state.route_registry.count(),
         policies_count: state.policy_registry.count(),
+        git_provider: state.config.git_provider.clone(),
     })
 }
 
@@ -1552,6 +1554,7 @@ mod tests {
         assert!(data["version"].is_string());
         assert_eq!(data["routes_count"], 0);
         assert_eq!(data["policies_count"], 0);
+        assert_eq!(data["git_provider"], "gitlab");
     }
 
     #[tokio::test]

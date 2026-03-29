@@ -31,6 +31,6 @@ expression: json
   "serverInfo": {
     "name": "STOA Gateway",
     "protocolVersion": "2025-11-25",
-    "version": "0.9.0"
+    "version": "0.9.1"
   }
 }

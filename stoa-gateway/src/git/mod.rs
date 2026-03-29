@@ -194,4 +194,62 @@ mod tests {
         assert!(provider.is_gitlab());
         // We can't easily call async in a sync test without a runtime; verify is_gitlab instead.
     }
+
+    #[test]
+    fn test_is_github_is_gitlab_mutually_exclusive() {
+        let github_config = github_config(Some("tok"), Some("org"));
+        let gh = GitProvider::from_config(&github_config).unwrap();
+        assert!(gh.is_github());
+        assert!(!gh.is_gitlab());
+
+        let gl = GitProvider::from_config(&Config::default()).unwrap();
+        assert!(gl.is_gitlab());
+        assert!(!gl.is_github());
+    }
+
+    #[test]
+    fn test_from_config_unknown_provider_falls_back_to_gitlab() {
+        let config = Config {
+            git_provider: "bitbucket".into(),
+            ..Config::default()
+        };
+        let provider = GitProvider::from_config(&config).unwrap();
+        assert!(provider.is_gitlab());
+    }
+
+    #[test]
+    fn test_from_config_empty_provider_falls_back_to_gitlab() {
+        let config = Config {
+            git_provider: String::new(),
+            ..Config::default()
+        };
+        let provider = GitProvider::from_config(&config).unwrap();
+        assert!(provider.is_gitlab());
+    }
+
+    #[test]
+    fn test_from_config_github_case_sensitive() {
+        // "GitHub" (capitalized) should NOT match — only "github" is valid
+        let config = Config {
+            git_provider: "GitHub".into(),
+            github_token: Some("tok".into()),
+            github_org: Some("org".into()),
+            ..Config::default()
+        };
+        let provider = GitProvider::from_config(&config).unwrap();
+        // Falls through to GitLab because match is case-sensitive
+        assert!(provider.is_gitlab());
+    }
+
+    #[test]
+    fn test_provider_error_display() {
+        let err = GitProviderError::Config("missing field".into());
+        assert_eq!(
+            err.to_string(),
+            "Provider configuration missing: missing field"
+        );
+
+        let err = GitProviderError::Unsupported("list_files for GitLab".into());
+        assert!(err.to_string().contains("not supported"));
+    }
 }

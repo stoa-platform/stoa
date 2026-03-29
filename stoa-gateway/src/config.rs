@@ -262,6 +262,12 @@ pub struct Config {
     #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_secs: u64,
 
+    /// URL of the third-party gateway managed by this Link/sidecar instance.
+    /// Displayed in Console UI. Only relevant for sidecar/connect modes.
+    /// Env: STOA_TARGET_GATEWAY_URL
+    #[serde(default)]
+    pub target_gateway_url: Option<String>,
+
     // === Native Tools (Phase 1) ===
     /// Enable native tool implementations (default: true)
     /// Set STOA_NATIVE_TOOLS_ENABLED=false to fallback to proxy mode
@@ -1407,6 +1413,7 @@ impl Default for Config {
             auto_register: default_auto_register(),
             advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),
+            target_gateway_url: None,
             native_tools_enabled: default_native_tools_enabled(),
             kafka_enabled: false,
             kafka_brokers: default_kafka_brokers(),

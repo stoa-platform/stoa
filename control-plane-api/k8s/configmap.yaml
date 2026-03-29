@@ -27,7 +27,7 @@ data:
   KEYCLOAK_VERIFY_SSL: "false"
 
   # Git Provider Selection (gitlab or github)
-  GIT_PROVIDER: "gitlab"
+  GIT_PROVIDER: "github"
 
   # GitLab Integration
   GITLAB_URL: "https://gitlab.com"

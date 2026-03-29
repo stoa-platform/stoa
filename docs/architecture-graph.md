@@ -1,7 +1,7 @@
 # Platform Architecture — Dependency Graph
 
 > Auto-generated from `docs/platform-catalog.yaml` by `scripts/ops/catalog-graph.sh`.
-> Last catalog update: 2026-02-24. Do not edit manually.
+> Last catalog update: 2026-03-29. Do not edit manually.
 
 ## Service Dependencies
 
@@ -25,8 +25,12 @@ graph TD
     class stoa_portal frontend
     stoa_gateway["STOA Gateway (Rust)"]
     class stoa_gateway gateway
+    stoa_link_wm["STOA Link — webMethods (Sidecar)"]
+    stoa_connect["STOA Connect (Go Agent)"]
     stoa_operator["STOA Operator"]
     class stoa_operator external
+    webmethods["webMethods API Gateway (Trial)"]
+    class webmethods gateway
     postgres["PostgreSQL"]
     class postgres database
     redpanda["Redpanda (Kafka)"]
@@ -35,8 +39,11 @@ graph TD
     class opensearch database
     keycloak["Keycloak (OIDC)"]
     class keycloak identity
-    infisical["Infisical (Secrets Vault)"]
+    vault["HashiCorp Vault"]
+    class vault identity
+    infisical["Infisical (Legacy Secrets)"]
     class infisical identity
+    openldap["OpenLDAP"]
     prometheus["Prometheus"]
     class prometheus monitoring
     grafana["Grafana"]
@@ -49,16 +56,8 @@ graph TD
     class argocd external
     n8n["n8n (Workflow Engine)"]
     class n8n external
-    kong_arena["Kong DB-less (Arena)"]
-    class kong_arena gateway
-    gravitee_arena["Gravitee APIM (Arena)"]
-    class gravitee_arena gateway
-    kong_vps["Kong Standalone (VPS)"]
-    class kong_vps gateway
-    gravitee_vps["Gravitee APIM (VPS)"]
-    class gravitee_vps gateway
-    webmethods_vps["webMethods API Gateway (VPS)"]
-    class webmethods_vps gateway
+    netbox["Netbox (IPAM)"]
+    uptime_kuma["Uptime Kuma (Status Page)"]
 
     %% Dependencies
     control_plane_api --> postgres
@@ -72,6 +71,10 @@ graph TD
     stoa_gateway --> control_plane_api
     stoa_gateway --> keycloak
     stoa_gateway --> redpanda
+    stoa_link_wm --> control_plane_api
+    stoa_link_wm --> webmethods
+    stoa_connect --> control_plane_api
+    stoa_connect --> webmethods
     stoa_operator --> control_plane_api
     keycloak --> postgres
     grafana --> prometheus
@@ -95,14 +98,15 @@ graph TD
 | operator | 1 | stoa-operator |
 | search | 1 | opensearch |
 | logging | 1 | loki |
-| secrets | 1 | infisical |
-| gateway-benchmark | 2 | kong-arena, gravitee-arena |
-| gateway-external | 3 | kong-vps, gravitee-vps, webmethods-vps |
+| secrets | 2 | vault, infisical |
+| gateway-external | 1 | webmethods |
 
 ## Cluster Topology
 
 | Cluster | Provider | Nodes | Namespaces/Hosts |
 |---------|----------|-------|------------------|
-| OVH Managed Kubernetes (GRA9) | OVH | 3 | 6 |
-| OVH VPS Fleet | OVH | 4 | 4 |
-| OVH VPS (Infisical) | OVH | 1 | 1 |
+| OVH Managed Kubernetes (GRA9) | OVH | 3 | 5 |
+| K3s Gateway Cluster (Contabo) | Contabo | 2 | 2 |
+| OVH VPS Fleet | OVH | 3 | 3 |
+| Contabo VPS (HEGEMON Workers) | Contabo | 5 | 5 |
+| OVH VPS (Vault) | OVH | 1 | 1 |

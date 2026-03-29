@@ -533,9 +533,9 @@ async def list_portal_mcp_servers(
                 logger.warning("MCP servers cache empty, falling back to Git sync")
                 try:
                     from ..services.catalog_sync_service import CatalogSyncService
-                    from ..services.git_service import git_service
+                    from ..services.git_provider import git_provider_factory
 
-                    sync_service = CatalogSyncService(db, git_service)
+                    sync_service = CatalogSyncService(db, git_provider_factory())
                     await sync_service.sync_mcp_servers()
                     await db.commit()
 

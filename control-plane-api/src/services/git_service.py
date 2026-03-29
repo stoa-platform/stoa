@@ -3,7 +3,9 @@
 import asyncio
 import logging
 import re
+import tempfile
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import gitlab
@@ -11,6 +13,7 @@ import yaml
 from gitlab.v4.objects import Project
 
 from ..config import settings
+from .git_provider import GitProvider
 
 logger = logging.getLogger(__name__)
 
@@ -90,14 +93,14 @@ def _normalize_api_data(raw_data: dict) -> dict:
     return raw_data
 
 
-class GitLabService:
-    """Service for GitLab operations - GitOps source of truth"""
+class GitLabService(GitProvider):
+    """GitLab implementation of GitProvider — GitOps source of truth."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._gl: gitlab.Gitlab | None = None
         self._project: Project | None = None
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Initialize GitLab connection"""
         try:
             self._gl = gitlab.Gitlab(settings.GITLAB_URL, private_token=settings.GITLAB_TOKEN)
@@ -111,10 +114,106 @@ class GitLabService:
             logger.error(f"Failed to connect to GitLab: {e}")
             raise
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Close GitLab connection"""
         self._gl = None
         self._project = None
+
+    # ============================================================
+    # GitProvider ABC implementations
+    # ============================================================
+
+    async def clone_repo(self, repo_url: str) -> Path:
+        """Clone a GitLab repository to a temporary directory."""
+        tmp_dir = Path(tempfile.mkdtemp(prefix="stoa-gl-"))
+        token = settings.GITLAB_TOKEN
+        # Inject token into HTTPS URL for auth
+        authed_url = repo_url.replace("https://", f"https://oauth2:{token}@")
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "clone",
+            "--depth=1",
+            authed_url,
+            str(tmp_dir / "repo"),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"git clone failed: {stderr.decode().strip()}")
+        return tmp_dir / "repo"
+
+    async def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> str:
+        """Retrieve raw file content from GitLab."""
+        if not self._gl:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id)
+        try:
+            f = project.files.get(file_path, ref=ref)
+            return f.decode().decode("utf-8")
+        except gitlab.exceptions.GitlabGetError as exc:
+            raise FileNotFoundError(f"{file_path} not found in project {project_id}") from exc
+
+    async def list_files(self, project_id: str, path: str = "", ref: str = "main") -> list[str]:
+        """List files in a GitLab repository directory."""
+        if not self._gl:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id)
+        items = project.repository_tree(path=path, ref=ref, per_page=100, all=True)
+        return [item["path"] for item in items]
+
+    async def create_webhook(
+        self,
+        project_id: str,
+        url: str,
+        secret: str,
+        events: list[str],
+    ) -> dict[str, Any]:
+        """Register a webhook on a GitLab project."""
+        if not self._gl:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id)
+        # Map generic event names to GitLab hook booleans
+        hook_data: dict[str, Any] = {"url": url, "token": secret}
+        event_map = {
+            "push": "push_events",
+            "merge_request": "merge_requests_events",
+            "tag": "tag_push_events",
+            "issues": "issues_events",
+        }
+        for event in events:
+            gl_key = event_map.get(event, f"{event}_events")
+            hook_data[gl_key] = True
+        hook = project.hooks.create(hook_data)
+        return {"id": str(hook.id), "url": hook.url}
+
+    async def delete_webhook(self, project_id: str, hook_id: str) -> bool:
+        """Remove a webhook from a GitLab project."""
+        if not self._gl:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id)
+        try:
+            hook = project.hooks.get(int(hook_id))
+            hook.delete()
+            return True
+        except gitlab.exceptions.GitlabGetError:
+            return False
+
+    async def get_repo_info(self, project_id: str) -> dict[str, Any]:
+        """Retrieve GitLab project metadata."""
+        if not self._gl:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id)
+        return {
+            "name": project.name,
+            "default_branch": project.default_branch,
+            "url": project.web_url,
+            "visibility": project.visibility,
+        }
+
+    # ============================================================
+    # Legacy methods (used by existing callers)
+    # ============================================================
 
     def _get_tenant_path(self, tenant_id: str) -> str:
         """Get the base path for a tenant in the repo"""

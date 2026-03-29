@@ -129,6 +129,8 @@ def git_provider_factory() -> GitProvider:
         return GitLabService()
 
     if provider == "github":
-        raise NotImplementedError("GitHub provider not yet implemented. Coming in Wave 2 (CAB-1890 Phase 3).")
+        from .github_service import GitHubService
+
+        return GitHubService()
 
     raise ValueError(f"Unsupported GIT_PROVIDER: '{settings.GIT_PROVIDER}'. " f"Supported values: 'gitlab', 'github'.")

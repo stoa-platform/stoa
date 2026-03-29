@@ -63,12 +63,15 @@ class TestGitProviderFactory:
         assert isinstance(provider, GitLabService)
 
     @patch("src.services.git_provider.settings")
-    def test_factory_github_not_yet_implemented(self, mock_settings):
-        """GIT_PROVIDER=github must raise NotImplementedError (Wave 2)."""
+    def test_factory_returns_github_service(self, mock_settings):
+        """GIT_PROVIDER=github must return a GitHubService instance."""
         mock_settings.GIT_PROVIDER = "github"
 
-        with pytest.raises(NotImplementedError, match="Wave 2"):
-            git_provider_factory()
+        provider = git_provider_factory()
+
+        from src.services.github_service import GitHubService
+
+        assert isinstance(provider, GitHubService)
 
     @patch("src.services.git_provider.settings")
     def test_factory_unknown_provider_raises(self, mock_settings):

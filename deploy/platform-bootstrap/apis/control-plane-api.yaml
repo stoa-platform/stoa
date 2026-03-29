@@ -248,4 +248,15 @@ spec:
     - path: /webhooks/gitlab/health
       methods: [GET]
       auth: false
-      description: "Webhook health check"
+      description: "GitLab webhook health check"
+
+    # Webhooks (GitHub)
+    - path: /webhooks/github
+      methods: [POST]
+      auth: false
+      description: "GitHub webhook receiver"
+
+    - path: /webhooks/github/health
+      methods: [GET]
+      auth: false
+      description: "GitHub webhook health check"

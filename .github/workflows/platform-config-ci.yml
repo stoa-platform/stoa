@@ -41,7 +41,9 @@ permissions:
 env:
   BASE_DOMAIN: gostoa.dev
   ENV_PREFIX: ${{ (github.event.inputs.environment == 'staging' && 'staging-') || '' }}
+  GIT_PROVIDER: ${{ vars.GIT_PROVIDER || 'gitlab' }}
   GITLAB_PROJECT: cab6961310/stoa-gitops
+  GITHUB_GITOPS_REPO: stoa-platform/stoa-gitops
 
 jobs:
   # ============================================
@@ -115,10 +117,11 @@ jobs:
           fi
 
   # ============================================
-  # Stage 2: Sync to GitLab (main branch only)
+  # Stage 2: Sync to Git repository (main branch only)
+  # Supports GitLab (default) and GitHub via GIT_PROVIDER
   # ============================================
-  sync-gitlab:
-    name: Sync to GitLab
+  sync-gitops:
+    name: Sync to GitOps repo
     needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -131,15 +134,22 @@ jobs:
           git config --global user.name "STOA CI/CD"
           git config --global user.email "ci@gostoa.dev"
 
-      - name: Clone GitLab repository
+      - name: Clone GitOps repository
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GH_GITOPS_TOKEN: ${{ secrets.GITHUB_GITOPS_TOKEN }}
         run: |
-          git clone https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git /tmp/stoa-gitops
+          if [ "$GIT_PROVIDER" = "github" ]; then
+            echo "Cloning from GitHub: ${GITHUB_GITOPS_REPO}"
+            git clone "https://x-access-token:${GH_GITOPS_TOKEN}@github.com/${GITHUB_GITOPS_REPO}.git" /tmp/stoa-gitops
+          else
+            echo "Cloning from GitLab: ${GITLAB_PROJECT}"
+            git clone "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git" /tmp/stoa-gitops
+          fi
 
-      - name: Sync platform configs to GitLab
+      - name: Sync platform configs
         run: |
-          echo "=== Syncing platform-bootstrap to GitLab ==="
+          echo "=== Syncing platform-bootstrap to ${GIT_PROVIDER} ==="
 
           # Create directories if not exist
           mkdir -p /tmp/stoa-gitops/webmethods/apis
@@ -167,9 +177,10 @@ jobs:
             cp gitops-templates/webmethods/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/ 2>/dev/null || true  # intentional: glob may match zero files
           fi
 
-      - name: Commit and push to GitLab
+      - name: Commit and push
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GH_GITOPS_TOKEN: ${{ secrets.GITHUB_GITOPS_TOKEN }}
         run: |
           cd /tmp/stoa-gitops
 
@@ -184,14 +195,18 @@ jobs:
           Run: ${{ github.run_id }}"
 
             git push origin main
-            echo "GITLAB_PUSHED=true" >> $GITHUB_ENV
+            echo "CONFIGS_PUSHED=true" >> $GITHUB_ENV
           fi
 
       - name: Output sync result
         run: |
-          if [ "$GITLAB_PUSHED" = "true" ]; then
-            echo "✅ Configs synced to GitLab successfully"
-            echo "GitLab will trigger ArgoCD for deployment via CRD reconciliation"
+          if [ "$CONFIGS_PUSHED" = "true" ]; then
+            echo "✅ Configs synced to ${GIT_PROVIDER} successfully"
+            if [ "$GIT_PROVIDER" = "github" ]; then
+              echo "GitHub will trigger ArgoCD for deployment via CRD reconciliation"
+            else
+              echo "GitLab will trigger ArgoCD for deployment via CRD reconciliation"
+            fi
           else
             echo "ℹ️ No changes to sync"
           fi
@@ -201,7 +216,7 @@ jobs:
   # ============================================
   verify:
     name: Verify Deployment
-    needs: sync-gitlab
+    needs: sync-gitops
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -247,7 +262,7 @@ jobs:
   # ============================================
   notify:
     name: Send Notifications
-    needs: [validate, sync-gitlab, verify]
+    needs: [validate, sync-gitops, verify]
     if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

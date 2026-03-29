@@ -32,6 +32,10 @@ import os
 # Set environment variables to disable workers before any imports
 os.environ["ENABLE_SNAPSHOT_CONSUMER"] = "false"
 
+# Explicit GIT_PROVIDER for test determinism (CAB-1890 dual-provider).
+# Tests that need GIT_PROVIDER=github override this via monkeypatch.setenv().
+os.environ.setdefault("GIT_PROVIDER", "gitlab")
+
 # Create mock services that will be patched into src.main
 _mock_kafka_service = MagicMock()
 _mock_kafka_service.connect = AsyncMock()

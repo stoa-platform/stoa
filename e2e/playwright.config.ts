@@ -114,6 +114,16 @@ export default defineConfig({
       },
       testMatch: /integration-/,
     },
+
+    // Standalone API smoke tests (no BDD, no browser)
+    {
+      name: 'smoke-api',
+      testDir: './tests',
+      use: {
+        baseURL: process.env.STOA_API_URL || 'https://api.gostoa.dev',
+      },
+      testMatch: /.*-smoke\.spec\.ts/,
+    },
   ],
 
   // Global setup/teardown if needed

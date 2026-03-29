@@ -231,7 +231,10 @@ async def test_deployment(
     import httpx
 
     from src.models.gateway_instance import GatewayInstance
-    from src.services.credential_resolver import AGENT_MANAGED_MESSAGE
+    from src.services.credential_resolver import (
+        _PULL_MODEL_GATEWAY_TYPES,
+        AGENT_MANAGED_MESSAGE,
+    )
 
     result = await db.execute(
         select(
@@ -239,6 +242,7 @@ async def test_deployment(
             GatewayInstance.base_url,
             GatewayInstance.auth_config,
             GatewayInstance.source,
+            GatewayInstance.gateway_type,
         )
         .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
         .where(GatewayDeployment.id == deployment_id)
@@ -250,8 +254,9 @@ async def test_deployment(
     dep = row.GatewayDeployment
     base_url = row.base_url
     auth_config = row.auth_config or {}
+    gw_type = row.gateway_type.value if hasattr(row.gateway_type, "value") else str(row.gateway_type)
 
-    if row.source == "self_register":
+    if row.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
         return TestResult(reachable=False, error=AGENT_MANAGED_MESSAGE, gateway_url=base_url)
 
     ds = dep.desired_state or {}

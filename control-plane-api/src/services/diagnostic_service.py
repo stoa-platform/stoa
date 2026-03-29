@@ -85,7 +85,10 @@ class DiagnosticService:
                 stages=[ConnectivityStage(name="lookup", status="error", error="Gateway not found")],
             )
 
-        if gateway.source == "self_register":
+        from src.services.credential_resolver import _PULL_MODEL_GATEWAY_TYPES
+
+        gw_type = gateway.gateway_type.value if hasattr(gateway.gateway_type, "value") else str(gateway.gateway_type)
+        if gateway.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
             return ConnectivityResult(
                 gateway_id=gateway_id,
                 overall_status="skipped",

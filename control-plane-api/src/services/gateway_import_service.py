@@ -56,10 +56,13 @@ class GatewayImportService:
 
     async def preview_import(self, gateway_instance_id: UUID) -> list[ImportPreview]:
         """Dry-run: show what would be imported without creating anything."""
+        from src.services.credential_resolver import _PULL_MODEL_GATEWAY_TYPES
+
         gateway = await self.gw_repo.get_by_id(gateway_instance_id)
         if not gateway:
             raise ValueError("Gateway instance not found")
-        if gateway.source == "self_register":
+        gw_type = gateway.gateway_type.value if hasattr(gateway.gateway_type, "value") else str(gateway.gateway_type)
+        if gateway.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
             raise ValueError(AGENT_MANAGED_MESSAGE)
 
         adapter = await create_adapter_with_credentials(
@@ -102,10 +105,13 @@ class GatewayImportService:
 
     async def import_from_gateway(self, gateway_instance_id: UUID) -> ImportResult:
         """Import APIs from a gateway into the catalog + create SYNCED deployments."""
+        from src.services.credential_resolver import _PULL_MODEL_GATEWAY_TYPES
+
         gateway = await self.gw_repo.get_by_id(gateway_instance_id)
         if not gateway:
             raise ValueError("Gateway instance not found")
-        if gateway.source == "self_register":
+        gw_type = gateway.gateway_type.value if hasattr(gateway.gateway_type, "value") else str(gateway.gateway_type)
+        if gateway.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
             raise ValueError(AGENT_MANAGED_MESSAGE)
 
         adapter = await create_adapter_with_credentials(

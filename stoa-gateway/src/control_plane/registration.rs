@@ -53,6 +53,10 @@ pub struct RegistrationPayload {
     /// Optional tenant restriction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tenant_id: Option<String>,
+
+    /// URL of the third-party gateway managed by this Link instance
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_gateway_url: Option<String>,
 }
 
 /// Heartbeat payload sent every 30 seconds
@@ -163,6 +167,7 @@ impl GatewayRegistrar {
                 .clone()
                 .unwrap_or_else(|| format!("http://{}:{}", hostname, config.port)),
             tenant_id: None, // Platform-wide gateway
+            target_gateway_url: config.target_gateway_url.clone(),
         };
 
         info!(
@@ -428,12 +433,14 @@ mod tests {
             capabilities: vec!["rest".to_string(), "mcp".to_string()],
             admin_url: "http://gateway-abc123:8080".to_string(),
             tenant_id: None,
+            target_gateway_url: None,
         };
 
         let json = serde_json::to_string(&payload).expect("Should serialize");
         assert!(json.contains("gateway-abc123"));
         assert!(json.contains("edge_mcp"));
         assert!(!json.contains("tenant_id")); // None should be skipped
+        assert!(!json.contains("target_gateway_url")); // None should be skipped
     }
 
     #[test]
@@ -446,11 +453,14 @@ mod tests {
             capabilities: vec!["rest".to_string()],
             admin_url: "http://gw-1:8081".to_string(),
             tenant_id: Some("acme".to_string()),
+            target_gateway_url: Some("https://webmethods-prod:5555".to_string()),
         };
 
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("tenant_id"));
         assert!(json.contains("acme"));
+        assert!(json.contains("target_gateway_url"));
+        assert!(json.contains("webmethods-prod:5555"));
     }
 
     #[test]

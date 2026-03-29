@@ -923,6 +923,23 @@ function GatewayDetailPanel({
                   </a>
                 }
               />
+              {gw.target_gateway_url && (
+                <DetailRow
+                  label="Target Gateway"
+                  value={
+                    <a
+                      href={gw.target_gateway_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {gw.target_gateway_url.replace(/^https?:\/\//, '')}
+                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    </a>
+                  }
+                />
+              )}
               {gw.source && (
                 <DetailRow
                   label="Source"

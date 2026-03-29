@@ -37,6 +37,8 @@ type Config struct {
 	Version string
 	// HeartbeatInterval is the time between heartbeat calls (default 30s).
 	HeartbeatInterval time.Duration
+	// TargetGatewayURL is the URL of the third-party gateway managed by this agent.
+	TargetGatewayURL string
 }
 
 // ConfigFromEnv creates a Config from environment variables.
@@ -61,17 +63,19 @@ func ConfigFromEnv(version string) Config {
 			cfg.HeartbeatInterval = d
 		}
 	}
+	cfg.TargetGatewayURL = os.Getenv("STOA_TARGET_GATEWAY_URL")
 	return cfg
 }
 
 // RegistrationPayload is the payload sent to POST /v1/internal/gateways/register.
 type RegistrationPayload struct {
-	Hostname     string   `json:"hostname"`
-	Mode         string   `json:"mode"`
-	Version      string   `json:"version"`
-	Environment  string   `json:"environment"`
-	Capabilities []string `json:"capabilities"`
-	AdminURL     string   `json:"admin_url"`
+	Hostname         string   `json:"hostname"`
+	Mode             string   `json:"mode"`
+	Version          string   `json:"version"`
+	Environment      string   `json:"environment"`
+	Capabilities     []string `json:"capabilities"`
+	AdminURL         string   `json:"admin_url"`
+	TargetGatewayURL string   `json:"target_gateway_url,omitempty"`
 }
 
 // RegistrationResponse is the response from the register endpoint.
@@ -155,12 +159,13 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 	defer span.End()
 
 	payload := RegistrationPayload{
-		Hostname:     a.cfg.InstanceName,
-		Mode:         "connect",
-		Version:      a.cfg.Version,
-		Environment:  a.cfg.Environment,
-		Capabilities: []string{"policy_sync", "health_monitoring"},
-		AdminURL:     fmt.Sprintf("http://%s:%s", a.cfg.InstanceName, healthPort),
+		Hostname:         a.cfg.InstanceName,
+		Mode:             "connect",
+		Version:          a.cfg.Version,
+		Environment:      a.cfg.Environment,
+		Capabilities:     []string{"policy_sync", "health_monitoring"},
+		AdminURL:         fmt.Sprintf("http://%s:%s", a.cfg.InstanceName, healthPort),
+		TargetGatewayURL: a.cfg.TargetGatewayURL,
 	}
 
 	data, err := json.Marshal(payload)

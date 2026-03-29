@@ -26,6 +26,9 @@ data:
   KEYCLOAK_CLIENT_ID: "control-plane-api"
   KEYCLOAK_VERIFY_SSL: "false"
 
+  # Git Provider Selection (gitlab or github)
+  GIT_PROVIDER: "gitlab"
+
   # GitLab Integration
   GITLAB_URL: "https://gitlab.com"
   GITLAB_DEFAULT_BRANCH: "main"
@@ -38,6 +41,13 @@ data:
   # stoa-gitops: Infrastructure configs, policies, Ansible playbooks
   GITLAB_GITOPS_PROJECT_ID: "77260481"
   GITLAB_GITOPS_PROJECT_PATH: "cab6961310/stoa-gitops"
+
+  # GitHub Integration (used when GIT_PROVIDER=github)
+  GITHUB_TOKEN: ""
+  GITHUB_ORG: "stoa-platform"
+  GITHUB_CATALOG_REPO: "stoa-catalog"
+  GITHUB_GITOPS_REPO: "stoa-gitops"
+  GITHUB_WEBHOOK_SECRET: ""
 
   # Kafka/Redpanda Event Streaming
   KAFKA_ENABLED: "true"

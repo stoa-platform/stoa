@@ -98,45 +98,60 @@ find "$TEMP_DIR" -name "*.bak" -delete
 echo -e "${GREEN}✓ Variables substituted${NC}\n"
 
 # ============================================
-# Step 3: Sync to GitLab
+# Step 3: Sync to Git repository
 # ============================================
-echo -e "${BLUE}[3/5] Syncing to GitLab (stoa-gitops)...${NC}"
+GIT_PROVIDER="${GIT_PROVIDER:-gitlab}"
+echo -e "${BLUE}[3/5] Syncing to ${GIT_PROVIDER} (stoa-gitops)...${NC}"
 
 if [ "$DRY_RUN" = true ]; then
   echo -e "${YELLOW}DRY RUN: Would sync the following files:${NC}"
   find "$TEMP_DIR" -name "*.yaml" -exec echo "  - {}" \;
 else
-  if [ -z "$GITLAB_TOKEN" ]; then
-    echo -e "${YELLOW}GITLAB_TOKEN not set, skipping GitLab sync${NC}"
-    echo "Set GITLAB_TOKEN to enable automatic sync"
+  REPO_DIR=$(mktemp -d)
+  CLONE_SUCCESS=false
+
+  if [ "$GIT_PROVIDER" = "github" ]; then
+    GITHUB_ORG="${GITHUB_ORG:-stoa-platform}"
+    GITHUB_GITOPS_REPO="${GITHUB_GITOPS_REPO:-stoa-gitops}"
+    if [ -z "$GITHUB_TOKEN" ]; then
+      echo -e "${YELLOW}GITHUB_TOKEN not set, skipping GitHub sync${NC}"
+      echo "Set GITHUB_TOKEN to enable automatic sync"
+    else
+      git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_ORG}/${GITHUB_GITOPS_REPO}.git" "$REPO_DIR" 2>/dev/null && CLONE_SUCCESS=true
+    fi
   else
-    GITLAB_PROJECT="${GITLAB_PROJECT:-cab6961310/stoa-gitops}"
-    GITLAB_REPO_DIR=$(mktemp -d)
+    if [ -z "$GITLAB_TOKEN" ]; then
+      echo -e "${YELLOW}GITLAB_TOKEN not set, skipping GitLab sync${NC}"
+      echo "Set GITLAB_TOKEN to enable automatic sync"
+    else
+      GITLAB_PROJECT="${GITLAB_PROJECT:-cab6961310/stoa-gitops}"
+      git clone "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git" "$REPO_DIR" 2>/dev/null && CLONE_SUCCESS=true
+    fi
+  fi
 
-    git clone "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git" "$GITLAB_REPO_DIR" 2>/dev/null
-
+  if [ "$CLONE_SUCCESS" = true ]; then
     # Copy configs
-    mkdir -p "$GITLAB_REPO_DIR/webmethods/apis"
-    mkdir -p "$GITLAB_REPO_DIR/webmethods/policies"
-    mkdir -p "$GITLAB_REPO_DIR/platform/applications"
-    mkdir -p "$GITLAB_REPO_DIR/platform/scopes"
+    mkdir -p "$REPO_DIR/webmethods/apis"
+    mkdir -p "$REPO_DIR/webmethods/policies"
+    mkdir -p "$REPO_DIR/platform/applications"
+    mkdir -p "$REPO_DIR/platform/scopes"
 
-    cp "$TEMP_DIR/apis/"*.yaml "$GITLAB_REPO_DIR/webmethods/apis/" 2>/dev/null || true
-    cp "$TEMP_DIR/policies/"*.yaml "$GITLAB_REPO_DIR/webmethods/policies/" 2>/dev/null || true
-    cp "$TEMP_DIR/applications/"*.yaml "$GITLAB_REPO_DIR/platform/applications/" 2>/dev/null || true
-    cp "$TEMP_DIR/scopes/"*.yaml "$GITLAB_REPO_DIR/platform/scopes/" 2>/dev/null || true
+    cp "$TEMP_DIR/apis/"*.yaml "$REPO_DIR/webmethods/apis/" 2>/dev/null || true
+    cp "$TEMP_DIR/policies/"*.yaml "$REPO_DIR/webmethods/policies/" 2>/dev/null || true
+    cp "$TEMP_DIR/applications/"*.yaml "$REPO_DIR/platform/applications/" 2>/dev/null || true
+    cp "$TEMP_DIR/scopes/"*.yaml "$REPO_DIR/platform/scopes/" 2>/dev/null || true
 
-    cd "$GITLAB_REPO_DIR"
+    cd "$REPO_DIR"
     git add -A
     if ! git diff --staged --quiet; then
       git commit -m "bootstrap: platform configs from init script (env: $ENV)"
       git push origin main
-      echo -e "${GREEN}✓ Synced to GitLab${NC}"
+      echo -e "${GREEN}✓ Synced to ${GIT_PROVIDER}${NC}"
     else
       echo -e "${YELLOW}No changes to sync${NC}"
     fi
 
-    rm -rf "$GITLAB_REPO_DIR"
+    rm -rf "$REPO_DIR"
     cd "$PROJECT_ROOT"
   fi
 fi
@@ -236,7 +251,11 @@ echo -e "${GREEN}        Platform Bootstrap Complete!                       ${NC
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Verify configs in GitLab: https://gitlab.com/cab6961310/stoa-gitops"
+if [ "$GIT_PROVIDER" = "github" ]; then
+  echo "  1. Verify configs in GitHub: https://github.com/${GITHUB_ORG:-stoa-platform}/${GITHUB_GITOPS_REPO:-stoa-gitops}"
+else
+  echo "  1. Verify configs in GitLab: https://gitlab.com/cab6961310/stoa-gitops"
+fi
 echo "  2. Check ArgoCD sync status: https://argocd.${BASE_DOMAIN}"
 echo "  3. Verify Gateway APIs: https://gateway.${BASE_DOMAIN}"
 echo ""

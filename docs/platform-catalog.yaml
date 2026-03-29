@@ -3,10 +3,10 @@ kind: PlatformCatalog
 metadata:
   name: stoa-platform
   description: STOA Platform — service inventory and dependency map
-  lastUpdated: "2026-03-29"
+  lastUpdated: "2026-02-24"
 
 # ==============================================================================
-# CORE SERVICES — Control Plane (K8s OVH Prod)
+# CORE SERVICES — Control Plane
 # ==============================================================================
 services:
   # --------------------------------------------------------------------------
@@ -40,7 +40,6 @@ services:
       - stoa-portal
       - stoa-gateway
       - stoa-operator
-      - stoa-connect
     health: /health
     metrics: /metrics
     argocdApp: control-plane-api
@@ -67,7 +66,7 @@ services:
       - control-plane-api
       - keycloak
     consumesSecrets: []
-    exposedTo: []
+    exposedTo: []  # end-user UI, no downstream consumers
     health: /health
     metrics: null
     argocdApp: control-plane-ui
@@ -104,7 +103,7 @@ services:
     owner: platform-team
 
   # --------------------------------------------------------------------------
-  # STOA Gateway — Rust MCP gateway (edge-mcp mode)
+  # STOA Gateway — Rust MCP gateway
   # --------------------------------------------------------------------------
   - name: stoa-gateway
     displayName: STOA Gateway (Rust)
@@ -119,22 +118,6 @@ services:
         namespace: stoa-system
         replicas: 2
         k8sName: stoa-gateway
-        mode: edge-mcp
-        url: mcp.gostoa.dev
-      dev:
-        cluster: k3s-gateways
-        namespace: gateway-dev
-        replicas: 1
-        k8sName: stoa-gateway
-        mode: edge-mcp
-        url: dev-gw-k3s.gostoa.dev
-      staging:
-        cluster: k3s-gateways
-        namespace: gateway-staging
-        replicas: 1
-        k8sName: stoa-gateway
-        mode: edge-mcp
-        url: staging-gw-k3s.gostoa.dev
     dependsOn:
       - control-plane-api
       - keycloak
@@ -142,97 +125,11 @@ services:
     consumesSecrets:
       - STOA_CONTROL_PLANE_API_KEY
       - KEYCLOAK_ADMIN_PASSWORD
-    exposedTo: []
+    exposedTo: []  # entry point for external MCP clients
     health: /health
     metrics: /metrics
     argocdApp: stoa-gateway
     ciWorkflow: stoa-gateway-ci
-    owner: platform-team
-
-  # --------------------------------------------------------------------------
-  # STOA Link — Sidecar for webMethods (runs stoa-gateway in sidecar mode)
-  # --------------------------------------------------------------------------
-  - name: stoa-link-wm
-    displayName: STOA Link — webMethods (Sidecar)
-    type: gateway-sidecar
-    tech: Rust, Tokio, axum (stoa-gateway binary in sidecar mode)
-    path: stoa-gateway/
-    containerPort: 8080
-    image: ghcr.io/stoa-platform/stoa-gateway
-    deploy:
-      prod:
-        cluster: vps-ovh
-        namespace: null
-        replicas: 1
-        host: webmethods-vps
-        mode: sidecar
-        url: link-webmethods.gostoa.dev
-      dev:
-        cluster: k3s-gateways
-        namespace: gateway-dev
-        replicas: 1
-        k8sName: stoa-link-wm
-        mode: sidecar
-        url: dev-wm-k3s.gostoa.dev
-      staging:
-        cluster: k3s-gateways
-        namespace: gateway-staging
-        replicas: 1
-        k8sName: stoa-link-wm
-        mode: sidecar
-        url: staging-wm-k3s.gostoa.dev
-    dependsOn:
-      - control-plane-api
-      - webmethods
-    consumesSecrets:
-      - STOA_CONTROL_PLANE_API_KEY
-    exposedTo: []
-    health: /health
-    metrics: /metrics
-    argocdApp: null
-    ciWorkflow: null
-    owner: platform-team
-
-  # --------------------------------------------------------------------------
-  # STOA Connect — Go agent bridging webMethods to Control Plane
-  # --------------------------------------------------------------------------
-  - name: stoa-connect
-    displayName: STOA Connect (Go Agent)
-    type: gateway-agent
-    tech: Go 1.22, stoa-go
-    path: stoa-go/cmd/stoa-connect/
-    containerPort: 8090
-    image: null  # standalone binary, not containerized
-    deploy:
-      prod:
-        cluster: vps-ovh
-        namespace: null
-        replicas: 1
-        host: webmethods-vps
-        systemdUnit: stoa-connect.service
-      dev:
-        cluster: vps-contabo
-        namespace: null
-        replicas: 1
-        host: worker-3
-        systemdUnit: stoa-connect.service
-      staging:
-        cluster: vps-ovh
-        namespace: null
-        replicas: 1
-        host: staging-vps
-        systemdUnit: stoa-connect.service
-    dependsOn:
-      - control-plane-api
-      - webmethods
-    consumesSecrets:
-      - STOA_GATEWAY_API_KEY
-    exposedTo:
-      - control-plane-api
-    health: /health
-    metrics: null
-    argocdApp: null
-    ciWorkflow: null
     owner: platform-team
 
   # --------------------------------------------------------------------------
@@ -258,49 +155,8 @@ services:
     exposedTo: []
     health: /health
     metrics: /metrics
-    argocdApp: null
-    ciWorkflow: null
-    owner: platform-team
-
-# ==============================================================================
-# THIRD-PARTY GATEWAYS
-# ==============================================================================
-
-  - name: webmethods
-    displayName: webMethods API Gateway (Trial)
-    type: gateway-external
-    tech: webMethods 10.15 (trial, 25-min keepalive cron)
-    path: null
-    containerPort: 5555
-    image: softwareag/apigateway-trial:10.15
-    deploy:
-      prod:
-        cluster: vps-ovh
-        namespace: null
-        replicas: 1
-        host: webmethods-vps
-        url: webmethods.gostoa.dev
-      dev:
-        cluster: vps-contabo
-        namespace: null
-        replicas: 1
-        host: worker-3
-        url: dev-wm.gostoa.dev
-      staging:
-        cluster: vps-ovh
-        namespace: null
-        replicas: 1
-        host: staging-vps
-        url: staging-wm-vps.gostoa.dev
-    dependsOn: []
-    consumesSecrets: []
-    exposedTo:
-      - stoa-connect
-      - stoa-link-wm
-    health: /rest/apigateway/health
-    metrics: null
-    argocdApp: null
-    ciWorkflow: null
+    argocdApp: null  # standalone manifest
+    ciWorkflow: null  # not yet in CI
     owner: platform-team
 
 # ==============================================================================
@@ -311,7 +167,7 @@ services:
     displayName: PostgreSQL
     type: database
     tech: PostgreSQL 15
-    path: null
+    path: null  # managed externally
     containerPort: 5432
     image: postgres:15-alpine
     deploy:
@@ -319,14 +175,13 @@ services:
         cluster: ovh-mks
         namespace: stoa-system
         replicas: 1
-        k8sName: control-plane-db
+        k8sName: postgres
         storage: 20Gi
     dependsOn: []
     consumesSecrets:
       - POSTGRES_PASSWORD
     exposedTo:
       - control-plane-api
-      - keycloak
     health: pg_isready
     metrics: null
     argocdApp: null
@@ -396,10 +251,10 @@ services:
   - name: keycloak
     displayName: Keycloak (OIDC)
     type: identity
-    tech: Keycloak 26.5.3
+    tech: Keycloak 26
     path: null
     containerPort: 8080
-    image: ghcr.io/stoa-platform/keycloak:latest
+    image: quay.io/keycloak/keycloak:26.5.3
     deploy:
       prod:
         cluster: ovh-mks
@@ -428,74 +283,25 @@ services:
       - viewer
     owner: platform-team
 
-  - name: vault
-    displayName: HashiCorp Vault
-    type: secrets
-    tech: HashiCorp Vault (self-hosted)
-    path: null
-    containerPort: 8200
-    image: hashicorp/vault
-    deploy:
-      prod:
-        cluster: vps-ovh
-        namespace: null
-        replicas: 1
-        host: vault-vps
-        url: hcvault.gostoa.dev
-    dependsOn: []
-    consumesSecrets: []
-    exposedTo:
-      - stoa-connect
-      - stoa-gateway
-    health: /v1/sys/health
-    metrics: null
-    argocdApp: null
-    ciWorkflow: null
-    owner: platform-team
-
   - name: infisical
-    displayName: Infisical (Legacy Secrets)
+    displayName: Infisical (Secrets Vault)
     type: secrets
-    tech: Infisical (self-hosted, read-only reference during Vault transition)
+    tech: Infisical (self-hosted)
     path: null
     containerPort: 443
     image: infisical/infisical
     deploy:
       prod:
-        cluster: vps-ovh
+        cluster: ovh-infisical-vps
         namespace: null
         replicas: 1
-        host: infisical-vps
-        url: vault.gostoa.dev
+        k8sName: null
     dependsOn: []
     consumesSecrets: []
     exposedTo:
       - control-plane-api
+      - stoa-gateway
     health: /api/status
-    metrics: null
-    argocdApp: null
-    ciWorkflow: null
-    owner: platform-team
-
-  - name: openldap
-    displayName: OpenLDAP
-    type: directory
-    tech: OpenLDAP 1.5.0
-    path: null
-    containerPort: 389
-    image: osixia/openldap:1.5.0
-    deploy:
-      prod:
-        cluster: ovh-mks
-        namespace: stoa-system
-        replicas: 1
-        k8sName: openldap
-    dependsOn: []
-    consumesSecrets:
-      - LDAP_ADMIN_PASSWORD
-    exposedTo:
-      - control-plane-api
-    health: null
     metrics: null
     argocdApp: null
     ciWorkflow: null
@@ -632,12 +438,10 @@ services:
       - control-plane-ui
       - stoa-portal
       - stoa-gateway
-      - gateways-dev
-      - gateways-staging
     owner: platform-team
 
 # ==============================================================================
-# AUTOMATION & TOOLING
+# AUTOMATION
 # ==============================================================================
 
   - name: n8n
@@ -653,8 +457,7 @@ services:
         namespace: null
         replicas: 1
         k8sName: null
-        host: tooling-vps
-        url: n8n.gostoa.dev
+        host: n8n-vps
     dependsOn: []
     consumesSecrets:
       - N8N_ENCRYPTION_KEY
@@ -672,54 +475,132 @@ services:
       - stoa-slash-command
       - approve-webhook
       - daily-digest
-      - blog-publish
     owner: platform-team
 
-  - name: netbox
-    displayName: Netbox (IPAM)
-    type: tooling
-    tech: Netbox 4.5.4
+# ==============================================================================
+# GATEWAY ARENA — Benchmark instances
+# ==============================================================================
+
+  - name: kong-arena
+    displayName: Kong DB-less (Arena)
+    type: gateway-benchmark
+    tech: Kong 3.x (DB-less)
     path: null
-    containerPort: 8080
-    image: netboxcommunity/netbox
+    containerPort: 8000
+    image: kong:3.6
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: kong-arena
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: ":8001/status"
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Layer 0 + Layer 1 benchmark baseline
+    owner: platform-team
+
+  - name: gravitee-arena
+    displayName: Gravitee APIM (Arena)
+    type: gateway-benchmark
+    tech: Gravitee APIM 4.x
+    path: null
+    containerPort: 8082
+    image: graviteeio/apim-gateway:4
+    deploy:
+      prod:
+        cluster: ovh-mks
+        namespace: stoa-system
+        replicas: 1
+        k8sName: gravitee-arena-gw
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: ":18082/_node/health"
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Layer 0 + Layer 1 benchmark baseline
+    owner: platform-team
+
+# ==============================================================================
+# VPS GATEWAY INSTANCES — Live adapter testing
+# ==============================================================================
+
+  - name: kong-vps
+    displayName: Kong Standalone (VPS)
+    type: gateway-external
+    tech: Kong 3.x (DB-less)
+    path: null
+    containerPort: 8000
+    image: kong:3.6
     deploy:
       prod:
         cluster: vps-ovh
         namespace: null
         replicas: 1
-        host: tooling-vps
-        url: netbox.gostoa.dev
+        k8sName: null
+        host: kong-gra
     dependsOn: []
     consumesSecrets: []
     exposedTo: []
-    health: /api/status/
+    health: ":8001/status"
     metrics: null
     argocdApp: null
     ciWorkflow: null
+    purpose: Live adapter testing + VPS benchmark sidecar
     owner: platform-team
 
-  - name: uptime-kuma
-    displayName: Uptime Kuma (Status Page)
-    type: tooling
-    tech: Uptime Kuma
+  - name: gravitee-vps
+    displayName: Gravitee APIM (VPS)
+    type: gateway-external
+    tech: Gravitee APIM 4.x
     path: null
-    containerPort: 3001
-    image: louislam/uptime-kuma
+    containerPort: 8082
+    image: graviteeio/apim-gateway:4
     deploy:
       prod:
         cluster: vps-ovh
         namespace: null
         replicas: 1
-        host: tooling-vps
-        url: status.gostoa.dev
+        k8sName: null
+        host: gravitee-gra
     dependsOn: []
     consumesSecrets: []
     exposedTo: []
-    health: /api/status-page/heartbeat/stoa
+    health: ":8083/management/organizations/DEFAULT/environments/DEFAULT"
     metrics: null
     argocdApp: null
     ciWorkflow: null
-    monitors: 21
+    purpose: Live adapter testing + VPS benchmark sidecar
+    owner: platform-team
+
+  - name: webmethods-vps
+    displayName: webMethods API Gateway (VPS)
+    type: gateway-external
+    tech: webMethods 10.15 (trial)
+    path: null
+    containerPort: 5555
+    image: softwareag/apigateway-trial:10.15
+    deploy:
+      prod:
+        cluster: vps-ovh
+        namespace: null
+        replicas: 1
+        k8sName: null
+        host: webmethods-vps
+    dependsOn: []
+    consumesSecrets: []
+    exposedTo: []
+    health: /rest/apigateway/health
+    metrics: null
+    argocdApp: null
+    ciWorkflow: null
+    purpose: Live adapter testing
     owner: platform-team
 
 # ==============================================================================
@@ -733,70 +614,39 @@ clusters:
     region: GRA9
     nodes: 3
     nodeType: B2-15
-    purpose: Production — control plane + gateway + data layer + observability
     namespaces:
       - stoa-system
       - monitoring
       - opensearch
       - argocd
       - kyverno
-
-  - name: k3s-gateways
-    displayName: K3s Gateway Cluster (Contabo)
-    provider: Contabo
-    region: Nuremberg
-    nodes: 2
-    nodeType: VPS L (8 vCPU, 24 GB)
-    purpose: Dev + Staging data plane (gateways + sidecars)
-    namespaces:
-      - gateway-dev
-      - gateway-staging
-    argocdManaged: true
-    argocdApps:
-      - gateways-dev
-      - gateways-staging
+      - nginx-gateway
 
   - name: vps-ovh
     displayName: OVH VPS Fleet
     provider: OVH
     region: GRA
-    nodes: 3
+    nodes: 4
     nodeType: VPS
     hosts:
+      - name: kong-gra
+        purpose: Kong standalone + benchmark sidecar
+      - name: gravitee-gra
+        purpose: Gravitee APIM + benchmark sidecar
       - name: webmethods-vps
-        purpose: webMethods prod + stoa-connect + stoa-link
-      - name: staging-vps
-        purpose: webMethods staging + stoa-connect
-      - name: tooling-vps
-        purpose: n8n, Netbox, Uptime Kuma, Healthchecks, PocketBase
+        purpose: webMethods trial gateway
+      - name: n8n-vps
+        purpose: n8n workflow engine
 
-  - name: vps-contabo
-    displayName: Contabo VPS (HEGEMON Workers)
-    provider: Contabo
-    region: Nuremberg
-    nodes: 5
-    nodeType: VPS L (8 vCPU, 24 GB)
-    hosts:
-      - name: worker-1
-        purpose: HEGEMON backend agent
-      - name: worker-2
-        purpose: HEGEMON frontend agent
-      - name: worker-3
-        purpose: webMethods dev + stoa-connect dev + K3s worker node
-      - name: worker-4
-        purpose: HEGEMON auth agent
-      - name: worker-5
-        purpose: HEGEMON QA agent
-
-  - name: vps-vault
-    displayName: OVH VPS (Vault)
+  - name: ovh-infisical-vps
+    displayName: OVH VPS (Infisical)
     provider: OVH
-    region: GRA6
+    region: GRA
     nodes: 1
     nodeType: VPS
     hosts:
-      - name: vault-vps
-        purpose: HashiCorp Vault (secrets management)
+      - name: infisical-vps
+        purpose: Infisical secrets vault
 
 # ==============================================================================
 # RBAC ROLES

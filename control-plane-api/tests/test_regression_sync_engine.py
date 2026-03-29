@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.gateway_instance import GatewayInstanceStatus
+from src.services.credential_resolver import AgentManagedGatewayError
 
 
 @pytest.mark.asyncio
@@ -19,6 +20,9 @@ async def test_regression_sync_engine_skips_self_register_gateways():
     Regression: sync engine called sync_api() on agent-managed gateways
     with unreachable base_urls (e.g. http://connect-webmethods-dev:8090),
     causing DNS resolution errors and 500s on /v1/admin/deployments.
+
+    The centralized guard in create_adapter_with_credentials() raises
+    AgentManagedGatewayError, which _reconcile_one() catches and skips.
     """
     from src.workers.sync_engine import SyncEngine
 
@@ -32,6 +36,9 @@ async def test_regression_sync_engine_skips_self_register_gateways():
     mock_gateway.status = GatewayInstanceStatus.ONLINE
     mock_gateway.source = "self_register"
     mock_gateway.name = "connect-webmethods-dev"
+    mock_gateway.base_url = "http://connect-webmethods-dev:8090"
+    mock_gateway.auth_config = {}
+    mock_gateway.gateway_type.value = "webmethods"
 
     # Mock a pending deployment
     mock_deployment = MagicMock()
@@ -43,7 +50,11 @@ async def test_regression_sync_engine_skips_self_register_gateways():
         patch("src.workers.sync_engine._get_session_factory") as mock_sf,
         patch("src.workers.sync_engine.GatewayDeploymentRepository") as mock_dep_repo_cls,
         patch("src.workers.sync_engine.GatewayInstanceRepository") as mock_gw_repo_cls,
-        patch("src.workers.sync_engine.create_adapter_with_credentials") as mock_create_adapter,
+        patch(
+            "src.workers.sync_engine.create_adapter_with_credentials",
+            new_callable=AsyncMock,
+            side_effect=AgentManagedGatewayError("connect-webmethods-dev"),
+        ) as mock_create_adapter,
     ):
         # Set up async context manager for session
         mock_session = AsyncMock()
@@ -64,5 +75,42 @@ async def test_regression_sync_engine_skips_self_register_gateways():
 
         await engine._reconcile_one(mock_deployment.id)
 
-        # The adapter should NEVER be created for self_register gateways
-        mock_create_adapter.assert_not_called()
+        # The adapter factory is called but raises AgentManagedGatewayError,
+        # which _reconcile_one catches and skips — no sync_api() call
+        mock_create_adapter.assert_awaited_once()
+        # Verify source was passed to the centralized guard
+        call_kwargs = mock_create_adapter.call_args
+        assert call_kwargs.kwargs["source"] == "self_register"
+
+
+@pytest.mark.asyncio
+async def test_regression_centralized_guard_raises_for_self_register():
+    """create_adapter_with_credentials() raises AgentManagedGatewayError for self_register."""
+    from src.services.credential_resolver import create_adapter_with_credentials
+
+    with pytest.raises(AgentManagedGatewayError, match="agent-managed"):
+        await create_adapter_with_credentials(
+            "webmethods",
+            "http://connect-webmethods-dev:8090",
+            {},
+            source="self_register",
+            gateway_name="connect-webmethods-dev",
+        )
+
+
+@pytest.mark.asyncio
+async def test_regression_centralized_guard_allows_non_self_register():
+    """create_adapter_with_credentials() proceeds normally for non-self_register gateways."""
+    from src.services.credential_resolver import create_adapter_with_credentials
+
+    with patch("src.services.credential_resolver.AdapterRegistry") as mock_registry:
+        mock_registry.create.return_value = MagicMock()
+        adapter = await create_adapter_with_credentials(
+            "kong",
+            "http://kong:8001",
+            {"token": "secret"},
+            source="manual",
+            gateway_name="kong-prod",
+        )
+        assert adapter is not None
+        mock_registry.create.assert_called_once()

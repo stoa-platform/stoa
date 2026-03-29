@@ -85,6 +85,10 @@ class TelemetryWorker:
         if not TelemetryAdapterRegistry.has_type(gw_type):
             return
 
+        if gw.source == "self_register":
+            logger.debug("Skipping telemetry pull for agent-managed gateway %s", gw.name)
+            return
+
         config = {
             "base_url": gw.base_url,
             "auth_config": gw.auth_config or {},

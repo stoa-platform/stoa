@@ -72,6 +72,7 @@ async def _resolve_adapter(
 
         return await create_adapter_with_credentials(
             gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
+            source=gateway.source, gateway_name=gateway.name,
         )
     except Exception as e:
         logger.error("Failed to resolve gateway adapter for API %s: %s", api_id, e)

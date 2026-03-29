@@ -138,6 +138,7 @@ class TestResolveAdapter:
         assert result is mock_adapter
         mock_create.assert_awaited_once_with(
             "kong", "https://kong.example.com", {"token": "secret"},
+            source=gateway.source, gateway_name=gateway.name,
         )
 
     async def test_no_deployment_returns_none(self):

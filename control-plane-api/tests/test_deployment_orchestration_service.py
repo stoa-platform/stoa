@@ -339,3 +339,4 @@ class TestDeploymentOrchestrationService:
             assert result[1]["deployable"] is True
             assert result[2]["environment"] == "production"
             assert result[2]["deployable"] is False
+

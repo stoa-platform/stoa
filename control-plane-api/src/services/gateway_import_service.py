@@ -16,7 +16,10 @@ from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
-from src.services.credential_resolver import create_adapter_with_credentials
+from src.services.credential_resolver import (
+    AGENT_MANAGED_MESSAGE,
+    create_adapter_with_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,8 @@ class GatewayImportService:
         gateway = await self.gw_repo.get_by_id(gateway_instance_id)
         if not gateway:
             raise ValueError("Gateway instance not found")
+        if gateway.source == "self_register":
+            raise ValueError(AGENT_MANAGED_MESSAGE)
 
         adapter = await create_adapter_with_credentials(
             gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
@@ -100,6 +105,8 @@ class GatewayImportService:
         gateway = await self.gw_repo.get_by_id(gateway_instance_id)
         if not gateway:
             raise ValueError("Gateway instance not found")
+        if gateway.source == "self_register":
+            raise ValueError(AGENT_MANAGED_MESSAGE)
 
         adapter = await create_adapter_with_credentials(
             gateway.gateway_type.value, gateway.base_url, gateway.auth_config,

@@ -312,7 +312,10 @@ class DeploymentOrchestrationService:
 
         from ..models.gateway_deployment import DeploymentSyncStatus
         from ..repositories.gateway_instance import GatewayInstanceRepository
-        from ..services.credential_resolver import create_adapter_with_credentials
+        from ..services.credential_resolver import (
+            AgentManagedGatewayError,
+            create_adapter_with_credentials,
+        )
 
         gw_repo = GatewayInstanceRepository(self.db)
 
@@ -326,6 +329,8 @@ class DeploymentOrchestrationService:
                     gateway.gateway_type.value,
                     gateway.base_url,
                     gateway.auth_config,
+                    source=gateway.source,
+                    gateway_name=gateway.name,
                 )
                 await adapter.connect()
                 try:
@@ -354,6 +359,12 @@ class DeploymentOrchestrationService:
                     with contextlib.suppress(Exception):
                         await adapter.disconnect()
 
+            except AgentManagedGatewayError:
+                logger.info(
+                    "Skipping inline sync for agent-managed gateway (deployment %s)",
+                    dep.id,
+                )
+                continue
             except Exception as e:
                 # Reset to PENDING so the SyncEngine periodic loop can retry
                 dep.sync_status = DeploymentSyncStatus.PENDING

@@ -90,6 +90,37 @@ pub struct Config {
     #[serde(default)]
     pub gitlab_project_id: Option<String>,
 
+    // === GitHub (UAC Sync) ===
+    /// GitHub personal access token (or fine-grained PAT).
+    /// Env: GITHUB_TOKEN / STOA_GITHUB_TOKEN
+    #[serde(default)]
+    pub github_token: Option<String>,
+
+    /// GitHub organization name (owner of catalog/gitops repos).
+    /// Env: GITHUB_ORG / STOA_GITHUB_ORG
+    #[serde(default)]
+    pub github_org: Option<String>,
+
+    /// GitHub repository name for UAC catalog storage.
+    /// Env: GITHUB_CATALOG_REPO / STOA_GITHUB_CATALOG_REPO
+    #[serde(default)]
+    pub github_catalog_repo: Option<String>,
+
+    /// GitHub repository name for GitOps PR submission.
+    /// Env: GITHUB_GITOPS_REPO / STOA_GITHUB_GITOPS_REPO
+    #[serde(default)]
+    pub github_gitops_repo: Option<String>,
+
+    /// GitHub webhook secret for validating incoming webhook payloads.
+    /// Env: GITHUB_WEBHOOK_SECRET / STOA_GITHUB_WEBHOOK_SECRET
+    #[serde(default)]
+    pub github_webhook_secret: Option<String>,
+
+    /// Git provider selector for UAC sync: "gitlab" (default) or "github".
+    /// Env: GIT_PROVIDER / STOA_GIT_PROVIDER
+    #[serde(default = "default_git_provider")]
+    pub git_provider: String,
+
     // === Rate Limiting ===
     #[serde(default)]
     pub rate_limit_default: Option<usize>,
@@ -1320,6 +1351,10 @@ fn default_snapshot_body_max_bytes() -> usize {
     4096
 }
 
+fn default_git_provider() -> String {
+    "gitlab".to_string() // backward compatible default
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1341,6 +1376,12 @@ impl Default for Config {
             gitlab_api_url: None,
             gitlab_token: None,
             gitlab_project_id: None,
+            github_token: None,
+            github_org: None,
+            github_catalog_repo: None,
+            github_gitops_repo: None,
+            github_webhook_secret: None,
+            git_provider: default_git_provider(),
             rate_limit_default: Some(1000),
             rate_limit_window_seconds: Some(60),
             mcp_session_ttl_minutes: default_session_ttl(),
@@ -1514,6 +1555,12 @@ impl Config {
             "GITLAB_URL",
             "GITLAB_TOKEN",
             "GITLAB_PROJECT_ID",
+            "GITHUB_TOKEN",
+            "GITHUB_ORG",
+            "GITHUB_CATALOG_REPO",
+            "GITHUB_GITOPS_REPO",
+            "GITHUB_WEBHOOK_SECRET",
+            "GIT_PROVIDER",
         ]));
 
         let config: Config = figment.extract()?;
@@ -1769,6 +1816,22 @@ mod tests {
             config.otel_enabled,
             "CAB-1831: otel_enabled should default to true"
         );
+    }
+
+    #[test]
+    fn test_default_github_config() {
+        let config = Config::default();
+        // All GitHub fields default to None
+        assert!(config.github_token.is_none());
+        assert!(config.github_org.is_none());
+        assert!(config.github_catalog_repo.is_none());
+        assert!(config.github_gitops_repo.is_none());
+        assert!(config.github_webhook_secret.is_none());
+        // git_provider defaults to "gitlab" for backward compatibility
+        assert_eq!(config.git_provider, "gitlab");
+        // GitLab fields are unaffected
+        assert!(config.gitlab_url.is_none());
+        assert!(config.gitlab_token.is_none());
     }
 
     /// Regression test for PR #1814: OAuth proxy endpoints must use

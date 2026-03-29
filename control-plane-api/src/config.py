@@ -71,7 +71,7 @@ class Settings(BaseSettings):
         return self.GITLAB_CATALOG_PROJECT_PATH
 
     # Git Provider Abstraction (CAB-1890 — GitLab→GitHub migration)
-    GIT_PROVIDER: str = "gitlab"  # "gitlab" (default) or "github"
+    GIT_PROVIDER: str = "github"  # "gitlab" or "github" (default)
     GITHUB_TOKEN: str = ""
     GITHUB_ORG: str = "stoa-platform"
     GITHUB_CATALOG_REPO: str = "stoa-catalog"

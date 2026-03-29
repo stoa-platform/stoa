@@ -27,7 +27,10 @@ from ..models.gateway_deployment import DeploymentSyncStatus, PolicySyncStatus
 from ..models.gateway_instance import GatewayInstanceStatus
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.gateway_instance import GatewayInstanceRepository
-from ..services.credential_resolver import create_adapter_with_credentials
+from ..services.credential_resolver import (
+    AgentManagedGatewayError,
+    create_adapter_with_credentials,
+)
 from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -274,21 +277,14 @@ class SyncEngine:
                 )
                 return
 
-            # Skip agent-managed gateways (stoa-connect pulls sync from CP)
-            if gateway.source == "self_register":
-                logger.debug(
-                    "Gateway %s is agent-managed (self_register), skipping push sync for deployment %s",
-                    gateway.name,
-                    deployment_id,
-                )
-                return
-
             adapter = None
             try:
                 adapter = await create_adapter_with_credentials(
                     gateway.gateway_type.value,
                     gateway.base_url,
                     gateway.auth_config,
+                    source=gateway.source,
+                    gateway_name=gateway.name,
                 )
                 await adapter.connect()
 
@@ -301,6 +297,13 @@ class SyncEngine:
                 ):
                     await self._handle_sync(deployment, adapter, repo, session)
 
+            except AgentManagedGatewayError:
+                logger.debug(
+                    "Skipping push sync for agent-managed gateway %s (deployment %s)",
+                    gateway.name,
+                    deployment_id,
+                )
+                return
             except Exception as e:
                 logger.error(
                     "Reconcile failed for deployment %s: %s",
@@ -443,6 +446,8 @@ class SyncEngine:
                         gateway.gateway_type.value,
                         gateway.base_url,
                         gateway.auth_config,
+                        source=gateway.source,
+                        gateway_name=gateway.name,
                     )
                     await adapter.connect()
                     apis = await adapter.list_apis()
@@ -485,6 +490,11 @@ class SyncEngine:
                                 )
 
                     await session.commit()
+                except AgentManagedGatewayError:
+                    logger.debug(
+                        "Skipping drift detection for agent-managed gateway %s",
+                        gateway.name,
+                    )
                 except Exception as e:
                     logger.error(
                         "Drift detection failed for gateway %s: %s",

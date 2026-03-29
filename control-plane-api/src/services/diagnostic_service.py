@@ -75,12 +75,21 @@ class DiagnosticService:
 
     async def check_connectivity(self, tenant_id: str, gateway_id: str) -> ConnectivityResult:
         """Test connectivity chain: DNS → TCP → TLS → HTTP health."""
+        from src.services.credential_resolver import AGENT_MANAGED_MESSAGE
+
         gateway = await self._get_gateway(gateway_id)
         if not gateway:
             return ConnectivityResult(
                 gateway_id=gateway_id,
                 overall_status="unhealthy",
                 stages=[ConnectivityStage(name="lookup", status="error", error="Gateway not found")],
+            )
+
+        if gateway.source == "self_register":
+            return ConnectivityResult(
+                gateway_id=gateway_id,
+                overall_status="skipped",
+                stages=[ConnectivityStage(name="agent_managed", status="skipped", error=AGENT_MANAGED_MESSAGE)],
             )
 
         stages: list[ConnectivityStage] = []

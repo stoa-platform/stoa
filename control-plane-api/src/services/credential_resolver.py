@@ -13,6 +13,25 @@ from src.services.vault_client import get_vault_client
 
 logger = logging.getLogger(__name__)
 
+AGENT_MANAGED_MESSAGE = (
+    "Gateway is agent-managed (source=self_register). "
+    "Use the agent's heartbeat/sync-ack for status."
+)
+
+
+class AgentManagedGatewayError(Exception):
+    """Raised when an operation targets an agent-managed (self_register) gateway.
+
+    These gateways are controlled by stoa-connect and should not receive
+    direct HTTP calls from the Control Plane.
+    """
+
+    def __init__(self, gateway_name: str | None = None):
+        detail = AGENT_MANAGED_MESSAGE
+        if gateway_name:
+            detail = f"Gateway '{gateway_name}': {detail}"
+        super().__init__(detail)
+
 
 async def resolve_gateway_auth_config(auth_config: dict[str, Any] | None) -> dict[str, Any]:
     """Resolve Vault-backed credentials in a gateway auth_config.
@@ -74,14 +93,29 @@ async def create_adapter_with_credentials(
     gateway_type: str,
     base_url: str,
     auth_config: dict[str, Any] | None,
+    *,
+    source: str | None = None,
+    gateway_name: str | None = None,
     **extra_config: Any,
 ) -> Any:
     """Create a gateway adapter with Vault-resolved credentials.
 
     Convenience wrapper: resolves auth_config, then calls AdapterRegistry.create().
-    Raises ValueError if credential resolution fails (e.g. Vault-only config with
-    Vault unavailable).
+
+    Raises:
+        AgentManagedGatewayError: if source is "self_register" — these gateways
+            are managed by stoa-connect and must not receive direct HTTP calls.
+        ValueError: if credential resolution fails (e.g. Vault-only config with
+            Vault unavailable).
     """
+    if source == "self_register":
+        logger.info(
+            "Blocked adapter creation for agent-managed gateway %s (type=%s)",
+            gateway_name or "unknown",
+            gateway_type,
+        )
+        raise AgentManagedGatewayError(gateway_name)
+
     resolved_auth = await resolve_gateway_auth_config(auth_config)
     logger.debug(
         "Creating %s adapter with auth keys: %s",

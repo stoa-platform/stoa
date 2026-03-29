@@ -23,7 +23,10 @@ from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
 from ..models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
-from ..services.credential_resolver import create_adapter_with_credentials
+from ..services.credential_resolver import (
+    AgentManagedGatewayError,
+    create_adapter_with_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +204,7 @@ class GatewayHealthWorker:
         try:
             adapter = await create_adapter_with_credentials(
                 gw_type, gateway.base_url, gateway.auth_config or {},
+                source=gateway.source, gateway_name=gateway.name,
             )
             check_result = await asyncio.wait_for(adapter.health_check(), timeout=_HEALTH_CHECK_TIMEOUT)
 
@@ -220,6 +224,10 @@ class GatewayHealthWorker:
                 error_msg = check_result.error or "health_check returned success=False"
                 self._handle_failure(gateway, health_details, consecutive_failures, error_msg, now)
                 logger.warning("Gateway %s (%s) health check failed: %s", gateway.name, gw_type, error_msg)
+
+        except AgentManagedGatewayError:
+            logger.debug("Skipping active health poll for agent-managed gateway %s", gateway.name)
+            return
 
         except TimeoutError:
             consecutive_failures += 1

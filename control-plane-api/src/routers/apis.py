@@ -18,7 +18,7 @@ from ..auth import (
 from ..database import get_db
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
-from ..services.git_service import git_service
+from ..services.git_provider import GitProvider, get_git_provider
 from ..services.kafka_service import kafka_service
 
 logger = logging.getLogger(__name__)
@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["APIs"])
 
 
-def _require_git_service() -> None:
-    """Guard: raise 503 if GitLab integration is not connected."""
-    if not git_service._project:
+def _require_git_service(git: GitProvider) -> None:
+    """Guard: raise 503 if git provider is not connected."""
+    if not getattr(git, "_project", None):
         raise HTTPException(
             status_code=503,
-            detail="GitLab integration is not configured. API creation via GitOps is unavailable.",
+            detail="Git integration is not configured. API creation via GitOps is unavailable.",
         )
 
 
@@ -117,14 +117,15 @@ async def list_apis(
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     environment: str | None = Query(default=None, description="Filter by environment (dev, staging, prod)"),
     user: User = Depends(get_current_user),
+    git: GitProvider = Depends(get_git_provider),
 ):
-    """List APIs for a tenant from GitLab (paginated).
+    """List APIs for a tenant from git provider (paginated).
 
     Optionally filter by environment — only returns APIs deployed to that environment.
     """
-    _require_git_service()
+    _require_git_service(git)
     try:
-        apis = await git_service.list_apis(tenant_id)
+        apis = await git.list_apis(tenant_id)
         all_items = [_api_from_yaml(tenant_id, api) for api in apis]
         # Filter by environment if specified
         if environment:
@@ -149,11 +150,13 @@ async def list_apis(
 
 @router.get("/{api_id}", response_model=APIResponse)
 @require_tenant_access
-async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):
-    """Get API by ID from GitLab"""
-    _require_git_service()
+async def get_api(
+    tenant_id: str, api_id: str, user: User = Depends(get_current_user), git: GitProvider = Depends(get_git_provider)
+):
+    """Get API by ID from git provider"""
+    _require_git_service(git)
     try:
-        api_data = await git_service.get_api(tenant_id, api_id)
+        api_data = await git.get_api(tenant_id, api_id)
         if not api_data:
             raise HTTPException(status_code=404, detail="API not found")
         return _api_from_yaml(tenant_id, api_data)
@@ -168,10 +171,14 @@ async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_
 @require_permission(Permission.APIS_CREATE)
 @require_tenant_access
 async def create_api(
-    tenant_id: str, api: APICreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    tenant_id: str,
+    api: APICreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
-    Create a new API in GitLab and emit event.
+    Create a new API via git provider and emit event.
 
     This creates the API definition in the GitOps repository:
     - tenants/{tenant_id}/apis/{api_name}/api.yaml
@@ -192,11 +199,11 @@ async def create_api(
         settings = tenant.settings or {}
         check_trial_expiry(settings)
         max_apis, _ = get_tenant_limits(tenant)
-        current_apis = await git_service.list_apis(tenant_id)
+        current_apis = await git.list_apis(tenant_id)
         if len(current_apis) >= max_apis:
             raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
 
-    _require_git_service()
+    _require_git_service(git)
 
     api_id = str(uuid.uuid4())
 
@@ -217,8 +224,8 @@ async def create_api(
     }
 
     try:
-        # Create in GitLab
-        await git_service.create_api(tenant_id, api_data)
+        # Create in git provider
+        await git.create_api(tenant_id, api_data)
 
         # Emit Kafka event
         await kafka_service.emit_api_created(
@@ -270,12 +277,18 @@ async def create_api(
 @router.put("/{api_id}", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_UPDATE)
 @require_tenant_access
-async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = Depends(get_current_user)):
-    """Update API in GitLab"""
-    _require_git_service()
+async def update_api(
+    tenant_id: str,
+    api_id: str,
+    api: APIUpdate,
+    user: User = Depends(get_current_user),
+    git: GitProvider = Depends(get_git_provider),
+):
+    """Update API in git provider"""
+    _require_git_service(git)
     try:
         # Get current API
-        current = await git_service.get_api(tenant_id, api_id)
+        current = await git.get_api(tenant_id, api_id)
         if not current:
             raise HTTPException(status_code=404, detail="API not found")
 
@@ -285,8 +298,8 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
         if not updates:
             return _api_from_yaml(tenant_id, current)
 
-        # Update in GitLab
-        await git_service.update_api(tenant_id, api_id, updates)
+        # Update in git provider
+        await git.update_api(tenant_id, api_id, updates)
 
         # Emit Kafka event
         await kafka_service.emit_api_updated(
@@ -308,7 +321,7 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
         logger.info(f"Updated API {api_id} for tenant {tenant_id} by {user.username}")
 
         # Fetch updated API
-        updated = await git_service.get_api(tenant_id, api_id)
+        updated = await git.get_api(tenant_id, api_id)
         return _api_from_yaml(tenant_id, updated)
 
     except HTTPException:
@@ -321,17 +334,19 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
 @router.delete("/{api_id}", dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_DELETE)
 @require_tenant_access
-async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):
-    """Delete API from GitLab"""
-    _require_git_service()
+async def delete_api(
+    tenant_id: str, api_id: str, user: User = Depends(get_current_user), git: GitProvider = Depends(get_git_provider)
+):
+    """Delete API from git provider"""
+    _require_git_service(git)
     try:
         # Verify API exists
-        api_data = await git_service.get_api(tenant_id, api_id)
+        api_data = await git.get_api(tenant_id, api_id)
         if not api_data:
             raise HTTPException(status_code=404, detail="API not found")
 
-        # Delete from GitLab
-        await git_service.delete_api(tenant_id, api_id)
+        # Delete from git provider
+        await git.delete_api(tenant_id, api_id)
 
         # Emit Kafka event
         await kafka_service.emit_api_deleted(
@@ -368,18 +383,19 @@ async def list_api_versions(
     api_id: str,
     limit: int = Query(default=20, ge=1, le=100, description="Max commits to return"),
     user: User = Depends(get_current_user),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """List version history (git commits) for a specific API."""
-    _require_git_service()
+    _require_git_service(git)
     try:
         # Verify API exists
-        api_data = await git_service.get_api(tenant_id, api_id)
+        api_data = await git.get_api(tenant_id, api_id)
         if not api_data:
             raise HTTPException(status_code=404, detail="API not found")
 
         # Get commits for this API's directory in the tenant repo
         api_path = f"tenants/{tenant_id}/apis/{api_id}"
-        commits = await git_service.list_commits(path=api_path, limit=limit)
+        commits = await git.list_commits(path=api_path, limit=limit)
         return [APIVersionEntry(**c) for c in commits]
     except HTTPException:
         raise

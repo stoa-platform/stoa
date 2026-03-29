@@ -22,7 +22,7 @@ from ..schemas.tenant import (
 )
 from ..schemas.tenant_dr import ImportResult, TenantExportResponse, TenantImportRequest
 from ..services.cache_service import tenant_cache
-from ..services.git_service import git_service
+from ..services.git_provider import GitProvider, get_git_provider
 from ..services.kafka_service import Topics, kafka_service
 from ..services.keycloak_service import keycloak_service
 from ..services.tenant_dr_service import TenantExportService, TenantImportService
@@ -68,6 +68,7 @@ async def get_tenant_usage(
     tenant_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """Get tenant resource usage and limits."""
     if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
@@ -83,7 +84,7 @@ async def get_tenant_usage(
     api_count = 0
     app_count = 0
     try:
-        apis = await git_service.list_apis(tenant_id)
+        apis = await git.list_apis(tenant_id)
         api_count = len(apis)
     except Exception:
         logger.warning("Failed to count APIs for tenant %s", tenant_id)

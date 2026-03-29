@@ -24,7 +24,7 @@ from ..schemas.catalog import (
     SyncTriggerResponse,
 )
 from ..services.catalog_sync_service import CatalogSyncService
-from ..services.git_service import git_service
+from ..services.git_provider import GitProvider, get_git_provider
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/admin/catalog", tags=["Catalog Admin"])
@@ -46,6 +46,7 @@ async def trigger_catalog_sync(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger a full catalog synchronization from GitLab.
@@ -58,7 +59,7 @@ async def trigger_catalog_sync(
     _require_admin(user)
 
     try:
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
 
         # Check if a sync is already running
         last_sync = await sync_service.get_last_sync_status()
@@ -72,7 +73,7 @@ async def trigger_catalog_sync(
         # Launch sync in background
         async def run_sync():
             async for session in get_async_db():
-                service = CatalogSyncService(session, git_service)
+                service = CatalogSyncService(session, git)
                 await service.sync_all()
 
         background_tasks.add_task(run_sync)
@@ -94,6 +95,7 @@ async def trigger_mcp_servers_sync(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
     tenant_id: str | None = Query(None, description="Sync specific tenant only"),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger MCP servers synchronization from GitLab.
@@ -109,7 +111,7 @@ async def trigger_mcp_servers_sync(
 
         async def run_sync():
             async for session in get_async_db():
-                service = CatalogSyncService(session, git_service)
+                service = CatalogSyncService(session, git)
                 await service.sync_mcp_servers(tenant_id)
 
         background_tasks.add_task(run_sync)
@@ -131,6 +133,7 @@ async def trigger_tenant_sync(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger catalog synchronization for a specific tenant.
@@ -147,7 +150,7 @@ async def trigger_tenant_sync(
 
         async def run_sync():
             async for session in get_async_db():
-                service = CatalogSyncService(session, git_service)
+                service = CatalogSyncService(session, git)
                 await service.sync_tenant(tenant_id)
 
         background_tasks.add_task(run_sync)
@@ -167,6 +170,7 @@ async def trigger_tenant_sync(
 async def get_sync_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get the status of the last catalog sync operation.
@@ -183,7 +187,7 @@ async def get_sync_status(
     _require_admin(user)
 
     try:
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
         last_sync = await sync_service.get_last_sync_status()
 
         if not last_sync:
@@ -203,6 +207,7 @@ async def get_sync_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
     limit: int = Query(10, ge=1, le=100),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get the history of catalog sync operations.
@@ -214,7 +219,7 @@ async def get_sync_history(
     _require_admin(user)
 
     try:
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
         syncs = await sync_service.get_sync_history(limit=limit)
 
         return SyncHistoryResponse(
@@ -236,6 +241,7 @@ async def get_sync_history(
 async def get_catalog_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get statistics about the catalog cache.
@@ -256,7 +262,7 @@ async def get_catalog_stats(
         stats = await repo.get_stats()
 
         # Get last sync info
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
         last_sync = await sync_service.get_last_sync_status()
 
         return CatalogStatsResponse(

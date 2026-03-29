@@ -12,8 +12,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..config import settings
-from ..services import git_service, kafka_service, keycloak_service
+from ..services import kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
+from ..services.git_provider import git_provider_factory
 from ..services.vault_client import get_vault_client
 
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -24,9 +25,13 @@ def _check_kafka_connected() -> bool:
     return kafka_service._producer is not None
 
 
-def _check_gitlab_connected() -> bool:
-    """Check if GitLab client is connected."""
-    return git_service._gl is not None
+def _check_git_connected() -> bool:
+    """Check if git provider is connected."""
+    try:
+        provider = git_provider_factory()
+        return getattr(provider, "_gl", None) is not None or getattr(provider, "_client", None) is not None
+    except Exception:
+        return False
 
 
 def _check_keycloak_connected() -> bool:
@@ -110,12 +115,12 @@ async def readiness():
         checks["keycloak"] = f"error: {e!s}"
         all_healthy = False
 
-    # Check GitLab connection (non-critical)
+    # Check git provider connection (non-critical)
     try:
-        gitlab_healthy = _check_gitlab_connected()
-        checks["gitlab"] = "ok" if gitlab_healthy else "disconnected"
+        git_healthy = _check_git_connected()
+        checks["git"] = "ok" if git_healthy else "disconnected"
     except Exception as e:
-        checks["gitlab"] = f"error: {e!s}"
+        checks["git"] = f"error: {e!s}"
 
     # Check Gateway connection (non-critical)
     try:

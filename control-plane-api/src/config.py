@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     def GITLAB_PROJECT_PATH(self) -> str:
         return self.GITLAB_CATALOG_PROJECT_PATH
 
+    # Git Provider Abstraction (CAB-1890 — GitLab→GitHub migration)
+    GIT_PROVIDER: str = "gitlab"  # "gitlab" (default) or "github"
+    GITHUB_TOKEN: str = ""
+    GITHUB_ORG: str = "stoa-platform"
+    GITHUB_CATALOG_REPO: str = "stoa-catalog"
+    GITHUB_GITOPS_REPO: str = "stoa-gitops"
+    GITHUB_WEBHOOK_SECRET: str = ""
+
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.stoa-system.svc.cluster.local:9092"

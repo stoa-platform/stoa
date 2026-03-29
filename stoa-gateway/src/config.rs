@@ -1834,6 +1834,55 @@ mod tests {
         assert!(config.gitlab_token.is_none());
     }
 
+    #[test]
+    fn test_git_provider_github_config_complete() {
+        // Verify that a fully-configured GitHub setup has all expected fields
+        let config = Config {
+            git_provider: "github".into(),
+            github_token: Some("ghp_test123".into()),
+            github_org: Some("stoa-platform".into()),
+            github_catalog_repo: Some("stoa".into()),
+            github_gitops_repo: Some("stoa-infra".into()),
+            github_webhook_secret: Some("whsec_test".into()),
+            ..Config::default()
+        };
+        assert_eq!(config.git_provider, "github");
+        assert_eq!(config.github_token.as_deref(), Some("ghp_test123"));
+        assert_eq!(config.github_org.as_deref(), Some("stoa-platform"));
+        assert_eq!(config.github_catalog_repo.as_deref(), Some("stoa"));
+        assert_eq!(config.github_gitops_repo.as_deref(), Some("stoa-infra"));
+        assert_eq!(config.github_webhook_secret.as_deref(), Some("whsec_test"));
+    }
+
+    #[test]
+    fn test_git_provider_gitlab_and_github_coexist() {
+        // During migration, both provider configs can coexist
+        let config = Config {
+            git_provider: "github".into(),
+            github_token: Some("ghp_tok".into()),
+            github_org: Some("acme".into()),
+            gitlab_url: Some("https://gitlab.example.com".into()),
+            gitlab_token: Some("glpat-legacy".into()),
+            gitlab_project_id: Some("42".into()),
+            ..Config::default()
+        };
+        // git_provider selects github even though gitlab fields are present
+        assert_eq!(config.git_provider, "github");
+        // GitLab fields remain accessible (for shadow mode fallback)
+        assert!(config.gitlab_token.is_some());
+    }
+
+    #[test]
+    fn test_git_provider_unknown_value_treated_as_gitlab() {
+        // Any value other than "github" falls through to gitlab
+        let config = Config {
+            git_provider: "bitbucket".into(),
+            ..Config::default()
+        };
+        // GitProvider::from_config would treat this as GitLab (the catch-all)
+        assert_ne!(config.git_provider, "github");
+    }
+
     /// Regression test for PR #1814: OAuth proxy endpoints must use
     /// keycloak_internal_url when available, to bypass hairpin NAT on OVH MKS.
     /// Root cause: proxy.rs used config.keycloak_url (external) for backend

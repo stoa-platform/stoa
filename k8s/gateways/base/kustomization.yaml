@@ -3,11 +3,7 @@ kind: Kustomization
 resources:
   - echo/deployment.yaml
   - echo/service.yaml
-  - kong/deployment.yaml
-  - kong/service.yaml
   - stoa-gateway/deployment.yaml
   - stoa-gateway/service.yaml
-  - stoa-sidecar-kong/deployment.yaml
-  - stoa-sidecar-kong/service.yaml
-  - stoa-sidecar-webmethods/deployment.yaml
-  - stoa-sidecar-webmethods/service.yaml
+  - stoa-link-wm/deployment.yaml
+  - stoa-link-wm/service.yaml

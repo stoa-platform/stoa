@@ -307,7 +307,8 @@ class Settings(BaseSettings):
     def log_components_dict(self) -> dict:
         """Return LOG_COMPONENTS as a dict"""
         try:
-            return json.loads(self.LOG_COMPONENTS)
+            result: dict = json.loads(self.LOG_COMPONENTS)
+            return result
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -315,7 +316,8 @@ class Settings(BaseSettings):
     def log_exclude_paths_list(self) -> list[str]:
         """Return LOG_EXCLUDE_PATHS as a list"""
         try:
-            return json.loads(self.LOG_EXCLUDE_PATHS)
+            result: list[str] = json.loads(self.LOG_EXCLUDE_PATHS)
+            return result
         except (json.JSONDecodeError, TypeError):
             return ["/health", "/healthz", "/ready", "/metrics"]
 
@@ -323,7 +325,8 @@ class Settings(BaseSettings):
     def log_masking_patterns_list(self) -> list[str]:
         """Return LOG_MASKING_PATTERNS as a list"""
         try:
-            return json.loads(self.LOG_MASKING_PATTERNS)
+            result: list[str] = json.loads(self.LOG_MASKING_PATTERNS)
+            return result
         except (json.JSONDecodeError, TypeError):
             return ["password", "secret", "token", "api_key", "authorization"]
 

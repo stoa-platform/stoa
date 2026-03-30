@@ -169,14 +169,14 @@ class PIIMasker:
             return masked, masked_paths
 
         elif isinstance(body, list):
-            masked = []
+            masked_list: list[Any] = []
             for i, item in enumerate(body):
                 current_path = f"{path}[{i}]"
                 masked_item, nested_paths = self.mask_body(item, current_path, depth + 1)
-                masked.append(masked_item)
+                masked_list.append(masked_item)
                 masked_paths.extend(nested_paths)
 
-            return masked, masked_paths
+            return masked_list, masked_paths
 
         elif isinstance(body, str):
             # Check regex patterns for sensitive values

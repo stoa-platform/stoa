@@ -135,7 +135,8 @@ class SnapshotSettings(BaseSettings):
     def exclude_paths_list(self) -> list[str]:
         """Get exclude paths as a list."""
         try:
-            return json.loads(self.exclude_paths)
+            result: list[str] = json.loads(self.exclude_paths)
+            return result
         except json.JSONDecodeError:
             return []
 

@@ -68,7 +68,8 @@ async def fetch_openapi_spec(url: str, timeout: float = 30.0) -> dict:
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        return resp.json()
+        result: dict = resp.json()
+        return result
 
 
 def transform_openapi_to_uac(

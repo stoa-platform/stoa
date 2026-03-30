@@ -24,6 +24,8 @@ beforeEach(() => {
   vi.stubEnv('VITE_ENABLE_MONITORING', '');
   vi.stubEnv('VITE_ENABLE_GITOPS', '');
   vi.stubEnv('VITE_ENABLE_DEBUG', '');
+  vi.stubEnv('VITE_GIT_PROVIDER', '');
+  vi.stubEnv('VITE_GIT_REPO_URL', '');
 });
 
 describe('config', () => {

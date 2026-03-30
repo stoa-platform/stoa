@@ -31,7 +31,7 @@ class TestReadiness:
         with (
             patch("src.routers.health._check_kafka_connected", return_value=True),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", return_value=True),
         ):
             resp = client.get("/health/ready")
@@ -46,7 +46,7 @@ class TestReadiness:
             patch("src.routers.health.settings") as mock_settings,
             patch("src.routers.health._check_kafka_connected", return_value=False),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", return_value=True),
         ):
             mock_settings.KAFKA_ENABLED = True
@@ -61,7 +61,7 @@ class TestReadiness:
         with (
             patch("src.routers.health._check_kafka_connected", return_value=True),
             patch("src.routers.health._check_keycloak_connected", return_value=False),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", return_value=True),
         ):
             resp = client.get("/health/ready")
@@ -72,7 +72,7 @@ class TestReadiness:
         with (
             patch("src.routers.health._check_kafka_connected", return_value=True),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", return_value=False),
+            patch("src.routers.health._check_git_connected", return_value=False),
             patch("src.routers.health._check_gateway_connected", return_value=True),
         ):
             resp = client.get("/health/ready")
@@ -84,7 +84,7 @@ class TestReadiness:
         with (
             patch("src.routers.health.settings") as mock_settings,
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", return_value=True),
         ):
             mock_settings.KAFKA_ENABLED = False

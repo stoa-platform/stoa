@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from src.routers.health import (
     _check_gateway_connected,
-    _check_gitlab_connected,
+    _check_git_connected,
     _check_kafka_connected,
     _check_keycloak_connected,
     readiness,
@@ -32,12 +32,12 @@ class TestCheckGitlabConnected:
     def test_returns_false_when_gl_is_none(self):
         with patch("src.routers.health.git_service") as mock_svc:
             mock_svc._gl = None
-            assert _check_gitlab_connected() is False
+            assert _check_git_connected() is False
 
     def test_returns_true_when_gl_is_set(self):
         with patch("src.routers.health.git_service") as mock_svc:
             mock_svc._gl = MagicMock()
-            assert _check_gitlab_connected() is True
+            assert _check_git_connected() is True
 
 
 class TestCheckKeycloakConnected:
@@ -89,7 +89,7 @@ class TestReadinessExceptions:
             patch("src.routers.health.settings", _mock_settings()),
             patch("src.routers.health._check_kafka_connected", side_effect=Exception("k-down")),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", return_value=True),
             pytest.raises(HTTPException) as exc_info,
         ):
@@ -102,7 +102,7 @@ class TestReadinessExceptions:
         with (
             patch("src.routers.health.settings", _mock_settings(kafka_enabled=False)),
             patch("src.routers.health._check_keycloak_connected", side_effect=Exception("kc-down")),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", return_value=True),
             pytest.raises(HTTPException) as exc_info,
         ):
@@ -115,7 +115,7 @@ class TestReadinessExceptions:
         with (
             patch("src.routers.health.settings", _mock_settings(kafka_enabled=False)),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", side_effect=Exception("gl-down")),
+            patch("src.routers.health._check_git_connected", side_effect=Exception("gl-down")),
             patch("src.routers.health._check_gateway_connected", return_value=True),
         ):
             result = await readiness()
@@ -127,7 +127,7 @@ class TestReadinessExceptions:
         with (
             patch("src.routers.health.settings", _mock_settings(kafka_enabled=False)),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
-            patch("src.routers.health._check_gitlab_connected", return_value=True),
+            patch("src.routers.health._check_git_connected", return_value=True),
             patch("src.routers.health._check_gateway_connected", side_effect=Exception("gw-down")),
         ):
             result = await readiness()

@@ -100,7 +100,7 @@ func TestStreamEventsParsesSyncDeployment(t *testing.T) {
 				t.Fatal("expected flusher")
 			}
 			// Send one event then close
-			fmt.Fprintf(w, "event: sync-deployment\ndata: %s\n\n", string(eventData))
+			_, _ = fmt.Fprintf(w, "event: sync-deployment\ndata: %s\n\n", string(eventData))
 			flusher.Flush()
 			return
 		}
@@ -149,7 +149,7 @@ func TestStreamEventsIgnoresHeartbeat(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			flusher, _ := w.(http.Flusher)
-			fmt.Fprintf(w, "event: heartbeat\ndata: {\"status\":\"connected\"}\n\n")
+			_, _ = fmt.Fprintf(w, "event: heartbeat\ndata: {\"status\":\"connected\"}\n\n")
 			flusher.Flush()
 			return
 		}
@@ -212,7 +212,7 @@ func TestStartDeploymentStreamSkipsWithoutRegistration(t *testing.T) {
 
 func TestMainSSEToggle(t *testing.T) {
 	// Verify env var controls SSE vs polling
-	os.Unsetenv("STOA_SSE_ENABLED")
+	_ = os.Unsetenv("STOA_SSE_ENABLED")
 	cfg := SSEConfigFromEnv()
 	if cfg.Enabled {
 		t.Error("SSE should be disabled without env var")

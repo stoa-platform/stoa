@@ -136,6 +136,20 @@ envsubst '${API_BACKEND_URL} ${LOGS_BACKEND_URL} ${GRAFANA_BACKEND_URL} ${DNS_RE
   > /etc/nginx/conf.d/default.conf
 ```
 
+### 9. Service port consistency (CRITICAL — CAB-1935 post-mortem)
+Ports in `*/k8s/deployment.yaml` MUST match the Helm chart `service.port` in stoa-infra. A mismatch causes silent connectivity failures (nginx proxy_pass to unreachable port).
+
+**When changing a service port in stoa-infra**: grep all `k8s/deployment.yaml` in stoa for `svc.cluster.local` references to that service. Update both repos atomically.
+
+**CI check**: `scripts/ci/check-service-ports.sh` validates all ports against a known-ports map. Run it before any k8s manifest change.
+
+**Known ports** (source of truth: `stoa-infra/charts/*/values.yaml`):
+- `stoa-control-plane-api`: 8000
+- `stoa-control-plane-ui`: 80
+- `stoa-portal`: 80
+- `stoa-gateway`: 80
+- `keycloak`: 8080
+
 ## CI Workflow (`*-ci.yml`)
 
 ### apply-manifest Job (CRITICAL)

@@ -134,8 +134,9 @@ fi
 echo ""
 echo "── Step 5: SSE Endpoint Auth Rejection ──"
 if [ -n "$GATEWAY_ID" ]; then
+    BAD_KEY="not-a-real-key"
     BAD_AUTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 \
-        -H "X-Gateway-Key: invalid-key-12345" \
+        -H "X-Gateway-Key: ${BAD_KEY}" \
         -H "Accept: text/event-stream" \
         "${API_URL}/v1/internal/gateways/${GATEWAY_ID}/events" 2>/dev/null || echo "000")
     if [ "$BAD_AUTH_CODE" = "401" ] || [ "$BAD_AUTH_CODE" = "403" ]; then

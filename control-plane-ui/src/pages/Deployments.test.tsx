@@ -80,6 +80,12 @@ vi.mock('../config', () => ({
   config: {
     api: { baseUrl: 'https://api.gostoa.dev' },
     services: {
+      git: {
+        provider: 'gitlab',
+        label: 'GitLab',
+        url: 'https://gitlab.example.com',
+        webhookPath: 'webhooks/gitlab',
+      },
       gitlab: { url: 'https://gitlab.example.com' },
       awx: {
         url: 'https://awx.example.com',

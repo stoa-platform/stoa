@@ -45,7 +45,7 @@ spec:
             - name: STOA_HOST
               value: "0.0.0.0"
             - name: STOA_CONTROL_PLANE_URL
-              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
             - name: STOA_LOG_LEVEL
               value: "info"
             - name: STOA_LOG_FORMAT
@@ -88,7 +88,7 @@ spec:
             - name: STOA_LLM_PROXY_SKIP_VALIDATION
               value: "true"
             - name: STOA_LLM_PROXY_METERING_URL
-              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
             # --- API Proxy backends (CAB-1728: dogfooding low-risk) ---
             - name: STOA_API_PROXY_ENABLED
               value: "true"

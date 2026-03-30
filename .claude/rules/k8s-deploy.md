@@ -162,3 +162,31 @@ Every component CI must have an `apply-manifest` job between `docker` and `deplo
 - `control-plane-ui` (control-plane-ui-ci.yml) ✓
 - `portal` (stoa-portal-ci.yml) ✓
 - `control-plane-api` — **NO** (naming mismatch: CI uses `control-plane-api`, k8s has `stoa-control-plane-api`)
+
+## Service Port Consistency (post-mortem PR #2077)
+
+Backend URL env vars in k8s manifests MUST use the correct K8s Service port. The Helm chart in stoa-infra defines the actual Service port — standalone manifests and Helm defaults in this repo must match.
+
+### Known-ports map (source of truth)
+
+| K8s Service | Port | Container Port |
+|-------------|------|---------------|
+| stoa-control-plane-api | 8000 | 8000 |
+| stoa-gateway | 80 | 8080 |
+| opensearch-dashboards | 5601 | 5601 |
+| grafana | 3000 | 3000 |
+| prometheus-kube-prometheus-prometheus | 9090 | 9090 |
+
+### CI enforcement
+
+`scripts/ci/check-service-ports.sh` scans all `**/k8s/deployment.yaml` and `charts/**/*.yaml` for `*.svc.cluster.local` URLs and validates ports against the known-ports map. Runs in `required-checks.yml` on every PR.
+
+```bash
+# Local check
+bash scripts/ci/check-service-ports.sh --verbose
+```
+
+### When to update
+
+- Service port changed in stoa-infra Helm chart → update `KNOWN_PORTS` in the script + fix all references
+- New internal service added → add to `KNOWN_PORTS` in the script

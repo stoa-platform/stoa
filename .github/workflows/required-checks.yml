@@ -184,3 +184,26 @@ jobs:
           echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| CycloneDX | sbom-cyclonedx.json |" >> $GITHUB_STEP_SUMMARY
           echo "| SPDX | sbom-spdx.json |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # 4. Service Port Drift Detection (post-mortem PR #2077)
+  # ==========================================================================
+  port-drift-check:
+    name: Service Port Drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check service port consistency
+        run: bash scripts/ci/check-service-ports.sh
+
+      - name: Summary
+        if: failure()
+        run: |
+          echo "## Service Port Drift Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Backend URL ports in k8s manifests or Helm chart defaults don't match the expected service ports." >> $GITHUB_STEP_SUMMARY
+          echo "Run \`scripts/ci/check-service-ports.sh --verbose\` locally to see details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See: PR #2077 post-mortem (CAB-1935)" >> $GITHUB_STEP_SUMMARY

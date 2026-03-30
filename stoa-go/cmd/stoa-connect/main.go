@@ -86,7 +86,14 @@ func main() {
 			agent.StartSync(ctx, adapter, dcfg.GatewayAdminURL, connect.SyncConfig{
 				Interval: dcfg.Interval,
 			})
-			agent.StartRouteSync(ctx, adapter, dcfg.GatewayAdminURL, connect.RouteSyncConfigFromEnv())
+
+			// ADR-059: SSE stream replaces route polling when enabled
+			sseCfg := connect.SSEConfigFromEnv()
+			if sseCfg.Enabled && agent.GatewayID() != "" {
+				agent.StartDeploymentStream(ctx, adapter, dcfg.GatewayAdminURL, sseCfg)
+			} else {
+				agent.StartRouteSync(ctx, adapter, dcfg.GatewayAdminURL, connect.RouteSyncConfigFromEnv())
+			}
 
 			// Start credential sync loop (requires Vault)
 			vaultCfg := connect.VaultConfigFromEnv()

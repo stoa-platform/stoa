@@ -11,6 +11,7 @@ useDefault = true
 description = "Allowlist for false positives"
 
 paths = [
+  '''scripts/e2e/.*''',
   '''docs/.*\.md''',
   '''.*SUBSCRIPTIONS\.md''',
   '''.*README\.md''',

@@ -7,13 +7,17 @@ Includes tool discovery endpoints (CAB-1817) authenticated via X-Gateway-Key
 instead of user JWT, so sidecars (STOA Link) can discover tools without OIDC.
 """
 
+import asyncio
+import json
 import logging
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from src.config import settings
 from src.database import get_db
@@ -795,3 +799,61 @@ async def get_gateway_config(
             for p in policies
         ],
     }
+
+
+# --- SSE endpoint for STOA Link agents (ADR-059) ---
+
+LINK_EVENT_TYPES = ["sync-deployment", "sync-policy", "undeploy"]
+
+
+async def _link_event_generator(
+    request: Request, gateway_id: str, event_types: list[str] | None = None
+) -> AsyncGenerator[dict, None]:
+    """Generate SSE events for a specific gateway (ADR-059)."""
+    from src.events.event_bus import event_bus
+
+    sub = event_bus.subscribe(
+        tenant_id="*",
+        gateway_id=gateway_id,
+        event_types=event_types or LINK_EVENT_TYPES,
+    )
+    try:
+        async for event in event_bus.listen(sub):
+            if await request.is_disconnected():
+                break
+            data = event.get("data", {})
+            yield {
+                "event": event.get("event", "message"),
+                "data": json.dumps(data) if isinstance(data, dict) else data,
+            }
+    except asyncio.CancelledError:
+        pass
+    finally:
+        event_bus.unsubscribe(sub)
+
+
+@router.get("/{gateway_id}/events")
+async def stream_gateway_events(
+    gateway_id: UUID,
+    request: Request,
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
+    db: AsyncSession = Depends(get_db),
+) -> EventSourceResponse:
+    """SSE stream of deployment events for a specific gateway (ADR-059).
+
+    Used by STOA Link agents to receive real-time deployment notifications
+    instead of polling /config. Events include:
+    - sync-deployment: new deployment to apply
+    - sync-policy: policy update
+    - undeploy: API removal
+
+    Authentication: X-Gateway-Key header (same as other internal endpoints).
+    """
+    _validate_gateway_key(x_gateway_key)
+
+    repo = GatewayInstanceRepository(db)
+    instance = await repo.get_by_id(gateway_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Gateway instance not found")
+
+    return EventSourceResponse(_link_event_generator(request, str(gateway_id)))

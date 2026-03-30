@@ -244,11 +244,12 @@ async def lifespan(app: FastAPI):
             logger.warning("Failed to start error snapshot consumer", error=str(e))
 
     # Start gateway sync engine (Control Plane Agnostique)
+    # ADR-059: gated by DEPLOY_MODE — disabled in sse_only mode
     sync_engine_task = None
-    if ENABLE_SYNC_ENGINE and settings.SYNC_ENGINE_ENABLED:
+    if ENABLE_SYNC_ENGINE and settings.SYNC_ENGINE_ENABLED and settings.is_sync_engine_enabled:
         try:
             sync_engine_task = asyncio.create_task(sync_engine.start())
-            logger.info("Gateway sync engine started")
+            logger.info("Gateway sync engine started (DEPLOY_MODE=%s)", settings.DEPLOY_MODE)
         except Exception as e:
             logger.warning("Failed to start sync engine", error=str(e))
 

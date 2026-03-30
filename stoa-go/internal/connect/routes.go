@@ -109,10 +109,37 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 	span.SetAttributes(attribute.Int("stoa.routes_count", len(routes)))
 	log.Printf("route-sync: %d routes to push", len(routes))
 
-	if err := adapter.SyncRoutes(ctx, adminURL, routes); err != nil {
-		span.RecordError(err)
+	syncErr := adapter.SyncRoutes(ctx, adminURL, routes)
+
+	// Build ack results based on sync outcome
+	var results []SyncedRouteResult
+	for _, r := range routes {
+		result := SyncedRouteResult{DeploymentID: r.DeploymentID}
+		if r.DeploymentID == "" {
+			continue // Skip routes without deployment tracking
+		}
+		if syncErr != nil {
+			result.Status = "failed"
+			result.Error = syncErr.Error()
+		} else {
+			result.Status = "applied"
+		}
+		results = append(results, result)
+	}
+
+	// Report route sync results to CP (fire-and-forget: log warning on failure)
+	if len(results) > 0 {
+		if ackErr := a.ReportRouteSyncAck(ctx, results); ackErr != nil {
+			log.Printf("route-sync: report ack error: %v", ackErr)
+		} else {
+			log.Printf("route-sync: reported %d ack results to CP", len(results))
+		}
+	}
+
+	if syncErr != nil {
+		span.RecordError(syncErr)
 		span.SetStatus(codes.Error, "sync routes failed")
-		log.Printf("route-sync: push error: %v", err)
+		log.Printf("route-sync: push error: %v", syncErr)
 		return
 	}
 

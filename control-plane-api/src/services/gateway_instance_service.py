@@ -127,7 +127,20 @@ class GatewayInstanceService:
         if not instance:
             raise ValueError(f"Gateway instance {instance_id} not found")
 
-        from src.services.credential_resolver import create_adapter_with_credentials
+        from src.services.credential_resolver import (
+            _PULL_MODEL_GATEWAY_TYPES,
+            AGENT_MANAGED_MESSAGE,
+            create_adapter_with_credentials,
+        )
+
+        gw_type = instance.gateway_type.value if hasattr(instance.gateway_type, "value") else str(instance.gateway_type)
+        if instance.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
+            return {
+                "status": instance.status.value if instance.status else "unknown",
+                "details": {"info": AGENT_MANAGED_MESSAGE},
+                "gateway_name": instance.name,
+                "gateway_type": gw_type,
+            }
 
         adapter = await create_adapter_with_credentials(
             instance.gateway_type.value, instance.base_url, instance.auth_config,

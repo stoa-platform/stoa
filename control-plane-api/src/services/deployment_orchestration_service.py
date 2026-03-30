@@ -7,12 +7,14 @@ Sits above GatewayDeploymentService, adding:
 - Auto-deploy via api_gateway_assignments
 - Environment-aware gateway filtering
 """
+
 import logging
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..models.catalog import APICatalog
 from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus
@@ -30,9 +32,7 @@ class DeploymentOrchestrationService:
         self.deploy_svc = GatewayDeploymentService(db)
         self.assignment_repo = ApiGatewayAssignmentRepository(db)
 
-    async def _resolve_api_catalog(
-        self, tenant_id: str, api_identifier: str
-    ) -> APICatalog:
+    async def _resolve_api_catalog(self, tenant_id: str, api_identifier: str) -> APICatalog:
         """Resolve an API identifier to a catalog entry.
 
         Accepts either a UUID (catalog ID) or a string (Git API name/id).
@@ -82,7 +82,8 @@ class DeploymentOrchestrationService:
         # Not in catalog — sync from Git on-demand
         logger.info(
             "API '%s' not in catalog for tenant '%s', syncing from Git...",
-            api_identifier, tenant_id,
+            api_identifier,
+            tenant_id,
         )
         entry = await self._sync_api_from_git(tenant_id, api_identifier)
         if entry:
@@ -93,9 +94,7 @@ class DeploymentOrchestrationService:
             f"Ensure the API exists in the Git repository."
         )
 
-    async def _sync_api_from_git(
-        self, tenant_id: str, api_id: str
-    ) -> APICatalog | None:
+    async def _sync_api_from_git(self, tenant_id: str, api_id: str) -> APICatalog | None:
         """Sync a single API from Git into the catalog on-demand."""
         try:
             from ..services.git_service import git_service
@@ -169,9 +168,7 @@ class DeploymentOrchestrationService:
 
         # 2. Validate promotion prerequisite (staging/prod only — dev is no-ceremony)
         if environment != "dev":
-            has_promotion = await self._has_active_promotion(
-                api_catalog.api_id, api_catalog.tenant_id, environment
-            )
+            has_promotion = await self._has_active_promotion(api_catalog.api_id, api_catalog.tenant_id, environment)
             if not has_promotion:
                 raise ValueError(
                     f"API '{api_catalog.api_name}' has no active promotion to {environment}. "
@@ -194,10 +191,10 @@ class DeploymentOrchestrationService:
         # 4. Deploy via existing GatewayDeploymentService (creates PENDING records + Kafka events)
         deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
 
-        # 5. Attempt inline sync — don't wait for Kafka/periodic worker
-        #    This gives immediate feedback in the UI. If it fails, the background
-        #    SyncEngine will retry on its next cycle.
-        await self._try_inline_sync(deployments)
+        # 5. Legacy mode: attempt inline sync for immediate UI feedback.
+        #    SSE mode (ADR-059): Link handles sync via SSE notification.
+        if settings.is_inline_sync_enabled:
+            await self._try_inline_sync(deployments)
 
         logger.info(
             "Orchestrated deployment: api=%s env=%s gateways=%d by=%s",
@@ -208,9 +205,7 @@ class DeploymentOrchestrationService:
         )
         return deployments
 
-    async def get_deployable_environments(
-        self, tenant_id: str, api_identifier: str
-    ) -> list[dict]:
+    async def get_deployable_environments(self, tenant_id: str, api_identifier: str) -> list[dict]:
         """Get environments where this API can be deployed.
 
         Dev is always deployable (no promotion required).
@@ -227,31 +222,33 @@ class DeploymentOrchestrationService:
         environments = []
 
         # Dev is always available
-        environments.append({
-            "environment": "dev",
-            "deployable": True,
-            "promotion_status": "not_required",
-        })
+        environments.append(
+            {
+                "environment": "dev",
+                "deployable": True,
+                "promotion_status": "not_required",
+            }
+        )
 
         # Staging requires promotion from dev
-        staging_promotion = await self._get_latest_promotion(
-            api_id_for_promotion, tenant_for_lookup, "staging"
+        staging_promotion = await self._get_latest_promotion(api_id_for_promotion, tenant_for_lookup, "staging")
+        environments.append(
+            {
+                "environment": "staging",
+                "deployable": staging_promotion is not None,
+                "promotion_status": staging_promotion.status if staging_promotion else "not_promoted",
+            }
         )
-        environments.append({
-            "environment": "staging",
-            "deployable": staging_promotion is not None,
-            "promotion_status": staging_promotion.status if staging_promotion else "not_promoted",
-        })
 
         # Production requires promotion from staging
-        prod_promotion = await self._get_latest_promotion(
-            api_id_for_promotion, tenant_for_lookup, "production"
+        prod_promotion = await self._get_latest_promotion(api_id_for_promotion, tenant_for_lookup, "production")
+        environments.append(
+            {
+                "environment": "production",
+                "deployable": prod_promotion is not None,
+                "promotion_status": prod_promotion.status if prod_promotion else "not_promoted",
+            }
         )
-        environments.append({
-            "environment": "production",
-            "deployable": prod_promotion is not None,
-            "promotion_status": prod_promotion.status if prod_promotion else "not_promoted",
-        })
 
         return environments
 
@@ -261,6 +258,7 @@ class DeploymentOrchestrationService:
         tenant_id: str,
         target_environment: str,
         approved_by: str,
+        promotion_id: UUID | None = None,
     ) -> list:
         """Triggered by promotion event — auto-deploy to assigned gateways."""
         # Resolve the catalog entry
@@ -269,28 +267,39 @@ class DeploymentOrchestrationService:
         except ValueError:
             logger.warning(
                 "Auto-deploy skipped: cannot resolve api=%s tenant=%s",
-                api_id, tenant_id,
+                api_id,
+                tenant_id,
             )
             return []
 
         # Get auto-deploy assignments
-        assignments = await self.assignment_repo.list_auto_deploy(
-            api_catalog.id, target_environment
-        )
+        assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, target_environment)
         if not assignments:
             logger.debug(
                 "No auto-deploy assignments for api=%s env=%s",
-                api_id, target_environment,
+                api_id,
+                target_environment,
             )
             return []
 
         gateway_ids = [a.gateway_id for a in assignments]
         logger.info(
             "Auto-deploying api=%s to %d gateways in %s (triggered by promotion, approved by %s)",
-            api_id, len(gateway_ids), target_environment, approved_by,
+            api_id,
+            len(gateway_ids),
+            target_environment,
+            approved_by,
         )
 
-        return await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
+        deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
+
+        # Stamp deployments with the promotion that triggered them
+        if promotion_id and deployments:
+            for dep in deployments:
+                dep.promotion_id = promotion_id
+            await self.db.flush()
+
+        return deployments
 
     async def _try_inline_sync(self, deployments: list) -> None:
         """Attempt to sync deployments immediately (inline, not via Kafka/worker).
@@ -304,7 +313,10 @@ class DeploymentOrchestrationService:
 
         from ..models.gateway_deployment import DeploymentSyncStatus
         from ..repositories.gateway_instance import GatewayInstanceRepository
-        from ..services.credential_resolver import create_adapter_with_credentials
+        from ..services.credential_resolver import (
+            AgentManagedGatewayError,
+            create_adapter_with_credentials,
+        )
 
         gw_repo = GatewayInstanceRepository(self.db)
 
@@ -315,7 +327,11 @@ class DeploymentOrchestrationService:
                     continue
 
                 adapter = await create_adapter_with_credentials(
-                    gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
+                    gateway.gateway_type.value,
+                    gateway.base_url,
+                    gateway.auth_config,
+                    source=gateway.source,
+                    gateway_name=gateway.name,
                 )
                 await adapter.connect()
                 try:
@@ -344,28 +360,33 @@ class DeploymentOrchestrationService:
                     with contextlib.suppress(Exception):
                         await adapter.disconnect()
 
+            except AgentManagedGatewayError:
+                logger.info(
+                    "Skipping inline sync for agent-managed gateway (deployment %s)",
+                    dep.id,
+                )
+                continue
             except Exception as e:
                 # Reset to PENDING so the SyncEngine periodic loop can retry
                 dep.sync_status = DeploymentSyncStatus.PENDING
                 dep.sync_error = str(e)[:500]
+                dep.sync_attempts += 1
                 logger.warning("Inline sync error for deployment %s: %s (will retry via SyncEngine)", dep.id, e)
 
-    async def _has_active_promotion(
-        self, api_id: str, tenant_id: str, target_environment: str
-    ) -> bool:
+    async def _has_active_promotion(self, api_id: str, tenant_id: str, target_environment: str) -> bool:
         result = await self.db.execute(
-            select(Promotion.id).where(
+            select(Promotion.id)
+            .where(
                 Promotion.api_id == api_id,
                 Promotion.tenant_id == tenant_id,
                 Promotion.target_environment == target_environment,
                 Promotion.status == PromotionStatus.PROMOTED.value,
-            ).limit(1)
+            )
+            .limit(1)
         )
         return result.scalar_one_or_none() is not None
 
-    async def _get_latest_promotion(
-        self, api_id: str, tenant_id: str, target_environment: str
-    ) -> Promotion | None:
+    async def _get_latest_promotion(self, api_id: str, tenant_id: str, target_environment: str) -> Promotion | None:
         result = await self.db.execute(
             select(Promotion)
             .where(
@@ -379,13 +400,9 @@ class DeploymentOrchestrationService:
         )
         return result.scalar_one_or_none()
 
-    async def _validate_gateways_for_env(
-        self, gateway_ids: list[UUID], environment: str
-    ) -> None:
+    async def _validate_gateways_for_env(self, gateway_ids: list[UUID], environment: str) -> None:
         for gw_id in gateway_ids:
-            result = await self.db.execute(
-                select(GatewayInstance).where(GatewayInstance.id == gw_id)
-            )
+            result = await self.db.execute(select(GatewayInstance).where(GatewayInstance.id == gw_id))
             gateway = result.scalar_one_or_none()
             if not gateway:
                 raise ValueError(f"Gateway {gw_id} not found")

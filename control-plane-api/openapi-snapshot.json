@@ -11005,6 +11005,11 @@
             "title": "Backend Url",
             "type": "string"
           },
+          "deployment_id": {
+            "default": "",
+            "title": "Deployment Id",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -11020,6 +11025,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "openapi_spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Spec"
           },
           "path_prefix": {
             "title": "Path Prefix",
@@ -19568,6 +19585,29 @@
         "title": "RootCause",
         "type": "object"
       },
+      "RouteSyncAckPayload": {
+        "description": "Payload from stoa-connect reporting route sync results.",
+        "properties": {
+          "sync_timestamp": {
+            "description": "ISO timestamp of sync completion",
+            "title": "Sync Timestamp",
+            "type": "string"
+          },
+          "synced_routes": {
+            "description": "Sync results per route",
+            "items": {
+              "$ref": "#/components/schemas/SyncedRouteResult"
+            },
+            "title": "Synced Routes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sync_timestamp"
+        ],
+        "title": "RouteSyncAckPayload",
+        "type": "object"
+      },
       "RoutingInfo": {
         "description": "API routing information at time of error.",
         "properties": {
@@ -22350,6 +22390,39 @@
           "status"
         ],
         "title": "SyncedPolicyResult",
+        "type": "object"
+      },
+      "SyncedRouteResult": {
+        "description": "Result of syncing a single route deployment on the gateway.",
+        "properties": {
+          "deployment_id": {
+            "description": "GatewayDeployment UUID",
+            "title": "Deployment Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message if failed",
+            "title": "Error"
+          },
+          "status": {
+            "description": "Sync result: applied or failed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deployment_id",
+          "status"
+        ],
+        "title": "SyncedRouteResult",
         "type": "object"
       },
       "SystemInfoResponse": {
@@ -37469,6 +37542,67 @@
           }
         },
         "summary": "Gateway Heartbeat",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
+    "/v1/internal/gateways/{gateway_id}/route-sync-ack": {
+      "post": {
+        "description": "Acknowledge route sync results from stoa-connect.\n\nCalled by stoa-connect after pushing routes to the local gateway.\nUpdates GatewayDeployment sync_status based on the results.",
+        "operationId": "route_sync_ack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteSyncAckPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Route Sync Ack",
         "tags": [
           "Gateway Internal"
         ]

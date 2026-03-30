@@ -50,7 +50,10 @@ from src.schemas.contract import (
     TenantToolsResponse,
 )
 from src.services.cache_service import contract_cache
-from src.services.credential_resolver import create_adapter_with_credentials
+from src.services.credential_resolver import (
+    AgentManagedGatewayError,
+    create_adapter_with_credentials,
+)
 from src.services.uac_tool_generator import UacToolGenerator
 
 logger = get_logger(__name__)
@@ -841,11 +844,14 @@ async def enable_binding(
         try:
             adapter = await create_adapter_with_credentials(
                 gw.gateway_type.value, gw.base_url, gw.auth_config,
+                source=gw.source, gateway_name=gw.name,
             )
             await adapter.connect()
             result = await adapter.deploy_contract(contract_spec)
             if not result.success:
                 dispatch_errors.append(f"{gw.name}: {result.error}")
+        except AgentManagedGatewayError:
+            logger.info("Skipping UAC dispatch for agent-managed gateway %s", gw.name)
         except Exception as exc:
             dispatch_errors.append(f"{gw.name}: {exc}")
 

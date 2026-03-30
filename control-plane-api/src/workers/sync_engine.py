@@ -23,11 +23,14 @@ from kafka.errors import KafkaError
 
 from ..config import settings
 from ..database import _get_session_factory
-from ..models.gateway_deployment import DeploymentSyncStatus
+from ..models.gateway_deployment import DeploymentSyncStatus, PolicySyncStatus
 from ..models.gateway_instance import GatewayInstanceStatus
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.gateway_instance import GatewayInstanceRepository
-from ..services.credential_resolver import create_adapter_with_credentials
+from ..services.credential_resolver import (
+    AgentManagedGatewayError,
+    create_adapter_with_credentials,
+)
 from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -280,6 +283,8 @@ class SyncEngine:
                     gateway.gateway_type.value,
                     gateway.base_url,
                     gateway.auth_config,
+                    source=gateway.source,
+                    gateway_name=gateway.name,
                 )
                 await adapter.connect()
 
@@ -292,6 +297,13 @@ class SyncEngine:
                 ):
                     await self._handle_sync(deployment, adapter, repo, session)
 
+            except AgentManagedGatewayError:
+                logger.debug(
+                    "Skipping push sync for agent-managed gateway %s (deployment %s)",
+                    gateway.name,
+                    deployment_id,
+                )
+                return
             except Exception as e:
                 logger.error(
                     "Reconcile failed for deployment %s: %s",
@@ -330,6 +342,7 @@ class SyncEngine:
             deployment.sync_error = None
 
             # Sync bound policies (non-blocking — failure is warned, not fatal)
+            policy_failures = []
             try:
                 from ..repositories.gateway_policy import GatewayPolicyRepository
 
@@ -350,13 +363,26 @@ class SyncEngine:
                         }
                         await adapter.upsert_policy(policy_spec)
                     except Exception as pe:
+                        policy_failures.append(str(pe)[:100])
                         logger.warning(
                             "Failed to apply policy %s to deployment %s: %s",
                             policy.id,
                             deployment.id,
                             pe,
                         )
+
+                if not policies:
+                    deployment.policy_sync_status = None
+                    deployment.policy_sync_error = None
+                elif policy_failures:
+                    deployment.policy_sync_status = PolicySyncStatus.PARTIAL
+                    deployment.policy_sync_error = "; ".join(policy_failures)[:500]
+                else:
+                    deployment.policy_sync_status = PolicySyncStatus.SYNCED
+                    deployment.policy_sync_error = None
             except Exception as e:
+                deployment.policy_sync_status = PolicySyncStatus.ERROR
+                deployment.policy_sync_error = str(e)[:500]
                 logger.warning("Policy sync failed for deployment %s: %s", deployment.id, e)
 
             await repo.update(deployment)
@@ -420,6 +446,8 @@ class SyncEngine:
                         gateway.gateway_type.value,
                         gateway.base_url,
                         gateway.auth_config,
+                        source=gateway.source,
+                        gateway_name=gateway.name,
                     )
                     await adapter.connect()
                     apis = await adapter.list_apis()
@@ -448,7 +476,8 @@ class SyncEngine:
                         else:
                             gw_hash = gw_api.get("spec_hash", "")
                             desired_hash = (dep.desired_state or {}).get("spec_hash", "")
-                            if gw_hash and desired_hash and gw_hash != desired_hash:
+                            # Detect drift: mismatch OR one side missing hash while the other has it
+                            if (gw_hash or desired_hash) and gw_hash != desired_hash:
                                 dep.sync_status = DeploymentSyncStatus.DRIFTED
                                 dep.sync_error = (
                                     f"Spec hash mismatch: " f"desired={desired_hash[:8]}... actual={gw_hash[:8]}..."
@@ -461,6 +490,11 @@ class SyncEngine:
                                 )
 
                     await session.commit()
+                except AgentManagedGatewayError:
+                    logger.debug(
+                        "Skipping drift detection for agent-managed gateway %s",
+                        gateway.name,
+                    )
                 except Exception as e:
                     logger.error(
                         "Drift detection failed for gateway %s: %s",

@@ -1164,6 +1164,7 @@ export interface GatewayInstance {
   environment: string;
   tenant_id?: string;
   base_url: string;
+  target_gateway_url?: string | null;
   auth_config: Record<string, unknown>;
   status: GatewayInstanceStatus;
   last_health_check?: string;
@@ -1906,4 +1907,42 @@ export interface PromotionDiffResponse {
   source_spec: Record<string, unknown> | null;
   target_spec: Record<string, unknown> | null;
   diff_summary: Record<string, unknown> | null;
+}
+
+// ─── EU API Catalog (CAB-1639) ────────────────────────────────────────────────
+
+export interface CatalogTool {
+  name: string;
+  description?: string;
+}
+
+export interface CatalogEntry {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  country: string;
+  region: string;
+  spec_url?: string;
+  mcp_endpoint?: string;
+  protocol: 'openapi' | 'mcp' | 'graphql';
+  auth_type: 'none' | 'api_key' | 'oauth2' | 'basic';
+  tools: CatalogTool[];
+  status: 'verified' | 'community' | 'experimental';
+  tags: string[];
+  documentation_url?: string;
+  icon?: string;
+}
+
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
+export interface CatalogResponse {
+  entries: CatalogEntry[];
+  total: number;
+  categories: CatalogCategory[];
 }

@@ -136,8 +136,11 @@ journal.md
 # Database dumps (may contain PII)
 *.sql
 !hegemon/tools/state/schema.sql
+!docs/scripts/schema.sql
+!docs/scripts/seed.sql
 *.dump
 *.db
+!docs/stoa-impact.db
 *.sqlite
 *.sqlite3
 backups/

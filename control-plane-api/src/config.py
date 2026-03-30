@@ -130,6 +130,24 @@ class Settings(BaseSettings):
     SYNC_ENGINE_MAX_CONCURRENT: int = 5
     SYNC_ENGINE_RETRY_MAX: int = 3
 
+    # ADR-059: Deployment mode — controls how CP notifies gateways of pending deploys
+    # sse_only: SSE push only (no SyncEngine, no inline sync)
+    # dual: SSE + SyncEngine for drift detection (no push, no inline sync)
+    # legacy: original behavior (SyncEngine + inline sync, no SSE)
+    DEPLOY_MODE: str = "legacy"
+
+    @property
+    def is_sse_enabled(self) -> bool:
+        return self.DEPLOY_MODE in ("sse_only", "dual")
+
+    @property
+    def is_sync_engine_enabled(self) -> bool:
+        return self.DEPLOY_MODE in ("legacy", "dual")
+
+    @property
+    def is_inline_sync_enabled(self) -> bool:
+        return self.DEPLOY_MODE == "legacy"
+
     # Gateway Auto-Registration (ADR-028)
     # Comma-separated list of valid API keys for gateway self-registration
     GATEWAY_API_KEYS: str = ""

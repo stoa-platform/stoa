@@ -14,6 +14,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..models.catalog import APICatalog
 from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus
@@ -190,10 +191,10 @@ class DeploymentOrchestrationService:
         # 4. Deploy via existing GatewayDeploymentService (creates PENDING records + Kafka events)
         deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
 
-        # 5. Attempt inline sync — don't wait for Kafka/periodic worker
-        #    This gives immediate feedback in the UI. If it fails, the background
-        #    SyncEngine will retry on its next cycle.
-        await self._try_inline_sync(deployments)
+        # 5. Legacy mode: attempt inline sync for immediate UI feedback.
+        #    SSE mode (ADR-059): Link handles sync via SSE notification.
+        if settings.is_inline_sync_enabled:
+            await self._try_inline_sync(deployments)
 
         logger.info(
             "Orchestrated deployment: api=%s env=%s gateways=%d by=%s",

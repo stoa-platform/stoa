@@ -509,36 +509,50 @@ pub fn build_router(state: AppState) -> Router {
             // Shadow: passive traffic capture and UAC generation
             let shadow_settings = mode::ShadowSettings::from_env();
 
-            // Build GitClient if GitLab is configured (CAB-1109 Phase 5)
-            let shadow_service = if let (Some(api_url), Some(token), Some(project_id)) = (
-                &state.config.gitlab_api_url,
-                &state.config.gitlab_token,
-                &state.config.gitlab_project_id,
-            ) {
-                use crate::git::{GitClient, GitClientConfig};
-                match GitClient::new(GitClientConfig {
-                    api_url: api_url.clone(),
-                    project_id: project_id.clone(),
-                    token: token.clone(),
-                    ..GitClientConfig::default()
-                }) {
-                    Ok(client) => {
+            // Dispatch git client by git_provider config (CAB-1891)
+            let shadow_service = match state.config.git_provider.as_str() {
+                "github" => {
+                    // GitHub: log that PR submission will use GitHub (future: integrate GitHubClient)
+                    tracing::info!("Shadow mode: git_provider=github, PR submission via GitHub");
+                    std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
+                }
+                _ => {
+                    // GitLab (default): existing behavior (CAB-1109 Phase 5)
+                    if let (Some(api_url), Some(token), Some(project_id)) = (
+                        &state.config.gitlab_api_url,
+                        &state.config.gitlab_token,
+                        &state.config.gitlab_project_id,
+                    ) {
+                        use crate::git::{GitClient, GitClientConfig};
+                        match GitClient::new(GitClientConfig {
+                            api_url: api_url.clone(),
+                            project_id: project_id.clone(),
+                            token: token.clone(),
+                            ..GitClientConfig::default()
+                        }) {
+                            Ok(client) => {
+                                tracing::info!(
+                                    "Shadow mode: GitLab client configured for UAC MR submission"
+                                );
+                                std::sync::Arc::new(mode::shadow::ShadowService::with_git_client(
+                                    shadow_settings,
+                                    std::sync::Arc::new(client),
+                                ))
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "Shadow mode: GitLab client init failed, MR submission disabled");
+                                std::sync::Arc::new(mode::shadow::ShadowService::new(
+                                    shadow_settings,
+                                ))
+                            }
+                        }
+                    } else {
                         tracing::info!(
-                            "Shadow mode: GitLab client configured for UAC MR submission"
+                            "Shadow mode: GitLab not configured, MR submission disabled"
                         );
-                        std::sync::Arc::new(mode::shadow::ShadowService::with_git_client(
-                            shadow_settings,
-                            std::sync::Arc::new(client),
-                        ))
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "Shadow mode: GitLab client init failed, MR submission disabled");
                         std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
                     }
                 }
-            } else {
-                tracing::info!("Shadow mode: GitLab not configured, MR submission disabled");
-                std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
             };
 
             let svc_status = shadow_service.clone();
@@ -712,7 +726,7 @@ async fn http_metrics_middleware(
     // Skip span creation when proxy tracing is disabled to save ~0.4ms per request.
     // Env: STOA_PROXY_TRACING_ENABLED (default: true)
     use tracing::Instrument;
-    let response = if tracing_enabled {
+    let (response, captured_trace_id) = if tracing_enabled {
         let deployment_mode = state.config.gateway_mode.to_string();
         let request_span = tracing::span!(
             tracing::Level::INFO,
@@ -722,10 +736,25 @@ async fn http_metrics_middleware(
             http.method = %method,
             http.route = %path,
         );
-        next.run(request).instrument(request_span).await
+        // CAB-1866: capture trace_id inside the span so access_log_middleware can read it.
+        // access_log is an outer layer — by the time it sees the response, this span has
+        // already closed and tracing::Span::current() returns Span::none().
+        let (resp, trace_id) = async {
+            let r = next.run(request).await;
+            let tid = crate::telemetry::extract_trace_id();
+            (r, tid)
+        }
+        .instrument(request_span)
+        .await;
+        (resp, trace_id)
     } else {
-        next.run(request).await
+        let resp = next.run(request).await;
+        (resp, "-".to_string())
     };
+    let mut response = response;
+    response
+        .extensions_mut()
+        .insert(crate::access_log::CapturedTraceId(captured_trace_id));
 
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();

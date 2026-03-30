@@ -1,4 +1,5 @@
 """Catalog sync service for syncing API and MCP tools from GitLab to PostgreSQL (CAB-682, CAB-689)"""
+
 import logging
 import time
 from datetime import UTC, datetime
@@ -19,7 +20,7 @@ from src.models.mcp_subscription import (
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.services.gateway_deployment_service import GatewayDeploymentService
-from src.services.git_service import GitLabService
+from src.services.git_provider import GitProvider
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class CatalogSyncService:
     def __init__(
         self,
         db: AsyncSession,
-        git_service: GitLabService,
+        git_service: GitProvider,
         enable_gateway_reconciliation: bool = True,
     ):
         self.db = db
@@ -41,10 +42,7 @@ class CatalogSyncService:
         """Full sync of all tenants from GitLab (CAB-688: parallel + progress logging)"""
         start_time = time.time()
 
-        sync_status = CatalogSyncStatus(
-            sync_type=SyncType.FULL.value,
-            status=SyncStatus.RUNNING.value
-        )
+        sync_status = CatalogSyncStatus(sync_type=SyncType.FULL.value, status=SyncStatus.RUNNING.value)
         self.db.add(sync_status)
         await self.db.commit()
         await self.db.refresh(sync_status)
@@ -78,9 +76,7 @@ class CatalogSyncService:
                 logger.info(f"Sync progress: tenant {i}/{total_tenants} - {tenant_id} ({len(api_ids)} APIs)")
 
                 try:
-                    synced, failed = await self._sync_tenant_apis_parallel(
-                        tenant_id, api_ids, commit_sha, seen_apis
-                    )
+                    synced, failed = await self._sync_tenant_apis_parallel(tenant_id, api_ids, commit_sha, seen_apis)
                     items_synced += synced
                     apis_failed += failed
                 except Exception as e:
@@ -127,10 +123,7 @@ class CatalogSyncService:
 
     async def sync_tenant(self, tenant_id: str) -> CatalogSyncStatus:
         """Sync a single tenant from GitLab"""
-        sync_status = CatalogSyncStatus(
-            sync_type=SyncType.TENANT.value,
-            status=SyncStatus.RUNNING.value
-        )
+        sync_status = CatalogSyncStatus(sync_type=SyncType.TENANT.value, status=SyncStatus.RUNNING.value)
         self.db.add(sync_status)
         await self.db.commit()
         await self.db.refresh(sync_status)
@@ -177,21 +170,13 @@ class CatalogSyncService:
         """List all tenant IDs from GitLab"""
         try:
             tree = self.git._project.repository_tree(path="tenants", ref="main")
-            return [
-                item["name"]
-                for item in tree
-                if item["type"] == "tree"
-            ]
+            return [item["name"] for item in tree if item["type"] == "tree"]
         except Exception as e:
             logger.warning(f"Failed to list tenants: {e}")
             return []
 
     async def _sync_tenant_apis_parallel(
-        self,
-        tenant_id: str,
-        api_ids: list[str],
-        commit_sha: str | None,
-        seen_apis: set[tuple[str, str]]
+        self, tenant_id: str, api_ids: list[str], commit_sha: str | None, seen_apis: set[tuple[str, str]]
     ) -> tuple[int, int]:
         """Sync all APIs for a tenant in parallel (CAB-688). Returns (synced, failed)."""
         # Parallel fetch all api.yaml and openapi specs
@@ -241,49 +226,49 @@ class CatalogSyncService:
         # Extract target gateways from api.yaml gateways: block
         gateways_block = api.get("gateways", [])
         target_gateways = [
-            g.get("instance", g.get("name", ""))
-            for g in gateways_block
-            if g.get("instance") or g.get("name")
+            g.get("instance", g.get("name", "")) for g in gateways_block if g.get("instance") or g.get("name")
         ]
 
-        stmt = insert(APICatalog).values(
-            tenant_id=tenant_id,
-            api_id=api_id,
-            api_name=api.get("name", api_id),
-            version=api.get("version"),
-            status=api.get("status", "active"),
-            category=api.get("category"),
-            tags=tags,
-            portal_published=portal_published,
-            api_metadata=api,
-            openapi_spec=openapi_spec,
-            git_path=git_path,
-            git_commit_sha=commit_sha,
-            target_gateways=target_gateways,
-            synced_at=datetime.now(UTC),
-            deleted_at=None
-        ).on_conflict_do_update(
-            constraint='uq_api_catalog_tenant_api',
-            set_={
-                APICatalog.api_name: api.get("name", api_id),
-                APICatalog.version: api.get("version"),
-                APICatalog.status: api.get("status", "active"),
-                APICatalog.category: api.get("category"),
-                APICatalog.tags: tags,
-                APICatalog.portal_published: portal_published,
-                APICatalog.api_metadata: api,
-                APICatalog.openapi_spec: openapi_spec,
-                APICatalog.git_commit_sha: commit_sha,
-                APICatalog.target_gateways: target_gateways,
-                APICatalog.synced_at: datetime.now(UTC),
-                APICatalog.deleted_at: None
-            }
+        stmt = (
+            insert(APICatalog)
+            .values(
+                tenant_id=tenant_id,
+                api_id=api_id,
+                api_name=api.get("name", api_id),
+                version=api.get("version"),
+                status=api.get("status", "active"),
+                category=api.get("category"),
+                tags=tags,
+                portal_published=portal_published,
+                api_metadata=api,
+                openapi_spec=openapi_spec,
+                git_path=git_path,
+                git_commit_sha=commit_sha,
+                target_gateways=target_gateways,
+                synced_at=datetime.now(UTC),
+                deleted_at=None,
+            )
+            .on_conflict_do_update(
+                constraint="uq_api_catalog_tenant_api",
+                set_={
+                    APICatalog.api_name: api.get("name", api_id),
+                    APICatalog.version: api.get("version"),
+                    APICatalog.status: api.get("status", "active"),
+                    APICatalog.category: api.get("category"),
+                    APICatalog.tags: tags,
+                    APICatalog.portal_published: portal_published,
+                    APICatalog.api_metadata: api,
+                    APICatalog.openapi_spec: openapi_spec,
+                    APICatalog.git_commit_sha: commit_sha,
+                    APICatalog.target_gateways: target_gateways,
+                    APICatalog.synced_at: datetime.now(UTC),
+                    APICatalog.deleted_at: None,
+                },
+            )
         )
         await self.db.execute(stmt)
 
-    async def _reconcile_gateway_deployments(
-        self, tenant_id: str, api_id: str, api: dict
-    ) -> None:
+    async def _reconcile_gateway_deployments(self, tenant_id: str, api_id: str, api: dict) -> None:
         """Create/update GatewayDeployment records from api.yaml gateways: block.
 
         For each gateway entry, resolves the GatewayInstance by name and
@@ -320,7 +305,9 @@ class CatalogSyncService:
             if not gateway:
                 logger.warning(
                     "GitOps: gateway instance '%s' not found for API %s/%s — skipping",
-                    instance_name, tenant_id, api_id,
+                    instance_name,
+                    tenant_id,
+                    api_id,
                 )
                 continue
 
@@ -331,9 +318,7 @@ class CatalogSyncService:
                 desired_state_copy = desired_state
 
             # Check for existing deployment
-            existing = await deploy_repo.get_by_api_and_gateway(
-                catalog_entry.id, gateway.id
-            )
+            existing = await deploy_repo.get_by_api_and_gateway(catalog_entry.id, gateway.id)
             now = datetime.now(UTC)
 
             if existing:
@@ -347,7 +332,9 @@ class CatalogSyncService:
                     await deploy_repo.update(existing)
                     logger.info(
                         "GitOps: updated deployment for %s/%s → %s",
-                        tenant_id, api_id, instance_name,
+                        tenant_id,
+                        api_id,
+                        instance_name,
                     )
             else:
                 deployment = GatewayDeployment(
@@ -360,15 +347,12 @@ class CatalogSyncService:
                 await deploy_repo.create(deployment)
                 logger.info(
                     "GitOps: created deployment for %s/%s → %s",
-                    tenant_id, api_id, instance_name,
+                    tenant_id,
+                    api_id,
+                    instance_name,
                 )
 
-    async def _sync_tenant_apis(
-        self,
-        tenant_id: str,
-        commit_sha: str | None,
-        seen_apis: set[tuple[str, str]]
-    ) -> int:
+    async def _sync_tenant_apis(self, tenant_id: str, commit_sha: str | None, seen_apis: set[tuple[str, str]]) -> int:
         """Sync all APIs for a tenant (legacy sequential, used by sync_tenant)"""
         count = 0
 
@@ -403,8 +387,7 @@ class CatalogSyncService:
         """Mark APIs as deleted if they're no longer in Git"""
         # Get all active APIs in database
         result = await self.db.execute(
-            select(APICatalog.tenant_id, APICatalog.api_id)
-            .where(APICatalog.deleted_at.is_(None))
+            select(APICatalog.tenant_id, APICatalog.api_id).where(APICatalog.deleted_at.is_(None))
         )
         db_apis = set(result.fetchall())
 
@@ -426,19 +409,13 @@ class CatalogSyncService:
 
     async def get_last_sync_status(self) -> CatalogSyncStatus | None:
         """Get the status of the last sync operation"""
-        result = await self.db.execute(
-            select(CatalogSyncStatus)
-            .order_by(CatalogSyncStatus.started_at.desc())
-            .limit(1)
-        )
+        result = await self.db.execute(select(CatalogSyncStatus).order_by(CatalogSyncStatus.started_at.desc()).limit(1))
         return result.scalar_one_or_none()
 
     async def get_sync_history(self, limit: int = 10) -> list[CatalogSyncStatus]:
         """Get recent sync history"""
         result = await self.db.execute(
-            select(CatalogSyncStatus)
-            .order_by(CatalogSyncStatus.started_at.desc())
-            .limit(limit)
+            select(CatalogSyncStatus).order_by(CatalogSyncStatus.started_at.desc()).limit(limit)
         )
         return list(result.scalars().all())
 
@@ -487,9 +464,7 @@ class CatalogSyncService:
             logger.info(f"MCP sync progress: tenant {i}/{total_tenants} - {tid}")
 
             try:
-                synced, failed = await self._sync_tenant_mcp_servers(
-                    tid, commit_sha, seen_servers
-                )
+                synced, failed = await self._sync_tenant_mcp_servers(tid, commit_sha, seen_servers)
                 stats["servers_synced"] += synced
                 stats["servers_failed"] += failed
                 stats["tenants_processed"] += 1
@@ -570,9 +545,7 @@ class CatalogSyncService:
         category = category_map.get(category_str, MCPServerCategory.PUBLIC)
 
         # Check if server exists
-        result = await self.db.execute(
-            select(MCPServer).where(MCPServer.name == server_name)
-        )
+        result = await self.db.execute(select(MCPServer).where(MCPServer.name == server_name))
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -600,6 +573,7 @@ class CatalogSyncService:
         else:
             # Create new server
             import uuid
+
             server_id = uuid.uuid4()
             new_server = MCPServer(
                 id=server_id,
@@ -635,9 +609,7 @@ class CatalogSyncService:
     ) -> None:
         """Sync tools for a server — replace all tools with Git data."""
         # Delete existing tools
-        result = await self.db.execute(
-            select(MCPServerTool).where(MCPServerTool.server_id == server_id)
-        )
+        result = await self.db.execute(select(MCPServerTool).where(MCPServerTool.server_id == server_id))
         existing_tools = result.scalars().all()
         for tool in existing_tools:
             await self.db.delete(tool)
@@ -665,9 +637,7 @@ class CatalogSyncService:
     async def _mark_orphan_mcp_servers(self, seen_servers: set[str]) -> int:
         """Mark MCP servers as orphan if they're no longer in Git."""
         result = await self.db.execute(
-            select(MCPServer.name).where(
-                MCPServer.sync_status != MCPServerSyncStatus.ORPHAN
-            )
+            select(MCPServer.name).where(MCPServer.sync_status != MCPServerSyncStatus.ORPHAN)
         )
         db_servers = {row[0] for row in result.fetchall()}
 

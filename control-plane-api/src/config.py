@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     def GITLAB_PROJECT_PATH(self) -> str:
         return self.GITLAB_CATALOG_PROJECT_PATH
 
+    # Git Provider Abstraction (CAB-1890 — GitLab→GitHub migration)
+    GIT_PROVIDER: str = "github"  # "gitlab" or "github" (default)
+    GITHUB_TOKEN: str = ""
+    GITHUB_ORG: str = "stoa-platform"
+    GITHUB_CATALOG_REPO: str = "stoa-catalog"
+    GITHUB_GITOPS_REPO: str = "stoa-gitops"
+    GITHUB_WEBHOOK_SECRET: str = ""
+
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.stoa-system.svc.cluster.local:9092"
@@ -121,6 +129,24 @@ class Settings(BaseSettings):
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes
     SYNC_ENGINE_MAX_CONCURRENT: int = 5
     SYNC_ENGINE_RETRY_MAX: int = 3
+
+    # ADR-059: Deployment mode — controls how CP notifies gateways of pending deploys
+    # sse_only: SSE push only (no SyncEngine, no inline sync)
+    # dual: SSE + SyncEngine for drift detection (no push, no inline sync)
+    # legacy: original behavior (SyncEngine + inline sync, no SSE)
+    DEPLOY_MODE: str = "legacy"
+
+    @property
+    def is_sse_enabled(self) -> bool:
+        return self.DEPLOY_MODE in ("sse_only", "dual")
+
+    @property
+    def is_sync_engine_enabled(self) -> bool:
+        return self.DEPLOY_MODE in ("legacy", "dual")
+
+    @property
+    def is_inline_sync_enabled(self) -> bool:
+        return self.DEPLOY_MODE == "legacy"
 
     # Gateway Auto-Registration (ADR-028)
     # Comma-separated list of valid API keys for gateway self-registration
@@ -299,7 +325,8 @@ class Settings(BaseSettings):
     def log_components_dict(self) -> dict:
         """Return LOG_COMPONENTS as a dict"""
         try:
-            return json.loads(self.LOG_COMPONENTS)
+            result: dict = json.loads(self.LOG_COMPONENTS)
+            return result
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -307,7 +334,8 @@ class Settings(BaseSettings):
     def log_exclude_paths_list(self) -> list[str]:
         """Return LOG_EXCLUDE_PATHS as a list"""
         try:
-            return json.loads(self.LOG_EXCLUDE_PATHS)
+            result: list[str] = json.loads(self.LOG_EXCLUDE_PATHS)
+            return result
         except (json.JSONDecodeError, TypeError):
             return ["/health", "/healthz", "/ready", "/metrics"]
 
@@ -315,7 +343,8 @@ class Settings(BaseSettings):
     def log_masking_patterns_list(self) -> list[str]:
         """Return LOG_MASKING_PATTERNS as a list"""
         try:
-            return json.loads(self.LOG_MASKING_PATTERNS)
+            result: list[str] = json.loads(self.LOG_MASKING_PATTERNS)
+            return result
         except (json.JSONDecodeError, TypeError):
             return ["password", "secret", "token", "api_key", "authorization"]
 

@@ -1,0 +1,32 @@
+# ══════════════════════════════════════════════════
+# git-crypt: fichiers sensibles Impact Analysis
+# Chiffrés sur GitHub public, transparents en local
+# ══════════════════════════════════════════════════
+
+# Audit files — vulnérabilités, surface d'attaque, endpoints internes
+docs/audit/** filter=git-crypt diff=git-crypt
+
+# Impact Analysis DB — contrats, risques, scores
+docs/stoa-impact.db filter=git-crypt diff=git-crypt
+
+# Context packs — analyse d'impact par ticket, fichiers concernés
+docs/context-packs/** filter=git-crypt diff=git-crypt
+
+# Learning reports — précision du compilateur, false negatives
+docs/learning/** filter=git-crypt diff=git-crypt
+
+# File mapping — structure interne du repo, paths sensibles
+docs/file-map.json filter=git-crypt diff=git-crypt
+
+# Seed data — contient les mêmes données que la DB
+docs/scripts/seed.sql filter=git-crypt diff=git-crypt
+
+# ══════════════════════════════════════════════════
+# PAS chiffrés (safe à publier) :
+# - docs/scripts/*.sh (tooling générique)
+# - docs/scripts/*.py (tooling générique)
+# - docs/scripts/schema.sql (structure sans données)
+# - docs/DEPENDENCIES.md (auto-généré, info publique)
+# - docs/SCENARIOS.md (auto-généré, info publique)
+# - docs/CONTEXT-COMPILER.md (documentation du workflow)
+# ══════════════════════════════════════════════════

@@ -171,6 +171,15 @@ class GatewayDeploymentRepository:
         )
         return list(result.scalars().all())
 
+    async def list_by_promotion(self, promotion_id: UUID) -> list[GatewayDeployment]:
+        """List all deployments linked to a promotion."""
+        result = await self.session.execute(
+            select(GatewayDeployment).where(
+                GatewayDeployment.promotion_id == promotion_id
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_status_summary(self) -> dict:
         """Get sync status counts for the dashboard."""
         counts = {}

@@ -103,6 +103,7 @@ class PromotionDeployConsumer:
             api_id = payload.get("api_id")
             target_env = payload.get("target_environment")
             approved_by = payload.get("approved_by", "system")
+            promotion_id = payload.get("promotion_id")
             tenant_id = data.get("tenant_id", "")
 
             if not api_id or not target_env:
@@ -116,7 +117,7 @@ class PromotionDeployConsumer:
 
             if self._loop:
                 future = asyncio.run_coroutine_threadsafe(
-                    self._auto_deploy(api_id, tenant_id, target_env, approved_by),
+                    self._auto_deploy(api_id, tenant_id, target_env, approved_by, promotion_id),
                     self._loop,
                 )
                 future.add_done_callback(self._deploy_callback)
@@ -125,9 +126,13 @@ class PromotionDeployConsumer:
             logger.error("Failed to handle promotion-approved event: %s", e, exc_info=True)
 
     async def _auto_deploy(
-        self, api_id: str, tenant_id: str, target_env: str, approved_by: str
+        self, api_id: str, tenant_id: str, target_env: str, approved_by: str,
+        promotion_id: str | None = None,
     ) -> None:
         """Execute auto-deploy in an async context with its own DB session."""
+        from uuid import UUID as _UUID
+
+        promo_uuid = _UUID(promotion_id) if promotion_id else None
         async with _get_session_factory()() as session:
             svc = DeploymentOrchestrationService(session)
             deployments = await svc.auto_deploy_on_promotion(
@@ -135,6 +140,7 @@ class PromotionDeployConsumer:
                 tenant_id=tenant_id,
                 target_environment=target_env,
                 approved_by=approved_by,
+                promotion_id=promo_uuid,
             )
             if deployments:
                 await session.commit()

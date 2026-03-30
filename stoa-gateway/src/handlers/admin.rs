@@ -88,6 +88,7 @@ pub struct AdminHealthResponse {
     pub version: String,
     pub routes_count: usize,
     pub policies_count: usize,
+    pub git_provider: String,
 }
 
 pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResponse> {
@@ -96,6 +97,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResp
         version: env!("CARGO_PKG_VERSION").to_string(),
         routes_count: state.route_registry.count(),
         policies_count: state.policy_registry.count(),
+        git_provider: state.config.git_provider.clone(),
     })
 }
 
@@ -1591,6 +1593,36 @@ mod tests {
         assert!(data["version"].is_string());
         assert_eq!(data["routes_count"], 0);
         assert_eq!(data["policies_count"], 0);
+        assert_eq!(data["git_provider"], "gitlab");
+    }
+
+    #[tokio::test]
+    async fn test_admin_health_reports_github_provider() {
+        let config = Config {
+            admin_api_token: Some("secret".into()),
+            git_provider: "github".into(),
+            ..Config::default()
+        };
+        let state = AppState::new(config);
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["git_provider"], "github");
     }
 
     #[tokio::test]

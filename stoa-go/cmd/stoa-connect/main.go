@@ -10,8 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"io"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stoa-platform/stoa-go/internal/connect"
+	"github.com/stoa-platform/stoa-go/internal/connect/adapters"
 	"github.com/stoa-platform/stoa-go/internal/connect/telemetry"
 	"github.com/stoa-platform/stoa-go/pkg/config"
 )
@@ -83,7 +86,14 @@ func main() {
 			agent.StartSync(ctx, adapter, dcfg.GatewayAdminURL, connect.SyncConfig{
 				Interval: dcfg.Interval,
 			})
-			agent.StartRouteSync(ctx, adapter, dcfg.GatewayAdminURL, connect.RouteSyncConfigFromEnv())
+
+			// ADR-059: SSE stream replaces route polling when enabled
+			sseCfg := connect.SSEConfigFromEnv()
+			if sseCfg.Enabled && agent.GatewayID() != "" {
+				agent.StartDeploymentStream(ctx, adapter, dcfg.GatewayAdminURL, sseCfg)
+			} else {
+				agent.StartRouteSync(ctx, adapter, dcfg.GatewayAdminURL, connect.RouteSyncConfigFromEnv())
+			}
 
 			// Start credential sync loop (requires Vault)
 			vaultCfg := connect.VaultConfigFromEnv()
@@ -110,6 +120,25 @@ func main() {
 			Version, Commit, gatewayID, agent.DiscoveredAPIsCount())
 	})
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/webhook/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB max
+		if err != nil {
+			http.Error(w, "read error", http.StatusBadRequest)
+			return
+		}
+		events, err := adapters.HandleWebhookEvents(body)
+		if err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		log.Printf("received %d telemetry events via webhook", len(events))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"accepted":%d}`, len(events))
+	})
 
 	srv := &http.Server{
 		Addr:              ":" + port,

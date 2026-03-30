@@ -4,6 +4,7 @@ assertion_line: 36
 expression: json
 ---
 {
+  "git_provider": "gitlab",
   "policies_count": 0,
   "routes_count": 0,
   "status": "ok",

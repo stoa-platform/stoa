@@ -46,6 +46,9 @@ class GatewayInstanceResponse(BaseModel):
     environment: str
     tenant_id: str | None
     base_url: str
+    target_gateway_url: str | None = Field(
+        None, description="URL of the third-party gateway managed by this Link/Connect instance"
+    )
     auth_config: dict
     status: str
     last_health_check: datetime | None
@@ -70,6 +73,8 @@ class GatewayInstanceResponse(BaseModel):
             return [k for k, val in v.items() if val]
         if v is None:
             return []
+        if not isinstance(v, list):
+            return [str(v)]
         return list(v)
 
 

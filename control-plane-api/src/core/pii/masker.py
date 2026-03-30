@@ -57,8 +57,8 @@ class PIIMasker:
             matches = list(pattern.pattern.finditer(text))
             if matches:
                 pii_found[pattern.pii_type] = len(matches)
-                _mask_func = self._get_mask_func(pattern)
-                text = pattern.pattern.sub(lambda m, mf=_mask_func: mf(m.group(0)), text)
+                _mask_func: Any = self._get_mask_func(pattern)
+                text = pattern.pattern.sub(lambda m, mf=_mask_func: mf(m.group(0)), text)  # type: ignore[misc]
 
         if self.config.audit_enabled and pii_found:
             logger.info(
@@ -76,7 +76,8 @@ class PIIMasker:
     ) -> dict[str, Any]:
         if not self.config.enabled:
             return data
-        return self._mask_recursive(data, context, recursive)
+        result: dict[str, Any] = self._mask_recursive(data, context, recursive)
+        return result
 
     def _mask_recursive(self, data: Any, ctx: MaskingContext | None, rec: bool) -> Any:
         if isinstance(data, str):

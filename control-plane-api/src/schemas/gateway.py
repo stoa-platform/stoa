@@ -73,6 +73,8 @@ class GatewayInstanceResponse(BaseModel):
             return [k for k, val in v.items() if val]
         if v is None:
             return []
+        if not isinstance(v, list):
+            return [str(v)]
         return list(v)
 
 

@@ -32,7 +32,7 @@ class Topics:
     MCP_SYNC_RESULTS = "stoa.mcp.sync.results"
 
     # Gateway orchestration events
-    GATEWAY_SYNC_REQUESTS = "stoa.gateway.sync.requests"
+    GATEWAY_SYNC_REQUESTS = "stoa.gateway.sync.requests"  # ADR-059: deprecated in sse_only mode
     GATEWAY_SYNC_RESULTS = "stoa.gateway.sync.results"
     GATEWAY_EVENTS = "stoa.gateway.events"
 
@@ -271,21 +271,15 @@ class KafkaService:
 
     async def emit_policy_deleted(self, tenant_id: str, policy_id: str, user_id: str) -> str:
         """Emit policy-deleted event to stoa.policy.changes."""
-        return await self.publish(
-            Topics.POLICY_CHANGES, "policy-deleted", tenant_id, {"policy_id": policy_id}, user_id
-        )
+        return await self.publish(Topics.POLICY_CHANGES, "policy-deleted", tenant_id, {"policy_id": policy_id}, user_id)
 
     async def emit_policy_binding_created(self, tenant_id: str, binding_data: dict, user_id: str) -> str:
         """Emit policy-binding-created event to stoa.policy.changes."""
-        return await self.publish(
-            Topics.POLICY_CHANGES, "policy-binding-created", tenant_id, binding_data, user_id
-        )
+        return await self.publish(Topics.POLICY_CHANGES, "policy-binding-created", tenant_id, binding_data, user_id)
 
     async def emit_policy_binding_deleted(self, tenant_id: str, binding_data: dict, user_id: str) -> str:
         """Emit policy-binding-deleted event to stoa.policy.changes."""
-        return await self.publish(
-            Topics.POLICY_CHANGES, "policy-binding-deleted", tenant_id, binding_data, user_id
-        )
+        return await self.publish(Topics.POLICY_CHANGES, "policy-binding-deleted", tenant_id, binding_data, user_id)
 
     def create_consumer(self, topics: list[str], group_id: str, tenant_filter: str | None = None) -> KafkaConsumer:
         """

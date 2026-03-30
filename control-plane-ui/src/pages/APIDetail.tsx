@@ -361,7 +361,7 @@ function OverviewTab({ api }: { api: API }) {
 }
 
 function SpecTab({ api }: { api: API }) {
-  // The OpenAPI spec is not directly in the API response — it's stored in GitLab.
+  // The OpenAPI spec is not directly in the API response — it's stored in the Git repository.
   // For now show a placeholder directing users to the spec file.
   return (
     <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
@@ -390,7 +390,7 @@ function VersionsTab({ versions, loading }: { versions: APIVersionEntry[]; loadi
       <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
         <GitCommit className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
         <p className="text-sm">No version history available.</p>
-        <p className="text-xs mt-1">Requires GitLab integration to be configured.</p>
+        <p className="text-xs mt-1">Requires Git provider integration to be configured.</p>
       </div>
     );
   }

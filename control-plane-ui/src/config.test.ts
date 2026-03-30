@@ -24,6 +24,8 @@ beforeEach(() => {
   vi.stubEnv('VITE_ENABLE_MONITORING', '');
   vi.stubEnv('VITE_ENABLE_GITOPS', '');
   vi.stubEnv('VITE_ENABLE_DEBUG', '');
+  vi.stubEnv('VITE_GIT_PROVIDER', '');
+  vi.stubEnv('VITE_GIT_REPO_URL', '');
 });
 
 describe('config', () => {
@@ -60,7 +62,34 @@ describe('config', () => {
     expect(config.services.awx.getJobUrl(42)).toBe('https://awx.gostoa.dev/#/jobs/playbook/42');
   });
 
-  it('constructs GitLab URLs correctly', async () => {
+  it('constructs Git repository URLs correctly (default gitlab)', async () => {
+    const { config } = await importConfig();
+    expect(config.services.git.provider).toBe('gitlab');
+    expect(config.services.git.label).toBe('GitLab');
+    expect(config.services.git.url).toBe('https://gitlab.com');
+    expect(config.services.git.webhookPath).toBe('webhooks/gitlab');
+    expect(config.services.git.getProjectUrl('123')).toBe('https://gitlab.com/projects/123');
+    expect(config.services.git.getRepoUrl('stoa/api')).toBe('https://gitlab.com/stoa/api');
+  });
+
+  it('switches to GitHub when VITE_GIT_PROVIDER=github', async () => {
+    vi.stubEnv('VITE_GIT_PROVIDER', 'github');
+    const { config } = await importConfig();
+    expect(config.services.git.provider).toBe('github');
+    expect(config.services.git.label).toBe('GitHub');
+    expect(config.services.git.url).toBe('https://github.com');
+    expect(config.services.git.webhookPath).toBe('webhooks/github');
+  });
+
+  it('uses custom VITE_GIT_REPO_URL when set', async () => {
+    vi.stubEnv('VITE_GIT_PROVIDER', 'github');
+    vi.stubEnv('VITE_GIT_REPO_URL', 'https://github.example.com');
+    const { config } = await importConfig();
+    expect(config.services.git.url).toBe('https://github.example.com');
+    expect(config.services.git.label).toBe('GitHub');
+  });
+
+  it('preserves backward-compatible gitlab alias', async () => {
     const { config } = await importConfig();
     expect(config.services.gitlab.getProjectUrl('123')).toBe('https://gitlab.com/projects/123');
     expect(config.services.gitlab.getRepoUrl('stoa/api')).toBe('https://gitlab.com/stoa/api');

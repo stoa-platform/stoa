@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
@@ -119,12 +120,17 @@ class GatewayDeploymentService:
                 deployment = await self.deploy_repo.create(deployment)
                 deployments.append(deployment)
 
-        await self._emit_sync_requests(deployments, api_catalog.tenant_id)
+        if settings.is_sync_engine_enabled:
+            await self._emit_sync_requests(deployments, api_catalog.tenant_id)
+
+        if settings.is_sse_enabled:
+            await self._emit_sse_events(deployments, api_catalog.tenant_id)
 
         logger.info(
-            "Deployed API %s to %d gateway(s)",
+            "Deployed API %s to %d gateway(s) (mode=%s)",
             api_catalog.api_name,
             len(deployments),
+            settings.DEPLOY_MODE,
         )
         return deployments
 
@@ -184,3 +190,24 @@ class GatewayDeploymentService:
             )
         except Exception as e:
             logger.warning("Failed to emit sync request for %s: %s", deployment.id, e)
+
+    async def _emit_sse_events(self, deployments: list[GatewayDeployment], tenant_id: str) -> None:
+        """Emit SSE events to notify connected Links of pending deployments (ADR-059)."""
+        from src.events.event_bus import event_bus
+
+        for dep in deployments:
+            try:
+                await event_bus.publish(
+                    tenant_id=tenant_id,
+                    event_type="sync-deployment",
+                    data={
+                        "deployment_id": str(dep.id),
+                        "api_catalog_id": str(dep.api_catalog_id),
+                        "gateway_instance_id": str(dep.gateway_instance_id),
+                        "sync_status": dep.sync_status.value,
+                        "desired_state": dep.desired_state,
+                    },
+                    gateway_id=str(dep.gateway_instance_id),
+                )
+            except Exception as e:
+                logger.warning("Failed to emit SSE event for deployment %s: %s", dep.id, e)

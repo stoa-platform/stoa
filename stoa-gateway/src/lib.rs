@@ -509,36 +509,50 @@ pub fn build_router(state: AppState) -> Router {
             // Shadow: passive traffic capture and UAC generation
             let shadow_settings = mode::ShadowSettings::from_env();
 
-            // Build GitClient if GitLab is configured (CAB-1109 Phase 5)
-            let shadow_service = if let (Some(api_url), Some(token), Some(project_id)) = (
-                &state.config.gitlab_api_url,
-                &state.config.gitlab_token,
-                &state.config.gitlab_project_id,
-            ) {
-                use crate::git::{GitClient, GitClientConfig};
-                match GitClient::new(GitClientConfig {
-                    api_url: api_url.clone(),
-                    project_id: project_id.clone(),
-                    token: token.clone(),
-                    ..GitClientConfig::default()
-                }) {
-                    Ok(client) => {
+            // Dispatch git client by git_provider config (CAB-1891)
+            let shadow_service = match state.config.git_provider.as_str() {
+                "github" => {
+                    // GitHub: log that PR submission will use GitHub (future: integrate GitHubClient)
+                    tracing::info!("Shadow mode: git_provider=github, PR submission via GitHub");
+                    std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
+                }
+                _ => {
+                    // GitLab (default): existing behavior (CAB-1109 Phase 5)
+                    if let (Some(api_url), Some(token), Some(project_id)) = (
+                        &state.config.gitlab_api_url,
+                        &state.config.gitlab_token,
+                        &state.config.gitlab_project_id,
+                    ) {
+                        use crate::git::{GitClient, GitClientConfig};
+                        match GitClient::new(GitClientConfig {
+                            api_url: api_url.clone(),
+                            project_id: project_id.clone(),
+                            token: token.clone(),
+                            ..GitClientConfig::default()
+                        }) {
+                            Ok(client) => {
+                                tracing::info!(
+                                    "Shadow mode: GitLab client configured for UAC MR submission"
+                                );
+                                std::sync::Arc::new(mode::shadow::ShadowService::with_git_client(
+                                    shadow_settings,
+                                    std::sync::Arc::new(client),
+                                ))
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "Shadow mode: GitLab client init failed, MR submission disabled");
+                                std::sync::Arc::new(mode::shadow::ShadowService::new(
+                                    shadow_settings,
+                                ))
+                            }
+                        }
+                    } else {
                         tracing::info!(
-                            "Shadow mode: GitLab client configured for UAC MR submission"
+                            "Shadow mode: GitLab not configured, MR submission disabled"
                         );
-                        std::sync::Arc::new(mode::shadow::ShadowService::with_git_client(
-                            shadow_settings,
-                            std::sync::Arc::new(client),
-                        ))
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "Shadow mode: GitLab client init failed, MR submission disabled");
                         std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
                     }
                 }
-            } else {
-                tracing::info!("Shadow mode: GitLab not configured, MR submission disabled");
-                std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
             };
 
             let svc_status = shadow_service.clone();

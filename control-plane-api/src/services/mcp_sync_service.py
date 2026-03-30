@@ -6,6 +6,7 @@ PostgreSQL stores runtime state for subscriptions.
 
 This service implements one-way sync: GitLab -> Database.
 """
+
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -22,7 +23,7 @@ from ..models.mcp_subscription import (
     MCPServerSyncStatus,
     MCPServerTool,
 )
-from .git_service import GitLabService
+from .git_provider import GitProvider
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SyncResult:
     """Result of a sync operation."""
+
     success: bool = True
     servers_synced: int = 0
     servers_created: int = 0
@@ -50,16 +52,11 @@ class MCPSyncService:
     Database is the runtime store for subscriptions and access control.
     """
 
-    def __init__(self, git_service: GitLabService, db: AsyncSession):
+    def __init__(self, git_service: GitProvider, db: AsyncSession):
         self.git_service = git_service
         self.db = db
 
-    async def sync_server(
-        self,
-        tenant_id: str,
-        server_name: str,
-        commit_sha: str | None = None
-    ) -> MCPServer | None:
+    async def sync_server(self, tenant_id: str, server_name: str, commit_sha: str | None = None) -> MCPServer | None:
         """
         Sync a single MCP server from GitLab to database.
 
@@ -89,9 +86,7 @@ class MCPSyncService:
 
             # 2. Find existing server in database
             result = await self.db.execute(
-                select(MCPServer)
-                .where(MCPServer.name == server_name)
-                .options(selectinload(MCPServer.tools))
+                select(MCPServer).where(MCPServer.name == server_name).options(selectinload(MCPServer.tools))
             )
             existing_server = result.scalar_one_or_none()
 
@@ -101,10 +96,7 @@ class MCPSyncService:
                 "tenant": MCPServerCategory.TENANT,
                 "public": MCPServerCategory.PUBLIC,
             }
-            category = category_map.get(
-                server_data.get("category", "public"),
-                MCPServerCategory.PUBLIC
-            )
+            category = category_map.get(server_data.get("category", "public"), MCPServerCategory.PUBLIC)
 
             # 4. Map status string to enum
             status_map = {
@@ -112,10 +104,7 @@ class MCPSyncService:
                 "maintenance": MCPServerStatus.MAINTENANCE,
                 "deprecated": MCPServerStatus.DEPRECATED,
             }
-            status = status_map.get(
-                server_data.get("status", "active"),
-                MCPServerStatus.ACTIVE
-            )
+            status = status_map.get(server_data.get("status", "active"), MCPServerStatus.ACTIVE)
 
             if existing_server:
                 # Update existing server
@@ -178,9 +167,7 @@ class MCPSyncService:
 
             # Update sync status to error if server exists
             try:
-                result = await self.db.execute(
-                    select(MCPServer).where(MCPServer.name == server_name)
-                )
+                result = await self.db.execute(select(MCPServer).where(MCPServer.name == server_name))
                 existing = result.scalar_one_or_none()
                 if existing:
                     existing.sync_status = MCPServerSyncStatus.ERROR
@@ -327,9 +314,7 @@ class MCPSyncService:
 
                 try:
                     # Check if server exists
-                    existing = await self.db.execute(
-                        select(MCPServer).where(MCPServer.name == server_name)
-                    )
+                    existing = await self.db.execute(select(MCPServer).where(MCPServer.name == server_name))
                     was_new = existing.scalar_one_or_none() is None
 
                     synced = await self.sync_server(tenant_id, server_name)
@@ -343,9 +328,7 @@ class MCPSyncService:
                     result.add_error(f"Failed to sync {server_name}: {e}")
 
             # 2. Mark servers not in GitLab as orphans
-            db_servers = await self.db.execute(
-                select(MCPServer).where(MCPServer.git_path.isnot(None))
-            )
+            db_servers = await self.db.execute(select(MCPServer).where(MCPServer.git_path.isnot(None)))
             for server in db_servers.scalars():
                 if server.git_path not in git_server_paths:
                     server.sync_status = MCPServerSyncStatus.ORPHAN

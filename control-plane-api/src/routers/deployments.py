@@ -20,7 +20,7 @@ from ..schemas.deployment import (
     RollbackCreate,
 )
 from ..services.deployment_service import DeploymentService
-from ..services.git_service import git_service
+from ..services.git_provider import GitProvider, get_git_provider
 
 logger = logging.getLogger(__name__)
 
@@ -82,28 +82,29 @@ async def create_deployment(
     request: DeploymentCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """Deploy an API to an environment.
 
     Creates a deployment record, emits a deploy-request Kafka event,
     and triggers webhook notifications.
     """
-    # GitLab stores APIs by name (directory slug), not UUID.
-    # Use api_name if provided, otherwise try api_id as the GitLab lookup key.
+    # Git stores APIs by name (directory slug), not UUID.
+    # Use api_name if provided, otherwise try api_id as the git lookup key.
     lookup_key = request.api_name or request.api_id
     api_name = lookup_key
     version = request.version or "1.0.0"
     api_info = None
 
     try:
-        api_info = await git_service.get_api(tenant_id, lookup_key)
+        api_info = await git.get_api(tenant_id, lookup_key)
         if api_info:
             api_name = api_info.get("name", lookup_key)
             version = request.version or api_info.get("version", "1.0.0")
         else:
-            logger.warning("API not found in GitLab for tenant=%s key=%s", tenant_id, lookup_key)
+            logger.warning("API not found in git for tenant=%s key=%s", tenant_id, lookup_key)
     except Exception as e:
-        logger.warning("Failed to lookup API in GitLab for %s/%s: %s", tenant_id, lookup_key, e)
+        logger.warning("Failed to lookup API in git for %s/%s: %s", tenant_id, lookup_key, e)
 
     service = DeploymentService(db)
     deployment = await service.create_deployment(
@@ -118,17 +119,17 @@ async def create_deployment(
     )
     await db.commit()
 
-    # Update deployment flag in GitLab so the API appears in the environment view
+    # Update deployment flag in git so the API appears in the environment view
     env = request.environment.value
     if env in ("dev", "staging"):
         try:
-            current_api = api_info or await git_service.get_api(tenant_id, api_name)
+            current_api = api_info or await git.get_api(tenant_id, api_name)
             if current_api:
                 deployments = dict(current_api.get("deployments", {}))
                 deployments[env] = True
-                await git_service.update_api(tenant_id, api_name, {"deployments": deployments})
+                await git.update_api(tenant_id, api_name, {"deployments": deployments})
         except Exception as e:
-            logger.warning("Failed to update deployment flag in GitLab for %s: %s", request.api_id, e)
+            logger.warning("Failed to update deployment flag in git for %s: %s", request.api_id, e)
 
     return DeploymentResponse.model_validate(deployment)
 

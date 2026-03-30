@@ -90,6 +90,37 @@ pub struct Config {
     #[serde(default)]
     pub gitlab_project_id: Option<String>,
 
+    // === GitHub (UAC Sync) ===
+    /// GitHub personal access token (or fine-grained PAT).
+    /// Env: GITHUB_TOKEN / STOA_GITHUB_TOKEN
+    #[serde(default)]
+    pub github_token: Option<String>,
+
+    /// GitHub organization name (owner of catalog/gitops repos).
+    /// Env: GITHUB_ORG / STOA_GITHUB_ORG
+    #[serde(default)]
+    pub github_org: Option<String>,
+
+    /// GitHub repository name for UAC catalog storage.
+    /// Env: GITHUB_CATALOG_REPO / STOA_GITHUB_CATALOG_REPO
+    #[serde(default)]
+    pub github_catalog_repo: Option<String>,
+
+    /// GitHub repository name for GitOps PR submission.
+    /// Env: GITHUB_GITOPS_REPO / STOA_GITHUB_GITOPS_REPO
+    #[serde(default)]
+    pub github_gitops_repo: Option<String>,
+
+    /// GitHub webhook secret for validating incoming webhook payloads.
+    /// Env: GITHUB_WEBHOOK_SECRET / STOA_GITHUB_WEBHOOK_SECRET
+    #[serde(default)]
+    pub github_webhook_secret: Option<String>,
+
+    /// Git provider selector for UAC sync: "gitlab" (default) or "github".
+    /// Env: GIT_PROVIDER / STOA_GIT_PROVIDER
+    #[serde(default = "default_git_provider")]
+    pub git_provider: String,
+
     // === Rate Limiting ===
     #[serde(default)]
     pub rate_limit_default: Option<usize>,
@@ -230,6 +261,12 @@ pub struct Config {
     /// Env: STOA_HEARTBEAT_INTERVAL_SECS
     #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_secs: u64,
+
+    /// URL of the third-party gateway managed by this Link/sidecar instance.
+    /// Displayed in Console UI. Only relevant for sidecar/connect modes.
+    /// Env: STOA_TARGET_GATEWAY_URL
+    #[serde(default)]
+    pub target_gateway_url: Option<String>,
 
     // === Native Tools (Phase 1) ===
     /// Enable native tool implementations (default: true)
@@ -1320,6 +1357,10 @@ fn default_snapshot_body_max_bytes() -> usize {
     4096
 }
 
+fn default_git_provider() -> String {
+    "gitlab".to_string() // backward compatible default
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1341,6 +1382,12 @@ impl Default for Config {
             gitlab_api_url: None,
             gitlab_token: None,
             gitlab_project_id: None,
+            github_token: None,
+            github_org: None,
+            github_catalog_repo: None,
+            github_gitops_repo: None,
+            github_webhook_secret: None,
+            git_provider: default_git_provider(),
             rate_limit_default: Some(1000),
             rate_limit_window_seconds: Some(60),
             mcp_session_ttl_minutes: default_session_ttl(),
@@ -1366,6 +1413,7 @@ impl Default for Config {
             auto_register: default_auto_register(),
             advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),
+            target_gateway_url: None,
             native_tools_enabled: default_native_tools_enabled(),
             kafka_enabled: false,
             kafka_brokers: default_kafka_brokers(),
@@ -1514,6 +1562,12 @@ impl Config {
             "GITLAB_URL",
             "GITLAB_TOKEN",
             "GITLAB_PROJECT_ID",
+            "GITHUB_TOKEN",
+            "GITHUB_ORG",
+            "GITHUB_CATALOG_REPO",
+            "GITHUB_GITOPS_REPO",
+            "GITHUB_WEBHOOK_SECRET",
+            "GIT_PROVIDER",
         ]));
 
         let config: Config = figment.extract()?;
@@ -1769,6 +1823,71 @@ mod tests {
             config.otel_enabled,
             "CAB-1831: otel_enabled should default to true"
         );
+    }
+
+    #[test]
+    fn test_default_github_config() {
+        let config = Config::default();
+        // All GitHub fields default to None
+        assert!(config.github_token.is_none());
+        assert!(config.github_org.is_none());
+        assert!(config.github_catalog_repo.is_none());
+        assert!(config.github_gitops_repo.is_none());
+        assert!(config.github_webhook_secret.is_none());
+        // git_provider defaults to "gitlab" for backward compatibility
+        assert_eq!(config.git_provider, "gitlab");
+        // GitLab fields are unaffected
+        assert!(config.gitlab_url.is_none());
+        assert!(config.gitlab_token.is_none());
+    }
+
+    #[test]
+    fn test_git_provider_github_config_complete() {
+        // Verify that a fully-configured GitHub setup has all expected fields
+        let config = Config {
+            git_provider: "github".into(),
+            github_token: Some("ghp_test123".into()),
+            github_org: Some("stoa-platform".into()),
+            github_catalog_repo: Some("stoa".into()),
+            github_gitops_repo: Some("stoa-infra".into()),
+            github_webhook_secret: Some("whsec_test".into()),
+            ..Config::default()
+        };
+        assert_eq!(config.git_provider, "github");
+        assert_eq!(config.github_token.as_deref(), Some("ghp_test123"));
+        assert_eq!(config.github_org.as_deref(), Some("stoa-platform"));
+        assert_eq!(config.github_catalog_repo.as_deref(), Some("stoa"));
+        assert_eq!(config.github_gitops_repo.as_deref(), Some("stoa-infra"));
+        assert_eq!(config.github_webhook_secret.as_deref(), Some("whsec_test"));
+    }
+
+    #[test]
+    fn test_git_provider_gitlab_and_github_coexist() {
+        // During migration, both provider configs can coexist
+        let config = Config {
+            git_provider: "github".into(),
+            github_token: Some("ghp_tok".into()),
+            github_org: Some("acme".into()),
+            gitlab_url: Some("https://gitlab.example.com".into()),
+            gitlab_token: Some("glpat-legacy".into()),
+            gitlab_project_id: Some("42".into()),
+            ..Config::default()
+        };
+        // git_provider selects github even though gitlab fields are present
+        assert_eq!(config.git_provider, "github");
+        // GitLab fields remain accessible (for shadow mode fallback)
+        assert!(config.gitlab_token.is_some());
+    }
+
+    #[test]
+    fn test_git_provider_unknown_value_treated_as_gitlab() {
+        // Any value other than "github" falls through to gitlab
+        let config = Config {
+            git_provider: "bitbucket".into(),
+            ..Config::default()
+        };
+        // GitProvider::from_config would treat this as GitLab (the catch-all)
+        assert_ne!(config.git_provider, "github");
     }
 
     /// Regression test for PR #1814: OAuth proxy endpoints must use

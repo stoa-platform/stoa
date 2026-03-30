@@ -11,6 +11,7 @@ useDefault = true
 description = "Allowlist for false positives"
 
 paths = [
+  '''scripts/e2e/.*''',
   '''docs/.*\.md''',
   '''.*SUBSCRIPTIONS\.md''',
   '''.*README\.md''',
@@ -74,6 +75,7 @@ commits = [
   "9afc09b27908a971e850f5414d121c87f1c6f8cd",  # Historical postgres-statefulset password (removed)
   "4e9b396296cc68dbff36a3f90b95014d4365bdd1",  # Historical ansible playbook db_password comment
   "ef2e357f4fab1ec2011cb0583d8d1f78604546fa",  # Historical ansible playbook db_password comment (dup)
+  "64b5c3c76c34e746d43ff76ba6ba97ab9245b849",  # E2E deploy script curl-auth-header false positive (test key "not-a-real-key")
 ]
 
 # Rules to modify or disable

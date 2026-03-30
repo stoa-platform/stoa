@@ -19,7 +19,7 @@
     "i18n:check:strict": "node scripts/i18n-check.mjs --fail-on-missing"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-query": "^5.95.2",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "axios": "^1.13.6",

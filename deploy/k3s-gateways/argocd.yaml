@@ -37,17 +37,17 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: gateways-rec
+  name: gateways-staging
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/stoa-platform/stoa.git
     targetRevision: main
-    path: k8s/gateways/overlays/rec
+    path: k8s/gateways/overlays/staging
   destination:
     server: https://144.91.73.37:6443
-    namespace: gateway-rec
+    namespace: gateway-staging
   syncPolicy:
     automated:
       prune: true

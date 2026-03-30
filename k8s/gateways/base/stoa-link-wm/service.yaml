@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: stoa-sidecar-kong
+  name: stoa-link-wm
 spec:
   selector:
-    app: stoa-sidecar-kong
+    app: stoa-link-wm
   ports:
     - port: 8080
       targetPort: 8080

@@ -14,7 +14,14 @@
 
 ## Step 1: Read the Catalog
 
-Read `docs/platform-catalog.yaml` — this is the source of truth for all services.
+The catalog lives in **stoa-infra** (private repo), NOT in the public stoa repo.
+
+Locate and read the catalog in this order:
+1. `~/hlfh-repos/stoa-infra/docs/platform-catalog.yaml` (local clone — preferred)
+2. If not found: `docs/platform-catalog.yaml` (legacy location in stoa repo — may be stale)
+3. If neither exists: warn the user and suggest cloning stoa-infra
+
+**Important**: When updating the catalog (drift fixes, new services), always write to `stoa-infra/docs/platform-catalog.yaml`. NEVER commit infra topology (hosts, IPs, clusters, secrets) to the public stoa repo.
 
 ## Step 2: Execute Based on Mode
 
@@ -135,3 +142,5 @@ Format output as a clean markdown table. Keep it concise — the catalog YAML ha
 - If kubectl is not available, show catalog data only (no error, just note "live state unavailable")
 - Always show the catalog `lastUpdated` date so the user knows freshness
 - If a service is missing from the catalog but visible in K8s, suggest adding it
+- Catalog updates go to `stoa-infra` (private), NEVER to the public `stoa` repo
+- The graph (`docs/architecture-graph.md`) is auto-generated and OK in the public repo (no sensitive data)

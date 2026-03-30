@@ -36,7 +36,28 @@ spec:
   hostnames:
     - auth.gostoa.dev
   rules:
-    - backendRefs:
+    - matches:
+        - path:
+            type: Exact
+            value: /robots.txt
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Content-Type
+                value: text/plain
+              - name: X-Robots-Tag
+                value: "noindex, nofollow"
+      backendRefs:
+        - name: keycloak
+          port: 80
+    - filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: X-Robots-Tag
+                value: "noindex, nofollow"
+      backendRefs:
         - name: keycloak
           port: 80
 ---

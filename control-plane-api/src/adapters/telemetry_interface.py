@@ -25,6 +25,9 @@ class TelemetryAdapterInterface(ABC):
     as warnings and never crash the caller.
     """
 
+    def __init__(self, config: dict | None = None) -> None:
+        self.config = config or {}
+
     @abstractmethod
     async def get_access_logs(self, since: datetime, limit: int = 1000) -> list[dict]:
         """Pull access logs from the gateway since a given timestamp.

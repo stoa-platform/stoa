@@ -1084,7 +1084,9 @@ function GitConfigTab() {
         <div className="space-y-3">
           <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
             <div>
-              <p className="font-medium text-neutral-900 dark:text-white">{config.services.git.label} Webhook</p>
+              <p className="font-medium text-neutral-900 dark:text-white">
+                {config.services.git.label} Webhook
+              </p>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Receives push and merge request events
               </p>

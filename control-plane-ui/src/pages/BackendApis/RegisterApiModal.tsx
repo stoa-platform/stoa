@@ -100,7 +100,11 @@ export function RegisterApiModal({ tenantId, onClose, onCreated }: RegisterApiMo
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+        <form
+          id="register-api-form"
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto p-6 space-y-5"
+        >
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
               {error}
@@ -331,6 +335,7 @@ export function RegisterApiModal({ tenantId, onClose, onCreated }: RegisterApiMo
           </button>
           <button
             type="submit"
+            form="register-api-form"
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >

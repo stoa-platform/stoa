@@ -122,7 +122,12 @@ class GatewayAdminService:
         """
         async with self._get_client(auth_token) as client:
             response = await client.request(method, path, **kwargs)
-            response.raise_for_status()
+
+            if response.is_error:
+                body = response.text[:500] if response.content else ""
+                raise RuntimeError(
+                    f"Gateway returned {response.status_code} on {method} {path}: {body}"
+                )
 
             # Handle empty responses
             if response.status_code == 204 or not response.content:

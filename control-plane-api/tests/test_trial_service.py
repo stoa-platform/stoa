@@ -207,20 +207,8 @@ class TestGetTrialStatus:
 
 
 TENANT_PATH = "src.routers.apis.TenantRepository"
+CATALOG_REPO_PATH = "src.routers.apis.CatalogRepository"
 KAFKA_PATH = "src.routers.apis.kafka_service"
-
-
-def _make_mock_git(**methods):
-    """Create a mock GitProvider with the given async methods configured."""
-    from unittest.mock import MagicMock
-
-    from src.services.git_provider import GitProvider
-
-    mock = MagicMock(spec=GitProvider)
-    mock._project = object()
-    for name, value in methods.items():
-        setattr(mock, name, value)
-    return mock
 
 API_PAYLOAD = {
     "name": "test-api",
@@ -242,74 +230,55 @@ class TestCreateApiTrialLimits:
 
     def test_non_trial_tenant_no_limit(self, app_with_tenant_admin, client_as_tenant_admin):
         """Non-trial tenant can create APIs without limit."""
-        from src.services.git_provider import get_git_provider
-
         tenant = _mock_tenant(settings={"is_trial": False})
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        mock_git = _make_mock_git(
-            list_apis=AsyncMock(return_value=[{}, {}, {}, {}, {}]),  # 5 APIs
-            create_api=AsyncMock(),
-        )
-        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
-
         with (
             patch(TENANT_PATH) as MockRepo,
+            patch(CATALOG_REPO_PATH) as MockCatalog,
             patch(KAFKA_PATH) as mock_kafka,
         ):
             MockRepo.return_value = mock_repo
+            MockCatalog.return_value.get_portal_apis = AsyncMock(return_value=([{}, {}, {}, {}, {}], 5))
             mock_kafka.emit_api_created = AsyncMock()
             mock_kafka.emit_audit_event = AsyncMock()
             resp = client_as_tenant_admin.post("/v1/tenants/acme/apis", json=API_PAYLOAD)
-
-        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 200
 
     def test_trial_tenant_under_limit_ok(self, app_with_tenant_admin, client_as_tenant_admin):
         """Trial tenant under API limit can create."""
-        from src.services.git_provider import get_git_provider
-
         tenant = _mock_tenant(settings=_trial_settings(days_ago=5))
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        mock_git = _make_mock_git(
-            list_apis=AsyncMock(return_value=[{}, {}]),  # 2 APIs < 3
-            create_api=AsyncMock(),
-        )
-        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
-
         with (
             patch(TENANT_PATH) as MockRepo,
+            patch(CATALOG_REPO_PATH) as MockCatalog,
             patch(KAFKA_PATH) as mock_kafka,
         ):
             MockRepo.return_value = mock_repo
+            MockCatalog.return_value.get_portal_apis = AsyncMock(return_value=([{}, {}], 2))
             mock_kafka.emit_api_created = AsyncMock()
             mock_kafka.emit_audit_event = AsyncMock()
             resp = client_as_tenant_admin.post("/v1/tenants/acme/apis", json=API_PAYLOAD)
-
-        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 200
 
     def test_trial_tenant_at_limit_blocked(self, app_with_tenant_admin, client_as_tenant_admin):
         """Trial tenant at API limit gets 429."""
-        from src.services.git_provider import get_git_provider
-
         tenant = _mock_tenant(settings=_trial_settings(days_ago=5))
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        mock_git = _make_mock_git(list_apis=AsyncMock(return_value=[{}, {}, {}]))  # 3 APIs = limit
-        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
-
-        with patch(TENANT_PATH) as MockRepo:
+        with (
+            patch(TENANT_PATH) as MockRepo,
+            patch(CATALOG_REPO_PATH) as MockCatalog,
+        ):
             MockRepo.return_value = mock_repo
+            MockCatalog.return_value.get_portal_apis = AsyncMock(return_value=([{}, {}, {}], 3))
             resp = client_as_tenant_admin.post("/v1/tenants/acme/apis", json=API_PAYLOAD)
-
-        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 429
 
@@ -328,23 +297,17 @@ class TestCreateApiTrialLimits:
 
     def test_tenant_not_found_proceeds(self, app_with_tenant_admin, client_as_tenant_admin):
         """If tenant not in DB, API creation proceeds (no trial check)."""
-        from src.services.git_provider import get_git_provider
-
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=None)
 
-        mock_git = _make_mock_git(create_api=AsyncMock())
-        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
-
         with (
             patch(TENANT_PATH) as MockRepo,
+            patch(CATALOG_REPO_PATH),
             patch(KAFKA_PATH) as mock_kafka,
         ):
             MockRepo.return_value = mock_repo
             mock_kafka.emit_api_created = AsyncMock()
             mock_kafka.emit_audit_event = AsyncMock()
             resp = client_as_tenant_admin.post("/v1/tenants/acme/apis", json=API_PAYLOAD)
-
-        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 200

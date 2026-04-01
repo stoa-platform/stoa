@@ -182,27 +182,24 @@ class TestUpdateTenantLimits:
         assert tenant.settings["max_applications"] == 100
 
 
+API_CATALOG_REPO = "src.routers.apis.CatalogRepository"
+
+
 class TestApiCreationLimit:
     """Tests for POST /v1/tenants/{tenant_id}/apis — limit enforcement."""
 
     def test_create_api_under_limit(self, app_with_tenant_admin, client_as_tenant_admin):
-        from src.services.git_provider import get_git_provider
-
         tenant = _make_tenant(max_apis=5)
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        mock_git = _make_mock_git(
-            list_apis=AsyncMock(return_value=[{"id": "1"}, {"id": "2"}]),
-            create_api=AsyncMock(),
-        )
-        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
-
         with (
             patch(API_TENANT_REPO) as MockRepo,
+            patch(API_CATALOG_REPO) as MockCatalog,
             patch("src.routers.apis.kafka_service") as mock_kafka,
         ):
             MockRepo.return_value = mock_repo
+            MockCatalog.return_value.get_portal_apis = AsyncMock(return_value=([{}, {}], 2))
             mock_kafka.emit_api_created = AsyncMock()
             mock_kafka.emit_audit_event = AsyncMock()
             resp = client_as_tenant_admin.post(
@@ -214,22 +211,19 @@ class TestApiCreationLimit:
                 },
             )
 
-        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
-
         assert resp.status_code == 200
 
     def test_create_api_at_limit_returns_429(self, app_with_tenant_admin, client_as_tenant_admin):
-        from src.services.git_provider import get_git_provider
-
         tenant = _make_tenant(max_apis=2)
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        mock_git = _make_mock_git(list_apis=AsyncMock(return_value=[{"id": "1"}, {"id": "2"}]))
-        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
-
-        with patch(API_TENANT_REPO) as MockRepo:
+        with (
+            patch(API_TENANT_REPO) as MockRepo,
+            patch(API_CATALOG_REPO) as MockCatalog,
+        ):
             MockRepo.return_value = mock_repo
+            MockCatalog.return_value.get_portal_apis = AsyncMock(return_value=([{}, {}], 2))
             resp = client_as_tenant_admin.post(
                 f"/v1/tenants/{TENANT_ID}/apis",
                 json={
@@ -238,8 +232,6 @@ class TestApiCreationLimit:
                     "backend_url": "https://backend.example.com",
                 },
             )
-
-        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 429
         assert "limit reached" in resp.json()["detail"].lower()

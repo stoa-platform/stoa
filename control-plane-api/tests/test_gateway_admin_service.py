@@ -106,9 +106,9 @@ class TestRequest:
             svc = GatewayAdminService()
             mock_response = MagicMock()
             mock_response.status_code = 200
+            mock_response.is_error = False
             mock_response.content = b'{"key": "value"}'
             mock_response.json.return_value = {"key": "value"}
-            mock_response.raise_for_status = MagicMock()
 
             mock_client = AsyncMock()
             mock_client.request = AsyncMock(return_value=mock_response)
@@ -126,8 +126,8 @@ class TestRequest:
             svc = GatewayAdminService()
             mock_response = MagicMock()
             mock_response.status_code = 204
+            mock_response.is_error = False
             mock_response.content = b""
-            mock_response.raise_for_status = MagicMock()
 
             mock_client = AsyncMock()
             mock_client.request = AsyncMock(return_value=mock_response)

@@ -40,6 +40,13 @@ class GatewayInstanceRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_name_including_deleted(self, name: str) -> GatewayInstance | None:
+        """Get gateway instance by name, including soft-deleted entries."""
+        result = await self.session.execute(
+            select(GatewayInstance).where(GatewayInstance.name == name)
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_source_and_type(
         self,
         source: str,

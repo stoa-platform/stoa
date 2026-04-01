@@ -173,6 +173,60 @@ class TestWebMethodsAPIs:
         assert result.success is True
         assert result.resource_id == ""
 
+    async def test_sync_api_snake_case_fields(self) -> None:
+        """sync_api accepts snake_case fields from build_desired_state (deployment orchestration)."""
+        adapter = _make_adapter()
+        adapter._svc.import_api = AsyncMock(
+            return_value={"apiResponse": {"api": {"id": "api-xyz"}}}
+        )
+        spec_payload = {"openapi": "3.0.0", "info": {"title": "Pet Store"}}
+
+        result = await adapter.sync_api(
+            api_spec={
+                "api_name": "petstore",
+                "version": "1.0.7",
+                "api_id": "petstore",
+                "backend_url": "https://petstore.swagger.io/v2",
+                "openapi_spec": spec_payload,
+                "tenant_id": "acme",
+                "spec_hash": "abc123",
+                "activated": True,
+            },
+            tenant_id="acme",
+        )
+
+        assert result.success is True
+        assert result.resource_id == "api-xyz"
+        adapter._svc.import_api.assert_awaited_once_with(
+            api_name="petstore",
+            api_version="1.0.7",
+            openapi_url=None,
+            openapi_spec=spec_payload,
+            api_type="openapi",
+            auth_token=None,
+        )
+
+    async def test_sync_api_snake_case_without_spec_uses_backend_url(self) -> None:
+        """When openapi_spec is absent, backend_url is used as openapi_url."""
+        adapter = _make_adapter()
+        adapter._svc.import_api = AsyncMock(
+            return_value={"apiResponse": {"api": {"id": "api-url"}}}
+        )
+
+        result = await adapter.sync_api(
+            api_spec={
+                "api_name": "simple-api",
+                "version": "2.0",
+                "backend_url": "https://api.example.com/v2",
+            },
+            tenant_id="t",
+        )
+
+        assert result.success is True
+        _, kwargs = adapter._svc.import_api.call_args
+        assert kwargs["openapi_url"] == "https://api.example.com/v2"
+        assert kwargs["openapi_spec"] is None
+
     async def test_sync_api_exception(self) -> None:
         adapter = _make_adapter()
         adapter._svc.import_api = AsyncMock(side_effect=RuntimeError("import failed"))

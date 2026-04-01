@@ -309,6 +309,31 @@ async def register_gateway(
         logger.info("Gateway re-registered: id=%s, name=%s", instance.id, instance.name)
         return instance
 
+    # 1c. Resurrect: if a soft-deleted entry exists with the same name, restore it
+    #     instead of creating a new one (would violate unique constraint on name).
+    #     Happens when a gateway re-registers after auto-purge (CAB-1897) or manual cleanup.
+    deleted_entry = await repo.get_by_name_including_deleted(instance_name)
+    if deleted_entry:
+        deleted_entry.deleted_at = None
+        deleted_entry.deleted_by = None
+        deleted_entry.version = payload.version
+        deleted_entry.capabilities = payload.capabilities
+        deleted_entry.base_url = payload.admin_url
+        if payload.target_gateway_url:
+            deleted_entry.target_gateway_url = payload.target_gateway_url
+        deleted_entry.status = GatewayInstanceStatus.ONLINE
+        deleted_entry.last_health_check = now
+        deleted_entry.mode = normalized_mode
+        deleted_entry.health_details = {**(deleted_entry.health_details or {}), **heartbeat_details}
+        instance = await repo.update(deleted_entry)
+        await db.commit()
+        logger.info(
+            "Gateway resurrected from soft-delete: id=%s, name=%s",
+            instance.id,
+            instance.name,
+        )
+        return instance
+
     # 1b. Cancel-and-replace: soft-delete stale self_register entries with same
     #     mode+env but different name (hostname changed after container recreation).
     #     This prevents duplicate gateways in the Console UI.

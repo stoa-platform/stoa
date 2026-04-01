@@ -198,6 +198,7 @@ class TestGatewayRegistrationTenant:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -235,6 +236,7 @@ class TestGatewayRegistrationTenant:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -252,6 +254,86 @@ class TestGatewayRegistrationTenant:
             )
 
         assert resp.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# Regression: register after soft-delete (CAB-1937)
+# ---------------------------------------------------------------------------
+
+
+class TestRegressionRegisterAfterSoftDelete:
+    """POST /register must resurrect a soft-deleted entry instead of 409."""
+
+    def test_regression_register_after_soft_delete(self, client):
+        """Gateway re-registration after auto-purge resurrects the soft-deleted entry."""
+        deleted_gw = _make_gateway_instance(
+            deleted_at=datetime(2026, 3, 30, tzinfo=UTC),
+            deleted_by="auto-purge",
+            status=MagicMock(value="offline"),
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=deleted_gw)
+            mock_repo.update = AsyncMock(return_value=deleted_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json={
+                    "hostname": "gw-host",
+                    "mode": "edge-mcp",
+                    "version": "0.3.0",
+                    "environment": "staging",
+                    "admin_url": "http://gw:8080",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 201
+        mock_repo.create.assert_not_called()
+        mock_repo.update.assert_awaited_once()
+        assert deleted_gw.deleted_at is None
+        assert deleted_gw.deleted_by is None
+        assert deleted_gw.version == "0.3.0"
+
+    def test_regression_register_soft_deleted_skips_cancel_and_replace(self, client):
+        """Resurrection path should not reach cancel-and-replace or create steps."""
+        deleted_gw = _make_gateway_instance(
+            deleted_at=datetime(2026, 3, 30, tzinfo=UTC),
+            deleted_by="replaced-by:other-gw",
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=deleted_gw)
+            mock_repo.update = AsyncMock(return_value=deleted_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json={
+                    "hostname": "gw-host",
+                    "mode": "edge-mcp",
+                    "version": "0.2.0",
+                    "environment": "staging",
+                    "admin_url": "http://gw:8080",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 201
+        mock_repo.find_self_registered_by_mode_env.assert_not_called()
+        mock_repo.get_by_source_and_type.assert_not_called()
+        mock_repo.create.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

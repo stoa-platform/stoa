@@ -30,13 +30,17 @@ class TestCheckKafkaConnected:
 
 class TestCheckGitlabConnected:
     def test_returns_false_when_gl_is_none(self):
-        with patch("src.routers.health.git_service") as mock_svc:
-            mock_svc._gl = None
+        mock_provider = MagicMock()
+        mock_provider._gl = None
+        mock_provider._client = None
+        with patch("src.routers.health.git_provider_factory", return_value=mock_provider):
             assert _check_git_connected() is False
 
     def test_returns_true_when_gl_is_set(self):
-        with patch("src.routers.health.git_service") as mock_svc:
-            mock_svc._gl = MagicMock()
+        mock_provider = MagicMock()
+        mock_provider._gl = MagicMock()
+        mock_provider._client = None
+        with patch("src.routers.health.git_provider_factory", return_value=mock_provider):
             assert _check_git_connected() is True
 
 
@@ -121,7 +125,7 @@ class TestReadinessExceptions:
             result = await readiness()
 
         assert result.status == "healthy"
-        assert "error" in result.checks["gitlab"]
+        assert "error" in result.checks["git"]
 
     async def test_gateway_exception_is_non_critical(self):
         with (

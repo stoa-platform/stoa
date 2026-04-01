@@ -43,6 +43,7 @@ class TestGatewayInstancesRouter:
             "capabilities": [],
             "version": None,
             "tags": [],
+            "target_gateway_url": None,
             "protected": False,
             "deleted_at": None,
             "deleted_by": None,

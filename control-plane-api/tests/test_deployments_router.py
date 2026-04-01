@@ -16,7 +16,6 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 DEPLOY_SVC_PATH = "src.routers.deployments.DeploymentService"
-GIT_SVC_PATH = "src.routers.deployments.git_service"
 
 
 def _mock_deployment(**overrides):
@@ -240,16 +239,24 @@ class TestCreateDeployment:
     """POST /v1/tenants/{tenant_id}/deployments"""
 
     def test_create_success(self, app_with_tenant_admin, mock_db_session):
+        from src.services.git_provider import GitProvider, get_git_provider
+
         deployment = _mock_deployment()
         mock_svc = MagicMock()
         mock_svc.create_deployment = AsyncMock(return_value=deployment)
 
+        mock_git = MagicMock(spec=GitProvider)
+        mock_git._project = object()
+        mock_git.get_api = AsyncMock(return_value=None)
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
         with (
             patch(DEPLOY_SVC_PATH, return_value=mock_svc),
-            patch(f"{GIT_SVC_PATH}.get_api", new=AsyncMock(return_value=None)),
             TestClient(app_with_tenant_admin) as client,
         ):
             resp = client.post("/v1/tenants/acme/deployments", json=_VALID_DEPLOY_PAYLOAD)
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 201
         data = resp.json()
@@ -276,21 +283,29 @@ class TestCreateDeployment:
         assert resp.status_code == 422
 
     def test_create_uses_git_service_api_info(self, app_with_tenant_admin, mock_db_session):
-        """When git_service returns API info, api_name and version are enriched."""
+        """When git provider returns API info, api_name and version are enriched."""
+        from src.services.git_provider import GitProvider, get_git_provider
+
         deployment = _mock_deployment(api_name="Git API Name", version="2.0.0")
         mock_svc = MagicMock()
         mock_svc.create_deployment = AsyncMock(return_value=deployment)
         git_info = {"name": "Git API Name", "version": "2.0.0"}
 
+        mock_git = MagicMock(spec=GitProvider)
+        mock_git._project = object()
+        mock_git.get_api = AsyncMock(return_value=git_info)
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
         with (
             patch(DEPLOY_SVC_PATH, return_value=mock_svc),
-            patch(f"{GIT_SVC_PATH}.get_api", new=AsyncMock(return_value=git_info)),
             TestClient(app_with_tenant_admin) as client,
         ):
             resp = client.post(
                 "/v1/tenants/acme/deployments",
                 json={"api_id": "api-1", "environment": "staging"},
             )
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 201
         call_kwargs = mock_svc.create_deployment.call_args.kwargs

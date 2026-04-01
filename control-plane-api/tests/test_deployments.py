@@ -42,7 +42,16 @@ def _mock_deployment(**overrides):
 # ===========================================================
 
 SERVICE_PATH = "src.routers.deployments.DeploymentService"
-GIT_PATH = "src.routers.deployments.git_service"
+
+
+def _make_mock_git(**methods):
+    """Create a mock GitProvider for dependency_overrides."""
+    from src.services.git_provider import GitProvider
+
+    mock = MagicMock(spec=GitProvider)
+    for name, value in methods.items():
+        setattr(mock, name, value)
+    return mock
 
 
 class TestListDeployments:
@@ -101,13 +110,16 @@ class TestGetDeployment:
 
 class TestCreateDeployment:
     @pytest.mark.asyncio
-    async def test_success(self, client_as_tenant_admin):
+    async def test_success(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         dep = _mock_deployment()
-        with (
-            patch(SERVICE_PATH) as MockSvc,
-            patch(GIT_PATH) as mock_git,
-        ):
-            mock_git.get_api = AsyncMock(return_value=None)
+        mock_git = _make_mock_git(
+            get_api=AsyncMock(return_value=None),
+            update_api=AsyncMock(return_value=None),
+        )
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+        with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.create_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
                 "/v1/tenants/acme/deployments",
@@ -117,13 +129,16 @@ class TestCreateDeployment:
         assert resp.json()["status"] == "pending"
 
     @pytest.mark.asyncio
-    async def test_with_git_resolution(self, client_as_tenant_admin):
+    async def test_with_git_resolution(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         dep = _mock_deployment(api_name="Resolved Name", version="2.0.0")
-        with (
-            patch(SERVICE_PATH) as MockSvc,
-            patch(GIT_PATH) as mock_git,
-        ):
-            mock_git.get_api = AsyncMock(return_value={"name": "Resolved Name", "version": "2.0.0"})
+        mock_git = _make_mock_git(
+            get_api=AsyncMock(return_value={"name": "Resolved Name", "version": "2.0.0"}),
+            update_api=AsyncMock(return_value=None),
+        )
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+        with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.create_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
                 "/v1/tenants/acme/deployments",
@@ -132,13 +147,16 @@ class TestCreateDeployment:
         assert resp.status_code == 201
 
     @pytest.mark.asyncio
-    async def test_git_failure_non_blocking(self, client_as_tenant_admin):
+    async def test_git_failure_non_blocking(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         dep = _mock_deployment()
-        with (
-            patch(SERVICE_PATH) as MockSvc,
-            patch(GIT_PATH) as mock_git,
-        ):
-            mock_git.get_api = AsyncMock(side_effect=Exception("git down"))
+        mock_git = _make_mock_git(
+            get_api=AsyncMock(side_effect=Exception("git down")),
+            update_api=AsyncMock(return_value=None),
+        )
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+        with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.create_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
                 "/v1/tenants/acme/deployments",

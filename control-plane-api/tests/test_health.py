@@ -68,7 +68,7 @@ class TestReadiness:
         assert resp.status_code == 503
 
     def test_ready_gitlab_disconnected_still_healthy(self, client):
-        """GitLab is non-critical — should not affect readiness."""
+        """Git provider is non-critical — should not affect readiness."""
         with (
             patch("src.routers.health._check_kafka_connected", return_value=True),
             patch("src.routers.health._check_keycloak_connected", return_value=True),
@@ -78,7 +78,7 @@ class TestReadiness:
             resp = client.get("/health/ready")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["checks"]["gitlab"] == "disconnected"
+        assert body["checks"]["git"] == "disconnected"
 
     def test_ready_kafka_disabled(self, client):
         with (

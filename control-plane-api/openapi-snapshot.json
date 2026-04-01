@@ -10547,6 +10547,18 @@
             "title": "Tags",
             "type": "array"
           },
+          "target_gateway_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL of the third-party gateway managed by this Link/Connect instance",
+            "title": "Target Gateway Url"
+          },
           "tenant_id": {
             "anyOf": [
               {
@@ -10966,6 +10978,18 @@
             "title": "Mode",
             "type": "string"
           },
+          "target_gateway_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)",
+            "title": "Target Gateway Url"
+          },
           "tenant_id": {
             "anyOf": [
               {
@@ -11127,8 +11151,8 @@
         "title": "GeneratedBindingResponse",
         "type": "object"
       },
-      "GitLabHealthResponse": {
-        "description": "GitLab connection health status.",
+      "GitHealthResponse": {
+        "description": "Git provider connection health status.",
         "properties": {
           "default_branch": {
             "anyOf": [
@@ -11182,11 +11206,38 @@
         "required": [
           "status"
         ],
-        "title": "GitLabHealthResponse",
+        "title": "GitHealthResponse",
         "type": "object"
       },
-      "GitLabServerSummary": {
-        "description": "Summary of a GitLab-defined MCP server.",
+      "GitOpsStatus": {
+        "description": "Overall GitOps sync status.",
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentStatus"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "components",
+          "checked_at"
+        ],
+        "title": "GitOpsStatus",
+        "type": "object"
+      },
+      "GitServerSummary": {
+        "description": "Summary of a git-defined MCP server.",
         "properties": {
           "category": {
             "anyOf": [
@@ -11260,16 +11311,16 @@
             "type": "integer"
           }
         },
-        "title": "GitLabServerSummary",
+        "title": "GitServerSummary",
         "type": "object"
       },
-      "GitLabServersResponse": {
-        "description": "List of MCP servers found in GitLab.",
+      "GitServersResponse": {
+        "description": "List of MCP servers found in the git provider.",
         "properties": {
           "servers": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/GitLabServerSummary"
+              "$ref": "#/components/schemas/GitServerSummary"
             },
             "title": "Servers",
             "type": "array"
@@ -11280,34 +11331,7 @@
             "type": "integer"
           }
         },
-        "title": "GitLabServersResponse",
-        "type": "object"
-      },
-      "GitOpsStatus": {
-        "description": "Overall GitOps sync status.",
-        "properties": {
-          "checked_at": {
-            "title": "Checked At",
-            "type": "string"
-          },
-          "components": {
-            "items": {
-              "$ref": "#/components/schemas/ComponentStatus"
-            },
-            "title": "Components",
-            "type": "array"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "components",
-          "checked_at"
-        ],
-        "title": "GitOpsStatus",
+        "title": "GitServersResponse",
         "type": "object"
       },
       "GovernanceEntity": {
@@ -37491,6 +37515,57 @@
         ]
       }
     },
+    "/v1/internal/gateways/{gateway_id}/events": {
+      "get": {
+        "description": "SSE stream of deployment events for a specific gateway (ADR-059).\n\nUsed by STOA Link agents to receive real-time deployment notifications\ninstead of polling /config. Events include:\n- sync-deployment: new deployment to apply\n- sync-policy: policy update\n- undeploy: API removal\n\nAuthentication: X-Gateway-Key header (same as other internal endpoints).",
+        "operationId": "stream_gateway_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gateway_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Gateway Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gateway-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Gateway-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Gateway Events",
+        "tags": [
+          "Gateway Internal"
+        ]
+      }
+    },
     "/v1/internal/gateways/{gateway_id}/heartbeat": {
       "post": {
         "description": "Gateway heartbeat endpoint.\n\nCalled every 30s by STOA gateways to maintain ONLINE status.\nIf no heartbeat received for 90s, gateway is marked OFFLINE by the health worker.",
@@ -38047,16 +38122,16 @@
         ]
       }
     },
-    "/v1/mcp/gitops/gitlab/health": {
+    "/v1/mcp/gitops/git/health": {
       "get": {
-        "description": "Check GitLab connection health.\n\nRequires: cpi-admin role",
-        "operationId": "get_gitlab_health",
+        "description": "Check git provider connection health.\n\nRequires: cpi-admin role",
+        "operationId": "get_git_health",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GitLabHealthResponse"
+                  "$ref": "#/components/schemas/GitHealthResponse"
                 }
               }
             },
@@ -38068,22 +38143,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Gitlab Health",
+        "summary": "Get Git Health",
         "tags": [
           "MCP GitOps"
         ]
       }
     },
-    "/v1/mcp/gitops/gitlab/servers": {
+    "/v1/mcp/gitops/git/servers": {
       "get": {
-        "description": "List all MCP servers defined in GitLab (before sync to DB).\n\nUseful for debugging and verifying GitLab content.\n\nRequires: cpi-admin role",
-        "operationId": "list_gitlab_servers",
+        "description": "List all MCP servers defined in git provider (before sync to DB).\n\nUseful for debugging and verifying git content.\n\nRequires: cpi-admin role",
+        "operationId": "list_git_servers",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GitLabServersResponse"
+                  "$ref": "#/components/schemas/GitServersResponse"
                 }
               }
             },
@@ -38095,7 +38170,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Gitlab Servers",
+        "summary": "List Git Servers",
         "tags": [
           "MCP GitOps"
         ]
@@ -38130,7 +38205,7 @@
     },
     "/v1/mcp/gitops/sync": {
       "post": {
-        "description": "Trigger a full sync of all MCP servers from GitLab.\n\nThis will:\n1. Read all MCP server definitions from GitLab\n2. Create/update servers in the database\n3. Mark servers not in GitLab as orphans\n\nRequires: cpi-admin role",
+        "description": "Trigger a full sync of all MCP servers from git provider.\n\nThis will:\n1. Read all MCP server definitions from git\n2. Create/update servers in the database\n3. Mark servers not in git as orphans\n\nRequires: cpi-admin role",
         "operationId": "trigger_full_sync",
         "responses": {
           "200": {
@@ -44357,7 +44432,7 @@
     },
     "/v1/tenants/{tenant_id}/apis": {
       "get": {
-        "description": "List APIs for a tenant from GitLab (paginated).\n\nOptionally filter by environment \u2014 only returns APIs deployed to that environment.",
+        "description": "List APIs for a tenant from git provider (paginated).\n\nOptionally filter by environment \u2014 only returns APIs deployed to that environment.",
         "operationId": "list_apis",
         "parameters": [
           {
@@ -44448,7 +44523,7 @@
         ]
       },
       "post": {
-        "description": "Create a new API in GitLab and emit event.\n\nThis creates the API definition in the GitOps repository:\n- tenants/{tenant_id}/apis/{api_name}/api.yaml\n- tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires",
+        "description": "Create a new API via git provider and emit event.\n\nThis creates the API definition in the GitOps repository:\n- tenants/{tenant_id}/apis/{api_name}/api.yaml\n- tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires",
         "operationId": "create_api",
         "parameters": [
           {
@@ -44524,7 +44599,7 @@
     },
     "/v1/tenants/{tenant_id}/apis/{api_id}": {
       "delete": {
-        "description": "Delete API from GitLab",
+        "description": "Delete API from git provider",
         "operationId": "delete_api",
         "parameters": [
           {
@@ -44595,7 +44670,7 @@
         ]
       },
       "get": {
-        "description": "Get API by ID from GitLab",
+        "description": "Get API by ID from git provider",
         "operationId": "get_api",
         "parameters": [
           {
@@ -44650,7 +44725,7 @@
         ]
       },
       "put": {
-        "description": "Update API in GitLab",
+        "description": "Update API in git provider",
         "operationId": "update_api",
         "parameters": [
           {
@@ -49910,7 +49985,7 @@
     },
     "/v1/tenants/{tenant_id}/git/files/{file_path}": {
       "delete": {
-        "description": "Delete a file from GitLab",
+        "description": "Delete a file from git provider",
         "operationId": "delete_file",
         "parameters": [
           {
@@ -49991,7 +50066,7 @@
         ]
       },
       "get": {
-        "description": "Get file content from GitLab",
+        "description": "Get file content from git provider",
         "operationId": "get_file",
         "parameters": [
           {
@@ -50056,7 +50131,7 @@
         ]
       },
       "post": {
-        "description": "Create or update a file in GitLab",
+        "description": "Create or update a file in git provider",
         "operationId": "create_or_update_file",
         "parameters": [
           {
@@ -50324,7 +50399,7 @@
     },
     "/v1/tenants/{tenant_id}/git/tree": {
       "get": {
-        "description": "Get directory tree from GitLab",
+        "description": "Get directory tree from git provider",
         "operationId": "get_tree",
         "parameters": [
           {
@@ -54690,6 +54765,72 @@
         "summary": "Get Token Usage Compare",
         "tags": [
           "Usage"
+        ]
+      }
+    },
+    "/webhooks/github": {
+      "post": {
+        "description": "Handle GitHub webhooks for GitOps.",
+        "operationId": "github_webhook",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Hub-Signature-256",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hub-Signature-256"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-GitHub-Event",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Github-Event"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookProcessedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Github Webhook",
+        "tags": [
+          "Webhooks"
         ]
       }
     },

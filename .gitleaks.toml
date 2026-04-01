@@ -50,6 +50,8 @@ paths = [
   '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
   # UI component test fixtures — mock PEM keys for certificate wizard tests
   '''control-plane-ui/src/components/__tests__/CertificateGenerationWizard\.test\.tsx''',
+  # Gateway secrets detection plugin — inline test fixtures with fake secrets (CAB-1936)
+  '''stoa-gateway/src/plugin/builtin/secrets_detection\.rs''',
 ]
 
 regexes = [

@@ -53,11 +53,17 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
 
     async def sync_api(self, api_spec: dict, tenant_id: str, auth_token: str | None = None) -> AdapterResult:
         try:
+            # Support both camelCase (legacy /v1/gateway/) and snake_case (deployment orchestration)
+            api_name = api_spec.get("apiName") or api_spec.get("api_name", "unknown")
+            api_version = api_spec.get("apiVersion") or api_spec.get("version", "1.0.0")
+            openapi_url = api_spec.get("url") or api_spec.get("backend_url")
+            openapi_spec = api_spec.get("apiDefinition") or api_spec.get("openapi_spec")
+
             result = await self._svc.import_api(
-                api_name=api_spec["apiName"],
-                api_version=api_spec["apiVersion"],
-                openapi_url=api_spec.get("url"),
-                openapi_spec=api_spec.get("apiDefinition"),
+                api_name=api_name,
+                api_version=api_version,
+                openapi_url=openapi_url if not openapi_spec else None,
+                openapi_spec=openapi_spec,
                 api_type=api_spec.get("type", "openapi"),
                 auth_token=auth_token,
             )

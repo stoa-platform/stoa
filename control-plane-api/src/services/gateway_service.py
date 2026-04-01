@@ -125,9 +125,8 @@ class GatewayAdminService:
 
             if response.is_error:
                 body = response.text[:500] if response.content else ""
-                raise RuntimeError(
-                    f"Gateway returned {response.status_code} on {method} {path}: {body}"
-                )
+                msg = f"Gateway returned {response.status_code} on {method} {path}: {body}"
+                raise httpx.HTTPStatusError(msg, request=response.request, response=response)
 
             # Handle empty responses
             if response.status_code == 204 or not response.content:

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -72,6 +73,14 @@ class APIVersionEntry(BaseModel):
     date: str
 
 
+def _slugify(value: str) -> str:
+    """Generate URL-safe slug from a name (CAB-1938)."""
+    value = value.lower().strip()
+    value = re.sub(r"[^a-z0-9\s-]", "", value)
+    value = re.sub(r"[\s-]+", "-", value).strip("-")
+    return value or "api"
+
+
 def _api_from_catalog(api: APICatalog) -> APIResponse:
     """Convert APICatalog DB model to APIResponse."""
     metadata = api.api_metadata or {}
@@ -83,7 +92,7 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
         id=api.api_id,
         tenant_id=api.tenant_id,
         name=api.api_id,
-        display_name=api.api_name or api.api_id,
+        display_name=metadata.get("display_name") or api.api_name or api.api_id,
         version=api.version or "1.0.0",
         description=metadata.get("description", ""),
         backend_url=metadata.get("backend_url", ""),
@@ -194,6 +203,9 @@ async def create_api(
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
     portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
 
+    # Generate URL-safe slug from name (CAB-1938)
+    api_id = _slugify(api.name)
+
     api_metadata = {
         "name": api.name,
         "display_name": api.display_name,
@@ -217,8 +229,8 @@ async def create_api(
             insert(APICatalog)
             .values(
                 tenant_id=tenant_id,
-                api_id=api.name,
-                api_name=api.display_name,
+                api_id=api_id,
+                api_name=api.name,
                 version=api.version,
                 status="draft",
                 tags=tags,
@@ -235,7 +247,7 @@ async def create_api(
         await kafka_service.emit_api_created(
             tenant_id=tenant_id,
             api_data={
-                "id": api.name,
+                "id": api_id,
                 "name": api.name,
                 "version": api.version,
             },
@@ -247,17 +259,17 @@ async def create_api(
             tenant_id=tenant_id,
             action="create",
             resource_type="api",
-            resource_id=api.name,
+            resource_id=api_id,
             user_id=user.id,
             details={"name": api.name, "version": api.version},
         )
 
-        logger.info(f"Created API {api.name} for tenant {tenant_id} by {user.username}")
+        logger.info(f"Created API {api_id} ({api.name}) for tenant {tenant_id} by {user.username}")
 
         return APIResponse(
-            id=api.name,
+            id=api_id,
             tenant_id=tenant_id,
-            name=api.name,
+            name=api_id,
             display_name=api.display_name,
             version=api.version,
             description=api.description,
@@ -272,8 +284,11 @@ async def create_api(
     except Exception as e:
         await db.rollback()
         if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-            logger.warning(f"API creation conflict for {api.name}: {e}")
-            raise HTTPException(status_code=409, detail=f"API '{api.name}' already exists")
+            logger.warning(f"API creation conflict for {api.name} v{api.version}: {e}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"API '{api.name}' version '{api.version}' already exists in this tenant",
+            )
         logger.error(f"Failed to create API {api.name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to create API. Please try again or contact support.")
 

@@ -1,12 +1,22 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-22 (Vault credential resolver for gateway adapters PR #1964)
+> Derniere MAJ: 2026-03-30 (ADR-059 Deploy Single Path MEGA — 4 PRs merged)
 
 ## ✅ DONE
 
 > Full history: 2500+ pts across 160+ issues. See Linear for complete audit trail.
 
 ### Cycle 12 (Mar 3+)
+- ✅ CAB-1930: [MEGA] Deploy Single Path — SSE replaces SyncEngine (34 pts) — ADR-059, Council 8.00/10
+  - CAB-1931 [api] SSE endpoint + DEPLOY_MODE flag (13 pts) — PR #2072
+  - CAB-1932 [go] stoa-connect SSE client + reconnect (8 pts) — PR #2073
+  - CAB-1933 [api] Phantom instance cleanup + Alembic 083 (5 pts) — PR #2074
+  - CAB-1934 [e2e] Deploy single path verification script (5 pts) — PR #2075
+  - ADR-059 published in stoa-docs
+- ✅ fix(ui): API backend port 80 → 8000 in k8s deployment — PR #2077
+  - Root cause: Helm chart (stoa-infra) had port 8000 since Jan 2026, UI manifest never updated
+- ✅ fix(api): bridge git_provider DI with legacy test patches — PR #2076
+  - Reduces pre-existing test failures from 102 to ~42 on main
 - ✅ Vault credential resolver for gateway adapters — PR #1964
   - `VaultClient.read_secret()`, `credential_resolver.py`, 9 call sites updated, 12 new tests
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
@@ -72,6 +82,7 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 
 ## 📋 NEXT
 
+- [ ] CAB-1935: chore(ci) Cross-repo service port drift detection (5 pts) — Council 9.00/10
 **Human-only**: CAB-1132 Business Model (8), CAB-1126 Video (8), CAB-1125 Punchline (8)
 **Deferred**: CAB-1473 WASM (21, 5.00), CAB-1462 ErrorSnap (21, 5.75), CAB-1512 Federation (21, 5.50)
 
@@ -85,5 +96,5 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 - Arena L0 scores: STOA 83.90 | Gravitee 46.72 | Kong 5.46
 - Arena L1 (Enterprise): STOA + agentgateway only (Kong/Gravitee removed PR #1620)
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB), Go daemon, Infisical secrets
-- ADR numbering: stoa-docs 001-056. Next: **ADR-057**
+- ADR numbering: stoa-docs 001-059. Next: **ADR-060**
 - docs.gostoa.dev = 41+ articles, 8 migration spokes

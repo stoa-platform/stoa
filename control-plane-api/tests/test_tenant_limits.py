@@ -10,15 +10,24 @@ Covers:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 TENANT_REPO = "src.routers.tenants.TenantRepository"
-GIT_SVC = "src.routers.tenants.git_service"
 KC_SVC = "src.routers.tenants.keycloak_service"
 CACHE = "src.routers.tenants.tenant_cache"
 KAFKA = "src.routers.tenants.kafka_service"
-API_GIT_SVC = "src.routers.apis.git_service"
 API_TENANT_REPO = "src.routers.apis.TenantRepository"
 APP_KC_SVC = "src.routers.applications.keycloak_service"
 APP_TENANT_REPO = "src.routers.applications.TenantRepository"
 TENANT_ID = "acme"
+
+
+def _make_mock_git(**methods):
+    """Create a mock GitProvider with the given async methods configured."""
+    from src.services.git_provider import GitProvider
+
+    mock = MagicMock(spec=GitProvider)
+    mock._project = object()
+    for name, value in methods.items():
+        setattr(mock, name, value)
+    return mock
 
 
 def _make_tenant(max_apis=None, max_applications=None, **overrides):
@@ -52,20 +61,25 @@ def _make_tenant(max_apis=None, max_applications=None, **overrides):
 class TestGetTenantUsage:
     """Tests for GET /v1/tenants/{tenant_id}/usage."""
 
-    def test_usage_returns_counts_and_defaults(self, client_as_tenant_admin):
+    def test_usage_returns_counts_and_defaults(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         tenant = _make_tenant()
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
+        mock_git = _make_mock_git(list_apis=AsyncMock(return_value=[{"id": "api-1"}, {"id": "api-2"}]))
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
         with (
             patch(TENANT_REPO) as MockRepo,
-            patch(GIT_SVC) as mock_git,
             patch(KC_SVC) as mock_kc,
         ):
             MockRepo.return_value = mock_repo
-            mock_git.list_apis = AsyncMock(return_value=[{"id": "api-1"}, {"id": "api-2"}])
             mock_kc.get_clients = AsyncMock(return_value=[{"id": "app-1"}])
             resp = client_as_tenant_admin.get(f"/v1/tenants/{TENANT_ID}/usage")
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -75,20 +89,25 @@ class TestGetTenantUsage:
         assert data["application_count"] == 1
         assert data["max_applications"] == 20  # default
 
-    def test_usage_returns_custom_limits(self, client_as_tenant_admin):
+    def test_usage_returns_custom_limits(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         tenant = _make_tenant(max_apis=5, max_applications=8)
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
+        mock_git = _make_mock_git(list_apis=AsyncMock(return_value=[]))
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
         with (
             patch(TENANT_REPO) as MockRepo,
-            patch(GIT_SVC) as mock_git,
             patch(KC_SVC) as mock_kc,
         ):
             MockRepo.return_value = mock_repo
-            mock_git.list_apis = AsyncMock(return_value=[])
             mock_kc.get_clients = AsyncMock(return_value=[])
             resp = client_as_tenant_admin.get(f"/v1/tenants/{TENANT_ID}/usage")
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -109,20 +128,25 @@ class TestGetTenantUsage:
         resp = client_as_other_tenant.get(f"/v1/tenants/{TENANT_ID}/usage")
         assert resp.status_code == 403
 
-    def test_usage_graceful_on_service_error(self, client_as_tenant_admin):
+    def test_usage_graceful_on_service_error(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         tenant = _make_tenant()
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
+        mock_git = _make_mock_git(list_apis=AsyncMock(side_effect=RuntimeError("GitLab down")))
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
         with (
             patch(TENANT_REPO) as MockRepo,
-            patch(GIT_SVC) as mock_git,
             patch(KC_SVC) as mock_kc,
         ):
             MockRepo.return_value = mock_repo
-            mock_git.list_apis = AsyncMock(side_effect=RuntimeError("GitLab down"))
             mock_kc.get_clients = AsyncMock(side_effect=RuntimeError("KC down"))
             resp = client_as_tenant_admin.get(f"/v1/tenants/{TENANT_ID}/usage")
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -161,19 +185,24 @@ class TestUpdateTenantLimits:
 class TestApiCreationLimit:
     """Tests for POST /v1/tenants/{tenant_id}/apis — limit enforcement."""
 
-    def test_create_api_under_limit(self, client_as_tenant_admin):
+    def test_create_api_under_limit(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         tenant = _make_tenant(max_apis=5)
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
+        mock_git = _make_mock_git(
+            list_apis=AsyncMock(return_value=[{"id": "1"}, {"id": "2"}]),
+            create_api=AsyncMock(),
+        )
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
         with (
             patch(API_TENANT_REPO) as MockRepo,
-            patch(API_GIT_SVC) as mock_git,
             patch("src.routers.apis.kafka_service") as mock_kafka,
         ):
             MockRepo.return_value = mock_repo
-            mock_git.list_apis = AsyncMock(return_value=[{"id": "1"}, {"id": "2"}])
-            mock_git.create_api = AsyncMock()
             mock_kafka.emit_api_created = AsyncMock()
             mock_kafka.emit_audit_event = AsyncMock()
             resp = client_as_tenant_admin.post(
@@ -185,19 +214,22 @@ class TestApiCreationLimit:
                 },
             )
 
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
+
         assert resp.status_code == 200
 
-    def test_create_api_at_limit_returns_429(self, client_as_tenant_admin):
+    def test_create_api_at_limit_returns_429(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.git_provider import get_git_provider
+
         tenant = _make_tenant(max_apis=2)
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        with (
-            patch(API_TENANT_REPO) as MockRepo,
-            patch(API_GIT_SVC) as mock_git,
-        ):
+        mock_git = _make_mock_git(list_apis=AsyncMock(return_value=[{"id": "1"}, {"id": "2"}]))
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
+        with patch(API_TENANT_REPO) as MockRepo:
             MockRepo.return_value = mock_repo
-            mock_git.list_apis = AsyncMock(return_value=[{"id": "1"}, {"id": "2"}])
             resp = client_as_tenant_admin.post(
                 f"/v1/tenants/{TENANT_ID}/apis",
                 json={
@@ -206,6 +238,8 @@ class TestApiCreationLimit:
                     "backend_url": "https://backend.example.com",
                 },
             )
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
 
         assert resp.status_code == 429
         assert "limit reached" in resp.json()["detail"].lower()

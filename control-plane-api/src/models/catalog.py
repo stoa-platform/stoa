@@ -40,8 +40,8 @@ class APICatalog(Base):
     # Identity
     tenant_id = Column(String(100), nullable=False, index=True)
     api_id = Column(String(100), nullable=False)
-    api_name = Column(String(255), nullable=True)
-    version = Column(String(50), nullable=True)
+    api_name = Column(String(255), nullable=False)
+    version = Column(String(50), nullable=False, default="1.0.0", server_default="1.0.0")
 
     # Status and classification
     status = Column(String(50), default="active", nullable=False)
@@ -71,9 +71,23 @@ class APICatalog(Base):
     synced_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)  # Soft delete
 
-    # Composite unique constraint
+    # Partial unique indexes (CAB-1938) — only active (non-deleted) rows
+    # Primary uniqueness: (tenant_id, api_name, version) WHERE deleted_at IS NULL
+    # Routing uniqueness: (tenant_id, api_id) WHERE deleted_at IS NULL
+    # Note: partial indexes created in migration 084 via raw SQL; declared here for documentation
     __table_args__ = (
-        Index('ix_api_catalog_tenant_api', 'tenant_id', 'api_id', unique=True),
+        Index(
+            'ix_api_catalog_tenant_name_version',
+            'tenant_id', 'api_name', 'version',
+            unique=True,
+            postgresql_where=Column('deleted_at').is_(None),
+        ),
+        Index(
+            'ix_api_catalog_tenant_api_active',
+            'tenant_id', 'api_id',
+            unique=True,
+            postgresql_where=Column('deleted_at').is_(None),
+        ),
     )
 
     def __repr__(self) -> str:

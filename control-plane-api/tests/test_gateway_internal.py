@@ -76,6 +76,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -142,6 +143,7 @@ class TestGatewayRegistration:
             mock_repo = MockRepo.return_value
             # Step 1: no exact name match (hostname changed)
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             # Step 1b: find stale entries with same mode+env
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[stale])
             mock_repo.soft_delete = AsyncMock(return_value=stale)
@@ -180,6 +182,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -239,6 +242,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -270,6 +274,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -303,6 +308,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -341,6 +347,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)  # No exact name match
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=argocd_gw)
             mock_repo.update = AsyncMock(return_value=argocd_gw)

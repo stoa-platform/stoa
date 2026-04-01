@@ -1,9 +1,12 @@
-//! Built-in Plugins — Example Implementations (CAB-1759)
+//! Built-in Plugins (CAB-1759, CAB-1936)
 //!
-//! Three example plugins demonstrating the Plugin SDK:
+//! Four built-in plugins:
 //! 1. **CustomHeaderInjection** — Adds configurable headers to requests/responses
 //! 2. **RequestLogger** — Logs request metadata for observability
 //! 3. **IpWhitelist** — Restricts access by client IP address
+//! 4. **StcPlugin** — STOA Token Compression for LLM agents (ADR-060)
+
+pub mod stc;
 
 use async_trait::async_trait;
 use axum::http::StatusCode;
@@ -291,6 +294,7 @@ pub async fn register_builtin_plugins(
         Arc::new(CustomHeaderInjection::new()),
         Arc::new(RequestLogger::new()),
         Arc::new(IpWhitelist::new()),
+        Arc::new(stc::StcPlugin::new()),
     ];
 
     for plugin in plugins {
@@ -534,7 +538,7 @@ mod tests {
             .await
             .expect("register builtins");
 
-        assert_eq!(registry.count().await, 3);
+        assert_eq!(registry.count().await, 4);
 
         let names: Vec<String> = registry
             .list()
@@ -545,5 +549,6 @@ mod tests {
         assert!(names.contains(&"custom-header-injection".to_string()));
         assert!(names.contains(&"request-logger".to_string()));
         assert!(names.contains(&"ip-whitelist".to_string()));
+        assert!(names.contains(&"stc-compression".to_string()));
     }
 }

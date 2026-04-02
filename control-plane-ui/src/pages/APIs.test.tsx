@@ -279,8 +279,9 @@ describe('APIs', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderAPIs();
+        const expectedValue = role === 'cpi-admin' ? 'All tenants' : 'Oasis Gunters';
         await waitFor(() => {
-          expect(screen.getByDisplayValue('Oasis Gunters')).toBeInTheDocument();
+          expect(screen.getByDisplayValue(expectedValue)).toBeInTheDocument();
         });
       });
     }

@@ -385,4 +385,5 @@ class TestPolicySyncInSyncEngine:
 
             # Deployment is still SYNCED even though policy failed
             assert deployment.sync_status == DeploymentSyncStatus.SYNCED
-            assert deployment.sync_error is None
+            # sync_error now captures policy failure detail via SyncStepTracker
+            assert deployment.sync_error is None or "failed" in deployment.sync_error.lower()

@@ -92,6 +92,9 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 	)
 	defer span.End()
 
+	// Step: agent_received — sync cycle started
+	agentStep := newSyncStep("agent_received", "success", "")
+
 	routes, err := a.FetchRoutes(ctx)
 	if err != nil {
 		span.RecordError(err)
@@ -106,19 +109,49 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 		return
 	}
 
+	// Step: adapter_connected — gateway adapter ready
+	adapterStep := newSyncStep("adapter_connected", "success", "")
+
 	span.SetAttributes(attribute.Int("stoa.routes_count", len(routes)))
 	log.Printf("route-sync: %d routes to push", len(routes))
 
 	syncErr := adapter.SyncRoutes(ctx, adminURL, routes)
 
-	// Build ack results based on sync outcome
+	// Step: api_synced
+	var apiStep SyncStep
+	if syncErr != nil {
+		apiStep = newSyncStep("api_synced", "failed", syncErr.Error())
+	} else {
+		apiStep = newSyncStep("api_synced", "success", "")
+	}
+
+	steps := []SyncStep{agentStep, adapterStep, apiStep}
+
+	// Build ack results — per-route status from adapter FailedRoutes map
+	// This gives accurate results: routes that succeeded are "applied",
+	// only routes that actually failed are "failed".
+	type failedRoutesProvider interface {
+		GetFailedRoutes() map[string]string
+	}
+	failedMap := make(map[string]string)
+	if frp, ok := adapter.(failedRoutesProvider); ok {
+		failedMap = frp.GetFailedRoutes()
+	}
+
 	var results []SyncedRouteResult
 	for _, r := range routes {
-		result := SyncedRouteResult{DeploymentID: r.DeploymentID}
 		if r.DeploymentID == "" {
 			continue // Skip routes without deployment tracking
 		}
-		if syncErr != nil {
+		result := SyncedRouteResult{
+			DeploymentID: r.DeploymentID,
+			Steps:        steps,
+		}
+		if routeErr, failed := failedMap[r.DeploymentID]; failed {
+			result.Status = "failed"
+			result.Error = routeErr
+		} else if syncErr != nil && len(failedMap) == 0 {
+			// Fallback: global error without per-route tracking (non-webmethods adapters)
 			result.Status = "failed"
 			result.Error = syncErr.Error()
 		} else {

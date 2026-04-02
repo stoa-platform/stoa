@@ -15,9 +15,15 @@ import (
 
 // WebMethodsAdapter implements GatewayAdapter for webMethods API Gateway (port 5555).
 type WebMethodsAdapter struct {
-	client      *http.Client
-	cfg         AdapterConfig
-	syncedHashes map[string]string // tracks last-synced SpecHash per route name
+	client       *http.Client
+	cfg          AdapterConfig
+	syncedHashes map[string]string            // tracks last-synced SpecHash per route name
+	FailedRoutes map[string]string            // deployment_id → error (populated after SyncRoutes)
+}
+
+// GetFailedRoutes returns the per-deployment-id error map from the last SyncRoutes call.
+func (w *WebMethodsAdapter) GetFailedRoutes() map[string]string {
+	return w.FailedRoutes
 }
 
 // NewWebMethodsAdapter creates a new webMethods adapter.
@@ -26,6 +32,7 @@ func NewWebMethodsAdapter(cfg AdapterConfig) *WebMethodsAdapter {
 		client:       &http.Client{Timeout: 10 * time.Second},
 		cfg:          cfg,
 		syncedHashes: make(map[string]string),
+		FailedRoutes: make(map[string]string),
 	}
 }
 
@@ -564,6 +571,69 @@ func fixSecuritySchemeTypes(spec []byte) []byte {
 	return fixed
 }
 
+// stripSwagger2ResponseRefs removes $ref from response schemas in Swagger 2.0 specs.
+// webMethods 10.15 RefProperty parser crashes on $ref inside response schema objects
+// (e.g. {"schema":{"$ref":"#/definitions/Pet"}}). We strip the schema entirely since
+// webMethods doesn't use response schemas for routing — it only needs paths + methods.
+func stripSwagger2ResponseRefs(spec []byte) []byte {
+	if !bytes.Contains(spec, []byte(`"swagger"`)) {
+		return spec // Not Swagger 2.0
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
+		return spec
+	}
+
+	paths, ok := parsed["paths"].(map[string]interface{})
+	if !ok {
+		return spec
+	}
+
+	modified := false
+	for _, pathItem := range paths {
+		pi, ok := pathItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, method := range []string{"get", "post", "put", "delete", "patch", "options", "head"} {
+			op, ok := pi[method].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			responses, ok := op["responses"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			for code, resp := range responses {
+				r, ok := resp.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				// Strip ALL response schemas — webMethods RefProperty parser
+				// crashes on $ref, additionalProperties, and other complex
+				// schema constructs during PUT. Response schemas aren't needed
+				// for gateway routing.
+				if _, hasSchema := r["schema"]; hasSchema {
+					delete(r, "schema")
+					responses[code] = r
+					modified = true
+				}
+			}
+		}
+	}
+
+	if !modified {
+		return spec
+	}
+
+	fixed, err := json.Marshal(parsed)
+	if err != nil {
+		return spec
+	}
+	return fixed
+}
+
 // SyncRoutes pushes CP routes to webMethods via REST API import.
 // Idempotent: checks if API exists by name, uses PUT to update if so, POST only for new APIs.
 // Deactivated routes are deactivated on the gateway. Skips unchanged routes via SpecHash.
@@ -573,6 +643,8 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		return fmt.Errorf("list existing apis: %w", err)
 	}
 
+	// Reset per-route failure tracking
+	w.FailedRoutes = make(map[string]string)
 	var syncErrors []string
 
 	for _, route := range routes {
@@ -601,6 +673,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			spec = downgradeOpenAPI31(spec)
 			spec = fixExternalDocs(spec)
 			spec = fixSecuritySchemeTypes(spec)
+			spec = stripSwagger2ResponseRefs(spec)
 		}
 
 		var apiPayload map[string]interface{}
@@ -677,7 +750,11 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			if len(detail) > 300 {
 				detail = detail[:300]
 			}
-			syncErrors = append(syncErrors, fmt.Sprintf("%s: %d — %s", wmName, resp.StatusCode, detail))
+			errMsg := fmt.Sprintf("%s: %d — %s", wmName, resp.StatusCode, detail)
+			syncErrors = append(syncErrors, errMsg)
+			if route.DeploymentID != "" {
+				w.FailedRoutes[route.DeploymentID] = fmt.Sprintf("webmethods api sync failed (%d): %s", resp.StatusCode, detail)
+			}
 			continue
 		}
 

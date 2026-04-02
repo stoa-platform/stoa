@@ -23,7 +23,6 @@ on:
         type: choice
         options:
           - dev
-          - staging
           - prod
       dry_run:
         description: 'Dry run (validate only)'
@@ -40,7 +39,7 @@ permissions:
 
 env:
   BASE_DOMAIN: gostoa.dev
-  ENV_PREFIX: ${{ (github.event.inputs.environment == 'staging' && 'staging-') || '' }}
+  ENV_PREFIX: ''
   GIT_PROVIDER: ${{ vars.GIT_PROVIDER || 'gitlab' }}
   GITLAB_PROJECT: cab6961310/stoa-gitops
   GITHUB_GITOPS_REPO: stoa-platform/stoa-gitops

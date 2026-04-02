@@ -139,6 +139,7 @@ class GatewayDeploymentResponse(BaseModel):
     last_sync_success: datetime | None = None
     sync_error: str | None = None
     sync_attempts: int
+    sync_steps: list[dict] | None = None
     gateway_resource_id: str | None = None
     created_at: datetime
     updated_at: datetime

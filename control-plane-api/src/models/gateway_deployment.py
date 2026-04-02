@@ -85,6 +85,7 @@ class GatewayDeployment(Base):
     last_sync_success = Column(DateTime(timezone=True), nullable=True)
     sync_error = Column(Text, nullable=True)
     sync_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    sync_steps = Column(JSONB, nullable=True)  # Ordered list of SyncStep dicts for step-level observability
 
     # Policy sync tracking
     policy_sync_status = Column(

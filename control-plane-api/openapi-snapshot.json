@@ -923,6 +923,89 @@
         "title": "ActivityType",
         "type": "string"
       },
+      "AdminAPIPaginatedResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminAPIResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "AdminAPIPaginatedResponse",
+        "type": "object"
+      },
+      "AdminAPIResponse": {
+        "description": "API response for cross-tenant admin listing.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "title": "Status",
+            "type": "string"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "display_name",
+          "version",
+          "description"
+        ],
+        "title": "AdminAPIResponse",
+        "type": "object"
+      },
       "ApplicationCreate": {
         "properties": {
           "api_subscriptions": {
@@ -28921,6 +29004,86 @@
         ]
       }
     },
+    "/v1/admin/catalog/apis": {
+      "get": {
+        "description": "List APIs across all tenants (admin only).\n\nPass tenant_id to filter by a specific tenant, or omit for cross-tenant view.",
+        "operationId": "list_all_apis",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by tenant (omit for all)",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by tenant (omit for all)",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAPIPaginatedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List All Apis",
+        "tags": [
+          "Catalog Admin"
+        ]
+      }
+    },
     "/v1/admin/catalog/cache": {
       "delete": {
         "description": "Invalidate the in-memory API cache (if any).\n\nNote: This endpoint is maintained for backwards compatibility.\nWith the new PostgreSQL-based cache, the sync endpoints should be used instead.\n\nRequires: cpi-admin role",
@@ -44432,7 +44595,7 @@
     },
     "/v1/tenants/{tenant_id}/apis": {
       "get": {
-        "description": "List APIs for a tenant from git provider (paginated).\n\nOptionally filter by environment \u2014 only returns APIs deployed to that environment.",
+        "description": "List APIs for a tenant from database catalog (paginated).\n\nOptionally filter by environment \u2014 only returns APIs deployed to that environment.",
         "operationId": "list_apis",
         "parameters": [
           {
@@ -44523,7 +44686,7 @@
         ]
       },
       "post": {
-        "description": "Create a new API via git provider and emit event.\n\nThis creates the API definition in the GitOps repository:\n- tenants/{tenant_id}/apis/{api_name}/api.yaml\n- tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires",
+        "description": "Create a new API in the database catalog and emit event.\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires",
         "operationId": "create_api",
         "parameters": [
           {
@@ -44599,7 +44762,7 @@
     },
     "/v1/tenants/{tenant_id}/apis/{api_id}": {
       "delete": {
-        "description": "Delete API from git provider",
+        "description": "Soft-delete API from database catalog",
         "operationId": "delete_api",
         "parameters": [
           {
@@ -44670,7 +44833,7 @@
         ]
       },
       "get": {
-        "description": "Get API by ID from git provider",
+        "description": "Get API by ID from database catalog",
         "operationId": "get_api",
         "parameters": [
           {
@@ -44725,7 +44888,7 @@
         ]
       },
       "put": {
-        "description": "Update API in git provider",
+        "description": "Update API in database catalog",
         "operationId": "update_api",
         "parameters": [
           {
@@ -45132,7 +45295,7 @@
     },
     "/v1/tenants/{tenant_id}/apis/{api_id}/versions": {
       "get": {
-        "description": "List version history (git commits) for a specific API.",
+        "description": "List version history for a specific API.\n\nGit history unavailable \u2014 returns empty list pending GitHub migration (CAB-1890).",
         "operationId": "list_api_versions",
         "parameters": [
           {

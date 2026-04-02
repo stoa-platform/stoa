@@ -636,9 +636,16 @@ async def route_sync_ack(
             not_found += 1
             continue
 
-        # Store step trace if provided (CAB-1945)
+        # Store step trace — merge CP steps with agent steps (CAB-1947)
         if result.steps is not None:
-            deployment.sync_steps = result.steps
+            from src.services.sync_step_tracker import SyncStepTracker
+
+            # Prepend CP-side event_emitted step to agent-reported steps
+            cp_tracker = SyncStepTracker()
+            cp_tracker.start("event_emitted")
+            cp_tracker.complete("event_emitted", detail="deployment dispatched to agent")
+            merged_steps = cp_tracker.to_list() + result.steps
+            deployment.sync_steps = merged_steps
 
         if result.status == "applied":
             deployment.sync_status = DeploymentSyncStatus.SYNCED
@@ -648,8 +655,6 @@ async def route_sync_ack(
             deployment.sync_status = DeploymentSyncStatus.ERROR
             # Derive sync_error from step trace if available, else use scalar error
             if result.steps:
-                from src.services.sync_step_tracker import SyncStepTracker
-
                 tracker = SyncStepTracker.from_list(result.steps)
                 deployment.sync_error = tracker.first_error() or result.error
             else:

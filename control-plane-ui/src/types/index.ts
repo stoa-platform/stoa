@@ -44,6 +44,7 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   deployed_dev: boolean;
   deployed_staging: boolean;
+  openapi_spec?: string | Record<string, unknown>;
   tags?: string[];
   portal_promoted?: boolean; // Whether API is promoted to Developer Portal
   audience?: 'public' | 'internal' | 'partner';

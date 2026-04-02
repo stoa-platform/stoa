@@ -59,10 +59,9 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             openapi_url = api_spec.get("url") or api_spec.get("backend_url")
             openapi_spec = api_spec.get("apiDefinition") or api_spec.get("openapi_spec")
 
-            # Idempotency: return existing API if already present on the gateway.
-            # Same pattern as provision_application, upsert_policy, upsert_strategy, upsert_alias.
-            # Note: returns the existing resource without updating its spec — an update-in-place
-            # would require PUT /apis/{id} which is not yet available in GatewayAdminService.
+            # Upsert: if API with same name+version exists, delete then reimport
+            # so the latest spec is always applied. list_apis returns normalized
+            # flat objects (see list_apis below).
             existing_apis = await self.list_apis(auth_token=auth_token)
             existing = next(
                 (a for a in existing_apis if a.get("apiName") == api_name and a.get("apiVersion") == api_version),
@@ -72,12 +71,13 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             if existing:
                 existing_id = existing.get("id", "")
                 logger.info(
-                    "API '%s' v%s already exists (id=%s), returning existing",
+                    "API '%s' v%s already exists (id=%s), deleting before reimport",
                     api_name,
                     api_version,
                     existing_id,
                 )
-                return AdapterResult(success=True, resource_id=existing_id, data=existing)
+                if existing_id:
+                    await self._svc.delete_api(existing_id, auth_token=auth_token)
 
             result = await self._svc.import_api(
                 api_name=api_name,
@@ -100,7 +100,11 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def list_apis(self, auth_token: str | None = None) -> list[dict]:
-        return await self._svc.list_apis(auth_token=auth_token)
+        # webMethods returns nested objects: {"api": {"apiName": ..., "id": ...}, "responseStatus": ...}
+        # Normalize to flat format so callers (sync_api, drift detection) can access
+        # fields like apiName, apiVersion, id directly.
+        raw = await self._svc.list_apis(auth_token=auth_token)
+        return [item.get("api", item) for item in raw]
 
     # --- Policies ---
 

@@ -98,7 +98,7 @@ patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 # This complements conftest_integration.py's integration_db fixture (which only
 # skips tests that explicitly use the fixture, not all @integration-marked tests).
 
-def pytest_collection_modifyitems(_config, items):
+def pytest_collection_modifyitems(config, items):  # noqa: ARG001
     """Skip @pytest.mark.integration tests when DATABASE_URL is absent."""
     if os.environ.get("DATABASE_URL"):
         return

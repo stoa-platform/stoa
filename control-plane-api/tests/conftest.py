@@ -92,6 +92,22 @@ patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
 patch.object(_main_module, 'connect_error_snapshots', AsyncMock(return_value=None)).start()
 patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 
+# ============== Auto-Skip Integration Tests Without Infra (CAB-1939) ==============
+# Tests marked @pytest.mark.integration require a PostgreSQL database.
+# Skip them automatically when DATABASE_URL is not set (local dev without DB).
+# This complements conftest_integration.py's integration_db fixture (which only
+# skips tests that explicitly use the fixture, not all @integration-marked tests).
+
+def pytest_collection_modifyitems(_config, items):
+    """Skip @pytest.mark.integration tests when DATABASE_URL is absent."""
+    if os.environ.get("DATABASE_URL"):
+        return
+    skip_integration = pytest.mark.skip(reason="DATABASE_URL not set — skipping integration test")
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
+
+
 # ============== Disable PII Masking in Tests ==============
 # PIIMaskingMiddleware._mask_query_string corrupts UUIDs and datetime query params
 # e.g. uuid "af85fcc7-..." → "af85****fcc7-..." causing 422 validation errors.

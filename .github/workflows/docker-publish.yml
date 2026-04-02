@@ -54,7 +54,7 @@ jobs:
   # ==========================================================================
   setup:
     name: Setup Build Matrix
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -87,7 +87,7 @@ jobs:
   # ==========================================================================
   build:
     name: Build ${{ matrix.service }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: setup
     permissions:
       contents: read
@@ -195,7 +195,7 @@ jobs:
   # ==========================================================================
   summary:
     name: Build Summary
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [setup, build]
     if: always()
     steps:

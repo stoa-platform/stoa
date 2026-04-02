@@ -357,8 +357,10 @@ async def seed_catalog_directly(
     failed = 0
     results = {}
 
+    from .apis import _slugify
+
     for api_entry in data.apis:
-        api_id = api_entry.name
+        api_id = _slugify(api_entry.name)
         tags = api_entry.tags
         promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
         portal_published = any(tag.lower() in promotion_tags for tag in tags)
@@ -404,6 +406,7 @@ async def seed_catalog_directly(
                 )
                 .on_conflict_do_update(
                     index_elements=["tenant_id", "api_id"],
+                    index_where=APICatalog.deleted_at.is_(None),
                     set_={
                         "api_name": api_entry.display_name,
                         "version": api_entry.version,
@@ -411,7 +414,7 @@ async def seed_catalog_directly(
                         "category": api_entry.category,
                         "tags": tags,
                         "portal_published": portal_published,
-                        "metadata": api_metadata,  # DB column is "metadata" not "api_metadata"
+                        "metadata": api_metadata,
                         "openapi_spec": openapi_spec,
                         "synced_at": datetime.now(UTC),
                         "deleted_at": None,

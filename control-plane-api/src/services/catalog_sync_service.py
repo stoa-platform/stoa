@@ -235,7 +235,7 @@ class CatalogSyncService:
                 tenant_id=tenant_id,
                 api_id=api_id,
                 api_name=api.get("name", api_id),
-                version=api.get("version"),
+                version=api.get("version", "1.0.0"),
                 status=api.get("status", "active"),
                 category=api.get("category"),
                 tags=tags,
@@ -249,10 +249,11 @@ class CatalogSyncService:
                 deleted_at=None,
             )
             .on_conflict_do_update(
-                constraint="uq_api_catalog_tenant_api",
+                index_elements=["tenant_id", "api_id"],
+                index_where=APICatalog.deleted_at.is_(None),
                 set_={
                     APICatalog.api_name: api.get("name", api_id),
-                    APICatalog.version: api.get("version"),
+                    APICatalog.version: api.get("version", "1.0.0"),
                     APICatalog.status: api.get("status", "active"),
                     APICatalog.category: api.get("category"),
                     APICatalog.tags: tags,

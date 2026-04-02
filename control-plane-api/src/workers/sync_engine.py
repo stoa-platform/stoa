@@ -32,6 +32,7 @@ from ..services.credential_resolver import (
     create_adapter_with_credentials,
 )
 from ..services.kafka_service import Topics, kafka_service
+from ..services.sync_step_tracker import SyncStepTracker
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +279,7 @@ class SyncEngine:
                 return
 
             adapter = None
+            tracker = SyncStepTracker()
             try:
                 adapter = await create_adapter_with_credentials(
                     gateway.gateway_type.value,
@@ -286,7 +288,10 @@ class SyncEngine:
                     source=gateway.source,
                     gateway_name=gateway.name,
                 )
+
+                tracker.start("adapter_connected")
                 await adapter.connect()
+                tracker.complete("adapter_connected")
 
                 if deployment.sync_status == DeploymentSyncStatus.DELETING:
                     await self._handle_delete(deployment, adapter, repo, session)
@@ -295,7 +300,7 @@ class SyncEngine:
                     DeploymentSyncStatus.DRIFTED,
                     DeploymentSyncStatus.ERROR,
                 ):
-                    await self._handle_sync(deployment, adapter, repo, session)
+                    await self._handle_sync(deployment, adapter, repo, session, tracker)
 
             except AgentManagedGatewayError:
                 logger.debug(
@@ -311,8 +316,21 @@ class SyncEngine:
                     e,
                     exc_info=True,
                 )
+                # Mark current running step as failed, skip remaining
+                if tracker.first_error() is None:
+                    running = [s for s in tracker.to_list() if s.get("status") == "running"]
+                    if running:
+                        tracker.fail(running[-1]["name"], detail=str(e)[:500])
+                    else:
+                        tracker.start("adapter_connected")
+                        tracker.fail("adapter_connected", detail=str(e)[:500])
+                for skip_name in ("api_synced", "policies_applied"):
+                    if not any(s.get("name") == skip_name for s in tracker.to_list()):
+                        tracker.skip(skip_name, reason="previous step failed")
+
                 deployment.sync_status = DeploymentSyncStatus.ERROR
-                deployment.sync_error = str(e)[:500]
+                deployment.sync_error = tracker.first_error() or str(e)[:500]
+                deployment.sync_steps = tracker.to_list()
                 deployment.sync_attempts += 1
                 deployment.last_sync_attempt = datetime.now(UTC)
                 await repo.update(deployment)
@@ -322,7 +340,7 @@ class SyncEngine:
                     with contextlib.suppress(Exception):
                         await adapter.disconnect()
 
-    async def _handle_sync(self, deployment, adapter, repo, session) -> None:
+    async def _handle_sync(self, deployment, adapter, repo, session, tracker: SyncStepTracker) -> None:
         """Handle PENDING/DRIFTED/ERROR deployment — sync API to gateway."""
         now = datetime.now(UTC)
         deployment.sync_status = DeploymentSyncStatus.SYNCING
@@ -331,9 +349,12 @@ class SyncEngine:
         await session.commit()
 
         tenant_id = (deployment.desired_state or {}).get("tenant_id", "")
+
+        tracker.start("api_synced")
         result = await adapter.sync_api(deployment.desired_state, tenant_id)
 
         if result.success:
+            tracker.complete("api_synced", detail=f"resource={result.resource_id}")
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.actual_state = result.data or deployment.desired_state
             deployment.actual_at = now
@@ -342,6 +363,7 @@ class SyncEngine:
             deployment.sync_error = None
 
             # Sync bound policies (non-blocking — failure is warned, not fatal)
+            tracker.start("policies_applied")
             policy_failures = []
             try:
                 from ..repositories.gateway_policy import GatewayPolicyRepository
@@ -372,19 +394,28 @@ class SyncEngine:
                         )
 
                 if not policies:
+                    tracker.complete("policies_applied", detail="no policies bound")
                     deployment.policy_sync_status = None
                     deployment.policy_sync_error = None
                 elif policy_failures:
+                    tracker.fail(
+                        "policies_applied",
+                        detail=f"{len(policy_failures)} failed: {'; '.join(policy_failures)}"[:500],
+                    )
                     deployment.policy_sync_status = PolicySyncStatus.PARTIAL
                     deployment.policy_sync_error = "; ".join(policy_failures)[:500]
                 else:
+                    tracker.complete("policies_applied", detail=f"{len(policies)} applied")
                     deployment.policy_sync_status = PolicySyncStatus.SYNCED
                     deployment.policy_sync_error = None
             except Exception as e:
+                tracker.fail("policies_applied", detail=str(e)[:500])
                 deployment.policy_sync_status = PolicySyncStatus.ERROR
                 deployment.policy_sync_error = str(e)[:500]
                 logger.warning("Policy sync failed for deployment %s: %s", deployment.id, e)
 
+            deployment.sync_steps = tracker.to_list()
+            deployment.sync_error = tracker.first_error()
             await repo.update(deployment)
             await session.commit()
             logger.info(
@@ -393,8 +424,11 @@ class SyncEngine:
                 deployment.gateway_resource_id,
             )
         else:
+            tracker.fail("api_synced", detail=result.error or "Sync failed")
+            tracker.skip("policies_applied", reason="previous step failed")
             deployment.sync_status = DeploymentSyncStatus.ERROR
-            deployment.sync_error = result.error or "Sync failed"
+            deployment.sync_error = tracker.first_error()
+            deployment.sync_steps = tracker.to_list()
             deployment.sync_attempts += 1
             await repo.update(deployment)
             await session.commit()

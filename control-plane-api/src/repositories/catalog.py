@@ -4,9 +4,12 @@ Provides fast database-backed queries for the Portal API catalog
 instead of real-time GitLab API calls.
 """
 
+from uuid import UUID
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.api_gateway_assignment import ApiGatewayAssignment
 from src.models.catalog import APICatalog, AudienceEnum, MCPToolsCatalog
 
 # Role -> allowed audiences ceiling (CAB-1323)
@@ -51,6 +54,7 @@ class CatalogRepository:
         environment: str | None = None,
         sort_by: str | None = None,
         auth_type: str | None = None,
+        gateway_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[APICatalog], int]:
@@ -83,6 +87,13 @@ class CatalogRepository:
             query = query.where(APICatalog.tenant_id.in_(tenant_ids))
         elif tenant_id:
             query = query.where(APICatalog.tenant_id == tenant_id)
+
+        # Filter by gateway assignment (CAB-1940: scope APIs to a specific gateway)
+        if gateway_id is not None:
+            query = query.join(
+                ApiGatewayAssignment,
+                APICatalog.id == ApiGatewayAssignment.api_id,
+            ).where(ApiGatewayAssignment.gateway_id == gateway_id)
 
         # Filter by tags (any tag match using JSONB contains)
         if tags:

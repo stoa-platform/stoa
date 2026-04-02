@@ -77,6 +77,7 @@ const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.Ga
 const GatewayModes = lazy(() =>
   gatewaysModule().then((m) => ({ default: m.GatewayModesDashboard }))
 );
+const GatewayDetailPage = lazy(() => gatewaysModule().then((m) => ({ default: m.GatewayDetail })));
 const ApiDeployments = lazy(() =>
   import('./pages/ApiDeployments/ApiDeploymentsDashboard').then((m) => ({
     default: m.ApiDeploymentsDashboard,
@@ -324,6 +325,7 @@ function ProtectedRoutes() {
                 />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
+                <Route path="/gateways/:id" element={<GatewayDetailPage />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
                 <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />

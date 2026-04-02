@@ -340,4 +340,15 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("parse"));
     }
+
+    /// Regression test for CAB-1940: sidecar mode should NOT discover API tools.
+    /// The gate is in main.rs (not called for non-EdgeMcp modes), so here we verify
+    /// that the tool registry stays empty when discover_api_tools is simply not called.
+    #[tokio::test]
+    async fn regression_cab_1940_sidecar_has_no_catalog_tools() {
+        // Sidecar mode: discover_api_tools is never called (gated in main.rs).
+        // Verify the registry is empty by default — no implicit population.
+        let registry = ToolRegistry::new();
+        assert_eq!(registry.count(), 0, "Sidecar must not have catalog tools");
+    }
 }

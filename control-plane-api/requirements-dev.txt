@@ -1,6 +1,6 @@
 # Development and CI dependencies for Control Plane API
 # CAB-313: Lint, Test, Security tools
-# respx added for httpx mock tests (CAB-1944)
+# respx: httpx mock layer for adapter integration tests (CAB-1944)
 
 # Linting & Formatting
 ruff>=0.1.9

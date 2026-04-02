@@ -33,6 +33,11 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         self._base_url = (config or {}).get("base_url", "http://localhost:8080")
         auth_config = (config or {}).get("auth_config", {})
         self._admin_token = auth_config.get("admin_token", "") if isinstance(auth_config, dict) else ""
+        if not self._admin_token:
+            logger.warning(
+                "StoaGatewayAdapter: no admin_token in auth_config for %s — admin API calls will fail with 401",
+                self._base_url,
+            )
         self._client: httpx.AsyncClient | None = None
 
     @property

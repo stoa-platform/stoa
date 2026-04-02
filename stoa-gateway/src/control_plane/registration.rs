@@ -57,6 +57,10 @@ pub struct RegistrationPayload {
     /// URL of the third-party gateway managed by this Link instance
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_gateway_url: Option<String>,
+
+    /// Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev) for Console display (CAB-1940)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_url: Option<String>,
 }
 
 /// Heartbeat payload sent every 30 seconds
@@ -171,6 +175,7 @@ impl GatewayRegistrar {
                 .unwrap_or_else(|| format!("http://{}:{}", hostname, config.port)),
             tenant_id: None, // Platform-wide gateway
             target_gateway_url: config.target_gateway_url.clone(),
+            public_url: config.gateway_public_url.clone(),
         };
 
         info!(
@@ -477,6 +482,7 @@ mod tests {
             admin_url: "http://gateway-abc123:8080".to_string(),
             tenant_id: None,
             target_gateway_url: None,
+            public_url: None,
         };
 
         let json = serde_json::to_string(&payload).expect("Should serialize");
@@ -484,6 +490,7 @@ mod tests {
         assert!(json.contains("edge_mcp"));
         assert!(!json.contains("tenant_id")); // None should be skipped
         assert!(!json.contains("target_gateway_url")); // None should be skipped
+        assert!(!json.contains("public_url")); // None should be skipped
     }
 
     #[test]
@@ -497,6 +504,7 @@ mod tests {
             admin_url: "http://gw-1:8081".to_string(),
             tenant_id: Some("acme".to_string()),
             target_gateway_url: Some("https://webmethods-prod:5555".to_string()),
+            public_url: Some("https://link-webmethods.gostoa.dev".to_string()),
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -504,6 +512,8 @@ mod tests {
         assert!(json.contains("acme"));
         assert!(json.contains("target_gateway_url"));
         assert!(json.contains("webmethods-prod:5555"));
+        assert!(json.contains("public_url"));
+        assert!(json.contains("link-webmethods.gostoa.dev"));
     }
 
     #[test]

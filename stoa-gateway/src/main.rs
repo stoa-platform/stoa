@@ -76,28 +76,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Auto-register with Control Plane (ADR-028, CAB-1915)
     // Registration runs in background with retry so the gateway becomes visible
     // even if the CP API is not ready at startup (common in K8s).
-    if config.auto_register {
-        if let Some(cp_url) = &config.control_plane_url {
-            if let Some(api_key) = &config.control_plane_api_key {
+    // The registrar is kept alive so api_bridge can read the assigned gateway_id (CAB-1940).
+    let registrar: Option<std::sync::Arc<GatewayRegistrar>> = if config.auto_register {
+        match (&config.control_plane_url, &config.control_plane_api_key) {
+            (Some(cp_url), Some(api_key)) => {
                 info!(
                     "Starting background registration with Control Plane: {}",
                     cp_url
                 );
-                let registrar =
-                    std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
+                let r = std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
 
-                registrar.start_registration_and_heartbeat(
+                r.clone().start_registration_and_heartbeat(
                     config.clone(),
                     std::sync::Arc::new(state.clone()),
                     config.heartbeat_interval_secs,
                 );
-            } else {
-                info!("Auto-registration skipped: STOA_CONTROL_PLANE_API_KEY not set");
+                Some(r)
             }
-        } else {
-            info!("Auto-registration skipped: STOA_CONTROL_PLANE_URL not set");
+            (None, _) => {
+                info!("Auto-registration skipped: STOA_CONTROL_PLANE_URL not set");
+                None
+            }
+            (_, None) => {
+                info!("Auto-registration skipped: STOA_CONTROL_PLANE_API_KEY not set");
+                None
+            }
         }
-    }
+    } else {
+        None
+    };
 
     // Start background tasks
     state.start_background_tasks();
@@ -109,7 +116,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_k8s_watcher(&config, &state).await;
 
     // Register tools: try CP discovery, fallback to static
-    register_tools(&state).await;
+    // Pass registrar so API catalog discovery can scope by gateway_id (CAB-1940)
+    register_tools(&state, registrar).await;
 
     info!(
         tools = state.tool_registry.count(),
@@ -248,7 +256,10 @@ fn init_tracing(config: &Config) {
 }
 
 /// Register MCP tools.
-async fn register_tools(state: &AppState) {
+///
+/// When a `GatewayRegistrar` is provided, the API catalog discovery uses the
+/// assigned gateway_id to scope results to this gateway's assigned APIs (CAB-1940).
+async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<GatewayRegistrar>>) {
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
 
     if state.config.native_tools_enabled {
@@ -287,7 +298,16 @@ async fn register_tools(state: &AppState) {
     if state.config.gateway_mode == stoa_gateway::mode::GatewayMode::EdgeMcp {
         let cp_url = state.control_plane.base_url().to_string();
         let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
-        match api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client).await {
+
+        // Read gateway_id if registration has completed (may be None at startup)
+        let gw_id = match &registrar {
+            Some(r) => r.gateway_id().await,
+            None => None,
+        };
+
+        match api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client, gw_id)
+            .await
+        {
             Ok(count) => {
                 if count > 0 {
                     info!(count, "API catalog tools registered");
@@ -299,7 +319,13 @@ async fn register_tools(state: &AppState) {
         }
 
         // Background refresh: sync API catalog tools every 60s
-        api_bridge::start_api_tool_refresh_task(state.tool_registry.clone(), cp_url, http_client);
+        // Passes registrar so each tick reads the current gateway_id (CAB-1940)
+        api_bridge::start_api_tool_refresh_task(
+            state.tool_registry.clone(),
+            cp_url,
+            http_client,
+            registrar,
+        );
     } else {
         info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (not edge-mcp mode)");
     }

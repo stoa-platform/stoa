@@ -12,7 +12,8 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 use super::dynamic_tool::DynamicTool;
 use super::{ToolAnnotations, ToolRegistry, ToolSchema};
@@ -47,37 +48,31 @@ struct CatalogApisResponse {
 /// Each API becomes a public DynamicTool that proxies HTTP POST calls
 /// to its backend_url. Tools are named after the API slug (e.g. "payments").
 ///
+/// When `gateway_id` is provided, only APIs assigned to this gateway are returned.
+/// If the filtered query returns 0 APIs, falls back to unfiltered (backward compat
+/// for gateways without assignments configured yet — CAB-1940 adjustment #1).
+///
 /// Returns the number of API tools registered.
 pub async fn discover_api_tools(
     registry: &ToolRegistry,
     cp_base_url: &str,
     client: &Client,
+    gateway_id: Option<Uuid>,
 ) -> Result<usize, String> {
-    // Use internal endpoint (no JWT auth required, includes backend_url)
-    let url = format!(
-        "{}/v1/internal/catalog/apis",
-        cp_base_url.trim_end_matches('/')
-    );
+    let catalog = fetch_catalog(cp_base_url, client, gateway_id).await?;
 
-    debug!(url = %url, "Discovering API tools from CP internal catalog");
-
-    let resp = client
-        .get(&url)
-        .timeout(Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|e| format!("CP catalog request failed: {}", e))?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("CP catalog returned {}: {}", status, body));
-    }
-
-    let catalog: CatalogApisResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse CP catalog response: {}", e))?;
+    // CAB-1940 fallback: if gateway_id filter returned 0 APIs, retry unfiltered.
+    // This handles gateways that have no api_gateway_assignments rows yet.
+    let catalog = match gateway_id {
+        Some(gw_id) if catalog.apis.is_empty() => {
+            warn!(
+                gateway_id = %gw_id,
+                "No APIs found for gateway — falling back to unfiltered catalog"
+            );
+            fetch_catalog(cp_base_url, client, None).await?
+        }
+        _ => catalog,
+    };
 
     let mut count = 0;
     for api in &catalog.apis {
@@ -156,17 +151,63 @@ pub async fn discover_api_tools(
     Ok(count)
 }
 
+/// Fetch the API catalog from the Control Plane.
+///
+/// When `gateway_id` is `Some`, appends `?gateway_id={id}` to scope results
+/// to APIs assigned to this gateway (CAB-1940 Phase 2 server-side filter).
+async fn fetch_catalog(
+    cp_base_url: &str,
+    client: &Client,
+    gateway_id: Option<Uuid>,
+) -> Result<CatalogApisResponse, String> {
+    let mut url = format!(
+        "{}/v1/internal/catalog/apis",
+        cp_base_url.trim_end_matches('/')
+    );
+    if let Some(gw_id) = gateway_id {
+        url.push_str(&format!("?gateway_id={gw_id}"));
+    }
+
+    debug!(url = %url, "Discovering API tools from CP internal catalog");
+
+    let resp = client
+        .get(&url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("CP catalog request failed: {e}"))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("CP catalog returned {status}: {body}"));
+    }
+
+    resp.json()
+        .await
+        .map_err(|e| format!("Failed to parse CP catalog response: {e}"))
+}
+
 /// Start a background task that periodically refreshes API tools from the CP catalog.
+///
+/// When `registrar` is provided, reads the gateway's assigned ID on each tick
+/// so the catalog fetch is scoped to this gateway's assigned APIs (CAB-1940).
 pub fn start_api_tool_refresh_task(
     registry: Arc<ToolRegistry>,
     cp_base_url: String,
     client: Client,
+    registrar: Option<Arc<crate::control_plane::registration::GatewayRegistrar>>,
 ) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(API_TOOL_REFRESH_INTERVAL).await;
 
-            match discover_api_tools(&registry, &cp_base_url, &client).await {
+            let gw_id = match &registrar {
+                Some(r) => r.gateway_id().await,
+                None => None,
+            };
+
+            match discover_api_tools(&registry, &cp_base_url, &client, gw_id).await {
                 Ok(count) => {
                     if count > 0 {
                         info!(count, "New API tools discovered from catalog");
@@ -183,7 +224,7 @@ pub fn start_api_tool_refresh_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -205,7 +246,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
             .await
             .unwrap();
 
@@ -228,7 +269,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -261,7 +302,7 @@ mod tests {
         registry.register(Arc::new(pre));
 
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -282,7 +323,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -300,7 +341,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        discover_api_tools(&registry, &mock.uri(), &client)
+        discover_api_tools(&registry, &mock.uri(), &client, None)
             .await
             .unwrap();
 
@@ -320,7 +361,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let result = discover_api_tools(&registry, &mock.uri(), &client).await;
+        let result = discover_api_tools(&registry, &mock.uri(), &client, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("500"));
     }
@@ -336,7 +377,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let result = discover_api_tools(&registry, &mock.uri(), &client).await;
+        let result = discover_api_tools(&registry, &mock.uri(), &client, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("parse"));
     }
@@ -350,5 +391,83 @@ mod tests {
         // Verify the registry is empty by default — no implicit population.
         let registry = ToolRegistry::new();
         assert_eq!(registry.count(), 0, "Sidecar must not have catalog tools");
+    }
+
+    /// CAB-1940 Phase 3: gateway_id is sent as query param to scope API discovery.
+    #[tokio::test]
+    async fn regression_cab_1940_gateway_id_sent_as_query_param() {
+        let gw_id = Uuid::new_v4();
+        let mock = MockServer::start().await;
+
+        // Only respond when gateway_id query param is present
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis"))
+            .and(query_param("gateway_id", gw_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "apis": [{"id": "scoped", "name": "Scoped API", "backend_url": "http://b:80"}]
+            })))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_api_tools(&registry, &mock.uri(), &client, Some(gw_id))
+            .await
+            .unwrap();
+
+        assert_eq!(count, 1);
+        assert!(registry.get("scoped").is_some());
+    }
+
+    /// CAB-1940 Phase 3: fallback to unfiltered when gateway_id filter returns 0 APIs.
+    #[tokio::test]
+    async fn regression_cab_1940_fallback_to_unfiltered_on_empty() {
+        let gw_id = Uuid::new_v4();
+        let mock = MockServer::start().await;
+
+        // Filtered request returns empty
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis"))
+            .and(query_param("gateway_id", gw_id.to_string()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"apis": []})))
+            .mount(&mock)
+            .await;
+
+        // Unfiltered request returns APIs
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "apis": [{"id": "fallback", "name": "Fallback API", "backend_url": "http://b:80"}]
+            })))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_api_tools(&registry, &mock.uri(), &client, Some(gw_id))
+            .await
+            .unwrap();
+
+        assert_eq!(count, 1, "Should fallback to unfiltered catalog");
+        assert!(registry.get("fallback").is_some());
+    }
+
+    /// CAB-1940 Phase 3: no fallback when gateway_id is None (unfiltered is the only call).
+    #[tokio::test]
+    async fn no_fallback_when_no_gateway_id() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"apis": []})))
+            .expect(1) // Only one request (no retry)
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
     }
 }

@@ -69,6 +69,7 @@ class GatewayInstance(Base):
     # Connection configuration
     base_url = Column(String(500), nullable=False)  # Admin API URL
     target_gateway_url = Column(String(500), nullable=True)  # Third-party gateway URL (for Link/Connect)
+    public_url = Column(String(500), nullable=True)  # Public DNS URL for Console display (CAB-1940)
     auth_config = Column(JSONB, nullable=False, default=dict)
     # auth_config examples:
     #   {"type": "oidc_proxy", "proxy_url": "https://apis.gostoa.dev/..."}

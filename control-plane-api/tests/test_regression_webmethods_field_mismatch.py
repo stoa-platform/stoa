@@ -26,6 +26,7 @@ def _make_adapter() -> WebMethodsGatewayAdapter:
 async def test_regression_webmethods_sync_api_snake_case_desired_state():
     """sync_api must not KeyError when given snake_case fields from build_desired_state."""
     adapter = _make_adapter()
+    adapter._svc.list_apis = AsyncMock(return_value=[])
     adapter._svc.import_api = AsyncMock(
         return_value={"apiResponse": {"api": {"id": "api-123"}}}
     )

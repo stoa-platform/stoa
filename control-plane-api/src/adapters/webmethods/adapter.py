@@ -59,6 +59,26 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             openapi_url = api_spec.get("url") or api_spec.get("backend_url")
             openapi_spec = api_spec.get("apiDefinition") or api_spec.get("openapi_spec")
 
+            # Idempotency: return existing API if already present on the gateway.
+            # Same pattern as provision_application, upsert_policy, upsert_strategy, upsert_alias.
+            # Note: returns the existing resource without updating its spec — an update-in-place
+            # would require PUT /apis/{id} which is not yet available in GatewayAdminService.
+            existing_apis = await self.list_apis(auth_token=auth_token)
+            existing = next(
+                (a for a in existing_apis if a.get("apiName") == api_name and a.get("apiVersion") == api_version),
+                None,
+            )
+
+            if existing:
+                existing_id = existing.get("id", "")
+                logger.info(
+                    "API '%s' v%s already exists (id=%s), returning existing",
+                    api_name,
+                    api_version,
+                    existing_id,
+                )
+                return AdapterResult(success=True, resource_id=existing_id, data=existing)
+
             result = await self._svc.import_api(
                 api_name=api_name,
                 api_version=api_version,

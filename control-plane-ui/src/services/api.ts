@@ -250,6 +250,13 @@ class ApiService {
     return data.items ?? data;
   }
 
+  async getAdminApis(page = 1, pageSize = 100): Promise<API[]> {
+    const { data } = await this.client.get('/v1/admin/catalog/apis', {
+      params: { page, page_size: pageSize },
+    });
+    return data.items ?? data;
+  }
+
   async getApi(tenantId: string, apiId: string): Promise<API> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis/${apiId}`);
     return data;

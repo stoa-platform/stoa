@@ -368,8 +368,18 @@
 
 ## Cycle 14 (Mar 30 – Apr 5) — CURRENT
 
-**Scope**: ~371 pts | **Done**: 31 pts | **In Review**: 128 pts | **In Progress**: 53 pts
+**Scope**: ~371 pts | **Done**: 52 pts | **In Review**: 128 pts | **In Progress**: 53 pts
 **Theme**: STOA Connect + Dashboard UX + Health Checks + Real Data
+
+### Done
+
+- [x] fix(api): duplicate personal tenant cleanup (2026-04-02) — DB-only (no PR)
+  - Archived 8 duplicate tenants, fixed `owner_user_id` email→UUID on 8 originals
+- [x] CAB-1938: fix(api): slug api_id + name-version uniqueness — PRs #2106, #2109, #2111
+- [x] CAB-1936: [MEGA] STC + Security Plugins — competitive response to IBM Context Forge (21 pts, P3)
+  - Phase 1: ADR-058 + federation benchmark — PR #2107
+  - Phase 2+3: STC plugin + PII filter + secrets detection — PR #2108
+- [x] CAB-1935: chore(ci): cross-repo service port drift detection (5 pts, P2) — PR #2079
 
 ### In Review
 
@@ -397,7 +407,6 @@
 - [ ] CAB-1887: fix(ui): [MEGA] Gateway Dashboard Inconsistencies (21 pts, P1-Urgent)
 - [ ] CAB-1917: [MEGA] fix(api): Fix API creation and deployment pipeline (21 pts, P2)
 - [ ] CAB-1867: chore(ops): Bus Factor Mitigation — Break Glass + Bootstrap (13 pts, P2)
-- [ ] CAB-1935: chore(ci): cross-repo service port drift detection (5 pts, P2) — Council 9.00/10
 - [ ] CAB-1855: [MEGA] feat(gateway): constant real data in prod — 5 APIs + traffic (21 pts, P2) — subs 1858 (In Review), 1859 (In Progress)
 - [ ] CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (21 pts, P2) — Council 8.25/10
   - **Phase 0** [owner: —]

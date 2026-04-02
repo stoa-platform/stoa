@@ -468,6 +468,14 @@ func (w *WebMethodsAdapter) DeleteAPI(ctx context.Context, adminURL string, apiN
 // openAPI31Re matches OpenAPI 3.1.x version strings.
 var openAPI31Re = regexp.MustCompile(`"openapi"\s*:\s*"3\.1\.\d+"`)
 
+// sanitizeWMName removes characters that webMethods rejects in apiName.
+// webMethods only accepts alphanumeric, hyphens, underscores, and dots.
+var wmNameRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+
+func sanitizeWMName(name string) string {
+	return wmNameRe.ReplaceAllString(name, "-")
+}
+
 // downgradeOpenAPI31 rewrites an OpenAPI 3.1.x spec to 3.0.3.
 // webMethods only accepts OpenAPI 3.0.x.
 func downgradeOpenAPI31(spec []byte) []byte {
@@ -475,6 +483,38 @@ func downgradeOpenAPI31(spec []byte) []byte {
 		return spec
 	}
 	return openAPI31Re.ReplaceAll(spec, []byte(`"openapi": "3.0.3"`))
+}
+
+// fixExternalDocs wraps externalDocs object into an array if needed.
+// webMethods expects externalDocs as an array, but OpenAPI/Swagger specs
+// define it as a single object. This causes deserialization errors on PUT.
+func fixExternalDocs(spec []byte) []byte {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
+		return spec
+	}
+
+	ed, ok := parsed["externalDocs"]
+	if !ok {
+		return spec
+	}
+
+	// If it's already an array, no fix needed
+	if _, isArray := ed.([]interface{}); isArray {
+		return spec
+	}
+
+	// If it's an object, wrap in array
+	if obj, isObj := ed.(map[string]interface{}); isObj {
+		parsed["externalDocs"] = []interface{}{obj}
+		fixed, err := json.Marshal(parsed)
+		if err != nil {
+			return spec
+		}
+		return fixed
+	}
+
+	return spec
 }
 
 // SyncRoutes pushes CP routes to webMethods via REST API import.
@@ -487,7 +527,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 	}
 
 	for _, route := range routes {
-		wmName := "stoa-" + route.Name
+		wmName := sanitizeWMName("stoa-" + route.Name)
 
 		// Deactivated route: deactivate on gateway if it exists
 		if !route.Activated {
@@ -506,10 +546,11 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			}
 		}
 
-		// Downgrade OpenAPI 3.1 spec if present
+		// Fix spec compatibility issues before sending to webMethods
 		spec := route.OpenAPISpec
 		if len(spec) > 0 {
 			spec = downgradeOpenAPI31(spec)
+			spec = fixExternalDocs(spec)
 		}
 
 		var apiPayload map[string]interface{}
@@ -581,7 +622,11 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		}
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 			log.Printf("webmethods: sync %s failed (%d): %s", wmName, resp.StatusCode, string(respBody))
-			return fmt.Errorf("webmethods api sync failed (%d)", resp.StatusCode)
+			detail := string(respBody)
+			if len(detail) > 300 {
+				detail = detail[:300]
+			}
+			return fmt.Errorf("webmethods api sync failed (%d): %s", resp.StatusCode, detail)
 		}
 
 		// Determine API ID for post-deploy verification

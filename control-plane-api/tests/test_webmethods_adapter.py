@@ -106,6 +106,7 @@ class TestWebMethodsLifecycle:
 class TestWebMethodsAPIs:
     async def test_sync_api_success(self) -> None:
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(
             return_value={"apiResponse": {"api": {"id": "api-abc"}}}
         )
@@ -133,6 +134,7 @@ class TestWebMethodsAPIs:
 
     async def test_sync_api_uses_api_definition_when_no_url(self) -> None:
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(
             return_value={"apiResponse": {"api": {"id": "api-def"}}}
         )
@@ -154,6 +156,7 @@ class TestWebMethodsAPIs:
 
     async def test_sync_api_default_type_is_openapi(self) -> None:
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(return_value={"apiResponse": {"api": {"id": "x"}}})
 
         await adapter.sync_api(
@@ -166,6 +169,7 @@ class TestWebMethodsAPIs:
 
     async def test_sync_api_missing_id_returns_empty_string(self) -> None:
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(return_value={})
 
         result = await adapter.sync_api({"apiName": "api", "apiVersion": "1"}, tenant_id="t")
@@ -176,6 +180,7 @@ class TestWebMethodsAPIs:
     async def test_sync_api_snake_case_fields(self) -> None:
         """sync_api accepts snake_case fields from build_desired_state (deployment orchestration)."""
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(
             return_value={"apiResponse": {"api": {"id": "api-xyz"}}}
         )
@@ -209,6 +214,7 @@ class TestWebMethodsAPIs:
     async def test_sync_api_snake_case_without_spec_uses_backend_url(self) -> None:
         """When openapi_spec is absent, backend_url is used as openapi_url."""
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(
             return_value={"apiResponse": {"api": {"id": "api-url"}}}
         )
@@ -229,6 +235,7 @@ class TestWebMethodsAPIs:
 
     async def test_sync_api_exception(self) -> None:
         adapter = _make_adapter()
+        adapter._svc.list_apis = AsyncMock(return_value=[])
         adapter._svc.import_api = AsyncMock(side_effect=RuntimeError("import failed"))
 
         result = await adapter.sync_api({"apiName": "api", "apiVersion": "1"}, tenant_id="t")

@@ -139,7 +139,9 @@ class TestSyncAll:
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
 
-        with patch.object(svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))) as mock_parallel, patch.object(
+        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
+            svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))
+        ) as mock_parallel, patch.object(
             svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)
         ), patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})):
             status = await svc.sync_all()
@@ -189,7 +191,9 @@ class TestSyncAll:
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
 
-        with patch.object(svc, "_sync_tenant_apis_parallel", side_effect=mock_parallel), patch.object(
+        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
+            svc, "_sync_tenant_apis_parallel", side_effect=mock_parallel
+        ), patch.object(
             svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)
         ), patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})):
             status = await svc.sync_all()
@@ -212,9 +216,9 @@ class TestSyncAll:
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
         mcp_mock = AsyncMock(return_value={"servers_synced": 3, "servers_failed": 0})
 
-        with patch.object(svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)), patch.object(
-            svc, "sync_mcp_servers", mcp_mock
-        ):
+        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
+            svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)
+        ), patch.object(svc, "sync_mcp_servers", mcp_mock):
             await svc.sync_all()
 
         mcp_mock.assert_awaited_once()
@@ -232,7 +236,9 @@ class TestSyncAll:
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
         delete_mock = AsyncMock(return_value=2)
 
-        with patch.object(svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))), patch.object(
+        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
+            svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))
+        ), patch.object(
             svc, "_soft_delete_missing_apis", delete_mock
         ), patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})):
             await svc.sync_all()

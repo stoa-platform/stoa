@@ -55,6 +55,15 @@ type SyncedPolicyResult struct {
 	Error    string `json:"error,omitempty"`
 }
 
+// SyncStep records a single step in a sync pipeline for observability.
+type SyncStep struct {
+	Name        string `json:"name"`
+	Status      string `json:"status"` // "success", "failed", "skipped"
+	StartedAt   string `json:"started_at"`
+	CompletedAt string `json:"completed_at,omitempty"`
+	Detail      string `json:"detail,omitempty"`
+}
+
 // FetchConfig pulls the gateway config (policies, deployments) from the CP.
 func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error) {
 	if a.gatewayID == "" {
@@ -188,8 +197,9 @@ type RouteSyncAckPayload struct {
 // SyncedRouteResult reports the sync result for one route deployment.
 type SyncedRouteResult struct {
 	DeploymentID string `json:"deployment_id"`
-	Status       string `json:"status"` // "applied", "failed"
-	Error        string `json:"error,omitempty"`
+	Status       string     `json:"status"` // "applied", "failed"
+	Error        string     `json:"error,omitempty"`
+	Steps        []SyncStep `json:"steps,omitempty"`
 }
 
 // ReportRouteSyncAck sends route sync results to the CP.
@@ -395,6 +405,18 @@ func (a *Agent) StartSync(ctx context.Context, adapter adapters.GatewayAdapter, 
 			}
 		}
 	}()
+}
+
+// newSyncStep creates a completed SyncStep with the current timestamp.
+func newSyncStep(name, status, detail string) SyncStep {
+	now := time.Now().UTC().Format(time.RFC3339)
+	return SyncStep{
+		Name:        name,
+		Status:      status,
+		StartedAt:   now,
+		CompletedAt: now,
+		Detail:      detail,
+	}
 }
 
 // getStringConfig safely extracts a string value from a config map.

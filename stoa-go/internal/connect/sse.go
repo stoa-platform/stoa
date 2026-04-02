@@ -195,6 +195,11 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 	)
 	defer span.End()
 
+	var steps []SyncStep
+
+	// Step: agent_received — SSE event consumed
+	steps = append(steps, newSyncStep("agent_received", "success", ""))
+
 	var event DeploymentEvent
 	if err := json.Unmarshal(data, &event); err != nil {
 		log.Printf("sse-stream: decode deployment event error: %v", err)
@@ -205,18 +210,21 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 	span.SetAttributes(attribute.String("stoa.deployment_id", event.DeploymentID))
 	log.Printf("sse-stream: received deployment %s (status=%s)", event.DeploymentID, event.SyncStatus)
 
+	// Step: adapter_connected — gateway adapter ready
+	steps = append(steps, newSyncStep("adapter_connected", "success", ""))
+
 	// Parse desired_state into a Route for the adapter
 	var route adapters.Route
 	if err := json.Unmarshal(event.DesiredState, &route); err != nil {
 		log.Printf("sse-stream: decode desired_state error: %v", err)
 		span.RecordError(err)
-		// Report failure
-		a.reportDeploymentResult(ctx, event.DeploymentID, "failed", fmt.Sprintf("decode desired_state: %v", err))
+		steps = append(steps, newSyncStep("api_synced", "failed", fmt.Sprintf("decode desired_state: %v", err)))
+		a.reportDeploymentResultWithSteps(ctx, event.DeploymentID, "failed", fmt.Sprintf("decode desired_state: %v", err), steps)
 		return
 	}
 	route.DeploymentID = event.DeploymentID
 
-	// Apply to gateway
+	// Apply to gateway — Step: api_synced
 	syncErr := adapter.SyncRoutes(ctx, adminURL, []adapters.Route{route})
 
 	status := "applied"
@@ -227,20 +235,28 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 		span.RecordError(syncErr)
 		span.SetStatus(codes.Error, "sync failed")
 		log.Printf("sse-stream: sync deployment %s failed: %v", event.DeploymentID, syncErr)
+		steps = append(steps, newSyncStep("api_synced", "failed", syncErr.Error()))
 	} else {
 		span.SetStatus(codes.Ok, "synced")
 		log.Printf("sse-stream: sync deployment %s applied", event.DeploymentID)
+		steps = append(steps, newSyncStep("api_synced", "success", ""))
 	}
 
-	a.reportDeploymentResult(ctx, event.DeploymentID, status, errMsg)
+	a.reportDeploymentResultWithSteps(ctx, event.DeploymentID, status, errMsg, steps)
 }
 
-// reportDeploymentResult sends a single deployment ack via route-sync-ack.
+// reportDeploymentResult sends a single deployment ack via route-sync-ack (without steps).
 func (a *Agent) reportDeploymentResult(ctx context.Context, deploymentID, status, errMsg string) {
+	a.reportDeploymentResultWithSteps(ctx, deploymentID, status, errMsg, nil)
+}
+
+// reportDeploymentResultWithSteps sends a single deployment ack with step trace via route-sync-ack.
+func (a *Agent) reportDeploymentResultWithSteps(ctx context.Context, deploymentID, status, errMsg string, steps []SyncStep) {
 	result := SyncedRouteResult{
 		DeploymentID: deploymentID,
 		Status:       status,
 		Error:        errMsg,
+		Steps:        steps,
 	}
 	if ackErr := a.ReportRouteSyncAck(ctx, []SyncedRouteResult{result}); ackErr != nil {
 		log.Printf("sse-stream: ack error for %s: %v", deploymentID, ackErr)

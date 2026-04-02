@@ -314,6 +314,130 @@ func TestRunRouteSyncNoAckWithoutDeploymentIDs(t *testing.T) {
 	}
 }
 
+func TestRunRouteSyncIncludesStepsInAck(t *testing.T) {
+	var ackPayload RouteSyncAckPayload
+
+	routes := []adapters.Route{
+		{ID: "r1", Name: "api-a", DeploymentID: "dep-1", PathPrefix: "/a", BackendURL: "http://svc-a:8080", Activated: true},
+	}
+
+	cpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/internal/gateways/routes":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(routes)
+		case r.URL.Path == "/v1/internal/gateways/gw-test/route-sync-ack" && r.Method == "POST":
+			_ = json.NewDecoder(r.Body).Decode(&ackPayload)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer cpServer.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: cpServer.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-test"
+
+	adapter := &mockSyncAdapter{}
+	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
+
+	if len(ackPayload.SyncedRoutes) != 1 {
+		t.Fatalf("expected 1 ack result, got %d", len(ackPayload.SyncedRoutes))
+	}
+
+	steps := ackPayload.SyncedRoutes[0].Steps
+	if len(steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(steps))
+	}
+
+	expectedNames := []string{"agent_received", "adapter_connected", "api_synced"}
+	for i, name := range expectedNames {
+		if steps[i].Name != name {
+			t.Errorf("step %d: expected name %s, got %s", i, name, steps[i].Name)
+		}
+		if steps[i].Status != "success" {
+			t.Errorf("step %d: expected status success, got %s", i, steps[i].Status)
+		}
+		if steps[i].StartedAt == "" {
+			t.Errorf("step %d: expected non-empty started_at", i)
+		}
+	}
+}
+
+func TestRunRouteSyncStepsShowFailure(t *testing.T) {
+	var ackPayload RouteSyncAckPayload
+
+	routes := []adapters.Route{
+		{ID: "r1", Name: "api-a", DeploymentID: "dep-1", PathPrefix: "/a", BackendURL: "http://svc-a:8080", Activated: true},
+	}
+
+	cpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/internal/gateways/routes":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(routes)
+		case r.URL.Path == "/v1/internal/gateways/gw-test/route-sync-ack" && r.Method == "POST":
+			_ = json.NewDecoder(r.Body).Decode(&ackPayload)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer cpServer.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: cpServer.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-test"
+
+	adapter := &mockSyncAdapter{syncRoutesErr: fmt.Errorf("gateway unreachable")}
+	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
+
+	if len(ackPayload.SyncedRoutes) != 1 {
+		t.Fatalf("expected 1 ack result, got %d", len(ackPayload.SyncedRoutes))
+	}
+
+	steps := ackPayload.SyncedRoutes[0].Steps
+	if len(steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(steps))
+	}
+
+	// First two steps succeed, api_synced fails
+	if steps[0].Status != "success" || steps[1].Status != "success" {
+		t.Error("expected first two steps to succeed")
+	}
+	if steps[2].Name != "api_synced" {
+		t.Errorf("expected step 3 name api_synced, got %s", steps[2].Name)
+	}
+	if steps[2].Status != "failed" {
+		t.Errorf("expected step 3 status failed, got %s", steps[2].Status)
+	}
+	if steps[2].Detail == "" {
+		t.Error("expected step 3 detail to contain error message")
+	}
+}
+
+func TestSyncStepOmittedWhenEmpty(t *testing.T) {
+	// Verify omitempty: SyncedRouteResult without steps serializes without "steps" key
+	result := SyncedRouteResult{
+		DeploymentID: "dep-1",
+		Status:       "applied",
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	var m map[string]interface{}
+	_ = json.Unmarshal(data, &m)
+	if _, ok := m["steps"]; ok {
+		t.Error("expected 'steps' key to be omitted when empty")
+	}
+}
+
 func TestRouteSyncConfigFromEnv(t *testing.T) {
 	cfg := RouteSyncConfigFromEnv()
 	if cfg.Interval != 30*1e9 { // 30 seconds in nanoseconds

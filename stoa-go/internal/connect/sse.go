@@ -245,11 +245,6 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 	a.reportDeploymentResultWithSteps(ctx, event.DeploymentID, status, errMsg, steps)
 }
 
-// reportDeploymentResult sends a single deployment ack via route-sync-ack (without steps).
-func (a *Agent) reportDeploymentResult(ctx context.Context, deploymentID, status, errMsg string) {
-	a.reportDeploymentResultWithSteps(ctx, deploymentID, status, errMsg, nil)
-}
-
 // reportDeploymentResultWithSteps sends a single deployment ack with step trace via route-sync-ack.
 func (a *Agent) reportDeploymentResultWithSteps(ctx context.Context, deploymentID, status, errMsg string, steps []SyncStep) {
 	result := SyncedRouteResult{

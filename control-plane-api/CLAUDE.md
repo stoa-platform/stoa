@@ -37,6 +37,13 @@ ruff check . && black --check .        # Lint
 mypy src/                              # Type check
 ```
 
+## Local Test Setup
+- Tests run without external services — conftest.py mocks Kafka, Keycloak, GitLab, ArgoCD
+- `KAFKA_ENABLED=false` is set in conftest (prevents any Kafka connection attempt)
+- `@pytest.mark.integration` tests are auto-skipped when `DATABASE_URL` is not set
+- To run integration tests locally: `DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/stoa_test pytest -m integration`
+- OpenSearch tests are always ignored: `--ignore=tests/test_opensearch.py`
+
 ## Migrations
 ```bash
 cd alembic/

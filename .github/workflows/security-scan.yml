@@ -35,7 +35,7 @@ jobs:
   # ==========================================================================
   sast-rust:
     name: SAST Rust (Clippy)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     defaults:
       run:
         working-directory: stoa-gateway
@@ -79,7 +79,7 @@ jobs:
   # ==========================================================================
   sast-python:
     name: SAST Python (Bandit)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -120,7 +120,7 @@ jobs:
   # ==========================================================================
   sast-javascript:
     name: SAST JavaScript (ESLint)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -190,7 +190,7 @@ jobs:
   # ==========================================================================
   dependency-scan:
     name: Dependency Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     continue-on-error: true  # Tracked vulnerabilities, not blocking
     steps:
       - name: Checkout repository
@@ -255,7 +255,7 @@ jobs:
   # ==========================================================================
   secret-scan:
     name: Secret Scan (Gitleaks)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -275,7 +275,7 @@ jobs:
   # ==========================================================================
   container-scan:
     name: Container Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 30  # Rust build (~10 min) + Trivy scan
     continue-on-error: true  # Base image vulns — tracked, not blocking
     strategy:

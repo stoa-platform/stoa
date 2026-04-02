@@ -3355,6 +3355,9 @@ export interface paths {
          *
          *     Internal endpoint — no JWT auth required (service-to-service on internal network).
          *     Used by stoa-gateway to discover APIs and register them as MCP tools.
+         *
+         *     If gateway_id is provided, only APIs assigned to that gateway are returned.
+         *     Without gateway_id, all published APIs are returned (backward compatible).
          */
         get: operations["internal_list_apis"];
         put?: never;
@@ -13298,6 +13301,10 @@ export interface components {
             sync_error?: string | null;
             /** Sync Status */
             sync_status: string;
+            /** Sync Steps */
+            sync_steps?: {
+                [key: string]: unknown;
+            }[] | null;
             /**
              * Updated At
              * Format: date-time
@@ -13440,6 +13447,11 @@ export interface components {
              * @default false
              */
             protected: boolean;
+            /**
+             * Public Url
+             * @description Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)
+             */
+            public_url?: string | null;
             /** Status */
             status: string;
             /** Tags */
@@ -13627,6 +13639,11 @@ export interface components {
              * @description Gateway mode: edge_mcp, sidecar, proxy, shadow
              */
             mode: string;
+            /**
+             * Public Url
+             * @description Public DNS URL of this gateway for Console display (CAB-1940)
+             */
+            public_url?: string | null;
             /**
              * Target Gateway Url
              * @description URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)
@@ -18641,6 +18658,13 @@ export interface components {
              * @description Sync result: applied or failed
              */
             status: string;
+            /**
+             * Steps
+             * @description Ordered sync step trace (optional)
+             */
+            steps?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /**
          * SystemInfoResponse
@@ -26471,7 +26495,10 @@ export interface operations {
     };
     internal_list_apis: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter APIs assigned to this gateway (CAB-1940) */
+                gateway_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -26485,6 +26512,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InternalAPIsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

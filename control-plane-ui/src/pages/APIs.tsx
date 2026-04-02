@@ -695,7 +695,10 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     version: api?.version || '1.0.0',
     description: api?.description || '',
     backend_url: api?.backend_url || '',
-    openapi_spec: '',
+    openapi_spec:
+      api?.openapi_spec && typeof api.openapi_spec === 'object'
+        ? JSON.stringify(api.openapi_spec, null, 2)
+        : (api?.openapi_spec as string) || '',
     tags: api?.tags || [],
     portal_promoted: api?.portal_promoted || api?.tags?.includes('portal:published') || false,
   });

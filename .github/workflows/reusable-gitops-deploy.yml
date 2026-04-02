@@ -24,7 +24,7 @@ on:
         required: true
         type: string
       environment:
-        description: 'Target environment (dev, staging, prod)'
+        description: 'Target environment (dev, prod)'
         required: false
         type: string
         default: 'dev'

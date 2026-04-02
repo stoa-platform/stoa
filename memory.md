@@ -1,10 +1,26 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-30 (ADR-059 Deploy Single Path MEGA — 4 PRs merged)
+> Derniere MAJ: 2026-04-02 (duplicate tenant cleanup + CAB-1938 upsert fix)
 
 ## ✅ DONE
 
 > Full history: 2500+ pts across 160+ issues. See Linear for complete audit trail.
+
+### Cycle 14 (Mar 30+)
+- ✅ fix(api): duplicate personal tenant cleanup (2026-04-02)
+  - Root cause: original tenants (12/03) stored email as `owner_user_id`, fix (24/03) stored UUID → index didn't detect duplicates
+  - Fix: archived 8 doublons (`free-*-{hex}`), updated 8 originals (`owner_user_id` email→UUID)
+  - Migration 051 + `ix_tenants_personal_owner_unique` index confirmed active in prod
+  - Data preserved: free-aech (10 APIs, 1 sub, 22 chats), free-i-r0k (1 chat), free-torpedo (2 chats)
+- ✅ CAB-1938: fix(api) slug api_id + name-version uniqueness — PRs #2106, #2109, #2111
+  - Migration 084: partial unique indexes on (tenant_id, api_name, version) WHERE deleted_at IS NULL
+  - Slug generation: `_slugify()` auto-generates URL-safe api_id from name
+  - 22 regression tests (slugify, endpoint slug generation, 409 message, soft-delete, versions)
+- ✅ CAB-1936: [MEGA] STC + Security Plugins — competitive response to IBM Context Forge (21 pts) — Council 6.00/10
+  - Phase 1: ADR-058 + federation benchmark — PR #2107
+  - Phase 2: STC compression plugin + SDK body extension — PR #2108
+  - Phase 3: PII filter + secrets detection plugins — PR #2110 (squashed into #2108)
+  - 6 builtin plugins total, 2142 gateway tests green, IBAN added to PiiScanner
 
 ### Cycle 12 (Mar 3+)
 - ✅ CAB-1930: [MEGA] Deploy Single Path — SSE replaces SyncEngine (34 pts) — ADR-059, Council 8.00/10
@@ -55,6 +71,10 @@
 
 ## 🔴 IN PROGRESS
 
+CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
+- PRs #2106, #2109, #2111 merged
+- Pending: PR for align upsert conflict clauses (commit 9a7a6eb8 on branch)
+
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 23/23 PASS
 - [ ] Repetitions + video backup (human-only)
@@ -82,7 +102,6 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 
 ## 📋 NEXT
 
-- [ ] CAB-1935: chore(ci) Cross-repo service port drift detection (5 pts) — Council 9.00/10
 **Human-only**: CAB-1132 Business Model (8), CAB-1126 Video (8), CAB-1125 Punchline (8)
 **Deferred**: CAB-1473 WASM (21, 5.00), CAB-1462 ErrorSnap (21, 5.75), CAB-1512 Federation (21, 5.50)
 
@@ -92,7 +111,7 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
-- Test suite: 5700+ tests, 91% CP-API coverage, 1330+ gateway tests
+- Test suite: 5700+ tests, 91% CP-API coverage, 2142 gateway tests
 - Arena L0 scores: STOA 83.90 | Gravitee 46.72 | Kong 5.46
 - Arena L1 (Enterprise): STOA + agentgateway only (Kong/Gravitee removed PR #1620)
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB), Go daemon, Infisical secrets

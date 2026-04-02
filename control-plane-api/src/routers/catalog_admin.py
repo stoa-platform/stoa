@@ -499,3 +499,65 @@ async def update_api_audience(
         audience=payload.audience,
         updated_by=user.username,
     )
+
+
+# ============================================================================
+# Cross-Tenant API Listing (Admin)
+# ============================================================================
+
+
+class AdminAPIResponse(BaseModel):
+    """API response for cross-tenant admin listing."""
+
+    id: str
+    tenant_id: str
+    name: str
+    display_name: str
+    version: str
+    description: str
+    status: str = "draft"
+    tags: list[str] = []
+
+
+class AdminAPIPaginatedResponse(BaseModel):
+    items: list[AdminAPIResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/apis", response_model=AdminAPIPaginatedResponse)
+async def list_all_apis(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=100, ge=1, le=500),
+    tenant_id: str | None = Query(default=None, description="Filter by tenant (omit for all)"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """List APIs across all tenants (admin only).
+
+    Pass tenant_id to filter by a specific tenant, or omit for cross-tenant view.
+    """
+    _require_admin(user)
+
+    repo = CatalogRepository(db)
+    apis, total = await repo.get_portal_apis(
+        tenant_id=tenant_id,
+        include_unpublished=True,
+        page=page,
+        page_size=page_size,
+    )
+    items = [
+        AdminAPIResponse(
+            id=api.api_id,
+            tenant_id=api.tenant_id,
+            name=api.api_id,
+            display_name=(api.api_metadata or {}).get("display_name") or api.api_name or api.api_id,
+            version=api.version or "1.0.0",
+            description=(api.api_metadata or {}).get("description", ""),
+            status=api.status or "draft",
+            tags=api.tags or [],
+        )
+        for api in apis
+    ]
+    return AdminAPIPaginatedResponse(items=items, total=total, page=page, page_size=page_size)

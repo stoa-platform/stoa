@@ -517,6 +517,53 @@ func fixExternalDocs(spec []byte) []byte {
 	return spec
 }
 
+// fixSecuritySchemeTypes uppercases securityScheme enum values.
+// webMethods expects OAUTH2/HTTP/APIKEY/OPENIDCONNECT and HEADER/QUERY/COOKIE,
+// but OpenAPI specs use lowercase: oauth2, http, apiKey, header, query.
+func fixSecuritySchemeTypes(spec []byte) []byte {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
+		return spec
+	}
+
+	components, ok := parsed["components"].(map[string]interface{})
+	if !ok {
+		return spec
+	}
+	schemes, ok := components["securitySchemes"].(map[string]interface{})
+	if !ok {
+		return spec
+	}
+
+	modified := false
+	for name, v := range schemes {
+		scheme, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, field := range []string{"type", "in"} {
+			if val, ok := scheme[field].(string); ok {
+				upper := strings.ToUpper(val)
+				if upper != val {
+					scheme[field] = upper
+					modified = true
+				}
+			}
+		}
+		schemes[name] = scheme
+	}
+
+	if !modified {
+		return spec
+	}
+
+	fixed, err := json.Marshal(parsed)
+	if err != nil {
+		return spec
+	}
+	return fixed
+}
+
 // SyncRoutes pushes CP routes to webMethods via REST API import.
 // Idempotent: checks if API exists by name, uses PUT to update if so, POST only for new APIs.
 // Deactivated routes are deactivated on the gateway. Skips unchanged routes via SpecHash.
@@ -525,6 +572,8 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 	if err != nil {
 		return fmt.Errorf("list existing apis: %w", err)
 	}
+
+	var syncErrors []string
 
 	for _, route := range routes {
 		wmName := sanitizeWMName("stoa-" + route.Name)
@@ -551,6 +600,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if len(spec) > 0 {
 			spec = downgradeOpenAPI31(spec)
 			spec = fixExternalDocs(spec)
+			spec = fixSecuritySchemeTypes(spec)
 		}
 
 		var apiPayload map[string]interface{}
@@ -592,6 +642,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if err != nil {
 			return fmt.Errorf("marshal webmethods api: %w", err)
 		}
+		data = fixExternalDocs(data)
 
 		var method string
 		var apiURL string
@@ -626,7 +677,8 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			if len(detail) > 300 {
 				detail = detail[:300]
 			}
-			return fmt.Errorf("webmethods api sync failed (%d): %s", resp.StatusCode, detail)
+			syncErrors = append(syncErrors, fmt.Sprintf("%s: %d — %s", wmName, resp.StatusCode, detail))
+			continue
 		}
 
 		// Determine API ID for post-deploy verification
@@ -665,6 +717,10 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if route.SpecHash != "" {
 			w.syncedHashes[wmName] = route.SpecHash
 		}
+	}
+
+	if len(syncErrors) > 0 {
+		return fmt.Errorf("webmethods api sync failed (%d/%d): %s", len(syncErrors), len(routes), strings.Join(syncErrors, "; "))
 	}
 
 	return nil

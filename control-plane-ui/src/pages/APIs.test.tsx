@@ -71,6 +71,34 @@ vi.mock('../services/api', () => ({
         updated_at: '2024-01-10T00:00:00Z',
       },
     ]),
+    getAdminApis: vi.fn().mockResolvedValue([
+      {
+        id: 'api-1',
+        tenant_id: 'oasis-gunters',
+        name: 'payment-api',
+        display_name: 'Payment API',
+        version: '1.0.0',
+        description: 'Handles all payment processing',
+        backend_url: 'https://payments.example.com',
+        status: 'published',
+        deployed_dev: true,
+        deployed_staging: false,
+        tags: ['payments'],
+      },
+      {
+        id: 'api-2',
+        tenant_id: 'oasis-gunters',
+        name: 'user-api',
+        display_name: 'User API',
+        version: '2.0.0',
+        description: 'User management service',
+        backend_url: 'https://users.example.com',
+        status: 'draft',
+        deployed_dev: false,
+        deployed_staging: false,
+        tags: ['users'],
+      },
+    ]),
     createApi: vi.fn(),
     updateApi: vi.fn(),
     deleteApi: vi.fn(),
@@ -167,10 +195,10 @@ describe('APIs', () => {
     });
   });
 
-  it('renders the tenant selector', async () => {
+  it('renders the tenant selector with All tenants for admin', async () => {
     renderAPIs();
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Oasis Gunters')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('All tenants')).toBeInTheDocument();
     });
   });
 
@@ -190,11 +218,11 @@ describe('APIs', () => {
     expect(screen.getByText('User API')).toBeInTheDocument();
   });
 
-  it('renders the tenant selector with first tenant auto-selected', async () => {
+  it('renders the tenant selector with first tenant for non-admin', async () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('viewer'));
     renderAPIs();
     await waitFor(() => {
-      const select = screen.getByDisplayValue('Oasis Gunters');
-      expect(select).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Oasis Gunters')).toBeInTheDocument();
     });
   });
 

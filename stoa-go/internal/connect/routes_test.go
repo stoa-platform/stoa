@@ -406,7 +406,6 @@ func TestRunRouteSyncStepsShowFailure(t *testing.T) {
 		t.Fatalf("expected 3 steps, got %d", len(steps))
 	}
 
-	// First two steps succeed, api_synced fails
 	if steps[0].Status != "success" || steps[1].Status != "success" {
 		t.Error("expected first two steps to succeed")
 	}
@@ -422,7 +421,6 @@ func TestRunRouteSyncStepsShowFailure(t *testing.T) {
 }
 
 func TestSyncStepOmittedWhenEmpty(t *testing.T) {
-	// Verify omitempty: SyncedRouteResult without steps serializes without "steps" key
 	result := SyncedRouteResult{
 		DeploymentID: "dep-1",
 		Status:       "applied",

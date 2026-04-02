@@ -270,7 +270,6 @@ func TestSSESyncDeploymentIncludesSteps(t *testing.T) {
 
 	_ = agent.streamEvents(ctx, adapter, "http://localhost:8080")
 
-	// Verify steps in ack payload
 	if len(ackPayload.SyncedRoutes) != 1 {
 		t.Fatalf("expected 1 ack result, got %d", len(ackPayload.SyncedRoutes))
 	}

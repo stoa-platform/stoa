@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { apiService } from '../../services/api';
@@ -158,6 +158,7 @@ export function GatewayList() {
   const { isReady, hasRole } = useAuth();
   const isCpiAdmin = hasRole('cpi-admin');
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -453,7 +454,7 @@ export function GatewayList() {
                 env={env}
                 gateways={items}
                 stats={envStats[env]}
-                onSelect={setSelectedGateway}
+                onSelect={(gw) => navigate(`/gateways/${gw.id}`)}
                 onHealthCheck={handleHealthCheck}
                 onDelete={handleDelete}
                 onRestore={handleRestore}

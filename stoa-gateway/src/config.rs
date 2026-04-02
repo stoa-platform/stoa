@@ -268,6 +268,12 @@ pub struct Config {
     #[serde(default)]
     pub target_gateway_url: Option<String>,
 
+    /// Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev).
+    /// Sent to Control Plane during auto-registration for Console display (CAB-1940).
+    /// Env: STOA_GATEWAY_PUBLIC_URL
+    #[serde(default)]
+    pub gateway_public_url: Option<String>,
+
     // === Native Tools (Phase 1) ===
     /// Enable native tool implementations (default: true)
     /// Set STOA_NATIVE_TOOLS_ENABLED=false to fallback to proxy mode
@@ -1414,6 +1420,7 @@ impl Default for Config {
             advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),
             target_gateway_url: None,
+            gateway_public_url: None,
             native_tools_enabled: default_native_tools_enabled(),
             kafka_enabled: false,
             kafka_brokers: default_kafka_brokers(),

@@ -1,0 +1,278 @@
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import {
+  ArrowLeft,
+  ExternalLink,
+  Server,
+  Zap,
+  Globe,
+  Activity,
+  GitBranch,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react';
+import type { GatewayInstance } from '../../types';
+
+const MODE_LABELS: Record<string, string> = {
+  'edge-mcp': 'Edge MCP',
+  sidecar: 'STOA Link',
+  proxy: 'Proxy',
+  shadow: 'Shadow',
+  connect: 'Connect',
+};
+
+const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
+  online: { color: 'text-green-600 bg-green-50', icon: CheckCircle2 },
+  offline: { color: 'text-red-600 bg-red-50', icon: XCircle },
+  degraded: { color: 'text-amber-600 bg-amber-50', icon: AlertTriangle },
+  maintenance: { color: 'text-blue-600 bg-blue-50', icon: Clock },
+};
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+export function GatewayDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { isReady } = useAuth();
+
+  const { data: gateway, isLoading } = useQuery<GatewayInstance>({
+    queryKey: ['gateway', id],
+    queryFn: () => apiService.getGatewayInstance(id!),
+    enabled: isReady && !!id,
+  });
+
+  const { data: deploymentsData } = useQuery({
+    queryKey: ['gateway-deployments', id],
+    queryFn: () =>
+      apiService.getGatewayDeployments({
+        gateway_instance_id: id,
+        page_size: 100,
+      }),
+    enabled: isReady && !!id,
+  });
+
+  if (isLoading || !gateway) {
+    return (
+      <div className="p-6 space-y-4">
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    );
+  }
+
+  const hd = (gateway.health_details || {}) as Record<string, unknown>;
+  const statusCfg = STATUS_CONFIG[gateway.status] || STATUS_CONFIG.offline;
+  const StatusIcon = statusCfg.icon;
+  const deployments = deploymentsData?.items || [];
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/gateways')}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5 text-gray-500" />
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-gray-900">{gateway.display_name}</h1>
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusCfg.color}`}
+            >
+              <StatusIcon className="h-3 w-3" />
+              {gateway.status}
+            </span>
+            {gateway.mode && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                {MODE_LABELS[gateway.mode] || gateway.mode}
+              </span>
+            )}
+            {gateway.source === 'argocd' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">
+                <GitBranch className="h-3 w-3" />
+                GitOps
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 font-mono mt-1">{gateway.name}</p>
+        </div>
+        {gateway.public_url && (
+          <a
+            href={gateway.public_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Globe className="h-4 w-4" />
+            Open Gateway
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+
+      {/* Configuration */}
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Server className="h-5 w-5 text-gray-400" />
+          Configuration
+        </h2>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          <ConfigItem label="Admin URL" value={gateway.base_url} isLink />
+          {gateway.public_url && (
+            <ConfigItem label="Public URL" value={gateway.public_url} isLink />
+          )}
+          {gateway.target_gateway_url && (
+            <ConfigItem label="Target Gateway" value={gateway.target_gateway_url} isLink />
+          )}
+          <ConfigItem label="Environment" value={gateway.environment} />
+          <ConfigItem label="Type" value={gateway.gateway_type} />
+          {gateway.version && <ConfigItem label="Version" value={gateway.version} />}
+          <ConfigItem label="Source" value={gateway.source || 'manual'} />
+          {gateway.tenant_id && <ConfigItem label="Tenant" value={gateway.tenant_id} />}
+        </dl>
+        {gateway.capabilities.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <dt className="text-sm font-medium text-gray-500 mb-2">Capabilities</dt>
+            <div className="flex flex-wrap gap-2">
+              {gateway.capabilities.map((cap) => (
+                <span
+                  key={cap}
+                  className="px-2 py-1 rounded-md bg-gray-100 text-xs font-medium text-gray-600"
+                >
+                  {cap}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Health & Metrics */}
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Activity className="h-5 w-5 text-gray-400" />
+          Health &amp; Metrics
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <MetricCard
+            label="Uptime"
+            value={hd.uptime_seconds ? formatUptime(hd.uptime_seconds as number) : '-'}
+          />
+          <MetricCard label="Routes" value={String(hd.routes_count ?? '-')} />
+          <MetricCard label="Discovered APIs" value={String(hd.discovered_apis_count ?? '-')} />
+          <MetricCard
+            label="Error Rate"
+            value={hd.error_rate != null ? `${((hd.error_rate as number) * 100).toFixed(1)}%` : '-'}
+            alert={(hd.error_rate as number) > 0.05}
+          />
+        </div>
+      </section>
+
+      {/* APIs Deployed */}
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Zap className="h-5 w-5 text-gray-400" />
+          APIs Deployed
+          <span className="ml-auto text-sm font-normal text-gray-400">
+            {deployments.length} API{deployments.length !== 1 ? 's' : ''}
+          </span>
+        </h2>
+        {deployments.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">No APIs deployed on this gateway</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-100">
+                  <th className="pb-2 font-medium">API Name</th>
+                  <th className="pb-2 font-medium">Version</th>
+                  <th className="pb-2 font-medium">Sync Status</th>
+                  <th className="pb-2 font-medium">Environment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deployments.map((d: Record<string, unknown>) => (
+                  <tr key={d.id as string} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-2.5 font-medium text-gray-900">
+                      {(d.api_name as string) || (d.api_catalog_id as string)}
+                    </td>
+                    <td className="py-2.5 text-gray-500">{(d.api_version as string) || '-'}</td>
+                    <td className="py-2.5">
+                      <SyncBadge status={(d.sync_status as string) || 'pending'} />
+                    </td>
+                    <td className="py-2.5 text-gray-500">{d.environment as string}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ConfigItem({ label, value, isLink }: { label: string; value: string; isLink?: boolean }) {
+  return (
+    <div>
+      <dt className="text-sm font-medium text-gray-500">{label}</dt>
+      <dd className="mt-1 text-sm text-gray-900">
+        {isLink ? (
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+          >
+            {value}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : (
+          <span className="font-mono">{value}</span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
+  return (
+    <div className="rounded-lg border border-gray-100 p-3">
+      <dt className="text-xs font-medium text-gray-500">{label}</dt>
+      <dd className={`mt-1 text-lg font-semibold ${alert ? 'text-red-600' : 'text-gray-900'}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function SyncBadge({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    synced: 'bg-green-50 text-green-700',
+    pending: 'bg-amber-50 text-amber-700',
+    syncing: 'bg-blue-50 text-blue-700',
+    error: 'bg-red-50 text-red-700',
+    drifted: 'bg-orange-50 text-orange-700',
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-50 text-gray-700'}`}
+    >
+      {status}
+    </span>
+  );
+}

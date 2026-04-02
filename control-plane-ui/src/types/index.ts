@@ -1166,6 +1166,7 @@ export interface GatewayInstance {
   tenant_id?: string;
   base_url: string;
   target_gateway_url?: string | null;
+  public_url?: string | null;
   auth_config: Record<string, unknown>;
   status: GatewayInstanceStatus;
   last_health_check?: string;

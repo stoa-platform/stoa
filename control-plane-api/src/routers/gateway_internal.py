@@ -165,6 +165,10 @@ class GatewayRegistration(BaseModel):
         default=None,
         description="URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)",
     )
+    public_url: str | None = Field(
+        default=None,
+        description="Public DNS URL of this gateway for Console display (CAB-1940)",
+    )
 
 
 class HeartbeatPayload(BaseModel):
@@ -300,6 +304,8 @@ async def register_gateway(
             existing.base_url = payload.admin_url
         if payload.target_gateway_url:
             existing.target_gateway_url = payload.target_gateway_url
+        if payload.public_url:
+            existing.public_url = payload.public_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
         existing.mode = normalized_mode
@@ -321,6 +327,8 @@ async def register_gateway(
         deleted_entry.base_url = payload.admin_url
         if payload.target_gateway_url:
             deleted_entry.target_gateway_url = payload.target_gateway_url
+        if payload.public_url:
+            deleted_entry.public_url = payload.public_url
         deleted_entry.status = GatewayInstanceStatus.ONLINE
         deleted_entry.last_health_check = now
         deleted_entry.mode = normalized_mode
@@ -364,6 +372,8 @@ async def register_gateway(
         argocd_entry.base_url = payload.admin_url
         if payload.target_gateway_url:
             argocd_entry.target_gateway_url = payload.target_gateway_url
+        if payload.public_url:
+            argocd_entry.public_url = payload.public_url
         argocd_entry.status = GatewayInstanceStatus.ONLINE
         argocd_entry.last_health_check = now
         argocd_entry.mode = normalized_mode
@@ -387,6 +397,7 @@ async def register_gateway(
         tenant_id=payload.tenant_id,
         base_url=payload.admin_url,
         target_gateway_url=payload.target_gateway_url,
+        public_url=payload.public_url,
         auth_config={"type": "gateway_key"},
         status=GatewayInstanceStatus.ONLINE,
         last_health_check=now,

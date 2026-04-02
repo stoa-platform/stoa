@@ -210,6 +210,86 @@ func TestStartDeploymentStreamSkipsWithoutRegistration(t *testing.T) {
 	agent.StartDeploymentStream(ctx, &mockSSEAdapter{}, "http://localhost", SSEConfig{Enabled: true})
 }
 
+func TestSSESyncDeploymentIncludesSteps(t *testing.T) {
+	desiredState, _ := json.Marshal(adapters.Route{
+		ID:         "route-1",
+		Name:       "test-api",
+		TenantID:   "acme",
+		PathPrefix: "/api/v1",
+		BackendURL: "http://backend:8080",
+		Activated:  true,
+	})
+
+	eventData, _ := json.Marshal(DeploymentEvent{
+		DeploymentID:      "dep-456",
+		APICatalogID:      "cat-789",
+		GatewayInstanceID: "gw-sse",
+		SyncStatus:        "pending",
+		DesiredState:      desiredState,
+	})
+
+	var ackPayload RouteSyncAckPayload
+
+	sseServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/internal/gateways/gw-sse/events" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				t.Fatal("expected flusher")
+			}
+			_, _ = fmt.Fprintf(w, "event: sync-deployment\ndata: %s\n\n", string(eventData))
+			flusher.Flush()
+			return
+		}
+		if r.URL.Path == "/v1/internal/gateways/gw-sse/route-sync-ack" && r.Method == "POST" {
+			_ = json.NewDecoder(r.Body).Decode(&ackPayload)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/v1/internal/gateways/routes" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("[]"))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer sseServer.Close()
+
+	adapter := &mockSSEAdapter{}
+	agent := New(Config{
+		ControlPlaneURL: sseServer.URL,
+		GatewayAPIKey:   "test-key",
+		InstanceName:    "test-gw",
+	})
+	agent.gatewayID = "gw-sse"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_ = agent.streamEvents(ctx, adapter, "http://localhost:8080")
+
+	if len(ackPayload.SyncedRoutes) != 1 {
+		t.Fatalf("expected 1 ack result, got %d", len(ackPayload.SyncedRoutes))
+	}
+
+	steps := ackPayload.SyncedRoutes[0].Steps
+	if len(steps) != 3 {
+		t.Fatalf("expected 3 steps (agent_received, adapter_connected, api_synced), got %d", len(steps))
+	}
+
+	expectedNames := []string{"agent_received", "adapter_connected", "api_synced"}
+	for i, name := range expectedNames {
+		if steps[i].Name != name {
+			t.Errorf("step %d: expected name %s, got %s", i, name, steps[i].Name)
+		}
+		if steps[i].Status != "success" {
+			t.Errorf("step %d: expected status success, got %s", i, steps[i].Status)
+		}
+	}
+}
+
 func TestMainSSEToggle(t *testing.T) {
 	// Verify env var controls SSE vs polling
 	_ = os.Unsetenv("STOA_SSE_ENABLED")

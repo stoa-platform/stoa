@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   RotateCcw,
@@ -10,7 +10,11 @@ import {
   Zap,
 } from 'lucide-react';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
+import { DeployProgress } from '../../components/DeployProgress';
+import { DeployLogViewer } from '../../components/DeployLogViewer';
+import { useDeployEvents } from '../../hooks/useDeployEvents';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type { GatewayDeployment } from '../../types';
@@ -114,6 +118,7 @@ export function DeploymentDetailDrawer({
   onAction,
 }: DeploymentDetailDrawerProps) {
   const toast = useToastActions();
+  const { user } = useAuth();
   const [confirm, ConfirmDialog] = useConfirm();
   const [loading, setLoading] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -124,6 +129,24 @@ export function DeploymentDetailDrawer({
     path?: string;
   } | null>(null);
   const [testing, setTesting] = useState(false);
+
+  // SSE deploy events — real-time Kafka workflow visibility
+  const tenantId = user?.tenant_id || '';
+  const { deployStates, loadHistoricalLogs } = useDeployEvents({
+    tenantId,
+    enabled: !!tenantId,
+    onStatusChange: () => onAction(),
+  });
+  const deployState = deployStates[d.id];
+
+  // Load historical logs when drawer opens
+  useEffect(() => {
+    if (tenantId && d.id) {
+      loadHistoricalLogs(d.id).catch(() => {
+        /* historical logs may not exist yet */
+      });
+    }
+  }, [tenantId, d.id, loadHistoricalLogs]);
 
   const apiName = (d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8) || '—';
   const gatewayLabel =
@@ -243,7 +266,7 @@ export function DeploymentDetailDrawer({
           )}
 
           {/* Success banner */}
-          {d.sync_status === 'synced' && (
+          {d.sync_status === 'synced' && !deployState?.status && (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -251,6 +274,43 @@ export function DeploymentDetailDrawer({
                   Successfully synced to gateway
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Deploy Workflow Progress (Kafka pipeline) */}
+          {(deployState?.status || d.sync_status === 'syncing' || d.sync_status === 'pending') && (
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">
+                Deploy Workflow
+              </h3>
+              <DeployProgress
+                currentStep={
+                  deployState?.currentStep ||
+                  (d.sync_status === 'synced'
+                    ? 'complete'
+                    : d.sync_status === 'pending'
+                      ? 'init'
+                      : 'sync')
+                }
+                status={
+                  deployState?.status ||
+                  (d.sync_status === 'synced'
+                    ? 'success'
+                    : d.sync_status === 'error'
+                      ? 'failed'
+                      : 'in_progress')
+                }
+              />
+            </div>
+          )}
+
+          {/* Deploy Logs (Kafka event stream) */}
+          {(deployState?.logs?.length ?? 0) > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-2">
+                Deploy Logs
+              </h3>
+              <DeployLogViewer logs={deployState?.logs ?? []} maxHeight="250px" />
             </div>
           )}
 

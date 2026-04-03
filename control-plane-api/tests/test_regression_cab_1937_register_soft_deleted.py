@@ -38,6 +38,7 @@ def _make_gateway_instance(**overrides):
         "mode": "edge-mcp",
         "target_gateway_url": None,
         "public_url": None,
+        "ui_url": None,
         "protected": False,
         "deleted_at": None,
         "deleted_by": None,

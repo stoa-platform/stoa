@@ -16,7 +16,7 @@ import pytest
 import requests
 
 # Configuration
-GATEWAY_URL = os.getenv("GATEWAY_URL", "https://gateway.gostoa.dev")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://vps-wm.gostoa.dev")
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 

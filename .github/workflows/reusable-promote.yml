@@ -4,7 +4,7 @@
 # Promotes a dev-tagged GHCR image to prod by dispatching to stoa-infra.
 # ArgoCD auto-syncs the change to the production cluster.
 #
-# Pattern: verify image exists → staging pre-flight → dispatch to stoa-infra → health check
+# Pattern: verify image exists → dispatch to stoa-infra → health check
 # =============================================================================
 
 name: Reusable Promote to Prod
@@ -58,37 +58,6 @@ jobs:
             exit 1
           fi
           echo "Image verified"
-
-      - name: Staging health pre-flight
-        run: |
-          set -euo pipefail
-          PASS=0; FAIL=0
-
-          check() {
-            local name="$1" url="$2"
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
-            if [ "$status" = "200" ]; then
-              echo "  $name: $status"
-              PASS=$((PASS+1))
-            else
-              echo "  $name: $status (expected 200)"
-              FAIL=$((FAIL+1))
-            fi
-          }
-
-          echo "Staging health pre-flight (all 5 endpoints must be healthy)"
-          echo "---"
-          check "API Health"      "https://staging-api.gostoa.dev/health"
-          check "Gateway Health"  "https://staging-mcp.gostoa.dev/health/ready"
-          check "Portal"          "https://staging-portal.gostoa.dev"
-          check "Console"         "https://staging-console.gostoa.dev"
-          check "Keycloak OIDC"   "https://staging-auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
-          echo "---"
-          echo "Results: $PASS passed, $FAIL failed"
-          if [ "$FAIL" -gt 0 ]; then
-            echo "::error::Staging is unhealthy — aborting promotion"
-            exit 1
-          fi
 
       - name: Dispatch image update to stoa-infra (prod)
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3

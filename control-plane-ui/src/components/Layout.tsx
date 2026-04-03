@@ -28,6 +28,7 @@ import {
   Activity,
   Server,
   ArrowUpDown,
+  Rocket,
   BarChart3,
   Menu,
   X,
@@ -178,6 +179,17 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
+    title: 'nav.apiDeployments',
+    items: [
+      {
+        name: 'nav.deployments',
+        href: '/api-deployments',
+        icon: Rocket,
+        permission: 'apis:read',
+      },
+    ],
+  },
+  {
     title: 'nav.gateway',
     items: [
       { name: 'nav.gatewayOverview', href: '/gateway', icon: Server, permission: 'apis:read' },
@@ -215,6 +227,12 @@ const navigationSections: NavSection[] = [
         href: '/observability',
         icon: Gauge,
         shortcut: ['g', 'g'],
+      },
+      {
+        name: 'nav.callFlow',
+        href: '/call-flow',
+        icon: Activity,
+        shortcut: ['g', 'f'],
       },
       { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
       {
@@ -353,8 +371,16 @@ export function Layout({ children }: LayoutProps) {
     } catch {
       /* ignore corrupt data */
     }
-    // Default: all sections open (only 5 sections now, all fit on screen)
-    return {};
+    // CAB-1907: Default collapsed — only Overview + API Catalog expanded
+    return {
+      'nav.aiMcp': true,
+      'nav.usersAccess': true,
+      'nav.apiDeployments': true,
+      'nav.gateway': true,
+      'nav.monitoring': true,
+      'nav.governance': true,
+      'nav.admin': true,
+    };
   });
 
   const toggleSection = useCallback((title: string) => {

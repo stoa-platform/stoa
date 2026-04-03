@@ -5,7 +5,7 @@ exports[`Deployments > snapshot: cpi-admin persona > matches structural snapshot
   "buttons": [
     "Pipeline Traces",
     "Deployment History",
-    "GitLab Config",
+    "Git Config",
   ],
   "headings": [
     "Deployments",
@@ -19,7 +19,7 @@ exports[`Deployments > snapshot: devops persona > matches structural snapshot 1`
   "buttons": [
     "Pipeline Traces",
     "Deployment History",
-    "GitLab Config",
+    "Git Config",
   ],
   "headings": [
     "Deployments",
@@ -33,7 +33,7 @@ exports[`Deployments > snapshot: tenant-admin persona > matches structural snaps
   "buttons": [
     "Pipeline Traces",
     "Deployment History",
-    "GitLab Config",
+    "Git Config",
   ],
   "headings": [
     "Deployments",
@@ -47,7 +47,7 @@ exports[`Deployments > snapshot: viewer persona > matches structural snapshot 1`
   "buttons": [
     "Pipeline Traces",
     "Deployment History",
-    "GitLab Config",
+    "Git Config",
   ],
   "headings": [
     "Deployments",

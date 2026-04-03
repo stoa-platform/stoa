@@ -88,6 +88,12 @@ pub struct PluginContext {
     pub store: HashMap<String, String>,
     /// Client IP address
     pub client_ip: Option<String>,
+    /// Mutable request body (available in PreUpstream phase).
+    /// None in PreAuth/PostAuth/PostUpstream/OnError phases.
+    pub request_body: Option<Vec<u8>>,
+    /// Mutable response body (available in PostUpstream/OnError phases).
+    /// None in PreAuth/PostAuth/PreUpstream phases.
+    pub response_body: Option<Vec<u8>>,
 }
 
 impl PluginContext {
@@ -111,6 +117,8 @@ impl PluginContext {
             config: Value::Null,
             store: HashMap::new(),
             client_ip: None,
+            request_body: None,
+            response_body: None,
         }
     }
 
@@ -144,6 +152,30 @@ impl PluginContext {
         ) {
             self.response_headers.insert(name, value);
         }
+    }
+
+    /// Get the response body as a UTF-8 string (if present and valid UTF-8).
+    pub fn get_response_body_str(&self) -> Option<&str> {
+        self.response_body
+            .as_ref()
+            .and_then(|b| std::str::from_utf8(b).ok())
+    }
+
+    /// Set the response body from a string.
+    pub fn set_response_body(&mut self, body: &str) {
+        self.response_body = Some(body.as_bytes().to_vec());
+    }
+
+    /// Get the request body as a UTF-8 string (if present and valid UTF-8).
+    pub fn get_request_body_str(&self) -> Option<&str> {
+        self.request_body
+            .as_ref()
+            .and_then(|b| std::str::from_utf8(b).ok())
+    }
+
+    /// Set the request body from a string.
+    pub fn set_request_body(&mut self, body: &str) {
+        self.request_body = Some(body.as_bytes().to_vec());
     }
 
     /// Store a value in the per-request key-value store.
@@ -282,6 +314,44 @@ mod tests {
     }
 
     #[test]
+    fn test_context_response_body() {
+        let mut ctx = PluginContext::new(
+            Phase::PostUpstream,
+            "acme".to_string(),
+            "/api".to_string(),
+            "POST".to_string(),
+            HeaderMap::new(),
+        );
+
+        // Initially None
+        assert!(ctx.get_response_body_str().is_none());
+
+        // Set and get
+        ctx.set_response_body(r#"{"result": "ok"}"#);
+        assert_eq!(ctx.get_response_body_str(), Some(r#"{"result": "ok"}"#));
+
+        // Overwrite
+        ctx.set_response_body("compressed");
+        assert_eq!(ctx.get_response_body_str(), Some("compressed"));
+    }
+
+    #[test]
+    fn test_context_request_body() {
+        let mut ctx = PluginContext::new(
+            Phase::PreUpstream,
+            "acme".to_string(),
+            "/api".to_string(),
+            "POST".to_string(),
+            HeaderMap::new(),
+        );
+
+        assert!(ctx.get_request_body_str().is_none());
+
+        ctx.set_request_body(r#"{"tool": "echo"}"#);
+        assert_eq!(ctx.get_request_body_str(), Some(r#"{"tool": "echo"}"#));
+    }
+
+    #[test]
     fn test_context_initial_state() {
         let ctx = PluginContext::new(
             Phase::PreAuth,
@@ -298,6 +368,8 @@ mod tests {
         assert!(ctx.user_id.is_none());
         assert!(ctx.response_status.is_none());
         assert!(ctx.client_ip.is_none());
+        assert!(ctx.request_body.is_none());
+        assert!(ctx.response_body.is_none());
         assert!(ctx.store.is_empty());
     }
 

@@ -26,6 +26,9 @@ data:
   KEYCLOAK_CLIENT_ID: "control-plane-api"
   KEYCLOAK_VERIFY_SSL: "false"
 
+  # Git Provider Selection (gitlab or github)
+  GIT_PROVIDER: "github"
+
   # GitLab Integration
   GITLAB_URL: "https://gitlab.com"
   GITLAB_DEFAULT_BRANCH: "main"
@@ -39,13 +42,20 @@ data:
   GITLAB_GITOPS_PROJECT_ID: "77260481"
   GITLAB_GITOPS_PROJECT_PATH: "cab6961310/stoa-gitops"
 
+  # GitHub Integration (used when GIT_PROVIDER=github)
+  GITHUB_TOKEN: ""
+  GITHUB_ORG: "stoa-platform"
+  GITHUB_CATALOG_REPO: "stoa-catalog"
+  GITHUB_GITOPS_REPO: "stoa-gitops"
+  GITHUB_WEBHOOK_SECRET: ""
+
   # Kafka/Redpanda Event Streaming
   KAFKA_ENABLED: "true"
   KAFKA_BOOTSTRAP_SERVERS: "redpanda.stoa-system.svc.cluster.local:9092"
   KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
 
   # API Gateway
-  GATEWAY_URL: "https://gateway.gostoa.dev"
+  GATEWAY_URL: "https://vps-wm.gostoa.dev"
   GATEWAY_ADMIN_PROXY_URL: "https://apis.gostoa.dev/gateway/Gateway-Admin-API/1.0"
   GATEWAY_USE_OIDC_PROXY: "true"
 

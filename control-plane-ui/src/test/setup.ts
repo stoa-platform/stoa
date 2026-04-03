@@ -47,6 +47,7 @@ i18n.use(initReactI18next).init({
           errorSnapshots: 'Error Snapshots',
           executions: 'Executions',
           observability: 'Observability',
+          callFlow: 'Call Flow',
           logs: 'Logs',
           governance: 'Governance',
           shadowDiscovery: 'Shadow Discovery',

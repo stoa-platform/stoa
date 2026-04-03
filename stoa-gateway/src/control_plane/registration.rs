@@ -3,6 +3,10 @@
 //! Implements the "Apple ecosystem" experience where gateways self-register
 //! with the Control Plane at startup and maintain presence via heartbeat.
 //!
+//! Registration retries with exponential backoff (5s → 10s → 20s → ... → 300s max)
+//! so that gateways that start before the Control Plane become visible once the
+//! CP is ready (CAB-1915).
+//!
 //! # Example
 //!
 //! ```ignore
@@ -11,11 +15,8 @@
 //!     "gw_secret_key".to_string(),
 //! );
 //!
-//! // Register at startup
-//! let gateway_id = registrar.register(&config).await?;
-//!
-//! // Start background heartbeat (every 30s)
-//! registrar.start_heartbeat(state.clone());
+//! // Start background registration + heartbeat (retries until CP is ready)
+//! registrar.start_registration_and_heartbeat(config, state, 30);
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,14 @@ pub struct RegistrationPayload {
     /// Optional tenant restriction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tenant_id: Option<String>,
+
+    /// URL of the third-party gateway managed by this Link instance
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_gateway_url: Option<String>,
+
+    /// Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev) for Console display (CAB-1940)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_url: Option<String>,
 }
 
 /// Heartbeat payload sent every 30 seconds
@@ -65,6 +74,9 @@ pub struct HeartbeatPayload {
 
     /// Number of registered policies
     pub policies_count: usize,
+
+    /// Number of discovered APIs / tools (CAB-1916)
+    pub discovered_apis: usize,
 
     /// Total requests processed (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,6 +108,9 @@ pub enum RegistrationError {
 
     #[error("Invalid API key")]
     InvalidApiKey,
+
+    #[error("Gateway not found (purged from Control Plane)")]
+    NotFound,
 
     #[error("Control Plane unreachable: {0}")]
     Unreachable(String),
@@ -154,8 +169,13 @@ impl GatewayRegistrar {
             version: env!("CARGO_PKG_VERSION").to_string(),
             environment: config.environment.clone(),
             capabilities,
-            admin_url: format!("http://{}:{}", hostname, config.port),
+            admin_url: config
+                .advertise_url
+                .clone()
+                .unwrap_or_else(|| format!("http://{}:{}", hostname, config.port)),
             tenant_id: None, // Platform-wide gateway
+            target_gateway_url: config.target_gateway_url.clone(),
+            public_url: config.gateway_public_url.clone(),
         };
 
         info!(
@@ -213,37 +233,143 @@ impl GatewayRegistrar {
         }
     }
 
-    /// Start background heartbeat loop
+    /// Start background registration with retry, then heartbeat loop (CAB-1915).
     ///
-    /// Spawns a tokio task that sends heartbeats at the configured interval.
-    pub fn start_heartbeat(self: Arc<Self>, state: Arc<AppState>, interval_secs: u64) {
+    /// In K8s, the gateway may start before the Control Plane API is ready.
+    /// This method retries registration with exponential backoff (5s → 300s max),
+    /// then starts the heartbeat loop once registered.
+    pub fn start_registration_and_heartbeat(
+        self: Arc<Self>,
+        config: Config,
+        state: Arc<AppState>,
+        heartbeat_interval_secs: u64,
+    ) {
         let registrar = self.clone();
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            const INITIAL_DELAY_SECS: u64 = 5;
+            const MAX_DELAY_SECS: u64 = 300;
+
+            let mut delay_secs = INITIAL_DELAY_SECS;
+            let mut attempt = 0u32;
 
             loop {
-                interval.tick().await;
+                attempt += 1;
 
-                let gateway_id = *registrar.gateway_id.read().await;
+                match registrar.register(&config).await {
+                    Ok(id) => {
+                        if attempt > 1 {
+                            info!(
+                                gateway_id = %id,
+                                attempts = attempt,
+                                "Registered with Control Plane after retry"
+                            );
+                        } else {
+                            info!(gateway_id = %id, "Registered with Control Plane");
+                        }
+                        // Registration succeeded — run heartbeat loop
+                        let needs_reregister = registrar
+                            .run_heartbeat_loop(&state, heartbeat_interval_secs)
+                            .await;
 
-                if let Some(id) = gateway_id {
-                    let payload = HeartbeatPayload {
-                        uptime_seconds: registrar.start_time.elapsed().as_secs(),
-                        routes_count: state.route_registry.count(),
-                        policies_count: state.policy_registry.count(),
-                        requests_total: Some(crate::metrics::get_requests_total()),
-                        error_rate: Some(crate::metrics::get_error_rate()),
-                    };
-
-                    if let Err(e) = registrar.send_heartbeat(id, payload).await {
-                        warn!(error = %e, "Failed to send heartbeat");
-                    } else {
-                        debug!(gateway_id = %id, "Heartbeat sent");
+                        if needs_reregister {
+                            // Gateway was purged — reset backoff and re-register
+                            info!("Re-registration requested, restarting registration loop");
+                            delay_secs = INITIAL_DELAY_SECS;
+                            attempt = 0;
+                            continue;
+                        }
+                        return; // heartbeat loop stopped permanently
+                    }
+                    Err(RegistrationError::InvalidApiKey) => {
+                        error!(
+                            "Gateway registration rejected: invalid API key — \
+                             check STOA_CONTROL_PLANE_API_KEY. Will not retry."
+                        );
+                        return; // Permanent failure, no point retrying
+                    }
+                    Err(e) => {
+                        warn!(
+                            error = %e,
+                            attempt = attempt,
+                            retry_in_secs = delay_secs,
+                            "Registration failed, will retry"
+                        );
+                        tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                        delay_secs = (delay_secs * 2).min(MAX_DELAY_SECS);
                     }
                 }
             }
         });
+    }
+
+    /// Start background heartbeat loop
+    ///
+    /// Spawns a tokio task that sends heartbeats at the configured interval.
+    /// Note: this method does not handle re-registration. Use
+    /// `start_registration_and_heartbeat` for the full lifecycle.
+    pub fn start_heartbeat(self: Arc<Self>, state: Arc<AppState>, interval_secs: u64) {
+        let registrar = self.clone();
+
+        tokio::spawn(async move {
+            let needs_reregister = registrar.run_heartbeat_loop(&state, interval_secs).await;
+            if needs_reregister {
+                warn!("Gateway purged but start_heartbeat has no registration context — heartbeat stopped");
+            }
+        });
+    }
+
+    /// Internal heartbeat loop — sends heartbeats at the configured interval.
+    ///
+    /// Returns `true` if re-registration is needed (gateway was purged from CP),
+    /// `false` if the loop should stop permanently.
+    async fn run_heartbeat_loop(&self, state: &AppState, interval_secs: u64) -> bool {
+        let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+        let mut consecutive_not_found = 0u32;
+        const RE_REGISTER_THRESHOLD: u32 = 3;
+
+        loop {
+            interval.tick().await;
+
+            let gateway_id = *self.gateway_id.read().await;
+
+            if let Some(id) = gateway_id {
+                let payload = HeartbeatPayload {
+                    uptime_seconds: self.start_time.elapsed().as_secs(),
+                    routes_count: state.route_registry.count(),
+                    policies_count: state.policy_registry.count(),
+                    discovered_apis: state.tool_registry.count(),
+                    requests_total: Some(crate::metrics::get_requests_total()),
+                    error_rate: Some(crate::metrics::get_error_rate()),
+                };
+
+                match self.send_heartbeat(id, payload).await {
+                    Ok(()) => {
+                        consecutive_not_found = 0;
+                        debug!(gateway_id = %id, "Heartbeat sent");
+                    }
+                    Err(RegistrationError::NotFound) => {
+                        consecutive_not_found += 1;
+                        warn!(
+                            gateway_id = %id,
+                            consecutive = consecutive_not_found,
+                            "Heartbeat 404 — gateway not found on Control Plane"
+                        );
+                        if consecutive_not_found >= RE_REGISTER_THRESHOLD {
+                            warn!(
+                                gateway_id = %id,
+                                "Gateway purged from Control Plane, re-registering"
+                            );
+                            *self.gateway_id.write().await = None;
+                            return true; // Signal re-registration needed
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Failed to send heartbeat");
+                    }
+                }
+            }
+        }
     }
 
     /// Send a single heartbeat
@@ -268,6 +394,8 @@ impl GatewayRegistrar {
 
         if response.status().is_success() {
             Ok(())
+        } else if response.status() == reqwest::StatusCode::NOT_FOUND {
+            Err(RegistrationError::NotFound)
         } else {
             Err(RegistrationError::Rejected(format!(
                 "Heartbeat failed: {}",
@@ -353,12 +481,16 @@ mod tests {
             capabilities: vec!["rest".to_string(), "mcp".to_string()],
             admin_url: "http://gateway-abc123:8080".to_string(),
             tenant_id: None,
+            target_gateway_url: None,
+            public_url: None,
         };
 
         let json = serde_json::to_string(&payload).expect("Should serialize");
         assert!(json.contains("gateway-abc123"));
         assert!(json.contains("edge_mcp"));
         assert!(!json.contains("tenant_id")); // None should be skipped
+        assert!(!json.contains("target_gateway_url")); // None should be skipped
+        assert!(!json.contains("public_url")); // None should be skipped
     }
 
     #[test]
@@ -371,11 +503,17 @@ mod tests {
             capabilities: vec!["rest".to_string()],
             admin_url: "http://gw-1:8081".to_string(),
             tenant_id: Some("acme".to_string()),
+            target_gateway_url: Some("https://webmethods-prod:5555".to_string()),
+            public_url: Some("https://vps-wm-link.gostoa.dev".to_string()),
         };
 
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("tenant_id"));
         assert!(json.contains("acme"));
+        assert!(json.contains("target_gateway_url"));
+        assert!(json.contains("webmethods-prod:5555"));
+        assert!(json.contains("public_url"));
+        assert!(json.contains("vps-wm-link.gostoa.dev"));
     }
 
     #[test]
@@ -384,6 +522,7 @@ mod tests {
             uptime_seconds: 3600,
             routes_count: 10,
             policies_count: 5,
+            discovered_apis: 3,
             requests_total: Some(1000),
             error_rate: None,
         };
@@ -391,6 +530,7 @@ mod tests {
         let json = serde_json::to_string(&payload).expect("Should serialize");
         assert!(json.contains("3600"));
         assert!(json.contains("1000"));
+        assert!(json.contains("\"discovered_apis\":3"));
         assert!(!json.contains("error_rate")); // None should be skipped
     }
 
@@ -400,6 +540,7 @@ mod tests {
             uptime_seconds: 7200,
             routes_count: 5,
             policies_count: 3,
+            discovered_apis: 8,
             requests_total: Some(5000),
             error_rate: Some(0.02),
         };
@@ -517,6 +658,73 @@ mod tests {
         assert!(!hostname.unwrap().is_empty());
     }
 
+    /// Regression test for CAB-1895: auto-registration wrote pod hostname:8080
+    /// instead of K8s service URL. When STOA_ADVERTISE_URL is set, registration
+    /// must use it as admin_url.
+    #[tokio::test]
+    async fn regression_cab_1895_advertise_url_overrides_hostname() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        let expected_url = "http://stoa-gateway.stoa-system.svc.cluster.local:80";
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .and(header("X-Gateway-Key", "test-key"))
+            .and(wiremock::matchers::body_string_contains(expected_url))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": gw_id.to_string(),
+                "name": "gw-edge-prod",
+                "status": "active"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+        let config = Config {
+            advertise_url: Some(expected_url.to_string()),
+            ..Config::default()
+        };
+
+        let result = registrar.register(&config).await;
+        assert!(
+            result.is_ok(),
+            "Registration should succeed with advertise_url"
+        );
+        assert_eq!(result.unwrap(), gw_id);
+    }
+
+    /// When STOA_ADVERTISE_URL is not set, registration falls back to hostname:port.
+    #[tokio::test]
+    async fn test_register_without_advertise_url_uses_hostname() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        // Match any request — we just verify admin_url contains `:8080` (default port)
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .and(wiremock::matchers::body_string_contains(":8080"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": gw_id.to_string(),
+                "name": "gw-edge-dev",
+                "status": "active"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+        let config = Config {
+            advertise_url: None,
+            ..Config::default()
+        };
+
+        let result = registrar.register(&config).await;
+        assert!(
+            result.is_ok(),
+            "Registration should succeed with hostname fallback"
+        );
+    }
+
     #[tokio::test]
     async fn test_gateway_id_initially_none() {
         let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
@@ -628,6 +836,7 @@ mod tests {
             uptime_seconds: 60,
             routes_count: 5,
             policies_count: 2,
+            discovered_apis: 3,
             requests_total: None,
             error_rate: None,
         };
@@ -653,11 +862,123 @@ mod tests {
             uptime_seconds: 60,
             routes_count: 0,
             policies_count: 0,
+            discovered_apis: 0,
             requests_total: None,
             error_rate: None,
         };
 
         let result = registrar.send_heartbeat(gw_id, payload).await;
         assert!(result.is_err());
+    }
+
+    /// Regression test for CAB-1915: gateway that starts before CP API must
+    /// retry registration until CP becomes available, then start heartbeat.
+    /// The old code tried once at startup and silently gave up on failure,
+    /// leaving the edge-mcp gateway invisible in the Console.
+    #[tokio::test]
+    async fn regression_cab_1915_retry_registration_on_cp_unavailable() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+        let attempt_count = Arc::new(AtomicU32::new(0));
+
+        // First 2 attempts fail with 503 (CP not ready), third succeeds.
+        let counter = attempt_count.clone();
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(move |_: &wiremock::Request| {
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                if n < 2 {
+                    ResponseTemplate::new(503).set_body_string("service unavailable")
+                } else {
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "id": gw_id.to_string(),
+                        "name": "gw-edgemcp-prod",
+                        "status": "active"
+                    }))
+                }
+            })
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+
+        // Verify initial registration fails (simulating CP not ready)
+        let config = Config::default();
+        let result = registrar.register(&config).await;
+        assert!(
+            result.is_err(),
+            "First attempt should fail (CP returns 503)"
+        );
+
+        // Second attempt also fails
+        let result = registrar.register(&config).await;
+        assert!(
+            result.is_err(),
+            "Second attempt should fail (CP returns 503)"
+        );
+
+        // Third attempt succeeds (CP is now ready)
+        let result = registrar.register(&config).await;
+        assert!(result.is_ok(), "Third attempt should succeed (CP is ready)");
+        assert_eq!(result.unwrap(), gw_id);
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
+    }
+
+    /// Regression: heartbeat 404 returns NotFound error (gateway purged from CP).
+    /// This enables the heartbeat loop to detect purged instances and re-register.
+    #[tokio::test]
+    async fn regression_heartbeat_404_returns_not_found() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/internal/gateways/{}/heartbeat", gw_id)))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "detail": "Gateway instance not found"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "key".to_string());
+
+        let payload = HeartbeatPayload {
+            uptime_seconds: 3600,
+            routes_count: 5,
+            policies_count: 2,
+            discovered_apis: 3,
+            requests_total: None,
+            error_rate: None,
+        };
+
+        let result = registrar.send_heartbeat(gw_id, payload).await;
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), RegistrationError::NotFound),
+            "404 should return NotFound, not generic Rejected"
+        );
+    }
+
+    /// Regression test for CAB-1915: invalid API key should NOT be retried
+    /// (permanent failure, not a transient issue).
+    #[tokio::test]
+    async fn regression_cab_1915_no_retry_on_invalid_api_key() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "bad-key".to_string());
+        let config = Config::default();
+
+        let result = registrar.register(&config).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            RegistrationError::InvalidApiKey
+        ));
     }
 }

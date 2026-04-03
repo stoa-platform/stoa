@@ -97,7 +97,7 @@ class MCPServerCreate(BaseModel):
     icon: str | None = Field(None, max_length=500)
     category: MCPServerCategoryEnum = MCPServerCategoryEnum.PUBLIC
     tenant_id: str | None = Field(None, max_length=255)
-    visibility: MCPServerVisibility = MCPServerVisibility()
+    visibility: MCPServerVisibility = MCPServerVisibility(roles=None, exclude_roles=None, public=True)
     requires_approval: bool = False
     auto_approve_roles: list[str] | None = None
     version: str | None = Field(None, max_length=50)

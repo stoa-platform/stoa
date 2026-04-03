@@ -4,9 +4,12 @@ Provides fast database-backed queries for the Portal API catalog
 instead of real-time GitLab API calls.
 """
 
+from uuid import UUID
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.api_gateway_assignment import ApiGatewayAssignment
 from src.models.catalog import APICatalog, AudienceEnum, MCPToolsCatalog
 
 # Role -> allowed audiences ceiling (CAB-1323)
@@ -28,12 +31,7 @@ def get_allowed_audiences(roles: list[str]) -> list[str]:
 
 def escape_like(value: str) -> str:
     """Escape special SQL LIKE characters: %, _, \\"""
-    return (
-        value
-        .replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class CatalogRepository:
@@ -53,6 +51,10 @@ class CatalogRepository:
         include_unpublished: bool = False,
         user_roles: list[str] | None = None,
         audience_filter: str | None = None,
+        environment: str | None = None,
+        sort_by: str | None = None,
+        auth_type: str | None = None,
+        gateway_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[APICatalog], int]:
@@ -86,13 +88,17 @@ class CatalogRepository:
         elif tenant_id:
             query = query.where(APICatalog.tenant_id == tenant_id)
 
+        # Filter by gateway assignment (CAB-1940: scope APIs to a specific gateway)
+        if gateway_id is not None:
+            query = query.join(
+                ApiGatewayAssignment,
+                APICatalog.id == ApiGatewayAssignment.api_id,
+            ).where(ApiGatewayAssignment.gateway_id == gateway_id)
+
         # Filter by tags (any tag match using JSONB contains)
         if tags:
             # Match if any of the provided tags are in the API's tags array
-            tag_conditions = [
-                APICatalog.tags.contains([tag])
-                for tag in tags
-            ]
+            tag_conditions = [APICatalog.tags.contains([tag]) for tag in tags]
             query = query.where(or_(*tag_conditions))
 
         # Search filter (name, description, api_id) - CAB-1044: escape LIKE wildcards
@@ -102,9 +108,9 @@ class CatalogRepository:
             query = query.where(
                 or_(
                     func.lower(APICatalog.api_name).like(search_pattern, escape="\\"),
-                    func.lower(
-                        func.coalesce(APICatalog.api_metadata['description'].astext, '')
-                    ).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(APICatalog.api_metadata["description"].astext, "")).like(
+                        search_pattern, escape="\\"
+                    ),
                     func.lower(APICatalog.api_id).like(search_pattern, escape="\\"),
                 )
             )
@@ -117,13 +123,31 @@ class CatalogRepository:
             else:
                 query = query.where(APICatalog.audience.in_(allowed))
 
+        # Filter by auth_type (extracted from api_metadata JSONB)
+        if auth_type:
+            _AUTH_TAG_MAP: dict[str, list[str]] = {
+                "oauth2": ["oauth2", "oidc"],
+                "api_key": ["api-key", "apikey"],
+                "mtls": ["mtls", "mutual-tls"],
+                "basic": ["basic", "basic-auth"],
+            }
+            tag_values = _AUTH_TAG_MAP.get(auth_type.lower(), [auth_type.lower()])
+            auth_conditions = [APICatalog.tags.contains([tv]) for tv in tag_values]
+            query = query.where(or_(*auth_conditions))
+
         # Get total count before pagination
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.session.execute(count_query)
         total = total_result.scalar_one()
 
         # Apply ordering and pagination
-        query = query.order_by(APICatalog.api_name)
+        _SORT_COLUMNS = {
+            "name": APICatalog.api_name,
+            "updated_at": APICatalog.synced_at.desc(),
+            "created_at": APICatalog.synced_at.desc(),
+        }
+        order_clause = _SORT_COLUMNS.get(sort_by or "name", APICatalog.api_name)
+        query = query.order_by(order_clause)
         query = query.offset((page - 1) * page_size).limit(page_size)
 
         result = await self.session.execute(query)
@@ -179,11 +203,7 @@ class CatalogRepository:
         include_unpublished: bool = False,
     ) -> list[APICatalog]:
         """Get all APIs for a specific tenant."""
-        query = (
-            select(APICatalog)
-            .where(APICatalog.tenant_id == tenant_id)
-            .where(APICatalog.deleted_at.is_(None))
-        )
+        query = select(APICatalog).where(APICatalog.tenant_id == tenant_id).where(APICatalog.deleted_at.is_(None))
 
         if not include_unpublished:
             query = query.where(APICatalog.portal_published)
@@ -209,7 +229,7 @@ class CatalogRepository:
         """Get distinct tags from published APIs."""
         # This query extracts unique tags from the JSONB array
         result = await self.session.execute(
-            select(func.jsonb_array_elements_text(APICatalog.tags).label('tag'))
+            select(func.jsonb_array_elements_text(APICatalog.tags).label("tag"))
             .where(APICatalog.portal_published)
             .where(APICatalog.deleted_at.is_(None))
             .distinct()
@@ -220,16 +240,13 @@ class CatalogRepository:
         """Get catalog statistics."""
         # Total APIs
         total_result = await self.session.execute(
-            select(func.count(APICatalog.id))
-            .where(APICatalog.deleted_at.is_(None))
+            select(func.count(APICatalog.id)).where(APICatalog.deleted_at.is_(None))
         )
         total = total_result.scalar_one()
 
         # Published APIs
         published_result = await self.session.execute(
-            select(func.count(APICatalog.id))
-            .where(APICatalog.deleted_at.is_(None))
-            .where(APICatalog.portal_published)
+            select(func.count(APICatalog.id)).where(APICatalog.deleted_at.is_(None)).where(APICatalog.portal_published)
         )
         published = published_result.scalar_one()
 
@@ -289,8 +306,8 @@ class MCPToolsCatalogRepository:
             query = query.where(
                 or_(
                     func.lower(MCPToolsCatalog.tool_name).like(search_pattern, escape="\\"),
-                    func.lower(func.coalesce(MCPToolsCatalog.display_name, '')).like(search_pattern, escape="\\"),
-                    func.lower(func.coalesce(MCPToolsCatalog.description, '')).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(MCPToolsCatalog.display_name, "")).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(MCPToolsCatalog.description, "")).like(search_pattern, escape="\\"),
                 )
             )
 

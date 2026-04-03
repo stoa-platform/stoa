@@ -46,7 +46,7 @@ curl -s -H "Authorization: Bearer $AWX_TOKEN" \
 
 # 4. Check active version in Gateway
 curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.gostoa.dev/rest/apigateway/apis/<API_ID>" | \
+  "https://vps-wm.gostoa.dev/rest/apigateway/apis/<API_ID>" | \
   jq '.apiResponse.api.apiVersion'
 ```
 
@@ -118,7 +118,7 @@ curl -s -H "Authorization: Bearer $AWX_TOKEN" \
 # 1. Deactivate current API
 curl -X PUT \
   -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.gostoa.dev/rest/apigateway/apis/<API_ID>/deactivate"
+  "https://vps-wm.gostoa.dev/rest/apigateway/apis/<API_ID>/deactivate"
 
 # 2. Restore previous version from Git
 git checkout HEAD~1 -- apis/<API_NAME>/openapi.yaml
@@ -127,13 +127,13 @@ git checkout HEAD~1 -- apis/<API_NAME>/openapi.yaml
 curl -X POST \
   -u $GATEWAY_USER:$GATEWAY_PASSWORD \
   -H "Content-Type: application/json" \
-  "https://gateway.gostoa.dev/rest/apigateway/apis" \
+  "https://vps-wm.gostoa.dev/rest/apigateway/apis" \
   -d @apis/<API_NAME>/openapi.yaml
 
 # 4. Activate restored API
 curl -X PUT \
   -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.gostoa.dev/rest/apigateway/apis/<NEW_API_ID>/activate"
+  "https://vps-wm.gostoa.dev/rest/apigateway/apis/<NEW_API_ID>/activate"
 ```
 
 ### Method 5: GitOps Rollback (ArgoCD)
@@ -171,11 +171,11 @@ kubectl patch application <APP_NAME> -n argocd --type merge -p '{
 
 ```bash
 # Test API
-curl -s https://gateway.gostoa.dev/gateway/<API_PATH>/health | jq .
+curl -s https://vps-wm.gostoa.dev/gateway/<API_PATH>/health | jq .
 
 # Check version
 curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.gostoa.dev/rest/apigateway/apis/<API_ID>" | \
+  "https://vps-wm.gostoa.dev/rest/apigateway/apis/<API_ID>" | \
   jq '.apiResponse.api | {name, apiVersion, isActive}'
 
 # Check metrics

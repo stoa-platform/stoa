@@ -187,14 +187,12 @@ class TestGatewayInstanceService:
 
         with (
             patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
-            patch("src.services.gateway_instance_service.AdapterRegistry") as MockRegistry,
+            patch("src.services.credential_resolver.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter),
         ):
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_id = AsyncMock(return_value=gw)
             mock_repo.update_status = AsyncMock()
-
-            MockRegistry.create.return_value = mock_adapter
 
             from src.services.gateway_instance_service import GatewayInstanceService
 
@@ -217,14 +215,12 @@ class TestGatewayInstanceService:
 
         with (
             patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo,
-            patch("src.services.gateway_instance_service.AdapterRegistry") as MockRegistry,
+            patch("src.services.credential_resolver.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter),
         ):
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_id = AsyncMock(return_value=gw)
             mock_repo.update_status = AsyncMock()
-
-            MockRegistry.create.return_value = mock_adapter
 
             from src.services.gateway_instance_service import GatewayInstanceService
 
@@ -232,7 +228,7 @@ class TestGatewayInstanceService:
             svc.repo = mock_repo
 
             result = await svc.health_check(gw.id)
-            assert result["status"] == "offline"
+            assert result["status"] == "degraded"
             assert "refused" in result["details"]["error"]
 
 

@@ -250,8 +250,9 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         target_url.push_str(q);
     }
 
-    // SSRF protection: block requests to private/internal IP ranges (defense-in-depth)
-    if is_blocked_url(&target_url) {
+    // SSRF protection: block requests to private/internal IP ranges (defense-in-depth).
+    // Skip for admin-registered routes (trusted_backend) — URLs are admin-managed (CAB-1893).
+    if !route.trusted_backend && is_blocked_url(&target_url) {
         warn!(
             route_id = %route.id,
             target_url = %target_url,
@@ -305,6 +306,33 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     };
 
     let upstream_start = std::time::Instant::now();
+
+    // Pingora path: use shared connection pool when available (CAB-1849).
+    // Falls back to reqwest when pingora feature is disabled or pool is absent.
+    #[cfg(feature = "pingora")]
+    let mut response = if let Some(ref pool) = state.pingora_pool {
+        forward_request_pingora(
+            pool,
+            request,
+            &method,
+            &target_url,
+            resolved_header.as_ref(),
+            trace_ctx.as_ref(),
+        )
+        .await
+    } else {
+        forward_request(
+            request,
+            &method,
+            &target_url,
+            resolved_header.as_ref(),
+            trace_ctx.as_ref(),
+            route.upstream_http_version,
+        )
+        .await
+    };
+
+    #[cfg(not(feature = "pingora"))]
     let mut response = forward_request(
         request,
         &method,
@@ -387,14 +415,130 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 
     // Inject X-Stoa-Timing debug header with gateway/upstream timing
     // and hop count from Via headers (CAB-1316 Phase 2).
-    let hop_chain = hop_detection::parse_via_headers(response.headers());
+    // Short-circuit: only parse Via headers if the response actually contains them (CAB-1893).
     let gw_ms = (upstream_duration * 1000.0) as u64;
-    let timing_value = format!("gw={gw_ms};hops={}", hop_chain.total_hops);
+    let hops = if response.headers().contains_key("via") {
+        hop_detection::parse_via_headers(response.headers()).total_hops
+    } else {
+        0
+    };
+    let timing_value = format!("gw={gw_ms};hops={hops}");
     if let Ok(hv) = HeaderValue::from_str(&timing_value) {
         response.headers_mut().insert("x-stoa-timing", hv);
     }
 
     response
+}
+
+/// Forward request via Pingora shared connection pool (CAB-1849).
+///
+/// Uses Pingora's cross-worker connection pool for upstream requests.
+/// Headers (hop-by-hop filtering, credential injection, traceparent, Via)
+/// are handled identically to the reqwest path for consistency.
+#[cfg(feature = "pingora")]
+async fn forward_request_pingora(
+    pool: &std::sync::Arc<crate::proxy::pingora_pool::PingoraPool>,
+    request: Request<Body>,
+    method: &Method,
+    target_url: &str,
+    resolved_header: Option<&(String, String)>,
+    trace_ctx: Option<&crate::trace_context::RequestTraceContext>,
+) -> Response {
+    let mut headers = HeaderMap::new();
+
+    // Copy request headers, excluding hop-by-hop
+    for (name, value) in request.headers().iter() {
+        if !is_hop_by_hop(name.as_str()) {
+            headers.insert(name.clone(), value.clone());
+        }
+    }
+
+    // Inject W3C traceparent for distributed tracing propagation
+    if crate::telemetry::is_otel_active() {
+        use opentelemetry::propagation::TextMapPropagator;
+        use opentelemetry_sdk::propagation::TraceContextPropagator;
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+        let cx = tracing::Span::current().context();
+        let propagator = TraceContextPropagator::new();
+        let mut inject_map = std::collections::HashMap::new();
+        propagator.inject_context(&cx, &mut inject_map);
+        for (key, value) in inject_map {
+            if let (Ok(n), Ok(v)) = (
+                axum::http::header::HeaderName::from_bytes(key.as_bytes()),
+                HeaderValue::from_str(&value),
+            ) {
+                headers.insert(n, v);
+            }
+        }
+    } else if let Some(ctx) = trace_ctx {
+        let traceparent = TRACE_RNG.with(|rng| {
+            let mut rng = rng.borrow_mut();
+            let mut span_bytes = [0u8; 8];
+            rng.fill(&mut span_bytes);
+            let mut buf = String::with_capacity(55);
+            buf.push_str("00-");
+            buf.push_str(&ctx.trace_id);
+            buf.push('-');
+            hex_encode_into(&span_bytes, &mut buf);
+            buf.push_str("-01");
+            buf
+        });
+        if let Ok(v) = HeaderValue::from_str(&traceparent) {
+            headers.insert("traceparent", v);
+        }
+    } else {
+        let traceparent = TRACE_RNG.with(|rng| {
+            let mut rng = rng.borrow_mut();
+            let mut bytes = [0u8; 24];
+            rng.fill(&mut bytes);
+            let mut buf = String::with_capacity(55);
+            buf.push_str("00-");
+            hex_encode_into(&bytes[..16], &mut buf);
+            buf.push('-');
+            hex_encode_into(&bytes[16..], &mut buf);
+            buf.push_str("-01");
+            buf
+        });
+        if let Ok(v) = HeaderValue::from_str(&traceparent) {
+            headers.insert("traceparent", v);
+        }
+    }
+
+    // Inject Via header for hop detection (CAB-1316 Phase 2)
+    if let Ok(v) = HeaderValue::from_str(hop_detection::build_via_value()) {
+        headers.insert("via", v);
+    }
+
+    // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
+    if let Some((name, value)) = resolved_header {
+        if let (Ok(n), Ok(v)) = (
+            axum::http::header::HeaderName::from_bytes(name.as_bytes()),
+            HeaderValue::from_str(value),
+        ) {
+            headers.insert(n, v);
+        }
+    }
+
+    // Tag request as coming through Pingora pool
+    headers.insert("x-stoa-pool", HeaderValue::from_static("pingora"));
+
+    // Extract body for POST/PUT/PATCH
+    let body = if matches!(*method, Method::POST | Method::PUT | Method::PATCH) {
+        match axum::body::to_bytes(request.into_body(), 10 * 1024 * 1024).await {
+            Ok(b) if !b.is_empty() => Some(b),
+            Ok(_) => None,
+            Err(e) => {
+                error!(error = %e, "Pingora: failed to read request body");
+                return (StatusCode::BAD_REQUEST, "Failed to read request body").into_response();
+            }
+        }
+    } else {
+        None
+    };
+
+    pool.send_request(target_url.to_string(), method.clone(), headers, body)
+        .await
 }
 
 /// Forward request to the backend, reusing the webMethods proxy pattern.

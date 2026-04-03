@@ -23,6 +23,10 @@ from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
 from ..models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
+from ..services.credential_resolver import (
+    AgentManagedGatewayError,
+    create_adapter_with_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +88,7 @@ class GatewayHealthWorker:
         async with session_factory() as session:
             await self._mark_stale_gateways_offline(session)
             await self._active_health_check_external_gateways(session)
+            await self._purge_stale_gateways(session)
             await session.commit()
 
     async def _mark_stale_gateways_offline(self, session: AsyncSession):
@@ -92,7 +97,9 @@ class GatewayHealthWorker:
 
         stmt = select(GatewayInstance).where(
             GatewayInstance.gateway_type.in_(list(_HEARTBEAT_TYPES)),
-            GatewayInstance.status == GatewayInstanceStatus.ONLINE,
+            GatewayInstance.status.in_(
+                [GatewayInstanceStatus.ONLINE, GatewayInstanceStatus.DEGRADED]
+            ),
             GatewayInstance.last_health_check < cutoff_time,
             GatewayInstance.deleted_at.is_(None),
         )
@@ -120,6 +127,44 @@ class GatewayHealthWorker:
             }
 
         logger.info("Marked %d gateways as OFFLINE due to heartbeat timeout", len(stale_gateways))
+
+    async def _purge_stale_gateways(self, session: AsyncSession):
+        """Soft-delete gateway instances that have been offline for longer than the purge TTL.
+
+        Default: 7 days without any heartbeat → soft-deleted (CAB-1897).
+        Protected instances are never purged.
+        """
+        purge_cutoff = datetime.now(UTC) - timedelta(days=settings.GATEWAY_PURGE_AFTER_DAYS)
+
+        stmt = select(GatewayInstance).where(
+            GatewayInstance.status == GatewayInstanceStatus.OFFLINE,
+            GatewayInstance.last_health_check < purge_cutoff,
+            GatewayInstance.deleted_at.is_(None),
+            GatewayInstance.protected.is_(False),
+        )
+        result = await session.execute(stmt)
+        stale_gateways = result.scalars().all()
+
+        if not stale_gateways:
+            return
+
+        now = datetime.now(UTC)
+        for gateway in stale_gateways:
+            logger.info(
+                "Purging stale gateway %s (%s): offline since %s (purge cutoff: %s)",
+                gateway.name,
+                gateway.id,
+                gateway.last_health_check.isoformat() if gateway.last_health_check else "never",
+                purge_cutoff.isoformat(),
+            )
+            gateway.deleted_at = now
+            gateway.deleted_by = "system:auto-purge"
+
+        logger.info(
+            "Auto-purged %d stale gateway instances (offline > %d days)",
+            len(stale_gateways),
+            settings.GATEWAY_PURGE_AFTER_DAYS,
+        )
 
     async def _active_health_check_external_gateways(self, session: AsyncSession):
         """Actively poll external gateways (non-STOA) via their adapter health_check().
@@ -152,17 +197,15 @@ class GatewayHealthWorker:
             logger.debug("No adapter registered for gateway type %s, skipping %s", gw_type, gateway.name)
             return
 
-        config = {
-            "base_url": gateway.base_url,
-            "auth_config": gateway.auth_config or {},
-        }
-
         now = datetime.now(UTC)
         health_details = dict(gateway.health_details or {})
         consecutive_failures = health_details.get("consecutive_failures", 0)
 
         try:
-            adapter = AdapterRegistry.create(gw_type, config=config)
+            adapter = await create_adapter_with_credentials(
+                gw_type, gateway.base_url, gateway.auth_config or {},
+                source=gateway.source, gateway_name=gateway.name,
+            )
             check_result = await asyncio.wait_for(adapter.health_check(), timeout=_HEALTH_CHECK_TIMEOUT)
 
             if check_result.success:
@@ -181,6 +224,10 @@ class GatewayHealthWorker:
                 error_msg = check_result.error or "health_check returned success=False"
                 self._handle_failure(gateway, health_details, consecutive_failures, error_msg, now)
                 logger.warning("Gateway %s (%s) health check failed: %s", gateway.name, gw_type, error_msg)
+
+        except AgentManagedGatewayError:
+            logger.debug("Skipping active health poll for agent-managed gateway %s", gateway.name)
+            return
 
         except TimeoutError:
             consecutive_failures += 1

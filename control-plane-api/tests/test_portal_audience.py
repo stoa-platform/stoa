@@ -66,6 +66,15 @@ class TestAudienceMapping:
 # ============================================================================
 
 
+def _mock_db_session() -> AsyncMock:
+    """Create a mock DB session that returns empty results for deploy env queries."""
+    db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.all.return_value = []
+    db.execute.return_value = mock_result
+    return db
+
+
 def _make_api(audience: str = "public", **kwargs) -> MagicMock:
     """Create a mock APICatalog row."""
     api = MagicMock(spec=APICatalog)
@@ -96,7 +105,7 @@ class TestPortalAPIsAudienceFilter:
 
         user = MagicMock()
         user.roles = ["viewer"]
-        db = AsyncMock()
+        db = _mock_db_session()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
             await list_portal_apis(user=user, db=db, page=1, page_size=20)
@@ -115,7 +124,7 @@ class TestPortalAPIsAudienceFilter:
 
         user = MagicMock()
         user.roles = ["devops"]
-        db = AsyncMock()
+        db = _mock_db_session()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
             await list_portal_apis(user=user, db=db, page=1, page_size=20)
@@ -136,7 +145,7 @@ class TestPortalAPIsAudienceFilter:
 
         user = MagicMock()
         user.roles = ["cpi-admin"]
-        db = AsyncMock()
+        db = _mock_db_session()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
             result = await list_portal_apis(user=user, db=db, page=1, page_size=20)
@@ -155,7 +164,7 @@ class TestPortalAPIsAudienceFilter:
 
         user = MagicMock()
         user.roles = ["cpi-admin"]
-        db = AsyncMock()
+        db = _mock_db_session()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
             await list_portal_apis(user=user, db=db, audience="internal", page=1, page_size=20)
@@ -173,7 +182,7 @@ class TestPortalAPIsAudienceFilter:
 
         user = MagicMock()
         user.roles = ["cpi-admin"]
-        db = AsyncMock()
+        db = _mock_db_session()
 
         with patch("src.routers.portal.CatalogRepository", return_value=mock_repo):
             result = await list_portal_apis(user=user, db=db, page=1, page_size=20)

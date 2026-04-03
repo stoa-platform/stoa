@@ -18,6 +18,7 @@ from starlette.responses import Response
 
 from .config import settings
 from .consumers.deployment_consumer import deployment_consumer
+from .consumers.promotion_deploy_consumer import promotion_deploy_consumer
 from .features.error_snapshots import (
     add_error_snapshot_middleware,
     connect_error_snapshots,
@@ -34,6 +35,7 @@ from .opensearch.audit_middleware import AuditMiddleware
 from .routers import (
     access_requests,
     admin_prospects,
+    api_gateway_assignments,
     apis,
     applications,
     argocd_admin,
@@ -227,6 +229,8 @@ async def lifespan(app: FastAPI):
         try:
             deployment_consumer_task = asyncio.create_task(deployment_consumer.start())
             logger.info("Deployment notification consumer started")
+            asyncio.create_task(promotion_deploy_consumer.start())
+            logger.info("Promotion auto-deploy consumer started")
         except Exception as e:
             logger.warning("Failed to start deployment notification consumer", error=str(e))
 
@@ -240,11 +244,12 @@ async def lifespan(app: FastAPI):
             logger.warning("Failed to start error snapshot consumer", error=str(e))
 
     # Start gateway sync engine (Control Plane Agnostique)
+    # ADR-059: gated by DEPLOY_MODE — disabled in sse_only mode
     sync_engine_task = None
-    if ENABLE_SYNC_ENGINE and settings.SYNC_ENGINE_ENABLED:
+    if ENABLE_SYNC_ENGINE and settings.SYNC_ENGINE_ENABLED and settings.is_sync_engine_enabled:
         try:
             sync_engine_task = asyncio.create_task(sync_engine.start())
-            logger.info("Gateway sync engine started")
+            logger.info("Gateway sync engine started (DEPLOY_MODE=%s)", settings.DEPLOY_MODE)
         except Exception as e:
             logger.warning("Failed to start sync engine", error=str(e))
 
@@ -305,9 +310,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down...")
 
-    # Stop deployment notification consumer
+    # Stop deployment notification consumer + promotion auto-deploy consumer
     if ENABLE_DEPLOYMENT_NOTIFIER and deployment_consumer_task:
         await deployment_consumer.stop()
+        await promotion_deploy_consumer.stop()
         deployment_consumer_task.cancel()
         with suppress(asyncio.CancelledError):
             await deployment_consumer_task
@@ -651,6 +657,10 @@ app.add_middleware(AuditMiddleware)
 
 # Routers
 app.include_router(tenants.router)
+# api_gateway_assignments MUST be before apis — both share /v1/tenants/{tenant_id}/apis/{api_id}
+# prefix, and FastAPI resolves in registration order. Without this, /deploy and
+# /deployable-environments are swallowed by the apis router's /{api_id} catch-all.
+app.include_router(api_gateway_assignments.router)
 app.include_router(apis.router)
 app.include_router(applications.router)
 app.include_router(deployments.router)

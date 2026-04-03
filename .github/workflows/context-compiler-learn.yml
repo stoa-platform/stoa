@@ -1,0 +1,94 @@
+# Context Compiler — Post-Merge Learning
+# Runs after each merge to main. Compares predicted vs actual changes to improve impact DB accuracy.
+# Kill-switch: set DISABLE_CONTEXT_COMPILER=true in repo variables to disable.
+
+name: Context Compiler — Post-Merge Learning
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/learning/**"
+      - "docs/context-packs/**"
+      - "*.md"
+      - ".claude/**"
+      - ".github/workflows/context-compiler-*.yml"
+
+concurrency:
+  group: context-compiler-learn
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  learn:
+    if: vars.DISABLE_CONTEXT_COMPILER != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Need HEAD~1 for diff
+
+      - name: Unlock git-crypt
+        run: |
+          sudo apt-get install -y git-crypt
+          echo "${{ secrets.GIT_CRYPT_KEY }}" | base64 -d > /tmp/git-crypt.key
+          git-crypt unlock /tmp/git-crypt.key
+          rm /tmp/git-crypt.key
+
+      - name: Check prerequisites
+        id: prereq
+        run: |
+          if [ ! -f docs/stoa-impact.db ]; then
+            echo "::warning::stoa-impact.db not found — skipping post-change learning"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f docs/scripts/post-change-learn.sh ]; then
+            echo "::warning::post-change-learn.sh not found — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f docs/file-map.json ]; then
+            echo "::warning::file-map.json not found — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Extract ticket ref from commit
+        id: ticket
+        if: steps.prereq.outputs.skip != 'true'
+        run: |
+          # Look for CAB-XXXX in commit message or PR title
+          TICKET=$(git log --format=%s -1 HEAD | grep -oP 'CAB-\d+' | head -1 || echo "")
+          echo "ref=${TICKET}" >> "$GITHUB_OUTPUT"
+          echo "Ticket ref: ${TICKET:-none}"
+
+      - name: Run post-change learning
+        if: steps.prereq.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          chmod +x docs/scripts/post-change-learn.sh
+          TICKET_ARG=""
+          if [ -n "${{ steps.ticket.outputs.ref }}" ]; then
+            TICKET_ARG="--ticket ${{ steps.ticket.outputs.ref }}"
+          fi
+          docs/scripts/post-change-learn.sh \
+            --commit HEAD \
+            $TICKET_ARG
+
+      - name: Commit DB updates
+        if: steps.prereq.outputs.skip != 'true'
+        run: |
+          git config user.name "STOA AI Factory"
+          git config user.email "factory@gostoa.dev"
+          git add docs/stoa-impact.db docs/learning/ || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: post-change learning for ${{ steps.ticket.outputs.ref || 'unknown' }} [skip ci]"
+            git push || echo "::warning::Push failed — DB update will be picked up next run"
+          fi

@@ -1,5 +1,5 @@
 /**
- * Tests for Sidebar (CAB-1390, CAB-1764)
+ * Tests for Sidebar (CAB-1390, CAB-1764, CAB-1905)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -54,10 +54,9 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       mockUseAuth.mockReturnValue(createAuthMock(role));
     });
 
-    it('renders flat navigation items', () => {
+    it('renders Discover nav item (CAB-1905)', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('Marketplace')).toBeInTheDocument();
-      expect(screen.getByText('Profile')).toBeInTheDocument();
+      expect(screen.getByText('Discover')).toBeInTheDocument();
     });
 
     it('renders My Workspace nav item', () => {
@@ -65,23 +64,29 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
       expect(screen.getByText('My Workspace')).toBeInTheDocument();
     });
 
+    it('renders Playground nav item', () => {
+      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
+      expect(screen.getByText('Playground')).toBeInTheDocument();
+    });
+
     it('renders Documentation external link', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
       expect(screen.getByText('Documentation')).toBeInTheDocument();
     });
 
-    it('does not render removed nav items', () => {
+    it('does not render removed nav items (CAB-1905)', () => {
       renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
+      // Removed in CAB-1905: Marketplace, Service Catalog, Profile, Console
+      expect(screen.queryByText('Marketplace')).not.toBeInTheDocument();
+      expect(screen.queryByText('Service Catalog')).not.toBeInTheDocument();
+      expect(screen.queryByText('Profile')).not.toBeInTheDocument();
+      expect(screen.queryByText('Console')).not.toBeInTheDocument();
+      // Previously removed items
       expect(screen.queryByText('Compare APIs')).not.toBeInTheDocument();
       expect(screen.queryByText('Favorites')).not.toBeInTheDocument();
       expect(screen.queryByText('Notifications')).not.toBeInTheDocument();
       expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
       expect(screen.queryByText('Rate Limits')).not.toBeInTheDocument();
-    });
-
-    it('renders Console as external link', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.getByText('Console')).toBeInTheDocument();
     });
 
     it('shows mobile overlay when isOpen is true', () => {
@@ -101,13 +106,6 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         fireEvent.click(overlay);
         expect(onClose).toHaveBeenCalled();
       }
-    });
-
-    it('does not render section headers (flat navigation)', () => {
-      renderWithProviders(<Sidebar isOpen={false} onClose={onClose} />);
-      expect(screen.queryByText('Discover')).not.toBeInTheDocument();
-      expect(screen.queryByText('Account')).not.toBeInTheDocument();
-      expect(screen.queryByText('Operations')).not.toBeInTheDocument();
     });
   }
 );

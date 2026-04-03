@@ -65,7 +65,8 @@ fi
 
 # 5. Import OpenSearch Dashboards saved objects
 echo "[5/$TOTAL] Importing OpenSearch Dashboards visualizations..."
-OSD_FILE="$REPO_ROOT/docker/observability/opensearch-dashboards/saved-objects/stoa-bench-dashboards.ndjson"
+STOA_INFRA_DIR="${STOA_INFRA_DIR:-$REPO_ROOT/../stoa-infra}"
+OSD_FILE="$STOA_INFRA_DIR/docker/observability/opensearch-dashboards/saved-objects/stoa-bench-dashboards.ndjson"
 if [ -f "$OSD_FILE" ]; then
   # Copy file to OSD pod then import (kubectl exec with stdin piping is unreliable)
   kubectl cp "$OSD_FILE" opensearch/$(kubectl get pod -n opensearch -l app=opensearch-dashboards -o jsonpath='{.items[0].metadata.name}'):/tmp/stoa-bench-dashboards.ndjson 2>/dev/null \
@@ -111,7 +112,7 @@ if kubectl wait --for=condition=complete "job/$JOB_NAME" -n stoa-system --timeou
   echo ""
   echo "Deploy complete. Next steps:"
   echo "  1. Check Pushgateway: kubectl exec -n monitoring deploy/pushgateway -- wget -qO- localhost:9091/metrics | grep enterprise"
-  echo "  2. Import Grafana dashboard: docker/observability/grafana/dashboards/gateway-arena-historical.json"
+  echo "  2. Import Grafana dashboard: stoa-infra:docker/observability/grafana/dashboards/gateway-arena-historical.json"
   echo "  3. OpenSearch Dashboards: https://opensearch.gostoa.dev (OIDC via Keycloak)"
   echo "  4. Cleanup: kubectl delete job $JOB_NAME -n stoa-system"
 else

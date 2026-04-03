@@ -45,6 +45,12 @@ class GatewayInstance(Base):
 
     Each instance represents a specific gateway deployment (e.g. "webmethods-prod")
     with its connection configuration and health status.
+
+    URL semantics (CAB-1953):
+        base_url            — Admin API URL used by the Control Plane to pilot this gateway.
+        public_url          — Public DNS URL where runtime APIs are served (e.g. https://mcp.gostoa.dev).
+        target_gateway_url  — Admin API URL of the third-party gateway managed by Link/Connect.
+        ui_url              — Web UI URL of the third-party gateway (e.g. webMethods console at :9072).
     """
 
     __tablename__ = "gateway_instances"
@@ -68,6 +74,9 @@ class GatewayInstance(Base):
 
     # Connection configuration
     base_url = Column(String(500), nullable=False)  # Admin API URL
+    target_gateway_url = Column(String(500), nullable=True)  # Third-party gateway URL (for Link/Connect)
+    public_url = Column(String(500), nullable=True)  # Public DNS URL for Console display (CAB-1940)
+    ui_url = Column(String(500), nullable=True)  # Web UI URL of third-party gateway (CAB-1953)
     auth_config = Column(JSONB, nullable=False, default=dict)
     # auth_config examples:
     #   {"type": "oidc_proxy", "proxy_url": "https://apis.gostoa.dev/..."}

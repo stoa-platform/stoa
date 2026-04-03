@@ -1,8 +1,10 @@
 """Tests for SyncEngine — reconciliation and drift detection."""
-import pytest
+
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
-from datetime import datetime, timezone
+
+import pytest
 
 from src.adapters.gateway_adapter_interface import AdapterResult
 from src.models.gateway_deployment import DeploymentSyncStatus
@@ -23,10 +25,14 @@ class TestSyncEngine:
             "sync_status": DeploymentSyncStatus.PENDING,
             "sync_attempts": 0,
             "sync_error": None,
+            "sync_steps": None,
             "gateway_resource_id": None,
             "last_sync_attempt": None,
             "last_sync_success": None,
-            "desired_at": datetime.now(timezone.utc),
+            "desired_at": datetime.now(UTC),
+            "desired_generation": 1,
+            "attempted_generation": 0,
+            "synced_generation": 0,
         }
         defaults.update(overrides)
         mock = MagicMock()
@@ -56,14 +62,12 @@ class TestSyncEngine:
         adapter.connect = AsyncMock()
         adapter.disconnect = AsyncMock()
         adapter.sync_api = AsyncMock(
-            return_value=sync_result or AdapterResult(success=True, resource_id="gw-api-1", data={"spec_hash": "abc123"})
+            return_value=sync_result
+            or AdapterResult(success=True, resource_id="gw-api-1", data={"spec_hash": "abc123"})
         )
-        adapter.delete_api = AsyncMock(
-            return_value=delete_result or AdapterResult(success=True)
-        )
-        adapter.list_apis = AsyncMock(
-            return_value=list_apis_result or []
-        )
+        adapter.delete_api = AsyncMock(return_value=delete_result or AdapterResult(success=True))
+        adapter.list_apis = AsyncMock(return_value=list_apis_result or [])
+        adapter.upsert_policy = AsyncMock()
         return adapter
 
     @pytest.mark.asyncio
@@ -83,17 +87,21 @@ class TestSyncEngine:
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+        ):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -115,9 +123,7 @@ class TestSyncEngine:
         """Adapter sync failure marks deployment as ERROR."""
         deployment = self._make_deployment(sync_status=DeploymentSyncStatus.PENDING)
         gateway = self._make_gateway(id=deployment.gateway_instance_id)
-        adapter = self._make_adapter(
-            sync_result=AdapterResult(success=False, error="Connection refused")
-        )
+        adapter = self._make_adapter(sync_result=AdapterResult(success=False, error="Connection refused"))
 
         mock_session = AsyncMock()
         mock_session.commit = AsyncMock()
@@ -129,17 +135,21 @@ class TestSyncEngine:
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+        ):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -175,17 +185,21 @@ class TestSyncEngine:
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+        ):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -207,9 +221,7 @@ class TestSyncEngine:
             gateway_resource_id="gw-api-99",
         )
         gateway = self._make_gateway(id=deployment.gateway_instance_id)
-        adapter = self._make_adapter(
-            delete_result=AdapterResult(success=False, error="Gateway timeout")
-        )
+        adapter = self._make_adapter(delete_result=AdapterResult(success=False, error="Gateway timeout"))
 
         mock_session = AsyncMock()
         mock_session.commit = AsyncMock()
@@ -221,17 +233,21 @@ class TestSyncEngine:
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
-
-            mock_registry.create.return_value = adapter
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+        ):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -257,16 +273,21 @@ class TestSyncEngine:
         mock_repo = MagicMock()
         mock_repo.list_by_statuses = AsyncMock(return_value=[deployment])
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.settings") as mock_settings:
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.settings") as mock_settings,
+        ):
 
             mock_settings.SYNC_ENGINE_RETRY_MAX = 3
+            mock_settings.SYNC_ENGINE_INTERVAL_SECONDS = 300
 
             from src.workers.sync_engine import SyncEngine
 
@@ -299,22 +320,25 @@ class TestSyncEngine:
         mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
 
         # Gateway reports a different spec_hash
-        adapter = self._make_adapter(
-            list_apis_result=[{"id": "gw-api-1", "spec_hash": "actual-different-hash"}]
+        adapter = self._make_adapter(list_apis_result=[{"id": "gw-api-1", "spec_hash": "actual-different-hash"}])
+
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
         )
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+            patch("src.workers.sync_engine.kafka_service") as mock_kafka,
+        ):
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry, \
-             patch("src.workers.sync_engine.kafka_service") as mock_kafka:
-
-            mock_registry.create.return_value = adapter
             mock_kafka.publish = AsyncMock()
 
             from src.workers.sync_engine import SyncEngine
@@ -349,18 +373,23 @@ class TestSyncEngine:
         # Gateway returns empty list — API was deleted externally
         adapter = self._make_adapter(list_apis_result=[])
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry, \
-             patch("src.workers.sync_engine.kafka_service") as mock_kafka:
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+            patch("src.workers.sync_engine.kafka_service") as mock_kafka,
+        ):
 
-            mock_registry.create.return_value = adapter
             mock_kafka.publish = AsyncMock()
 
             from src.workers.sync_engine import SyncEngine
@@ -390,15 +419,19 @@ class TestSyncEngine:
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
 
-        mock_factory = MagicMock(return_value=MagicMock(
-            __aenter__=AsyncMock(return_value=mock_session),
-            __aexit__=AsyncMock(return_value=False),
-        ))
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
 
-        with patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory), \
-             patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo), \
-             patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo), \
-             patch("src.workers.sync_engine.AdapterRegistry") as mock_registry:
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch("src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock) as mock_create,
+        ):
 
             from src.workers.sync_engine import SyncEngine
 
@@ -409,5 +442,164 @@ class TestSyncEngine:
 
             await engine._reconcile_one(deployment.id)
 
-            # AdapterRegistry.create should NOT be called for offline gateway
-            mock_registry.create.assert_not_called()
+            # create_adapter_with_credentials should NOT be called for offline gateway
+            mock_create.assert_not_awaited()
+
+
+class TestSyncStepInstrumentation(TestSyncEngine):
+    """Tests for sync step tracing in the reconciliation pipeline (CAB-1946)."""
+
+    def _make_policy(self, **overrides):
+        """Create a mock GatewayPolicy."""
+        defaults = {
+            "id": uuid4(),
+            "name": "rate-limit",
+            "policy_type": MagicMock(value="rate_limit"),
+            "config": {"limit": 100},
+            "priority": 1,
+        }
+        defaults.update(overrides)
+        mock = MagicMock()
+        for k, v in defaults.items():
+            setattr(mock, k, v)
+        return mock
+
+    async def _run_reconcile(self, deployment, gateway, adapter, policy_repo=None):
+        """Run _reconcile_one with standard mocks and return the deployment."""
+        mock_session = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=deployment)
+        mock_repo.update = AsyncMock(return_value=deployment)
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
+
+        if policy_repo is None:
+            policy_repo = MagicMock()
+            policy_repo.get_policies_for_deployment = AsyncMock(return_value=[])
+
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
+
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+            patch("src.repositories.gateway_policy.GatewayPolicyRepository", return_value=policy_repo),
+        ):
+
+            from src.workers.sync_engine import SyncEngine
+
+            engine = SyncEngine()
+            engine._semaphore = MagicMock()
+            engine._semaphore.__aenter__ = AsyncMock()
+            engine._semaphore.__aexit__ = AsyncMock()
+
+            await engine._reconcile_one(deployment.id)
+            return deployment
+
+    @pytest.mark.asyncio
+    async def test_reconcile_produces_success_trace(self):
+        """Successful sync produces 3-step trace: adapter_connected, api_synced, policies_applied."""
+        deployment = self._make_deployment(sync_status=DeploymentSyncStatus.PENDING)
+        gateway = self._make_gateway(id=deployment.gateway_instance_id)
+        adapter = self._make_adapter()
+
+        await self._run_reconcile(deployment, gateway, adapter)
+
+        assert deployment.sync_status == DeploymentSyncStatus.SYNCED
+        assert deployment.sync_steps is not None
+        steps = deployment.sync_steps
+        assert len(steps) == 3
+        assert steps[0]["name"] == "adapter_connected"
+        assert steps[0]["status"] == "success"
+        assert steps[1]["name"] == "api_synced"
+        assert steps[1]["status"] == "success"
+        assert steps[2]["name"] == "policies_applied"
+        assert steps[2]["status"] == "success"
+        assert deployment.sync_error is None
+
+    @pytest.mark.asyncio
+    async def test_reconcile_adapter_failure_trace(self):
+        """Adapter connect failure produces failed adapter_connected + skipped remaining steps."""
+        deployment = self._make_deployment(sync_status=DeploymentSyncStatus.PENDING)
+        gateway = self._make_gateway(id=deployment.gateway_instance_id)
+        adapter = self._make_adapter()
+        adapter.connect = AsyncMock(side_effect=ConnectionError("Connection refused"))
+
+        await self._run_reconcile(deployment, gateway, adapter)
+
+        assert deployment.sync_status == DeploymentSyncStatus.ERROR
+        steps = deployment.sync_steps
+        assert len(steps) == 3
+        assert steps[0]["name"] == "adapter_connected"
+        assert steps[0]["status"] == "failed"
+        assert "Connection refused" in steps[0]["detail"]
+        assert steps[1]["name"] == "api_synced"
+        assert steps[1]["status"] == "skipped"
+        assert steps[2]["name"] == "policies_applied"
+        assert steps[2]["status"] == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_reconcile_sync_failure_trace(self):
+        """sync_api failure produces failed api_synced + skipped policies_applied."""
+        deployment = self._make_deployment(sync_status=DeploymentSyncStatus.PENDING)
+        gateway = self._make_gateway(id=deployment.gateway_instance_id)
+        adapter = self._make_adapter(sync_result=AdapterResult(success=False, error="Gateway timeout"))
+
+        await self._run_reconcile(deployment, gateway, adapter)
+
+        assert deployment.sync_status == DeploymentSyncStatus.ERROR
+        steps = deployment.sync_steps
+        assert len(steps) == 3
+        assert steps[0]["name"] == "adapter_connected"
+        assert steps[0]["status"] == "success"
+        assert steps[1]["name"] == "api_synced"
+        assert steps[1]["status"] == "failed"
+        assert "Gateway timeout" in steps[1]["detail"]
+        assert steps[2]["name"] == "policies_applied"
+        assert steps[2]["status"] == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_reconcile_partial_policy_failure_trace(self):
+        """Partial policy failure produces failed policies_applied with detail."""
+        deployment = self._make_deployment(sync_status=DeploymentSyncStatus.PENDING)
+        gateway = self._make_gateway(id=deployment.gateway_instance_id)
+        adapter = self._make_adapter()
+        adapter.upsert_policy = AsyncMock(side_effect=Exception("rate-limit rejected"))
+
+        policy = self._make_policy()
+        mock_policy_repo = MagicMock()
+        mock_policy_repo.get_policies_for_deployment = AsyncMock(return_value=[policy])
+
+        await self._run_reconcile(deployment, gateway, adapter, policy_repo=mock_policy_repo)
+
+        assert deployment.sync_status == DeploymentSyncStatus.SYNCED
+        steps = deployment.sync_steps
+        assert len(steps) == 3
+        assert steps[2]["name"] == "policies_applied"
+        assert steps[2]["status"] == "failed"
+        assert "rate-limit rejected" in steps[2]["detail"]
+
+    @pytest.mark.asyncio
+    async def test_sync_error_backward_compat(self):
+        """sync_error is derived from tracker.first_error() for backward compatibility."""
+        deployment = self._make_deployment(sync_status=DeploymentSyncStatus.PENDING)
+        gateway = self._make_gateway(id=deployment.gateway_instance_id)
+        adapter = self._make_adapter(sync_result=AdapterResult(success=False, error="502 Bad Gateway"))
+
+        await self._run_reconcile(deployment, gateway, adapter)
+
+        assert deployment.sync_error == "502 Bad Gateway"
+        failed_steps = [s for s in deployment.sync_steps if s["status"] == "failed"]
+        assert len(failed_steps) == 1
+        assert failed_steps[0]["detail"] == deployment.sync_error

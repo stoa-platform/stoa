@@ -67,7 +67,7 @@ Create CNAME records pointing to the Load Balancer:
 
 | DNS | Target | Purpose |
 |-----|--------|---------|
-| `gateway.gostoa.dev` | `<elb-hostname>` | Admin UI (port 9072) |
+| `vps-wm.gostoa.dev` | `<elb-hostname>` | Admin UI (port 9072) |
 | `apis.gostoa.dev` | `<elb-hostname>` | API Runtime (port 5543) |
 
 ## Sources & Documentation
@@ -1047,7 +1047,7 @@ Internal:  http://localhost:5555/rest/apigateway/apis
 
 ## Ansible Integration
 
-See `/ansible/playbooks/register-api-gateway.yaml` for automated API registration including:
+See `stoa-infra:ansible/playbooks/register-api-gateway.yaml` for automated API registration including:
 1. Download and convert OpenAPI spec
 2. Create endpoint alias
 3. Import API via file upload

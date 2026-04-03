@@ -47,7 +47,7 @@ spec:
               env:
                 # Service endpoints (in-cluster DNS — all on port 80)
                 - name: STOA_API_URL
-                  value: "http://stoa-control-plane-api.stoa-system.svc"
+                  value: "http://stoa-control-plane-api.stoa-system.svc:8000"
                 - name: STOA_GATEWAY_URL
                   value: "http://stoa-gateway.stoa-system.svc"
                 - name: STOA_AUTH_URL

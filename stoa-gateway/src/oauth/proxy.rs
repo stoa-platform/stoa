@@ -108,7 +108,7 @@ pub async fn token_proxy(
         let url = token_url.clone();
         let ct = content_type.clone();
         let b = body.clone();
-        let via = via_value.clone();
+        let via = via_value;
         async move {
             c.post(&url)
                 .header("content-type", ct)
@@ -187,7 +187,7 @@ pub async fn par_proxy(State(state): State<AppState>, headers: HeaderMap, body: 
         let url = par_url.clone();
         let ct = content_type.clone();
         let b = body.clone();
-        let via = via_value.clone();
+        let via = via_value;
         async move {
             c.post(&url)
                 .header("content-type", ct)
@@ -282,7 +282,7 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
         let c = client.clone();
         let url = dcr_url.clone();
         let payload = cleaned_payload.clone();
-        let via = via_value.clone();
+        let via = via_value;
         async move {
             c.post(&url)
                 .header("content-type", "application/json")
@@ -679,7 +679,7 @@ pub async fn register_get_proxy(
         let c = client.clone();
         let u = url.clone();
         let r = rat.clone();
-        let via = via_value.clone();
+        let via = via_value;
         async move {
             c.get(&u)
                 .header("Authorization", format!("Bearer {}", r))
@@ -735,7 +735,7 @@ pub async fn register_update_proxy(
         let u = url.clone();
         let r = rat.clone();
         let p = cleaned.clone();
-        let via = via_value.clone();
+        let via = via_value;
         async move {
             c.put(&u)
                 .header("Authorization", format!("Bearer {}", r))
@@ -782,7 +782,7 @@ pub async fn register_delete_proxy(
         let c = client.clone();
         let u = url.clone();
         let r = rat.clone();
-        let via = via_value.clone();
+        let via = via_value;
         async move {
             c.delete(&u)
                 .header("Authorization", format!("Bearer {}", r))

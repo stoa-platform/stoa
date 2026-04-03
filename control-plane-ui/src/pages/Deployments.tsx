@@ -64,7 +64,7 @@ const tabs: Tab[] = [
     id: 'pipelines',
     name: 'Pipeline Traces',
     icon: Activity,
-    description: 'GitLab → Kafka → AWX traces',
+    description: `${config.services.git.label} → Kafka → AWX traces`,
   },
   {
     id: 'history',
@@ -72,7 +72,7 @@ const tabs: Tab[] = [
     icon: Rocket,
     description: 'API deployment records',
   },
-  { id: 'config', name: 'GitLab Config', icon: Settings, description: 'GitOps configuration' },
+  { id: 'config', name: 'Git Config', icon: Settings, description: 'GitOps configuration' },
 ];
 
 // =============================================================================
@@ -420,7 +420,7 @@ function PipelineTracesTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-neutral-500 dark:text-neutral-400">
-          End-to-end tracing of GitLab → Kafka → AWX pipeline
+          End-to-end tracing of {config.services.git.label} → Kafka → AWX pipeline
         </p>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
@@ -478,7 +478,7 @@ function PipelineTracesTab() {
           <div className="flex flex-col items-center justify-center py-12 text-neutral-500 dark:text-neutral-400">
             <Activity className="h-12 w-12 mb-4 text-neutral-300 dark:text-neutral-600" />
             <p>No pipeline traces yet</p>
-            <p className="text-sm">Push to GitLab to trigger a pipeline</p>
+            <p className="text-sm">Push to {config.services.git.label} to trigger a pipeline</p>
           </div>
         ) : (
           <div>
@@ -989,10 +989,10 @@ function DeploymentHistoryTab() {
 }
 
 // =============================================================================
-// GITLAB CONFIG TAB (ex-Git page)
+// GIT CONFIG TAB (ex-GitLab page)
 // =============================================================================
 
-function GitLabConfigTab() {
+function GitConfigTab() {
   return (
     <div className="space-y-6">
       {/* GitOps Overview */}
@@ -1006,7 +1006,7 @@ function GitLabConfigTab() {
         </p>
         <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4 font-mono text-sm">
           <div className="text-neutral-500 dark:text-neutral-400 mb-2"># Pipeline flow</div>
-          <div className="text-blue-600">GitLab Push</div>
+          <div className="text-blue-600">{config.services.git.label} Push</div>
           <div className="text-neutral-400 ml-4">↓ webhook</div>
           <div className="text-green-600 ml-4">Control-Plane-API</div>
           <div className="text-neutral-400 ml-8">↓ publish event</div>
@@ -1054,13 +1054,13 @@ function GitLabConfigTab() {
         </h3>
         <div className="flex flex-wrap gap-4">
           <a
-            href={config.services.gitlab.url}
+            href={config.services.git.url}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
           >
             <GitBranch className="h-5 w-5" />
-            GitLab Repository
+            {config.services.git.label} Repository
             <ExternalLink className="h-4 w-4" />
           </a>
           <a
@@ -1084,7 +1084,9 @@ function GitLabConfigTab() {
         <div className="space-y-3">
           <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
             <div>
-              <p className="font-medium text-neutral-900 dark:text-white">GitLab Webhook</p>
+              <p className="font-medium text-neutral-900 dark:text-white">
+                {config.services.git.label} Webhook
+              </p>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Receives push and merge request events
               </p>
@@ -1098,7 +1100,7 @@ function GitLabConfigTab() {
             <p>
               <strong>Endpoint:</strong>{' '}
               <code className="bg-neutral-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
-                {config.api.baseUrl}/webhooks/gitlab
+                {config.api.baseUrl}/{config.services.git.webhookPath}
               </code>
             </p>
             <p className="mt-1">
@@ -1153,7 +1155,7 @@ export function Deployments() {
       <div>
         {activeTab === 'pipelines' && <PipelineTracesTab />}
         {activeTab === 'history' && <DeploymentHistoryTab />}
-        {activeTab === 'config' && <GitLabConfigTab />}
+        {activeTab === 'config' && <GitConfigTab />}
       </div>
     </div>
   );

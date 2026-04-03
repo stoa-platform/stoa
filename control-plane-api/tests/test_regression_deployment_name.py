@@ -83,7 +83,6 @@ class TestRegression_DeploymentNameLookup:
         mock_deployment.id = "dep-1"
 
         with (
-            patch("src.routers.deployments.git_service", mock_git_service),
             patch("src.routers.deployments.DeploymentService") as mock_svc_cls,
             patch("src.routers.deployments.DeploymentResponse") as mock_resp_cls,
         ):
@@ -96,16 +95,17 @@ class TestRegression_DeploymentNameLookup:
                 request=mock_request,
                 user=mock_user,
                 db=mock_db,
+                git=mock_git_service,
             )
 
-        # THE INVARIANT: git_service must have been called with the name, not UUID
+        # THE INVARIANT: git provider must have been called with the name, not UUID
         assert "petstore-api" in mock_git_service.lookup_keys, (
-            f"git_service was called with {mock_git_service.lookup_keys}, "
+            f"git provider was called with {mock_git_service.lookup_keys}, "
             "expected 'petstore-api' (the name), not the UUID"
         )
         # Verify update_api was also called with the name
         assert "update:petstore-api" in mock_git_service.lookup_keys, (
-            f"git_service.update_api was called with {mock_git_service.lookup_keys}, "
+            f"git provider update_api was called with {mock_git_service.lookup_keys}, "
             "expected 'update:petstore-api'"
         )
 
@@ -133,7 +133,6 @@ class TestRegression_DeploymentNameLookup:
         mock_deployment = MagicMock()
 
         with (
-            patch("src.routers.deployments.git_service", mock_git_service),
             patch("src.routers.deployments.DeploymentService") as mock_svc_cls,
             patch("src.routers.deployments.DeploymentResponse") as mock_resp_cls,
         ):
@@ -146,6 +145,7 @@ class TestRegression_DeploymentNameLookup:
                 request=mock_request,
                 user=mock_user,
                 db=mock_db,
+                git=mock_git_service,
             )
 
         # Should use api_id as lookup key (which is the name)

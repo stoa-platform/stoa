@@ -18,9 +18,9 @@ def _make_svc_with_mock_client(json_response=None, status_code=200, content=b"{}
     svc = GatewayAdminService()
     mock_response = MagicMock()
     mock_response.status_code = status_code
+    mock_response.is_error = status_code >= 400
     mock_response.content = content
     mock_response.json.return_value = json_response or {}
-    mock_response.raise_for_status = MagicMock()
 
     svc._client = AsyncMock()
     svc._client.request = AsyncMock(return_value=mock_response)
@@ -259,15 +259,15 @@ class TestProvisionApplication:
         svc._use_proxy = False
         create_resp = MagicMock()
         create_resp.status_code = 200
+        create_resp.is_error = False
         create_resp.content = b'{"id": "gw-app-1"}'
         create_resp.json.return_value = {"id": "gw-app-1"}
-        create_resp.raise_for_status = MagicMock()
 
         assoc_resp = MagicMock()
         assoc_resp.status_code = 200
+        assoc_resp.is_error = False
         assoc_resp.content = b"{}"
         assoc_resp.json.return_value = {}
-        assoc_resp.raise_for_status = MagicMock()
 
         svc._client = AsyncMock()
         svc._client.request = AsyncMock(side_effect=[create_resp, assoc_resp])
@@ -292,15 +292,15 @@ class TestProvisionApplication:
 
         create_resp = MagicMock()
         create_resp.status_code = 200
+        create_resp.is_error = False
         create_resp.content = b'{"applications": [{"id": "nested-1"}]}'
         create_resp.json.return_value = {"applications": [{"id": "nested-1"}]}
-        create_resp.raise_for_status = MagicMock()
 
         assoc_resp = MagicMock()
         assoc_resp.status_code = 200
+        assoc_resp.is_error = False
         assoc_resp.content = b"{}"
         assoc_resp.json.return_value = {}
-        assoc_resp.raise_for_status = MagicMock()
 
         svc._client = AsyncMock()
         svc._client.request = AsyncMock(side_effect=[create_resp, assoc_resp])
@@ -339,25 +339,26 @@ class TestProvisionApplication:
 
         create_resp = MagicMock()
         create_resp.status_code = 200
+        create_resp.is_error = False
         create_resp.content = b'{"id": "cleanup-app"}'
         create_resp.json.return_value = {"id": "cleanup-app"}
-        create_resp.raise_for_status = MagicMock()
 
         assoc_resp = MagicMock()
-        assoc_resp.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError("fail", request=MagicMock(), response=MagicMock())
-        )
+        assoc_resp.status_code = 500
+        assoc_resp.is_error = True
+        assoc_resp.content = b'fail'
+        assoc_resp.text = "fail"
+        assoc_resp.request = MagicMock()
 
         delete_resp = MagicMock()
         delete_resp.status_code = 204
+        delete_resp.is_error = False
         delete_resp.content = b""
-        delete_resp.json.return_value = {}
-        delete_resp.raise_for_status = MagicMock()
 
         svc._client = AsyncMock()
         svc._client.request = AsyncMock(side_effect=[create_resp, assoc_resp, delete_resp])
 
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(httpx.HTTPStatusError, match="Gateway returned 500"):
             asyncio.get_event_loop().run_until_complete(
                 svc.provision_application(
                     subscription_id="sub-004",
@@ -499,9 +500,9 @@ class TestConfigureApiOidc:
         for _i in range(6):
             resp = MagicMock()
             resp.status_code = 200
+            resp.is_error = False
             resp.content = b'{"ok": true}'
             resp.json.return_value = {"ok": True}
-            resp.raise_for_status = MagicMock()
             responses.append(resp)
 
         svc._client = AsyncMock()
@@ -530,13 +531,10 @@ class TestConfigureApiOidc:
         for _ in range(6):
             resp = MagicMock()
             resp.status_code = 409
-            resp.raise_for_status = MagicMock(
-                side_effect=httpx.HTTPStatusError(
-                    "Conflict",
-                    request=MagicMock(),
-                    response=MagicMock(status_code=409),
-                )
-            )
+            resp.is_error = True
+            resp.content = b'Conflict'
+            resp.text = "Conflict"
+            resp.request = MagicMock()
             responses.append(resp)
 
         svc._client = AsyncMock()

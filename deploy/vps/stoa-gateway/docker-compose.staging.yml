@@ -1,0 +1,32 @@
+# STOA Gateway — Staging
+# VPS: 54.36.209.237 (OVH staging-vps)
+# Canonical copy at /opt/stoa-gateway/docker-compose.yml on VPS
+
+services:
+  stoa-gateway:
+    image: ghcr.io/stoa-platform/stoa-gateway:latest
+    container_name: staging-stoa-gateway
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - STOA_GATEWAY_MODE=edge-mcp
+      - STOA_HOST=0.0.0.0
+      - STOA_PORT=3000
+      - STOA_ENVIRONMENT=staging
+      - STOA_LOG_LEVEL=info
+      - STOA_LOG_FORMAT=json
+      - STOA_CONTROL_PLANE_URL=https://api.gostoa.dev
+      - STOA_CONTROL_PLANE_API_KEY=stoa-gateway-api-key-ovh-prod-2026
+      - STOA_AUTO_REGISTER=true
+      - STOA_INSTANCE_NAME=stoa-gateway-staging
+      - STOA_ADVERTISE_URL=https://staging-gw-vps.gostoa.dev
+      - STOA_ADMIN_LISTEN_ADDR=0.0.0.0:3001
+      - STOA_KEYCLOAK_URL=https://auth.gostoa.dev
+      - STOA_KEYCLOAK_REALM=stoa
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

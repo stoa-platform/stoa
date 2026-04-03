@@ -43,11 +43,10 @@ on:
       environment:
         description: 'Target environment'
         required: false
-        default: 'staging'
+        default: 'dev'
         type: choice
         options:
           - dev
-          - staging
           - production
 
 concurrency:
@@ -64,7 +63,7 @@ env:
 jobs:
   e2e-tests:
     name: E2E Tests (shard ${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 30
     # PR and scheduled runs are non-blocking — E2E requires live infra
     continue-on-error: ${{ github.event_name == 'pull_request' || github.event_name == 'schedule' }}

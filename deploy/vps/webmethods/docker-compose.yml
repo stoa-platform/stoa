@@ -1,0 +1,45 @@
+# webMethods API Gateway — Production
+# VPS: 51.255.201.17 (OVH webmethods-vps)
+# Managed by Ansible — canonical copy at /opt/webmethods/docker-compose.yml on VPS
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: webmethods-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  apigateway:
+    image: softwareag/apigateway-trial:10.15
+    container_name: webmethods-apigateway
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5555:5555"
+      - "5543:5543"
+      - "127.0.0.1:19072:9072"
+    environment:
+      - apigw_elasticsearch_hosts=elasticsearch:9200
+      - apigw_elasticsearch_http_username=
+      - apigw_elasticsearch_http_password=
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u Administrator:manage http://localhost:5555/rest/apigateway/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+volumes:
+  es-data:

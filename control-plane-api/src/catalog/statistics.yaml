@@ -1,0 +1,59 @@
+category_id: statistics
+category_name: Statistics & Open Data
+icon: bar-chart-3
+
+entries:
+  - id: eu-eurostat
+    name: eurostat
+    display_name: "Eurostat Data API"
+    description: "European statistics — economic, social, environmental indicators"
+    country: EU
+    region: EU
+    spec_url: https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: get_dataset
+        description: Retrieve statistical dataset by code
+      - name: search_datasets
+        description: Search available datasets by keyword
+    status: verified
+    tags: [statistics, data, eu, economics]
+    documentation_url: https://ec.europa.eu/eurostat/
+    icon: bar-chart-3
+
+  - id: eu-data-gouv-fr
+    name: data-gouv-fr
+    display_name: "data.gouv.fr (France)"
+    description: "French open data platform — government datasets and APIs"
+    country: FR
+    region: EU-FR
+    spec_url: https://www.data.gouv.fr/api/1/
+    protocol: openapi
+    auth_type: api_key
+    tools:
+      - name: search_datasets
+        description: Search open datasets
+      - name: get_dataset
+        description: Get dataset details and resources
+    status: verified
+    tags: [open-data, france, government]
+    documentation_url: https://www.data.gouv.fr/
+    icon: database
+
+  - id: eu-data-europa
+    name: data-europa
+    display_name: "data.europa.eu"
+    description: "EU Open Data Portal — pan-European open datasets"
+    country: EU
+    region: EU
+    spec_url: https://data.europa.eu/api/hub/search/
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: search_datasets
+        description: Search EU open datasets
+    status: community
+    tags: [open-data, eu, government]
+    documentation_url: https://data.europa.eu/
+    icon: database

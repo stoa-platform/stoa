@@ -77,8 +77,11 @@ const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.Ga
 const GatewayModes = lazy(() =>
   gatewaysModule().then((m) => ({ default: m.GatewayModesDashboard }))
 );
-const GatewayDeployments = lazy(() =>
-  import('./pages/GatewayDeployments').then((m) => ({ default: m.GatewayDeploymentsDashboard }))
+const GatewayDetailPage = lazy(() => gatewaysModule().then((m) => ({ default: m.GatewayDetail })));
+const ApiDeployments = lazy(() =>
+  import('./pages/ApiDeployments/ApiDeploymentsDashboard').then((m) => ({
+    default: m.ApiDeploymentsDashboard,
+  }))
 );
 const DriftDetection = lazy(() =>
   import('./pages/DriftDetection').then((m) => ({ default: m.DriftDetection }))
@@ -121,6 +124,17 @@ const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 // CAB-1764: Skeleton pages (ShadowDiscovery, TokenOptimizer, Policies, Workflows) removed from nav
 // Routes redirect to home. Pages retained in codebase for reintroduction when implemented.
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
+
+// CAB-1639: EU Public API Catalog
+const EUApiCatalog = lazy(() =>
+  import('./pages/EUApiCatalog/EUApiCatalog').then((m) => ({ default: m.EUApiCatalog }))
+);
+
+// CAB-1922: Backend API detail view
+const backendApisModule = () => import('./pages/BackendApis');
+const BackendApiDetail = lazy(() =>
+  backendApisModule().then((m) => ({ default: m.BackendApiDetail }))
+);
 
 // CAB-1251: SaaS Self-Service pages
 const saasApiKeysModule = () => import('./pages/SaasApiKeys');
@@ -304,10 +318,15 @@ function ProtectedRoutes() {
                   path="/external-mcp-servers"
                   element={<Navigate to="/mcp-servers?tab=custom" replace />}
                 />
+                <Route path="/api-deployments" element={<ApiDeployments />} />
+                <Route
+                  path="/gateway-deployments"
+                  element={<Navigate to="/api-deployments" replace />}
+                />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
+                <Route path="/gateways/:id" element={<GatewayDetailPage />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
-                <Route path="/gateway-deployments" element={<GatewayDeployments />} />
                 <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
                 <Route path="/operations" element={<OperationsDashboard />} />
@@ -339,6 +358,8 @@ function ProtectedRoutes() {
                   path="/backend-apis"
                   element={<Navigate to="/apis?tab=backends" replace />}
                 />
+                <Route path="/backend-apis/:id" element={<BackendApiDetail />} />
+                <Route path="/eu-catalog" element={<EUApiCatalog />} />
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />

@@ -15,6 +15,7 @@ def _mock_summary_row(**overrides) -> MagicMock:
         "tenant_id": "acme",
         "api_id": uuid.uuid4(),
         "consumer_id": None,
+        "environment": None,
         "period": "daily",
         "period_start": datetime.utcnow(),
         "request_count": 100,
@@ -22,6 +23,10 @@ def _mock_summary_row(**overrides) -> MagicMock:
         "total_latency_ms": 5000,
         "p99_latency_ms": 200,
         "total_tokens": 1500,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
     }

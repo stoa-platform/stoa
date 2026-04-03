@@ -46,6 +46,15 @@ class GatewayInstanceResponse(BaseModel):
     environment: str
     tenant_id: str | None
     base_url: str
+    target_gateway_url: str | None = Field(
+        None, description="URL of the third-party gateway managed by this Link/Connect instance"
+    )
+    public_url: str | None = Field(
+        None, description="Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)"
+    )
+    ui_url: str | None = Field(
+        None, description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)"
+    )
     auth_config: dict
     status: str
     last_health_check: datetime | None
@@ -70,6 +79,8 @@ class GatewayInstanceResponse(BaseModel):
             return [k for k, val in v.items() if val]
         if v is None:
             return []
+        if not isinstance(v, list):
+            return [str(v)]
         return list(v)
 
 
@@ -124,16 +135,22 @@ class GatewayDeploymentResponse(BaseModel):
     gateway_instance_id: UUID
     desired_state: dict
     desired_at: datetime
-    actual_state: dict | None
-    actual_at: datetime | None
+    actual_state: dict | None = None
+    actual_at: datetime | None = None
     sync_status: str
-    last_sync_attempt: datetime | None
-    last_sync_success: datetime | None
-    sync_error: str | None
+    last_sync_attempt: datetime | None = None
+    last_sync_success: datetime | None = None
+    sync_error: str | None = None
     sync_attempts: int
-    gateway_resource_id: str | None
+    sync_steps: list[dict] | None = None
+    gateway_resource_id: str | None = None
     created_at: datetime
     updated_at: datetime
+    # Joined from GatewayInstance (populated by list queries, absent on single-object endpoints)
+    gateway_name: str | None = None
+    gateway_display_name: str | None = None
+    gateway_type: str | None = None
+    gateway_environment: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

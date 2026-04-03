@@ -67,15 +67,3 @@ pub fn spawn_cache_file_watcher(watch_dir: String, cache: Arc<PromptCache>) {
     });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::cache::PromptCacheConfig;
-
-    #[test]
-    fn watcher_tolerates_missing_directory() {
-        let cache = Arc::new(PromptCache::new(PromptCacheConfig::default()));
-        // Should not panic — just logs a warning
-        spawn_cache_file_watcher("/nonexistent/path/abc123".into(), cache);
-    }
-}

@@ -33,7 +33,19 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         self._base_url = (config or {}).get("base_url", "http://localhost:8080")
         auth_config = (config or {}).get("auth_config", {})
         self._admin_token = auth_config.get("admin_token", "") if isinstance(auth_config, dict) else ""
+        if not self._admin_token:
+            logger.warning(
+                "StoaGatewayAdapter: no admin_token in auth_config for %s — admin API calls will fail with 401",
+                self._base_url,
+            )
         self._client: httpx.AsyncClient | None = None
+
+    @property
+    def _http(self) -> httpx.AsyncClient:
+        """Return the connected HTTP client, raising if not connected."""
+        if self._client is None:
+            raise RuntimeError("StoaGatewayAdapter not connected — call connect() first")
+        return self._client
 
     # --- Lifecycle ---
 
@@ -51,7 +63,11 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
             if resp.status_code == 200:
                 data = resp.json()
                 return AdapterResult(success=True, data=data)
-            return AdapterResult(success=False, error=f"Health check failed: HTTP {resp.status_code}")
+            body = resp.text.strip() or "(empty response)"
+            return AdapterResult(
+                success=False,
+                error=f"Health check failed: HTTP {resp.status_code} — {body}",
+            )
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
@@ -72,7 +88,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
     async def sync_api(self, api_spec: dict, tenant_id: str, auth_token: str | None = None) -> AdapterResult:
         try:
             payload = mappers.map_api_spec_to_stoa(api_spec, tenant_id)
-            resp = await self._client.post("/admin/apis", json=payload)
+            resp = await self._http.post("/admin/apis", json=payload)
 
             if resp.status_code in (200, 201):
                 data = resp.json()
@@ -81,13 +97,16 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
                     resource_id=data.get("id", payload.get("id", "")),
                     data={"spec_hash": payload.get("spec_hash", "")},
                 )
-            return AdapterResult(success=False, error=f"sync_api failed: HTTP {resp.status_code} — {resp.text}")
+            body = resp.text[:500] if resp.text else "(empty response)"
+            return AdapterResult(success=False, error=f"sync_api failed: HTTP {resp.status_code} — {body}")
         except Exception as e:
-            return AdapterResult(success=False, error=str(e))
+            error_msg = str(e) or f"{type(e).__name__}: (no details)"
+            logger.warning("sync_api exception for tenant %s: [%s] %s", tenant_id, type(e).__name__, error_msg)
+            return AdapterResult(success=False, error=error_msg)
 
     async def delete_api(self, api_id: str, auth_token: str | None = None) -> AdapterResult:
         try:
-            resp = await self._client.delete(f"/admin/apis/{api_id}")
+            resp = await self._http.delete(f"/admin/apis/{api_id}")
             if resp.status_code in (200, 204):
                 return AdapterResult(success=True, resource_id=api_id)
             if resp.status_code == 404:
@@ -99,7 +118,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
 
     async def list_apis(self, auth_token: str | None = None) -> list[dict]:
         try:
-            resp = await self._client.get("/admin/apis")
+            resp = await self._http.get("/admin/apis")
             if resp.status_code == 200:
                 return resp.json()
             return []
@@ -111,7 +130,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
     async def upsert_policy(self, policy_spec: dict, auth_token: str | None = None) -> AdapterResult:
         try:
             payload = mappers.map_policy_to_stoa(policy_spec)
-            resp = await self._client.post("/admin/policies", json=payload)
+            resp = await self._http.post("/admin/policies", json=payload)
 
             if resp.status_code in (200, 201):
                 data = resp.json()
@@ -129,7 +148,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
 
     async def delete_policy(self, policy_id: str, auth_token: str | None = None) -> AdapterResult:
         try:
-            resp = await self._client.delete(f"/admin/policies/{policy_id}")
+            resp = await self._http.delete(f"/admin/policies/{policy_id}")
             if resp.status_code in (200, 204):
                 return AdapterResult(success=True, resource_id=policy_id)
             if resp.status_code == 404:
@@ -140,7 +159,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
 
     async def list_policies(self, auth_token: str | None = None) -> list[dict]:
         try:
-            resp = await self._client.get("/admin/policies")
+            resp = await self._http.get("/admin/policies")
             if resp.status_code == 200:
                 return resp.json()
             return []
@@ -226,7 +245,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         """
         try:
             payload = mappers.map_uac_to_stoa_contract(contract_spec)
-            resp = await self._client.post("/admin/contracts", json=payload)
+            resp = await self._http.post("/admin/contracts", json=payload)
 
             if resp.status_code in (200, 201):
                 data = resp.json()
@@ -248,7 +267,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         Deletes the contract and cascades removal of generated routes and tools.
         """
         try:
-            resp = await self._client.delete(f"/admin/contracts/{contract_name}")
+            resp = await self._http.delete(f"/admin/contracts/{contract_name}")
             if resp.status_code in (200, 204):
                 return AdapterResult(success=True, resource_id=contract_name)
             if resp.status_code == 404:
@@ -272,7 +291,7 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         synced = 0
         for mapping in mappings:
             try:
-                resp = await self._client.post("/admin/consumer-credentials", json=mapping)
+                resp = await self._http.post("/admin/consumer-credentials", json=mapping)
                 if resp.status_code in (200, 201):
                     synced += 1
                 else:

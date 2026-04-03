@@ -67,6 +67,7 @@ import type {
   PromotionDiffResponse,
   TenantCAInfo,
   CSRSignResponse,
+  IssuedCertificateListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -246,6 +247,13 @@ class ApiService {
     const params: Record<string, unknown> = { page: 1, page_size: 100 };
     if (environment) params.environment = environment;
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis`, { params });
+    return data.items ?? data;
+  }
+
+  async getAdminApis(page = 1, pageSize = 100): Promise<API[]> {
+    const { data } = await this.client.get('/v1/admin/catalog/apis', {
+      params: { page, page_size: pageSize },
+    });
     return data.items ?? data;
   }
 
@@ -430,6 +438,20 @@ class ApiService {
 
   async revokeTenantCA(tenantId: string): Promise<void> {
     await this.client.delete(`/v1/tenants/${tenantId}/ca`);
+  }
+
+  async listIssuedCertificates(
+    tenantId: string,
+    status?: string
+  ): Promise<IssuedCertificateListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/ca/certificates`, {
+      params: status ? { status } : undefined,
+    });
+    return data;
+  }
+
+  async revokeIssuedCertificate(tenantId: string, certId: string): Promise<void> {
+    await this.client.post(`/v1/tenants/${tenantId}/ca/certificates/${certId}/revoke`);
   }
 
   // Deployments (CAB-1353 lifecycle API)
@@ -733,6 +755,11 @@ class ApiService {
     return data;
   }
 
+  async getGatewayTools(id: string): Promise<any[]> {
+    const { data } = await this.client.get(`/v1/admin/gateways/${id}/tools`);
+    return data;
+  }
+
   async createGatewayInstance(payload: any): Promise<any> {
     const { data } = await this.client.post('/v1/admin/gateways', payload);
     return data;
@@ -781,6 +808,7 @@ class ApiService {
     sync_status?: string;
     gateway_instance_id?: string;
     environment?: string;
+    gateway_type?: string;
     page?: number;
     page_size?: number;
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
@@ -810,11 +838,87 @@ class ApiService {
     return data;
   }
 
+  async testDeployment(id: string): Promise<{
+    reachable: boolean;
+    status_code?: number;
+    latency_ms?: number;
+    error?: string;
+    gateway_url?: string;
+    path?: string;
+  }> {
+    const { data } = await this.client.post(`/v1/admin/deployments/${id}/test`);
+    return data;
+  }
+
   async getCatalogEntries(): Promise<
     { id: string; api_name: string; tenant_id: string; version: string }[]
   > {
     const { data } = await this.client.get('/v1/admin/deployments/catalog-entries');
     return data;
+  }
+
+  // API Deployment Orchestration (CAB-1888)
+
+  async getDeployableEnvironments(
+    tenantId: string,
+    apiId: string
+  ): Promise<{
+    environments: {
+      environment: string;
+      deployable: boolean;
+      promotion_status: string;
+    }[];
+  }> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/apis/${apiId}/deployable-environments`
+    );
+    return data;
+  }
+
+  async deployApiToEnv(
+    tenantId: string,
+    apiId: string,
+    payload: { environment: string; gateway_ids?: string[] }
+  ): Promise<{ deployed: number; environment: string; deployment_ids: string[] }> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/apis/${apiId}/deploy`,
+      payload
+    );
+    return data;
+  }
+
+  async getApiGatewayAssignments(
+    tenantId: string,
+    apiId: string,
+    environment?: string
+  ): Promise<{ items: any[]; total: number }> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
+      { params: environment ? { environment } : {} }
+    );
+    return data;
+  }
+
+  async createApiGatewayAssignment(
+    tenantId: string,
+    apiId: string,
+    payload: { gateway_id: string; environment: string; auto_deploy: boolean }
+  ): Promise<any> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteApiGatewayAssignment(
+    tenantId: string,
+    apiId: string,
+    assignmentId: string
+  ): Promise<void> {
+    await this.client.delete(
+      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments/${assignmentId}`
+    );
   }
 
   // =========================================================================
@@ -1003,6 +1107,18 @@ class ApiService {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/tenant`, {
       params: { group_by: 'source', ...params },
     });
+    return data;
+  }
+
+  // Chat conversation metrics — tenant-level aggregates (CAB-1868)
+  async getChatConversationMetrics(tenantId: string): Promise<ChatConversationMetrics> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/tenant`);
+    return data;
+  }
+
+  // Chat model distribution — conversations per model (CAB-1868)
+  async getChatModelDistribution(tenantId: string): Promise<ChatModelDistribution> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/chat/usage/models`);
     return data;
   }
 
@@ -1400,6 +1516,25 @@ export interface TokenUsageStats {
   today_tokens: number;
   top_users: { user_id: string; tokens: number }[];
   daily_breakdown: { date: string; tokens: number }[];
+}
+
+// Chat conversation metrics (CAB-1868)
+export interface ChatConversationMetrics {
+  tenant_id: string;
+  total_conversations: number;
+  total_messages: number;
+  total_tokens: number;
+  unique_users: number;
+}
+
+export interface ModelDistributionEntry {
+  model: string;
+  conversations: number;
+}
+
+export interface ChatModelDistribution {
+  models: ModelDistributionEntry[];
+  total_conversations: number;
 }
 
 // Platform Status types (CAB-654)

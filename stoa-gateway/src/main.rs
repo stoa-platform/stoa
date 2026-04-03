@@ -73,34 +73,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize mode-specific components
     init_mode_components(&config).await;
 
-    // Auto-register with Control Plane (ADR-028)
-    if config.auto_register {
-        if let Some(cp_url) = &config.control_plane_url {
-            if let Some(api_key) = &config.control_plane_api_key {
-                info!("Auto-registering with Control Plane: {}", cp_url);
-                let registrar =
-                    std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
+    // Auto-register with Control Plane (ADR-028, CAB-1915)
+    // Registration runs in background with retry so the gateway becomes visible
+    // even if the CP API is not ready at startup (common in K8s).
+    // The registrar is kept alive so api_bridge can read the assigned gateway_id (CAB-1940).
+    let registrar: Option<std::sync::Arc<GatewayRegistrar>> = if config.auto_register {
+        match (&config.control_plane_url, &config.control_plane_api_key) {
+            (Some(cp_url), Some(api_key)) => {
+                info!(
+                    "Starting background registration with Control Plane: {}",
+                    cp_url
+                );
+                let r = std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
 
-                match registrar.register(&config).await {
-                    Ok(id) => {
-                        info!(gateway_id = %id, "Registered with Control Plane");
-                        // Start heartbeat background task
-                        registrar.start_heartbeat(
-                            std::sync::Arc::new(state.clone()),
-                            config.heartbeat_interval_secs,
-                        );
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "Failed to register with Control Plane — running in standalone mode");
-                    }
-                }
-            } else {
-                info!("Auto-registration skipped: STOA_CONTROL_PLANE_API_KEY not set");
+                r.clone().start_registration_and_heartbeat(
+                    config.clone(),
+                    std::sync::Arc::new(state.clone()),
+                    config.heartbeat_interval_secs,
+                );
+                Some(r)
             }
-        } else {
-            info!("Auto-registration skipped: STOA_CONTROL_PLANE_URL not set");
+            (None, _) => {
+                info!("Auto-registration skipped: STOA_CONTROL_PLANE_URL not set");
+                None
+            }
+            (_, None) => {
+                info!("Auto-registration skipped: STOA_CONTROL_PLANE_API_KEY not set");
+                None
+            }
         }
-    }
+    } else {
+        None
+    };
 
     // Start background tasks
     state.start_background_tasks();
@@ -112,7 +116,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_k8s_watcher(&config, &state).await;
 
     // Register tools: try CP discovery, fallback to static
-    register_tools(&state).await;
+    // Pass registrar so API catalog discovery can scope by gateway_id (CAB-1940)
+    register_tools(&state, registrar).await;
 
     info!(
         tools = state.tool_registry.count(),
@@ -222,12 +227,6 @@ fn init_tracing(config: &Config) {
         .with_target(true)
         .with_current_span(true);
 
-    // CAB-1866: eprintln because tracing subscriber is not yet initialized
-    eprintln!(
-        "[stoa-gateway] OTel config: enabled={}, endpoint={:?}",
-        config.otel_enabled, config.otel_endpoint
-    );
-
     if config.otel_enabled {
         use stoa_gateway::telemetry::{init_telemetry_tracer, TelemetryConfig};
 
@@ -257,7 +256,10 @@ fn init_tracing(config: &Config) {
 }
 
 /// Register MCP tools.
-async fn register_tools(state: &AppState) {
+///
+/// When a `GatewayRegistrar` is provided, the API catalog discovery uses the
+/// assigned gateway_id to scope results to this gateway's assigned APIs (CAB-1940).
+async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<GatewayRegistrar>>) {
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
 
     if state.config.native_tools_enabled {
@@ -284,20 +286,6 @@ async fn register_tools(state: &AppState) {
         stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
     }
 
-    // Discover published APIs from CP catalog and register as MCP tools
-    let cp_url = state.control_plane.base_url().to_string();
-    let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
-    match api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client).await {
-        Ok(count) => {
-            if count > 0 {
-                info!(count, "API catalog tools registered");
-            }
-        }
-        Err(e) => {
-            warn!(error = %e, "API catalog discovery failed (will retry in background)");
-        }
-    }
-
     // Background refresh: sync tools from CP every 60s
     stoa_tools::start_tool_refresh_task(
         state.tool_registry.clone(),
@@ -305,8 +293,42 @@ async fn register_tools(state: &AppState) {
         state.cp_circuit_breaker.clone(),
     );
 
-    // Background refresh: sync API catalog tools every 60s
-    api_bridge::start_api_tool_refresh_task(state.tool_registry.clone(), cp_url, http_client);
+    // Discover published APIs from CP catalog and register as MCP tools
+    // Sidecar is an ext_authz enforcer, Shadow is passive capture — neither needs discovery (CAB-1949)
+    if state.config.gateway_mode.supports_discovery() {
+        let cp_url = state.control_plane.base_url().to_string();
+        let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
+
+        // Read gateway_id if registration has completed (may be None at startup)
+        let gw_id = match &registrar {
+            Some(r) => r.gateway_id().await,
+            None => None,
+        };
+
+        match api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client, gw_id)
+            .await
+        {
+            Ok(count) => {
+                if count > 0 {
+                    info!(count, "API catalog tools registered");
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "API catalog discovery failed (will retry in background)");
+            }
+        }
+
+        // Background refresh: sync API catalog tools every 60s
+        // Passes registrar so each tick reads the current gateway_id (CAB-1940)
+        api_bridge::start_api_tool_refresh_task(
+            state.tool_registry.clone(),
+            cp_url,
+            http_client,
+            registrar,
+        );
+    } else {
+        info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (sidecar/shadow mode)");
+    }
 }
 
 // === Graceful Shutdown ===

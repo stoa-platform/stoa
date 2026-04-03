@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { apiService } from '../../services/api';
@@ -158,6 +158,7 @@ export function GatewayList() {
   const { isReady, hasRole } = useAuth();
   const isCpiAdmin = hasRole('cpi-admin');
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -453,7 +454,7 @@ export function GatewayList() {
                 env={env}
                 gateways={items}
                 stats={envStats[env]}
-                onSelect={setSelectedGateway}
+                onSelect={(gw) => navigate(`/gateways/${gw.id}`)}
                 onHealthCheck={handleHealthCheck}
                 onDelete={handleDelete}
                 onRestore={handleRestore}
@@ -714,6 +715,36 @@ function GatewayRow({
             {gw.base_url.replace(/^https?:\/\//, '')}
           </span>
         </div>
+        {(gw.ui_url || gw.public_url) && (
+          <div className="flex items-center gap-3 mt-0.5">
+            {gw.ui_url && (
+              <a
+                href={gw.ui_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Globe className="w-3 h-3" />
+                UI
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            )}
+            {gw.public_url && (
+              <a
+                href={gw.public_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Zap className="w-3 h-3" />
+                Runtime
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Status badge */}
@@ -738,7 +769,7 @@ function GatewayRow({
       </div>
 
       {/* Actions */}
-      <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex-shrink-0 flex items-center gap-1 w-16 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
         {isDeleted ? (
           <button
             onClick={(e) => {
@@ -752,17 +783,19 @@ function GatewayRow({
           </button>
         ) : (
           <>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onHealthCheck();
-              }}
-              disabled={isChecking}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
-              title="Health check"
-            >
-              <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
-            </button>
+            {gw.source !== 'self_register' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onHealthCheck();
+                }}
+                disabled={isChecking}
+                className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+                title="Health check"
+              >
+                <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -921,6 +954,40 @@ function GatewayDetailPanel({
                   </a>
                 }
               />
+              {gw.target_gateway_url && (
+                <DetailRow
+                  label="Target Gateway"
+                  value={
+                    <a
+                      href={gw.target_gateway_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {gw.target_gateway_url.replace(/^https?:\/\//, '')}
+                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    </a>
+                  }
+                />
+              )}
+              {gw.ui_url && (
+                <DetailRow
+                  label="Gateway UI"
+                  value={
+                    <a
+                      href={gw.ui_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {gw.ui_url.replace(/^https?:\/\//, '')}
+                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    </a>
+                  }
+                />
+              )}
               {gw.source && (
                 <DetailRow
                   label="Source"

@@ -715,7 +715,7 @@ function GatewayRow({
             {gw.base_url.replace(/^https?:\/\//, '')}
           </span>
         </div>
-        {(gw.mode === 'sidecar' || gw.mode === 'connect') && (gw.ui_url || gw.public_url) && (
+        {(gw.ui_url || gw.public_url) && (
           <div className="flex items-center gap-3 mt-0.5">
             {gw.ui_url && (
               <a

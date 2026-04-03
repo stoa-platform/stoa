@@ -1,12 +1,17 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-02 (duplicate tenant cleanup + CAB-1938 upsert fix)
+> Derniere MAJ: 2026-04-03 (CAB-1953 gateway ui_url)
 
 ## ✅ DONE
 
 > Full history: 2500+ pts across 160+ issues. See Linear for complete audit trail.
 
 ### Cycle 14 (Mar 30+)
+- ✅ CAB-1953: feat(api,ui) add ui_url to GatewayInstance — PR #2149 (2026-04-03)
+  - Migration 088: `ui_url` (String 500, nullable) on `gateway_instances`
+  - Self-register persists `ui_url` in all 4 code paths
+  - Console: UI + Runtime URL links on /gateways for sidecar/connect modes
+  - Council: 8.50/10 Go. 7 files, ~97 LOC
 - ✅ fix(api): duplicate personal tenant cleanup (2026-04-02)
   - Root cause: original tenants (12/03) stored email as `owner_user_id`, fix (24/03) stored UUID → index didn't detect duplicates
   - Fix: archived 8 doublons (`free-*-{hex}`), updated 8 originals (`owner_user_id` email→UUID)
@@ -16,7 +21,7 @@
   - Migration 084: partial unique indexes on (tenant_id, api_name, version) WHERE deleted_at IS NULL
   - Slug generation: `_slugify()` auto-generates URL-safe api_id from name
   - 22 regression tests (slugify, endpoint slug generation, 409 message, soft-delete, versions)
-- ✅ CAB-1936: [MEGA] STC + Security Plugins — competitive response to IBM Context Forge (21 pts) — Council 6.00/10
+- ✅ CAB-1936: [MEGA] STC + Security Plugins (21 pts) — Council 6.00/10
   - Phase 1: ADR-058 + federation benchmark — PR #2107
   - Phase 2: STC compression plugin + SDK body extension — PR #2108
   - Phase 3: PII filter + secrets detection plugins — PR #2110 (squashed into #2108)
@@ -74,6 +79,8 @@
 CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
 - PRs #2106, #2109, #2111 merged
 - Pending: PR for align upsert conflict clauses (commit 9a7a6eb8 on branch)
+
+CAB-1953 follow-up: gateways stoa-link/stoa-connect doivent envoyer `ui_url` dans leur payload self-register pour que les URLs apparaissent sur /gateways
 
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 23/23 PASS

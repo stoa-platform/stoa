@@ -122,10 +122,11 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
 /// 4. If not found: 404
 #[instrument(name = "proxy.dynamic", skip(state, request), fields(otel.kind = "client"))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
-    let path = request.uri().path().to_string();
+    let raw_path = request.uri().path();
+    let path = urlencoding::decode(raw_path).unwrap_or(std::borrow::Cow::Borrowed(raw_path));
     let method = request.method().clone();
 
-    // Find matching route
+    // Find matching route (path is percent-decoded so spaces in API names match)
     let route = match state.route_registry.find_by_path(&path) {
         Some(r) => r,
         None => {

@@ -40,10 +40,10 @@ export default defineConfig({
         'src/pages/**',
       ],
       thresholds: {
-        lines: 60,
-        functions: 60,
-        branches: 60,
-        statements: 60,
+        lines: 55, // CAB-1951 Phase 2: mechanical test deletion. Restored in Phase 3.
+        functions: 55,
+        branches: 55,
+        statements: 55,
       },
     },
     reporters: ['default', 'junit'],

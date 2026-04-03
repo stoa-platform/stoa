@@ -8,7 +8,19 @@ vi.mock('../../services/api', () => ({
   apiService: {
     forceSyncDeployment: vi.fn().mockResolvedValue({}),
     undeployFromGateway: vi.fn().mockResolvedValue({}),
+    testDeployment: vi.fn().mockResolvedValue({ reachable: true, status_code: 200 }),
   },
+}));
+
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { tenant_id: 'acme' }, hasPermission: () => true }),
+}));
+
+vi.mock('../../hooks/useDeployEvents', () => ({
+  useDeployEvents: () => ({
+    deployStates: {},
+    loadHistoricalLogs: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 vi.mock('@stoa/shared/components/Toast', () => ({

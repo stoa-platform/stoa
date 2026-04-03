@@ -329,10 +329,12 @@ vault:
     secretName: postgresql-credentials
 
 # ==============================================================================
-# Keycloak Monitoring (CAB-1961)
+# Keycloak (CAB-1961, CAB-1956)
 # ==============================================================================
-# Keycloak exposes Prometheus metrics at /metrics when KC_METRICS_ENABLED=true.
-# This ServiceMonitor enables Prometheus autodiscovery (kube-prometheus-stack).
+# Keycloak is deployed and scaled via stoa-infra (charts/keycloak/).
+# Replica counts in values-{dev,staging,prod}.yaml are REFERENCE ONLY —
+# actual replicas are managed by stoa-infra Helm chart.
+# Clustering (JGroups DNS_PING) is configured in stoa-infra when replicas > 1.
 keycloak:
   namespace: stoa-system
   metrics:

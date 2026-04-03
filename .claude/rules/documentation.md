@@ -99,6 +99,20 @@ Is it user-facing (customers, developers, partners)?
 
 See `stoa-docs/CONTRIBUTING.md` for interactive diagram patterns (Mermaid vs JSX decision tree, component conventions, existing components).
 
+## stoa-infra — Infrastructure Documentation
+
+Infrastructure docs live exclusively in `stoa-infra` (private repo). Key files:
+
+| File | Content |
+|------|---------|
+| `docs/carto/dns-inventory.md` | **DNS naming convention** + full record inventory (IPs, ports, Caddy config) |
+| `docs/carto/network-topology.md` | Network diagram (providers, sites, IPs) |
+| `docs/carto/service-placement.md` | Service→server mapping per environment |
+| `docs/carto/firewall-connectivity.md` | Firewall rules and port matrix |
+| `docs/carto/application-dependencies.md` | Service dependency graph |
+
+**When creating/renaming DNS records**: update `stoa-infra/docs/carto/dns-inventory.md` — it is the source of truth for DNS naming convention.
+
 ## Anti-Duplication Checklist
 
 Before creating any `.md` file in the stoa monorepo:

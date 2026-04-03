@@ -55,7 +55,7 @@ curl -X POST \
   -u Administrator:$GATEWAY_PASSWORD \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  "https://gateway.gostoa.dev/rest/apigateway/applications" \
+  "https://vps-wm.gostoa.dev/rest/apigateway/applications" \
   -d '{
     "name": "AppName",
     "description": "Description",

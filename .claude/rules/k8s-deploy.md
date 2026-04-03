@@ -150,6 +150,8 @@ Ports in `*/k8s/deployment.yaml` MUST match the Helm chart `service.port` in sto
 - `stoa-gateway`: 80
 - `keycloak`: 8080
 
+**DNS inventory**: `stoa-infra/docs/carto/dns-inventory.md` — naming convention + full record list for all environments.
+
 ## CI Workflow (`*-ci.yml`)
 
 ### apply-manifest Job (CRITICAL)

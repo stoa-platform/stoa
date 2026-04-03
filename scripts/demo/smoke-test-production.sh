@@ -103,10 +103,10 @@ check "Portal HTTPS reachable" "$R" "200\|302"
 # ─────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}Act 3: Gateway${NC}"
-R=$(curl -s --max-time 10 https://gateway.gostoa.dev/health 2>/dev/null || echo "error")
+R=$(curl -s --max-time 10 https://mcp.gostoa.dev/health 2>/dev/null || echo "error")
 check "Gateway /health" "$R" "healthy\|OK\|ok\|UP"
 
-R=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 10 https://gateway.gostoa.dev/.well-known/openid-configuration 2>/dev/null || echo "000")
+R=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 10 https://mcp.gostoa.dev/.well-known/openid-configuration 2>/dev/null || echo "000")
 check "Gateway OIDC discovery" "$R" "200"
 
 # ─────────────────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ check "Kong health (DB-less)" "$R" "server"
 R=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 10 https://gravitee.gostoa.dev/management/organizations/DEFAULT/environments 2>/dev/null || echo "000")
 check "Gravitee management API" "$R" "200\|401"
 
-R=$(curl -sI -o /dev/null -w "%{http_code}" -u Administrator:manage --max-time 10 https://webmethods.gostoa.dev/rest/apigateway/health 2>/dev/null || echo "000")
+R=$(curl -sI -o /dev/null -w "%{http_code}" -u Administrator:manage --max-time 10 https://vps-wm.gostoa.dev/rest/apigateway/health 2>/dev/null || echo "000")
 check "webMethods health" "$R" "200"
 
 # ─────────────────────────────────────────────────────────────────────

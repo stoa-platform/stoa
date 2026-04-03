@@ -63,7 +63,7 @@ ENV KAFKA_BOOTSTRAP_SERVERS=redpanda.stoa-system.svc.cluster.local:9092 \
     KAFKA_SASL_PASSWORD=""
 
 # API Gateway
-ENV GATEWAY_URL=https://gateway.gostoa.dev \
+ENV GATEWAY_URL=https://vps-wm.gostoa.dev \
     GATEWAY_ADMIN_USER=Administrator \
     GATEWAY_ADMIN_PASSWORD=""
 

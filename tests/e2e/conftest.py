@@ -19,7 +19,7 @@ from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 CONSOLE_URL = os.getenv("CONSOLE_URL", "https://console.gostoa.dev")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "https://gateway.gostoa.dev")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://vps-wm.gostoa.dev")
 PORTAL_URL = os.getenv("PORTAL_URL", "https://portal.gostoa.dev")
 KEYCLOAK_AUTH_URL = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect"
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")

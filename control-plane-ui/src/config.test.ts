@@ -50,8 +50,8 @@ describe('config', () => {
 
   it('constructs service URLs from base domain', async () => {
     const { config } = await importConfig();
-    expect(config.services.gateway.url).toBe('https://gateway.gostoa.dev');
-    expect(config.services.gateway.consoleUrl).toBe('https://gateway.gostoa.dev/apigatewayui/');
+    expect(config.services.gateway.url).toBe('https://vps-wm.gostoa.dev');
+    expect(config.services.gateway.consoleUrl).toBe('https://vps-wm.gostoa.dev/apigatewayui/');
     expect(config.services.mcpGateway.url).toBe('https://mcp.gostoa.dev');
     expect(config.services.awx.url).toBe('https://awx.gostoa.dev');
     expect(config.services.portal.url).toBe('https://portal.gostoa.dev');

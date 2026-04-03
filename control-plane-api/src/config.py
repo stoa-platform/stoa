@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     KAFKA_SASL_PASSWORD: str = ""
 
     # API Gateway
-    GATEWAY_URL: str = f"https://gateway.{_BASE_DOMAIN}"
+    GATEWAY_URL: str = f"https://vps-wm.{_BASE_DOMAIN}"
     GATEWAY_ADMIN_USER: str = "Administrator"
     GATEWAY_ADMIN_PASSWORD: str = ""
 

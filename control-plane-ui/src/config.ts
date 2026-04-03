@@ -71,7 +71,7 @@ export const config = {
   // External Services
   services: {
     gateway: {
-      url: import.meta.env.VITE_GATEWAY_URL || `https://gateway.${BASE_DOMAIN}`,
+      url: import.meta.env.VITE_GATEWAY_URL || `https://vps-wm.${BASE_DOMAIN}`,
       get consoleUrl() {
         return `${this.url}/apigatewayui/`;
       },

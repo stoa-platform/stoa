@@ -43,7 +43,7 @@ ARG VITE_KEYCLOAK_REALM=stoa
 ARG VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
 
 # External Services
-ARG VITE_GATEWAY_URL=https://gateway.gostoa.dev
+ARG VITE_GATEWAY_URL=https://vps-wm.gostoa.dev
 ARG VITE_AWX_URL=https://awx.gostoa.dev
 ARG VITE_PORTAL_URL=https://portal.gostoa.dev
 ARG VITE_GITLAB_URL=https://gitlab.com

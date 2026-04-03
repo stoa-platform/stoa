@@ -504,7 +504,7 @@ mod tests {
             admin_url: "http://gw-1:8081".to_string(),
             tenant_id: Some("acme".to_string()),
             target_gateway_url: Some("https://webmethods-prod:5555".to_string()),
-            public_url: Some("https://link-webmethods.gostoa.dev".to_string()),
+            public_url: Some("https://vps-wm-link.gostoa.dev".to_string()),
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -513,7 +513,7 @@ mod tests {
         assert!(json.contains("target_gateway_url"));
         assert!(json.contains("webmethods-prod:5555"));
         assert!(json.contains("public_url"));
-        assert!(json.contains("link-webmethods.gostoa.dev"));
+        assert!(json.contains("vps-wm-link.gostoa.dev"));
     }
 
     #[test]

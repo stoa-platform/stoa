@@ -294,8 +294,8 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
     );
 
     // Discover published APIs from CP catalog and register as MCP tools
-    // Only edge-mcp mode needs the tool registry — sidecar is an ext_authz enforcer (CAB-1940)
-    if state.config.gateway_mode == stoa_gateway::mode::GatewayMode::EdgeMcp {
+    // Sidecar is an ext_authz enforcer, Shadow is passive capture — neither needs discovery (CAB-1949)
+    if state.config.gateway_mode.supports_discovery() {
         let cp_url = state.control_plane.base_url().to_string();
         let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
 
@@ -327,7 +327,7 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
             registrar,
         );
     } else {
-        info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (not edge-mcp mode)");
+        info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (sidecar/shadow mode)");
     }
 }
 

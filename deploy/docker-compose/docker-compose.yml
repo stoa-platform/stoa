@@ -112,15 +112,22 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.3
     container_name: stoa-keycloak
-    command: start-dev --import-realm
+    command: start --import-realm --optimized
     ports:
       - "${PORT_KEYCLOAK:-8080}:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /
+      KC_HOSTNAME_STRICT: "false"
       KC_PROXY_HEADERS: "xforwarded"
+      # PostgreSQL dedicated database (CAB-1955)
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KC_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${POSTGRES_USER:-stoa}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-stoa-quickstart-2045}
       # Phase 2: Allow iframe embedding in Console (CAB-1108)
       KC_SPI_X_FRAME_OPTIONS: ""
       KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
@@ -137,7 +144,9 @@ services:
       - ../demo-federation/keycloak/demo-org-gamma.json:/opt/keycloak/data/import/demo-org-gamma-realm.json:ro
       # Theme
       - ../../keycloak/themes/stoa:/opt/keycloak/themes/stoa:ro
-      - keycloak-data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - stoa-network
     healthcheck:
@@ -718,7 +727,7 @@ networks:
 volumes:
   postgres-data:
   redpanda-data:
-  keycloak-data:
+  # keycloak-data removed — KC now uses PostgreSQL (CAB-1955)
   prometheus-data:
   grafana-data:
   loki-data:

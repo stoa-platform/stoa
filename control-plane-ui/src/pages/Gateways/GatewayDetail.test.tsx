@@ -28,7 +28,36 @@ const { mockGateway, mockDeployments } = vi.hoisted(() => ({
       uptime_seconds: 7200,
       routes_count: 5,
       policies_count: 2,
-      discovered_apis_count: 12,
+      discovered_apis_count: 3,
+      discovered_apis: [
+        {
+          name: 'Weather Service',
+          version: '2.0.0',
+          backend_url: 'https://api.weather.example.com',
+          paths: ['/forecast', '/current'],
+          methods: ['GET'],
+          policies: [],
+          is_active: true,
+        },
+        {
+          name: 'Payment Gateway',
+          version: '1.3.0',
+          backend_url: 'https://pay.example.com',
+          paths: ['/charge', '/refund'],
+          methods: ['POST', 'GET'],
+          policies: ['rate-limit'],
+          is_active: true,
+        },
+        {
+          name: 'Legacy CRM',
+          version: '',
+          backend_url: 'https://crm.internal',
+          paths: ['/contacts'],
+          methods: ['GET', 'PUT', 'DELETE'],
+          policies: [],
+          is_active: false,
+        },
+      ],
       error_rate: 0.01,
     },
     capabilities: ['rest', 'mcp', 'sse'],
@@ -90,13 +119,7 @@ function renderGatewayDetail(id = 'gw-1') {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/gateways/${id}`]}>
         <Routes>
-          <Route
-            path="/gateways/:id"
-            element={
-              // Lazy import not needed in test — direct import
-              <GatewayDetail />
-            }
-          />
+          <Route path="/gateways/:id" element={<GatewayDetail />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -156,7 +179,7 @@ describe('GatewayDetail', () => {
     await screen.findByText('STOA Edge MCP Gateway');
     expect(screen.getByText('2h 0m')).toBeInTheDocument(); // 7200s
     expect(screen.getByText('5')).toBeInTheDocument(); // routes
-    expect(screen.getByText('12')).toBeInTheDocument(); // discovered APIs
+    expect(screen.getByText('3')).toBeInTheDocument(); // discovered APIs
     expect(screen.getByText('1.0%')).toBeInTheDocument(); // error rate
   });
 
@@ -186,12 +209,12 @@ describe('GatewayDetail', () => {
   it('renders configuration fields', async () => {
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
-    expect(screen.getByText('http://stoa-gateway:8080')).toBeInTheDocument(); // base_url
-    expect(screen.getAllByText('dev').length).toBeGreaterThanOrEqual(1); // environment
-    expect(screen.getByText('0.9.1')).toBeInTheDocument(); // version
+    expect(screen.getByText('http://stoa-gateway:8080')).toBeInTheDocument();
+    expect(screen.getAllByText('dev').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('0.9.1')).toBeInTheDocument();
   });
 
-  it('renders discovery banner when discovered > 0 but no deployments', async () => {
+  it('renders discovered APIs table when no deployments but discovered APIs exist', async () => {
     const { apiService } = await import('../../services/api');
     vi.mocked(apiService.getGatewayDeployments).mockResolvedValueOnce({
       items: [],
@@ -199,15 +222,27 @@ describe('GatewayDetail', () => {
     });
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
-    expect(screen.getByText('12 APIs discovered via catalog sync')).toBeInTheDocument();
-    expect(screen.queryByText('No APIs deployed on this gateway')).not.toBeInTheDocument();
+    // API names from discovered_apis array
+    expect(screen.getByText('Weather Service')).toBeInTheDocument();
+    expect(screen.getByText('Payment Gateway')).toBeInTheDocument();
+    expect(screen.getByText('Legacy CRM')).toBeInTheDocument();
+    // Method badges
+    expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('POST').length).toBeGreaterThanOrEqual(1);
+    // Status badges
+    expect(screen.getAllByText('active').length).toBe(2);
+    expect(screen.getByText('inactive')).toBeInTheDocument();
   });
 
   it('renders empty state when no deployments and no discovered APIs', async () => {
     const { apiService } = await import('../../services/api');
     vi.mocked(apiService.getGatewayInstance).mockResolvedValueOnce({
       ...mockGateway,
-      health_details: { ...mockGateway.health_details, discovered_apis_count: 0 },
+      health_details: {
+        ...mockGateway.health_details,
+        discovered_apis_count: 0,
+        discovered_apis: [],
+      },
     });
     vi.mocked(apiService.getGatewayDeployments).mockResolvedValueOnce({
       items: [],
@@ -215,14 +250,15 @@ describe('GatewayDetail', () => {
     });
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
-    expect(screen.getByText('No APIs deployed on this gateway')).toBeInTheDocument();
+    expect(screen.getByText('No APIs deployed or discovered on this gateway')).toBeInTheDocument();
   });
 
-  it('renders deployments table when deployments exist even with discovered APIs', async () => {
+  it('shows both deployed and discovered sections when both have data', async () => {
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
     expect(screen.getByText('Payments API')).toBeInTheDocument();
-    expect(screen.queryByText(/discovered via catalog sync/)).not.toBeInTheDocument();
+    expect(screen.getByText('APIs Deployed')).toBeInTheDocument();
+    expect(screen.getByText('Weather Service')).toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

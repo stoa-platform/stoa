@@ -13,7 +13,7 @@ python-gitlab==8.1.0
 # GitHub integration (CAB-1890 — dual-provider migration)
 PyGithub>=2.0
 pyyaml==6.0.3
-sse-starlette==3.3.3
+sse-starlette==3.3.4
 aiocache==0.12.3
 prometheus-client==0.24.1
 structlog==24.1.0

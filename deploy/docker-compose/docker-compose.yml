@@ -132,6 +132,10 @@ services:
       # Phase 2: Allow iframe embedding in Console (CAB-1108)
       KC_SPI_X_FRAME_OPTIONS: ""
       KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
+      # Clustering — Infinispan distributed cache (CAB-1956)
+      # Enables session replication across replicas.
+      # Test: docker compose up --scale keycloak=2
+      KC_CACHE: "ispn"
       # FAPI 2.0: token exchange + DPoP + PAR (CAB-1733)
       KC_FEATURES: "token-exchange,dpop,par,admin-fine-grained-authz"
     volumes:

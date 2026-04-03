@@ -71,8 +71,6 @@ fi
 
 # 7. Verify Keycloak uses PostgreSQL (not H2)
 log "Checking Keycloak DB connection..."
-KC_DB_CHECK=$(docker exec stoa-keycloak bash -c 'echo "SELECT 1" | timeout 5 psql "jdbc:postgresql://postgres:5432/keycloak" 2>/dev/null' 2>&1 || true)
-# Alternative: just verify the env var is set
 KC_DB_ENV=$(docker exec stoa-keycloak printenv KC_DB 2>/dev/null || true)
 if [ "$KC_DB_ENV" = "postgres" ]; then
   log "KC_DB=postgres: confirmed"

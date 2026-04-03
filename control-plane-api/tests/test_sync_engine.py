@@ -30,6 +30,9 @@ class TestSyncEngine:
             "last_sync_attempt": None,
             "last_sync_success": None,
             "desired_at": datetime.now(UTC),
+            "desired_generation": 1,
+            "attempted_generation": 0,
+            "synced_generation": 0,
         }
         defaults.update(overrides)
         mock = MagicMock()

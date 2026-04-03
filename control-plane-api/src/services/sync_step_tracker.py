@@ -43,7 +43,7 @@ class SyncStepTracker:
     def from_list(cls, steps: list[dict]) -> SyncStepTracker:
         """Reconstruct a tracker from a serialized step list."""
         tracker = cls()
-        tracker._steps = [SyncStep(**s) for s in steps]  # type: ignore[arg-type]
+        tracker._steps = [SyncStep(**s) for s in steps]
         return tracker
 
     def start(self, name: str) -> None:

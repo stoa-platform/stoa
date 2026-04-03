@@ -44,6 +44,9 @@ def _mock_deployment(**kwargs):
     d.api_catalog_id = kwargs.get("api_catalog_id", uuid4())
     d.last_sync_attempt = None
     d.last_sync_success = None
+    d.desired_generation = kwargs.get("desired_generation", 1)
+    d.attempted_generation = kwargs.get("attempted_generation", 0)
+    d.synced_generation = kwargs.get("synced_generation", 0)
     return d
 
 

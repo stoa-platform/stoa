@@ -11,7 +11,7 @@ import type { PersonaRole } from '../../test/helpers';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockGateway, mockDeployments } = vi.hoisted(() => ({
+const { mockGateway, mockDeployments, mockTools } = vi.hoisted(() => ({
   mockGateway: {
     id: 'gw-1',
     name: 'stoa-gateway-edge-mcp-dev',
@@ -92,6 +92,11 @@ const { mockGateway, mockDeployments } = vi.hoisted(() => ({
     ],
     total: 2,
   },
+  mockTools: [
+    { name: 'weather_forecast', description: 'Get weather forecast for a location' },
+    { name: 'payment_charge', description: 'Process a payment charge' },
+    { name: 'crm_contacts', description: 'List CRM contacts' },
+  ],
 }));
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
@@ -100,6 +105,7 @@ vi.mock('../../services/api', () => ({
   apiService: {
     getGatewayInstance: vi.fn().mockResolvedValue(mockGateway),
     getGatewayDeployments: vi.fn().mockResolvedValue(mockDeployments),
+    getGatewayTools: vi.fn().mockResolvedValue(mockTools),
   },
 }));
 
@@ -214,51 +220,40 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('0.9.1')).toBeInTheDocument();
   });
 
-  it('renders discovered APIs table when no deployments but discovered APIs exist', async () => {
+  it('renders MCP tools table when tools are available', async () => {
     const { apiService } = await import('../../services/api');
     vi.mocked(apiService.getGatewayDeployments).mockResolvedValueOnce({
       items: [],
       total: 0,
     });
     renderGatewayDetail();
-    await screen.findByText('STOA Edge MCP Gateway');
-    // API names from discovered_apis array
-    expect(screen.getByText('Weather Service')).toBeInTheDocument();
-    expect(screen.getByText('Payment Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Legacy CRM')).toBeInTheDocument();
-    // Method badges
-    expect(screen.getAllByText('GET').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('POST').length).toBeGreaterThanOrEqual(1);
-    // Status badges
-    expect(screen.getAllByText('active').length).toBe(2);
-    expect(screen.getByText('inactive')).toBeInTheDocument();
+    expect(await screen.findByText('weather_forecast')).toBeInTheDocument();
+    expect(screen.getByText('payment_charge')).toBeInTheDocument();
+    expect(screen.getByText('crm_contacts')).toBeInTheDocument();
+    expect(screen.getByText('Get weather forecast for a location')).toBeInTheDocument();
+    expect(screen.getByText('MCP Tools')).toBeInTheDocument();
   });
 
-  it('renders empty state when no deployments and no discovered APIs', async () => {
+  it('renders empty state when no deployments and no tools', async () => {
     const { apiService } = await import('../../services/api');
-    vi.mocked(apiService.getGatewayInstance).mockResolvedValueOnce({
-      ...mockGateway,
-      health_details: {
-        ...mockGateway.health_details,
-        discovered_apis_count: 0,
-        discovered_apis: [],
-      },
-    });
+    vi.mocked(apiService.getGatewayTools).mockResolvedValueOnce([]);
     vi.mocked(apiService.getGatewayDeployments).mockResolvedValueOnce({
       items: [],
       total: 0,
     });
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
-    expect(screen.getByText('No APIs deployed or discovered on this gateway')).toBeInTheDocument();
+    expect(
+      screen.getByText('No APIs deployed and no MCP tools registered on this gateway')
+    ).toBeInTheDocument();
   });
 
-  it('shows both deployed and discovered sections when both have data', async () => {
+  it('shows both deployed and tools sections when both have data', async () => {
     renderGatewayDetail();
-    await screen.findByText('STOA Edge MCP Gateway');
+    expect(await screen.findByText('weather_forecast')).toBeInTheDocument();
     expect(screen.getByText('Payments API')).toBeInTheDocument();
     expect(screen.getByText('APIs Deployed')).toBeInTheDocument();
-    expect(screen.getByText('Weather Service')).toBeInTheDocument();
+    expect(screen.getByText('MCP Tools')).toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

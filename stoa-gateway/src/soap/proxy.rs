@@ -174,12 +174,3 @@ pub async fn soap_proxy(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_soap_content_type() {
-        // Verify the expected content type for SOAP requests
-        let ct = "text/xml; charset=utf-8";
-        assert!(ct.starts_with("text/xml"));
-    }
-}

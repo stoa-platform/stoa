@@ -732,7 +732,10 @@ networks:
 volumes:
   postgres-data:
   redpanda-data:
+<<<<<<< HEAD
+=======
   # keycloak-data removed — KC now uses PostgreSQL (CAB-1955)
+>>>>>>> origin/main
   prometheus-data:
   grafana-data:
   loki-data:

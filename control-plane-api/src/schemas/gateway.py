@@ -52,6 +52,9 @@ class GatewayInstanceResponse(BaseModel):
     public_url: str | None = Field(
         None, description="Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)"
     )
+    ui_url: str | None = Field(
+        None, description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)"
+    )
     auth_config: dict
     status: str
     last_health_check: datetime | None

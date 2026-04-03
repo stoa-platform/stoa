@@ -715,6 +715,36 @@ function GatewayRow({
             {gw.base_url.replace(/^https?:\/\//, '')}
           </span>
         </div>
+        {(gw.mode === 'sidecar' || gw.mode === 'connect') && (gw.ui_url || gw.public_url) && (
+          <div className="flex items-center gap-3 mt-0.5">
+            {gw.ui_url && (
+              <a
+                href={gw.ui_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Globe className="w-3 h-3" />
+                UI
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            )}
+            {gw.public_url && (
+              <a
+                href={gw.public_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Zap className="w-3 h-3" />
+                Runtime
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Status badge */}
@@ -936,6 +966,23 @@ function GatewayDetailPanel({
                       onClick={(e) => e.stopPropagation()}
                     >
                       {gw.target_gateway_url.replace(/^https?:\/\//, '')}
+                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    </a>
+                  }
+                />
+              )}
+              {gw.ui_url && (
+                <DetailRow
+                  label="Gateway UI"
+                  value={
+                    <a
+                      href={gw.ui_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {gw.ui_url.replace(/^https?:\/\//, '')}
                       <ExternalLink className="w-3 h-3 flex-shrink-0" />
                     </a>
                   }

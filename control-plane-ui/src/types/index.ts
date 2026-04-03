@@ -1167,6 +1167,7 @@ export interface GatewayInstance {
   base_url: string;
   target_gateway_url?: string | null;
   public_url?: string | null;
+  ui_url?: string | null;
   auth_config: Record<string, unknown>;
   status: GatewayInstanceStatus;
   last_health_check?: string;
@@ -1218,6 +1219,14 @@ export interface PaginatedGatewayInstances {
   page_size: number;
 }
 
+export interface SyncStep {
+  name: string;
+  status: 'running' | 'success' | 'failed' | 'skipped';
+  started_at: string;
+  completed_at?: string;
+  detail?: string;
+}
+
 export interface GatewayDeployment {
   id: string;
   api_catalog_id: string;
@@ -1231,6 +1240,7 @@ export interface GatewayDeployment {
   last_sync_success?: string;
   sync_error?: string;
   sync_attempts: number;
+  sync_steps?: SyncStep[];
   gateway_resource_id?: string;
   created_at: string;
   updated_at: string;

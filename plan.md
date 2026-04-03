@@ -368,7 +368,7 @@
 
 ## Cycle 14 (Mar 30 – Apr 5) — CURRENT
 
-**Scope**: ~371 pts | **Done**: 52 pts | **In Review**: 128 pts | **In Progress**: 53 pts
+**Scope**: ~371 pts | **Done**: 57 pts | **In Review**: 128 pts | **In Progress**: 53 pts
 **Theme**: STOA Connect + Dashboard UX + Health Checks + Real Data
 
 ### Done
@@ -376,10 +376,11 @@
 - [x] fix(api): duplicate personal tenant cleanup (2026-04-02) — DB-only (no PR)
   - Archived 8 duplicate tenants, fixed `owner_user_id` email→UUID on 8 originals
 - [x] CAB-1938: fix(api): slug api_id + name-version uniqueness — PRs #2106, #2109, #2111
-- [x] CAB-1936: [MEGA] STC + Security Plugins — competitive response to IBM Context Forge (21 pts, P3)
+- [x] CAB-1936: [MEGA] STC + Security Plugins (21 pts, P3)
   - Phase 1: ADR-058 + federation benchmark — PR #2107
   - Phase 2+3: STC plugin + PII filter + secrets detection — PR #2108
 - [x] CAB-1935: chore(ci): cross-repo service port drift detection (5 pts, P2) — PR #2079
+- [x] CAB-1953: feat(api,ui): add ui_url to GatewayInstance for admin UI links (5 pts, P3) — PR #2149
 
 ### In Review
 

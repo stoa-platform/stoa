@@ -73,8 +73,26 @@ Every `fix()` PR MUST include a regression test:
 
 CI enforces via `regression-guard.yml` (blocking). Bypass: `skip-regression` label.
 
+### Boundary Integrity Rule (CAB-1951)
+Never generate tests that mock the boundary under test. If a test for `WebMethodsAdapter`
+replaces `GatewayAdminService` with a mock, it tests nothing — it asserts that your mock
+returns what you told it to.
+
+| Layer | Wrong | Right |
+|-------|-------|-------|
+| **Python adapters** | `unittest.mock.AsyncMock` on the HTTP client | `httpx.MockTransport` with realistic payloads |
+| **Python routers** | Patch entire repository + assert `status_code == 200` | FastAPI `TestClient` with real (in-memory) DB |
+| **React pages** | 8+ `vi.mock()` + `getByText('Dashboard')` | MSW to intercept `fetch`, render with real providers |
+| **Rust HTTP** | Inline mock returning hardcoded `Ok(())` | `axum::test` helpers or `mockito` crate |
+
+**Why**: CAB-1944 shipped 5 regressions at mocked boundaries. 5,700 tests, 0 caught them.
+
+**How to apply**: Before writing a test, ask: "If the real dependency had a bug, would this
+test catch it?" If the answer is no (because the dependency is mocked), redesign the test.
+
 ### Detection Checklist
 1. Modified `src/pages/` → corresponding `.test.tsx` exists?
 2. New `vi.mock('AuthContext')` inline → should use `createAuthMock`?
 3. Coverage diff → threshold still met?
 4. PR title `fix(` → regression test present?
+5. New test mocks the boundary under test? → redesign per Boundary Integrity Rule

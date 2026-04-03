@@ -13,3 +13,9 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- Ensure the stoa user has full privileges
 GRANT ALL PRIVILEGES ON DATABASE stoa_platform TO stoa;
+
+-- =============================================================================
+-- Keycloak dedicated database (CAB-1955)
+-- Same PostgreSQL instance, separate database for Keycloak persistence
+-- =============================================================================
+CREATE DATABASE keycloak OWNER stoa;

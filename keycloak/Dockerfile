@@ -1,7 +1,7 @@
 # STOA Keycloak - Custom theme image
 # Based on official Keycloak with STOA dark theme
 # Theme version: 2.1 - KC 26.5.3 upgrade
-# Login theme: parent=keycloak (v1, deprecated in KC 26 — migrate to v2 when v1 removed)
+# Login theme: parent=keycloak.v2 (migrated CAB-1960)
 # Account theme: parent=keycloak.v2 (current)
 
 FROM quay.io/keycloak/keycloak:26.5.3 AS builder

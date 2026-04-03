@@ -45,7 +45,7 @@ jobs:
 
       - name: Create issue on drift
         if: steps.drift.outcome == 'failure' || steps.graph.outcome == 'failure'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const title = `Platform Catalog Drift Detected — ${new Date().toISOString().split('T')[0]}`;

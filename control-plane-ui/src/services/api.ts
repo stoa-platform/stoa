@@ -755,6 +755,11 @@ class ApiService {
     return data;
   }
 
+  async getGatewayTools(id: string): Promise<any[]> {
+    const { data } = await this.client.get(`/v1/admin/gateways/${id}/tools`);
+    return data;
+  }
+
   async createGatewayInstance(payload: any): Promise<any> {
     const { data } = await this.client.post('/v1/admin/gateways', payload);
     return data;

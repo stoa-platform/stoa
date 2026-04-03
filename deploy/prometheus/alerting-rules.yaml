@@ -331,6 +331,29 @@ spec:
             summary: "Keycloak high login failure rate"
             description: "Keycloak login failure rate is {{ $value | humanizePercentage }}"
 
+        - alert: KeycloakHighMemory
+          expr: |
+            jvm_memory_used_bytes{job="keycloak", area="heap"}
+            / jvm_memory_max_bytes{job="keycloak", area="heap"} > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            component: keycloak
+          annotations:
+            summary: "Keycloak JVM heap usage high"
+            description: "Keycloak JVM heap usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+        - alert: KeycloakSessionThreshold
+          expr: |
+            sum(keycloak_sessions_count{job="keycloak"}) > 500
+          for: 5m
+          labels:
+            severity: warning
+            component: keycloak
+          annotations:
+            summary: "Keycloak active sessions high"
+            description: "Keycloak has {{ $value }} active sessions (threshold: 500)"
+
     # ============================================
     # Redpanda/Kafka Alerts
     # ============================================

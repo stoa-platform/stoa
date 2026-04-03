@@ -329,6 +329,19 @@ vault:
     secretName: postgresql-credentials
 
 # ==============================================================================
+# Keycloak Monitoring (CAB-1961)
+# ==============================================================================
+# Keycloak exposes Prometheus metrics at /metrics when KC_METRICS_ENABLED=true.
+# This ServiceMonitor enables Prometheus autodiscovery (kube-prometheus-stack).
+keycloak:
+  namespace: stoa-system
+  metrics:
+    serviceMonitor:
+      enabled: false
+      interval: 15s
+      scrapeTimeout: 10s
+
+# ==============================================================================
 # Monitoring OIDC Configuration (CAB-1103 Phase 6B)
 # ==============================================================================
 # Configures OIDC authentication for Grafana, oauth2-proxy for Prometheus,

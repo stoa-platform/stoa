@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
 from ..database import get_db
+from ..models.portal_application import SecurityProfile
 from ..models.subscription import Subscription, SubscriptionStatus
 from ..repositories.plan import PlanRepository
 from ..repositories.portal_application import PortalApplicationRepository
@@ -114,14 +115,15 @@ async def create_subscription(
             detail="Application not found. Please create an application first.",
         )
 
-    if not portal_app.keycloak_client_id:
+    if portal_app.security_profile == SecurityProfile.API_KEY:
+        oauth_client_id = None
+    elif not portal_app.keycloak_client_id:
         raise HTTPException(
             status_code=400,
-            detail="Application has no OAuth2 client configured. "
-            "Please regenerate credentials in My Applications.",
+            detail="Application has no OAuth2 client configured. " "Please regenerate credentials in My Applications.",
         )
-
-    oauth_client_id = portal_app.keycloak_client_id
+    else:
+        oauth_client_id = portal_app.keycloak_client_id
 
     # Create subscription (no API key — OAuth2 only)
     subscription = Subscription(

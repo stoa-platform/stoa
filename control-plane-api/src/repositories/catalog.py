@@ -101,17 +101,18 @@ class CatalogRepository:
             tag_conditions = [APICatalog.tags.contains([tag]) for tag in tags]
             query = query.where(or_(*tag_conditions))
 
-        # Search filter (name, description, api_id) - CAB-1044: escape LIKE wildcards
+        # Search filter (name, description, api_id, version) - CAB-1044, CAB-1965
         if search and search.strip():
             search_term = escape_like(search.strip().lower())
             search_pattern = f"%{search_term}%"
             query = query.where(
                 or_(
-                    func.lower(APICatalog.api_name).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(APICatalog.api_name, "")).like(search_pattern, escape="\\"),
                     func.lower(func.coalesce(APICatalog.api_metadata["description"].astext, "")).like(
                         search_pattern, escape="\\"
                     ),
                     func.lower(APICatalog.api_id).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(APICatalog.version, "")).like(search_pattern, escape="\\"),
                 )
             )
 

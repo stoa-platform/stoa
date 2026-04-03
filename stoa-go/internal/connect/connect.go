@@ -40,6 +40,10 @@ type Config struct {
 	HeartbeatInterval time.Duration
 	// TargetGatewayURL is the URL of the third-party gateway managed by this agent.
 	TargetGatewayURL string
+	// PublicURL is the public DNS URL where runtime APIs are served.
+	PublicURL string
+	// UIURL is the web UI URL of the third-party gateway admin console.
+	UIURL string
 }
 
 // ConfigFromEnv creates a Config from environment variables.
@@ -65,6 +69,8 @@ func ConfigFromEnv(version string) Config {
 		}
 	}
 	cfg.TargetGatewayURL = os.Getenv("STOA_TARGET_GATEWAY_URL")
+	cfg.PublicURL = os.Getenv("STOA_PUBLIC_URL")
+	cfg.UIURL = os.Getenv("STOA_UI_URL")
 	return cfg
 }
 
@@ -77,6 +83,8 @@ type RegistrationPayload struct {
 	Capabilities     []string `json:"capabilities"`
 	AdminURL         string   `json:"admin_url"`
 	TargetGatewayURL string   `json:"target_gateway_url,omitempty"`
+	PublicURL        string   `json:"public_url,omitempty"`
+	UIURL            string   `json:"ui_url,omitempty"`
 }
 
 // RegistrationResponse is the response from the register endpoint.
@@ -168,6 +176,8 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 		Capabilities:     []string{"policy_sync", "health_monitoring"},
 		AdminURL:         fmt.Sprintf("http://%s:%s", a.cfg.InstanceName, healthPort),
 		TargetGatewayURL: a.cfg.TargetGatewayURL,
+		PublicURL:        a.cfg.PublicURL,
+		UIURL:            a.cfg.UIURL,
 	}
 
 	data, err := json.Marshal(payload)

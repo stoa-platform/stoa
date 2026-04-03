@@ -20,10 +20,16 @@ depends_on = None
 
 # Known URLs for existing gateways: (public_url, ui_url)
 KNOWN_URLS = {
+    # STOA Gateway (edge-mcp)
     "stoa-gateway-edge-mcp-dev": ("https://mcp.gostoa.dev", None),
+    # STOA Link — webMethods (old name with double -dev, and fixed name)
     "stoa-link-wm-dev-sidecar-dev": ("https://link-webmethods.gostoa.dev", "https://vps-wm-ui.gostoa.dev"),
-    # After STOA_INSTANCE_NAME fix, new registration will use this name:
     "stoa-link-wm-sidecar-dev": ("https://link-webmethods.gostoa.dev", "https://vps-wm-ui.gostoa.dev"),
+    # STOA Connect agents (VPS)
+    "connect-webmethods-connect-production": ("https://connect-webmethods.gostoa.dev", "https://vps-wm-ui.gostoa.dev"),
+    "kong-vps-connect-production": ("https://connect-kong.gostoa.dev", None),
+    "gravitee-vps-connect-production": ("https://connect-gravitee.gostoa.dev", None),
+    "connect-webmethods-dev-connect-dev": ("https://connect-webmethods.gostoa.dev", None),
 }
 
 

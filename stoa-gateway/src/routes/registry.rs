@@ -385,4 +385,27 @@ mod tests {
         assert_eq!(count, 1);
         assert_eq!(reg.get("r1").unwrap().path_prefix, "/apis/b");
     }
+
+    /// Regression test for CAB-1964: percent-encoded paths (%20) must match
+    /// routes whose path_prefix contains literal spaces.
+    ///
+    /// The fix is in dynamic_proxy (percent-decodes before find_by_path),
+    /// but we verify the registry itself matches decoded paths correctly.
+    #[test]
+    fn regression_cab_1964_percent_encoded_space_in_path() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("r1", "/apis/demo/Exchange Rate API"));
+
+        // Decoded path (what dynamic_proxy now passes) should match
+        let found = reg.find_by_path("/apis/demo/Exchange Rate API/USD");
+        assert!(found.is_some(), "decoded path must match route with spaces");
+        assert_eq!(found.unwrap().id, "r1");
+
+        // Raw percent-encoded path should NOT match (spaces != %20)
+        let not_found = reg.find_by_path("/apis/demo/Exchange%20Rate%20API/USD");
+        assert!(
+            not_found.is_none(),
+            "percent-encoded path must not match literal-space route"
+        );
+    }
 }

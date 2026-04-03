@@ -1407,3 +1407,83 @@ func TestWebMethodsSyncRoutesFailsIfActivateFails(t *testing.T) {
 		t.Errorf("error should contain API name, got: %s", err.Error())
 	}
 }
+
+// --- Regression tests for CAB-1944 Round 3 ---
+
+func TestRegressionStripSwagger2ResponseRefs(t *testing.T) {
+	// CAB-1944: webMethods RefProperty crash on $ref in response schemas
+	spec := []byte(`{"swagger":"2.0","paths":{"/pet/findByStatus":{"get":{"responses":{"200":{"description":"ok","schema":{"type":"array","items":{"$ref":"#/definitions/Pet"}}}}}}}}`)
+	result := stripSwagger2ResponseRefs(spec)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(result, &parsed); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	paths := parsed["paths"].(map[string]interface{})
+	get := paths["/pet/findByStatus"].(map[string]interface{})["get"].(map[string]interface{})
+	resp200 := get["responses"].(map[string]interface{})["200"].(map[string]interface{})
+	if _, hasSchema := resp200["schema"]; hasSchema {
+		t.Error("schema with $ref should have been stripped")
+	}
+}
+
+func TestRegressionStripSwagger2ResponseRefsNoOpOpenAPI3(t *testing.T) {
+	// No-op for OpenAPI 3.x specs
+	spec := []byte(`{"openapi":"3.0.0","paths":{"/pet":{"get":{"responses":{"200":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Pet"}}}}}}}}}`)
+	result := stripSwagger2ResponseRefs(spec)
+	if string(result) != string(spec) {
+		t.Error("should not modify OpenAPI 3.x specs")
+	}
+}
+
+func TestRegressionFailedRoutesTracking(t *testing.T) {
+	// CAB-1944: FailedRoutes should track per-deployment errors
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"apiResponse":[]}`))
+		case r.URL.Path == "/rest/apigateway/apis" && r.Method == http.MethodPost:
+			body, _ := io.ReadAll(r.Body)
+			var payload map[string]interface{}
+			_ = json.Unmarshal(body, &payload)
+			name := payload["apiName"].(string)
+			if name == "stoa-bad-route" {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"errorDetails":"RefProperty crash"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"apiResponse":{"api":{"id":"ok-1","isActive":true}}}`))
+		case strings.Contains(r.URL.Path, "/rest/apigateway/apis/") && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"apiResponse":{"api":{"id":"ok-1","isActive":true}}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	adapter := NewWebMethodsAdapter(AdapterConfig{})
+	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+		{Name: "good-route", DeploymentID: "dep-1", Activated: true},
+		{Name: "bad-route", DeploymentID: "dep-2", Activated: true},
+	})
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// dep-1 should NOT be in FailedRoutes (it succeeded)
+	if _, failed := adapter.FailedRoutes["dep-1"]; failed {
+		t.Error("dep-1 should not be in FailedRoutes (it succeeded)")
+	}
+	// dep-2 should be in FailedRoutes
+	if errMsg, failed := adapter.FailedRoutes["dep-2"]; !failed {
+		t.Error("dep-2 should be in FailedRoutes")
+	} else if !strings.Contains(errMsg, "RefProperty") {
+		t.Errorf("dep-2 error should contain RefProperty, got: %s", errMsg)
+	}
+}

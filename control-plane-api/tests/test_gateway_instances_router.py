@@ -44,6 +44,7 @@ class TestGatewayInstancesRouter:
             "version": None,
             "tags": [],
             "target_gateway_url": None,
+            "public_url": None,
             "protected": False,
             "deleted_at": None,
             "deleted_by": None,

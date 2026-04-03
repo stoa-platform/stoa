@@ -185,7 +185,7 @@ spec:
 
 3. Check Gateway directly:
    ```bash
-   curl https://gateway.gostoa.dev/rest/apigateway/apis
+   curl https://vps-wm.gostoa.dev/rest/apigateway/apis
    ```
 
 ### Validation Errors

@@ -44,13 +44,13 @@ The CP sync engine **skips** `self_register` gateways (agent-managed).
 
 ## DNS Records (Cloudflare, DNS-only)
 
-Only needed for Caddy TLS on webMethods admin UI:
+Convention: `vps-{gw}[-service].gostoa.dev` — see `stoa-infra/docs/carto/dns-inventory.md`.
 
 | Subdomain | IP | Purpose |
 |-----------|-----|---------|
-| `webmethods.gostoa.dev` | `51.255.201.17` | Prod wM admin |
-| `connect-webmethods.gostoa.dev` | `51.255.201.17` | Prod stoa-connect health (via Caddy) |
-| `link-webmethods.gostoa.dev` | `51.255.201.17` | Prod stoa-link sidecar |
+| `vps-wm.gostoa.dev` | `51.255.201.17` | Prod wM admin (5555) |
+| `vps-wm-ui.gostoa.dev` | `51.255.201.17` | Prod wM UI (9072) |
+| `vps-wm-link.gostoa.dev` | `51.255.201.17` | Prod stoa-gateway sidecar (9200) |
 | `dev-wm.gostoa.dev` | `164.68.121.123` | Dev wM admin |
 
 ## Services per VPS

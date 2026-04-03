@@ -170,6 +170,10 @@ class GatewayRegistration(BaseModel):
         default=None,
         description="Public DNS URL of this gateway for Console display (CAB-1940)",
     )
+    ui_url: str | None = Field(
+        default=None,
+        description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)",
+    )
 
 
 class HeartbeatPayload(BaseModel):
@@ -307,6 +311,8 @@ async def register_gateway(
             existing.target_gateway_url = payload.target_gateway_url
         if payload.public_url:
             existing.public_url = payload.public_url
+        if payload.ui_url:
+            existing.ui_url = payload.ui_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
         existing.mode = normalized_mode
@@ -330,6 +336,8 @@ async def register_gateway(
             deleted_entry.target_gateway_url = payload.target_gateway_url
         if payload.public_url:
             deleted_entry.public_url = payload.public_url
+        if payload.ui_url:
+            deleted_entry.ui_url = payload.ui_url
         deleted_entry.status = GatewayInstanceStatus.ONLINE
         deleted_entry.last_health_check = now
         deleted_entry.mode = normalized_mode
@@ -375,6 +383,8 @@ async def register_gateway(
             argocd_entry.target_gateway_url = payload.target_gateway_url
         if payload.public_url:
             argocd_entry.public_url = payload.public_url
+        if payload.ui_url:
+            argocd_entry.ui_url = payload.ui_url
         argocd_entry.status = GatewayInstanceStatus.ONLINE
         argocd_entry.last_health_check = now
         argocd_entry.mode = normalized_mode
@@ -399,6 +409,7 @@ async def register_gateway(
         base_url=payload.admin_url,
         target_gateway_url=payload.target_gateway_url,
         public_url=payload.public_url,
+        ui_url=payload.ui_url,
         auth_config={"type": "gateway_key"},
         status=GatewayInstanceStatus.ONLINE,
         last_health_check=now,

@@ -157,6 +157,7 @@ export function GatewayDetail() {
           {gateway.target_gateway_url && (
             <ConfigItem label="Target Gateway" value={gateway.target_gateway_url} isLink />
           )}
+          {gateway.ui_url && <ConfigItem label="Gateway UI" value={gateway.ui_url} isLink />}
           <ConfigItem label="Environment" value={gateway.environment} />
           <ConfigItem label="Type" value={gateway.gateway_type} />
           {gateway.version && <ConfigItem label="Version" value={gateway.version} />}

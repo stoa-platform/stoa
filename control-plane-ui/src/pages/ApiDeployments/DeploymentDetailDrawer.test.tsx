@@ -12,17 +12,6 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { tenant_id: 'acme' }, hasPermission: () => true }),
-}));
-
-vi.mock('../../hooks/useDeployEvents', () => ({
-  useDeployEvents: () => ({
-    deployStates: {},
-    loadHistoricalLogs: vi.fn().mockResolvedValue(undefined),
-  }),
-}));
-
 vi.mock('@stoa/shared/components/Toast', () => ({
   useToastActions: () => ({ success: vi.fn(), error: vi.fn() }),
 }));

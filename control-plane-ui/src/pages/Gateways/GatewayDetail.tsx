@@ -18,6 +18,16 @@ import {
 } from 'lucide-react';
 import type { GatewayInstance } from '../../types';
 
+interface DiscoveredAPI {
+  name: string;
+  version?: string;
+  backend_url?: string;
+  paths?: string[];
+  methods?: string[];
+  policies?: string[];
+  is_active?: boolean;
+}
+
 const MODE_LABELS: Record<string, string> = {
   'edge-mcp': 'Edge MCP',
   sidecar: 'STOA Link',
@@ -31,6 +41,14 @@ const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle2 }
   offline: { color: 'text-red-600 bg-red-50', icon: XCircle },
   degraded: { color: 'text-amber-600 bg-amber-50', icon: AlertTriangle },
   maintenance: { color: 'text-blue-600 bg-blue-50', icon: Clock },
+};
+
+const METHOD_COLORS: Record<string, string> = {
+  GET: 'bg-emerald-50 text-emerald-700',
+  POST: 'bg-blue-50 text-blue-700',
+  PUT: 'bg-amber-50 text-amber-700',
+  PATCH: 'bg-orange-50 text-orange-700',
+  DELETE: 'bg-red-50 text-red-700',
 };
 
 function formatUptime(seconds: number): string {
@@ -76,6 +94,7 @@ export function GatewayDetail() {
   const statusCfg = STATUS_CONFIG[gateway.status] || STATUS_CONFIG.offline;
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
+  const discoveredApis = (hd.discovered_apis as DiscoveredAPI[]) || [];
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -183,17 +202,15 @@ export function GatewayDetail() {
       </section>
 
       {/* APIs Deployed */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Zap className="h-5 w-5 text-gray-400" />
-          APIs Deployed
-          <span className="ml-auto text-sm font-normal text-gray-400">
-            {deployments.length} API{deployments.length !== 1 ? 's' : ''}
-          </span>
-        </h2>
-        {deployments.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">No APIs deployed on this gateway</p>
-        ) : (
+      {deployments.length > 0 && (
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-gray-400" />
+            APIs Deployed
+            <span className="ml-auto text-sm font-normal text-gray-400">
+              {deployments.length} API{deployments.length !== 1 ? 's' : ''}
+            </span>
+          </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -220,8 +237,80 @@ export function GatewayDetail() {
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
+
+      {/* Discovered APIs (from catalog sync / connect agent) */}
+      {discoveredApis.length > 0 && (
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-gray-400" />
+            Discovered APIs
+            <span className="ml-auto text-sm font-normal text-gray-400">
+              {discoveredApis.length} API{discoveredApis.length !== 1 ? 's' : ''}
+            </span>
+          </h2>
+          <p className="text-xs text-gray-400 mb-3">
+            Auto-discovered via catalog sync. Use Deploy to formally assign APIs for lifecycle
+            management.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-100">
+                  <th className="pb-2 font-medium">API Name</th>
+                  <th className="pb-2 font-medium">Version</th>
+                  <th className="pb-2 font-medium">Backend URL</th>
+                  <th className="pb-2 font-medium">Methods</th>
+                  <th className="pb-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {discoveredApis.map((api) => (
+                  <tr key={api.name} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-2.5 font-medium text-gray-900">{api.name}</td>
+                    <td className="py-2.5 text-gray-500">{api.version || '-'}</td>
+                    <td className="py-2.5 text-gray-500 font-mono text-xs max-w-[200px] truncate">
+                      {api.backend_url || '-'}
+                    </td>
+                    <td className="py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {(api.methods || []).map((m) => (
+                          <MethodBadge key={m} method={m} />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-2.5">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          api.is_active !== false
+                            ? 'bg-green-50 text-green-700'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {api.is_active !== false ? 'active' : 'inactive'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Empty state: no deployments and no discovered APIs */}
+      {deployments.length === 0 && discoveredApis.length === 0 && (
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-gray-400" />
+            APIs
+          </h2>
+          <p className="text-sm text-gray-400 text-center py-8">
+            No APIs deployed or discovered on this gateway
+          </p>
+        </section>
+      )}
     </div>
   );
 }
@@ -257,6 +346,17 @@ function MetricCard({ label, value, alert }: { label: string; value: string; ale
         {value}
       </dd>
     </div>
+  );
+}
+
+function MethodBadge({ method }: { method: string }) {
+  const upper = method.toUpperCase();
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${METHOD_COLORS[upper] || 'bg-gray-50 text-gray-600'}`}
+    >
+      {upper}
+    </span>
   );
 }
 

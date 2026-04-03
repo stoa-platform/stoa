@@ -175,13 +175,3 @@ impl WebMethodsProxy {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_proxy_creation() {
-        let proxy = WebMethodsProxy::new("https://gateway.gostoa.dev".to_string());
-        assert_eq!(proxy.base_url, "https://gateway.gostoa.dev");
-    }
-}

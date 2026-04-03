@@ -25,14 +25,14 @@ afterAll(() => server.close());
 describe('Tenants page (MSW integration)', () => {
   it('loads and displays tenant data from API', async () => {
     // Dynamic import to avoid module-level side effects
-    const { default: Tenants } = await import('../../pages/Tenants');
+    const { Tenants } = await import('../../pages/Tenants');
 
     renderWithProviders(<Tenants />, { route: '/tenants' });
 
     // MSW handlers return mockTenants (Oasis Gunters, IOI Sixers)
     await waitFor(
       () => {
-        expect(screen.getByText(/oasis/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/oasis/i).length).toBeGreaterThan(0);
       },
       { timeout: 3000 }
     );
@@ -45,7 +45,7 @@ describe('Tenants page (MSW integration)', () => {
       })
     );
 
-    const { default: Tenants } = await import('../../pages/Tenants');
+    const { Tenants } = await import('../../pages/Tenants');
     renderWithProviders(<Tenants />, { route: '/tenants' });
 
     await waitFor(
@@ -59,7 +59,8 @@ describe('Tenants page (MSW integration)', () => {
   });
 
   it('displays platform status from aggregated endpoint', async () => {
-    const { default: Dashboard } = await import('../../pages/Dashboard');
+    const { PlatformDashboard: Dashboard } =
+      await import('../../pages/Dashboard/PlatformDashboard');
 
     renderWithProviders(<Dashboard />, { route: '/' });
 
@@ -80,7 +81,7 @@ describe('Tenants page (MSW integration)', () => {
       })
     );
 
-    const { default: Tenants } = await import('../../pages/Tenants');
+    const { Tenants } = await import('../../pages/Tenants');
     renderWithProviders(<Tenants />, { route: '/tenants' });
 
     await waitFor(

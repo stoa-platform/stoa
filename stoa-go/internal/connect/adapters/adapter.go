@@ -36,6 +36,7 @@ type Route struct {
 	SpecHash     string   `json:"spec_hash,omitempty"`
 	OpenAPISpec  json.RawMessage `json:"openapi_spec,omitempty"`
 	Activated    bool     `json:"activated"`
+	Generation   int      `json:"generation,omitempty"` // CAB-1950: desired_generation from CP
 }
 
 // Credential represents a consumer credential fetched from Vault for injection.

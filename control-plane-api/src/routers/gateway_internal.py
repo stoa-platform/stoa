@@ -103,6 +103,7 @@ class GatewayRouteItem(BaseModel):
     spec_hash: str = ""
     openapi_spec: dict | None = None
     activated: bool = True
+    generation: int = 1
 
 
 @router.get("/routes", response_model=list[GatewayRouteItem])
@@ -139,7 +140,7 @@ async def list_gateway_routes(
         tenant_id = ds.get("tenant_id", "")
         route = map_api_spec_to_stoa(ds, tenant_id)
         if route.get("backend_url"):  # Skip routes without a backend
-            item = GatewayRouteItem(**route, deployment_id=str(dep.id))
+            item = GatewayRouteItem(**route, deployment_id=str(dep.id), generation=dep.desired_generation or 1)
             routes.append(item)
 
     return routes
@@ -587,6 +588,7 @@ class SyncedRouteResult(BaseModel):
     status: str = Field(..., description="Sync result: applied or failed")
     error: str | None = Field(default=None, description="Error message if failed")
     steps: list[dict] | None = Field(default=None, description="Ordered sync step trace (optional)")
+    generation: int | None = Field(default=None, description="Generation that was synced (CAB-1950)")
 
 
 class RouteSyncAckPayload(BaseModel):
@@ -647,12 +649,27 @@ async def route_sync_ack(
             merged_steps = cp_tracker.to_list() + result.steps
             deployment.sync_steps = merged_steps
 
+        # CAB-1950: reject stale generation acks
+        if result.generation is not None and result.generation < deployment.desired_generation:
+            logger.debug(
+                "route-sync-ack: stale generation %d < desired %d for deployment %s, skipping",
+                result.generation,
+                deployment.desired_generation,
+                result.deployment_id,
+            )
+            continue
+
         if result.status == "applied":
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.last_sync_success = now
             deployment.sync_error = None
+            if result.generation is not None:
+                deployment.synced_generation = result.generation
+                deployment.attempted_generation = result.generation
         elif result.status == "failed":
             deployment.sync_status = DeploymentSyncStatus.ERROR
+            if result.generation is not None:
+                deployment.attempted_generation = result.generation
             # Derive sync_error from step trace if available, else use scalar error
             if result.steps:
                 tracker = SyncStepTracker.from_list(result.steps)

@@ -376,6 +376,7 @@ class CatalogSyncService:
                     existing.sync_status = DeploymentSyncStatus.PENDING
                     existing.sync_error = None
                     existing.sync_attempts = 0
+                    existing.desired_generation = (existing.desired_generation or 0) + 1
                     await deploy_repo.update(existing)
                     logger.info(
                         "GitOps: updated deployment for %s/%s → %s",

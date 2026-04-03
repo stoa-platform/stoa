@@ -269,6 +269,16 @@ class SyncEngine:
                 await session.commit()
                 return
 
+            # Generation check (CAB-1950): skip if this generation was already attempted
+            if deployment.attempted_generation >= deployment.desired_generation:
+                logger.debug(
+                    "Deployment %s: generation %d already attempted (desired=%d), skipping",
+                    deployment_id,
+                    deployment.attempted_generation,
+                    deployment.desired_generation,
+                )
+                return
+
             # Skip if gateway is offline
             if gateway.status == GatewayInstanceStatus.OFFLINE:
                 logger.debug(
@@ -353,6 +363,9 @@ class SyncEngine:
         tracker.start("api_synced")
         result = await adapter.sync_api(deployment.desired_state, tenant_id)
 
+        # Mark this generation as attempted regardless of outcome (CAB-1950)
+        deployment.attempted_generation = deployment.desired_generation
+
         if result.success:
             tracker.complete("api_synced", detail=f"resource={result.resource_id}")
             deployment.sync_status = DeploymentSyncStatus.SYNCED
@@ -361,6 +374,7 @@ class SyncEngine:
             deployment.gateway_resource_id = result.resource_id or deployment.gateway_resource_id
             deployment.last_sync_success = now
             deployment.sync_error = None
+            deployment.synced_generation = deployment.desired_generation
 
             # Sync bound policies (non-blocking — failure is warned, not fatal)
             tracker.start("policies_applied")

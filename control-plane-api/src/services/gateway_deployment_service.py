@@ -173,6 +173,7 @@ class GatewayDeploymentService:
         deployment.sync_status = DeploymentSyncStatus.PENDING
         deployment.sync_error = None
         deployment.sync_attempts = 0
+        deployment.desired_generation = (deployment.desired_generation or 0) + 1
         await self.deploy_repo.update(deployment)
 
         await self._emit_sync_request(deployment)

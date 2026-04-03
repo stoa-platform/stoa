@@ -146,6 +146,7 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 		result := SyncedRouteResult{
 			DeploymentID: r.DeploymentID,
 			Steps:        steps,
+			Generation:   r.Generation,
 		}
 		if routeErr, failed := failedMap[r.DeploymentID]; failed {
 			result.Status = "failed"

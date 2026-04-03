@@ -196,10 +196,11 @@ type RouteSyncAckPayload struct {
 
 // SyncedRouteResult reports the sync result for one route deployment.
 type SyncedRouteResult struct {
-	DeploymentID string `json:"deployment_id"`
+	DeploymentID string     `json:"deployment_id"`
 	Status       string     `json:"status"` // "applied", "failed"
 	Error        string     `json:"error,omitempty"`
 	Steps        []SyncStep `json:"steps,omitempty"`
+	Generation   int        `json:"generation,omitempty"` // CAB-1950: generation that was synced
 }
 
 // ReportRouteSyncAck sends route sync results to the CP.

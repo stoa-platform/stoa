@@ -507,12 +507,23 @@ class SyncEngine:
                         if api_id:
                             gw_api_map[str(api_id)] = api
 
+                    drift_grace = timedelta(seconds=60)
+                    now = datetime.now(UTC)
+
                     for dep in deps:
                         if not dep.gateway_resource_id:
                             continue
 
                         gw_api = gw_api_map.get(dep.gateway_resource_id)
                         if gw_api is None:
+                            # Skip freshly synced deployments — gateway may not have indexed yet
+                            if dep.last_sync_success and (now - dep.last_sync_success) < drift_grace:
+                                logger.debug(
+                                    "Skipping drift check for %s — synced %ds ago (grace period)",
+                                    dep.id,
+                                    (now - dep.last_sync_success).total_seconds(),
+                                )
+                                continue
                             dep.sync_status = DeploymentSyncStatus.DRIFTED
                             dep.sync_error = "API not found on gateway (external deletion)"
                             await repo.update(dep)

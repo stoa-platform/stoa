@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Info,
 } from 'lucide-react';
 import type { GatewayInstance } from '../../types';
 
@@ -76,6 +77,7 @@ export function GatewayDetail() {
   const statusCfg = STATUS_CONFIG[gateway.status] || STATUS_CONFIG.offline;
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
+  const discoveredCount = (hd.discovered_apis_count as number) || 0;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -191,7 +193,20 @@ export function GatewayDetail() {
             {deployments.length} API{deployments.length !== 1 ? 's' : ''}
           </span>
         </h2>
-        {deployments.length === 0 ? (
+        {deployments.length === 0 && discoveredCount > 0 ? (
+          <div className="flex items-start gap-3 rounded-lg bg-blue-50 border border-blue-200 p-4">
+            <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium">
+                {discoveredCount} API{discoveredCount !== 1 ? 's' : ''} discovered via catalog sync
+              </p>
+              <p className="mt-1 text-blue-600">
+                These APIs were auto-discovered from the API catalog. Use Deploy to formally assign
+                APIs to this gateway for tracking and lifecycle management.
+              </p>
+            </div>
+          </div>
+        ) : deployments.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">No APIs deployed on this gateway</p>
         ) : (
           <div className="overflow-x-auto">

@@ -191,7 +191,7 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('0.9.1')).toBeInTheDocument(); // version
   });
 
-  it('renders empty state when no deployments', async () => {
+  it('renders discovery banner when discovered > 0 but no deployments', async () => {
     const { apiService } = await import('../../services/api');
     vi.mocked(apiService.getGatewayDeployments).mockResolvedValueOnce({
       items: [],
@@ -199,7 +199,30 @@ describe('GatewayDetail', () => {
     });
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('12 APIs discovered via catalog sync')).toBeInTheDocument();
+    expect(screen.queryByText('No APIs deployed on this gateway')).not.toBeInTheDocument();
+  });
+
+  it('renders empty state when no deployments and no discovered APIs', async () => {
+    const { apiService } = await import('../../services/api');
+    vi.mocked(apiService.getGatewayInstance).mockResolvedValueOnce({
+      ...mockGateway,
+      health_details: { ...mockGateway.health_details, discovered_apis_count: 0 },
+    });
+    vi.mocked(apiService.getGatewayDeployments).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+    });
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
     expect(screen.getByText('No APIs deployed on this gateway')).toBeInTheDocument();
+  });
+
+  it('renders deployments table when deployments exist even with discovered APIs', async () => {
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('Payments API')).toBeInTheDocument();
+    expect(screen.queryByText(/discovered via catalog sync/)).not.toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

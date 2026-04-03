@@ -17060,6 +17060,53 @@
         }
       }
     },
+    "/v1/admin/gateways/{gateway_id}/tools": {
+      "get": {
+        "tags": [
+          "Gateways"
+        ],
+        "summary": "Get Gateway Tools",
+        "description": "Proxy to gateway's MCP tools list endpoint.\n\nFetches the live tool list from the gateway's /mcp/v1/tools endpoint.\nReturns 503 if the gateway is OFFLINE, 502 if unreachable.",
+        "operationId": "get_gateway_tools",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "gateway_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Gateway Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/gateways/{gateway_id}/restore": {
       "post": {
         "tags": [

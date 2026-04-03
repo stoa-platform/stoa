@@ -118,7 +118,7 @@ cd kafka && ./smoke-test.sh local
 ### Grafana Dashboard
 
 **Dashboard**: Event Backbone - Kafka/Redpanda
-**Location**: `docker/observability/grafana/dashboards/event-backbone.json`
+**Location**: `stoa-infra:docker/observability/grafana/dashboards/event-backbone.json`
 
 **Key panels**:
 1. SLO Compliance Overview (stat)
@@ -265,7 +265,7 @@ kubectl apply -f kafka/opensearch-connector.yaml
 
 ### Create New Topic
 
-1. Edit `kafka/topic-policies.yaml`:
+1. Edit `stoa-infra:kafka/topic-policies.yaml`:
 ```yaml
 stoa.new.topic:
   delivery: at_least_once

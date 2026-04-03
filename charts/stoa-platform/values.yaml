@@ -329,6 +329,26 @@ vault:
     secretName: postgresql-credentials
 
 # ==============================================================================
+# Keycloak (CAB-1961, CAB-1956, CAB-1958)
+# ==============================================================================
+# Keycloak is deployed and scaled via stoa-infra (charts/keycloak/).
+# Replica counts in values-{dev,staging,prod}.yaml are REFERENCE ONLY —
+# actual replicas are managed by stoa-infra Helm chart.
+# Clustering (JGroups DNS_PING) is configured in stoa-infra when replicas > 1.
+keycloak:
+  namespace: stoa-system
+  # Keycloak Operator realm management (CAB-1958)
+  # When enabled, bootstrap-job is skipped — realm is managed by
+  # KeycloakRealmImport CR in stoa-infra charts/keycloak/.
+  operator:
+    enabled: false
+  metrics:
+    serviceMonitor:
+      enabled: false
+      interval: 15s
+      scrapeTimeout: 10s
+
+# ==============================================================================
 # Monitoring OIDC Configuration (CAB-1103 Phase 6B)
 # ==============================================================================
 # Configures OIDC authentication for Grafana, oauth2-proxy for Prometheus,

@@ -1,12 +1,45 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-03-16 (Phase 2 Unified Chat Settings PRs #1807, #1809)
+> Derniere MAJ: 2026-04-03 (CAB-1953 gateway ui_url)
 
 ## ✅ DONE
 
 > Full history: 2500+ pts across 160+ issues. See Linear for complete audit trail.
 
+### Cycle 14 (Mar 30+)
+- ✅ CAB-1953: feat(api,ui) add ui_url to GatewayInstance — PR #2149 (2026-04-03)
+  - Migration 088: `ui_url` (String 500, nullable) on `gateway_instances`
+  - Self-register persists `ui_url` in all 4 code paths
+  - Console: UI + Runtime URL links on /gateways for sidecar/connect modes
+  - Council: 8.50/10 Go. 7 files, ~97 LOC
+- ✅ fix(api): duplicate personal tenant cleanup (2026-04-02)
+  - Root cause: original tenants (12/03) stored email as `owner_user_id`, fix (24/03) stored UUID → index didn't detect duplicates
+  - Fix: archived 8 doublons (`free-*-{hex}`), updated 8 originals (`owner_user_id` email→UUID)
+  - Migration 051 + `ix_tenants_personal_owner_unique` index confirmed active in prod
+  - Data preserved: free-aech (10 APIs, 1 sub, 22 chats), free-i-r0k (1 chat), free-torpedo (2 chats)
+- ✅ CAB-1938: fix(api) slug api_id + name-version uniqueness — PRs #2106, #2109, #2111
+  - Migration 084: partial unique indexes on (tenant_id, api_name, version) WHERE deleted_at IS NULL
+  - Slug generation: `_slugify()` auto-generates URL-safe api_id from name
+  - 22 regression tests (slugify, endpoint slug generation, 409 message, soft-delete, versions)
+- ✅ CAB-1936: [MEGA] STC + Security Plugins (21 pts) — Council 6.00/10
+  - Phase 1: ADR-058 + federation benchmark — PR #2107
+  - Phase 2: STC compression plugin + SDK body extension — PR #2108
+  - Phase 3: PII filter + secrets detection plugins — PR #2110 (squashed into #2108)
+  - 6 builtin plugins total, 2142 gateway tests green, IBAN added to PiiScanner
+
 ### Cycle 12 (Mar 3+)
+- ✅ CAB-1930: [MEGA] Deploy Single Path — SSE replaces SyncEngine (34 pts) — ADR-059, Council 8.00/10
+  - CAB-1931 [api] SSE endpoint + DEPLOY_MODE flag (13 pts) — PR #2072
+  - CAB-1932 [go] stoa-connect SSE client + reconnect (8 pts) — PR #2073
+  - CAB-1933 [api] Phantom instance cleanup + Alembic 083 (5 pts) — PR #2074
+  - CAB-1934 [e2e] Deploy single path verification script (5 pts) — PR #2075
+  - ADR-059 published in stoa-docs
+- ✅ fix(ui): API backend port 80 → 8000 in k8s deployment — PR #2077
+  - Root cause: Helm chart (stoa-infra) had port 8000 since Jan 2026, UI manifest never updated
+- ✅ fix(api): bridge git_provider DI with legacy test patches — PR #2076
+  - Reduces pre-existing test failures from 102 to ~42 on main
+- ✅ Vault credential resolver for gateway adapters — PR #1964
+  - `VaultClient.read_secret()`, `credential_resolver.py`, 9 call sites updated, 12 new tests
 - 🔴 CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10
   - Spike DONE, ADR-056 DONE, KC 26.5.3 sufficient. Decomposed: 5 subs (CAB-1739-1743)
 - ✅ fix(gateway): audit remediations — Council 8.75/10, PR #1633
@@ -42,6 +75,12 @@
 - **C7**: 505 pts, 44 issues, 72 pts/day
 
 ## 🔴 IN PROGRESS
+
+CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
+- PRs #2106, #2109, #2111 merged
+- Pending: PR for align upsert conflict clauses (commit 9a7a6eb8 on branch)
+
+CAB-1953 follow-up: gateways stoa-link/stoa-connect doivent envoyer `ui_url` dans leur payload self-register pour que les URLs apparaissent sur /gateways
 
 CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 23/23 PASS
@@ -79,9 +118,9 @@ CAB-1733: [MEGA] FAPI 2.0 (34 pts) — Phase 1+2 done, docs pending
 
 ## 📝 NOTES
 - Demo MVP: mardi 17 mars 2026
-- Test suite: 5700+ tests, 91% CP-API coverage, 1330+ gateway tests
+- Test suite: 5700+ tests, 91% CP-API coverage, 2142 gateway tests
 - Arena L0 scores: STOA 83.90 | Gravitee 46.72 | Kong 5.46
 - Arena L1 (Enterprise): STOA + agentgateway only (Kong/Gravitee removed PR #1620)
 - HEGEMON fleet: 5 Contabo VPS (8vCPU/24GB), Go daemon, Infisical secrets
-- ADR numbering: stoa-docs 001-056. Next: **ADR-057**
+- ADR numbering: stoa-docs 001-059. Next: **ADR-060**
 - docs.gostoa.dev = 41+ articles, 8 migration spokes

@@ -32,6 +32,10 @@ import os
 # Set environment variables to disable workers before any imports
 os.environ["ENABLE_SNAPSHOT_CONSUMER"] = "false"
 
+# Explicit GIT_PROVIDER for test determinism (CAB-1890 dual-provider).
+# Tests that need GIT_PROVIDER=github override this via monkeypatch.setenv().
+os.environ.setdefault("GIT_PROVIDER", "gitlab")
+
 # Create mock services that will be patched into src.main
 _mock_kafka_service = MagicMock()
 _mock_kafka_service.connect = AsyncMock()
@@ -87,6 +91,22 @@ patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
 # Patch error snapshots
 patch.object(_main_module, 'connect_error_snapshots', AsyncMock(return_value=None)).start()
 patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
+
+# ============== Auto-Skip Integration Tests Without Infra (CAB-1939) ==============
+# Tests marked @pytest.mark.integration require a PostgreSQL database.
+# Skip them automatically when DATABASE_URL is not set (local dev without DB).
+# This complements conftest_integration.py's integration_db fixture (which only
+# skips tests that explicitly use the fixture, not all @integration-marked tests).
+
+def pytest_collection_modifyitems(config, items):  # noqa: ARG001
+    """Skip @pytest.mark.integration tests when DATABASE_URL is absent."""
+    if os.environ.get("DATABASE_URL"):
+        return
+    skip_integration = pytest.mark.skip(reason="DATABASE_URL not set — skipping integration test")
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
+
 
 # ============== Disable PII Masking in Tests ==============
 # PIIMaskingMiddleware._mask_query_string corrupts UUIDs and datetime query params

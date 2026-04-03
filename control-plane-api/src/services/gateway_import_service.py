@@ -12,11 +12,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.adapters.registry import AdapterRegistry
 from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
+from src.services.credential_resolver import (
+    AGENT_MANAGED_MESSAGE,
+    create_adapter_with_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +56,17 @@ class GatewayImportService:
 
     async def preview_import(self, gateway_instance_id: UUID) -> list[ImportPreview]:
         """Dry-run: show what would be imported without creating anything."""
+        from src.services.credential_resolver import _PULL_MODEL_GATEWAY_TYPES
+
         gateway = await self.gw_repo.get_by_id(gateway_instance_id)
         if not gateway:
             raise ValueError("Gateway instance not found")
+        gw_type = gateway.gateway_type.value if hasattr(gateway.gateway_type, "value") else str(gateway.gateway_type)
+        if gateway.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
+            raise ValueError(AGENT_MANAGED_MESSAGE)
 
-        adapter = AdapterRegistry.create(
-            gateway.gateway_type.value,
-            config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+        adapter = await create_adapter_with_credentials(
+            gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
         )
         await adapter.connect()
         try:
@@ -98,13 +105,17 @@ class GatewayImportService:
 
     async def import_from_gateway(self, gateway_instance_id: UUID) -> ImportResult:
         """Import APIs from a gateway into the catalog + create SYNCED deployments."""
+        from src.services.credential_resolver import _PULL_MODEL_GATEWAY_TYPES
+
         gateway = await self.gw_repo.get_by_id(gateway_instance_id)
         if not gateway:
             raise ValueError("Gateway instance not found")
+        gw_type = gateway.gateway_type.value if hasattr(gateway.gateway_type, "value") else str(gateway.gateway_type)
+        if gateway.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
+            raise ValueError(AGENT_MANAGED_MESSAGE)
 
-        adapter = AdapterRegistry.create(
-            gateway.gateway_type.value,
-            config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
+        adapter = await create_adapter_with_credentials(
+            gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
         )
         await adapter.connect()
         try:

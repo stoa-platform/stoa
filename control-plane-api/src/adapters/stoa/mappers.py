@@ -7,10 +7,11 @@ def map_api_spec_to_stoa(api_spec: dict, tenant_id: str) -> dict:
     """Map CP desired_state / api_spec to stoa-gateway admin API payload.
 
     The stoa-gateway admin API expects:
-    {id, name, tenant_id, path_prefix, backend_url, methods, spec_hash, activated}
+    {id, name, tenant_id, path_prefix, backend_url, methods, spec_hash,
+     openapi_spec (optional), activated}
     """
     api_name = api_spec.get("api_name", api_spec.get("apiName", "unknown"))
-    return {
+    result: dict = {
         "id": api_spec.get("api_catalog_id", ""),
         "name": api_name,
         "tenant_id": tenant_id,
@@ -20,6 +21,10 @@ def map_api_spec_to_stoa(api_spec: dict, tenant_id: str) -> dict:
         "spec_hash": api_spec.get("spec_hash", ""),
         "activated": api_spec.get("activated", True),
     }
+    # Pass through raw OpenAPI spec for outbound-only delivery to on-premise gateways (CAB-1929)
+    if api_spec.get("openapi_spec") is not None:
+        result["openapi_spec"] = api_spec["openapi_spec"]
+    return result
 
 
 def map_policy_to_stoa(policy_spec: dict) -> dict:

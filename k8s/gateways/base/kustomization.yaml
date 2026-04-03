@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - echo/deployment.yaml
+  - echo/service.yaml
+  - stoa-gateway/deployment.yaml
+  - stoa-gateway/service.yaml
+  - stoa-link-wm/deployment.yaml
+  - stoa-link-wm/service.yaml

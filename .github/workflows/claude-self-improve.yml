@@ -138,3 +138,72 @@ jobs:
           source scripts/ai-ops/ai-factory-notify.sh
           write_job_summary "self-improve-$(date -u +%Y-%m-%d)" "${{ steps.batch.outcome }}" "" "sonnet-4-5-batch" "self-improve"
           push_state_milestone "self-improve" "${{ steps.batch.outcome }}"
+
+  # ----- Weekly Impact Review (Context Compiler) -----
+  weekly-impact-review:
+    if: vars.DISABLE_L4_SELF_IMPROVE != 'true' && vars.DISABLE_CONTEXT_COMPILER != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 100 # For co-change analysis
+
+      - name: Unlock git-crypt
+        run: |
+          sudo apt-get install -y git-crypt
+          echo "${{ secrets.GIT_CRYPT_KEY }}" | base64 -d > /tmp/git-crypt.key
+          git-crypt unlock /tmp/git-crypt.key
+          rm /tmp/git-crypt.key
+
+      - name: Check prerequisites
+        id: prereq
+        run: |
+          MISSING=""
+          [ ! -f docs/stoa-impact.db ] && MISSING="${MISSING} stoa-impact.db"
+          [ ! -f docs/scripts/discover-cochanges.sh ] && MISSING="${MISSING} discover-cochanges.sh"
+          [ ! -f docs/scripts/dashboard.sh ] && MISSING="${MISSING} dashboard.sh"
+          if [ -n "$MISSING" ]; then
+            echo "::warning::Missing prerequisites:${MISSING} — skipping impact review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run co-change discovery
+        if: steps.prereq.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          chmod +x docs/scripts/discover-cochanges.sh
+          docs/scripts/discover-cochanges.sh --commits 50
+
+      - name: Regenerate docs from DB
+        if: steps.prereq.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          if [ -f docs/scripts/regenerate-docs.py ]; then
+            python3 docs/scripts/regenerate-docs.py
+          else
+            echo "::notice::regenerate-docs.py not found — skipping doc regeneration"
+          fi
+
+      - name: Dashboard snapshot
+        if: steps.prereq.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          chmod +x docs/scripts/dashboard.sh
+          mkdir -p docs/learning
+          docs/scripts/dashboard.sh > "docs/learning/weekly-dashboard-$(date -u +%Y%m%d).txt" 2>&1 || true
+
+      - name: Commit updates
+        if: steps.prereq.outputs.skip != 'true'
+        run: |
+          git config user.name "STOA AI Factory"
+          git config user.email "factory@gostoa.dev"
+          git add docs/stoa-impact.db docs/learning/ docs/DEPENDENCIES.md docs/SCENARIOS.md || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: weekly impact analysis update [skip ci]"
+            git push || echo "::warning::Push failed — changes will be picked up next run"
+          fi

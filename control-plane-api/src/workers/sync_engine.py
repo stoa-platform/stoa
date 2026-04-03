@@ -9,25 +9,30 @@ Pipeline: Control-Plane API -> Kafka -> SyncEngine -> Gateway Adapters -> DB upd
 Follows the ErrorSnapshotConsumer threading pattern for Kafka consumption
 (kafka-python is synchronous) combined with an asyncio periodic loop.
 """
+
 import asyncio
 import contextlib
 import json
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
-from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
-from ..models.gateway_deployment import DeploymentSyncStatus
+from ..models.gateway_deployment import DeploymentSyncStatus, PolicySyncStatus
 from ..models.gateway_instance import GatewayInstanceStatus
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.gateway_instance import GatewayInstanceRepository
+from ..services.credential_resolver import (
+    AgentManagedGatewayError,
+    create_adapter_with_credentials,
+)
 from ..services.kafka_service import Topics, kafka_service
+from ..services.sync_step_tracker import SyncStepTracker
 
 logger = logging.getLogger(__name__)
 
@@ -120,12 +125,14 @@ class SyncEngine:
 
             # Add SASL config if credentials are provided
             if hasattr(settings, "KAFKA_SASL_USERNAME") and settings.KAFKA_SASL_USERNAME:
-                kafka_config.update({
-                    "security_protocol": "SASL_PLAINTEXT",
-                    "sasl_mechanism": "SCRAM-SHA-256",
-                    "sasl_plain_username": settings.KAFKA_SASL_USERNAME,
-                    "sasl_plain_password": settings.KAFKA_SASL_PASSWORD,
-                })
+                kafka_config.update(
+                    {
+                        "security_protocol": "SASL_PLAINTEXT",
+                        "sasl_mechanism": "SCRAM-SHA-256",
+                        "sasl_plain_username": settings.KAFKA_SASL_USERNAME,
+                        "sasl_plain_password": settings.KAFKA_SASL_PASSWORD,
+                    }
+                )
 
             return KafkaConsumer(Topics.GATEWAY_SYNC_REQUESTS, **kafka_config)
 
@@ -187,12 +194,27 @@ class SyncEngine:
         """Fetch all actionable deployments and reconcile them concurrently."""
         async with _get_session_factory()() as session:
             repo = GatewayDeploymentRepository(session)
-            deployments = await repo.list_by_statuses([
-                DeploymentSyncStatus.PENDING,
-                DeploymentSyncStatus.DRIFTED,
-                DeploymentSyncStatus.ERROR,
-                DeploymentSyncStatus.DELETING,
-            ])
+            deployments = await repo.list_by_statuses(
+                [
+                    DeploymentSyncStatus.PENDING,
+                    DeploymentSyncStatus.SYNCING,
+                    DeploymentSyncStatus.DRIFTED,
+                    DeploymentSyncStatus.ERROR,
+                    DeploymentSyncStatus.DELETING,
+                ]
+            )
+
+            if not deployments:
+                return
+
+            # Filter out SYNCING deployments that are still fresh (inline sync in progress)
+            stale_threshold = datetime.now(UTC) - timedelta(seconds=settings.SYNC_ENGINE_INTERVAL_SECONDS)
+            deployments = [
+                dep
+                for dep in deployments
+                if dep.sync_status != DeploymentSyncStatus.SYNCING
+                or (dep.last_sync_attempt and dep.last_sync_attempt < stale_threshold)
+            ]
 
             if not deployments:
                 return
@@ -247,6 +269,16 @@ class SyncEngine:
                 await session.commit()
                 return
 
+            # Generation check (CAB-1950): skip if this generation was already attempted
+            if deployment.attempted_generation >= deployment.desired_generation:
+                logger.debug(
+                    "Deployment %s: generation %d already attempted (desired=%d), skipping",
+                    deployment_id,
+                    deployment.attempted_generation,
+                    deployment.desired_generation,
+                )
+                return
+
             # Skip if gateway is offline
             if gateway.status == GatewayInstanceStatus.OFFLINE:
                 logger.debug(
@@ -256,13 +288,20 @@ class SyncEngine:
                 )
                 return
 
-            adapter = AdapterRegistry.create(
-                gateway.gateway_type.value,
-                config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
-            )
-
+            adapter = None
+            tracker = SyncStepTracker()
             try:
+                adapter = await create_adapter_with_credentials(
+                    gateway.gateway_type.value,
+                    gateway.base_url,
+                    gateway.auth_config,
+                    source=gateway.source,
+                    gateway_name=gateway.name,
+                )
+
+                tracker.start("adapter_connected")
                 await adapter.connect()
+                tracker.complete("adapter_connected")
 
                 if deployment.sync_status == DeploymentSyncStatus.DELETING:
                     await self._handle_delete(deployment, adapter, repo, session)
@@ -271,8 +310,15 @@ class SyncEngine:
                     DeploymentSyncStatus.DRIFTED,
                     DeploymentSyncStatus.ERROR,
                 ):
-                    await self._handle_sync(deployment, adapter, repo, session)
+                    await self._handle_sync(deployment, adapter, repo, session, tracker)
 
+            except AgentManagedGatewayError:
+                logger.debug(
+                    "Skipping push sync for agent-managed gateway %s (deployment %s)",
+                    gateway.name,
+                    deployment_id,
+                )
+                return
             except Exception as e:
                 logger.error(
                     "Reconcile failed for deployment %s: %s",
@@ -280,17 +326,31 @@ class SyncEngine:
                     e,
                     exc_info=True,
                 )
+                # Mark current running step as failed, skip remaining
+                if tracker.first_error() is None:
+                    running = [s for s in tracker.to_list() if s.get("status") == "running"]
+                    if running:
+                        tracker.fail(running[-1]["name"], detail=str(e)[:500])
+                    else:
+                        tracker.start("adapter_connected")
+                        tracker.fail("adapter_connected", detail=str(e)[:500])
+                for skip_name in ("api_synced", "policies_applied"):
+                    if not any(s.get("name") == skip_name for s in tracker.to_list()):
+                        tracker.skip(skip_name, reason="previous step failed")
+
                 deployment.sync_status = DeploymentSyncStatus.ERROR
-                deployment.sync_error = str(e)[:500]
+                deployment.sync_error = tracker.first_error() or str(e)[:500]
+                deployment.sync_steps = tracker.to_list()
                 deployment.sync_attempts += 1
                 deployment.last_sync_attempt = datetime.now(UTC)
                 await repo.update(deployment)
                 await session.commit()
             finally:
-                with contextlib.suppress(Exception):
-                    await adapter.disconnect()
+                if adapter:
+                    with contextlib.suppress(Exception):
+                        await adapter.disconnect()
 
-    async def _handle_sync(self, deployment, adapter, repo, session) -> None:
+    async def _handle_sync(self, deployment, adapter, repo, session, tracker: SyncStepTracker) -> None:
         """Handle PENDING/DRIFTED/ERROR deployment — sync API to gateway."""
         now = datetime.now(UTC)
         deployment.sync_status = DeploymentSyncStatus.SYNCING
@@ -299,19 +359,29 @@ class SyncEngine:
         await session.commit()
 
         tenant_id = (deployment.desired_state or {}).get("tenant_id", "")
+
+        tracker.start("api_synced")
         result = await adapter.sync_api(deployment.desired_state, tenant_id)
 
+        # Mark this generation as attempted regardless of outcome (CAB-1950)
+        deployment.attempted_generation = deployment.desired_generation
+
         if result.success:
+            tracker.complete("api_synced", detail=f"resource={result.resource_id}")
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.actual_state = result.data or deployment.desired_state
             deployment.actual_at = now
             deployment.gateway_resource_id = result.resource_id or deployment.gateway_resource_id
             deployment.last_sync_success = now
             deployment.sync_error = None
+            deployment.synced_generation = deployment.desired_generation
 
             # Sync bound policies (non-blocking — failure is warned, not fatal)
+            tracker.start("policies_applied")
+            policy_failures = []
             try:
                 from ..repositories.gateway_policy import GatewayPolicyRepository
+
                 policy_repo = GatewayPolicyRepository(session)
                 policies = await policy_repo.get_policies_for_deployment(
                     api_catalog_id=deployment.api_catalog_id,
@@ -329,13 +399,37 @@ class SyncEngine:
                         }
                         await adapter.upsert_policy(policy_spec)
                     except Exception as pe:
+                        policy_failures.append(str(pe)[:100])
                         logger.warning(
                             "Failed to apply policy %s to deployment %s: %s",
-                            policy.id, deployment.id, pe,
+                            policy.id,
+                            deployment.id,
+                            pe,
                         )
+
+                if not policies:
+                    tracker.complete("policies_applied", detail="no policies bound")
+                    deployment.policy_sync_status = None
+                    deployment.policy_sync_error = None
+                elif policy_failures:
+                    tracker.fail(
+                        "policies_applied",
+                        detail=f"{len(policy_failures)} failed: {'; '.join(policy_failures)}"[:500],
+                    )
+                    deployment.policy_sync_status = PolicySyncStatus.PARTIAL
+                    deployment.policy_sync_error = "; ".join(policy_failures)[:500]
+                else:
+                    tracker.complete("policies_applied", detail=f"{len(policies)} applied")
+                    deployment.policy_sync_status = PolicySyncStatus.SYNCED
+                    deployment.policy_sync_error = None
             except Exception as e:
+                tracker.fail("policies_applied", detail=str(e)[:500])
+                deployment.policy_sync_status = PolicySyncStatus.ERROR
+                deployment.policy_sync_error = str(e)[:500]
                 logger.warning("Policy sync failed for deployment %s: %s", deployment.id, e)
 
+            deployment.sync_steps = tracker.to_list()
+            deployment.sync_error = tracker.first_error()
             await repo.update(deployment)
             await session.commit()
             logger.info(
@@ -344,8 +438,11 @@ class SyncEngine:
                 deployment.gateway_resource_id,
             )
         else:
+            tracker.fail("api_synced", detail=result.error or "Sync failed")
+            tracker.skip("policies_applied", reason="previous step failed")
             deployment.sync_status = DeploymentSyncStatus.ERROR
-            deployment.sync_error = result.error or "Sync failed"
+            deployment.sync_error = tracker.first_error()
+            deployment.sync_steps = tracker.to_list()
             deployment.sync_attempts += 1
             await repo.update(deployment)
             await session.commit()
@@ -391,11 +488,15 @@ class SyncEngine:
                 if not gateway or gateway.status == GatewayInstanceStatus.OFFLINE:
                     continue
 
-                adapter = AdapterRegistry.create(
-                    gateway.gateway_type.value,
-                    config={"base_url": gateway.base_url, "auth_config": gateway.auth_config},
-                )
+                adapter = None
                 try:
+                    adapter = await create_adapter_with_credentials(
+                        gateway.gateway_type.value,
+                        gateway.base_url,
+                        gateway.auth_config,
+                        source=gateway.source,
+                        gateway_name=gateway.name,
+                    )
                     await adapter.connect()
                     apis = await adapter.list_apis()
 
@@ -406,12 +507,23 @@ class SyncEngine:
                         if api_id:
                             gw_api_map[str(api_id)] = api
 
+                    drift_grace = timedelta(seconds=60)
+                    now = datetime.now(UTC)
+
                     for dep in deps:
                         if not dep.gateway_resource_id:
                             continue
 
                         gw_api = gw_api_map.get(dep.gateway_resource_id)
                         if gw_api is None:
+                            # Skip freshly synced deployments — gateway may not have indexed yet
+                            if dep.last_sync_success and (now - dep.last_sync_success) < drift_grace:
+                                logger.debug(
+                                    "Skipping drift check for %s — synced %ds ago (grace period)",
+                                    dep.id,
+                                    (now - dep.last_sync_success).total_seconds(),
+                                )
+                                continue
                             dep.sync_status = DeploymentSyncStatus.DRIFTED
                             dep.sync_error = "API not found on gateway (external deletion)"
                             await repo.update(dep)
@@ -423,11 +535,11 @@ class SyncEngine:
                         else:
                             gw_hash = gw_api.get("spec_hash", "")
                             desired_hash = (dep.desired_state or {}).get("spec_hash", "")
-                            if gw_hash and desired_hash and gw_hash != desired_hash:
+                            # Detect drift: mismatch OR one side missing hash while the other has it
+                            if (gw_hash or desired_hash) and gw_hash != desired_hash:
                                 dep.sync_status = DeploymentSyncStatus.DRIFTED
                                 dep.sync_error = (
-                                    f"Spec hash mismatch: "
-                                    f"desired={desired_hash[:8]}... actual={gw_hash[:8]}..."
+                                    f"Spec hash mismatch: " f"desired={desired_hash[:8]}... actual={gw_hash[:8]}..."
                                 )
                                 await repo.update(dep)
                                 await self._emit_drift_event(dep, "spec_hash_mismatch")
@@ -437,6 +549,11 @@ class SyncEngine:
                                 )
 
                     await session.commit()
+                except AgentManagedGatewayError:
+                    logger.debug(
+                        "Skipping drift detection for agent-managed gateway %s",
+                        gateway.name,
+                    )
                 except Exception as e:
                     logger.error(
                         "Drift detection failed for gateway %s: %s",
@@ -445,8 +562,9 @@ class SyncEngine:
                         exc_info=True,
                     )
                 finally:
-                    with contextlib.suppress(Exception):
-                        await adapter.disconnect()
+                    if adapter:
+                        with contextlib.suppress(Exception):
+                            await adapter.disconnect()
 
     async def _emit_drift_event(self, deployment, drift_type: str) -> None:
         """Emit a drift-detected event to gateway-events topic."""

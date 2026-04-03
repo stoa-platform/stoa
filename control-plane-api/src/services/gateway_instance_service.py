@@ -127,35 +127,59 @@ class GatewayInstanceService:
         if not instance:
             raise ValueError(f"Gateway instance {instance_id} not found")
 
-        adapter = AdapterRegistry.create(
-            instance.gateway_type.value,
-            config={
-                "base_url": instance.base_url,
-                "auth_config": instance.auth_config,
-            },
+        from src.services.credential_resolver import (
+            _PULL_MODEL_GATEWAY_TYPES,
+            AGENT_MANAGED_MESSAGE,
+            create_adapter_with_credentials,
+        )
+
+        gw_type = instance.gateway_type.value if hasattr(instance.gateway_type, "value") else str(instance.gateway_type)
+        if instance.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
+            return {
+                "status": instance.status.value if instance.status else "unknown",
+                "details": {"info": AGENT_MANAGED_MESSAGE},
+                "gateway_name": instance.name,
+                "gateway_type": gw_type,
+            }
+
+        adapter = await create_adapter_with_credentials(
+            instance.gateway_type.value, instance.base_url, instance.auth_config,
         )
 
         try:
             await adapter.connect()
             result = await adapter.health_check()
 
-            new_status = GatewayInstanceStatus.ONLINE if result.success else GatewayInstanceStatus.DEGRADED
-            await self.repo.update_status(instance, status=new_status, health_details=result.data)
+            new_status = (
+                GatewayInstanceStatus.ONLINE if result.success else GatewayInstanceStatus.DEGRADED
+            )
+            details = result.data or {}
+            if not result.success and result.error:
+                details = {**details, "error": result.error}
+            # Merge into existing health_details to preserve heartbeat data
+            merged = {**(instance.health_details or {}), **details, "last_health_check_result": new_status.value}
+            await self.repo.update_status(instance, status=new_status, health_details=merged)
 
             return {
                 "status": new_status.value,
-                "details": result.data,
+                "details": details,
                 "gateway_name": instance.name,
                 "gateway_type": instance.gateway_type.value,
             }
         except Exception as e:
+            # Merge error into existing health_details to preserve heartbeat data
+            merged = {
+                **(instance.health_details or {}),
+                "error": str(e),
+                "last_health_check_result": "error",
+            }
             await self.repo.update_status(
                 instance,
-                status=GatewayInstanceStatus.OFFLINE,
-                health_details={"error": str(e)},
+                status=GatewayInstanceStatus.DEGRADED,
+                health_details=merged,
             )
             return {
-                "status": "offline",
+                "status": "degraded",
                 "details": {"error": str(e)},
                 "gateway_name": instance.name,
                 "gateway_type": instance.gateway_type.value,

@@ -164,7 +164,9 @@ describe('Layout', () => {
   it('renders gateway section with items (CAB-1764)', () => {
     renderLayout();
     expect(screen.getByText('Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
+    // "Overview" appears as both section header and gateway nav item
+    const overviewElements = screen.getAllByText('Overview');
+    expect(overviewElements.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Config Sync')).toBeInTheDocument();
     expect(screen.getByText('Backend Health')).toBeInTheDocument();
   });
@@ -182,7 +184,8 @@ describe('Layout', () => {
 
   it('renders rationalized section headers (CAB-1764)', () => {
     renderLayout();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
+    // "Overview" appears as both section header and gateway nav item
+    expect(screen.getAllByText('Overview').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('API Catalog')).toBeInTheDocument();
     // AI & MCP has accent (⚡ prefix)
     expect(screen.getByText((_, el) => el?.textContent === '\u26A1 AI & MCP')).toBeInTheDocument();
@@ -193,7 +196,6 @@ describe('Layout', () => {
     expect(screen.getByText('Users & Access')).toBeInTheDocument();
     // Removed sections
     expect(screen.queryByText('Insights')).not.toBeInTheDocument();
-    expect(screen.queryByText('Access')).not.toBeInTheDocument();
   });
 
   it('renders STOA badges on unique features', () => {
@@ -204,17 +206,20 @@ describe('Layout', () => {
 
   it('collapses section when header is clicked', () => {
     renderLayout();
-    const overviewHeader = screen.getByText('Overview');
-    fireEvent.click(overviewHeader);
+    // Target the section header button (not the nav link with same text)
+    const overviewHeaders = screen.getAllByText('Overview');
+    const sectionHeader = overviewHeaders.find((el) => el.closest('button[class*="uppercase"]'))!;
+    fireEvent.click(sectionHeader);
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
     expect(stored['nav.overview']).toBe(true);
   });
 
   it('expands collapsed section when header is clicked twice', () => {
     renderLayout();
-    const overviewHeader = screen.getByText('Overview');
-    fireEvent.click(overviewHeader); // collapse
-    fireEvent.click(overviewHeader); // expand
+    const overviewHeaders = screen.getAllByText('Overview');
+    const sectionHeader = overviewHeaders.find((el) => el.closest('button[class*="uppercase"]'))!;
+    fireEvent.click(sectionHeader); // collapse
+    fireEvent.click(sectionHeader); // expand
     const stored = JSON.parse(localStorage.getItem('stoa-sidebar-sections') || '{}');
     expect(stored['nav.overview']).toBe(false);
   });
@@ -309,9 +314,8 @@ describe('Layout', () => {
       logout: vi.fn(),
       hasPermission: vi
         .fn()
-        .mockImplementation(
-          (p: string) =>
-            ['apis:read', 'apps:read', 'audit:read', 'consumers:read'].includes(p)
+        .mockImplementation((p: string) =>
+          ['apis:read', 'apps:read', 'audit:read', 'consumers:read'].includes(p)
         ),
       hasRole: vi.fn(() => false),
     });

@@ -193,6 +193,39 @@ class VaultClient:
             )
             raise
 
+    async def read_secret(self, path: str) -> dict[str, Any] | None:
+        """Read a secret from any KV v2 path.
+
+        Returns the secret data dict if found, None if not found or Vault unavailable.
+        Unlike retrieve_credential(), accepts any path (not just external-mcp-servers/).
+        """
+        if not self.enabled:
+            logger.debug("Vault disabled — cannot read secret at %s", path)
+            return None
+
+        self._ensure_unsealed()
+        client = self._get_client()
+
+        try:
+            response = client.secrets.kv.v2.read_secret_version(
+                path=path,
+                mount_point=self.mount_point,
+            )
+
+            if response and "data" in response and "data" in response["data"]:
+                logger.info("Read secret from Vault", extra={"path": path})
+                return response["data"]["data"]
+
+            return None
+
+        except InvalidPath:
+            logger.warning("Secret not found in Vault", extra={"path": path})
+            return None
+
+        except VaultError as e:
+            logger.error("Failed to read secret from Vault", extra={"path": path, "error": str(e)})
+            return None
+
     async def delete_credential(self, server_id: str) -> bool:
         """Delete credentials for an external MCP server.
 

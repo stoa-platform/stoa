@@ -1,9 +1,26 @@
 /**
  * UsageChart Component - CAB-280
- * Graphique d'évolution des appels sur 7 jours
+ * Interactive bar chart for 7-day call volume with hover tooltips.
+ * Migrated from div bars to Recharts for interactive data navigation (CAB-1883).
  */
 
 import { memo } from 'react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
+import {
+  CHART_TOOLTIP_STYLE,
+  CHART_AXIS_STYLE,
+  CHART_GRID_STYLE,
+  ChartEmptyState,
+} from '@stoa/shared/components/ChartCard';
 import type { DailyCallStat } from '../../types';
 
 interface UsageChartProps {
@@ -27,6 +44,11 @@ function ChartSkeleton() {
   );
 }
 
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { weekday: 'short' });
+}
+
 export const UsageChart = memo(function UsageChart({ data, isLoading = false }: UsageChartProps) {
   if (isLoading) {
     return (
@@ -39,13 +61,13 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
     );
   }
 
-  const maxCalls = Math.max(...data.map((d) => d.calls), 1);
+  const chartData = data.map((d, i) => ({
+    ...d,
+    label: formatDate(d.date),
+    isToday: i === data.length - 1,
+  }));
 
-  // Format date for display
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { weekday: 'short' });
-  };
+  const totalCalls = data.reduce((sum, d) => sum + d.calls, 0);
 
   return (
     <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
@@ -54,53 +76,35 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
           Call Volume (7 days)
         </h3>
         <span className="text-sm text-neutral-500 dark:text-neutral-400">
-          Total: {data.reduce((sum, d) => sum + d.calls, 0).toLocaleString()} calls
+          Total: {totalCalls.toLocaleString()} calls
         </span>
       </div>
 
-      {/* Chart */}
-      <div className="flex items-end gap-3 h-40">
-        {data.map((day, index) => {
-          const height = (day.calls / maxCalls) * 100;
-          const isToday = index === data.length - 1;
-
-          return (
-            <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
-              {/* Bar */}
-              <div className="w-full relative group">
-                <div
-                  className={`
-                    w-full rounded-t transition-all duration-300
-                    ${isToday ? 'bg-primary-500' : 'bg-primary-200 hover:bg-primary-300'}
-                  `}
-                  style={{ height: `${Math.max(height, 5)}%`, minHeight: '8px' }}
-                />
-
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                  <div className="bg-neutral-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                    {day.calls.toLocaleString()} calls
-                  </div>
-                </div>
-              </div>
-
-              {/* Label */}
-              <span
-                className={`text-xs ${isToday ? 'text-primary-600 font-medium' : 'text-neutral-400 dark:text-neutral-500'}`}
-              >
-                {formatDate(day.date)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Y-axis labels */}
-      <div className="flex justify-between mt-4 text-xs text-neutral-400 dark:text-neutral-500">
-        <span>0</span>
-        <span>{Math.round(maxCalls / 2).toLocaleString()}</span>
-        <span>{maxCalls.toLocaleString()}</span>
-      </div>
+      {data.length === 0 ? (
+        <ChartEmptyState message="No call data available" height={160} />
+      ) : (
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={chartData} barCategoryGap="20%">
+            <CartesianGrid {...CHART_GRID_STYLE} />
+            <XAxis dataKey="label" tick={CHART_AXIS_STYLE} axisLine={false} tickLine={false} />
+            <YAxis
+              tick={CHART_AXIS_STYLE}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v))}
+            />
+            <Tooltip
+              contentStyle={CHART_TOOLTIP_STYLE}
+              formatter={(value) => [`${Number(value).toLocaleString()} calls`, 'Volume']}
+            />
+            <Bar dataKey="calls" radius={[4, 4, 0, 0]}>
+              {chartData.map((entry, index) => (
+                <Cell key={index} fill={entry.isToday ? '#6366F1' : '#A5B4FC'} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 });

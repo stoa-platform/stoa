@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -37,6 +38,12 @@ type Config struct {
 	Version string
 	// HeartbeatInterval is the time between heartbeat calls (default 30s).
 	HeartbeatInterval time.Duration
+	// TargetGatewayURL is the URL of the third-party gateway managed by this agent.
+	TargetGatewayURL string
+	// PublicURL is the public DNS URL where runtime APIs are served.
+	PublicURL string
+	// UIURL is the web UI URL of the third-party gateway admin console.
+	UIURL string
 }
 
 // ConfigFromEnv creates a Config from environment variables.
@@ -61,17 +68,23 @@ func ConfigFromEnv(version string) Config {
 			cfg.HeartbeatInterval = d
 		}
 	}
+	cfg.TargetGatewayURL = os.Getenv("STOA_TARGET_GATEWAY_URL")
+	cfg.PublicURL = os.Getenv("STOA_PUBLIC_URL")
+	cfg.UIURL = os.Getenv("STOA_UI_URL")
 	return cfg
 }
 
 // RegistrationPayload is the payload sent to POST /v1/internal/gateways/register.
 type RegistrationPayload struct {
-	Hostname     string   `json:"hostname"`
-	Mode         string   `json:"mode"`
-	Version      string   `json:"version"`
-	Environment  string   `json:"environment"`
-	Capabilities []string `json:"capabilities"`
-	AdminURL     string   `json:"admin_url"`
+	Hostname         string   `json:"hostname"`
+	Mode             string   `json:"mode"`
+	Version          string   `json:"version"`
+	Environment      string   `json:"environment"`
+	Capabilities     []string `json:"capabilities"`
+	AdminURL         string   `json:"admin_url"`
+	TargetGatewayURL string   `json:"target_gateway_url,omitempty"`
+	PublicURL        string   `json:"public_url,omitempty"`
+	UIURL            string   `json:"ui_url,omitempty"`
 }
 
 // RegistrationResponse is the response from the register endpoint.
@@ -112,6 +125,7 @@ type Agent struct {
 	client             *http.Client
 	tracer             trace.Tracer
 	gatewayID          string
+	healthPort         string // stored after Register for re-registration
 	startTime          time.Time
 	lastDiscoveredAPIs []DiscoveredAPIPayload
 }
@@ -155,12 +169,15 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 	defer span.End()
 
 	payload := RegistrationPayload{
-		Hostname:     a.cfg.InstanceName,
-		Mode:         "connect",
-		Version:      a.cfg.Version,
-		Environment:  a.cfg.Environment,
-		Capabilities: []string{"policy_sync", "health_monitoring"},
-		AdminURL:     fmt.Sprintf("http://%s:%s", a.cfg.InstanceName, healthPort),
+		Hostname:         a.cfg.InstanceName,
+		Mode:             "connect",
+		Version:          a.cfg.Version,
+		Environment:      a.cfg.Environment,
+		Capabilities:     []string{"policy_sync", "health_monitoring"},
+		AdminURL:         fmt.Sprintf("http://%s:%s", a.cfg.InstanceName, healthPort),
+		TargetGatewayURL: a.cfg.TargetGatewayURL,
+		PublicURL:        a.cfg.PublicURL,
+		UIURL:            a.cfg.UIURL,
 	}
 
 	data, err := json.Marshal(payload)
@@ -186,7 +203,7 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("register request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
@@ -206,6 +223,7 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 	}
 
 	a.gatewayID = result.ID
+	a.healthPort = healthPort
 	span.SetAttributes(attribute.String("stoa.gateway_id", result.ID))
 	span.SetStatus(codes.Ok, "registered")
 	log.Printf("registered with CP: id=%s name=%s", result.ID, result.Name)
@@ -216,6 +234,10 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 func (a *Agent) GatewayID() string {
 	return a.gatewayID
 }
+
+// ErrGatewayNotFound is returned when the CP responds 404 to a heartbeat,
+// indicating the gateway instance was purged and needs re-registration.
+var ErrGatewayNotFound = fmt.Errorf("gateway not found on Control Plane (purged)")
 
 // Heartbeat sends a single heartbeat to the Control Plane.
 func (a *Agent) Heartbeat(ctx context.Context) error {
@@ -230,11 +252,13 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 
 	payload := HeartbeatPayload{
 		UptimeSeconds:  int(time.Since(a.startTime).Seconds()),
+		RoutesCount:    a.computeRoutesCount(),
 		DiscoveredAPIs: len(a.lastDiscoveredAPIs),
 	}
 
 	span.SetAttributes(
 		attribute.Int("stoa.uptime_seconds", payload.UptimeSeconds),
+		attribute.Int("stoa.routes_count", payload.RoutesCount),
 		attribute.Int("stoa.discovered_apis", payload.DiscoveredAPIs),
 	)
 
@@ -261,9 +285,16 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("heartbeat request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+
+	if resp.StatusCode == http.StatusNotFound {
+		err := ErrGatewayNotFound
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "gateway purged from CP")
+		return err
+	}
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -274,15 +305,20 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 	}
 
 	span.SetStatus(codes.Ok, "heartbeat sent")
+	HeartbeatsSent.Inc()
 	return nil
 }
 
 // StartHeartbeat starts a background goroutine that sends heartbeats
-// at the configured interval. Stops when ctx is cancelled.
+// at the configured interval. If the CP responds 404 (gateway purged),
+// it re-registers automatically after 3 consecutive 404s.
+// Stops when ctx is cancelled.
 func (a *Agent) StartHeartbeat(ctx context.Context) {
+	const reRegisterThreshold = 3
 	ticker := time.NewTicker(a.cfg.HeartbeatInterval)
 	go func() {
 		defer ticker.Stop()
+		consecutiveNotFound := 0
 		for {
 			select {
 			case <-ctx.Done():
@@ -290,7 +326,25 @@ func (a *Agent) StartHeartbeat(ctx context.Context) {
 				return
 			case <-ticker.C:
 				if err := a.Heartbeat(ctx); err != nil {
-					log.Printf("heartbeat error: %v", err)
+					if errors.Is(err, ErrGatewayNotFound) {
+						consecutiveNotFound++
+						log.Printf("heartbeat 404 (%d/%d) — gateway not found on CP",
+							consecutiveNotFound, reRegisterThreshold)
+						if consecutiveNotFound >= reRegisterThreshold {
+							log.Println("gateway purged from CP, re-registering...")
+							a.gatewayID = ""
+							if regErr := a.Register(ctx, a.healthPort); regErr != nil {
+								log.Printf("re-registration failed: %v", regErr)
+							} else {
+								log.Printf("re-registered with CP: id=%s", a.gatewayID)
+								consecutiveNotFound = 0
+							}
+						}
+					} else {
+						log.Printf("heartbeat error: %v", err)
+					}
+				} else {
+					consecutiveNotFound = 0
 				}
 			}
 		}
@@ -358,7 +412,7 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 		span.SetStatus(codes.Error, "request failed")
 		return fmt.Errorf("discovery report request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
 
@@ -372,6 +426,23 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 
 	span.SetStatus(codes.Ok, "discovery reported")
 	return nil
+}
+
+// computeRoutesCount computes the total number of routes from discovered APIs.
+// Each path on an active API counts as one route (CAB-1916).
+func (a *Agent) computeRoutesCount() int {
+	count := 0
+	for _, api := range a.lastDiscoveredAPIs {
+		if api.IsActive {
+			paths := len(api.Paths)
+			if paths == 0 {
+				// API with no explicit paths still counts as 1 route
+				paths = 1
+			}
+			count += paths
+		}
+	}
+	return count
 }
 
 // DiscoveredAPIsCount returns the count of last discovered APIs.

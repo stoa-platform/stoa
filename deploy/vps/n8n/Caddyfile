@@ -1,3 +1,0 @@
-n8n.gostoa.dev {
-	reverse_proxy n8n:5678
-}

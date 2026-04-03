@@ -23,11 +23,14 @@ class Subscriber:
 
     id: str = field(default_factory=lambda: str(uuid4())[:8])
     tenant_id: str = "*"
+    gateway_id: str | None = None
     event_types: list[str] | None = None
     queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=256))
 
-    def accepts(self, tenant_id: str, event_type: str) -> bool:
+    def accepts(self, tenant_id: str, event_type: str, gateway_id: str | None = None) -> bool:
         if self.tenant_id != "*" and self.tenant_id != tenant_id:
+            return False
+        if self.gateway_id and gateway_id and self.gateway_id != gateway_id:
             return False
         return not (self.event_types and event_type not in self.event_types)
 
@@ -38,21 +41,26 @@ class EventBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, Subscriber] = {}
 
-    def subscribe(self, tenant_id: str = "*", event_types: list[str] | None = None) -> Subscriber:
-        sub = Subscriber(tenant_id=tenant_id, event_types=event_types)
+    def subscribe(
+        self,
+        tenant_id: str = "*",
+        event_types: list[str] | None = None,
+        gateway_id: str | None = None,
+    ) -> Subscriber:
+        sub = Subscriber(tenant_id=tenant_id, gateway_id=gateway_id, event_types=event_types)
         self._subscribers[sub.id] = sub
-        logger.debug("SSE subscriber %s added (tenant=%s)", sub.id, tenant_id)
+        logger.debug("SSE subscriber %s added (tenant=%s, gateway=%s)", sub.id, tenant_id, gateway_id)
         return sub
 
     def unsubscribe(self, sub: Subscriber) -> None:
         self._subscribers.pop(sub.id, None)
         logger.debug("SSE subscriber %s removed", sub.id)
 
-    async def publish(self, tenant_id: str, event_type: str, data: dict) -> int:
+    async def publish(self, tenant_id: str, event_type: str, data: dict, gateway_id: str | None = None) -> int:
         """Fan-out an event to all matching subscribers. Returns delivery count."""
         delivered = 0
         for sub in list(self._subscribers.values()):
-            if sub.accepts(tenant_id, event_type):
+            if sub.accepts(tenant_id, event_type, gateway_id=gateway_id):
                 try:
                     sub.queue.put_nowait({"event": event_type, "data": data})
                     delivered += 1

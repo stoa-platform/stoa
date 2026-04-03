@@ -229,7 +229,7 @@ kubectl exec -n stoa deploy/apigateway -- \
 # Latency test
 for i in {1..10}; do
   curl -w "Total: %{time_total}s\n" -o /dev/null -s \
-    https://gateway.gostoa.dev/rest/apigateway/health
+    https://vps-wm.gostoa.dev/rest/apigateway/health
 done
 
 # Check percentiles

@@ -14,7 +14,6 @@ import uuid
 from typing import Any, Literal
 
 import structlog
-from structlog.types import Processor
 
 from .config import settings
 
@@ -37,7 +36,7 @@ class SensitiveDataMasker:
 
     def _mask_dict(self, d: dict[str, Any]) -> dict[str, Any]:
         """Recursively mask sensitive keys in a dict."""
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in d.items():
             if any(pattern.search(key) for pattern in self.patterns):
                 result[key] = self.mask_value
@@ -152,7 +151,7 @@ def configure_logging(
         noisy_logger.setLevel(getattr(logging, log_level_for_logger.upper(), logging.WARNING))
 
     # Shared processors for all formats
-    shared_processors: list[Processor] = [
+    shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
@@ -200,7 +199,8 @@ def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
         logger = get_logger(__name__)
         logger.info("Processing request", tenant_id="acme", api_id="123")
     """
-    return structlog.get_logger(name)
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
+    return logger
 
 
 def bind_context(**kwargs) -> None:

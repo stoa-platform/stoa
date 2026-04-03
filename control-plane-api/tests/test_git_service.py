@@ -31,6 +31,7 @@ Covers:
 - _fetch_with_protection (success, timeout retry, 429 retry, non-retryable break)
 - GitLabRateLimitError
 """
+
 import asyncio
 from unittest.mock import MagicMock, patch
 
@@ -437,9 +438,7 @@ class TestGetTenant:
         svc = _connected_service()
         svc._project.files.get.return_value = _mock_file("id: t1\n")
         await svc.get_tenant("t1")
-        svc._project.files.get.assert_called_once_with(
-            "tenants/t1/tenant.yaml", ref="main"
-        )
+        svc._project.files.get.assert_called_once_with("tenants/t1/tenant.yaml", ref="main")
 
 
 # ─────────────────────────────────────────────
@@ -518,7 +517,7 @@ class TestCreateApi:
         svc = _connected_service()
         # _ensure_tenant_exists: file exists
         svc._project.files.get.side_effect = [
-            MagicMock(),      # tenant.yaml exists
+            MagicMock(),  # tenant.yaml exists
             _gitlab_get_error(),  # api.yaml not found → api does not exist
         ]
         svc._project.commits.create.return_value = MagicMock()
@@ -538,8 +537,8 @@ class TestCreateApi:
     async def test_duplicate_api_raises_value_error(self):
         svc = _connected_service()
         svc._project.files.get.side_effect = [
-            MagicMock(),   # tenant.yaml exists
-            MagicMock(),   # api.yaml exists → duplicate
+            MagicMock(),  # tenant.yaml exists
+            MagicMock(),  # api.yaml exists → duplicate
         ]
         with pytest.raises(ValueError, match="already exists"):
             await svc.create_api("acme", {"name": "weather"})
@@ -623,9 +622,7 @@ class TestGetApi:
         svc = _connected_service()
         svc._project.files.get.return_value = _mock_file("id: w\n")
         await svc.get_api("acme", "weather")
-        svc._project.files.get.assert_called_once_with(
-            "tenants/acme/apis/weather/api.yaml", ref="main"
-        )
+        svc._project.files.get.assert_called_once_with("tenants/acme/apis/weather/api.yaml", ref="main")
 
 
 # ─────────────────────────────────────────────
@@ -724,18 +721,21 @@ class TestDeleteApi:
             {"type": "blob", "path": "tenants/acme/apis/weather/openapi.yaml"},
             {"type": "tree", "path": "tenants/acme/apis/weather/policies"},
         ]
-        svc._project.files.delete = MagicMock()
+        svc._project.commits.create = MagicMock()
         result = await svc.delete_api("acme", "weather")
         assert result is True
-        assert svc._project.files.delete.call_count == 2
+        svc._project.commits.create.assert_called_once()
+        call_args = svc._project.commits.create.call_args[0][0]
+        assert len(call_args["actions"]) == 2
+        assert all(a["action"] == "delete" for a in call_args["actions"])
 
     async def test_empty_tree_succeeds(self):
         svc = _connected_service()
         svc._project.repository_tree.return_value = []
-        svc._project.files.delete = MagicMock()
+        svc._project.commits.create = MagicMock()
         result = await svc.delete_api("acme", "weather")
         assert result is True
-        svc._project.files.delete.assert_not_called()
+        svc._project.commits.create.assert_not_called()
 
     async def test_exception_propagates(self):
         svc = _connected_service()
@@ -1023,17 +1023,13 @@ class TestListMcpServers:
         svc = _connected_service()
         svc._project.repository_tree.return_value = []
         await svc.list_mcp_servers("_platform")
-        svc._project.repository_tree.assert_called_once_with(
-            path="platform/mcp-servers", ref="main"
-        )
+        svc._project.repository_tree.assert_called_once_with(path="platform/mcp-servers", ref="main")
 
     async def test_tenant_path(self):
         svc = _connected_service()
         svc._project.repository_tree.return_value = []
         await svc.list_mcp_servers("acme")
-        svc._project.repository_tree.assert_called_once_with(
-            path="tenants/acme/mcp-servers", ref="main"
-        )
+        svc._project.repository_tree.assert_called_once_with(path="tenants/acme/mcp-servers", ref="main")
 
     async def test_returns_empty_list_on_404(self):
         svc = _connected_service()
@@ -1081,8 +1077,8 @@ class TestListAllMcpServers:
         # Third call: tenant servers tree → 1 server
         svc._project.repository_tree.side_effect = [
             [{"type": "tree", "name": "platform-svc"}],  # platform/mcp-servers
-            [{"type": "tree", "name": "acme"}],           # tenants
-            [{"type": "tree", "name": "tenant-svc"}],     # tenants/acme/mcp-servers
+            [{"type": "tree", "name": "acme"}],  # tenants
+            [{"type": "tree", "name": "tenant-svc"}],  # tenants/acme/mcp-servers
         ]
         svc._project.files.get.return_value = _mock_file(raw)
         result = await svc.list_all_mcp_servers()
@@ -1108,8 +1104,8 @@ class TestListAllMcpServers:
     async def test_empty_returns_empty_list(self):
         svc = _connected_service()
         svc._project.repository_tree.side_effect = [
-            [],                  # platform/mcp-servers empty
-            [],                  # tenants empty
+            [],  # platform/mcp-servers empty
+            [],  # tenants empty
         ]
         result = await svc.list_all_mcp_servers()
         assert result == []
@@ -1155,11 +1151,14 @@ class TestCreateMcpServer:
         svc = _connected_service()
         svc._project.files.get.side_effect = _gitlab_get_error()
         svc._project.commits.create.return_value = MagicMock()
-        await svc.create_mcp_server("acme", {
-            "name": "my-server",
-            "display_name": "My Server",
-            "description": "Test",
-        })
+        await svc.create_mcp_server(
+            "acme",
+            {
+                "name": "my-server",
+                "display_name": "My Server",
+                "description": "Test",
+            },
+        )
         call_args = svc._project.commits.create.call_args[0][0]
         content_yaml = yaml.safe_load(call_args["actions"][0]["content"])
         assert content_yaml["apiVersion"] == "gostoa.dev/v1"
@@ -1368,3 +1367,108 @@ class TestGitLabRateLimitError:
     def test_can_be_raised_and_caught(self):
         with pytest.raises(GitLabRateLimitError, match="too many"):
             raise GitLabRateLimitError("too many")
+
+
+# ─────────────────────────────────────────────
+# Dual-provider parametrized tests (CAB-1890)
+# ─────────────────────────────────────────────
+
+
+@pytest.fixture(params=["gitlab", "github"])
+def git_provider(request, monkeypatch):
+    """Parametrize tests across both git providers."""
+    monkeypatch.setenv("GIT_PROVIDER", request.param)
+    return request.param
+
+
+def _make_provider(git_provider: str):
+    """Create a GitProvider instance via factory with mocked settings."""
+    from src.services.git_provider import get_git_provider, git_provider_factory
+
+    get_git_provider.cache_clear()
+
+    with patch("src.services.git_provider.settings") as mock_settings:
+        mock_settings.GIT_PROVIDER = git_provider
+        mock_settings.GITLAB_URL = "https://gitlab.example.com"
+        mock_settings.GITLAB_TOKEN = "test-token"
+        mock_settings.GITLAB_PROJECT_ID = "12345"
+        return git_provider_factory()
+
+
+class TestDualProviderFactory:
+    """Verify git_provider_factory() returns correct type for each provider."""
+
+    def test_factory_returns_correct_type(self, git_provider):
+        provider = _make_provider(git_provider)
+        if git_provider == "github":
+            from src.services.github_service import GitHubService
+
+            assert isinstance(provider, GitHubService)
+        else:
+            assert isinstance(provider, GitLabService)
+
+    def test_factory_instance_implements_git_provider(self, git_provider):
+        from src.services.git_provider import GitProvider
+
+        provider = _make_provider(git_provider)
+        assert isinstance(provider, GitProvider)
+
+
+class TestDualProviderContract:
+    """Verify both providers expose all required interface methods."""
+
+    REQUIRED_METHODS = [
+        "connect",
+        "disconnect",
+        "clone_repo",
+        "get_file_content",
+        "list_files",
+        "create_webhook",
+        "delete_webhook",
+        "get_repo_info",
+    ]
+
+    @pytest.mark.parametrize("method_name", REQUIRED_METHODS)
+    def test_provider_has_required_method(self, git_provider, method_name):
+        provider = _make_provider(git_provider)
+        assert hasattr(provider, method_name)
+        assert callable(getattr(provider, method_name))
+
+
+class TestDualProviderDisconnect:
+    """Verify disconnect behavior across both providers."""
+
+    async def test_disconnect_is_idempotent(self, git_provider):
+        provider = _make_provider(git_provider)
+        # Disconnect without connecting should not raise
+        await provider.disconnect()
+        await provider.disconnect()  # idempotent
+
+
+class TestDualProviderNotConnected:
+    """Verify both providers raise RuntimeError when not connected."""
+
+    async def test_get_file_content_not_connected(self, git_provider):
+        provider = _make_provider(git_provider)
+        with pytest.raises(RuntimeError):
+            await provider.get_file_content("project", "file.txt")
+
+    async def test_get_repo_info_not_connected(self, git_provider):
+        provider = _make_provider(git_provider)
+        with pytest.raises(RuntimeError):
+            await provider.get_repo_info("project")
+
+    async def test_list_files_not_connected(self, git_provider):
+        provider = _make_provider(git_provider)
+        with pytest.raises(RuntimeError):
+            await provider.list_files("project")
+
+    async def test_create_webhook_not_connected(self, git_provider):
+        provider = _make_provider(git_provider)
+        with pytest.raises(RuntimeError):
+            await provider.create_webhook("project", "http://hook", "secret", ["push"])
+
+    async def test_delete_webhook_not_connected(self, git_provider):
+        provider = _make_provider(git_provider)
+        with pytest.raises(RuntimeError):
+            await provider.delete_webhook("project", "123")

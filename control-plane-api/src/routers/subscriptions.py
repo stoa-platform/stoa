@@ -63,10 +63,22 @@ def _extract_auth_token(request: Request) -> str | None:
 
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
-    """Check if user has access to a tenant"""
+    """Check if user has read access to a tenant's resources."""
     if "cpi-admin" in user.roles:
         return True
     return user.tenant_id == tenant_id
+
+
+def _has_tenant_admin_access(user: User, tenant_id: str) -> bool:
+    """Check if user has admin (write) access to a tenant's resources.
+
+    Unlike _has_tenant_access, this requires an admin role (cpi-admin or
+    tenant-admin), not just tenant membership. Viewer and devops roles
+    with matching tenant_id are denied.
+    """
+    if "cpi-admin" in user.roles:
+        return True
+    return "tenant-admin" in user.roles and user.tenant_id == tenant_id
 
 
 # ============== Subscriber Endpoints (Developer Portal) ==============
@@ -674,8 +686,8 @@ async def approve_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    if not _has_tenant_access(user, subscription.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _has_tenant_admin_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied — tenant-admin or cpi-admin role required")
 
     if subscription.status != SubscriptionStatus.PENDING:
         raise HTTPException(
@@ -731,8 +743,8 @@ async def revoke_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    if not _has_tenant_access(user, subscription.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _has_tenant_admin_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied — tenant-admin or cpi-admin role required")
 
     if subscription.status == SubscriptionStatus.REVOKED:
         raise HTTPException(status_code=400, detail="Subscription already revoked")
@@ -777,8 +789,8 @@ async def suspend_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    if not _has_tenant_access(user, subscription.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _has_tenant_admin_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied — tenant-admin or cpi-admin role required")
 
     if subscription.status != SubscriptionStatus.ACTIVE:
         raise HTTPException(
@@ -812,8 +824,8 @@ async def reactivate_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    if not _has_tenant_access(user, subscription.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _has_tenant_admin_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied — tenant-admin or cpi-admin role required")
 
     if subscription.status != SubscriptionStatus.SUSPENDED:
         raise HTTPException(
@@ -854,8 +866,8 @@ async def reject_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    if not _has_tenant_access(user, subscription.tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _has_tenant_admin_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied — tenant-admin or cpi-admin role required")
 
     if subscription.status != SubscriptionStatus.PENDING:
         raise HTTPException(status_code=400, detail=f"Cannot reject subscription in {subscription.status.value} status")
@@ -905,7 +917,7 @@ async def bulk_subscription_action(
                 failed.append(BulkActionFailure(id=sub_id, error="Subscription not found"))
                 continue
 
-            if not _has_tenant_access(user, subscription.tenant_id):
+            if not _has_tenant_admin_access(user, subscription.tenant_id):
                 failed.append(BulkActionFailure(id=sub_id, error="Access denied"))
                 continue
 

@@ -127,7 +127,17 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 
 	steps := []SyncStep{agentStep, adapterStep, apiStep}
 
-	// Build ack results based on sync outcome
+	// Build ack results — per-route status from adapter FailedRoutes map
+	// This gives accurate results: routes that succeeded are "applied",
+	// only routes that actually failed are "failed".
+	type failedRoutesProvider interface {
+		GetFailedRoutes() map[string]string
+	}
+	failedMap := make(map[string]string)
+	if frp, ok := adapter.(failedRoutesProvider); ok {
+		failedMap = frp.GetFailedRoutes()
+	}
+
 	var results []SyncedRouteResult
 	for _, r := range routes {
 		if r.DeploymentID == "" {
@@ -137,7 +147,11 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 			DeploymentID: r.DeploymentID,
 			Steps:        steps,
 		}
-		if syncErr != nil {
+		if routeErr, failed := failedMap[r.DeploymentID]; failed {
+			result.Status = "failed"
+			result.Error = routeErr
+		} else if syncErr != nil && len(failedMap) == 0 {
+			// Fallback: global error without per-route tracking (non-webmethods adapters)
 			result.Status = "failed"
 			result.Error = syncErr.Error()
 		} else {

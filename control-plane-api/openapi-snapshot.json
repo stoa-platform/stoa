@@ -10317,6 +10317,21 @@
             "title": "Sync Status",
             "type": "string"
           },
+          "sync_steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Steps"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -10618,6 +10633,18 @@
             "description": "Whether this gateway is protected from deletion",
             "title": "Protected",
             "type": "boolean"
+          },
+          "public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)",
+            "title": "Public Url"
           },
           "status": {
             "title": "Status",
@@ -11060,6 +11087,18 @@
             "description": "Gateway mode: edge_mcp, sidecar, proxy, shadow",
             "title": "Mode",
             "type": "string"
+          },
+          "public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public DNS URL of this gateway for Console display (CAB-1940)",
+            "title": "Public Url"
           },
           "target_gateway_url": {
             "anyOf": [
@@ -22523,6 +22562,22 @@
             "description": "Sync result: applied or failed",
             "title": "Status",
             "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ordered sync step trace (optional)",
+            "title": "Steps"
           }
         },
         "required": [
@@ -37227,8 +37282,29 @@
     },
     "/v1/internal/catalog/apis": {
       "get": {
-        "description": "List published APIs with backend_url for gateway API-to-Tool bridge.\n\nInternal endpoint \u2014 no JWT auth required (service-to-service on internal network).\nUsed by stoa-gateway to discover APIs and register them as MCP tools.",
+        "description": "List published APIs with backend_url for gateway API-to-Tool bridge.\n\nInternal endpoint \u2014 no JWT auth required (service-to-service on internal network).\nUsed by stoa-gateway to discover APIs and register them as MCP tools.\n\nIf gateway_id is provided, only APIs assigned to that gateway are returned.\nWithout gateway_id, all published APIs are returned (backward compatible).",
         "operationId": "internal_list_apis",
+        "parameters": [
+          {
+            "description": "Filter APIs assigned to this gateway (CAB-1940)",
+            "in": "query",
+            "name": "gateway_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter APIs assigned to this gateway (CAB-1940)",
+              "title": "Gateway Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -37239,6 +37315,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Internal List Apis",

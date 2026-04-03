@@ -75,6 +75,7 @@ class TestGatewayDeploymentService:
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
             mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
+            mock_deploy_repo.update = AsyncMock()
 
             mock_gw_repo = MockGwRepo.return_value
             mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
@@ -113,6 +114,7 @@ class TestGatewayDeploymentService:
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
             mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
+            mock_deploy_repo.update = AsyncMock()
 
             mock_gw_repo = MockGwRepo.return_value
             mock_gw_repo.get_by_id = AsyncMock(side_effect=lambda gid: gw1 if gid == gw1.id else gw2)
@@ -397,6 +399,7 @@ class TestGatewayDeploymentService:
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
             mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
+            mock_deploy_repo.update = AsyncMock()
 
             mock_gw_repo = MockGwRepo.return_value
             mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)

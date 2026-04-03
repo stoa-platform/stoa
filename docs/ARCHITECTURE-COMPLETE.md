@@ -95,7 +95,7 @@
 | Control-Plane API | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` | Backend API |
 | MCP Gateway | `https://mcp.gostoa.dev` | AI-Native API Gateway |
 | Keycloak | `https://auth.gostoa.dev` | Identity Provider |
-| Gateway Admin | `https://gateway.gostoa.dev` | webMethods Admin |
+| Gateway Admin | `https://vps-wm.gostoa.dev` | webMethods Admin |
 | AWX | `https://awx.gostoa.dev` | Automation |
 | ArgoCD | `https://argocd.gostoa.dev` | GitOps |
 | Vault | `https://vault.gostoa.dev` | Secrets Management |
@@ -1176,7 +1176,7 @@ control-plane-api/alembic/versions/
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  Version: 10.15 (lean image)                                            │
-│  URL: https://gateway.gostoa.dev                                    │
+│  URL: https://vps-wm.gostoa.dev                                    │
 │                                                                          │
 │  Configuration:                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │

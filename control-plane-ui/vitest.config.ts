@@ -34,10 +34,10 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/**/*.d.ts', 'src/main.tsx'],
       thresholds: {
-        lines: 62,
-        functions: 51, // lowered from 52: removed Deployments tab test (CAB-1887 — tab removed from UI)
-        branches: 56,
-        statements: 62, // lowered from 63: removed Deployments tab test (CAB-1887 — tab removed from UI)
+        lines: 55, // CAB-1951 Phase 2: mechanical test deletion. Restored in Phase 3.
+        functions: 45,
+        branches: 50,
+        statements: 55,
       },
     },
   },

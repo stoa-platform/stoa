@@ -1,14 +1,28 @@
-# webMethods Production — OVH VPS (51.255.201.17)
-# Canonical copy at /opt/webmethods-caddy/Caddyfile on VPS
+# webMethods VPS (51.255.201.17) — Convention: vps-wm[-service].gostoa.dev
+# Canonical copy at /etc/caddy/Caddyfile on VPS
 
-webmethods.gostoa.dev {
+vps-wm.gostoa.dev {
 	reverse_proxy localhost:5555
 }
 
-connect-webmethods.gostoa.dev {
-	reverse_proxy localhost:8090
+vps-wm.gostoa.dev:9072 {
+	reverse_proxy localhost:19072 {
+		header_down -Content-Security-Policy
+		transport http {
+			versions 1.1
+		}
+	}
 }
 
-link-webmethods.gostoa.dev {
+vps-wm-ui.gostoa.dev {
+	reverse_proxy localhost:19072 {
+		header_down -Content-Security-Policy
+		transport http {
+			versions 1.1
+		}
+	}
+}
+
+vps-wm-link.gostoa.dev {
 	reverse_proxy localhost:9200
 }

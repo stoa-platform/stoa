@@ -20,6 +20,8 @@ postgresql:
   readReplicas:
     replicaCount: 1
 
+# Keycloak replicas — REFERENCE ONLY (managed by stoa-infra charts/keycloak/)
+# Clustering (JGroups DNS_PING) enabled when replicas > 1 (CAB-1956)
 keycloak:
   replicas: 3
 

@@ -77,6 +77,11 @@ def _register_builtin_adapters() -> None:
     from .stoa import StoaGatewayAdapter
 
     AdapterRegistry.register("stoa", StoaGatewayAdapter)
+    # STOA Gateway mode variants (ADR-024) — all use the same adapter
+    AdapterRegistry.register("stoa_edge_mcp", StoaGatewayAdapter)
+    AdapterRegistry.register("stoa_sidecar", StoaGatewayAdapter)
+    AdapterRegistry.register("stoa_proxy", StoaGatewayAdapter)
+    AdapterRegistry.register("stoa_shadow", StoaGatewayAdapter)
 
     from .kong import KongGatewayAdapter
 

@@ -88,7 +88,14 @@ jobs:
         with:
           python-version: '3.11'
           working-directory: control-plane-api
-      - name: Run integration tests
+      - name: Run adapter boundary tests (CAB-1951)
+        working-directory: control-plane-api
+        env:
+          ENABLE_DEPLOYMENT_WORKER: 'false'
+          ENABLE_SNAPSHOT_CONSUMER: 'false'
+        run: |
+          pytest tests/test_int_webmethods_adapter.py -v --tb=short
+      - name: Run DB integration tests
         working-directory: control-plane-api
         env:
           DATABASE_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_test

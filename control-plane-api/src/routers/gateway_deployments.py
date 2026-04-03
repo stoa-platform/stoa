@@ -38,6 +38,7 @@ def _deployment_to_dict(dep) -> dict:
         "last_sync_success": dep.last_sync_success,
         "sync_error": dep.sync_error,
         "sync_attempts": dep.sync_attempts,
+        "sync_steps": dep.sync_steps,
         "gateway_resource_id": dep.gateway_resource_id,
         "created_at": dep.created_at,
         "updated_at": dep.updated_at,

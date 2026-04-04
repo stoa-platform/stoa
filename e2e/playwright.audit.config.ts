@@ -53,6 +53,17 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['audit-infra'],
     },
+    {
+      name: 'audit-security',
+      testMatch: /audit-phase3-security\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'audit-observability',
+      testMatch: /audit-phase4-observability\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['audit-security'],
+    },
   ],
 
   // Environment variables available in tests

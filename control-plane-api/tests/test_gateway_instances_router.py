@@ -47,6 +47,8 @@ class TestGatewayInstancesRouter:
             "public_url": None,
             "ui_url": None,
             "protected": False,
+            "enabled": True,
+            "visibility": None,
             "deleted_at": None,
             "deleted_by": None,
             "created_at": datetime(2026, 2, 1, tzinfo=UTC),
@@ -484,3 +486,104 @@ class TestGatewayInstancesRouter:
             response = client.delete(f"/v1/admin/gateways/{uuid4()}")
 
         assert response.status_code == 403
+
+    # ============== CAB-1979: enabled flag ==============
+
+    def test_update_gateway_enable_disable(self, app_with_cpi_admin, mock_db_session):
+        """PUT /{id} can toggle enabled flag."""
+        gw_id = uuid4()
+        updated = self._mock_gateway_instance(id=gw_id, enabled=False)
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.update = AsyncMock(return_value=updated)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.put(
+                    f"/v1/admin/gateways/{gw_id}",
+                    json={"enabled": False},
+                )
+
+        assert response.status_code == 200
+        assert response.json()["enabled"] is False
+        MockSvc.return_value.update.assert_called_once()
+
+    def test_update_gateway_visibility(self, app_with_cpi_admin, mock_db_session):
+        """PUT /{id} can set visibility to restrict to specific tenants."""
+        gw_id = uuid4()
+        visibility = {"tenant_ids": ["acme", "partner-co"]}
+        updated = self._mock_gateway_instance(id=gw_id, visibility=visibility)
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.update = AsyncMock(return_value=updated)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.put(
+                    f"/v1/admin/gateways/{gw_id}",
+                    json={"visibility": visibility},
+                )
+
+        assert response.status_code == 200
+        assert response.json()["visibility"] == visibility
+
+    def test_response_includes_enabled_and_visibility(self, app_with_cpi_admin, mock_db_session):
+        """GET /{id} response includes enabled and visibility fields."""
+        gw_id = uuid4()
+        instance = self._mock_gateway_instance(
+            id=gw_id, enabled=True, visibility={"tenant_ids": ["acme"]}
+        )
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.get_by_id = AsyncMock(return_value=instance)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"/v1/admin/gateways/{gw_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["enabled"] is True
+        assert data["visibility"] == {"tenant_ids": ["acme"]}
+
+    # ============== CAB-1979: visibility filtering ==============
+
+    def test_list_gateways_visibility_cpi_admin_sees_all(self, app_with_cpi_admin, mock_db_session):
+        """GET / — cpi-admin sees all gateways regardless of visibility."""
+        gw_public = self._mock_gateway_instance(name="gw-public", visibility=None)
+        gw_restricted = self._mock_gateway_instance(
+            name="gw-restricted", visibility={"tenant_ids": ["other-tenant"]}
+        )
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.list = AsyncMock(return_value=([gw_public, gw_restricted], 2))
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get("/v1/admin/gateways")
+
+        assert response.status_code == 200
+        assert response.json()["total"] == 2
+
+    def test_list_gateways_visibility_tenant_admin_filtered(self, app_with_tenant_admin, mock_db_session):
+        """GET / — tenant-admin only sees gateways visible to their tenant."""
+        gw_public = self._mock_gateway_instance(name="gw-public", visibility=None)
+        gw_for_acme = self._mock_gateway_instance(
+            name="gw-acme", visibility={"tenant_ids": ["acme"]}
+        )
+        gw_for_other = self._mock_gateway_instance(
+            name="gw-other", visibility={"tenant_ids": ["other-tenant"]}
+        )
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.list = AsyncMock(
+                return_value=([gw_public, gw_for_acme, gw_for_other], 3)
+            )
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.get("/v1/admin/gateways")
+
+        assert response.status_code == 200
+        data = response.json()
+        # tenant-admin for "acme" sees gw_public (null visibility) + gw_for_acme
+        assert data["total"] == 2
+        names = [gw["name"] for gw in data["items"]]
+        assert "gw-public" in names
+        assert "gw-acme" in names
+        assert "gw-other" not in names

@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "088"
-down_revision = "087"
+down_revision = "087_add_deployment_generations"
 branch_labels = None
 depends_on = None
 

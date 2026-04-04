@@ -1176,6 +1176,8 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  enabled: boolean;
+  visibility?: { tenant_ids: string[] } | null;
   source?: 'argocd' | 'self_register' | 'manual';
   protected?: boolean;
   deleted_at?: string | null;
@@ -1203,6 +1205,8 @@ export interface GatewayInstanceUpdate {
   auth_config?: Record<string, unknown>;
   capabilities?: string[];
   tags?: string[];
+  enabled?: boolean;
+  visibility?: { tenant_ids: string[] } | null;
 }
 
 export interface GatewayHealthCheckResponse {

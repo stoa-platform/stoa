@@ -40,6 +40,8 @@ def _make_gateway_instance(**overrides):
         "public_url": None,
         "ui_url": None,
         "protected": False,
+        "enabled": True,
+        "visibility": None,
         "deleted_at": None,
         "deleted_by": None,
         "created_at": datetime.now(UTC),

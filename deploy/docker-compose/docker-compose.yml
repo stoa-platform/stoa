@@ -210,6 +210,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: text
       ENVIRONMENT: development
+      # Local dev: override environment endpoints so Portal/Console don't redirect to prod
+      STOA_ENVIRONMENTS: '[{"name":"dev","label":"Development","mode":"full","color":"#22c55e","endpoints":{"api_url":"http://localhost:8000","keycloak_url":"http://localhost:8080","keycloak_realm":"stoa","mcp_url":"http://localhost:8081"},"is_current":true}]'
       # Kafka (Redpanda)
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       KAFKA_ENABLED: "true"

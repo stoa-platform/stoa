@@ -111,7 +111,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.3
     container_name: stoa-keycloak
-    command: start --import-realm --optimized
+    command: start --import-realm
     ports:
       - "${PORT_KEYCLOAK:-8080}:8080"
     environment:
@@ -200,7 +200,7 @@ services:
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
       # CORS
-      CORS_ORIGINS: http://localhost:3000,http://localhost:${PORT_CONSOLE:-3000}
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: text

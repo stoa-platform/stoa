@@ -30,6 +30,10 @@ export default defineConfig({
     video: 'on',
     actionTimeout: 15000,
     navigationTimeout: 30000,
+    // Force *.stoa.local DNS resolution to 127.0.0.1 (Chromium ignores macOS /etc/resolver)
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP *.stoa.local 127.0.0.1'],
+    },
   },
 
   projects: [

@@ -70,7 +70,6 @@ services:
       - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
       - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
       - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
-      - --advertise-schema-registry-addr=internal://redpanda:8081,external://localhost:18081
       - --mode=dev-container
     ports:
       - "${PORT_REDPANDA:-19092}:19092"   # Kafka API (external)
@@ -308,6 +307,10 @@ services:
       STOA_KAFKA_BROKERS: redpanda:9092
       STOA_KAFKA_METERING_TOPIC: stoa.metering
       STOA_KAFKA_ERRORS_TOPIC: stoa.errors.snapshots
+      # OpenTelemetry tracing (Tempo)
+      STOA_OTEL_ENDPOINT: http://tempo:4317
+      STOA_OTEL_ENABLED: "true"
+      STOA_OTEL_SAMPLE_RATE: "1.0"
     depends_on:
       control-plane-api:
         condition: service_healthy
@@ -516,18 +519,19 @@ services:
       # Phase 2: Allow iframe embedding in Console
       GF_SECURITY_ALLOW_EMBEDDING: "true"
       # Phase 3: Sub-path serving for reverse proxy
-      GF_SERVER_ROOT_URL: "http://localhost/grafana/"
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SERVER_ROOT_URL: "http://localhost:${PORT_GRAFANA:-3001}/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "false"
       # Phase 6B: OIDC via Keycloak (CAB-1103)
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "STOA SSO"
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "stoa-observability"
       GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: "${GRAFANA_OIDC_CLIENT_SECRET}"
       GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email"
-      GF_AUTH_GENERIC_OAUTH_AUTH_URL: "http://localhost/auth/realms/stoa/protocol/openid-connect/auth"
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: "http://localhost:${PORT_KEYCLOAK:-8080}/realms/stoa/protocol/openid-connect/auth"
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/token"
       GF_AUTH_GENERIC_OAUTH_API_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/userinfo"
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'cpi-admin') && 'Admin' || 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
       GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
       GF_AUTH_DISABLE_LOGIN_FORM: "true"

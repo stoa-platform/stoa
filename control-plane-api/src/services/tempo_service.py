@@ -84,11 +84,11 @@ def _extract_service_name(span: dict) -> str:
     """Extract service.name from span attributes or resource."""
     for attr in span.get("attributes", []):
         if attr.get("key") == "service.name":
-            return attr.get("value", {}).get("stringValue", "unknown")
+            return str(attr.get("value", {}).get("stringValue", "unknown"))
     resource = span.get("resource", {})
     for attr in resource.get("attributes", []):
         if attr.get("key") == "service.name":
-            return attr.get("value", {}).get("stringValue", "unknown")
+            return str(attr.get("value", {}).get("stringValue", "unknown"))
     return "unknown"
 
 

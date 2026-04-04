@@ -33,11 +33,23 @@
  * - VITE_ENABLE_DEBUG: Enable debug mode (default: false)
  */
 
+// Runtime config injected by container entrypoint (19-envsubst-custom.sh).
+// Falls back to Vite build-time env vars, then to hardcoded defaults.
+// This allows a single Docker image to be deployed to any environment.
+const rt = (typeof window !== 'undefined' &&
+  (window as unknown as Record<string, unknown>).__STOA_RUNTIME__) as
+  | Record<string, string>
+  | undefined;
+
+/** Read a config value: runtime (container env) > build-time (Vite) > fallback */
+const env = (key: string, fallback: string): string =>
+  (rt && rt[key]) || import.meta.env[key] || fallback;
+
 // Base domain - used to construct default URLs for all services
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'gostoa.dev';
+const BASE_DOMAIN = env('VITE_BASE_DOMAIN', 'gostoa.dev');
 
 // Environment detection
-const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || 'production';
+const ENVIRONMENT = env('VITE_ENVIRONMENT', 'production');
 const IS_DEV = ENVIRONMENT === 'dev' || ENVIRONMENT === 'development';
 
 export const config = {
@@ -53,16 +65,16 @@ export const config = {
   // API Configuration
   // Direct connection to Control-Plane-API backend
   api: {
-    baseUrl: import.meta.env.VITE_API_URL || `https://api.${BASE_DOMAIN}`,
+    baseUrl: env('VITE_API_URL', `https://api.${BASE_DOMAIN}`),
     docsUrl: import.meta.env.VITE_API_DOCS_URL || `https://api.${BASE_DOMAIN}/docs`,
     timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 30000,
   },
 
   // Keycloak Configuration
   keycloak: {
-    url: import.meta.env.VITE_KEYCLOAK_URL || `https://auth.${BASE_DOMAIN}`,
-    realm: import.meta.env.VITE_KEYCLOAK_REALM || 'stoa',
-    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'control-plane-ui',
+    url: env('VITE_KEYCLOAK_URL', `https://auth.${BASE_DOMAIN}`),
+    realm: env('VITE_KEYCLOAK_REALM', 'stoa'),
+    clientId: env('VITE_KEYCLOAK_CLIENT_ID', 'control-plane-ui'),
     get authority() {
       return `${this.url}/realms/${this.realm}`;
     },
@@ -71,13 +83,13 @@ export const config = {
   // External Services
   services: {
     gateway: {
-      url: import.meta.env.VITE_GATEWAY_URL || `https://vps-wm.${BASE_DOMAIN}`,
+      url: env('VITE_GATEWAY_URL', `https://vps-wm.${BASE_DOMAIN}`),
       get consoleUrl() {
         return `${this.url}/apigatewayui/`;
       },
     },
     mcpGateway: {
-      url: import.meta.env.VITE_MCP_GATEWAY_URL || `https://mcp.${BASE_DOMAIN}`,
+      url: env('VITE_MCP_GATEWAY_URL', `https://mcp.${BASE_DOMAIN}`),
     },
     awx: {
       url: import.meta.env.VITE_AWX_URL || `https://awx.${BASE_DOMAIN}`,
@@ -86,7 +98,7 @@ export const config = {
       },
     },
     portal: {
-      url: import.meta.env.VITE_PORTAL_URL || `https://portal.${BASE_DOMAIN}`,
+      url: env('VITE_PORTAL_URL', `https://portal.${BASE_DOMAIN}`),
     },
     git: {
       provider: (import.meta.env.VITE_GIT_PROVIDER || 'gitlab') as 'gitlab' | 'github',
@@ -115,13 +127,13 @@ export const config = {
     },
     // Observability services (CAB-654)
     argocd: {
-      url: import.meta.env.VITE_ARGOCD_URL || `https://argocd.${BASE_DOMAIN}`,
+      url: env('VITE_ARGOCD_URL', `https://argocd.${BASE_DOMAIN}`),
       getAppUrl(appName: string) {
         return `${this.url}/applications/${appName}`;
       },
     },
     grafana: {
-      url: import.meta.env.VITE_GRAFANA_URL || '/grafana/',
+      url: env('VITE_GRAFANA_URL', '/grafana/'),
       arenaDashboardUrl:
         import.meta.env.VITE_ARENA_DASHBOARD_URL ||
         '/grafana/d/gateway-arena/gateway-arena-leaderboard',

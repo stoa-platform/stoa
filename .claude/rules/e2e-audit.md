@@ -7,10 +7,16 @@
 
 ```
 docs/audits/YYYY-MM-DD-<topic>/
+├── .gitignore             # Excludes videos from git
 ├── README.md              # Structured report (template below)
-├── report/                # Playwright HTML report (copied from e2e/reports/local/)
-│   └── index.html         # Self-contained, viewable in browser
-└── results.json           # Playwright JSON results (machine-readable)
+├── results.json           # Playwright JSON results (machine-readable)
+├── report/                # Playwright HTML report
+│   ├── index.html         # Open in browser — shows screenshots + videos inline
+│   └── data/
+│       ├── *.png          # Screenshots (committed)
+│       └── *.webm         # Videos (gitignored, local only)
+└── videos/                # Videos with readable names (gitignored, local only)
+    └── <test-name>.webm
 ```
 
 **Naming**: `YYYY-MM-DD-<kebab-case-topic>`. Examples: `2026-04-04-subscription-dashboard`, `2026-05-15-gateway-security`.
@@ -98,11 +104,30 @@ git commit -m "docs(e2e): <topic> audit report + tests"
 | Artifact | Committed | Why |
 |----------|-----------|-----|
 | `docs/audits/<date>-<topic>/README.md` | **Yes** | Permanent record |
-| `docs/audits/<date>-<topic>/report/index.html` | **Yes** | Self-contained viewable report |
+| `docs/audits/<date>-<topic>/report/index.html` | **Yes** | Self-contained HTML report |
+| `docs/audits/<date>-<topic>/report/data/*.png` | **Yes** | Screenshots (evidence) |
 | `docs/audits/<date>-<topic>/results.json` | **Yes** | Machine-readable results |
+| `docs/audits/<date>-<topic>/.gitignore` | **Yes** | Excludes videos from git |
 | `e2e/tests/local-<topic>.spec.ts` | **Yes** | Reproducible tests |
-| `e2e/test-results/trace-*.png` | **No** (gitignored) | Re-generated on each run |
-| `e2e/test-results/*.webm` | **No** (gitignored) | Videos too large |
+| `docs/audits/<date>-<topic>/videos/*.webm` | **No** (gitignored) | Local only — re-generate with test run |
+| `docs/audits/<date>-<topic>/report/data/*.webm` | **No** (gitignored) | Same videos referenced by HTML report |
+
+### .gitignore template for audit directories
+
+```
+# Videos kept locally, not committed (too heavy for git)
+# Re-generate: cd e2e && npx playwright test --config playwright.local.config.ts tests/local-<topic>.spec.ts
+videos/
+report/data/*.webm
+```
+
+### Viewing videos locally
+
+After running tests, videos are in two places:
+- `videos/<test-name>.webm` — named for easy browsing
+- `report/data/<hash>.webm` — referenced by `report/index.html`
+
+Open `report/index.html` in a browser to see screenshots + videos inline with test results.
 
 ## Observability Stack (for dashboard audits)
 

@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "087_add_deployment_generations"
-down_revision = "086_add_sync_steps"
+down_revision = "086"
 branch_labels = None
 depends_on = None
 

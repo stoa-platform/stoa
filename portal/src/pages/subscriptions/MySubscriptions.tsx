@@ -25,6 +25,7 @@ import {
   Server,
   Wrench,
   ExternalLink,
+  CreditCard,
 } from 'lucide-react';
 import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -32,12 +33,14 @@ import { Button } from '@stoa/shared/components/Button';
 import { useSubscriptions, useRevokeSubscription } from '../../hooks/useSubscriptions';
 import { ExportConfigModal } from '../../components/subscriptions/ExportConfigModal';
 import { mcpServersService } from '../../services/mcpServers';
+import { apiSubscriptionsService } from '../../services/apiSubscriptions';
+import type { APISubscriptionResponse } from '../../services/apiSubscriptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { StatCardWithIconSkeleton, ServerCardSkeletonGrid } from '../../components/skeletons';
 import type { MCPSubscription } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked' | 'pending' | 'suspended';
-type TabType = 'servers' | 'tools';
+type TabType = 'servers' | 'tools' | 'apis';
 
 const statusConfig: Record<
   string,
@@ -132,6 +135,27 @@ export function MySubscriptions() {
     error: toolError,
   } = useSubscriptions();
 
+  // API subscriptions (classic — approved/rejected by tenant admin in Console)
+  const { data: apiSubsData, isLoading: apiSubsLoading } = useQuery({
+    queryKey: ['api-subscriptions'],
+    queryFn: () => apiSubscriptionsService.listMySubscriptions(),
+    enabled: isReady,
+  });
+
+  const apiSubscriptions: APISubscriptionResponse[] = apiSubsData?.items || [];
+
+  const filteredApiSubs = apiSubscriptions.filter((sub) => {
+    if (statusFilter !== 'all' && sub.status !== statusFilter) return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        sub.application_name?.toLowerCase().includes(query) ||
+        sub.api_name?.toLowerCase().includes(query)
+      );
+    }
+    return true;
+  });
+
   const revokeMutation = useRevokeSubscription();
 
   const handleRevokeSubscription = (subscriptionId: string) => {
@@ -157,6 +181,7 @@ export function MySubscriptions() {
   const refetchAll = () => {
     queryClient.invalidateQueries({ queryKey: ['server-subscriptions'] });
     queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
   };
 
   // Get tool subscriptions array
@@ -195,7 +220,10 @@ export function MySubscriptions() {
     0
   );
 
-  const isLoading = serverSubsLoading || toolSubsLoading;
+  const activeApiCount = apiSubscriptions.filter((s) => s.status === 'active').length;
+  const pendingApiCount = apiSubscriptions.filter((s) => s.status === 'pending').length;
+
+  const isLoading = serverSubsLoading || toolSubsLoading || apiSubsLoading;
 
   return (
     <div className="space-y-6">
@@ -319,6 +347,24 @@ export function MySubscriptions() {
               {activeToolCount > 0 && (
                 <span className="px-2 py-0.5 text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 rounded-full">
                   {activeToolCount}
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('apis')}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'apis'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              API Subscriptions
+              {(activeApiCount > 0 || pendingApiCount > 0) && (
+                <span className="px-2 py-0.5 text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 rounded-full">
+                  {pendingApiCount > 0 ? `${pendingApiCount} pending` : activeApiCount}
                 </span>
               )}
             </span>
@@ -576,6 +622,82 @@ export function MySubscriptions() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* API Subscriptions Tab */}
+      {activeTab === 'apis' && (
+        <>
+          {apiSubsLoading ? (
+            <ServerCardSkeletonGrid count={3} />
+          ) : filteredApiSubs.length === 0 ? (
+            <div className="text-center py-12">
+              <CreditCard className="h-12 w-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-1">
+                No API subscriptions
+              </h3>
+              <p className="text-neutral-500 dark:text-neutral-400">
+                Subscribe to APIs from the{' '}
+                <Link to="/discover" className="text-primary-600 hover:underline">
+                  API Catalog
+                </Link>
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+              <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+                <thead className="bg-neutral-50 dark:bg-neutral-900/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
+                      Application
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
+                      API
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
+                      Plan
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
+                      Created
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  {filteredApiSubs.map((sub) => {
+                    const cfg = statusConfig[sub.status] || statusConfig.active;
+                    return (
+                      <tr key={sub.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700/50">
+                        <td className="px-4 py-3 text-sm font-medium text-neutral-900 dark:text-white">
+                          {sub.application_name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
+                          {sub.api_name}
+                          <span className="text-xs text-neutral-400 ml-1">v{sub.api_version}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-neutral-500">
+                          {sub.plan_name || '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color} ${cfg.bgColor}`}
+                          >
+                            <cfg.icon className="h-3 w-3" />
+                            {cfg.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-neutral-500">
+                          {new Date(sub.created_at).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </>

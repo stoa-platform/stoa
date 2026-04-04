@@ -28,7 +28,13 @@ class ExternalMCPServerRepository:
         self.session.add(server)
         await self.session.flush()
         await self.session.refresh(server)
-        return server
+        # Eager-load tools to avoid MissingGreenlet on response serialization
+        result = await self.session.execute(
+            select(ExternalMCPServer)
+            .options(selectinload(ExternalMCPServer.tools))
+            .where(ExternalMCPServer.id == server.id)
+        )
+        return result.scalar_one()
 
     async def get_by_id(self, server_id: UUID) -> ExternalMCPServer | None:
         """Get server by ID with tools."""

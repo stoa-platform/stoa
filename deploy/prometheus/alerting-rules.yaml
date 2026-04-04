@@ -33,7 +33,7 @@ spec:
           annotations:
             summary: "STOA Gateway high error rate"
             description: "STOA Gateway tool error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-errors.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-errors"
 
         - alert: StoaGatewayHighLatency
           expr: |
@@ -47,7 +47,7 @@ spec:
           annotations:
             summary: "STOA Gateway high latency"
             description: "STOA Gateway P99 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-latency.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-latency"
 
         - alert: StoaGatewayDown
           expr: |
@@ -59,7 +59,7 @@ spec:
           annotations:
             summary: "STOA Gateway is down"
             description: "STOA Gateway has been down for more than 1 minute"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-down.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-down"
 
         - alert: StoaGatewayOidcFailure
           expr: |
@@ -73,7 +73,7 @@ spec:
           annotations:
             summary: "STOA Gateway OIDC authentication may be failing"
             description: "STOA Gateway has errors but no successful tool calls — possible OIDC token failure"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-oidc.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-oidc"
 
     # ============================================
     # STOA Gateway mTLS Alerts (CAB-864)
@@ -134,7 +134,7 @@ spec:
           annotations:
             summary: "Control-Plane API high error rate"
             description: "Control-Plane API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-errors.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#control-plane-api-errors"
 
         - alert: ControlPlaneAPIHighLatency
           expr: |
@@ -148,7 +148,7 @@ spec:
           annotations:
             summary: "Control-Plane API high latency"
             description: "Control-Plane API P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-latency.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#control-plane-api-latency"
 
         - alert: ControlPlaneAPIDown
           expr: |
@@ -160,7 +160,7 @@ spec:
           annotations:
             summary: "Control-Plane API is down"
             description: "Control-Plane API has been down for more than 1 minute"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-down.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#control-plane-api-down"
 
     # ============================================
     # Database Alerts
@@ -177,7 +177,7 @@ spec:
           annotations:
             summary: "PostgreSQL database is down"
             description: "PostgreSQL database {{ $labels.instance }} has been down for more than 1 minute"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/database-down.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#database-down"
 
         - alert: DatabaseHighConnections
           expr: |
@@ -217,7 +217,7 @@ spec:
           annotations:
             summary: "Pod {{ $labels.pod }} not ready"
             description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not ready for more than 5 minutes"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/pod-not-ready.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#pod-not-ready"
 
         - alert: PodCrashLooping
           expr: |
@@ -229,7 +229,7 @@ spec:
           annotations:
             summary: "Pod {{ $labels.pod }} is crash looping"
             description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value | humanize }} times in the last 15 minutes"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/pod-crash-loop.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#pod-crash-loop"
 
         - alert: PodHighMemory
           expr: |
@@ -273,7 +273,7 @@ spec:
           annotations:
             summary: "Disk space low on {{ $labels.instance }}"
             description: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ $value | humanizePercentage }} free space"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/disk-space-low.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#disk-space-low"
 
         - alert: DiskSpaceCritical
           expr: |
@@ -288,7 +288,7 @@ spec:
           annotations:
             summary: "Disk space critically low on {{ $labels.instance }}"
             description: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ $value | humanizePercentage }} free space"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/disk-space-critical.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#disk-space-critical"
 
         - alert: PVCSpaceHigh
           expr: |
@@ -317,7 +317,7 @@ spec:
           annotations:
             summary: "Keycloak is down"
             description: "Keycloak authentication service has been down for more than 1 minute"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/keycloak-down.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#keycloak-down"
 
         - alert: KeycloakHighLoginFailures
           expr: |
@@ -369,7 +369,7 @@ spec:
           annotations:
             summary: "Redpanda is down"
             description: "Redpanda event streaming service has been down for more than 1 minute"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/redpanda-down.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#redpanda-down"
 
         - alert: RedpandaConsumerLag
           expr: |
@@ -397,7 +397,7 @@ spec:
           annotations:
             summary: "Error budget running low"
             description: "Monthly error budget is at {{ $value | humanizePercentage }} remaining"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/error-budget-low.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#error-budget-low"
 
         - alert: ErrorBudgetExhausted
           expr: |
@@ -409,7 +409,7 @@ spec:
           annotations:
             summary: "Error budget nearly exhausted"
             description: "Monthly error budget is at {{ $value | humanizePercentage }} - freeze non-critical deployments"
-            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/error-budget-exhausted.md"
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#error-budget-exhausted"
 
         - alert: SLOAvailabilityBreach
           expr: |

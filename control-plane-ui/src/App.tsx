@@ -89,6 +89,12 @@ const DriftDetection = lazy(() =>
 const GatewayObservability = lazy(() =>
   import('./pages/GatewayObservability').then((m) => ({ default: m.GatewayObservabilityDashboard }))
 );
+const GatewaySecurity = lazy(() =>
+  import('./pages/GatewaySecurity').then((m) => ({ default: m.GatewaySecurityDashboard }))
+);
+const GatewayGuardrails = lazy(() =>
+  import('./pages/GatewayGuardrails').then((m) => ({ default: m.GuardrailsDashboard }))
+);
 const OperationsDashboard = lazy(() =>
   import('./pages/Operations').then((m) => ({ default: m.OperationsDashboard }))
 );
@@ -329,6 +335,8 @@ function ProtectedRoutes() {
                 <Route path="/gateways" element={<GatewayRegistry />} />
                 <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
+                <Route path="/gateway-security" element={<GatewaySecurity />} />
+                <Route path="/gateway-guardrails" element={<GatewayGuardrails />} />
                 <Route path="/operations" element={<OperationsDashboard />} />
                 <Route path="/my-usage" element={<TenantDashboard />} />
                 <Route path="/chat-settings" element={<TenantChatSettings />} />

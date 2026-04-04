@@ -4,6 +4,7 @@ import { join, resolve } from 'path';
 
 const ROOT = resolve(__dirname, '../..');
 const LOCALES_DIR = join(ROOT, 'public', 'locales');
+const SRC_DIR = join(ROOT, 'src');
 const BASE_LOCALE = 'en';
 const NAMESPACE = 'common';
 
@@ -27,6 +28,40 @@ function loadLocaleKeys(locale: string): string[] {
   const data = JSON.parse(readFileSync(filePath, 'utf-8'));
   return flattenKeys(data);
 }
+
+/** Recursively scan .ts/.tsx source files for nav.* i18n keys in string literals */
+function scanNavKeysInSource(dir: string): Set<string> {
+  const keys = new Set<string>();
+  const keyPattern = /['"](\w+(?:\.\w+)+)['"]/g;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory() && entry.name !== 'node_modules') {
+      for (const k of scanNavKeysInSource(fullPath)) keys.add(k);
+    } else if (
+      entry.isFile() &&
+      /\.(ts|tsx)$/.test(entry.name) &&
+      !entry.name.endsWith('.test.ts') &&
+      !entry.name.endsWith('.test.tsx')
+    ) {
+      const content = readFileSync(fullPath, 'utf-8');
+      let match;
+      while ((match = keyPattern.exec(content)) !== null) {
+        if (match[1].startsWith('nav.')) keys.add(match[1]);
+      }
+    }
+  }
+  return keys;
+}
+
+describe('i18n nav keys used in code have translations', () => {
+  const navKeysInCode = scanNavKeysInSource(SRC_DIR);
+  const enKeySet = new Set(loadLocaleKeys('en'));
+
+  it('all nav.* keys used in source code exist in en locale', () => {
+    const missing = [...navKeysInCode].filter((k) => !enKeySet.has(k));
+    expect(missing).toEqual([]);
+  });
+});
 
 describe('i18n locale sync', () => {
   const enKeys = loadLocaleKeys('en');

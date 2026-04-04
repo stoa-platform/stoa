@@ -70,6 +70,7 @@ export function ExternalMCPServerDetail() {
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [togglingTool, setTogglingTool] = useState<string | null>(null);
+  const [togglingServer, setTogglingServer] = useState(false);
 
   useEffect(() => {
     if (isReady && id) {
@@ -166,6 +167,22 @@ export function ExternalMCPServerDetail() {
     },
     [id, toast]
   );
+
+  const handleToggleServer = useCallback(async () => {
+    if (!id || !server) return;
+
+    try {
+      setTogglingServer(true);
+      const newEnabled = !server.enabled;
+      await externalMcpServersService.updateServer(id, { enabled: newEnabled });
+      setServer((prev) => (prev ? { ...prev, enabled: newEnabled } : prev));
+      toast.success(newEnabled ? 'Server enabled' : 'Server disabled');
+    } catch (err) {
+      toast.error('Failed to update server', (err as Error).message);
+    } finally {
+      setTogglingServer(false);
+    }
+  }, [id, server, toast]);
 
   const handleDelete = useCallback(async () => {
     if (!id || !server) return;
@@ -335,11 +352,19 @@ export function ExternalMCPServerDetail() {
             <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
               Status
             </label>
-            <span
-              className={`inline-flex px-2 py-1 text-xs rounded-full ${server.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300'}`}
-            >
-              {server.enabled ? 'Enabled' : 'Disabled'}
-            </span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={server.enabled}
+                onChange={handleToggleServer}
+                disabled={togglingServer}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-neutral-200 dark:bg-neutral-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-400">
+                {togglingServer ? '...' : server.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </label>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { createAuthMock } from '../../test/helpers';
 import { useAuth } from '../../contexts/AuthContext';
@@ -51,6 +51,7 @@ vi.mock('../../services/externalMcpServersApi', () => ({
       .mockResolvedValue({ success: true, tools_discovered: 5, latency_ms: 120 }),
     syncTools: vi.fn().mockResolvedValue({ synced_count: 5, removed_count: 0 }),
     deleteServer: vi.fn().mockResolvedValue({}),
+    updateServer: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -143,12 +144,36 @@ describe('ExternalMCPServersList', () => {
     });
   });
 
-  it('shows enabled/disabled status', async () => {
+  it('renders toggle switches for server enabled status', async () => {
     renderComponent();
     await waitFor(() => {
       expect(screen.getByText('Enabled')).toBeInTheDocument();
     });
     expect(screen.getByText('Disabled')).toBeInTheDocument();
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0]).toBeChecked(); // Linear = enabled
+    expect(checkboxes[1]).not.toBeChecked(); // GitHub = disabled
+  });
+
+  it('calls updateServer when toggle is clicked', async () => {
+    const { externalMcpServersService } = await import(
+      '../../services/externalMcpServersApi'
+    );
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Enabled')).toBeInTheDocument();
+    });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]); // Toggle Linear off
+
+    await waitFor(() => {
+      expect(externalMcpServersService.updateServer).toHaveBeenCalledWith('srv-1', {
+        enabled: false,
+      });
+    });
   });
 
   it('shows sync error when present', async () => {

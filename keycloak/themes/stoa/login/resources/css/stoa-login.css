@@ -1,7 +1,6 @@
-/* STOA Platform - Keycloak Login Theme v2
-   Adapted for keycloak.v2 (PatternFly) HTML structure
-   Aligned with gostoa.dev design system
-   Version 3.0 - KC 26 v2 migration (CAB-1960)
+/* STOA Platform - Keycloak Login Theme
+   Custom FreeMarker templates with STOA design system
+   Version 3.1 - Custom templates (matches prod auth.gostoa.dev)
    ================================================ */
 
 /* CSS Variables - STOA Design Tokens */
@@ -23,18 +22,6 @@
     --stoa-radius-lg: 16px;
     --stoa-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     --stoa-glow: 0 0 60px rgba(5, 150, 105, 0.15);
-
-    /* PatternFly overrides */
-    --pf-global--primary-color--100: #10b981;
-    --pf-global--primary-color--200: #047857;
-    --pf-global--link--Color: #10b981;
-    --pf-global--link--Color--hover: #047857;
-    --pf-global--BackgroundColor--dark-100: #0a0a0a;
-    --pf-global--BackgroundColor--100: #18181b;
-    --pf-global--Color--100: #fafafa;
-    --pf-global--Color--200: #a1a1aa;
-    --pf-global--BorderColor--100: #3f3f46;
-    --pf-global--active-color--100: #10b981;
 }
 
 /* Reset & Base */
@@ -44,6 +31,8 @@
 
 html, body {
     height: 100%;
+    margin: 0;
+    padding: 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--stoa-bg-primary);
     color: var(--stoa-text-primary);
@@ -66,180 +55,114 @@ body {
 }
 
 /* ==========================================================================
-   PatternFly Login Layout (v2)
+   Login Card
    ========================================================================== */
 
-/* Main login wrapper */
-.pf-c-login,
-.pf-v5-c-login {
-    background: transparent !important;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Login container */
-.pf-c-login__container,
-.pf-v5-c-login__container {
+.login-card {
     max-width: 420px;
     width: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Hide default KC header/logo */
-.pf-c-login__header,
-.pf-v5-c-login__header,
-.pf-c-brand,
-.pf-v5-c-brand,
-#kc-header,
-#kc-header-wrapper,
-.kc-logo-text,
-#kc-locale {
-    display: none !important;
-}
-
-/* ==========================================================================
-   Login Card (main area)
-   ========================================================================== */
-
-.pf-c-login__main,
-.pf-v5-c-login__main {
-    background: var(--stoa-bg-card) !important;
-    border: 1px solid var(--stoa-border) !important;
-    border-radius: var(--stoa-radius-lg) !important;
-    box-shadow: var(--stoa-shadow), var(--stoa-glow) !important;
+    margin: 0 auto;
+    background: var(--stoa-bg-card);
+    border: 1px solid var(--stoa-border);
+    border-radius: var(--stoa-radius-lg);
+    box-shadow: var(--stoa-shadow), var(--stoa-glow);
     overflow: hidden;
 }
 
-/* Header section — green gradient */
-.pf-c-login__main-header,
-.pf-v5-c-login__main-header {
-    background: var(--stoa-gradient) !important;
-    padding: 40px 32px !important;
+/* ==========================================================================
+   Header — STOA branding
+   ========================================================================== */
+
+.stoa-header {
+    background: var(--stoa-gradient);
+    padding: 40px 32px;
     text-align: center;
+    border-radius: var(--stoa-radius-lg) var(--stoa-radius-lg) 0 0;
 }
 
-/* Page title in header */
-.pf-c-login__main-header .pf-c-title,
-.pf-v5-c-login__main-header .pf-v5-c-title,
-#kc-page-title {
-    color: white !important;
-    font-size: 24px !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.5px;
+.stoa-badge {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 20px;
+    margin-bottom: 20px;
 }
 
-/* Subtitle / description */
-.pf-c-login__main-header-desc,
-.pf-v5-c-login__main-header-desc {
-    color: rgba(255, 255, 255, 0.8) !important;
-    font-size: 14px;
-    margin-top: 8px;
+.stoa-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.stoa-logo svg {
+    width: 40px;
+    height: 40px;
+}
+
+.stoa-logo-text {
+    font-size: 32px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: -1px;
+}
+
+.stoa-tagline {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 15px;
+    margin: 0;
+    font-weight: 400;
 }
 
 /* ==========================================================================
    Form Area
    ========================================================================== */
 
-.pf-c-login__main-body,
-.pf-v5-c-login__main-body {
-    padding: 32px !important;
-    background: var(--stoa-bg-card) !important;
+.login-content {
+    padding: 32px;
 }
 
-/* Form groups */
-.pf-c-form__group,
-.pf-v5-c-form__group {
+.form-group {
     margin-bottom: 20px;
 }
 
-/* Labels */
-.pf-c-form__label,
-.pf-v5-c-form__label,
-.pf-c-form__label-text,
-.pf-v5-c-form__label-text {
-    color: var(--stoa-text-secondary) !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
+.form-group label {
+    display: block;
+    color: var(--stoa-text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
 }
 
 /* Text inputs */
-.pf-c-form-control,
-.pf-v5-c-form-control,
-.pf-c-text-input-group__text-input,
-.pf-v5-c-text-input-group__text-input,
-input[type="text"],
-input[type="password"],
-input[type="email"] {
-    background: var(--stoa-bg-input) !important;
-    border: 1px solid var(--stoa-border) !important;
-    border-radius: var(--stoa-radius) !important;
-    color: var(--stoa-text-primary) !important;
-    font-size: 15px !important;
-    padding: 12px 16px !important;
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="email"] {
+    width: 100%;
+    background: var(--stoa-bg-input);
+    border: 1px solid var(--stoa-border);
+    border-radius: var(--stoa-radius);
+    color: var(--stoa-text-primary);
+    font-size: 15px;
+    padding: 12px 16px;
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     font-family: inherit;
 }
 
-.pf-c-form-control:focus,
-.pf-v5-c-form-control:focus,
-input[type="text"]:focus,
-input[type="password"]:focus,
-input[type="email"]:focus {
-    border-color: var(--stoa-emerald) !important;
-    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15) !important;
+.form-group input:focus {
+    border-color: var(--stoa-emerald);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
-input::placeholder {
+.form-group input::placeholder {
     color: var(--stoa-text-muted);
-}
-
-/* Password toggle button (v2 eye icon) */
-.pf-c-button.pf-m-control,
-.pf-v5-c-button.pf-m-control {
-    background: var(--stoa-bg-input) !important;
-    border: 1px solid var(--stoa-border) !important;
-    border-left: none !important;
-    color: var(--stoa-text-muted) !important;
-    border-radius: 0 var(--stoa-radius) var(--stoa-radius) 0 !important;
-}
-
-.pf-c-button.pf-m-control:hover,
-.pf-v5-c-button.pf-m-control:hover {
-    color: var(--stoa-text-secondary) !important;
-}
-
-/* Input group (password field + toggle) */
-.pf-c-input-group,
-.pf-v5-c-input-group,
-.pf-c-text-input-group,
-.pf-v5-c-text-input-group {
-    display: flex;
-}
-
-.pf-c-input-group .pf-c-form-control,
-.pf-v5-c-input-group .pf-v5-c-form-control {
-    border-radius: var(--stoa-radius) 0 0 var(--stoa-radius) !important;
-}
-
-/* Checkbox (Remember me) */
-.pf-c-check,
-.pf-v5-c-check {
-    color: var(--stoa-text-secondary);
-}
-
-.pf-c-check__input,
-.pf-v5-c-check__input {
-    accent-color: var(--stoa-emerald);
-}
-
-.pf-c-check__label,
-.pf-v5-c-check__label {
-    color: var(--stoa-text-secondary) !important;
-    font-size: 14px;
 }
 
 /* ==========================================================================
@@ -247,105 +170,100 @@ input::placeholder {
    ========================================================================== */
 
 /* Primary submit button */
-.pf-c-button.pf-m-primary,
-.pf-v5-c-button.pf-m-primary,
 #kc-login,
 input[type="submit"] {
     width: 100%;
-    padding: 14px 24px !important;
-    font-size: 15px !important;
-    font-weight: 600 !important;
-    color: white !important;
-    background: var(--stoa-gradient) !important;
-    border: none !important;
-    border-radius: var(--stoa-radius) !important;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    background: var(--stoa-gradient);
+    border: none;
+    border-radius: var(--stoa-radius);
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: inherit;
 }
 
-.pf-c-button.pf-m-primary:hover,
-.pf-v5-c-button.pf-m-primary:hover,
 #kc-login:hover,
 input[type="submit"]:hover {
     transform: translateY(-1px);
-    box-shadow: 0 10px 30px -10px rgba(5, 150, 105, 0.5) !important;
+    box-shadow: 0 10px 30px -10px rgba(5, 150, 105, 0.5);
 }
 
-.pf-c-button.pf-m-primary:active,
-.pf-v5-c-button.pf-m-primary:active {
+#kc-login:active,
+input[type="submit"]:active {
     transform: translateY(0);
 }
 
-/* Link buttons */
-.pf-c-button.pf-m-link,
-.pf-v5-c-button.pf-m-link {
-    color: var(--stoa-emerald) !important;
-    font-weight: 500;
-}
-
-.pf-c-button.pf-m-link:hover,
-.pf-v5-c-button.pf-m-link:hover {
-    color: var(--stoa-emerald-hover) !important;
-    text-decoration: underline;
-}
-
 /* ==========================================================================
-   Links (forgot password, register)
+   Links
    ========================================================================== */
 
-a, .pf-c-login a, .pf-v5-c-login a {
+a, .forgot-password {
     color: var(--stoa-emerald);
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s;
 }
 
-a:hover, .pf-c-login a:hover, .pf-v5-c-login a:hover {
+a:hover, .forgot-password:hover {
     color: var(--stoa-emerald-hover);
     text-decoration: underline;
 }
 
+.forgot-password {
+    font-size: 14px;
+}
+
 /* ==========================================================================
-   Footer area (registration link, social login)
+   Registration link
    ========================================================================== */
 
-.pf-c-login__main-footer,
-.pf-v5-c-login__main-footer {
-    background: rgba(0, 0, 0, 0.2) !important;
-    border-top: 1px solid var(--stoa-border) !important;
-    padding: 20px 32px !important;
+#kc-registration {
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid var(--stoa-border);
+    padding: 20px 32px;
     text-align: center;
+    color: var(--stoa-text-muted);
+    font-size: 14px;
 }
 
-.pf-c-login__main-footer-band,
-.pf-v5-c-login__main-footer-band {
-    background: transparent !important;
-    padding: 16px 0 0 !important;
+#kc-registration a {
+    margin-left: 8px;
 }
 
-/* Social providers */
-.pf-c-login__main-footer-links,
-.pf-v5-c-login__main-footer-links {
+/* ==========================================================================
+   Social Providers
+   ========================================================================== */
+
+#kc-social-providers {
+    margin-top: 8px;
+}
+
+.social-divider {
     display: flex;
-    gap: 12px;
-    justify-content: center;
-    padding: 0 !important;
-    margin: 0 !important;
+    align-items: center;
+    gap: 16px;
+    margin: 20px 0;
+    color: var(--stoa-text-muted);
+    font-size: 13px;
 }
 
-.pf-c-login__main-footer-links-item,
-.pf-v5-c-login__main-footer-links-item {
-    list-style: none;
+.social-divider::before,
+.social-divider::after {
+    content: '';
     flex: 1;
+    height: 1px;
+    background: var(--stoa-border);
 }
 
-.pf-c-login__main-footer-links-item a,
-.pf-v5-c-login__main-footer-links-item a {
+.social-button {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    width: 100%;
     padding: 12px;
     font-size: 14px;
     font-weight: 500;
@@ -357,143 +275,75 @@ a:hover, .pf-c-login a:hover, .pf-v5-c-login a:hover {
     transition: all 0.2s;
 }
 
-.pf-c-login__main-footer-links-item a:hover,
-.pf-v5-c-login__main-footer-links-item a:hover {
+.social-button:hover {
     background: var(--stoa-bg-secondary);
     border-color: var(--stoa-text-muted);
-}
-
-/* Registration link */
-.pf-c-login__main-footer-band-item,
-.pf-v5-c-login__main-footer-band-item {
-    color: var(--stoa-text-muted);
-    font-size: 14px;
 }
 
 /* ==========================================================================
    Alerts / Messages
    ========================================================================== */
 
-.pf-c-alert,
-.pf-v5-c-alert {
-    border-radius: var(--stoa-radius) !important;
+.alert {
+    border-radius: var(--stoa-radius);
+    padding: 12px 16px;
     margin-bottom: 16px;
+    font-size: 14px;
 }
 
-.pf-c-alert.pf-m-danger,
-.pf-v5-c-alert.pf-m-danger {
-    background: rgba(239, 68, 68, 0.1) !important;
-    border-color: #ef4444 !important;
+.alert-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid #ef4444;
+    color: #fca5a5;
 }
 
-.pf-c-alert.pf-m-warning,
-.pf-v5-c-alert.pf-m-warning {
-    background: rgba(245, 158, 11, 0.1) !important;
-    border-color: #f59e0b !important;
+.alert-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid #f59e0b;
+    color: #fcd34d;
 }
 
-.pf-c-alert.pf-m-success,
-.pf-v5-c-alert.pf-m-success {
-    background: rgba(34, 197, 94, 0.1) !important;
-    border-color: #22c55e !important;
+.alert-success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid #22c55e;
+    color: #86efac;
 }
 
-.pf-c-alert.pf-m-info,
-.pf-v5-c-alert.pf-m-info {
-    background: rgba(99, 102, 241, 0.1) !important;
-    border-color: #6366f1 !important;
-}
-
-.pf-c-alert__title,
-.pf-v5-c-alert__title {
-    color: var(--stoa-text-primary) !important;
-}
-
-.pf-c-alert__description,
-.pf-v5-c-alert__description {
-    color: var(--stoa-text-secondary) !important;
+.alert-info {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid #6366f1;
+    color: #a5b4fc;
 }
 
 /* ==========================================================================
-   Locale Selector (language toggle)
+   Footer (outside card)
    ========================================================================== */
 
-#kc-locale ul {
-    background: var(--stoa-bg-card) !important;
-    border: 1px solid var(--stoa-border) !important;
-    border-radius: var(--stoa-radius) !important;
-}
-
-#kc-locale a {
-    color: var(--stoa-text-primary) !important;
-}
-
-#kc-locale a:hover {
-    background: var(--stoa-bg-input) !important;
-}
-
-/* v2 locale selector */
-.pf-c-login__main-header-utilities,
-.pf-v5-c-login__main-header-utilities {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-}
-
-.pf-c-select,
-.pf-v5-c-select,
-.pf-c-menu-toggle,
-.pf-v5-c-menu-toggle {
-    background: rgba(0, 0, 0, 0.2) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-radius: var(--stoa-radius) !important;
-    color: white !important;
-}
-
-.pf-c-select__menu,
-.pf-v5-c-select__menu,
-.pf-c-menu,
-.pf-v5-c-menu {
-    background: var(--stoa-bg-card) !important;
-    border: 1px solid var(--stoa-border) !important;
-    border-radius: var(--stoa-radius) !important;
-}
-
-.pf-c-select__menu-item,
-.pf-v5-c-select__menu-item,
-.pf-c-menu__item,
-.pf-v5-c-menu__item {
-    color: var(--stoa-text-primary) !important;
-}
-
-.pf-c-select__menu-item:hover,
-.pf-v5-c-select__menu-item:hover,
-.pf-c-menu__item:hover,
-.pf-v5-c-menu__item:hover {
-    background: var(--stoa-bg-input) !important;
-}
-
-/* ==========================================================================
-   Page Footer (outside card)
-   ========================================================================== */
-
-.pf-c-login__footer,
-.pf-v5-c-login__footer {
+.stoa-footer {
     text-align: center;
-    padding: 24px !important;
+    padding: 24px;
     color: var(--stoa-text-muted);
     font-size: 12px;
 }
 
-.pf-c-login__footer a,
-.pf-v5-c-login__footer a {
+.stoa-footer a {
     color: var(--stoa-text-secondary) !important;
     font-weight: 400;
 }
 
-.pf-c-login__footer a:hover,
-.pf-v5-c-login__footer a:hover {
+.stoa-footer a:hover {
     color: var(--stoa-emerald) !important;
+}
+
+.footer-links {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 8px;
+}
+
+.footer-links span {
+    color: var(--stoa-text-muted);
 }
 
 /* ==========================================================================
@@ -501,23 +351,16 @@ a:hover, .pf-c-login a:hover, .pf-v5-c-login a:hover {
    ========================================================================== */
 
 @media (max-width: 480px) {
-    .pf-c-login__main,
-    .pf-v5-c-login__main {
-        border-radius: var(--stoa-radius) !important;
+    .login-card {
+        margin: 16px;
+        border-radius: var(--stoa-radius);
     }
 
-    .pf-c-login__main-header,
-    .pf-v5-c-login__main-header {
-        padding: 32px 24px !important;
+    .stoa-header {
+        padding: 32px 24px;
     }
 
-    .pf-c-login__main-body,
-    .pf-v5-c-login__main-body {
-        padding: 24px !important;
-    }
-
-    .pf-c-login__main-footer-links,
-    .pf-v5-c-login__main-footer-links {
-        flex-direction: column;
+    .login-content {
+        padding: 24px;
     }
 }

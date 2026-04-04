@@ -200,9 +200,10 @@ services:
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      # Observability (Prometheus + Loki for Usage Dashboard)
+      # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100
+      TEMPO_INTERNAL_URL: http://tempo:3200
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
       # Logging

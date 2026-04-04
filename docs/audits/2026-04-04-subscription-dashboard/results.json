@@ -1,0 +1,1421 @@
+{
+  "config": {
+    "configFile": "/Users/torpedo/hlfh-repos/stoa/e2e/playwright.local.config.ts",
+    "rootDir": "/Users/torpedo/hlfh-repos/stoa/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "local",
+        "name": "local",
+        "testDir": "/Users/torpedo/hlfh-repos/stoa/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/local-.*\\.spec\\.ts/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "reports/local",
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "reports/local/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "local-subscription-auth.spec.ts",
+      "file": "local-subscription-auth.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Phase A — Create Applications (all 5 auth types)",
+          "file": "local-subscription-auth.spec.ts",
+          "line": 94,
+          "column": 15,
+          "specs": [
+            {
+              "title": "A.0 — cleanup old test apps",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 801,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Cleaned 5 old apps\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:43.829Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e2f18-A-0-—-cleanup-old-test-apps-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-507a27211452819bb28e",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 98,
+              "column": 3
+            },
+            {
+              "title": "A.api_key — create via both endpoints",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 198,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  [tenant] api_key: client_id=high-five-e2e-apikey-1775309323813\n"
+                        },
+                        {
+                          "text": "  [portal] api_key: client_id=N/A, key=stoa_sk_aa5b167...\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:44.742Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-16a20-—-create-via-both-endpoints-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-5dc524b64da9c36216bc",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 119,
+              "column": 5
+            },
+            {
+              "title": "A.oauth2_public — create via both endpoints",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 172,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  [tenant] oauth2_public: client_id=high-five-e2e-oauth2public-1775309323813\n"
+                        },
+                        {
+                          "text": "  [portal] oauth2_public: client_id=default-e2e-oauth2public-1775309323813-portal, key=N/A\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:44.950Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-f3dbc-—-create-via-both-endpoints-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-e6fd59a3c22d92945ba3",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 119,
+              "column": 5
+            },
+            {
+              "title": "A.oauth2_confidential — create via both endpoints",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 190,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  [tenant] oauth2_confidential: client_id=high-five-e2e-oauth2confidential-1775309323813\n"
+                        },
+                        {
+                          "text": "  [portal] oauth2_confidential: client_id=default-e2e-oauth2confidential-1775309323813-portal, key=N/A\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:45.131Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-b2bbb-—-create-via-both-endpoints-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-3b2d662458e43a78278b",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 119,
+              "column": 5
+            },
+            {
+              "title": "A.fapi_baseline — create via both endpoints",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 157,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  [tenant] fapi_baseline: client_id=high-five-e2e-fapibaseline-1775309323813\n"
+                        },
+                        {
+                          "text": "  [portal] fapi_baseline: client_id=default-e2e-fapibaseline-1775309323813-portal, key=N/A\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:45.330Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-a182a-—-create-via-both-endpoints-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-1c315f46bfed56cd6109",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 119,
+              "column": 5
+            },
+            {
+              "title": "A.fapi_advanced — create via both endpoints",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 152,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  [tenant] fapi_advanced: client_id=high-five-e2e-fapiadvanced-1775309323813\n"
+                        },
+                        {
+                          "text": "  [portal] fapi_advanced: client_id=default-e2e-fapiadvanced-1775309323813-portal, key=N/A\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:45.496Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-d0873-—-create-via-both-endpoints-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-c5da95804b99befb78c6",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 119,
+              "column": 5
+            }
+          ]
+        },
+        {
+          "title": "Phase B — Console UI Traces",
+          "file": "local-subscription-auth.spec.ts",
+          "line": 155,
+          "column": 15,
+          "specs": [
+            {
+              "title": "B.1 — Applications page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10259,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Console: 6 app cards with client_id\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:45.657Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-be5a425d9fee7d1cbcf2",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 156,
+              "column": 3
+            },
+            {
+              "title": "B — Console Subscriptions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10329,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:28:56.961Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8c33a-s-B-—-Console-Subscriptions-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8c33a-s-B-—-Console-Subscriptions-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8c33a-s-B-—-Console-Subscriptions-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-f3ad0af828b1a23a67c5",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console Gateway Overview",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10415,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:29:07.364Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e7b6d--—-Console-Gateway-Overview-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e7b6d--—-Console-Gateway-Overview-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e7b6d--—-Console-Gateway-Overview-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-9d8c918ca5c513e8c626",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console Dashboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10227,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:29:17.857Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-ea3bd-races-B-—-Console-Dashboard-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-ea3bd-races-B-—-Console-Dashboard-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-ea3bd-races-B-—-Console-Dashboard-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-8ef27ba6e536f965d193",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console Business",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10353,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:29:28.173Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-aa303-Traces-B-—-Console-Business-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-aa303-Traces-B-—-Console-Business-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-aa303-Traces-B-—-Console-Business-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-49a47e39569f47e5f920",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console Executions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10117,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:29:38.600Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7ebe5-aces-B-—-Console-Executions-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7ebe5-aces-B-—-Console-Executions-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7ebe5-aces-B-—-Console-Executions-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-752e9d8702d36b4ac12a",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console API Traffic",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10683,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:29:48.789Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-88239-ces-B-—-Console-API-Traffic-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-88239-ces-B-—-Console-API-Traffic-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-88239-ces-B-—-Console-API-Traffic-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-0f0d306f00b65fa3ec24",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console Access Review",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10103,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:29:59.549Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-18320-s-B-—-Console-Access-Review-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-18320-s-B-—-Console-Access-Review-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-18320-s-B-—-Console-Access-Review-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-100141e5b48a729b16c9",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            },
+            {
+              "title": "B — Console Consumers",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10228,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:30:09.725Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-89fc1-races-B-—-Console-Consumers-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-89fc1-races-B-—-Console-Consumers-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-89fc1-races-B-—-Console-Consumers-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-d590b01ea70e925189ff",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 179,
+              "column": 5
+            }
+          ]
+        },
+        {
+          "title": "Phase C — Subscriptions + Loki + Portal Traces",
+          "file": "local-subscription-auth.spec.ts",
+          "line": 193,
+          "column": 15,
+          "specs": [
+            {
+              "title": "C.0 — Create MCP server + subscribe + generate traffic + push Loki logs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2355,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  MCP Server exists: d8d860f0-e6a4-4d6f-b5c5-51cd9f5cad7a\n"
+                        },
+                        {
+                          "text": "  MCP Subscription: 409\n"
+                        },
+                        {
+                          "text": "  Gateway proxy calls: 20/20 success\n"
+                        },
+                        {
+                          "text": "  MCP tool calls: 10\n"
+                        },
+                        {
+                          "text": "  Loki push: 204 (15 call logs)\n"
+                        },
+                        {
+                          "text": "  Recent Calls API: 15 total\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:30:20.032Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-29299-rate-traffic-push-Loki-logs-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-7b37d068403ae8a042e9",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 197,
+              "column": 3
+            },
+            {
+              "title": "C.1 — Portal Home (subscriptions + calls > 0)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 27524,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:30:22.461Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-c34c7-Home-subscriptions-calls-0--local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-c34c7-Home-subscriptions-calls-0--local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-c34c7-Home-subscriptions-calls-0--local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-4b072f7b405d03f37510",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 281,
+              "column": 3
+            },
+            {
+              "title": "C.2 — Portal Discover",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 25283,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:30:50.109Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e1c53-races-C-2-—-Portal-Discover-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e1c53-races-C-2-—-Portal-Discover-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e1c53-races-C-2-—-Portal-Discover-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-03a778cfd38bce834541",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 291,
+              "column": 3
+            },
+            {
+              "title": "C.3 — Portal My Subscriptions (active > 0)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 24718,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:31:15.508Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e9ffa--My-Subscriptions-active-0--local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e9ffa--My-Subscriptions-active-0--local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e9ffa--My-Subscriptions-active-0--local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-a27d2a3a4bfaba774167",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 299,
+              "column": 3
+            },
+            {
+              "title": "C.4 — Portal Usage Dashboard (calls + recent calls)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 26978,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:31:40.352Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-67b7b-shboard-calls-recent-calls--local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-67b7b-shboard-calls-recent-calls--local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-67b7b-shboard-calls-recent-calls--local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-c86b44c4905ec8a44593",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 308,
+              "column": 3
+            },
+            {
+              "title": "C.5 — Portal Apps & Credentials",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 25570,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:32:07.443Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7225f-5-—-Portal-Apps-Credentials-local/test-finished-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7225f-5-—-Portal-Apps-Credentials-local/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7225f-5-—-Portal-Apps-Credentials-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-36f1e75d3c2d8fabb8ee",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 319,
+              "column": 3
+            },
+            {
+              "title": "C.6 — Cross-validate API data",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 224,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  MCP subs: 1\n"
+                        },
+                        {
+                          "text": "  Recent calls: 15\n"
+                        },
+                        {
+                          "text": "    Get Weather | success | 94ms\n"
+                        },
+                        {
+                          "text": "    5-Day Forecast | success | 89ms\n"
+                        },
+                        {
+                          "text": "    Get Weather | success | 84ms\n"
+                        },
+                        {
+                          "text": "  Catalog: 16 APIs\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:32:33.136Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-59e49-6-—-Cross-validate-API-data-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-f8ff5e8f410cbf0fdc77",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 328,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Phase D — Gateway & Lifecycle",
+          "file": "local-subscription-auth.spec.ts",
+          "line": 354,
+          "column": 15,
+          "specs": [
+            {
+              "title": "D.1 — Gateway health + MCP capabilities",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 113,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Gateway: protocol=2025-11-25\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:32:33.368Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-1d7d7-way-health-MCP-capabilities-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-bc851857a152b789d35f",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 358,
+              "column": 3
+            },
+            {
+              "title": "D.2 — Seed test API + plans",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 86,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  API create: 429\n"
+                        },
+                        {
+                          "text": "  Free plan: 201\n"
+                        },
+                        {
+                          "text": "  API + plans seeded\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:32:33.540Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8b48e-e-D-2-—-Seed-test-API-plans-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-3a125979c1a1e1f3c067",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 365,
+              "column": 3
+            },
+            {
+              "title": "D.3 — Multi-tenant isolation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 34,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Isolation: sorrento auth unavailable (inconclusive)\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:32:33.635Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-6531a--3-—-Multi-tenant-isolation-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-a9d2aede2254d928fd62",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 386,
+              "column": 3
+            },
+            {
+              "title": "D.4 — Cross-validation summary",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 69,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Tenant apps: 6\n"
+                        },
+                        {
+                          "text": "    e2e-apikey-1775309323813: client_id=high-five-e2e-apikey-1775309323813\n"
+                        },
+                        {
+                          "text": "    e2e-fapiadvanced-1775309323813: client_id=high-five-e2e-fapiadvanced-1775309323813\n"
+                        },
+                        {
+                          "text": "    e2e-fapibaseline-1775309323813: client_id=high-five-e2e-fapibaseline-1775309323813\n"
+                        },
+                        {
+                          "text": "    e2e-oauth2confidential-1775309323813: client_id=high-five-e2e-oauth2confidential-1775309323813\n"
+                        },
+                        {
+                          "text": "    e2e-oauth2public-1775309323813: client_id=high-five-e2e-oauth2public-1775309323813\n"
+                        },
+                        {
+                          "text": "  Portal apps: 20\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T13:32:33.676Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-32dce--—-Cross-validation-summary-local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "4cb9f672aa6fc31fa806-fa3e6a48ff40a0c4bfa9",
+              "file": "local-subscription-auth.spec.ts",
+              "line": 400,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-04-04T13:28:43.077Z",
+    "duration": 230765.793,
+    "expected": 26,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -1,7 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import {
   ArrowLeft,
@@ -15,6 +17,12 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Power,
+  RefreshCw,
+  Heart,
+  Eye,
+  EyeOff,
+  ShieldAlert,
 } from 'lucide-react';
 import type { GatewayInstance } from '../../types';
 
@@ -54,7 +62,12 @@ function formatUptime(seconds: number): string {
 export function GatewayDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isReady } = useAuth();
+  const { isReady, hasPermission } = useAuth();
+  const toast = useToastActions();
+  const queryClient = useQueryClient();
+  const [confirm, ConfirmDialog] = useConfirm();
+
+  const canWrite = hasPermission('admin:servers');
 
   const { data: gateway, isLoading } = useQuery<GatewayInstance>({
     queryKey: ['gateway', id],
@@ -79,6 +92,40 @@ export function GatewayDetail() {
     retry: false,
   });
 
+  const toggleEnabledMutation = useMutation({
+    mutationFn: async (enabled: boolean) => apiService.updateGatewayInstance(id!, { enabled }),
+    onSuccess: (_data, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['gateway', id] });
+      queryClient.invalidateQueries({ queryKey: ['gateways'] });
+      toast.success(enabled ? 'Gateway enabled' : 'Gateway disabled');
+    },
+    onError: () => toast.error('Failed to update gateway'),
+  });
+
+  const healthCheckMutation = useMutation({
+    mutationFn: () => apiService.checkGatewayHealth(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gateway', id] });
+      toast.success('Health check completed');
+    },
+    onError: () => toast.error('Health check failed'),
+  });
+
+  const handleToggleEnabled = async () => {
+    if (!gateway) return;
+    if (gateway.enabled) {
+      const confirmed = await confirm({
+        title: 'Disable Gateway',
+        message: `Disabling "${gateway.display_name}" will prevent new deployments and tool syncs to this gateway. Existing deployments will remain active.`,
+        confirmLabel: 'Disable',
+        variant: 'danger',
+      });
+      if (confirmed) toggleEnabledMutation.mutate(false);
+    } else {
+      toggleEnabledMutation.mutate(true);
+    }
+  };
+
   if (isLoading || !gateway) {
     return (
       <div className="p-6 space-y-4">
@@ -93,6 +140,8 @@ export function GatewayDetail() {
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
   const discoveredApis = toolsData || [];
+  const hasVisibilityRestriction =
+    gateway.visibility && Array.isArray(gateway.visibility.tenant_ids);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -113,6 +162,12 @@ export function GatewayDetail() {
               <StatusIcon className="h-3 w-3" />
               {gateway.status}
             </span>
+            {!gateway.enabled && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                <Power className="h-3 w-3" />
+                Disabled
+              </span>
+            )}
             {gateway.mode && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
                 {MODE_LABELS[gateway.mode] || gateway.mode}
@@ -127,19 +182,61 @@ export function GatewayDetail() {
           </div>
           <p className="text-sm text-gray-500 font-mono mt-1">{gateway.name}</p>
         </div>
-        {gateway.public_url && (
-          <a
-            href={gateway.public_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <Globe className="h-4 w-4" />
-            Open Gateway
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        )}
+        <div className="flex items-center gap-2">
+          {canWrite && (
+            <>
+              <button
+                onClick={() => healthCheckMutation.mutate()}
+                disabled={healthCheckMutation.isPending}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                <Heart
+                  className={`h-4 w-4 ${healthCheckMutation.isPending ? 'animate-pulse' : ''}`}
+                />
+                Health Check
+              </button>
+              <button
+                onClick={handleToggleEnabled}
+                disabled={toggleEnabledMutation.isPending}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                  gateway.enabled
+                    ? 'border border-red-200 text-red-700 hover:bg-red-50'
+                    : 'border border-green-200 text-green-700 hover:bg-green-50'
+                }`}
+              >
+                <Power className="h-4 w-4" />
+                {gateway.enabled ? 'Disable' : 'Enable'}
+              </button>
+            </>
+          )}
+          {gateway.public_url && (
+            <a
+              href={gateway.public_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Globe className="h-4 w-4" />
+              Open Gateway
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
       </div>
+
+      {/* Disabled banner */}
+      {!gateway.enabled && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Gateway disabled</p>
+            <p className="text-sm text-amber-700">
+              This gateway will not accept new deployments or tool syncs. Existing deployments
+              remain active.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Configuration */}
       <section className="bg-white rounded-xl border border-gray-200 p-6">
@@ -177,6 +274,31 @@ export function GatewayDetail() {
             </div>
           </div>
         )}
+        {/* Visibility */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <dt className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+            {hasVisibilityRestriction ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+            Visibility
+          </dt>
+          {hasVisibilityRestriction ? (
+            <div className="flex flex-wrap gap-2">
+              {gateway.visibility!.tenant_ids.map((tid) => (
+                <span
+                  key={tid}
+                  className="px-2 py-1 rounded-md bg-amber-50 text-xs font-medium text-amber-700"
+                >
+                  {tid}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-sm text-gray-600">All tenants</span>
+          )}
+        </div>
       </section>
 
       {/* Health & Metrics */}
@@ -218,6 +340,7 @@ export function GatewayDetail() {
                   <th className="pb-2 font-medium">Version</th>
                   <th className="pb-2 font-medium">Sync Status</th>
                   <th className="pb-2 font-medium">Environment</th>
+                  {canWrite && <th className="pb-2 font-medium">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -231,6 +354,11 @@ export function GatewayDetail() {
                       <SyncBadge status={(d.sync_status as string) || 'pending'} />
                     </td>
                     <td className="py-2.5 text-gray-500">{d.environment as string}</td>
+                    {canWrite && (
+                      <td className="py-2.5">
+                        <ForceSyncButton deploymentId={d.id as string} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -289,7 +417,34 @@ export function GatewayDetail() {
           </p>
         </section>
       )}
+
+      {ConfirmDialog}
     </div>
+  );
+}
+
+function ForceSyncButton({ deploymentId }: { deploymentId: string }) {
+  const toast = useToastActions();
+  const queryClient = useQueryClient();
+
+  const syncMutation = useMutation({
+    mutationFn: () => apiService.forceSyncDeployment(deploymentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gateway-deployments'] });
+      toast.success('Sync triggered');
+    },
+    onError: () => toast.error('Sync failed'),
+  });
+
+  return (
+    <button
+      onClick={() => syncMutation.mutate()}
+      disabled={syncMutation.isPending}
+      className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+    >
+      <RefreshCw className={`h-3 w-3 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+      Sync
+    </button>
   );
 }
 

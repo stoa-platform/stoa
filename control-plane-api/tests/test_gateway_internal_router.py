@@ -33,7 +33,12 @@ def _make_gateway_instance(**overrides):
         "version": "0.2.0",
         "tags": ["mode:edge-mcp", "auto-registered"],
         "mode": "edge-mcp",
+        "target_gateway_url": None,
+        "public_url": None,
+        "ui_url": None,
         "protected": False,
+        "enabled": True,
+        "visibility": None,
         "deleted_at": None,
         "deleted_by": None,
         "created_at": datetime.now(UTC),
@@ -197,6 +202,8 @@ class TestGatewayRegistrationTenant:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -233,6 +240,8 @@ class TestGatewayRegistrationTenant:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -249,6 +258,86 @@ class TestGatewayRegistrationTenant:
             )
 
         assert resp.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# Regression: register after soft-delete (CAB-1937)
+# ---------------------------------------------------------------------------
+
+
+class TestRegressionRegisterAfterSoftDelete:
+    """POST /register must resurrect a soft-deleted entry instead of 409."""
+
+    def test_regression_register_after_soft_delete(self, client):
+        """Gateway re-registration after auto-purge resurrects the soft-deleted entry."""
+        deleted_gw = _make_gateway_instance(
+            deleted_at=datetime(2026, 3, 30, tzinfo=UTC),
+            deleted_by="auto-purge",
+            status=MagicMock(value="offline"),
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=deleted_gw)
+            mock_repo.update = AsyncMock(return_value=deleted_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json={
+                    "hostname": "gw-host",
+                    "mode": "edge-mcp",
+                    "version": "0.3.0",
+                    "environment": "staging",
+                    "admin_url": "http://gw:8080",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 201
+        mock_repo.create.assert_not_called()
+        mock_repo.update.assert_awaited_once()
+        assert deleted_gw.deleted_at is None
+        assert deleted_gw.deleted_by is None
+        assert deleted_gw.version == "0.3.0"
+
+    def test_regression_register_soft_deleted_skips_cancel_and_replace(self, client):
+        """Resurrection path should not reach cancel-and-replace or create steps."""
+        deleted_gw = _make_gateway_instance(
+            deleted_at=datetime(2026, 3, 30, tzinfo=UTC),
+            deleted_by="replaced-by:other-gw",
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=deleted_gw)
+            mock_repo.update = AsyncMock(return_value=deleted_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json={
+                    "hostname": "gw-host",
+                    "mode": "edge-mcp",
+                    "version": "0.2.0",
+                    "environment": "staging",
+                    "admin_url": "http://gw:8080",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert resp.status_code == 201
+        mock_repo.find_self_registered_by_mode_env.assert_not_called()
+        mock_repo.get_by_source_and_type.assert_not_called()
+        mock_repo.create.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -558,3 +647,107 @@ class TestInternalToolDiscovery:
         body = resp.json()
         assert body["total"] == 3
         assert len(body["tools"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Routes endpoint — GET /v1/internal/gateways/routes (CAB-1929)
+# ---------------------------------------------------------------------------
+
+
+def _make_deployment(desired_state: dict):
+    """Build a minimal mock GatewayDeployment."""
+    m = MagicMock()
+    m.desired_state = desired_state
+    return m
+
+
+class TestListGatewayRoutes:
+    """GET /v1/internal/gateways/routes — outbound-only route delivery (CAB-1929)."""
+
+    def test_routes_returns_basic_fields(self, client):
+        """Route with no openapi_spec returns standard fields."""
+        dep = _make_deployment({
+            "api_catalog_id": "cat-1",
+            "api_name": "petstore",
+            "backend_url": "http://petstore:8080",
+            "methods": ["GET", "POST"],
+            "spec_hash": "abc123",
+            "activated": True,
+            "tenant_id": "tenant-a",
+        })
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockRepo,
+        ):
+            mock_settings.GATEWAY_ADMIN_KEY = None
+            MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
+
+            resp = client.get("/v1/internal/gateways/routes")
+
+        assert resp.status_code == 200
+        routes = resp.json()
+        assert len(routes) == 1
+        assert routes[0]["name"] == "petstore"
+        assert routes[0]["spec_hash"] == "abc123"
+        assert routes[0]["openapi_spec"] is None
+
+    def test_regression_openapi_spec_dict_delivered_to_connect(self, client):
+        """openapi_spec dict in desired_state is delivered as JSON object to stoa-connect.
+
+        CAB-1929: outbound-only model — CP delivers spec as a dict so stoa-connect
+        can push it to the on-premise gateway without any inbound call-back.
+        webMethods requires apiDefinition as a JSON object (not a string).
+        """
+        spec_dict = {"openapi": "3.1.0", "info": {"title": "Petstore", "version": "1.0.0"}}
+        dep = _make_deployment({
+            "api_catalog_id": "cat-2",
+            "api_name": "petstore-spec",
+            "backend_url": "http://petstore:8080",
+            "methods": ["GET"],
+            "spec_hash": "sha-xyz",
+            "activated": True,
+            "tenant_id": "tenant-b",
+            "openapi_spec": spec_dict,
+        })
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockRepo,
+        ):
+            mock_settings.GATEWAY_ADMIN_KEY = None
+            MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
+
+            resp = client.get("/v1/internal/gateways/routes")
+
+        assert resp.status_code == 200
+        routes = resp.json()
+        assert len(routes) == 1
+
+        # openapi_spec is a JSON object (dict), not a string or base64
+        spec = routes[0]["openapi_spec"]
+        assert spec is not None, "openapi_spec must be present"
+        assert isinstance(spec, dict), f"Expected dict, got {type(spec)}"
+        assert spec["openapi"] == "3.1.0"
+        assert spec["info"]["title"] == "Petstore"
+
+    def test_routes_skips_deployment_without_backend_url(self, client):
+        """Deployments with no backend_url are excluded from the route list."""
+        dep = _make_deployment({
+            "api_catalog_id": "cat-3",
+            "api_name": "no-backend",
+            "backend_url": "",
+            "tenant_id": "tenant-a",
+        })
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockRepo,
+        ):
+            mock_settings.GATEWAY_ADMIN_KEY = None
+            MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
+
+            resp = client.get("/v1/internal/gateways/routes")
+
+        assert resp.status_code == 200
+        assert resp.json() == []

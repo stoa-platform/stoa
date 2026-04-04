@@ -90,6 +90,37 @@ pub struct Config {
     #[serde(default)]
     pub gitlab_project_id: Option<String>,
 
+    // === GitHub (UAC Sync) ===
+    /// GitHub personal access token (or fine-grained PAT).
+    /// Env: GITHUB_TOKEN / STOA_GITHUB_TOKEN
+    #[serde(default)]
+    pub github_token: Option<String>,
+
+    /// GitHub organization name (owner of catalog/gitops repos).
+    /// Env: GITHUB_ORG / STOA_GITHUB_ORG
+    #[serde(default)]
+    pub github_org: Option<String>,
+
+    /// GitHub repository name for UAC catalog storage.
+    /// Env: GITHUB_CATALOG_REPO / STOA_GITHUB_CATALOG_REPO
+    #[serde(default)]
+    pub github_catalog_repo: Option<String>,
+
+    /// GitHub repository name for GitOps PR submission.
+    /// Env: GITHUB_GITOPS_REPO / STOA_GITHUB_GITOPS_REPO
+    #[serde(default)]
+    pub github_gitops_repo: Option<String>,
+
+    /// GitHub webhook secret for validating incoming webhook payloads.
+    /// Env: GITHUB_WEBHOOK_SECRET / STOA_GITHUB_WEBHOOK_SECRET
+    #[serde(default)]
+    pub github_webhook_secret: Option<String>,
+
+    /// Git provider selector for UAC sync: "gitlab" (default) or "github".
+    /// Env: GIT_PROVIDER / STOA_GIT_PROVIDER
+    #[serde(default = "default_git_provider")]
+    pub git_provider: String,
+
     // === Rate Limiting ===
     #[serde(default)]
     pub rate_limit_default: Option<usize>,
@@ -158,6 +189,18 @@ pub struct Config {
     #[serde(default)]
     pub detailed_tracing: bool,
 
+    /// Enable HTTP metrics recording on proxy requests (path normalization + Prometheus observe).
+    /// Disable for pure proxy benchmarks to eliminate ~1.2ms overhead per request.
+    /// Env: STOA_PROXY_METRICS_ENABLED (default: true)
+    #[serde(default = "default_true")]
+    pub proxy_metrics_enabled: bool,
+
+    /// Enable tracing span creation on proxy requests.
+    /// Disable for pure proxy benchmarks to eliminate ~0.4ms overhead per request.
+    /// Env: STOA_PROXY_TRACING_ENABLED (default: true)
+    #[serde(default = "default_true")]
+    pub proxy_tracing_enabled: bool,
+
     // === Gateway Mode (Phase 8) ===
     /// Gateway deployment mode: edge-mcp, sidecar, proxy, shadow
     /// Env: STOA_GATEWAY_MODE (default: edge-mcp)
@@ -207,10 +250,29 @@ pub struct Config {
     #[serde(default = "default_auto_register")]
     pub auto_register: bool,
 
+    /// Override URL advertised to the Control Plane for admin API calls.
+    /// When set, registration uses this instead of auto-detected hostname:port.
+    /// Env: STOA_ADVERTISE_URL
+    /// Example: http://stoa-gateway.stoa-system.svc.cluster.local:80
+    #[serde(default)]
+    pub advertise_url: Option<String>,
+
     /// Heartbeat interval in seconds (default: 30)
     /// Env: STOA_HEARTBEAT_INTERVAL_SECS
     #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_secs: u64,
+
+    /// URL of the third-party gateway managed by this Link/sidecar instance.
+    /// Displayed in Console UI. Only relevant for sidecar/connect modes.
+    /// Env: STOA_TARGET_GATEWAY_URL
+    #[serde(default)]
+    pub target_gateway_url: Option<String>,
+
+    /// Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev).
+    /// Sent to Control Plane during auto-registration for Console display (CAB-1940).
+    /// Env: STOA_GATEWAY_PUBLIC_URL
+    #[serde(default)]
+    pub gateway_public_url: Option<String>,
 
     // === Native Tools (Phase 1) ===
     /// Enable native tool implementations (default: true)
@@ -715,6 +777,33 @@ pub struct Config {
     /// Env: STOA_MEMORY_LIMIT_MB
     #[serde(default = "default_memory_limit_mb")]
     pub memory_limit_mb: u64,
+
+    // === Error Snapshots (CAB-1645) ===
+    /// Enable opt-in error snapshot capture for 5xx responses.
+    /// When enabled, request/response body excerpts are captured with PII masking.
+    /// Env: STOA_SNAPSHOT_ENABLED
+    #[serde(default)]
+    pub snapshot_enabled: bool,
+
+    /// Maximum number of snapshots to keep in the ring buffer.
+    /// Env: STOA_SNAPSHOT_MAX_COUNT
+    #[serde(default = "default_snapshot_max_count")]
+    pub snapshot_max_count: usize,
+
+    /// Maximum age of snapshots in seconds before eviction.
+    /// Env: STOA_SNAPSHOT_MAX_AGE_SECS
+    #[serde(default = "default_snapshot_max_age_secs")]
+    pub snapshot_max_age_secs: u64,
+
+    /// Maximum bytes to capture from request/response bodies.
+    /// Env: STOA_SNAPSHOT_BODY_MAX_BYTES
+    #[serde(default = "default_snapshot_body_max_bytes")]
+    pub snapshot_body_max_bytes: usize,
+
+    /// Extra regex patterns to treat as PII during snapshot masking.
+    /// Env: STOA_SNAPSHOT_EXTRA_PII_PATTERNS (comma-separated)
+    #[serde(default)]
+    pub snapshot_extra_pii_patterns: Vec<String>,
 }
 
 /// LLM provider router configuration (CAB-1487)
@@ -1262,6 +1351,22 @@ fn default_memory_limit_mb() -> u64 {
     512
 }
 
+fn default_snapshot_max_count() -> usize {
+    100
+}
+
+fn default_snapshot_max_age_secs() -> u64 {
+    3600
+}
+
+fn default_snapshot_body_max_bytes() -> usize {
+    4096
+}
+
+fn default_git_provider() -> String {
+    "gitlab".to_string() // backward compatible default
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1283,6 +1388,12 @@ impl Default for Config {
             gitlab_api_url: None,
             gitlab_token: None,
             gitlab_project_id: None,
+            github_token: None,
+            github_org: None,
+            github_catalog_repo: None,
+            github_gitops_repo: None,
+            github_webhook_secret: None,
+            git_provider: default_git_provider(),
             rate_limit_default: Some(1000),
             rate_limit_window_seconds: Some(60),
             mcp_session_ttl_minutes: default_session_ttl(),
@@ -1295,6 +1406,8 @@ impl Default for Config {
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),
             detailed_tracing: false,
+            proxy_metrics_enabled: true,
+            proxy_tracing_enabled: true,
             gateway_mode: GatewayMode::default(),
             zombie_detection_enabled: default_zombie_detection(),
             agent_session_ttl_secs: default_agent_session_ttl(),
@@ -1304,7 +1417,10 @@ impl Default for Config {
             shadow_gitlab_project: None,
             environment: default_environment(),
             auto_register: default_auto_register(),
+            advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),
+            target_gateway_url: None,
+            gateway_public_url: None,
             native_tools_enabled: default_native_tools_enabled(),
             kafka_enabled: false,
             kafka_brokers: default_kafka_brokers(),
@@ -1400,6 +1516,11 @@ impl Default for Config {
             ip_blocklist_file: None,
             tcp_rate_limit_per_ip: None,
             memory_limit_mb: default_memory_limit_mb(),
+            snapshot_enabled: false,
+            snapshot_max_count: default_snapshot_max_count(),
+            snapshot_max_age_secs: default_snapshot_max_age_secs(),
+            snapshot_body_max_bytes: default_snapshot_body_max_bytes(),
+            snapshot_extra_pii_patterns: vec![],
         }
     }
 }
@@ -1448,6 +1569,12 @@ impl Config {
             "GITLAB_URL",
             "GITLAB_TOKEN",
             "GITLAB_PROJECT_ID",
+            "GITHUB_TOKEN",
+            "GITHUB_ORG",
+            "GITHUB_CATALOG_REPO",
+            "GITHUB_GITOPS_REPO",
+            "GITHUB_WEBHOOK_SECRET",
+            "GIT_PROVIDER",
         ]));
 
         let config: Config = figment.extract()?;
@@ -1703,6 +1830,71 @@ mod tests {
             config.otel_enabled,
             "CAB-1831: otel_enabled should default to true"
         );
+    }
+
+    #[test]
+    fn test_default_github_config() {
+        let config = Config::default();
+        // All GitHub fields default to None
+        assert!(config.github_token.is_none());
+        assert!(config.github_org.is_none());
+        assert!(config.github_catalog_repo.is_none());
+        assert!(config.github_gitops_repo.is_none());
+        assert!(config.github_webhook_secret.is_none());
+        // git_provider defaults to "gitlab" for backward compatibility
+        assert_eq!(config.git_provider, "gitlab");
+        // GitLab fields are unaffected
+        assert!(config.gitlab_url.is_none());
+        assert!(config.gitlab_token.is_none());
+    }
+
+    #[test]
+    fn test_git_provider_github_config_complete() {
+        // Verify that a fully-configured GitHub setup has all expected fields
+        let config = Config {
+            git_provider: "github".into(),
+            github_token: Some("ghp_test123".into()),
+            github_org: Some("stoa-platform".into()),
+            github_catalog_repo: Some("stoa".into()),
+            github_gitops_repo: Some("stoa-infra".into()),
+            github_webhook_secret: Some("whsec_test".into()),
+            ..Config::default()
+        };
+        assert_eq!(config.git_provider, "github");
+        assert_eq!(config.github_token.as_deref(), Some("ghp_test123"));
+        assert_eq!(config.github_org.as_deref(), Some("stoa-platform"));
+        assert_eq!(config.github_catalog_repo.as_deref(), Some("stoa"));
+        assert_eq!(config.github_gitops_repo.as_deref(), Some("stoa-infra"));
+        assert_eq!(config.github_webhook_secret.as_deref(), Some("whsec_test"));
+    }
+
+    #[test]
+    fn test_git_provider_gitlab_and_github_coexist() {
+        // During migration, both provider configs can coexist
+        let config = Config {
+            git_provider: "github".into(),
+            github_token: Some("ghp_tok".into()),
+            github_org: Some("acme".into()),
+            gitlab_url: Some("https://gitlab.example.com".into()),
+            gitlab_token: Some("glpat-legacy".into()),
+            gitlab_project_id: Some("42".into()),
+            ..Config::default()
+        };
+        // git_provider selects github even though gitlab fields are present
+        assert_eq!(config.git_provider, "github");
+        // GitLab fields remain accessible (for shadow mode fallback)
+        assert!(config.gitlab_token.is_some());
+    }
+
+    #[test]
+    fn test_git_provider_unknown_value_treated_as_gitlab() {
+        // Any value other than "github" falls through to gitlab
+        let config = Config {
+            git_provider: "bitbucket".into(),
+            ..Config::default()
+        };
+        // GitProvider::from_config would treat this as GitLab (the catch-all)
+        assert_ne!(config.git_provider, "github");
     }
 
     /// Regression test for PR #1814: OAuth proxy endpoints must use

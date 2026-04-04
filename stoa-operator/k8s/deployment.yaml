@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/name: stoa-operator
     app.kubernetes.io/component: operator
     app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: argocd
 spec:
   replicas: 1
   strategy:
@@ -34,7 +36,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: STOA_OPERATOR_CP_API_URL
-              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
             - name: STOA_OPERATOR_NAMESPACE
               value: "stoa-system"
             - name: STOA_OPERATOR_LOG_LEVEL

@@ -11,6 +11,7 @@ useDefault = true
 description = "Allowlist for false positives"
 
 paths = [
+  '''scripts/e2e/.*''',
   '''docs/.*\.md''',
   '''.*SUBSCRIPTIONS\.md''',
   '''.*README\.md''',
@@ -31,6 +32,9 @@ paths = [
   '''PLAN_DETAILLE\.md''',
   # Demo scripts with test/demo credentials (not real secrets)
   '''scripts/demo/.*''',
+  '''demo/.*''',
+  # VPS deploy files with webMethods trial default credentials (not real secrets)
+  '''deploy/vps/webmethods/.*''',
   # AI Factory rules (examples and anti-pattern documentation, not real secrets)
   '''\.claude/rules/.*\.md''',
   # VPS benchmark deploy scripts with example Pushgateway credentials
@@ -44,6 +48,13 @@ paths = [
   '''stoa-gateway/src/oauth/proxy\.rs''',
   # UI crypto test fixtures — forge-generated test keys (not real secrets)
   '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
+  # UI component test fixtures — mock PEM keys for certificate wizard tests
+  '''control-plane-ui/src/components/__tests__/CertificateGenerationWizard\.test\.tsx''',
+  # Gateway secrets detection plugin — inline test fixtures with fake secrets (CAB-1936)
+  '''stoa-gateway/src/plugin/builtin/secrets_detection\.rs''',
+  # Vault local dev init script — env var defaults for quickstart (not real secrets)
+  '''deploy/local/vault/init-vault-local\.sh''',
+  '''deploy/local/vault/vault-init-job\.yaml''',
 ]
 
 regexes = [
@@ -66,6 +77,10 @@ commits = [
   "aaeedd6b41789b2889715bf86e5cf6657d422edf",  # OpenSearch passwords + bcrypt hashes
   "92cf56ea3f31054ce04a76571c50d32a3257264b",  # PostgreSQL password in statefulset
   "7ebe3629d5f8efe4c242f18f31cf14925f31e5a6",  # Ansible playbook db_password
+  "9afc09b27908a971e850f5414d121c87f1c6f8cd",  # Historical postgres-statefulset password (removed)
+  "4e9b396296cc68dbff36a3f90b95014d4365bdd1",  # Historical ansible playbook db_password comment
+  "ef2e357f4fab1ec2011cb0583d8d1f78604546fa",  # Historical ansible playbook db_password comment (dup)
+  "64b5c3c76c34e746d43ff76ba6ba97ab9245b849",  # E2E deploy script curl-auth-header false positive (test key "not-a-real-key")
 ]
 
 # Rules to modify or disable

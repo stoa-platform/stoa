@@ -19,8 +19,11 @@ fn failing_route(id: &str, prefix: &str) -> ApiRoute {
         name: format!("failing-{}", id),
         tenant_id: "acme".to_string(),
         path_prefix: prefix.to_string(),
-        // 192.0.2.1 = TEST-NET-1 (RFC 5737) — non-routable, not SSRF-blocked
-        backend_url: "http://192.0.2.1:19999".to_string(),
+        // 127.0.0.1:1 — port 1 is always closed → instant "connection refused" (502).
+        // trusted_backend=true bypasses SSRF filter (which blocks loopback).
+        // Previous: 192.0.2.1 (TEST-NET-1) — non-routable, fast-fail on cloud VMs
+        // but silently dropped on some bare-metal hosts → 504 timeout instead of 502.
+        backend_url: "http://127.0.0.1:1".to_string(),
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: true,
@@ -29,6 +32,7 @@ fn failing_route(id: &str, prefix: &str) -> ApiRoute {
         upstream_http_version: Default::default(),
         upstreams: vec![],
         load_balancer: Default::default(),
+        trusted_backend: true,
     }
 }
 
@@ -189,7 +193,7 @@ async fn test_method_not_allowed_does_not_trip_cb() {
         name: "limited-api".to_string(),
         tenant_id: "acme".to_string(),
         path_prefix: "/apis/limited".to_string(),
-        backend_url: "http://192.0.2.1:19999".to_string(),
+        backend_url: "http://127.0.0.1:1".to_string(),
         methods: vec!["POST".to_string()],
         spec_hash: "abc".to_string(),
         activated: true,
@@ -198,6 +202,7 @@ async fn test_method_not_allowed_does_not_trip_cb() {
         upstream_http_version: Default::default(),
         upstreams: vec![],
         load_balancer: Default::default(),
+        trusted_backend: true,
     });
     let router = stoa_gateway::build_router(state.clone());
 

@@ -80,6 +80,12 @@ vi.mock('../config', () => ({
   config: {
     api: { baseUrl: 'https://api.gostoa.dev' },
     services: {
+      git: {
+        provider: 'gitlab',
+        label: 'GitLab',
+        url: 'https://gitlab.example.com',
+        webhookPath: 'webhooks/gitlab',
+      },
       gitlab: { url: 'https://gitlab.example.com' },
       awx: {
         url: 'https://awx.example.com',
@@ -172,7 +178,7 @@ describe('Deployments', () => {
     renderComponent();
     expect(screen.getByText('Pipeline Traces')).toBeInTheDocument();
     expect(screen.getByText('Deployment History')).toBeInTheDocument();
-    expect(screen.getByText('GitLab Config')).toBeInTheDocument();
+    expect(screen.getByText('Git Config')).toBeInTheDocument();
   });
 
   it('shows Pipeline Traces tab content by default', async () => {
@@ -189,9 +195,9 @@ describe('Deployments', () => {
     expect(screen.getByText('95.2%')).toBeInTheDocument();
   });
 
-  it('switches to GitLab Config tab', async () => {
+  it('switches to Git Config tab', async () => {
     renderComponent();
-    const configTab = screen.getByText('GitLab Config');
+    const configTab = screen.getByText('Git Config');
     fireEvent.click(configTab);
     expect(screen.getByText('GitOps Integration')).toBeInTheDocument();
     expect(screen.getByText('Repository Structure')).toBeInTheDocument();

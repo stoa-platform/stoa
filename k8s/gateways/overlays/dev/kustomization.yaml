@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gateway-dev
+resources:
+  - ../../base
+  - ingress.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: stoa-gateway
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_ENVIRONMENT
+          value: "dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_INSTANCE_NAME
+          value: "stoa-gateway-dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_GATEWAY_EXTERNAL_URL
+          value: "https://dev-gw-k3s.gostoa.dev"
+  - target:
+      kind: Deployment
+      name: stoa-link-wm
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_ENVIRONMENT
+          value: "dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_INSTANCE_NAME
+          value: "stoa-link-wm-dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_GATEWAY_EXTERNAL_URL
+          value: "https://dev-wm-k3s.gostoa.dev"

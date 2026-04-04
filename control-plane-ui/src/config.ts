@@ -24,7 +24,8 @@
  * - VITE_GATEWAY_URL: API Gateway URL
  * - VITE_AWX_URL: AWX/Ansible Tower URL
  * - VITE_PORTAL_URL: Developer Portal URL
- * - VITE_GITLAB_URL: GitLab URL for repository links
+ * - VITE_GIT_PROVIDER: Git provider type ('gitlab' | 'github', default: 'gitlab')
+ * - VITE_GIT_REPO_URL: Git repository base URL (default: provider-specific)
  *
  * Feature Flags:
  * - VITE_ENABLE_MONITORING: Enable monitoring features (default: true)
@@ -70,7 +71,7 @@ export const config = {
   // External Services
   services: {
     gateway: {
-      url: import.meta.env.VITE_GATEWAY_URL || `https://gateway.${BASE_DOMAIN}`,
+      url: import.meta.env.VITE_GATEWAY_URL || `https://vps-wm.${BASE_DOMAIN}`,
       get consoleUrl() {
         return `${this.url}/apigatewayui/`;
       },
@@ -87,14 +88,30 @@ export const config = {
     portal: {
       url: import.meta.env.VITE_PORTAL_URL || `https://portal.${BASE_DOMAIN}`,
     },
-    gitlab: {
-      url: import.meta.env.VITE_GITLAB_URL || 'https://gitlab.com',
+    git: {
+      provider: (import.meta.env.VITE_GIT_PROVIDER || 'gitlab') as 'gitlab' | 'github',
+      url:
+        import.meta.env.VITE_GIT_REPO_URL ||
+        import.meta.env.VITE_GITLAB_URL ||
+        ((import.meta.env.VITE_GIT_PROVIDER || 'gitlab') === 'github'
+          ? 'https://github.com'
+          : 'https://gitlab.com'),
+      get label() {
+        return this.provider === 'github' ? 'GitHub' : 'GitLab';
+      },
+      get webhookPath() {
+        return this.provider === 'github' ? 'webhooks/github' : 'webhooks/gitlab';
+      },
       getProjectUrl(projectId: string) {
         return `${this.url}/projects/${projectId}`;
       },
       getRepoUrl(projectPath: string) {
         return `${this.url}/${projectPath}`;
       },
+    },
+    /** @deprecated Use config.services.git instead */
+    get gitlab() {
+      return this.git;
     },
     // Observability services (CAB-654)
     argocd: {

@@ -77,8 +77,10 @@ class GatewayInstanceService:
             page_size=page_size,
         )
 
-    async def update(self, instance_id: UUID, data: GatewayInstanceUpdate) -> GatewayInstance:
-        """Update a gateway instance."""
+    async def update(
+        self, instance_id: UUID, data: GatewayInstanceUpdate, *, user_id: str | None = None
+    ) -> GatewayInstance:
+        """Update a gateway instance. Tracks enable/disable changes for audit."""
         instance = await self.repo.get_by_id(instance_id)
         if not instance:
             raise ValueError(f"Gateway instance {instance_id} not found")
@@ -97,8 +99,34 @@ class GatewayInstanceService:
             instance.environment = data.environment
         if data.protected is not None:
             instance.protected = data.protected
+        if data.enabled is not None:
+            old_enabled = instance.enabled
+            instance.enabled = data.enabled
+            if old_enabled != data.enabled:
+                action = "enabled" if data.enabled else "disabled"
+                logger.info(
+                    "Gateway %s %s by %s (was %s)",
+                    instance.name,
+                    action,
+                    user_id or "unknown",
+                    "enabled" if old_enabled else "disabled",
+                )
+        if data.visibility is not None:
+            instance.visibility = data.visibility
 
         return await self.repo.update(instance)
+
+    async def assert_enabled(self, instance_id: UUID) -> GatewayInstance:
+        """Return the gateway if it exists and is enabled, else raise."""
+        instance = await self.repo.get_by_id(instance_id)
+        if not instance:
+            raise ValueError(f"Gateway instance {instance_id} not found")
+        if not instance.enabled:
+            raise PermissionError(
+                f"Gateway '{instance.name}' is disabled. "
+                f"Enable it via PUT /v1/admin/gateways/{instance_id} before deploying."
+            )
+        return instance
 
     async def delete(self, instance_id: UUID, deleted_by: str) -> None:
         """Soft-delete a gateway instance. Rejects if protected."""
@@ -127,12 +155,25 @@ class GatewayInstanceService:
         if not instance:
             raise ValueError(f"Gateway instance {instance_id} not found")
 
-        adapter = AdapterRegistry.create(
+        from src.services.credential_resolver import (
+            _PULL_MODEL_GATEWAY_TYPES,
+            AGENT_MANAGED_MESSAGE,
+            create_adapter_with_credentials,
+        )
+
+        gw_type = instance.gateway_type.value if hasattr(instance.gateway_type, "value") else str(instance.gateway_type)
+        if instance.source == "self_register" and gw_type in _PULL_MODEL_GATEWAY_TYPES:
+            return {
+                "status": instance.status.value if instance.status else "unknown",
+                "details": {"info": AGENT_MANAGED_MESSAGE},
+                "gateway_name": instance.name,
+                "gateway_type": gw_type,
+            }
+
+        adapter = await create_adapter_with_credentials(
             instance.gateway_type.value,
-            config={
-                "base_url": instance.base_url,
-                "auth_config": instance.auth_config,
-            },
+            instance.base_url,
+            instance.auth_config,
         )
 
         try:
@@ -140,22 +181,33 @@ class GatewayInstanceService:
             result = await adapter.health_check()
 
             new_status = GatewayInstanceStatus.ONLINE if result.success else GatewayInstanceStatus.DEGRADED
-            await self.repo.update_status(instance, status=new_status, health_details=result.data)
+            details = result.data or {}
+            if not result.success and result.error:
+                details = {**details, "error": result.error}
+            # Merge into existing health_details to preserve heartbeat data
+            merged = {**(instance.health_details or {}), **details, "last_health_check_result": new_status.value}
+            await self.repo.update_status(instance, status=new_status, health_details=merged)
 
             return {
                 "status": new_status.value,
-                "details": result.data,
+                "details": details,
                 "gateway_name": instance.name,
                 "gateway_type": instance.gateway_type.value,
             }
         except Exception as e:
+            # Merge error into existing health_details to preserve heartbeat data
+            merged = {
+                **(instance.health_details or {}),
+                "error": str(e),
+                "last_health_check_result": "error",
+            }
             await self.repo.update_status(
                 instance,
-                status=GatewayInstanceStatus.OFFLINE,
-                health_details={"error": str(e)},
+                status=GatewayInstanceStatus.DEGRADED,
+                health_details=merged,
             )
             return {
-                "status": "offline",
+                "status": "degraded",
                 "details": {"error": str(e)},
                 "gateway_name": instance.name,
                 "gateway_type": instance.gateway_type.value,

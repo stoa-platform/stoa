@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -36,6 +37,7 @@ const PAGE_SIZE = 20;
 
 export function BackendApisList() {
   const { user, hasPermission } = useAuth();
+  const navigate = useNavigate();
   const toast = useToastActions();
   const queryClient = useQueryClient();
   const [confirm, ConfirmDialog] = useConfirm();
@@ -244,12 +246,17 @@ export function BackendApisList() {
                 return (
                   <tr key={api.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-750">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-neutral-900 dark:text-white">
-                        {api.display_name || api.name}
-                      </div>
-                      <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
-                        {api.name}
-                      </div>
+                      <button
+                        onClick={() => navigate(`/backend-apis/${api.id}`)}
+                        className="text-left group"
+                      >
+                        <div className="font-medium text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          {api.display_name || api.name}
+                        </div>
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
+                          {api.name}
+                        </div>
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300 font-mono truncate max-w-xs">
                       {api.backend_url}

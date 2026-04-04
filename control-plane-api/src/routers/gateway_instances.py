@@ -58,9 +58,15 @@ async def list_gateways(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
-    """List all registered gateway instances."""
+    """List all registered gateway instances.
+
+    Visibility filtering (CAB-1979): tenant-admins only see gateways where
+    visibility is null (public) or visibility.tenant_ids contains their tenant.
+    cpi-admins see all gateways regardless of visibility.
+    """
     # Only cpi-admin can see deleted gateways
     show_deleted = include_deleted and "cpi-admin" in user.roles
+    is_platform_admin = "cpi-admin" in user.roles
     svc = GatewayInstanceService(db)
     items, total = await svc.list(
         gateway_type=gateway_type,
@@ -70,6 +76,12 @@ async def list_gateways(
         page=page,
         page_size=page_size,
     )
+    # Visibility filtering for non-admin users
+    if not is_platform_admin and user.tenant_id:
+        items = [
+            gw for gw in items if gw.visibility is None or user.tenant_id in (gw.visibility.get("tenant_ids") or [])
+        ]
+        total = len(items)
     return PaginatedGatewayInstances(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -145,6 +157,43 @@ async def get_gateway(
     return instance
 
 
+@router.get("/{gateway_id}/tools")
+async def get_gateway_tools(
+    gateway_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["cpi-admin", "tenant-admin", "devops", "viewer"])),
+):
+    """Proxy to gateway's MCP tools list endpoint.
+
+    Fetches the live tool list from the gateway's /mcp/v1/tools endpoint.
+    Returns 503 if the gateway is OFFLINE, 502 if unreachable.
+    """
+    import httpx
+
+    svc = GatewayInstanceService(db)
+    instance = await svc.get_by_id(gateway_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Gateway instance not found")
+
+    if instance.status == GatewayInstanceStatus.OFFLINE:
+        raise HTTPException(status_code=503, detail="Gateway is offline")
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{instance.base_url}/mcp/v1/tools")
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=502, detail="Gateway did not respond within 5s")
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502, detail="Gateway is unreachable")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Gateway returned {e.response.status_code}")
+    except Exception as e:
+        logger.error("Failed to proxy tools for gateway %s: %s", gateway_id, e)
+        raise HTTPException(status_code=502, detail=f"Gateway error: {e!s}")
+
+
 @router.put("/{gateway_id}", response_model=GatewayInstanceResponse)
 async def update_gateway(
     gateway_id: UUID,
@@ -155,7 +204,7 @@ async def update_gateway(
     """Update a gateway instance configuration."""
     svc = GatewayInstanceService(db)
     try:
-        instance = await svc.update(gateway_id, data)
+        instance = await svc.update(gateway_id, data, user_id=user.id)
         await db.commit()
         return instance
     except ValueError as e:

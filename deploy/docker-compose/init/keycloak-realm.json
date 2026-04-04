@@ -29,7 +29,7 @@
     "strictTransportSecurity": "max-age=31536000; includeSubDomains",
     "referrerPolicy": "no-referrer"
   },
-  "accessTokenLifespan": 3600,
+  "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "roles": {
@@ -120,7 +120,7 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "protocol": "openid-connect",
       "redirectUris": [
         "http://localhost:3000/*",
@@ -158,7 +158,7 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "protocol": "openid-connect",
       "redirectUris": [
         "http://localhost:3001/*"
@@ -385,6 +385,66 @@
       ],
       "attributes": {
         "dpop.bound.access.tokens": "true"
+      }
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GOOGLE_CLIENT_ID:-google-placeholder-client-id}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET:-google-placeholder-secret}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "guiOrder": "1"
+      }
+    }
+  ],
+  "identityProviderMappers": [
+    {
+      "name": "google-viewer-role",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "hardcoded-role-idp-mapper",
+      "config": {
+        "role": "viewer",
+        "syncMode": "INHERIT"
+      }
+    },
+    {
+      "name": "google-email-mapper",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "google-user-attribute-mapper",
+      "config": {
+        "jsonField": "email",
+        "userAttribute": "email",
+        "syncMode": "INHERIT"
+      }
+    },
+    {
+      "name": "google-first-name-mapper",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "google-user-attribute-mapper",
+      "config": {
+        "jsonField": "given_name",
+        "userAttribute": "firstName",
+        "syncMode": "INHERIT"
+      }
+    },
+    {
+      "name": "google-last-name-mapper",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "google-user-attribute-mapper",
+      "config": {
+        "jsonField": "family_name",
+        "userAttribute": "lastName",
+        "syncMode": "INHERIT"
       }
     }
   ],

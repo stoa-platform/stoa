@@ -7,9 +7,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
+from ..models.gateway_deployment import DeploymentSyncStatus
 from ..models.promotion import Promotion, PromotionStatus, validate_promotion_chain
 from ..notifications.promotion_notifier import notify_promotion_event
 from ..repositories.deployment import DeploymentRepository
+from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.promotion import PromotionRepository
 from ..services.kafka_service import Topics, kafka_service
 
@@ -21,6 +23,7 @@ class PromotionService:
         self.db = db
         self.repo = PromotionRepository(db)
         self.deployment_repo = DeploymentRepository(db)
+        self.gw_deploy_repo = GatewayDeploymentRepository(db)
 
     async def create_promotion(
         self,
@@ -178,6 +181,11 @@ class PromotionService:
         promotion = await self.repo.get_by_id(promotion_id)
         if not promotion:
             raise ValueError(f"Promotion {promotion_id} not found")
+        if promotion.status != PromotionStatus.PROMOTING.value:
+            raise ValueError(
+                f"Cannot complete promotion in status '{promotion.status}' "
+                f"(expected '{PromotionStatus.PROMOTING.value}')"
+            )
 
         promotion.status = PromotionStatus.PROMOTED.value
         promotion.target_deployment_id = target_deployment_id
@@ -200,6 +208,43 @@ class PromotionService:
 
         logger.warning("Promotion %s failed: %s", promotion_id, reason)
         return promotion
+
+    async def check_promotion_completion(self, promotion_id: UUID) -> None:
+        """Check if all GatewayDeployments linked to a promotion are done.
+
+        Called after each route-sync-ack. If all deployments are SYNCED,
+        completes the promotion. If any are ERROR with none still PENDING/SYNCING,
+        fails the promotion.
+        """
+        deployments = await self.gw_deploy_repo.list_by_promotion(promotion_id)
+        if not deployments:
+            return  # No deployments linked — nothing to do
+
+        statuses = [d.sync_status for d in deployments]
+        pending_or_syncing = [
+            s for s in statuses
+            if s in (DeploymentSyncStatus.PENDING, DeploymentSyncStatus.SYNCING)
+        ]
+
+        if pending_or_syncing:
+            return  # Still waiting for some gateways
+
+        all_synced = all(s == DeploymentSyncStatus.SYNCED for s in statuses)
+        if all_synced:
+            try:
+                await self.complete_promotion(promotion_id)
+                logger.info("Promotion %s auto-completed: all %d deployments SYNCED", promotion_id, len(deployments))
+            except ValueError:
+                logger.info("Promotion %s already completed or not found", promotion_id)
+        else:
+            # At least one ERROR, no PENDING/SYNCING remaining
+            error_count = sum(1 for s in statuses if s == DeploymentSyncStatus.ERROR)
+            reason = f"Partial deployment failure: {error_count}/{len(deployments)} gateways failed"
+            try:
+                await self.fail_promotion(promotion_id, reason)
+                logger.warning("Promotion %s auto-failed: %s", promotion_id, reason)
+            except ValueError:
+                logger.info("Promotion %s already failed or not found", promotion_id)
 
     async def rollback_promotion(
         self,

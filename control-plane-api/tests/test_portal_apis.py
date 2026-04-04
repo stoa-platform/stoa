@@ -125,3 +125,131 @@ class TestEscapeLikeFunction:
         """Empty string returns empty string."""
         from src.repositories.catalog import escape_like
         assert escape_like("") == ""
+
+
+class TestPortalAPIsSortBy:
+    """Tests for sort_by parameter on /v1/portal/apis (CAB-1906)."""
+
+    @pytest.fixture
+    def mock_catalog_repo(self):
+        with patch('src.routers.portal.CatalogRepository') as mock_class:
+            mock_repo = MagicMock()
+            mock_repo.get_portal_apis = AsyncMock(return_value=([], 0))
+            mock_class.return_value = mock_repo
+            yield mock_repo
+
+    def test_sort_by_name(self, client_as_tenant_admin, mock_catalog_repo):
+        """sort_by=name is accepted and passed to repository."""
+        response = client_as_tenant_admin.get("/v1/portal/apis?sort_by=name")
+        assert response.status_code == 200
+        mock_catalog_repo.get_portal_apis.assert_called_once()
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["sort_by"] == "name"
+
+    def test_sort_by_updated_at(self, client_as_tenant_admin, mock_catalog_repo):
+        """sort_by=updated_at is accepted."""
+        response = client_as_tenant_admin.get("/v1/portal/apis?sort_by=updated_at")
+        assert response.status_code == 200
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["sort_by"] == "updated_at"
+
+    def test_sort_by_created_at(self, client_as_tenant_admin, mock_catalog_repo):
+        """sort_by=created_at is accepted."""
+        response = client_as_tenant_admin.get("/v1/portal/apis?sort_by=created_at")
+        assert response.status_code == 200
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["sort_by"] == "created_at"
+
+    def test_sort_by_default_none(self, client_as_tenant_admin, mock_catalog_repo):
+        """sort_by defaults to None when not provided."""
+        response = client_as_tenant_admin.get("/v1/portal/apis")
+        assert response.status_code == 200
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["sort_by"] is None
+
+
+class TestPortalAPIsAuthType:
+    """Tests for auth_type filter parameter on /v1/portal/apis (CAB-1906)."""
+
+    @pytest.fixture
+    def mock_catalog_repo(self):
+        with patch('src.routers.portal.CatalogRepository') as mock_class:
+            mock_repo = MagicMock()
+            mock_repo.get_portal_apis = AsyncMock(return_value=([], 0))
+            mock_class.return_value = mock_repo
+            yield mock_repo
+
+    def test_auth_type_oauth2(self, client_as_tenant_admin, mock_catalog_repo):
+        """auth_type=oauth2 is accepted and passed to repository."""
+        response = client_as_tenant_admin.get("/v1/portal/apis?auth_type=oauth2")
+        assert response.status_code == 200
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["auth_type"] == "oauth2"
+
+    def test_auth_type_api_key(self, client_as_tenant_admin, mock_catalog_repo):
+        """auth_type=api_key is accepted."""
+        response = client_as_tenant_admin.get("/v1/portal/apis?auth_type=api_key")
+        assert response.status_code == 200
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["auth_type"] == "api_key"
+
+    def test_auth_type_default_none(self, client_as_tenant_admin, mock_catalog_repo):
+        """auth_type defaults to None when not provided."""
+        response = client_as_tenant_admin.get("/v1/portal/apis")
+        assert response.status_code == 200
+        call_kwargs = mock_catalog_repo.get_portal_apis.call_args[1]
+        assert call_kwargs["auth_type"] is None
+
+
+class TestInferAuthType:
+    """Tests for _infer_auth_type helper (CAB-1906)."""
+
+    def test_oauth2(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type(["rest", "oauth2"]) == "OAuth2"
+
+    def test_oidc(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type(["oidc", "payments"]) == "OAuth2"
+
+    def test_api_key(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type(["api-key", "rest"]) == "API Key"
+
+    def test_mtls(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type(["mtls"]) == "mTLS"
+
+    def test_basic(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type(["basic-auth"]) == "Basic"
+
+    def test_none(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type(["rest", "graphql"]) is None
+
+    def test_empty(self):
+        from src.routers.portal import _infer_auth_type
+        assert _infer_auth_type([]) is None
+
+
+class TestCountEndpoints:
+    """Tests for _count_endpoints helper (CAB-1906)."""
+
+    def test_counts_methods(self):
+        from src.routers.portal import _count_endpoints
+        spec = {"paths": {"/users": {"get": {}, "post": {}}, "/users/{id}": {"get": {}, "delete": {}}}}
+        assert _count_endpoints(spec) == 4
+
+    def test_empty_paths(self):
+        from src.routers.portal import _count_endpoints
+        assert _count_endpoints({"paths": {}}) == 0
+
+    def test_none_spec(self):
+        from src.routers.portal import _count_endpoints
+        assert _count_endpoints(None) == 0
+
+    def test_ignores_non_methods(self):
+        from src.routers.portal import _count_endpoints
+        spec = {"paths": {"/users": {"get": {}, "parameters": []}}}
+        assert _count_endpoints(spec) == 1

@@ -24,7 +24,7 @@ from ..schemas.catalog import (
     SyncTriggerResponse,
 )
 from ..services.catalog_sync_service import CatalogSyncService
-from ..services.git_service import git_service
+from ..services.git_provider import GitProvider, get_git_provider
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/admin/catalog", tags=["Catalog Admin"])
@@ -46,6 +46,7 @@ async def trigger_catalog_sync(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger a full catalog synchronization from GitLab.
@@ -58,7 +59,7 @@ async def trigger_catalog_sync(
     _require_admin(user)
 
     try:
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
 
         # Check if a sync is already running
         last_sync = await sync_service.get_last_sync_status()
@@ -72,7 +73,7 @@ async def trigger_catalog_sync(
         # Launch sync in background
         async def run_sync():
             async for session in get_async_db():
-                service = CatalogSyncService(session, git_service)
+                service = CatalogSyncService(session, git)
                 await service.sync_all()
 
         background_tasks.add_task(run_sync)
@@ -94,6 +95,7 @@ async def trigger_mcp_servers_sync(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
     tenant_id: str | None = Query(None, description="Sync specific tenant only"),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger MCP servers synchronization from GitLab.
@@ -109,7 +111,7 @@ async def trigger_mcp_servers_sync(
 
         async def run_sync():
             async for session in get_async_db():
-                service = CatalogSyncService(session, git_service)
+                service = CatalogSyncService(session, git)
                 await service.sync_mcp_servers(tenant_id)
 
         background_tasks.add_task(run_sync)
@@ -131,6 +133,7 @@ async def trigger_tenant_sync(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger catalog synchronization for a specific tenant.
@@ -147,7 +150,7 @@ async def trigger_tenant_sync(
 
         async def run_sync():
             async for session in get_async_db():
-                service = CatalogSyncService(session, git_service)
+                service = CatalogSyncService(session, git)
                 await service.sync_tenant(tenant_id)
 
         background_tasks.add_task(run_sync)
@@ -167,6 +170,7 @@ async def trigger_tenant_sync(
 async def get_sync_status(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get the status of the last catalog sync operation.
@@ -183,7 +187,7 @@ async def get_sync_status(
     _require_admin(user)
 
     try:
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
         last_sync = await sync_service.get_last_sync_status()
 
         if not last_sync:
@@ -203,6 +207,7 @@ async def get_sync_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
     limit: int = Query(10, ge=1, le=100),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get the history of catalog sync operations.
@@ -214,7 +219,7 @@ async def get_sync_history(
     _require_admin(user)
 
     try:
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
         syncs = await sync_service.get_sync_history(limit=limit)
 
         return SyncHistoryResponse(
@@ -236,6 +241,7 @@ async def get_sync_history(
 async def get_catalog_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get statistics about the catalog cache.
@@ -256,7 +262,7 @@ async def get_catalog_stats(
         stats = await repo.get_stats()
 
         # Get last sync info
-        sync_service = CatalogSyncService(db, git_service)
+        sync_service = CatalogSyncService(db, git)
         last_sync = await sync_service.get_last_sync_status()
 
         return CatalogStatsResponse(
@@ -351,8 +357,10 @@ async def seed_catalog_directly(
     failed = 0
     results = {}
 
+    from .apis import _slugify
+
     for api_entry in data.apis:
-        api_id = api_entry.name
+        api_id = _slugify(api_entry.name)
         tags = api_entry.tags
         promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
         portal_published = any(tag.lower() in promotion_tags for tag in tags)
@@ -398,6 +406,7 @@ async def seed_catalog_directly(
                 )
                 .on_conflict_do_update(
                     index_elements=["tenant_id", "api_id"],
+                    index_where=APICatalog.deleted_at.is_(None),
                     set_={
                         "api_name": api_entry.display_name,
                         "version": api_entry.version,
@@ -405,7 +414,7 @@ async def seed_catalog_directly(
                         "category": api_entry.category,
                         "tags": tags,
                         "portal_published": portal_published,
-                        "metadata": api_metadata,  # DB column is "metadata" not "api_metadata"
+                        "metadata": api_metadata,
                         "openapi_spec": openapi_spec,
                         "synced_at": datetime.now(UTC),
                         "deleted_at": None,
@@ -490,3 +499,65 @@ async def update_api_audience(
         audience=payload.audience,
         updated_by=user.username,
     )
+
+
+# ============================================================================
+# Cross-Tenant API Listing (Admin)
+# ============================================================================
+
+
+class AdminAPIResponse(BaseModel):
+    """API response for cross-tenant admin listing."""
+
+    id: str
+    tenant_id: str
+    name: str
+    display_name: str
+    version: str
+    description: str
+    status: str = "draft"
+    tags: list[str] = []
+
+
+class AdminAPIPaginatedResponse(BaseModel):
+    items: list[AdminAPIResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/apis", response_model=AdminAPIPaginatedResponse)
+async def list_all_apis(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=100, ge=1, le=500),
+    tenant_id: str | None = Query(default=None, description="Filter by tenant (omit for all)"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """List APIs across all tenants (admin only).
+
+    Pass tenant_id to filter by a specific tenant, or omit for cross-tenant view.
+    """
+    _require_admin(user)
+
+    repo = CatalogRepository(db)
+    apis, total = await repo.get_portal_apis(
+        tenant_id=tenant_id,
+        include_unpublished=True,
+        page=page,
+        page_size=page_size,
+    )
+    items = [
+        AdminAPIResponse(
+            id=api.api_id,
+            tenant_id=api.tenant_id,
+            name=api.api_id,
+            display_name=(api.api_metadata or {}).get("display_name") or api.api_name or api.api_id,
+            version=api.version or "1.0.0",
+            description=(api.api_metadata or {}).get("description", ""),
+            status=api.status or "draft",
+            tags=api.tags or [],
+        )
+        for api in apis
+    ]
+    return AdminAPIPaginatedResponse(items=items, total=total, page=page, page_size=page_size)

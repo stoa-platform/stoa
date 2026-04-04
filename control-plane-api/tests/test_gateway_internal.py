@@ -47,7 +47,12 @@ def _make_gateway_instance(**overrides):
         "version": "0.1.0",
         "tags": ["mode:edge-mcp", "auto-registered"],
         "mode": "edge-mcp",
+        "target_gateway_url": None,
+        "public_url": None,
+        "ui_url": None,
         "protected": False,
+        "enabled": True,
+        "visibility": None,
         "deleted_at": None,
         "deleted_by": None,
         "created_at": datetime.now(UTC),
@@ -76,6 +81,8 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -116,6 +123,83 @@ class TestGatewayRegistration:
             assert resp.status_code == 201
             mock_repo.update.assert_awaited_once()
             mock_repo.create.assert_not_called()
+
+    def test_register_cancel_and_replace_soft_deletes_stale(self, client):
+        """When a gateway re-registers with a new hostname (e.g. container
+        recreated), stale entries with the same mode+env are soft-deleted
+        so the Console doesn't show duplicates (CAB-1908)."""
+        stale = _make_gateway_instance(
+            name="old-hostname-connect-production",
+            mode="connect",
+            source="self_register",
+        )
+        new_gw = _make_gateway_instance(
+            name="connect-kong-connect-production",
+            mode="connect",
+            source="self_register",
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            # Step 1: no exact name match (hostname changed)
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            # Step 1b: find stale entries with same mode+env
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[stale])
+            mock_repo.soft_delete = AsyncMock(return_value=stale)
+            # Step 2: no ArgoCD entry
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
+            # Step 3: create new entry
+            mock_repo.create = AsyncMock(return_value=new_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(
+                    hostname="connect-kong",
+                    mode="connect",
+                    environment="production",
+                ),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            # Stale entry was soft-deleted
+            mock_repo.soft_delete.assert_awaited_once_with(
+                stale, deleted_by="replaced-by:connect-kong-connect-production"
+            )
+            # New entry was created
+            mock_repo.create.assert_awaited_once()
+
+    def test_register_cancel_and_replace_no_stale(self, client):
+        """No soft-deletes when there are no stale entries (clean registration)."""
+        gw = _make_gateway_instance()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
+            mock_repo.create = AsyncMock(return_value=gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            mock_repo.soft_delete.assert_not_called()
 
     def test_register_invalid_key_returns_401(self, client):
         """Invalid gateway key is rejected with 401."""
@@ -163,6 +247,8 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -193,6 +279,8 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -225,6 +313,8 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
 
@@ -262,6 +352,8 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)  # No exact name match
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=argocd_gw)
             mock_repo.update = AsyncMock(return_value=argocd_gw)
 
@@ -742,6 +834,283 @@ class TestGatewaySyncAck:
             assert resp.status_code == 404
 
 
+def _make_deployment(**overrides):
+    """Create a mock GatewayDeployment."""
+    from src.models.gateway_deployment import DeploymentSyncStatus
+
+    dep_id = overrides.pop("id", uuid4())
+    defaults = {
+        "id": dep_id,
+        "api_catalog_id": uuid4(),
+        "gateway_instance_id": uuid4(),
+        "sync_status": DeploymentSyncStatus.PENDING,
+        "last_sync_attempt": None,
+        "last_sync_success": None,
+        "sync_error": None,
+        "sync_steps": None,
+        "sync_attempts": 0,
+        "promotion_id": None,
+    }
+    defaults.update(overrides)
+    mock = MagicMock()
+    for k, v in defaults.items():
+        setattr(mock, k, v)
+    return mock
+
+
+class TestRouteSyncAck:
+    """POST /v1/internal/gateways/{id}/route-sync-ack"""
+
+    def test_route_sync_ack_success(self, client):
+        """Two deployments applied → sync_status=SYNCED + last_sync_success set."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep1 = _make_deployment()
+        dep2 = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                for d in [dep1, dep2]:
+                    if d.id == dep_id:
+                        return d
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep1.id), "status": "applied"},
+                        {"deployment_id": str(dep2.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 2
+            assert data["not_found"] == 0
+            assert dep1.sync_status == DeploymentSyncStatus.SYNCED
+            assert dep1.last_sync_success is not None
+            assert dep1.sync_error is None
+            assert dep2.sync_status == DeploymentSyncStatus.SYNCED
+
+    def test_route_sync_ack_failed(self, client):
+        """One deployment failed → sync_status=ERROR + sync_error set."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "failed", "error": "connection refused"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 1
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert dep.sync_error == "connection refused"
+
+    def test_route_sync_ack_mixed(self, client):
+        """One applied + one failed → each updated independently."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep_ok = _make_deployment()
+        dep_fail = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                for d in [dep_ok, dep_fail]:
+                    if d.id == dep_id:
+                        return d
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep_ok.id), "status": "applied"},
+                        {"deployment_id": str(dep_fail.id), "status": "failed", "error": "timeout"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 2
+            assert data["not_found"] == 0
+            assert dep_ok.sync_status == DeploymentSyncStatus.SYNCED
+            assert dep_ok.sync_error is None
+            assert dep_fail.sync_status == DeploymentSyncStatus.ERROR
+            assert dep_fail.sync_error == "timeout"
+
+    def test_route_sync_ack_deployment_not_found(self, client):
+        """Non-existent deployment_id → 200 with not_found=1 (no crash)."""
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=None)
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(uuid4()), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["processed"] == 0
+            assert data["not_found"] == 1
+
+
+    def test_route_sync_ack_with_steps_merges_cp_step(self, client):
+        """Ack with agent steps → sync_steps includes CP event_emitted + agent steps."""
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            agent_steps = [
+                {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
+                {"name": "adapter_connected", "status": "success", "started_at": "2026-04-02T12:00:02Z"},
+                {"name": "api_synced", "status": "success", "started_at": "2026-04-02T12:00:03Z"},
+            ]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied", "steps": agent_steps},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:04Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_steps is not None
+            assert len(dep.sync_steps) == 4  # event_emitted + 3 agent steps
+            assert dep.sync_steps[0]["name"] == "event_emitted"
+            assert dep.sync_steps[0]["status"] == "success"
+            assert dep.sync_steps[1]["name"] == "agent_received"
+            assert dep.sync_steps[2]["name"] == "adapter_connected"
+            assert dep.sync_steps[3]["name"] == "api_synced"
+
+    def test_route_sync_ack_without_steps_backward_compat(self, client):
+        """Ack without steps field → sync_steps stays None (old agent compat)."""
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_steps is None
+
+    def test_route_sync_ack_failed_with_steps_derives_error(self, client):
+        """Ack with failed step → sync_error derived from step trace."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            agent_steps = [
+                {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
+                {"name": "adapter_connected", "status": "success", "started_at": "2026-04-02T12:00:02Z"},
+                {"name": "api_synced", "status": "failed", "started_at": "2026-04-02T12:00:03Z", "detail": "connection refused"},
+            ]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "failed", "error": "sync error", "steps": agent_steps},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:04Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert dep.sync_error == "connection refused"
+
+
 class TestHelperFunctions:
     """Unit tests for internal helper functions."""
 
@@ -792,3 +1161,205 @@ class TestHelperFunctions:
 
         # connect maps to GatewayType.STOA (bridge agent, not a new adapter type)
         assert _mode_to_gateway_type("connect") == GatewayType.STOA
+
+
+class TestRouteSyncAckPromotionCompletion:
+    """Tests for promotion auto-completion triggered by route-sync-ack."""
+
+    def test_route_ack_triggers_promotion_complete(self, client):
+        """Single promotion, single gateway — ack applied → promotion PROMOTED."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep = _make_deployment(promotion_id=promo_id)
+
+        mock_promotion = MagicMock()
+        mock_promotion.id = promo_id
+        mock_promotion.status = "promoting"
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.SYNCED
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_partial_does_not_complete(self, client):
+        """1 promotion, 2 gateways, only 1 ack → promotion NOT completed yet."""
+        promo_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id)
+        dep2 = _make_deployment(promotion_id=promo_id)  # Not in the ack payload
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                if dep_id == dep1.id:
+                    return dep1
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep1.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            # check_promotion_completion IS called — the service internally
+            # decides whether to complete based on remaining deployments
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_all_synced_completes(self, client):
+        """1 promotion, 2 gateways, 2 acks applied → check called once for the promotion."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id)
+        dep2 = _make_deployment(promotion_id=promo_id)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+
+            async def get_by_id_side_effect(dep_id):
+                for d in [dep1, dep2]:
+                    if d.id == dep_id:
+                        return d
+                return None
+
+            mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep1.id), "status": "applied"},
+                        {"deployment_id": str(dep2.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep1.sync_status == DeploymentSyncStatus.SYNCED
+            assert dep2.sync_status == DeploymentSyncStatus.SYNCED
+            # Called once — promo_id is deduplicated via set
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_error_fails_promotion(self, client):
+        """1 promotion, 1 gateway, ack failed → check called (service handles failure)."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep = _make_deployment(promotion_id=promo_id)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "failed", "error": "timeout"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
+
+    def test_route_ack_mixed_error_and_pending(self, client):
+        """1 promotion, 2 gateways, 1 error ack + 1 not yet acked → check called once."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        promo_id = uuid4()
+        dep_err = _make_deployment(promotion_id=promo_id)
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+            patch("src.routers.gateway_internal.PromotionService") as MockPromoSvc,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep_err)
+            mock_deploy_repo.update = AsyncMock()
+
+            mock_promo_svc = MockPromoSvc.return_value
+            mock_promo_svc.check_promotion_completion = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep_err.id), "status": "failed", "error": "connection refused"},
+                    ],
+                    "sync_timestamp": "2026-03-27T14:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep_err.sync_status == DeploymentSyncStatus.ERROR
+            # check is called — the service will see 1 ERROR + 1 PENDING still remaining
+            # and will NOT complete/fail yet
+            mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)

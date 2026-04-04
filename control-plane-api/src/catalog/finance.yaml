@@ -1,0 +1,23 @@
+category_id: finance
+category_name: Finance & Banking
+icon: landmark
+
+entries:
+  - id: eu-ecb-sdw
+    name: ecb-sdw
+    display_name: "ECB Statistical Data Warehouse"
+    description: "ECB — exchange rates, monetary statistics, banking data"
+    country: EU
+    region: EU
+    spec_url: https://data-api.ecb.europa.eu/service
+    protocol: openapi
+    auth_type: none
+    tools:
+      - name: get_exchange_rates
+        description: Get currency exchange rates
+      - name: get_monetary_data
+        description: Retrieve monetary and financial statistics
+    status: verified
+    tags: [finance, ecb, exchange-rates, eu]
+    documentation_url: https://data.ecb.europa.eu/
+    icon: landmark

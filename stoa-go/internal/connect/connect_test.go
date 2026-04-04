@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -191,10 +192,83 @@ func TestHeartbeatNotRegistered(t *testing.T) {
 	}
 }
 
-func TestStartHeartbeatStopsOnCancel(t *testing.T) {
-	callCount := 0
+// --- CAB-1916: routes_count computed from discovered APIs ---
+
+func TestComputeRoutesCountEmpty(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	if got := a.computeRoutesCount(); got != 0 {
+		t.Errorf("computeRoutesCount() = %d, want 0", got)
+	}
+}
+
+func TestComputeRoutesCountWithPaths(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "petstore", Paths: []string{"/pets", "/pets/{id}"}, IsActive: true},
+		{Name: "payments", Paths: []string{"/charge"}, IsActive: true},
+	}
+	if got := a.computeRoutesCount(); got != 3 {
+		t.Errorf("computeRoutesCount() = %d, want 3", got)
+	}
+}
+
+func TestComputeRoutesCountSkipsInactive(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "active", Paths: []string{"/ok"}, IsActive: true},
+		{Name: "inactive", Paths: []string{"/skip1", "/skip2"}, IsActive: false},
+	}
+	if got := a.computeRoutesCount(); got != 1 {
+		t.Errorf("computeRoutesCount() = %d, want 1", got)
+	}
+}
+
+func TestComputeRoutesCountNoPaths(t *testing.T) {
+	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
+	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "minimal", IsActive: true},
+	}
+	if got := a.computeRoutesCount(); got != 1 {
+		t.Errorf("computeRoutesCount() = %d, want 1 (API with no paths counts as 1)", got)
+	}
+}
+
+func TestHeartbeatSendsRoutesCount(t *testing.T) {
+	var receivedPayload HeartbeatPayload
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+		if err := json.NewDecoder(r.Body).Decode(&receivedPayload); err != nil {
+			t.Errorf("decode heartbeat: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: server.URL,
+		GatewayAPIKey:   "key",
+	})
+	agent.gatewayID = "gw-123"
+	agent.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+		{Name: "petstore", Paths: []string{"/pets", "/pets/{id}"}, IsActive: true},
+	}
+
+	err := agent.Heartbeat(context.Background())
+	if err != nil {
+		t.Fatalf("heartbeat failed: %v", err)
+	}
+	if receivedPayload.RoutesCount != 2 {
+		t.Errorf("routes_count = %d, want 2", receivedPayload.RoutesCount)
+	}
+	if receivedPayload.DiscoveredAPIs != 1 {
+		t.Errorf("discovered_apis = %d, want 1", receivedPayload.DiscoveredAPIs)
+	}
+}
+
+func TestStartHeartbeatStopsOnCancel(t *testing.T) {
+	var callCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
@@ -214,7 +288,77 @@ func TestStartHeartbeatStopsOnCancel(t *testing.T) {
 	cancel()
 	time.Sleep(100 * time.Millisecond)
 
-	if callCount < 2 {
-		t.Errorf("expected at least 2 heartbeats, got %d", callCount)
+	if callCount.Load() < 2 {
+		t.Errorf("expected at least 2 heartbeats, got %d", callCount.Load())
+	}
+}
+
+// Regression: heartbeat 404 returns ErrGatewayNotFound, enabling re-registration.
+func TestHeartbeat404ReturnsNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Gateway instance not found"}`))
+	}))
+	defer server.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: server.URL,
+		GatewayAPIKey:   "key",
+		InstanceName:    "test-agent",
+	})
+	agent.gatewayID = "purged-id"
+
+	err := agent.Heartbeat(context.Background())
+	if err == nil {
+		t.Fatal("expected error on 404 heartbeat")
+	}
+	if err != ErrGatewayNotFound {
+		t.Errorf("expected ErrGatewayNotFound, got: %v", err)
+	}
+}
+
+// Regression: heartbeat 404 triggers re-registration after 3 consecutive failures.
+func TestStartHeartbeat404ReRegisters(t *testing.T) {
+	var heartbeatCount atomic.Int32
+	var registerCount atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/internal/gateways/register" {
+			registerCount.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(RegistrationResponse{
+				ID:   "new-id",
+				Name: "re-registered",
+			})
+			return
+		}
+		// Heartbeat always returns 404
+		heartbeatCount.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	agent := New(Config{
+		ControlPlaneURL:   server.URL,
+		GatewayAPIKey:     "key",
+		InstanceName:      "test-agent",
+		HeartbeatInterval: 20 * time.Millisecond,
+	})
+	agent.gatewayID = "old-purged-id"
+	agent.healthPort = "8090"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	agent.StartHeartbeat(ctx)
+
+	// Wait for 3 heartbeat 404s + re-registration
+	time.Sleep(250 * time.Millisecond)
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+
+	if registerCount.Load() < 1 {
+		t.Errorf("expected at least 1 re-registration, got %d", registerCount.Load())
+	}
+	if agent.gatewayID != "new-id" {
+		t.Errorf("expected gatewayID=new-id after re-registration, got %s", agent.gatewayID)
 	}
 }

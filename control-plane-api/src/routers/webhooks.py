@@ -1,4 +1,5 @@
-"""Webhooks router - GitLab webhook handlers for GitOps with full tracing"""
+"""Webhooks router - GitLab and GitHub webhook handlers for GitOps with full tracing"""
+
 import hmac
 import logging
 
@@ -14,11 +15,32 @@ from ..services.trace_service import TraceService
 
 logger = logging.getLogger(__name__)
 
+
+class WebhookProcessedResponse(BaseModel):
+    """GitLab webhook processing result."""
+
+    status: str
+    event: str
+    trace_id: str
+    duration_ms: int | None = None
+    author: str | None = None
+
+
+class WebhookHealthResponse(BaseModel):
+    """Webhook endpoint health status."""
+
+    status: str
+    endpoint: str
+    supported_events: list[str] = []
+    trace_stats: dict = {}
+
+
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 
 class GitLabPushEvent(BaseModel):
     """GitLab push webhook payload (simplified)"""
+
     object_kind: str  # "push"
     event_name: str  # "push"
     ref: str  # "refs/heads/main"
@@ -35,6 +57,7 @@ class GitLabPushEvent(BaseModel):
 
 class GitLabMergeRequestEvent(BaseModel):
     """GitLab merge request webhook payload (simplified)"""
+
     object_kind: str  # "merge_request"
     event_type: str  # "merge_request"
     user: dict
@@ -56,7 +79,18 @@ def verify_gitlab_token(token: str | None, expected_token: str) -> bool:
     return hmac.compare_digest(token, expected_token)
 
 
-@router.post("/gitlab")
+def verify_github_signature(payload_body: bytes, signature: str | None, secret: str) -> bool:
+    """Verify GitHub webhook HMAC-SHA256 signature."""
+    if not secret:
+        logger.error("GITHUB_WEBHOOK_SECRET not configured - rejecting webhook")
+        return False
+    if not signature or not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(secret.encode(), payload_body, "sha256").hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
+@router.post("/gitlab", response_model=WebhookProcessedResponse)
 async def gitlab_webhook(
     request: Request,
     x_gitlab_token: str | None = Header(None, alias="X-Gitlab-Token"),
@@ -135,7 +169,7 @@ async def gitlab_webhook(
         )
 
         # Step 2: Token Verification (CAB-DDoS: always enforce)
-        webhook_secret = getattr(settings, 'GITLAB_WEBHOOK_SECRET', '')
+        webhook_secret = getattr(settings, "GITLAB_WEBHOOK_SECRET", "")
         if not verify_gitlab_token(x_gitlab_token, webhook_secret):
             await service.add_step(
                 trace,
@@ -181,7 +215,9 @@ async def gitlab_webhook(
         # Pipeline complete
         await service.complete(trace, TraceStatusDB.SUCCESS)
 
-        logger.info(f"Pipeline trace {trace.id}: {trace.status.value} in {trace.total_duration_ms}ms (author: {git_author})")
+        logger.info(
+            f"Pipeline trace {trace.id}: {trace.status.value} in {trace.total_duration_ms}ms (author: {git_author})"
+        )
 
         return {
             "status": "processed",
@@ -199,11 +235,91 @@ async def gitlab_webhook(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def handle_push_event_traced_pg(
-    payload: dict,
-    trace,
-    service: TraceService
-) -> dict:
+@router.post("/github", response_model=WebhookProcessedResponse)
+async def github_webhook(
+    request: Request,
+    x_hub_signature_256: str | None = Header(None, alias="X-Hub-Signature-256"),
+    x_github_event: str | None = Header(None, alias="X-GitHub-Event"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle GitHub webhooks for GitOps."""
+    service = TraceService(db)
+    event_type = x_github_event or "unknown"
+    raw_body = await request.body()
+    body = await request.json()
+
+    # Verify HMAC-SHA256
+    if not verify_github_signature(raw_body, x_hub_signature_256, settings.GITHUB_WEBHOOK_SECRET):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    # Extract git info
+    if event_type == "push":
+        git_project = body.get("repository", {}).get("full_name", "")
+        git_branch = body.get("ref", "").replace("refs/heads/", "")
+        head_commit = body.get("head_commit", {})
+        git_author = head_commit.get("author", {}).get("name", body.get("sender", {}).get("login", "unknown"))
+        git_commit_sha = head_commit.get("id")
+        git_commit_message = head_commit.get("message", "")[:200]
+    elif event_type == "pull_request":
+        pr = body.get("pull_request", {})
+        git_project = body.get("repository", {}).get("full_name", "")
+        git_branch = pr.get("head", {}).get("ref", "")
+        git_author = pr.get("user", {}).get("login", "unknown")
+        git_commit_sha = pr.get("merge_commit_sha")
+        git_commit_message = pr.get("title", "")[:200]
+    else:
+        git_project = body.get("repository", {}).get("full_name", "")
+        git_branch = ""
+        git_author = body.get("sender", {}).get("login", "unknown")
+        git_commit_sha = None
+        git_commit_message = None
+
+    trace = await service.create(
+        trigger_type=f"github-{event_type}",
+        trigger_source="github",
+        git_project=git_project,
+        git_branch=git_branch,
+        git_commit_sha=git_commit_sha,
+        git_commit_message=git_commit_message,
+        git_author=git_author,
+    )
+
+    await service.add_step(
+        trace,
+        name="webhook_received",
+        status="success",
+        duration_ms=5,
+        details={"event_type": event_type, "project": git_project, "action": body.get("action")},
+    )
+
+    # Dispatch to Kafka for async processing
+    if event_type == "push":
+        await kafka_service.publish(
+            topic=Topics.DEPLOY_REQUESTS,
+            event_type="sync-catalog",
+            tenant_id="all",
+            payload={"trace_id": str(trace.id), "source": "github", "project": git_project, "branch": git_branch},
+            user_id=git_author,
+        )
+    elif event_type == "pull_request" and body.get("action") == "closed" and body.get("pull_request", {}).get("merged"):
+        await kafka_service.publish(
+            topic=Topics.DEPLOY_REQUESTS,
+            event_type="sync-gitops",
+            tenant_id="all",
+            payload={
+                "trace_id": str(trace.id),
+                "source": "github",
+                "project": git_project,
+                "pr_number": body["pull_request"]["number"],
+            },
+            user_id=git_author,
+        )
+
+    await service.complete(trace, TraceStatusDB.SUCCESS, f"GitHub {event_type} processed")
+    return WebhookProcessedResponse(status="processed", event=event_type, trace_id=str(trace.id))
+
+
+async def handle_push_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:
     """
     Handle push events with full tracing (PostgreSQL version).
 
@@ -286,13 +402,15 @@ async def handle_push_event_traced_pg(
                     "requested_by": user_name,
                     "trace_id": trace.id,
                 },
-                user_id=user_name
+                user_id=user_name,
             )
-            events_published.append({
-                "event_id": event_id,
-                "tenant_id": tenant_id,
-                "api_name": api_name,
-            })
+            events_published.append(
+                {
+                    "event_id": event_id,
+                    "tenant_id": tenant_id,
+                    "api_name": api_name,
+                }
+            )
 
         await service.add_step(
             trace,
@@ -339,14 +457,16 @@ async def handle_push_event_traced_pg(
                         "requested_by": user_name,
                         "trace_id": trace.id,
                     },
-                    user_id=user_name
+                    user_id=user_name,
                 )
-                mcp_events_published.append({
-                    "event_id": event_id,
-                    "tenant_id": tenant_id,
-                    "server_name": server_name,
-                    "scope": scope,
-                })
+                mcp_events_published.append(
+                    {
+                        "event_id": event_id,
+                        "tenant_id": tenant_id,
+                        "server_name": server_name,
+                        "scope": scope,
+                    }
+                )
 
             await service.add_step(
                 trace,
@@ -378,11 +498,7 @@ async def handle_push_event_traced_pg(
     }
 
 
-async def handle_merge_request_event_traced_pg(
-    payload: dict,
-    trace,
-    service: TraceService
-) -> dict:
+async def handle_merge_request_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:
     """Handle merge request events with tracing (PostgreSQL version)."""
     object_attrs = payload.get("object_attributes", {})
     state = object_attrs.get("state")
@@ -408,7 +524,7 @@ async def handle_merge_request_event_traced_pg(
                 "requested_by": user_name,
                 "trace_id": trace.id,
             },
-            user_id=user_name
+            user_id=user_name,
         )
 
         await service.add_step(
@@ -434,11 +550,7 @@ async def handle_merge_request_event_traced_pg(
     return {"action": "sync_triggered", "mr_iid": mr_iid}
 
 
-async def handle_tag_push_event_traced_pg(
-    payload: dict,
-    trace,
-    service: TraceService
-) -> dict:
+async def handle_tag_push_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:
     """Handle tag push events with tracing (PostgreSQL version)."""
     ref = payload.get("ref", "")
     tag_name = ref.replace("refs/tags/", "")
@@ -448,7 +560,7 @@ async def handle_tag_push_event_traced_pg(
 
 
 # Health check for webhook endpoint
-@router.get("/gitlab/health")
+@router.get("/gitlab/health", response_model=WebhookHealthResponse)
 async def webhook_health(db: AsyncSession = Depends(get_db)):
     """Health check for GitLab webhook endpoint with trace stats from PostgreSQL."""
     service = TraceService(db)

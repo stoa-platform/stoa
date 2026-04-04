@@ -1,10 +1,11 @@
-"""MCP GitOps Router - Endpoints for GitOps synchronization.
+"""MCP GitOps Router - Endpoints for GitOps synchronization (CAB-1890).
 
-Provides endpoints for triggering MCP server syncs from GitLab and
-monitoring sync status.
+Provides endpoints for triggering MCP server syncs from the git provider
+and monitoring sync status.
 
 These endpoints are admin-only.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
 from ..database import get_db as get_async_db
-from ..services.git_service import git_service
+from ..services.git_provider import GitProvider, get_git_provider
 from ..services.mcp_sync_service import MCPSyncService
 
 logger = logging.getLogger(__name__)
@@ -24,8 +25,10 @@ router = APIRouter(prefix="/v1/mcp/gitops", tags=["MCP GitOps"])
 # Response Models
 # ============================================================================
 
+
 class SyncResponse(BaseModel):
     """Response for sync operations."""
+
     success: bool
     message: str
     servers_synced: int = 0
@@ -37,6 +40,7 @@ class SyncResponse(BaseModel):
 
 class SyncStatusResponse(BaseModel):
     """Response for sync status."""
+
     total_servers: int
     synced: int
     pending: int
@@ -47,18 +51,45 @@ class SyncStatusResponse(BaseModel):
     errors: list = []
 
 
+class GitHealthResponse(BaseModel):
+    """Git provider connection health status."""
+
+    status: str
+    project: str | None = None
+    project_id: int | None = None
+    default_branch: str | None = None
+    error: str | None = None
+
+
+class GitServerSummary(BaseModel):
+    """Summary of a git-defined MCP server."""
+
+    name: str | None = None
+    tenant_id: str | None = None
+    display_name: str | None = None
+    category: str | None = None
+    status: str | None = None
+    tools_count: int = 0
+    git_path: str | None = None
+
+
+class GitServersResponse(BaseModel):
+    """List of MCP servers found in the git provider."""
+
+    total: int = 0
+    servers: list[GitServerSummary] = []
+
+
 # ============================================================================
 # Admin Check
 # ============================================================================
+
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
     """Require admin role for GitOps operations."""
     admin_roles = {"cpi-admin", "admin"}
     if not any(role in admin_roles for role in (user.roles or [])):
-        raise HTTPException(
-            status_code=403,
-            detail="Admin role required for GitOps operations"
-        )
+        raise HTTPException(status_code=403, detail="Admin role required for GitOps operations")
     return user
 
 
@@ -66,30 +97,32 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 # GitOps Sync Endpoints
 # ============================================================================
 
+
 @router.post("/sync", response_model=SyncResponse)
 async def trigger_full_sync(
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
-    Trigger a full sync of all MCP servers from GitLab.
+    Trigger a full sync of all MCP servers from git provider.
 
     This will:
-    1. Read all MCP server definitions from GitLab
+    1. Read all MCP server definitions from git
     2. Create/update servers in the database
-    3. Mark servers not in GitLab as orphans
+    3. Mark servers not in git as orphans
 
     Requires: cpi-admin role
     """
     logger.info(f"User {user.username} triggered full MCP GitOps sync")
 
     try:
-        # Ensure GitLab connection
-        if not git_service._project:
-            await git_service.connect()
+        # Ensure git provider connection
+        if not git._project:  # TODO(CAB-1889): abstract _project access
+            await git.connect()
 
         # Run sync
-        sync_service = MCPSyncService(git_service, db)
+        sync_service = MCPSyncService(git, db)
         result = await sync_service.sync_all_servers()
 
         return SyncResponse(
@@ -112,6 +145,7 @@ async def trigger_tenant_sync(
     tenant_id: str,
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger sync of all MCP servers for a specific tenant.
@@ -123,10 +157,10 @@ async def trigger_tenant_sync(
     logger.info(f"User {user.username} triggered MCP sync for tenant {tenant_id}")
 
     try:
-        if not git_service._project:
-            await git_service.connect()
+        if not git._project:  # TODO(CAB-1889): abstract _project access
+            await git.connect()
 
-        sync_service = MCPSyncService(git_service, db)
+        sync_service = MCPSyncService(git, db)
         result = await sync_service.sync_tenant_servers(tenant_id)
 
         return SyncResponse(
@@ -150,6 +184,7 @@ async def trigger_server_sync(
     server_name: str,
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Trigger sync of a specific MCP server.
@@ -159,10 +194,10 @@ async def trigger_server_sync(
     logger.info(f"User {user.username} triggered sync for MCP server {server_name}")
 
     try:
-        if not git_service._project:
-            await git_service.connect()
+        if not git._project:  # TODO(CAB-1889): abstract _project access
+            await git.connect()
 
-        sync_service = MCPSyncService(git_service, db)
+        sync_service = MCPSyncService(git, db)
         server = await sync_service.sync_server(tenant_id, server_name)
 
         if server:
@@ -175,7 +210,7 @@ async def trigger_server_sync(
         else:
             return SyncResponse(
                 success=False,
-                message=f"Server {server_name} not found in GitLab",
+                message=f"Server {server_name} not found in git",
                 errors=[f"Server {server_name} not found"],
             )
 
@@ -188,6 +223,7 @@ async def trigger_server_sync(
 async def get_sync_status(
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
     Get current GitOps sync status.
@@ -201,7 +237,7 @@ async def get_sync_status(
     Requires: cpi-admin role
     """
     try:
-        sync_service = MCPSyncService(git_service, db)
+        sync_service = MCPSyncService(git, db)
         status = await sync_service.get_sync_status()
 
         return SyncStatusResponse(
@@ -217,60 +253,63 @@ async def get_sync_status(
 
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {e!s}")
+        raise HTTPException(status_code=500, detail="Failed to get sync status") from e
 
 
 # ============================================================================
-# GitLab Status
+# Git Provider Status
 # ============================================================================
 
-@router.get("/gitlab/health")
-async def get_gitlab_health(
+
+@router.get("/git/health", response_model=GitHealthResponse)
+async def get_git_health(
     user: User = Depends(require_admin),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
-    Check GitLab connection health.
+    Check git provider connection health.
 
     Requires: cpi-admin role
     """
     try:
-        if not git_service._project:
-            await git_service.connect()
+        if not git._project:  # TODO(CAB-1889): abstract _project access
+            await git.connect()
 
         # Try to list root directory
-        git_service._project.repository_tree(ref="main", per_page=1)
+        git._project.repository_tree(ref="main", per_page=1)  # TODO(CAB-1889): abstract _project access
 
         return {
             "status": "healthy",
-            "project": git_service._project.name,
-            "project_id": git_service._project.id,
+            "project": git._project.name,  # TODO(CAB-1889): abstract _project access
+            "project_id": git._project.id,  # TODO(CAB-1889): abstract _project access
             "default_branch": "main",
         }
 
     except Exception:
-        logger.exception("GitLab health check failed")
+        logger.exception("Git provider health check failed")
         return {
             "status": "unhealthy",
-            "error": "GitLab connection failed. Check server logs for details.",
+            "error": "Git provider connection failed. Check server logs for details.",
         }
 
 
-@router.get("/gitlab/servers")
-async def list_gitlab_servers(
+@router.get("/git/servers", response_model=GitServersResponse)
+async def list_git_servers(
     user: User = Depends(require_admin),
+    git: GitProvider = Depends(get_git_provider),
 ):
     """
-    List all MCP servers defined in GitLab (before sync to DB).
+    List all MCP servers defined in git provider (before sync to DB).
 
-    Useful for debugging and verifying GitLab content.
+    Useful for debugging and verifying git content.
 
     Requires: cpi-admin role
     """
     try:
-        if not git_service._project:
-            await git_service.connect()
+        if not git._project:  # TODO(CAB-1889): abstract _project access
+            await git.connect()
 
-        servers = await git_service.list_all_mcp_servers()
+        servers = await git.list_all_mcp_servers()  # TODO(CAB-1889): add list_all_mcp_servers to GitProvider ABC
 
         return {
             "total": len(servers),
@@ -289,5 +328,5 @@ async def list_gitlab_servers(
         }
 
     except Exception as e:
-        logger.error(f"Failed to list GitLab servers: {e}")
+        logger.error(f"Failed to list git servers: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to list servers: {e!s}")

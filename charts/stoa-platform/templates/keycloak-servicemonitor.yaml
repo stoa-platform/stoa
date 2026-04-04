@@ -1,0 +1,26 @@
+{{- if (default false .Values.keycloak.metrics.serviceMonitor.enabled) }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: keycloak
+  namespace: {{ .Values.keycloak.namespace | default "stoa-system" }}
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: authentication
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.keycloak.metrics.serviceMonitor.interval | default "15s" }}
+      scrapeTimeout: {{ .Values.keycloak.metrics.serviceMonitor.scrapeTimeout | default "10s" }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.keycloak.namespace | default "stoa-system" }}
+{{- end }}

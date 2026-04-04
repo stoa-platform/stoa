@@ -77,6 +77,12 @@ const { mockGateways } = vi.hoisted(() => ({
   ],
 }));
 
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 vi.mock('../../contexts/EnvironmentContext', () => ({
@@ -152,6 +158,7 @@ function renderGatewayList() {
 describe('GatewayList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockClear();
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
@@ -225,40 +232,18 @@ describe('GatewayList', () => {
     expect(statusDots.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('opens detail panel when clicking a gateway row', async () => {
+  it('navigates to detail page when clicking a gateway row (CAB-1940)', async () => {
     renderGatewayList();
     const gatewayName = await screen.findByText('STOA Edge MCP Gateway');
     fireEvent.click(gatewayName);
-    expect(screen.getByTestId('gateway-detail-panel')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/gateways/gw-1');
   });
 
-  it('shows heartbeat metrics in detail panel', async () => {
-    renderGatewayList();
-    const gatewayName = await screen.findByText('STOA Edge MCP Gateway');
-    fireEvent.click(gatewayName);
-    // New detail panel has "Heartbeat" section with MetricCards
-    expect(screen.getByText('Heartbeat')).toBeInTheDocument();
-    expect(screen.getByText('1h 0m')).toBeInTheDocument(); // uptime_seconds: 3600
-    expect(screen.getByText('10')).toBeInTheDocument(); // routes_count
-    expect(screen.getByText('2.0%')).toBeInTheDocument(); // error_rate: 0.02
-  });
-
-  it('closes detail panel when clicking close button', async () => {
-    renderGatewayList();
-    const gatewayName = await screen.findByText('STOA Edge MCP Gateway');
-    fireEvent.click(gatewayName);
-    expect(screen.getByTestId('gateway-detail-panel')).toBeInTheDocument();
-    const closeButton = screen.getByLabelText('Close');
-    fireEvent.click(closeButton);
-    expect(screen.queryByTestId('gateway-detail-panel')).not.toBeInTheDocument();
-  });
-
-  it('shows warn styling for high error rate in detail panel', async () => {
+  it('navigates to correct gateway on different row click (CAB-1940)', async () => {
     renderGatewayList();
     const gatewayName = await screen.findByText('webMethods Production');
     fireEvent.click(gatewayName);
-    // gw-2 has error_rate: 0.08 (> 0.05) -> error rate card has warn styling
-    expect(screen.getByText('8.0%')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/gateways/gw-2');
   });
 
   it('renders GitOps badge for argocd-sourced gateways', async () => {
@@ -268,21 +253,11 @@ describe('GatewayList', () => {
     expect(screen.getAllByText('GitOps').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows ArgoCD sync info in detail panel', async () => {
+  it('navigates to argocd gateway detail page (CAB-1940)', async () => {
     renderGatewayList();
     const gatewayName = await screen.findByText('Kong Dataplane');
     fireEvent.click(gatewayName);
-    expect(screen.getByText('ArgoCD Sync')).toBeInTheDocument();
-    expect(screen.getByText('Healthy')).toBeInTheDocument();
-    expect(screen.getByText('Synced')).toBeInTheDocument();
-    expect(screen.getByText('abc12345')).toBeInTheDocument();
-  });
-
-  it('shows source label in detail panel for argocd gateway', async () => {
-    renderGatewayList();
-    const gatewayName = await screen.findByText('Kong Dataplane');
-    fireEvent.click(gatewayName);
-    expect(screen.getByText('ArgoCD (GitOps)')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/gateways/gw-3');
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

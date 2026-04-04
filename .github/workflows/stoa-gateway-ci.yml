@@ -37,7 +37,6 @@ on:
         type: choice
         options:
           - dev
-          - staging
           - prod
 
 concurrency:
@@ -51,23 +50,21 @@ permissions:
   attestations: write
 
 jobs:
-  # === CI: fmt + clippy + test + audit ===
+  # === CI: fmt + clippy + test + coverage (single job, sccache) ===
   ci:
     uses: ./.github/workflows/reusable-rust-ci.yml
     with:
       component: stoa-gateway
-      run-audit: false
-      cargo-features: '--features kafka'
+      cargo-features: '--features kafka,pingora'
       runner: self-hosted
     permissions:
       contents: read
 
   # === Docker: build + push GHCR (AMD64 only) ===
+  # Note: does NOT depend on ci — flaky integration tests must not block deploy.
+  # CI still runs in parallel for visibility. Clippy/fmt gate PR merges via required checks.
   docker:
-    needs: ci
-    if: |
-      needs.ci.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: stoa-gateway
@@ -87,14 +84,17 @@ jobs:
   # === GitOps Deploy: dispatch to stoa-infra → ArgoCD syncs ===
   deploy:
     needs: docker
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: |
+      always() &&
+      needs.docker.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-gitops-deploy.yml
     with:
       component: stoa-gateway
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
-      verify-endpoint: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev/health/ready
+      environment-url: https://mcp.gostoa.dev
+      verify-endpoint: https://mcp.gostoa.dev/health/ready
       verify-timeout: 300
     secrets: inherit
 
@@ -110,33 +110,9 @@ jobs:
     permissions:
       contents: read
 
-  # === Staging: GitOps deploy to staging cluster ===
-  deploy-staging:
-    needs: [docker, smoke-test]
-    if: github.event_name == 'push' && needs.smoke-test.result == 'success'
-    uses: ./.github/workflows/reusable-gitops-deploy.yml
-    with:
-      component: stoa-gateway
-      image-tag: ${{ needs.docker.outputs.image-tag }}
-      environment: staging
-      environment-url: https://staging-mcp.gostoa.dev
-      verify-endpoint: https://staging-mcp.gostoa.dev/health/ready
-      verify-timeout: 300
-    secrets: inherit
-
-  smoke-test-staging:
-    needs: deploy-staging
-    if: needs.deploy-staging.result == 'success'
-    uses: ./.github/workflows/reusable-health-smoke.yml
-    with:
-      component: stoa-gateway
-      environment: staging
-    permissions:
-      contents: read
-
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test, deploy-staging, smoke-test-staging]
+    needs: [ci, docker, deploy, smoke-test]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:

@@ -6,6 +6,7 @@
 //! - Credit card numbers (Visa, MC, Amex, Discover)
 //! - US Social Security Numbers
 //! - IPv4 addresses
+//! - IBAN numbers (international bank account)
 //!
 //! Allowlists URLs and UUIDs to reduce false positives.
 
@@ -50,6 +51,10 @@ static IPV4_PATTERN: Lazy<Regex> = Lazy::new(|| {
     .expect("IPv4 regex")
 });
 
+static IBAN_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\b[A-Z]{2}\d{2}[A-Z0-9]{4}\d{7}[A-Z0-9]{0,16}\b").expect("IBAN regex")
+});
+
 pub struct PiiScanner;
 
 impl PiiScanner {
@@ -76,6 +81,16 @@ impl PiiScanner {
         }
     }
 
+    /// Redact PII from a plain text string.
+    ///
+    /// Public wrapper for the internal redact_string logic.
+    /// Returns (pii_found, redacted_string).
+    pub fn redact_text(s: &str) -> (bool, String) {
+        let mut found = false;
+        let result = Self::redact_string(s, &mut found);
+        (found, result)
+    }
+
     fn redact_string(s: &str, found: &mut bool) -> String {
         // Strip allowlisted patterns before scanning to avoid false positives
         let sanitized = URL_PATTERN.replace_all(s, "___URL___");
@@ -86,7 +101,8 @@ impl PiiScanner {
             || PHONE_PATTERN.is_match(&sanitized)
             || CC_PATTERN.is_match(&sanitized)
             || SSN_PATTERN.is_match(&sanitized)
-            || IPV4_PATTERN.is_match(&sanitized);
+            || IPV4_PATTERN.is_match(&sanitized)
+            || IBAN_PATTERN.is_match(&sanitized);
 
         if !has_pii {
             return s.to_string();
@@ -101,6 +117,7 @@ impl PiiScanner {
         result = CC_PATTERN.replace_all(&result, REDACTED).to_string();
         result = SSN_PATTERN.replace_all(&result, REDACTED).to_string();
         result = IPV4_PATTERN.replace_all(&result, REDACTED).to_string();
+        result = IBAN_PATTERN.replace_all(&result, REDACTED).to_string();
         result
     }
 }
@@ -200,6 +217,14 @@ mod tests {
         assert_eq!(items[0], "hello");
         assert_eq!(items[1], REDACTED);
         assert_eq!(items[2], "world");
+    }
+
+    #[test]
+    fn test_iban_detected() {
+        let val = json!({"bank": "wire to DE89370400440532013000"});
+        let (found, redacted) = PiiScanner::scan(&val);
+        assert!(found);
+        assert!(redacted["bank"].as_str().unwrap().contains(REDACTED));
     }
 
     #[test]

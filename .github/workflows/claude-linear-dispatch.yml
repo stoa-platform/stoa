@@ -20,9 +20,147 @@ permissions:
   actions: read
 
 jobs:
+  # ----- Stage 0: Context Pack Generation -----
+  context-pack:
+    if: |
+      vars.DISABLE_L3_LINEAR != 'true' &&
+      vars.DISABLE_CONTEXT_COMPILER != 'true' &&
+      github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      impact_score: ${{ steps.build.outputs.impact_score }}
+      impact_level: ${{ steps.build.outputs.impact_level }}
+      context_pack_path: ${{ steps.build.outputs.pack_path }}
+      should_block: ${{ steps.build.outputs.should_block }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unlock git-crypt
+        run: |
+          sudo apt-get install -y git-crypt
+          echo "${{ secrets.GIT_CRYPT_KEY }}" | base64 -d > /tmp/git-crypt.key
+          git-crypt unlock /tmp/git-crypt.key
+          rm /tmp/git-crypt.key
+
+      - name: Extract component from ticket
+        id: ticket
+        run: |
+          COMPONENT="${{ github.event.client_payload.component }}"
+          if [ -z "$COMPONENT" ]; then
+            # Fallback: extract [scope] from title
+            COMPONENT=$(echo "${{ github.event.client_payload.ticket_title }}" | grep -oP '\[(\w[\w-]*)\]' | tr -d '[]' | head -1 || true)
+          fi
+          if [ -z "$COMPONENT" ]; then
+            # Fallback: extract type(scope) from title
+            COMPONENT=$(echo "${{ github.event.client_payload.ticket_title }}" | grep -oP '\(\K[^)]+' | head -1 || true)
+          fi
+          INTENT="${{ github.event.client_payload.ticket_title }}"
+          echo "component=${COMPONENT:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "intent=${INTENT}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate context pack
+        id: build
+        run: |
+          # Graceful degradation if DB or scripts missing
+          if [ ! -f docs/stoa-impact.db ] || [ ! -f docs/scripts/build-context.sh ]; then
+            echo "::warning::Context Compiler DB or script not found — skipping"
+            echo "impact_score=0" >> "$GITHUB_OUTPUT"
+            echo "impact_level=LOW" >> "$GITHUB_OUTPUT"
+            echo "pack_path=" >> "$GITHUB_OUTPUT"
+            echo "should_block=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          chmod +x docs/scripts/build-context.sh
+          TICKET_ID="${{ github.event.client_payload.ticket_id }}"
+          COMPONENT="${{ steps.ticket.outputs.component }}"
+          INTENT="${{ steps.ticket.outputs.intent }}"
+
+          # Build context pack (use --ticket if available, else --component)
+          PACK_OUTPUT=""
+          if [ -n "$TICKET_ID" ] && [ "$COMPONENT" != "unknown" ]; then
+            PACK_OUTPUT=$(docs/scripts/build-context.sh \
+              --ticket "$TICKET_ID" \
+              --component "$COMPONENT" \
+              --intent "$INTENT" 2>&1) || true
+          elif [ "$COMPONENT" != "unknown" ]; then
+            PACK_OUTPUT=$(docs/scripts/build-context.sh \
+              --component "$COMPONENT" \
+              --intent "$INTENT" 2>&1) || true
+          else
+            echo "::warning::Could not determine component — skipping context pack"
+            echo "impact_score=0" >> "$GITHUB_OUTPUT"
+            echo "impact_level=LOW" >> "$GITHUB_OUTPUT"
+            echo "pack_path=" >> "$GITHUB_OUTPUT"
+            echo "should_block=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extract pack path from script output
+          PACK_PATH=$(echo "$PACK_OUTPUT" | grep "Context pack generated:" | sed 's/.*generated: //' || true)
+          if [ -z "$PACK_PATH" ] || [ ! -f "$PACK_PATH" ]; then
+            echo "::warning::Context pack generation failed"
+            echo "$PACK_OUTPUT"
+            echo "impact_score=0" >> "$GITHUB_OUTPUT"
+            echo "impact_level=LOW" >> "$GITHUB_OUTPUT"
+            echo "pack_path=" >> "$GITHUB_OUTPUT"
+            echo "should_block=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extract impact score and level
+          SCORE=$(grep -oP 'Impact Score: \K\d+' "$PACK_PATH" || echo "0")
+          LEVEL=$(grep -oP 'Impact Score: \d+ \(\K[^)]+' "$PACK_PATH" || echo "LOW")
+          SHOULD_BLOCK="false"
+          if [ "$SCORE" -ge 31 ]; then
+            SHOULD_BLOCK="true"
+          fi
+
+          echo "impact_score=${SCORE}" >> "$GITHUB_OUTPUT"
+          echo "impact_level=${LEVEL}" >> "$GITHUB_OUTPUT"
+          echo "pack_path=${PACK_PATH}" >> "$GITHUB_OUTPUT"
+          echo "should_block=${SHOULD_BLOCK}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Context pack generated — Impact Score: ${SCORE} (${LEVEL})"
+
+      - name: Upload context pack
+        if: steps.build.outputs.pack_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-pack
+          path: ${{ steps.build.outputs.pack_path }}
+          retention-days: 7
+
+      - name: Alert on CRITICAL impact
+        if: steps.build.outputs.should_block == 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          TICKET_ID="${{ github.event.client_payload.ticket_id }}"
+          SCORE="${{ steps.build.outputs.impact_score }}"
+          echo "::warning::Impact Score CRITICAL (${SCORE}) for ${TICKET_ID}. Review context pack before proceeding."
+
+          # Post warning comment on Linear ticket
+          if [ -n "$LINEAR_API_KEY" ] && [ -n "$TICKET_ID" ]; then
+            ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+              | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+            if [ -n "$ISSUE_ID" ]; then
+              curl -s -X POST "https://api.linear.app/graphql" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"⚠️ **CRITICAL Impact Score: ${SCORE}** — Context pack review recommended before implementation.\\\\n[View workflow](https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }})\\\" }) { success } }\"}" \
+                > /dev/null 2>&1 || true
+            fi
+          fi
+
   # ----- Stage 1: Council Gate (triggered by n8n dispatch) -----
   council:
+    needs: context-pack
     if: |
+      always() &&
       vars.DISABLE_L3_LINEAR != 'true' &&
       github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
@@ -77,6 +215,7 @@ jobs:
             Description: ${{ github.event.client_payload.ticket_description }}
             Priority: ${{ github.event.client_payload.ticket_priority }}
             Estimate: ${{ github.event.client_payload.ticket_estimate }} pts
+            Impact Score: ${{ needs.context-pack.outputs.impact_score || '0' }} (${{ needs.context-pack.outputs.impact_level || 'unknown' }})
 
             Run a CONCISE 4-persona Council validation (2-3 sentences per persona, score /10):
             Chucky (risk), OSS Killer (value), Archi 50x50 (architecture), Better Call Saul (legal).

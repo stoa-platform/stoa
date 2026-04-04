@@ -14,7 +14,10 @@ metadata:
   namespace: stoa-system
   labels:
     app: postgres-backup
-    component: backup
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: stoa-platform
+    stoa.dev/environment: prod
+    stoa.dev/managed-by: manual
 spec:
   # Run daily at 02:00 UTC
   schedule: "0 2 * * *"

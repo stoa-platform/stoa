@@ -129,7 +129,7 @@ class PrometheusClient:
     ) -> int:
         """Get total request count for given filters."""
         labels = self._build_labels(subscription_id, user_id, tenant_id)
-        query = f"sum(increase(mcp_requests_total{{{labels}}}[{time_range}])) or vector(0)"
+        query = f"sum(increase(stoa_mcp_tools_calls_total{{{labels}}}[{time_range}])) or vector(0)"
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -144,7 +144,7 @@ class PrometheusClient:
         labels = self._build_labels(subscription_id, user_id, tenant_id)
         if labels:
             labels += ","
-        query = f'sum(increase(mcp_requests_total{{{labels}status="success"}}[{time_range}])) or vector(0)'
+        query = f'sum(increase(stoa_mcp_tools_calls_total{{{labels}status="success"}}[{time_range}])) or vector(0)'
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -159,7 +159,7 @@ class PrometheusClient:
         labels = self._build_labels(subscription_id, user_id, tenant_id)
         if labels:
             labels += ","
-        query = f'sum(increase(mcp_requests_total{{{labels}status=~"error|timeout"}}[{time_range}])) or vector(0)'
+        query = f'sum(increase(stoa_mcp_tools_calls_total{{{labels}status=~"error|timeout"}}[{time_range}])) or vector(0)'
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -194,7 +194,7 @@ class PrometheusClient:
         query = f"""
             topk({limit},
                 sum by (tool_id, tool_name) (
-                    increase(mcp_requests_total{{user_id="{user_id}",tenant_id="{tenant_id}"}}[{time_range}])
+                    increase(stoa_mcp_tools_calls_total{{tenant=~"{tenant_id}|default"}}[{time_range}])
                 )
             )
         """.strip().replace("\n", " ").replace("  ", " ")
@@ -205,7 +205,7 @@ class PrometheusClient:
         """Get daily call counts for the last N days."""
         end = datetime.utcnow()
         start = end - timedelta(days=days)
-        query = f'sum(increase(mcp_requests_total{{user_id="{user_id}",tenant_id="{tenant_id}"}}[1d]))'
+        query = f'sum(increase(stoa_mcp_tools_calls_total{{tenant=~"{tenant_id}|default"}}[1d]))'
 
         result = await self.query_range(query, start, end, step="1d")
         return self._extract_daily_stats(result)
@@ -215,9 +215,9 @@ class PrometheusClient:
         labels = f'tool_id="{tool_id}",user_id="{user_id}",tenant_id="{tenant_id}"'
         query = f"""
             (
-                sum(increase(mcp_requests_total{{{labels},status="success"}}[{time_range}]))
+                sum(increase(stoa_mcp_tools_calls_total{{{labels},status="success"}}[{time_range}]))
                 /
-                sum(increase(mcp_requests_total{{{labels}}}[{time_range}]))
+                sum(increase(stoa_mcp_tools_calls_total{{{labels}}}[{time_range}]))
             ) * 100
         """.strip().replace("\n", " ").replace("  ", " ")
         result = await self.query(query)
@@ -362,14 +362,17 @@ class PrometheusClient:
     def _build_labels(
         self, subscription_id: str | None = None, user_id: str | None = None, tenant_id: str | None = None
     ) -> str:
-        """Build PromQL label selector."""
+        """Build PromQL label selector.
+
+        Maps API field names to gateway metric labels:
+        - tenant_id -> tenant (gateway uses 'tenant' label, with fallback to 'default')
+        - user_id not emitted by gateway, omitted from PromQL
+        """
         labels = []
         if subscription_id:
             labels.append(f'subscription_id="{subscription_id}"')
-        if user_id:
-            labels.append(f'user_id="{user_id}"')
         if tenant_id:
-            labels.append(f'tenant_id="{tenant_id}"')
+            labels.append(f'tenant=~"{tenant_id}|default"')
         return ",".join(labels)
 
     def _extract_scalar(self, result: dict | None, default: int = 0) -> int:

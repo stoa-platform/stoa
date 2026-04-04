@@ -124,6 +124,11 @@ class Settings(BaseSettings):
     LOKI_TIMEOUT_SECONDS: int = 30
     LOKI_ENABLED: bool = True
 
+    # Tempo Internal API (CAB-1984) - for distributed trace queries
+    TEMPO_INTERNAL_URL: str = "http://tempo:3200"
+    TEMPO_TIMEOUT_SECONDS: int = 30
+    TEMPO_ENABLED: bool = True
+
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes

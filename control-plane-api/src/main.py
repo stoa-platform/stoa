@@ -122,6 +122,7 @@ from .routers.oauth_clients import router as oauth_clients_router
 from .routers.portal import internal_router as portal_internal_router
 from .routers.telemetry import router as telemetry_router
 from .routers.tenant_mcp_servers import router as tenant_mcp_servers_router
+from .routers.tenant_tool_permissions import router as tenant_tool_permissions_router
 from .services import (
     argocd_service,
     git_service,
@@ -704,6 +705,9 @@ app.include_router(discovery.router)
 
 # Tenant-scoped MCP Servers — developer self-service (CAB-1319)
 app.include_router(tenant_mcp_servers_router)
+
+# Tenant Tool Permissions — fine-grained tool access control (CAB-1980)
+app.include_router(tenant_tool_permissions_router)
 
 # Portal and GitOps routers
 app.include_router(portal.router)

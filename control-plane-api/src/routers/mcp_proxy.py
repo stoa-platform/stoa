@@ -20,9 +20,11 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
 from ..config import settings
+from ..database import get_db
 
 # Security scheme for extracting Bearer token
 security = HTTPBearer()
@@ -311,12 +313,30 @@ async def invoke_tool(
     body: ToolInvokeRequest,
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Invoke a tool with the provided arguments.
 
     Proxies to stoa-gateway with user context.
+    Checks tenant tool permissions before invocation (CAB-1980).
     """
+    # Enforce tenant tool permissions
+    from .tenant_tool_permissions import check_tool_allowed
+
+    tenant_id = user.tenant_id or "default"
+    if not await check_tool_allowed(tenant_id, tool_name, db):
+        logger.warning(
+            "Tool invocation denied: tenant=%s tool=%s user=%s",
+            tenant_id,
+            tool_name,
+            user.email,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=f"Tool '{tool_name}' is not allowed for this tenant",
+        )
+
     result = await proxy_to_mcp(
         "POST",
         f"/mcp/v1/tools/{tool_name}/invoke",

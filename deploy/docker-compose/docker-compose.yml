@@ -111,7 +111,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.3
     container_name: stoa-keycloak
-    command: start --import-realm
+    command: start --import-realm --spi-theme-static-max-age=-1 --spi-theme-cache-themes=false
     ports:
       - "${PORT_KEYCLOAK:-8080}:8080"
     environment:
@@ -199,6 +199,10 @@ services:
       KEYCLOAK_REALM: stoa
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Observability (Prometheus + Loki for Usage Dashboard)
+      PROMETHEUS_INTERNAL_URL: http://prometheus:9090
+      LOKI_INTERNAL_URL: http://loki:3100
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
       # Logging
@@ -489,6 +493,7 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--web.enable-lifecycle"
+      - "--web.enable-remote-write-receiver"
       - "--storage.tsdb.retention.time=7d"
     networks:
       - stoa-network
@@ -497,6 +502,36 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Tempo (Distributed Tracing) — CAB-1975
+  # Receives OTLP spans from stoa-gateway, generates service graph metrics
+  # for Call Flow Console via metrics_generator → Prometheus remote write.
+  # ==========================================================================
+  tempo:
+    image: grafana/tempo:2.3.1
+    container_name: stoa-tempo
+    ports:
+      - "${PORT_TEMPO:-3200}:3200"    # Tempo API
+      - "${PORT_OTLP_GRPC:-4317}:4317"  # OTLP gRPC receiver
+      - "${PORT_OTLP_HTTP:-4318}:4318"  # OTLP HTTP receiver
+    volumes:
+      - ./config/tempo/tempo-config.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    command:
+      - "-config.file=/etc/tempo/tempo.yml"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   # ==========================================================================
@@ -767,6 +802,7 @@ volumes:
   postgres-data:
   redpanda-data:
   prometheus-data:
+  tempo-data:
   grafana-data:
   loki-data:
   opensearch-data:

@@ -52,6 +52,9 @@ paths = [
   '''control-plane-ui/src/components/__tests__/CertificateGenerationWizard\.test\.tsx''',
   # Gateway secrets detection plugin — inline test fixtures with fake secrets (CAB-1936)
   '''stoa-gateway/src/plugin/builtin/secrets_detection\.rs''',
+  # Vault local dev init script — env var defaults for quickstart (not real secrets)
+  '''deploy/local/vault/init-vault-local\.sh''',
+  '''deploy/local/vault/vault-init-job\.yaml''',
 ]
 
 regexes = [

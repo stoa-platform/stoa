@@ -36,10 +36,19 @@ const MODE_LABELS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
-  online: { color: 'text-green-600 bg-green-50', icon: CheckCircle2 },
-  offline: { color: 'text-red-600 bg-red-50', icon: XCircle },
-  degraded: { color: 'text-amber-600 bg-amber-50', icon: AlertTriangle },
-  maintenance: { color: 'text-blue-600 bg-blue-50', icon: Clock },
+  online: {
+    color: 'text-green-600 bg-green-50 dark:bg-green-950 dark:text-green-400',
+    icon: CheckCircle2,
+  },
+  offline: { color: 'text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-400', icon: XCircle },
+  degraded: {
+    color: 'text-amber-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-400',
+    icon: AlertTriangle,
+  },
+  maintenance: {
+    color: 'text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400',
+    icon: Clock,
+  },
 };
 
 function formatUptime(seconds: number): string {
@@ -100,13 +109,15 @@ export function GatewayDetail() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate('/gateways')}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
           <ArrowLeft className="h-5 w-5 text-gray-500" />
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">{gateway.display_name}</h1>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {gateway.display_name}
+            </h1>
             <span
               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusCfg.color}`}
             >
@@ -114,25 +125,25 @@ export function GatewayDetail() {
               {gateway.status}
             </span>
             {gateway.mode && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
                 {MODE_LABELS[gateway.mode] || gateway.mode}
               </span>
             )}
             {gateway.source === 'argocd' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
                 <GitBranch className="h-3 w-3" />
                 GitOps
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-500 font-mono mt-1">{gateway.name}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-mono mt-1">{gateway.name}</p>
         </div>
         {gateway.public_url && (
           <a
             href={gateway.public_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             <Globe className="h-4 w-4" />
             Open Gateway
@@ -142,9 +153,9 @@ export function GatewayDetail() {
       </div>
 
       {/* Configuration */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Server className="h-5 w-5 text-gray-400" />
+      <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+          <Server className="h-5 w-5 text-gray-400 dark:text-gray-500" />
           Configuration
         </h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
@@ -163,13 +174,15 @@ export function GatewayDetail() {
           {gateway.tenant_id && <ConfigItem label="Tenant" value={gateway.tenant_id} />}
         </dl>
         {gateway.capabilities.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <dt className="text-sm font-medium text-gray-500 mb-2">Capabilities</dt>
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Capabilities
+            </dt>
             <div className="flex flex-wrap gap-2">
               {gateway.capabilities.map((cap) => (
                 <span
                   key={cap}
-                  className="px-2 py-1 rounded-md bg-gray-100 text-xs font-medium text-gray-600"
+                  className="px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-300"
                 >
                   {cap}
                 </span>
@@ -180,9 +193,9 @@ export function GatewayDetail() {
       </section>
 
       {/* Health & Metrics */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Activity className="h-5 w-5 text-gray-400" />
+      <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+          <Activity className="h-5 w-5 text-gray-400 dark:text-gray-500" />
           Health &amp; Metrics
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -202,9 +215,9 @@ export function GatewayDetail() {
 
       {/* APIs Deployed */}
       {deployments.length > 0 && (
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-gray-400" />
+        <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-gray-400 dark:text-gray-500" />
             APIs Deployed
             <span className="ml-auto text-sm font-normal text-gray-400">
               {deployments.length} API{deployments.length !== 1 ? 's' : ''}
@@ -213,7 +226,7 @@ export function GatewayDetail() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-500 border-b border-gray-100">
+                <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                   <th className="pb-2 font-medium">API Name</th>
                   <th className="pb-2 font-medium">Version</th>
                   <th className="pb-2 font-medium">Sync Status</th>
@@ -222,15 +235,22 @@ export function GatewayDetail() {
               </thead>
               <tbody>
                 {deployments.map((d: Record<string, unknown>) => (
-                  <tr key={d.id as string} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2.5 font-medium text-gray-900">
+                  <tr
+                    key={d.id as string}
+                    className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <td className="py-2.5 font-medium text-gray-900 dark:text-gray-100">
                       {(d.api_name as string) || (d.api_catalog_id as string)}
                     </td>
-                    <td className="py-2.5 text-gray-500">{(d.api_version as string) || '-'}</td>
+                    <td className="py-2.5 text-gray-500 dark:text-gray-400">
+                      {(d.api_version as string) || '-'}
+                    </td>
                     <td className="py-2.5">
                       <SyncBadge status={(d.sync_status as string) || 'pending'} />
                     </td>
-                    <td className="py-2.5 text-gray-500">{d.environment as string}</td>
+                    <td className="py-2.5 text-gray-500 dark:text-gray-400">
+                      {d.environment as string}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -241,32 +261,35 @@ export function GatewayDetail() {
 
       {/* MCP Tools (live from gateway) */}
       {discoveredApis.length > 0 && (
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-gray-400" />
+        <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-gray-400 dark:text-gray-500" />
             MCP Tools
             <span className="ml-auto text-sm font-normal text-gray-400">
               {discoveredApis.length} tool{discoveredApis.length !== 1 ? 's' : ''}
             </span>
           </h2>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
             Live tools from the gateway&apos;s MCP tool registry.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-500 border-b border-gray-100">
+                <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                   <th className="pb-2 font-medium">API Name</th>
                   <th className="pb-2 font-medium">Description</th>
                 </tr>
               </thead>
               <tbody>
                 {discoveredApis.map((api) => (
-                  <tr key={api.name} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2.5 font-medium text-gray-900 font-mono text-xs">
+                  <tr
+                    key={api.name}
+                    className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <td className="py-2.5 font-medium text-gray-900 dark:text-gray-100 font-mono text-xs">
                       {api.name}
                     </td>
-                    <td className="py-2.5 text-gray-500 max-w-md truncate">
+                    <td className="py-2.5 text-gray-500 dark:text-gray-400 max-w-md truncate">
                       {api.description || '-'}
                     </td>
                   </tr>
@@ -279,12 +302,12 @@ export function GatewayDetail() {
 
       {/* Empty state: no deployments and no discovered APIs */}
       {deployments.length === 0 && discoveredApis.length === 0 && (
-        <section className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-gray-400" />
+        <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-gray-400 dark:text-gray-500" />
             APIs
           </h2>
-          <p className="text-sm text-gray-400 text-center py-8">
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
             No APIs deployed and no MCP tools registered on this gateway
           </p>
         </section>
@@ -296,14 +319,14 @@ export function GatewayDetail() {
 function ConfigItem({ label, value, isLink }: { label: string; value: string; isLink?: boolean }) {
   return (
     <div>
-      <dt className="text-sm font-medium text-gray-500">{label}</dt>
-      <dd className="mt-1 text-sm text-gray-900">
+      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</dt>
+      <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100">
         {isLink ? (
           <a
             href={value}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+            className="font-mono text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 inline-flex items-center gap-1"
           >
             {value}
             <ExternalLink className="h-3 w-3" />
@@ -318,9 +341,11 @@ function ConfigItem({ label, value, isLink }: { label: string; value: string; is
 
 function MetricCard({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
-    <div className="rounded-lg border border-gray-100 p-3">
-      <dt className="text-xs font-medium text-gray-500">{label}</dt>
-      <dd className={`mt-1 text-lg font-semibold ${alert ? 'text-red-600' : 'text-gray-900'}`}>
+    <div className="rounded-lg border border-gray-100 dark:border-gray-800 p-3">
+      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</dt>
+      <dd
+        className={`mt-1 text-lg font-semibold ${alert ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}
+      >
         {value}
       </dd>
     </div>

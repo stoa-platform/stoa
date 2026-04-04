@@ -660,6 +660,36 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Vault Agent — Secret Injection Sidecar (VPS simulation)
+  # Renders secrets from K3s Vault into shared volume for CP API / Gateway.
+  # Prerequisites: Vault on K3s + port-forward (setup-vault-local.sh)
+  # ==========================================================================
+  vault-agent:
+    image: hashicorp/vault:1.21.2
+    container_name: stoa-vault-agent
+    profiles: ["vault"]
+    command: ["vault", "agent", "-config=/vault/config/vault-agent.hcl"]
+    environment:
+      VAULT_ADDR: "http://host.docker.internal:8200"
+      VAULT_LOG_LEVEL: info
+    volumes:
+      - ./config/vault-agent/vault-agent.hcl:/vault/config/vault-agent.hcl:ro
+      - ./config/vault-agent/templates:/vault/templates:ro
+      - vault-agent-rendered:/vault/rendered
+      - vault-agent-creds:/vault/creds:ro
+      - vault-agent-token:/vault/token
+    mem_limit: 64m
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "test", "-f", "/vault/token/agent-token"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==========================================================================
   # OpenLDAP - Identity source for gamma org (ADR-026 Federation)
   # ==========================================================================
   openldap:
@@ -732,10 +762,6 @@ networks:
 volumes:
   postgres-data:
   redpanda-data:
-<<<<<<< HEAD
-=======
-  # keycloak-data removed — KC now uses PostgreSQL (CAB-1955)
->>>>>>> origin/main
   prometheus-data:
   grafana-data:
   loki-data:
@@ -744,3 +770,6 @@ volumes:
   alertmanager-data:
   ldap-data:
   ldap-config:
+  vault-agent-rendered:   # Vault Agent rendered secrets (api-secrets.env, gateway-secrets.env)
+  vault-agent-creds:      # AppRole role-id + secret-id (populated by setup script)
+  vault-agent-token:      # Agent auto-auth token sink

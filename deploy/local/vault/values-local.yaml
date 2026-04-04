@@ -1,0 +1,59 @@
+# =============================================================================
+# HashiCorp Vault Helm Chart — Local Dev Configuration
+# =============================================================================
+# Mirrors production patterns (stoa-infra) on local K3s (Docker Desktop).
+# Deploy: helm upgrade --install vault hashicorp/vault -n vault -f values-local.yaml
+#
+# Architecture:
+#   K3s namespace "vault" — single-replica dev server
+#   Accessible from K3s pods:   http://vault.vault.svc.cluster.local:8200
+#   Accessible from Docker:     http://host.docker.internal:8200 (via port-forward)
+#   Accessible via ingress:     http://vault.stoa.local (after ingress update)
+# =============================================================================
+
+global:
+  enabled: true
+
+server:
+  # Dev mode — auto-initialized, auto-unsealed, in-memory storage
+  dev:
+    enabled: true
+    devRootToken: "stoa-dev-root-token"
+
+  standalone:
+    enabled: true
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 250m
+
+  # Dev mode uses in-memory — no persistent storage needed
+  dataStorage:
+    enabled: false
+
+  auditStorage:
+    enabled: false
+
+  extraEnvironmentVars:
+    VAULT_LOG_LEVEL: info
+
+  service:
+    type: ClusterIP
+    port: 8200
+
+# Vault UI — accessible via port-forward or ingress
+ui:
+  enabled: true
+  serviceType: ClusterIP
+
+# Vault Agent Injector — disabled initially, enable for Phase 6
+injector:
+  enabled: false
+
+# CSI provider — not used locally
+csi:
+  enabled: false

@@ -242,5 +242,5 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ---
 
 <p align="center">
-  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Bordeaux, France</em>
+  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Paris, France</em>
 </p>

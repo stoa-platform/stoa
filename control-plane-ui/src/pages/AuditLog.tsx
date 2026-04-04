@@ -39,23 +39,25 @@ type AuditStatus = 'success' | 'failure' | 'warning' | string;
 interface AuditEntry {
   id: string;
   timestamp: string;
-  actor: string;
-  actor_type: 'user' | 'system' | 'service';
+  user_id: string | null;
+  user_email: string | null;
   action: AuditAction;
   resource_type: string;
-  resource_id: string;
-  resource_name: string;
+  resource_id: string | null;
+  resource_name?: string;
   status: AuditStatus;
-  details: string;
-  ip_address?: string;
+  details: Record<string, unknown> | null;
+  client_ip: string | null;
+  user_agent: string | null;
+  request_id: string | null;
   tenant_id: string;
 }
 
 interface AuditFilters {
   action?: string;
   status?: string;
-  date_from?: string;
-  date_to?: string;
+  start_date?: string;
+  end_date?: string;
   search?: string;
 }
 
@@ -98,7 +100,7 @@ function formatTimestamp(ts: string): string {
 }
 
 export function AuditLog() {
-  const { user, isReady } = useAuth();
+  const { user, isReady, hasRole } = useAuth();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -109,6 +111,7 @@ export function AuditLog() {
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  const canExport = hasRole('cpi-admin') || hasRole('tenant-admin');
   const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || 'default';
 
   const mountedRef = useRef(true);
@@ -121,8 +124,8 @@ export function AuditLog() {
       };
       if (filters.action) params.action = filters.action;
       if (filters.status) params.status = filters.status;
-      if (filters.date_from) params.date_from = filters.date_from;
-      if (filters.date_to) params.date_to = filters.date_to;
+      if (filters.start_date) params.date_from = filters.start_date;
+      if (filters.end_date) params.date_to = filters.end_date;
       if (filters.search) params.search = filters.search;
 
       const { data } = await apiService.get<{
@@ -169,8 +172,8 @@ export function AuditLog() {
         params: {
           ...(filters.action && { action: filters.action }),
           ...(filters.status && { status: filters.status }),
-          ...(filters.date_from && { date_from: filters.date_from }),
-          ...(filters.date_to && { date_to: filters.date_to }),
+          ...(filters.start_date && { date_from: filters.start_date }),
+          ...(filters.end_date && { date_to: filters.end_date }),
         },
       });
       const blob = new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], {
@@ -193,7 +196,7 @@ export function AuditLog() {
 
   const successCount = entries.filter((e) => e.status === 'success').length;
   const failureCount = entries.filter((e) => e.status === 'failure').length;
-  const uniqueActors = new Set(entries.map((e) => e.actor)).size;
+  const uniqueActors = new Set(entries.map((e) => e.user_email || e.user_id)).size;
 
   return (
     <div className="space-y-6">
@@ -209,16 +212,18 @@ export function AuditLog() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <button
-              onClick={() => handleExport('csv')}
-              disabled={exporting}
-              className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </button>
-          </div>
+          {canExport && (
+            <div className="relative">
+              <button
+                onClick={() => handleExport('csv')}
+                disabled={exporting}
+                className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+            </div>
+          )}
           <button
             onClick={loadData}
             className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
@@ -351,7 +356,7 @@ export function AuditLog() {
                 </select>
                 <input
                   type="date"
-                  value={filters.date_from || ''}
+                  value={filters.start_date || ''}
                   onChange={(e) => {
                     setFilters((f) => ({ ...f, date_from: e.target.value || undefined }));
                     setPage(1);
@@ -361,7 +366,7 @@ export function AuditLog() {
                 <span className="text-xs text-neutral-400">to</span>
                 <input
                   type="date"
-                  value={filters.date_to || ''}
+                  value={filters.end_date || ''}
                   onChange={(e) => {
                     setFilters((f) => ({ ...f, date_to: e.target.value || undefined }));
                     setPage(1);
@@ -423,7 +428,7 @@ export function AuditLog() {
                                 <div className="flex items-center gap-2">
                                   <User className="h-3.5 w-3.5 text-neutral-400" />
                                   <span className="text-neutral-900 dark:text-white">
-                                    {entry.actor}
+                                    {entry.user_email || entry.user_id || 'system'}
                                   </span>
                                 </div>
                               </td>
@@ -460,7 +465,9 @@ export function AuditLog() {
                                         Details
                                       </span>
                                       <p className="mt-1 text-neutral-700 dark:text-neutral-300">
-                                        {entry.details || 'No additional details'}
+                                        {entry.details
+                                          ? JSON.stringify(entry.details, null, 2)
+                                          : 'No additional details'}
                                       </p>
                                     </div>
                                     <div className="space-y-2">
@@ -472,24 +479,26 @@ export function AuditLog() {
                                           {entry.resource_id}
                                         </p>
                                       </div>
-                                      {entry.ip_address && (
+                                      {entry.client_ip && (
                                         <div>
                                           <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                                             IP Address
                                           </span>
                                           <p className="mt-1 font-mono text-xs text-neutral-700 dark:text-neutral-300">
-                                            {entry.ip_address}
+                                            {entry.client_ip}
                                           </p>
                                         </div>
                                       )}
-                                      <div>
-                                        <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
-                                          Actor Type
-                                        </span>
-                                        <p className="mt-1 text-neutral-700 dark:text-neutral-300 capitalize">
-                                          {entry.actor_type}
-                                        </p>
-                                      </div>
+                                      {entry.request_id && (
+                                        <div>
+                                          <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+                                            Request ID
+                                          </span>
+                                          <p className="mt-1 font-mono text-xs text-neutral-700 dark:text-neutral-300">
+                                            {entry.request_id}
+                                          </p>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </td>

@@ -108,6 +108,11 @@ class GatewayInstance(Base):
     version = Column(String(50), nullable=True)  # Gateway software version
     tags = Column(JSONB, nullable=False, default=list)
 
+    # Operational control (CAB-1979)
+    enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    visibility = Column(JSONB, nullable=True)
+    # visibility schema: {"tenant_ids": ["acme", "partner-co"]} — null = visible to all
+
     # Source of truth tracking (argocd, self_register, manual)
     source = Column(String(50), nullable=False, default="self_register", server_default="self_register")
 

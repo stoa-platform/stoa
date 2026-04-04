@@ -199,6 +199,11 @@ services:
       KEYCLOAK_REALM: stoa
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
+      PROMETHEUS_INTERNAL_URL: http://prometheus:9090
+      LOKI_INTERNAL_URL: http://loki:3100
+      TEMPO_INTERNAL_URL: http://tempo:3200
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:${PORT_CONSOLE:-3000}
       # Logging
@@ -213,6 +218,8 @@ services:
       GITLAB_URL: ""
       ENABLE_DEPLOYMENT_WORKER: "false"
       ENABLE_SNAPSHOT_CONSUMER: "false"
+      # Gateway registration (ADR-028) — shared key for local dev
+      GATEWAY_API_KEYS: "${GATEWAY_API_KEY:-local-dev-key}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -239,14 +246,15 @@ services:
     build:
       context: ../../
       dockerfile: control-plane-ui/Dockerfile
+      args:
+        VITE_KEYCLOAK_URL: http://localhost:${PORT_KEYCLOAK:-8080}
+        VITE_KEYCLOAK_REALM: stoa
+        VITE_KEYCLOAK_CLIENT_ID: control-plane-ui
+        VITE_API_URL: http://localhost:${PORT_API:-8000}
     image: stoa-console:local
     container_name: stoa-console
     ports:
       - "${PORT_CONSOLE:-3000}:8080"
-    environment:
-      # These are baked at build time, but we expose them for documentation
-      VITE_API_URL: http://localhost:${PORT_API:-8000}
-      VITE_KEYCLOAK_URL: http://localhost:${PORT_KEYCLOAK:-8080}
     depends_on:
       control-plane-api:
         condition: service_healthy
@@ -299,9 +307,10 @@ services:
       STOA_LOG_LEVEL: ${LOG_LEVEL:-info}
       STOA_LOG_FORMAT: json
       STOA_GATEWAY_MODE: edge-mcp
-      STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-true}"
+      STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-false}"
       STOA_INSTANCE_NAME: "stoa-quickstart"
       STOA_ENVIRONMENT: "dev"
+      STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
       # Kafka metering (Redpanda)
       STOA_KAFKA_ENABLED: "true"
       STOA_KAFKA_BROKERS: redpanda:9092

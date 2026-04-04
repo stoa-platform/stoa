@@ -206,6 +206,18 @@ const navigationSections: NavSection[] = [
         permission: 'tenants:read',
       },
       {
+        name: 'nav.security',
+        href: '/gateway-security',
+        icon: Shield,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.guardrails',
+        href: '/gateway-guardrails',
+        icon: Shield,
+        permission: 'tenants:read',
+      },
+      {
         name: 'nav.backendHealth',
         href: '/proxy-owner',
         icon: Activity,

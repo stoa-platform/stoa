@@ -290,7 +290,7 @@ async def export_audit_csv(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     limit: int = Query(default=10000, ge=1, le=50000, description="Max rows"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """
@@ -379,7 +379,7 @@ async def export_audit_json(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     limit: int = Query(default=10000, ge=1, le=50000, description="Max rows"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """
@@ -438,7 +438,7 @@ async def get_security_events(
     severity: str | None = Query(default=None, description="Filter by severity"),
     event_type: str | None = Query(default=None, description="Filter by event type"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum events to return"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
 ) -> SecurityEventsResponse:
     """
     Get security events for a tenant.
@@ -619,7 +619,7 @@ async def erase_user_pii(
 
 @router.get("/global/summary")
 async def get_global_audit_summary(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin"])),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
@@ -628,11 +628,6 @@ async def get_global_audit_summary(
     Returns aggregated audit statistics across all tenants.
     Data source: PostgreSQL (primary) -> demo data fallback.
     """
-    if "cpi-admin" not in user.roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Only cpi-admin can access global audit summary",
-        )
 
     # Try PostgreSQL
     try:

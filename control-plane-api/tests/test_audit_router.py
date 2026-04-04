@@ -14,8 +14,57 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+import pytest
+
+from src.auth.dependencies import User, get_current_user
+from src.database import get_db
+
 OS_SVC_PATH = "src.routers.audit.OpenSearchService"
 DEMO_TENANT = "oasis"
+
+
+@pytest.fixture
+def app_with_viewer(app, mock_db_session):
+    """App with viewer role user who has a valid tenant (oasis)."""
+
+    async def override():
+        return User(
+            id="viewer-user-id",
+            email="viewer@oasis.com",
+            username="viewer",
+            roles=["viewer"],
+            tenant_id=DEMO_TENANT,
+        )
+
+    async def override_db():
+        yield mock_db_session
+
+    app.dependency_overrides[get_current_user] = override
+    app.dependency_overrides[get_db] = override_db
+    yield app
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def app_with_devops(app, mock_db_session):
+    """App with devops role user who has a valid tenant (oasis)."""
+
+    async def override():
+        return User(
+            id="devops-user-id",
+            email="devops@oasis.com",
+            username="devops",
+            roles=["devops"],
+            tenant_id=DEMO_TENANT,
+        )
+
+    async def override_db():
+        yield mock_db_session
+
+    app.dependency_overrides[get_current_user] = override
+    app.dependency_overrides[get_db] = override_db
+    yield app
+    app.dependency_overrides.clear()
 
 
 def _make_os_mock() -> MagicMock:
@@ -215,3 +264,58 @@ class TestGetGlobalAuditSummary:
             resp = client.get("/v1/audit/global/summary")
 
         assert resp.status_code == 403
+
+
+class TestRbacTightening:
+    """RBAC enforcement: viewer/devops with valid tenant get 403 on exports and security events."""
+
+    def test_viewer_can_list_audit_entries(self, app_with_viewer, mock_db_session):
+        """Viewer can still read paginated audit entries (low-risk)."""
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_viewer) as client:
+            resp = client.get(f"/v1/audit/{DEMO_TENANT}")
+        assert resp.status_code == 200
+
+    def test_viewer_403_export_csv(self, app_with_viewer, mock_db_session):
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_viewer) as client:
+            resp = client.get(f"/v1/audit/{DEMO_TENANT}/export/csv")
+        assert resp.status_code == 403
+
+    def test_viewer_403_export_json(self, app_with_viewer, mock_db_session):
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_viewer) as client:
+            resp = client.get(f"/v1/audit/{DEMO_TENANT}/export/json")
+        assert resp.status_code == 403
+
+    def test_viewer_403_security_events(self, app_with_viewer, mock_db_session):
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_viewer) as client:
+            resp = client.get(f"/v1/audit/{DEMO_TENANT}/security")
+        assert resp.status_code == 403
+
+    def test_devops_403_export_csv(self, app_with_devops, mock_db_session):
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_devops) as client:
+            resp = client.get(f"/v1/audit/{DEMO_TENANT}/export/csv")
+        assert resp.status_code == 403
+
+    def test_devops_403_security_events(self, app_with_devops, mock_db_session):
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_devops) as client:
+            resp = client.get(f"/v1/audit/{DEMO_TENANT}/security")
+        assert resp.status_code == 403
+
+    def test_tenant_admin_200_export_csv(self, app_with_tenant_admin, mock_db_session):
+        """tenant-admin should still have export access (tenant acme)."""
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/audit/acme/export/csv")
+        assert resp.status_code == 200
+
+    def test_tenant_admin_200_security_events(self, app_with_tenant_admin, mock_db_session):
+        """tenant-admin should still have security events access (tenant acme)."""
+        mock_os = _make_os_mock()
+        with patch(OS_SVC_PATH, mock_os), TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/audit/acme/security")
+        assert resp.status_code == 200

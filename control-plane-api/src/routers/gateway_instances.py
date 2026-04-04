@@ -58,9 +58,15 @@ async def list_gateways(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
-    """List all registered gateway instances."""
+    """List all registered gateway instances.
+
+    Visibility filtering (CAB-1979): tenant-admins only see gateways where
+    visibility is null (public) or visibility.tenant_ids contains their tenant.
+    cpi-admins see all gateways regardless of visibility.
+    """
     # Only cpi-admin can see deleted gateways
     show_deleted = include_deleted and "cpi-admin" in user.roles
+    is_platform_admin = "cpi-admin" in user.roles
     svc = GatewayInstanceService(db)
     items, total = await svc.list(
         gateway_type=gateway_type,
@@ -70,6 +76,14 @@ async def list_gateways(
         page=page,
         page_size=page_size,
     )
+    # Visibility filtering for non-admin users
+    if not is_platform_admin and user.tenant_id:
+        items = [
+            gw
+            for gw in items
+            if gw.visibility is None or user.tenant_id in (gw.visibility.get("tenant_ids") or [])
+        ]
+        total = len(items)
     return PaginatedGatewayInstances(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -192,7 +206,7 @@ async def update_gateway(
     """Update a gateway instance configuration."""
     svc = GatewayInstanceService(db)
     try:
-        instance = await svc.update(gateway_id, data)
+        instance = await svc.update(gateway_id, data, user_id=user.id)
         await db.commit()
         return instance
     except ValueError as e:

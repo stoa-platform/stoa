@@ -77,8 +77,10 @@ class GatewayInstanceService:
             page_size=page_size,
         )
 
-    async def update(self, instance_id: UUID, data: GatewayInstanceUpdate) -> GatewayInstance:
-        """Update a gateway instance."""
+    async def update(
+        self, instance_id: UUID, data: GatewayInstanceUpdate, *, user_id: str | None = None
+    ) -> GatewayInstance:
+        """Update a gateway instance. Tracks enable/disable changes for audit."""
         instance = await self.repo.get_by_id(instance_id)
         if not instance:
             raise ValueError(f"Gateway instance {instance_id} not found")
@@ -97,8 +99,34 @@ class GatewayInstanceService:
             instance.environment = data.environment
         if data.protected is not None:
             instance.protected = data.protected
+        if data.enabled is not None:
+            old_enabled = instance.enabled
+            instance.enabled = data.enabled
+            if old_enabled != data.enabled:
+                action = "enabled" if data.enabled else "disabled"
+                logger.info(
+                    "Gateway %s %s by %s (was %s)",
+                    instance.name,
+                    action,
+                    user_id or "unknown",
+                    "enabled" if old_enabled else "disabled",
+                )
+        if data.visibility is not None:
+            instance.visibility = data.visibility
 
         return await self.repo.update(instance)
+
+    async def assert_enabled(self, instance_id: UUID) -> GatewayInstance:
+        """Return the gateway if it exists and is enabled, else raise."""
+        instance = await self.repo.get_by_id(instance_id)
+        if not instance:
+            raise ValueError(f"Gateway instance {instance_id} not found")
+        if not instance.enabled:
+            raise PermissionError(
+                f"Gateway '{instance.name}' is disabled. "
+                f"Enable it via PUT /v1/admin/gateways/{instance_id} before deploying."
+            )
+        return instance
 
     async def delete(self, instance_id: UUID, deleted_by: str) -> None:
         """Soft-delete a gateway instance. Rejects if protected."""

@@ -100,6 +100,11 @@ class GatewayDeploymentService:
             gateway = await self.gw_repo.get_by_id(gw_id)
             if not gateway:
                 raise ValueError(f"Gateway instance {gw_id} not found")
+            if not gateway.enabled:
+                raise PermissionError(
+                    f"Gateway '{gateway.name}' is disabled. "
+                    f"Enable it before deploying."
+                )
 
             existing = await self.deploy_repo.get_by_api_and_gateway(api_catalog_id, gw_id)
             if existing:

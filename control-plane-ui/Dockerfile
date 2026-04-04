@@ -106,9 +106,24 @@ ENV API_BACKEND_URL=http://control-plane-api:8000 \
     GRAFANA_BACKEND_URL=http://grafana:3000 \
     PROMETHEUS_BACKEND_URL=http://prometheus:9090
 
+# Runtime SPA config — injected into runtime-config.js at container startup.
+# Override via K8s deployment.yaml or docker-compose env vars.
+# Empty = app falls back to Vite build-time defaults.
+ENV VITE_KEYCLOAK_URL="" \
+    VITE_KEYCLOAK_REALM="" \
+    VITE_KEYCLOAK_CLIENT_ID="" \
+    VITE_API_URL="" \
+    VITE_BASE_DOMAIN="" \
+    VITE_ENVIRONMENT="" \
+    VITE_GATEWAY_URL="" \
+    VITE_MCP_GATEWAY_URL="" \
+    VITE_PORTAL_URL="" \
+    VITE_GRAFANA_URL="" \
+    VITE_ARGOCD_URL=""
+
 # Entrypoint scripts (run in alphabetical order at container startup):
 # 15-extract-dns-resolver.envsh — exports DNS_RESOLVER from /etc/resolv.conf
-# 19-envsubst-custom.sh — runs envsubst with explicit filter (only our 5 vars)
+# 19-envsubst-custom.sh — nginx config + runtime-config.js for SPA
 # The template is in /etc/nginx/custom-templates/ (NOT /etc/nginx/templates/)
 # so the built-in 20-envsubst-on-templates.sh has nothing to process and
 # won't clobber nginx variables like $uri, $host, $http_upgrade, etc.
@@ -118,6 +133,11 @@ COPY control-plane-ui/nginx.conf.template /etc/nginx/custom-templates/default.co
 
 # Copy built app
 COPY --from=builder /app/control-plane-ui/dist /usr/share/nginx/html
+
+# Allow nginx user to write runtime-config.js at startup
+USER root
+RUN chown nginx:nginx /usr/share/nginx/html/runtime-config.js
+USER nginx
 
 # nginx-unprivileged listens on 8080
 EXPOSE 8080

@@ -408,3 +408,104 @@ class TestGatewayInstanceServiceAdditional:
 
             with pytest.raises(ValueError, match="not found"):
                 await svc.health_check(uuid4())
+
+    # ============== CAB-1979: enabled + visibility ==============
+
+    @pytest.mark.asyncio
+    async def test_update_sets_enabled_flag(self):
+        """update() sets enabled field on instance."""
+        db = AsyncMock()
+        gateway = self._make_gateway(enabled=True)
+
+        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gateway)
+            mock_repo.update = AsyncMock(return_value=gateway)
+
+            from src.schemas.gateway import GatewayInstanceUpdate
+            from src.services.gateway_instance_service import GatewayInstanceService
+
+            svc = GatewayInstanceService(db)
+            svc.repo = mock_repo
+
+            data = GatewayInstanceUpdate(enabled=False)
+            await svc.update(gateway.id, data, user_id="admin-1")
+
+            assert gateway.enabled is False
+            mock_repo.update.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_update_sets_visibility(self):
+        """update() sets visibility JSONB on instance."""
+        db = AsyncMock()
+        gateway = self._make_gateway(visibility=None)
+
+        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gateway)
+            mock_repo.update = AsyncMock(return_value=gateway)
+
+            from src.schemas.gateway import GatewayInstanceUpdate
+            from src.services.gateway_instance_service import GatewayInstanceService
+
+            svc = GatewayInstanceService(db)
+            svc.repo = mock_repo
+
+            vis = {"tenant_ids": ["acme"]}
+            data = GatewayInstanceUpdate(visibility=vis)
+            await svc.update(gateway.id, data)
+
+            assert gateway.visibility == vis
+
+    @pytest.mark.asyncio
+    async def test_assert_enabled_passes_for_enabled_gateway(self):
+        """assert_enabled returns instance when enabled=True."""
+        db = AsyncMock()
+        gateway = self._make_gateway(enabled=True)
+
+        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gateway)
+
+            from src.services.gateway_instance_service import GatewayInstanceService
+
+            svc = GatewayInstanceService(db)
+            svc.repo = mock_repo
+
+            result = await svc.assert_enabled(gateway.id)
+            assert result == gateway
+
+    @pytest.mark.asyncio
+    async def test_assert_enabled_raises_for_disabled_gateway(self):
+        """assert_enabled raises PermissionError when enabled=False."""
+        db = AsyncMock()
+        gateway = self._make_gateway(enabled=False)
+
+        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gateway)
+
+            from src.services.gateway_instance_service import GatewayInstanceService
+
+            svc = GatewayInstanceService(db)
+            svc.repo = mock_repo
+
+            with pytest.raises(PermissionError, match="disabled"):
+                await svc.assert_enabled(gateway.id)
+
+    @pytest.mark.asyncio
+    async def test_assert_enabled_raises_for_missing_gateway(self):
+        """assert_enabled raises ValueError when gateway not found."""
+        db = AsyncMock()
+
+        with patch("src.services.gateway_instance_service.GatewayInstanceRepository") as MockRepo:
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=None)
+
+            from src.services.gateway_instance_service import GatewayInstanceService
+
+            svc = GatewayInstanceService(db)
+            svc.repo = mock_repo
+
+            with pytest.raises(ValueError, match="not found"):
+                await svc.assert_enabled(uuid4())

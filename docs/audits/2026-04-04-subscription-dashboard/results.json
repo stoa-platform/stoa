@@ -67,6 +67,588 @@
   },
   "suites": [
     {
+      "title": "local-approval-flow.spec.ts",
+      "file": "local-approval-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Approval Flow — Full State Machine",
+          "file": "local-approval-flow.spec.ts",
+          "line": 79,
+          "column": 15,
+          "specs": [
+            {
+              "title": "1.1 — Subscribe → status is PENDING (no API key)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 282,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  1.1 PASS: sub=8466c960-87d0-4bbc-86ce-f4139e769ab1 status=pending, no api_key\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:26.894Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-approval-flow-Approv-84878-atus-is-PENDING-no-API-key--local/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "304d157a08b283debf53-2ee3c5faa5516db1c345",
+              "file": "local-approval-flow.spec.ts",
+              "line": 109,
+              "column": 3
+            },
+            {
+              "title": "1.2 — Admin sees pending in Console",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 17994,
+                      "error": {
+                        "message": "TimeoutError: page.waitForURL: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth?client_id=control-plane-ui&redirect_uri=http%3A%2F%2Fconsole.stoa.local&response_type=code&scope=openid+profile+email+roles&state=1ee6089b3e854bbfbd761d6685ed2dcf&code_challenge=aY5ta3OI130IUcA0JFdKWA4IVAfmHBxozMVBGRgn_x0&code_challenge_method=S256&response_mode=query\"\n============================================================",
+                        "stack": "TimeoutError: page.waitForURL: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth?client_id=control-plane-ui&redirect_uri=http%3A%2F%2Fconsole.stoa.local&response_type=code&scope=openid+profile+email+roles&state=1ee6089b3e854bbfbd761d6685ed2dcf&code_challenge=aY5ta3OI130IUcA0JFdKWA4IVAfmHBxozMVBGRgn_x0&code_challenge_method=S256&response_mode=query\"\n============================================================\n    at loginPage (/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts:47:31)\n    at /Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts:142:5",
+                        "location": {
+                          "file": "/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts",
+                          "column": 31,
+                          "line": 47
+                        },
+                        "snippet": "  45 |     const btn = page.getByRole('button', { name: 'Login with Keycloak' });\n  46 |     if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {\n> 47 |       await Promise.all([page.waitForURL(/auth\\.stoa\\.local/, { timeout: 15000 }), btn.click()]);\n     |                               ^\n  48 |     }\n  49 |   }\n  50 |   // Portal login"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts",
+                            "column": 31,
+                            "line": 47
+                          },
+                          "message": "TimeoutError: page.waitForURL: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth?client_id=control-plane-ui&redirect_uri=http%3A%2F%2Fconsole.stoa.local&response_type=code&scope=openid+profile+email+roles&state=1ee6089b3e854bbfbd761d6685ed2dcf&code_challenge=aY5ta3OI130IUcA0JFdKWA4IVAfmHBxozMVBGRgn_x0&code_challenge_method=S256&response_mode=query\"\n============================================================\n\n  45 |     const btn = page.getByRole('button', { name: 'Login with Keycloak' });\n  46 |     if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {\n> 47 |       await Promise.all([page.waitForURL(/auth\\.stoa\\.local/, { timeout: 15000 }), btn.click()]);\n     |                               ^\n  48 |     }\n  49 |   }\n  50 |   // Portal login\n    at loginPage (/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts:47:31)\n    at /Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts:142:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:27.346Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-approval-flow-Approv-75f32-min-sees-pending-in-Console-local/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-approval-flow-Approv-75f32-min-sees-pending-in-Console-local/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-approval-flow-Approv-75f32-min-sees-pending-in-Console-local/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-approval-flow-Approv-75f32-min-sees-pending-in-Console-local/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-approval-flow.spec.ts",
+                        "column": 31,
+                        "line": 47
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "304d157a08b283debf53-eb2489f3174fdb825724",
+              "file": "local-approval-flow.spec.ts",
+              "line": 140,
+              "column": 3
+            },
+            {
+              "title": "1.3 — Admin approves → status ACTIVE + API key generated",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-b1b9dce5c5328a663c5a",
+              "file": "local-approval-flow.spec.ts",
+              "line": 155,
+              "column": 3
+            },
+            {
+              "title": "2.1 — Revoke previous + new subscription → PENDING",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-00eb8e988fb1963d8367",
+              "file": "local-approval-flow.spec.ts",
+              "line": 181,
+              "column": 3
+            },
+            {
+              "title": "2.2 — Admin rejects with reason → status REVOKED",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-5804aad94fb6290fabdc",
+              "file": "local-approval-flow.spec.ts",
+              "line": 206,
+              "column": 3
+            },
+            {
+              "title": "3.1 — Clean + create + approve a subscription",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-8a1b800aef56876266c7",
+              "file": "local-approval-flow.spec.ts",
+              "line": 228,
+              "column": 3
+            },
+            {
+              "title": "3.2 — Suspend → SUSPENDED",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-7a12df67fc9ef82cfa14",
+              "file": "local-approval-flow.spec.ts",
+              "line": 258,
+              "column": 3
+            },
+            {
+              "title": "3.3 — Reactivate → ACTIVE again",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.524Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-fcb48f9543dec41b0701",
+              "file": "local-approval-flow.spec.ts",
+              "line": 275,
+              "column": 3
+            },
+            {
+              "title": "4.1 — Revoke active sub with reason",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-05bb3a18b10941f10533",
+              "file": "local-approval-flow.spec.ts",
+              "line": 293,
+              "column": 3
+            },
+            {
+              "title": "5.1 — Cross-tenant: sorrento (IOI) cannot approve high-five sub",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-7189cebff130efa77e9b",
+              "file": "local-approval-flow.spec.ts",
+              "line": 312,
+              "column": 3
+            },
+            {
+              "title": "5.2 — Double approve: approve already-active sub",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-4f989c7873254c0a241f",
+              "file": "local-approval-flow.spec.ts",
+              "line": 345,
+              "column": 3
+            },
+            {
+              "title": "5.3 — Sorrento cannot list high-five pending subs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-390dc68c57dedf4e286b",
+              "file": "local-approval-flow.spec.ts",
+              "line": 370,
+              "column": 3
+            },
+            {
+              "title": "6.1 — Console Subscriptions: all status tabs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-1ec68ca6d0061c70df8f",
+              "file": "local-approval-flow.spec.ts",
+              "line": 381,
+              "column": 3
+            },
+            {
+              "title": "6.2 — Portal shows subscription statuses",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-ff17df77d90f53ac12ee",
+              "file": "local-approval-flow.spec.ts",
+              "line": 391,
+              "column": 3
+            },
+            {
+              "title": "7.1 — API stats confirm all transitions happened",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "local",
+                  "projectName": "local",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-04-04T15:27:46.525Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "304d157a08b283debf53-3b2ab692e5794b6efce6",
+              "file": "local-approval-flow.spec.ts",
+              "line": 403,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
       "title": "local-subscription-auth.spec.ts",
       "file": "local-subscription-auth.spec.ts",
       "column": 0,
@@ -92,10 +674,10 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 801,
+                      "duration": 230,
                       "errors": [],
                       "stdout": [
                         {
@@ -104,7 +686,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:43.829Z",
+                      "startTime": "2026-04-04T15:27:47.186Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -136,22 +718,22 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 198,
+                      "duration": 111,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  [tenant] api_key: client_id=high-five-e2e-apikey-1775309323813\n"
+                          "text": "  [tenant] api_key: client_id=high-five-e2e-apikey-1775316467166\n"
                         },
                         {
-                          "text": "  [portal] api_key: client_id=N/A, key=stoa_sk_aa5b167...\n"
+                          "text": "  [portal] api_key: client_id=N/A, key=stoa_sk_211d9c1...\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:44.742Z",
+                      "startTime": "2026-04-04T15:27:47.533Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -183,22 +765,22 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 172,
+                      "duration": 169,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  [tenant] oauth2_public: client_id=high-five-e2e-oauth2public-1775309323813\n"
+                          "text": "  [tenant] oauth2_public: client_id=high-five-e2e-oauth2public-1775316467166\n"
                         },
                         {
-                          "text": "  [portal] oauth2_public: client_id=default-e2e-oauth2public-1775309323813-portal, key=N/A\n"
+                          "text": "  [portal] oauth2_public: client_id=default-e2e-oauth2public-1775316467166-portal, key=N/A\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:44.950Z",
+                      "startTime": "2026-04-04T15:27:47.657Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -230,22 +812,22 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 190,
+                      "duration": 139,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  [tenant] oauth2_confidential: client_id=high-five-e2e-oauth2confidential-1775309323813\n"
+                          "text": "  [tenant] oauth2_confidential: client_id=high-five-e2e-oauth2confidential-1775316467166\n"
                         },
                         {
-                          "text": "  [portal] oauth2_confidential: client_id=default-e2e-oauth2confidential-1775309323813-portal, key=N/A\n"
+                          "text": "  [portal] oauth2_confidential: client_id=default-e2e-oauth2confidential-1775316467166-portal, key=N/A\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:45.131Z",
+                      "startTime": "2026-04-04T15:27:47.837Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -277,22 +859,22 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 157,
+                      "duration": 145,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  [tenant] fapi_baseline: client_id=high-five-e2e-fapibaseline-1775309323813\n"
+                          "text": "  [tenant] fapi_baseline: client_id=high-five-e2e-fapibaseline-1775316467166\n"
                         },
                         {
-                          "text": "  [portal] fapi_baseline: client_id=default-e2e-fapibaseline-1775309323813-portal, key=N/A\n"
+                          "text": "  [portal] fapi_baseline: client_id=default-e2e-fapibaseline-1775316467166-portal, key=N/A\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:45.330Z",
+                      "startTime": "2026-04-04T15:27:47.993Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -324,22 +906,22 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 152,
+                      "duration": 136,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  [tenant] fapi_advanced: client_id=high-five-e2e-fapiadvanced-1775309323813\n"
+                          "text": "  [tenant] fapi_advanced: client_id=high-five-e2e-fapiadvanced-1775316467166\n"
                         },
                         {
-                          "text": "  [portal] fapi_advanced: client_id=default-e2e-fapiadvanced-1775309323813-portal, key=N/A\n"
+                          "text": "  [portal] fapi_advanced: client_id=default-e2e-fapiadvanced-1775316467166-portal, key=N/A\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:45.496Z",
+                      "startTime": "2026-04-04T15:27:48.148Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -368,7 +950,7 @@
           "specs": [
             {
               "title": "B.1 — Applications page",
-              "ok": true,
+              "ok": false,
               "tags": [],
               "tests": [
                 {
@@ -379,25 +961,40 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 1,
                       "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10259,
-                      "errors": [],
-                      "stdout": [
+                      "status": "failed",
+                      "duration": 17760,
+                      "error": {
+                        "message": "TimeoutError: page.waitForURL: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth?client_id=control-plane-ui&redirect_uri=http%3A%2F%2Fconsole.stoa.local&response_type=code&scope=openid+profile+email+roles&state=d393849b6d934a86970fc78b2b52e6f7&code_challenge=f5MZV0E6wAWbgBQsbzsahA4OgRXyHrFVcYmQZjCh7V0&code_challenge_method=S256&response_mode=query\"\n============================================================",
+                        "stack": "TimeoutError: page.waitForURL: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth?client_id=control-plane-ui&redirect_uri=http%3A%2F%2Fconsole.stoa.local&response_type=code&scope=openid+profile+email+roles&state=d393849b6d934a86970fc78b2b52e6f7&code_challenge=f5MZV0E6wAWbgBQsbzsahA4OgRXyHrFVcYmQZjCh7V0&code_challenge_method=S256&response_mode=query\"\n============================================================\n    at loginConsole (/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts:50:31)\n    at /Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts:158:5",
+                        "location": {
+                          "file": "/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts",
+                          "column": 31,
+                          "line": 50
+                        },
+                        "snippet": "  48 |     const btn = page.getByRole('button', { name: 'Login with Keycloak' });\n  49 |     if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {\n> 50 |       await Promise.all([page.waitForURL(/auth\\.stoa\\.local/, { timeout: 15000 }), btn.click()]);\n     |                               ^\n  51 |     }\n  52 |     if (page.url().includes('auth.stoa.local')) {\n  53 |       await page.waitForLoadState('domcontentloaded');"
+                      },
+                      "errors": [
                         {
-                          "text": "  Console: 6 app cards with client_id\n"
+                          "location": {
+                            "file": "/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts",
+                            "column": 31,
+                            "line": 50
+                          },
+                          "message": "TimeoutError: page.waitForURL: Timeout 15000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n  navigated to \"https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth?client_id=control-plane-ui&redirect_uri=http%3A%2F%2Fconsole.stoa.local&response_type=code&scope=openid+profile+email+roles&state=d393849b6d934a86970fc78b2b52e6f7&code_challenge=f5MZV0E6wAWbgBQsbzsahA4OgRXyHrFVcYmQZjCh7V0&code_challenge_method=S256&response_mode=query\"\n============================================================\n\n  48 |     const btn = page.getByRole('button', { name: 'Login with Keycloak' });\n  49 |     if (await btn.isVisible({ timeout: 5000 }).catch(() => false)) {\n> 50 |       await Promise.all([page.waitForURL(/auth\\.stoa\\.local/, { timeout: 15000 }), btn.click()]);\n     |                               ^\n  51 |     }\n  52 |     if (page.url().includes('auth.stoa.local')) {\n  53 |       await page.waitForLoadState('domcontentloaded');\n    at loginConsole (/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts:50:31)\n    at /Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts:158:5"
                         }
                       ],
+                      "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:45.657Z",
+                      "startTime": "2026-04-04T15:27:48.294Z",
                       "annotations": [],
                       "attachments": [
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/test-finished-1.png"
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/test-failed-1.png"
                         },
                         {
                           "name": "video",
@@ -405,14 +1002,24 @@
                           "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/video.webm"
                         },
                         {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/error-context.md"
+                        },
+                        {
                           "name": "trace",
                           "contentType": "application/zip",
                           "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-2b492-ces-B-1-—-Applications-page-local/trace.zip"
                         }
-                      ]
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/torpedo/hlfh-repos/stoa/e2e/tests/local-subscription-auth.spec.ts",
+                        "column": 31,
+                        "line": 50
+                      }
                     }
                   ],
-                  "status": "expected"
+                  "status": "unexpected"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-be5a425d9fee7d1cbcf2",
@@ -433,36 +1040,20 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10329,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:28:56.961Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8c33a-s-B-—-Console-Subscriptions-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8c33a-s-B-—-Console-Subscriptions-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-8c33a-s-B-—-Console-Subscriptions-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-f3ad0af828b1a23a67c5",
@@ -483,36 +1074,20 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10415,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:29:07.364Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e7b6d--—-Console-Gateway-Overview-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e7b6d--—-Console-Gateway-Overview-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-e7b6d--—-Console-Gateway-Overview-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-9d8c918ca5c513e8c626",
@@ -533,36 +1108,20 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10227,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:29:17.857Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-ea3bd-races-B-—-Console-Dashboard-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-ea3bd-races-B-—-Console-Dashboard-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-ea3bd-races-B-—-Console-Dashboard-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-8ef27ba6e536f965d193",
@@ -583,36 +1142,20 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10353,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:29:28.173Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-aa303-Traces-B-—-Console-Business-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-aa303-Traces-B-—-Console-Business-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-aa303-Traces-B-—-Console-Business-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-49a47e39569f47e5f920",
@@ -626,43 +1169,27 @@
               "tags": [],
               "tests": [
                 {
-                  "timeout": 90000,
+                  "timeout": 60000,
                   "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "local",
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10117,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:29:38.600Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7ebe5-aces-B-—-Console-Executions-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7ebe5-aces-B-—-Console-Executions-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-7ebe5-aces-B-—-Console-Executions-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-752e9d8702d36b4ac12a",
@@ -683,36 +1210,20 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10683,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:29:48.789Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-88239-ces-B-—-Console-API-Traffic-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-88239-ces-B-—-Console-API-Traffic-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-88239-ces-B-—-Console-API-Traffic-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-0f0d306f00b65fa3ec24",
@@ -726,43 +1237,27 @@
               "tags": [],
               "tests": [
                 {
-                  "timeout": 90000,
+                  "timeout": 60000,
                   "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "local",
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10103,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:29:59.549Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-18320-s-B-—-Console-Access-Review-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-18320-s-B-—-Console-Access-Review-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-18320-s-B-—-Console-Access-Review-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-100141e5b48a729b16c9",
@@ -783,36 +1278,20 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 10228,
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:30:09.725Z",
+                      "startTime": "2026-04-04T15:28:07.093Z",
                       "annotations": [],
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-89fc1-races-B-—-Console-Consumers-local/test-finished-1.png"
-                        },
-                        {
-                          "name": "video",
-                          "contentType": "video/webm",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-89fc1-races-B-—-Console-Consumers-local/video.webm"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "/Users/torpedo/hlfh-repos/stoa/e2e/test-results/local-subscription-auth-Ph-89fc1-races-B-—-Console-Consumers-local/trace.zip"
-                        }
-                      ]
+                      "attachments": []
                     }
                   ],
-                  "status": "expected"
+                  "status": "skipped"
                 }
               ],
               "id": "4cb9f672aa6fc31fa806-d590b01ea70e925189ff",
@@ -841,14 +1320,14 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2355,
+                      "duration": 2351,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  MCP Server exists: d8d860f0-e6a4-4d6f-b5c5-51cd9f5cad7a\n"
+                          "text": "  MCP Server exists: d4df9ff1-ee48-43f8-af18-5d36b23cf626\n"
                         },
                         {
                           "text": "  MCP Subscription: 409\n"
@@ -868,7 +1347,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:30:20.032Z",
+                      "startTime": "2026-04-04T15:28:07.809Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -900,15 +1379,15 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 27524,
+                      "duration": 27355,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:30:22.461Z",
+                      "startTime": "2026-04-04T15:28:10.281Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -950,15 +1429,15 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 25283,
+                      "duration": 25407,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:30:50.109Z",
+                      "startTime": "2026-04-04T15:28:38.744Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1000,15 +1479,15 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 24718,
+                      "duration": 24784,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:31:15.508Z",
+                      "startTime": "2026-04-04T15:29:04.297Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1050,15 +1529,15 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 26978,
+                      "duration": 27342,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:31:40.352Z",
+                      "startTime": "2026-04-04T15:29:29.228Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1100,15 +1579,15 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 25570,
+                      "duration": 24919,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:32:07.443Z",
+                      "startTime": "2026-04-04T15:29:56.729Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1150,14 +1629,14 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 224,
+                      "duration": 275,
                       "errors": [],
                       "stdout": [
                         {
-                          "text": "  MCP subs: 1\n"
+                          "text": "  MCP subs: 11\n"
                         },
                         {
                           "text": "  Recent calls: 15\n"
@@ -1177,7 +1656,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:32:33.136Z",
+                      "startTime": "2026-04-04T15:30:21.796Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1217,10 +1696,10 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 113,
+                      "duration": 19,
                       "errors": [],
                       "stdout": [
                         {
@@ -1229,7 +1708,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:32:33.368Z",
+                      "startTime": "2026-04-04T15:30:22.083Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1261,7 +1740,7 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
                       "duration": 86,
@@ -1279,7 +1758,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:32:33.540Z",
+                      "startTime": "2026-04-04T15:30:22.169Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1311,10 +1790,10 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 34,
+                      "duration": 33,
                       "errors": [],
                       "stdout": [
                         {
@@ -1323,7 +1802,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:32:33.635Z",
+                      "startTime": "2026-04-04T15:30:22.264Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1355,29 +1834,29 @@
                   "projectName": "local",
                   "results": [
                     {
-                      "workerIndex": 0,
+                      "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 69,
+                      "duration": 62,
                       "errors": [],
                       "stdout": [
                         {
                           "text": "  Tenant apps: 6\n"
                         },
                         {
-                          "text": "    e2e-apikey-1775309323813: client_id=high-five-e2e-apikey-1775309323813\n"
+                          "text": "    e2e-apikey-1775316467166: client_id=high-five-e2e-apikey-1775316467166\n"
                         },
                         {
-                          "text": "    e2e-fapiadvanced-1775309323813: client_id=high-five-e2e-fapiadvanced-1775309323813\n"
+                          "text": "    e2e-fapiadvanced-1775316467166: client_id=high-five-e2e-fapiadvanced-1775316467166\n"
                         },
                         {
-                          "text": "    e2e-fapibaseline-1775309323813: client_id=high-five-e2e-fapibaseline-1775309323813\n"
+                          "text": "    e2e-fapibaseline-1775316467166: client_id=high-five-e2e-fapibaseline-1775316467166\n"
                         },
                         {
-                          "text": "    e2e-oauth2confidential-1775309323813: client_id=high-five-e2e-oauth2confidential-1775309323813\n"
+                          "text": "    e2e-oauth2confidential-1775316467166: client_id=high-five-e2e-oauth2confidential-1775316467166\n"
                         },
                         {
-                          "text": "    e2e-oauth2public-1775309323813: client_id=high-five-e2e-oauth2public-1775309323813\n"
+                          "text": "    e2e-oauth2public-1775316467166: client_id=high-five-e2e-oauth2public-1775316467166\n"
                         },
                         {
                           "text": "  Portal apps: 20\n"
@@ -1385,7 +1864,7 @@
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-04-04T13:32:33.676Z",
+                      "startTime": "2026-04-04T15:30:22.305Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1411,11 +1890,11 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-04-04T13:28:43.077Z",
-    "duration": 230765.793,
-    "expected": 26,
-    "skipped": 0,
-    "unexpected": 0,
+    "startTime": "2026-04-04T15:27:26.218Z",
+    "duration": 176225.04200000002,
+    "expected": 18,
+    "skipped": 21,
+    "unexpected": 2,
     "flaky": 0
   }
 }

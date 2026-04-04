@@ -76,7 +76,7 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 2. **E2E co-evolves with code** — Feature/fix tickets MUST update Playwright scenarios in the same PR. No separate "test later" tickets.
 3. **CI noise = P0** — Red `main` blocks ALL new work. Fix CI before starting any feature. `/ci-fix` has priority over backlog.
 4. **Multi-env gate** — DoD requires 3 proofs: local tests pass, CI pipeline green, staging/prod pod healthy.
-5. **Evidence archive** — Every Playwright run MUST archive screenshots + results in `audit/<TICKET>/` with `AUDIT-RESULTS.md`. See `testing-standards.md` Evidence Archive Rule for template and naming convention. No archive = session incomplete.
+5. **Evidence archive** — Every Playwright run MUST archive results in `docs/audits/<date>-<topic>/`. See `e2e-audit.md` for the single canonical process. No archive = session incomplete.
 
 ### MEGA Close Gate (titles containing `[MEGA]` or has children)
 

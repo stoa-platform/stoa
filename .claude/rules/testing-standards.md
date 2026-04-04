@@ -97,44 +97,7 @@ test catch it?" If the answer is no (because the dependency is mocked), redesign
 4. PR title `fix(` → regression test present?
 5. New test mocks the boundary under test? → redesign per Boundary Integrity Rule
 
-### Evidence Archive Rule (CAB-1969 post-mortem)
+### Evidence Archive Rule
 
-Every session that produces Playwright screenshots or test results MUST archive them before ending.
-Screenshots are ephemeral — they disappear on `git clean`, branch switch, or next session.
-
-**Archive location**: `audit/<TICKET>/` (gitignored, persists locally).
-
-**Mandatory steps after Playwright runs**:
-
-| Step | Command | Output |
-|------|---------|--------|
-| 1. Copy screenshots | `find e2e/test-results -name "*.png" -exec cp {} audit/<TICKET>/ \;` | Named PNGs |
-| 2. Copy results JSON | `cp e2e/test-results/audit/results.json audit/<TICKET>/` | Machine-readable |
-| 3. Copy HTML report | `cp -r e2e/test-results/audit/report audit/<TICKET>/` | Browsable report |
-| 4. Write AUDIT-RESULTS.md | See template below | Human-readable summary |
-| 5. Update Linear ticket | Post results + screenshot count in ticket description | Traceability |
-
-**AUDIT-RESULTS.md template**:
-```markdown
-# <TICKET> — Test Results
-**Date**: YYYY-MM-DD
-**Environment**: Docker Compose / K8s / Prod
-**Suite**: `npx playwright test --config <config>`
-
-## Results: X/Y pass (Z skip) — XX.X%
-| Phase | Tests | Result | Duration |
-|-------|-------|--------|----------|
-
-## Screenshots
-| File | What it proves |
-|------|----------------|
-
-## How to reproduce
-\`\`\`bash
-<exact commands>
-\`\`\`
-```
-
-**Naming convention**: `<Phase>-<description>.png` (e.g., `P1-console-login.png`, `P4-guardrails-devserver.png`).
-
-**When Evidence Pack needed** (audits, RFP, Gartner): run `e2e/scripts/generate-evidence-pack.sh` → self-contained HTML with base64 screenshots. Exclusion A9: no KC admin screenshots, no tokens.
+After any Playwright run, archive results into `docs/audits/`. See `e2e-audit.md` for the single canonical process.
+**Never** use `audit/<TICKET>/` or leave results in `e2e/test-results/` — both are ephemeral.

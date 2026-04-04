@@ -77,14 +77,23 @@ const GatewayRegistry = lazy(() => gatewaysModule().then((m) => ({ default: m.Ga
 const GatewayModes = lazy(() =>
   gatewaysModule().then((m) => ({ default: m.GatewayModesDashboard }))
 );
-const GatewayDeployments = lazy(() =>
-  import('./pages/GatewayDeployments').then((m) => ({ default: m.GatewayDeploymentsDashboard }))
+const GatewayDetailPage = lazy(() => gatewaysModule().then((m) => ({ default: m.GatewayDetail })));
+const ApiDeployments = lazy(() =>
+  import('./pages/ApiDeployments/ApiDeploymentsDashboard').then((m) => ({
+    default: m.ApiDeploymentsDashboard,
+  }))
 );
 const DriftDetection = lazy(() =>
   import('./pages/DriftDetection').then((m) => ({ default: m.DriftDetection }))
 );
 const GatewayObservability = lazy(() =>
   import('./pages/GatewayObservability').then((m) => ({ default: m.GatewayObservabilityDashboard }))
+);
+const GatewaySecurity = lazy(() =>
+  import('./pages/GatewaySecurity').then((m) => ({ default: m.GatewaySecurityDashboard }))
+);
+const GatewayGuardrails = lazy(() =>
+  import('./pages/GatewayGuardrails').then((m) => ({ default: m.GuardrailsDashboard }))
 );
 const OperationsDashboard = lazy(() =>
   import('./pages/Operations').then((m) => ({ default: m.OperationsDashboard }))
@@ -121,6 +130,17 @@ const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 // CAB-1764: Skeleton pages (ShadowDiscovery, TokenOptimizer, Policies, Workflows) removed from nav
 // Routes redirect to home. Pages retained in codebase for reintroduction when implemented.
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
+
+// CAB-1639: EU Public API Catalog
+const EUApiCatalog = lazy(() =>
+  import('./pages/EUApiCatalog/EUApiCatalog').then((m) => ({ default: m.EUApiCatalog }))
+);
+
+// CAB-1922: Backend API detail view
+const backendApisModule = () => import('./pages/BackendApis');
+const BackendApiDetail = lazy(() =>
+  backendApisModule().then((m) => ({ default: m.BackendApiDetail }))
+);
 
 // CAB-1251: SaaS Self-Service pages
 const saasApiKeysModule = () => import('./pages/SaasApiKeys');
@@ -304,12 +324,19 @@ function ProtectedRoutes() {
                   path="/external-mcp-servers"
                   element={<Navigate to="/mcp-servers?tab=custom" replace />}
                 />
+                <Route path="/api-deployments" element={<ApiDeployments />} />
+                <Route
+                  path="/gateway-deployments"
+                  element={<Navigate to="/api-deployments" replace />}
+                />
                 <Route path="/gateway" element={<GatewayStatus />} />
                 <Route path="/gateways/modes" element={<GatewayModes />} />
+                <Route path="/gateways/:id" element={<GatewayDetailPage />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
-                <Route path="/gateway-deployments" element={<GatewayDeployments />} />
                 <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
+                <Route path="/gateway-security" element={<GatewaySecurity />} />
+                <Route path="/gateway-guardrails" element={<GatewayGuardrails />} />
                 <Route path="/operations" element={<OperationsDashboard />} />
                 <Route path="/my-usage" element={<TenantDashboard />} />
                 <Route path="/chat-settings" element={<TenantChatSettings />} />
@@ -339,6 +366,8 @@ function ProtectedRoutes() {
                   path="/backend-apis"
                   element={<Navigate to="/apis?tab=backends" replace />}
                 />
+                <Route path="/backend-apis/:id" element={<BackendApiDetail />} />
+                <Route path="/eu-catalog" element={<EUApiCatalog />} />
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />
@@ -379,12 +408,30 @@ function Login() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-500 to-purple-600">
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-96">
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <div
+      className="flex items-center justify-center min-h-screen"
+      style={{
+        background:
+          'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5,150,105,0.15), transparent), radial-gradient(circle at 20% 80%, rgba(5,150,105,0.08), transparent), linear-gradient(to bottom, #0a0a0a, #111111)',
+      }}
+    >
+      <div
+        className="p-0 rounded-2xl w-96 overflow-hidden"
+        style={{
+          background: '#18181b',
+          border: '1px solid #3f3f46',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 60px rgba(5,150,105,0.15)',
+        }}
+      >
+        <div
+          className="px-8 py-10 text-center"
+          style={{
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+          }}
+        >
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-white/20 backdrop-blur-sm">
             <svg
-              className="w-8 h-8 text-blue-600"
+              className="w-8 h-8 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -397,33 +444,39 @@ function Login() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900">{t('login.title')}</h1>
-          <p className="text-neutral-500 mt-1">{t('login.subtitle')}</p>
+          <h1 className="text-2xl font-bold text-white">{t('login.title')}</h1>
+          <p className="text-white/80 mt-1">{t('login.subtitle')}</p>
         </div>
-        <button
-          onClick={login}
-          disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              {t('common.loading')}
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
-                />
-              </svg>
-              {t('login.button')}
-            </>
-          )}
-        </button>
+        <div className="px-8 py-8">
+          <button
+            onClick={login}
+            disabled={isLoading}
+            className="w-full text-white py-3.5 rounded-xl font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5"
+            style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+              boxShadow: isLoading ? 'none' : '0 10px 30px -10px rgba(5,150,105,0.5)',
+            }}
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                {t('common.loading')}
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+                  />
+                </svg>
+                {t('login.button')}
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

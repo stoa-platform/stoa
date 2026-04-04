@@ -325,7 +325,7 @@ Create `.claude/claims/<parent-id>.json`:
 - One phase per DAG level (Phase 1 = all items with no deps, Phase 2 = depends on Phase 1, etc.)
 - `mode` is `parallel` if multiple tickets in the phase, `sequential` if single ticket
 - `deps` references phase IDs (not ticket IDs)
-- All fields start as `null` — instances claim phases via `session-startup.md` Step 2
+- All fields start as `null` — instances claim phases via `session-lifecycle.md` Step 2
 - See `phase-ownership.md` for full claim lifecycle and schemas
 
 ## Step 10: Report to User

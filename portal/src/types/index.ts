@@ -200,6 +200,9 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   audience?: APIAudience;
   deployments?: Record<string, boolean>;
+  deployedEnvironments?: string[];
+  authType?: string | null; // CAB-1906: inferred from tags (OAuth2, API Key, mTLS, Basic)
+  endpointCount?: number; // CAB-1906: from OpenAPI spec
   createdAt: string;
   updatedAt: string;
 }
@@ -955,8 +958,10 @@ export interface MarketplaceFilters {
   category?: string;
   status?: string;
   tags?: string[];
+  authType?: string; // CAB-1906: oauth2, api_key, mtls, basic
   page?: number;
   pageSize?: number;
+  sortBy?: 'name' | 'updated_at' | 'created_at'; // CAB-1906
 }
 
 export interface MarketplaceStats {

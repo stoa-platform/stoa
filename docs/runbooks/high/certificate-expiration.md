@@ -40,8 +40,8 @@
 
 ```bash
 # 1. Check public endpoint certificates
-echo | openssl s_client -servername gateway.gostoa.dev \
-  -connect gateway.gostoa.dev:443 2>/dev/null | \
+echo | openssl s_client -servername vps-wm.gostoa.dev \
+  -connect vps-wm.gostoa.dev:443 2>/dev/null | \
   openssl x509 -noout -dates
 
 # 2. List all certificates in the cluster
@@ -133,7 +133,7 @@ kubectl describe challenge <challenge-name> -n <namespace>
 kubectl get ingress -A | grep acme
 
 # Manually test challenge
-curl -v http://gateway.gostoa.dev/.well-known/acme-challenge/test
+curl -v http://vps-wm.gostoa.dev/.well-known/acme-challenge/test
 ```
 
 ### Case 4: DNS challenge failing (wildcard)
@@ -161,7 +161,7 @@ aws route53 list-hosted-zones
 openssl req -new -newkey rsa:2048 -nodes \
   -keyout gateway.key \
   -out gateway.csr \
-  -subj "/CN=gateway.gostoa.dev"
+  -subj "/CN=vps-wm.gostoa.dev"
 
 # After obtaining signed certificate
 kubectl create secret tls gateway-tls \
@@ -190,8 +190,8 @@ kubectl rollout restart deployment -n stoa apigateway
 
 ```bash
 # Check new certificate expiration
-echo | openssl s_client -servername gateway.gostoa.dev \
-  -connect gateway.gostoa.dev:443 2>/dev/null | \
+echo | openssl s_client -servername vps-wm.gostoa.dev \
+  -connect vps-wm.gostoa.dev:443 2>/dev/null | \
   openssl x509 -noout -dates -subject
 
 # Check all endpoints
@@ -227,7 +227,7 @@ kubectl get certificates -A -o wide
 # check-certificates.sh
 
 DOMAINS=(
-  "gateway.gostoa.dev"
+  "vps-wm.gostoa.dev"
   "api.gostoa.dev"
   "auth.gostoa.dev"
   "console.gostoa.dev"

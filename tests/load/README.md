@@ -213,5 +213,5 @@ http_reqs......................: 2000   66.67/s
 ## Related Documentation
 
 - [SLO/SLA Documentation](../../docs/SLO-SLA.md)
-- [Monitoring Setup](../../docker/observability/README.md)
+- [Monitoring Setup](../../stoa-infra:docker/observability/README.md)
 - [K6 Official Documentation](https://k6.io/docs/)

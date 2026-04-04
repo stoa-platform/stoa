@@ -45,3 +45,6 @@ class APIListItem(BaseModel):
     tags: list[str] = []
     is_promoted: bool = True
     audience: str = "public"
+    deployed_environments: list[str] = []
+    auth_type: str | None = None
+    endpoint_count: int = 0

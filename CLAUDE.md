@@ -23,7 +23,6 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 | Control Plane API | Python 3.11, FastAPI, SQLAlchemy | `control-plane-api/` |
 | Console UI | React 18, TypeScript, Keycloak-js | `control-plane-ui/` |
 | Developer Portal | React, Vite, TypeScript | `portal/` |
-| MCP Gateway (archived) | Python 3.11, FastAPI, OPA | `archive/mcp-gateway/` |
 | STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
 | STOA Go (stoactl + stoa-connect) | Go 1.22, Cobra, keyring | `stoa-go/` |
 | CLI (legacy) | Python, Typer, Rich | `cli/` |
@@ -122,6 +121,77 @@ za   # analysis worktree (read-only exploration)
 zf   # feature session (main repo)
 zh   # hotfix worktree (ephemeral, from main)
 ```
+
+## Context Compiler (obligatoire)
+
+> **CI Automation**: Context packs are generated automatically by CI workflows.
+> Manual execution is still available but no longer required for tickets going through the L3 pipeline.
+> See `docs/CONTEXT-COMPILER.md` for full integration documentation.
+
+### CI Integration (automatic)
+
+| Hook | Workflow | Trigger | What |
+|------|----------|---------|------|
+| Pre-coding | `claude-linear-dispatch.yml` | `/go` on ticket | Generates context pack, alerts on CRITICAL |
+| Post-merge | `context-compiler-learn.yml` | Push to main | Compares predicted vs actual, enriches DB |
+| Weekly | `claude-self-improve.yml` | Friday 18:00 UTC | Co-change discovery, dashboard, doc regen |
+
+Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all hooks.
+
+### Manual usage (local sessions)
+
+1. Générer le context pack :
+   ```bash
+   docs/scripts/build-context.sh --component {composant} --intent "{description}"
+   ```
+   Ou si ticket Linear connu :
+   ```bash
+   docs/scripts/build-context.sh --ticket "CAB-XXXX"
+   ```
+
+2. LIRE le context pack généré dans `docs/context-packs/`. Il contient :
+   - Composants impactés avec niveau de risque
+   - Contrats à ne pas casser
+   - Scénarios E2E traversés
+   - Fichiers à modifier et à vérifier
+   - Risques ouverts
+   - DoD contextualisé
+
+3. Si Impact Score >= HIGH (16+) → Council OBLIGATOIRE avant de coder.
+   Si Impact Score CRITICAL (31+) → Christophe review le context pack avant GO.
+
+### Après chaque merge (automatisé par CI)
+
+```bash
+# Automatique via context-compiler-learn.yml — ou manuellement :
+docs/scripts/post-change-learn.sh --commit HEAD --ticket CAB-XXXX
+```
+
+### Hebdomadaire (automatisé par CI)
+
+```bash
+# Automatique via claude-self-improve.yml — ou manuellement :
+docs/scripts/discover-cochanges.sh --commits 50
+docs/scripts/dashboard.sh
+```
+
+### Délégation
+
+Quand un contributeur prend un ticket :
+1. Générer le context pack (ou récupérer l'artifact CI)
+2. Partager le `.md` avec le contributeur
+3. Le contributeur charge le context pack en début de session Claude Code
+4. Après merge, `context-compiler-learn.yml` s'exécute automatiquement
+
+### Legacy scripts (toujours disponibles)
+```bash
+docs/scripts/impact-check.sh {composant}     # Quick impact view (terminal)
+docs/scripts/contract-check.sh "{endpoint}"  # Contract lookup
+docs/scripts/dashboard.sh                    # Full dashboard + accuracy metrics
+```
+
+### DB location
+`docs/stoa-impact.db` — source of truth. `docs/DEPENDENCIES.md` et `docs/SCENARIOS.md` sont des vues auto-générées.
 
 ## Repos
 

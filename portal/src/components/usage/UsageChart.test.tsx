@@ -1,12 +1,28 @@
 /**
- * Tests for UsageChart (CAB-1390)
+ * Tests for UsageChart (CAB-1390, updated for Recharts migration CAB-1883)
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { UsageChart } from './UsageChart';
 import { renderWithProviders } from '../../test/helpers';
 import type { DailyCallStat } from '../../types';
+
+// Mock recharts — JSDOM has no layout engine so Recharts hooks fail.
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="responsive-container">{children}</div>
+  ),
+  BarChart: ({ children }: { children: React.ReactNode }) => (
+    <svg data-testid="bar-chart">{children}</svg>
+  ),
+  Bar: () => <rect data-testid="bar" />,
+  Cell: () => <rect data-testid="cell" />,
+  XAxis: () => <g data-testid="x-axis" />,
+  YAxis: () => <g data-testid="y-axis" />,
+  CartesianGrid: () => <g data-testid="grid" />,
+  Tooltip: () => <g data-testid="tooltip" />,
+}));
 
 const mockData: DailyCallStat[] = [
   { date: '2026-02-15', calls: 100 },
@@ -25,22 +41,23 @@ describe('UsageChart', () => {
     expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
   });
 
-  it('renders without crashing when data is empty', () => {
-    const { container } = renderWithProviders(<UsageChart data={[]} />);
-    expect(container).toBeTruthy();
+  it('renders empty state when data is empty', () => {
+    renderWithProviders(<UsageChart data={[]} />);
+    expect(screen.getByText('No call data available')).toBeInTheDocument();
   });
 
-  it('renders a bar for each data point', () => {
-    const { container } = renderWithProviders(<UsageChart data={mockData} />);
-    // Each bar has inline style with minHeight (unique to bar divs)
-    const bars = container.querySelectorAll('[style*="min-height"]');
-    expect(bars.length).toBe(mockData.length);
-  });
-
-  it('renders day labels for each data point', () => {
+  it('renders Recharts BarChart with data', () => {
     renderWithProviders(<UsageChart data={mockData} />);
-    // Day labels are rendered (e.g., "Mon", "Tue")
-    const dayLabels = screen.queryAllByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
-    expect(dayLabels.length).toBeGreaterThan(0);
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
+  });
+
+  it('renders total calls count', () => {
+    renderWithProviders(<UsageChart data={mockData} />);
+    expect(screen.getByText(/Total: 450 calls/)).toBeInTheDocument();
+  });
+
+  it('renders chart title', () => {
+    renderWithProviders(<UsageChart data={mockData} />);
+    expect(screen.getByText('Call Volume (7 days)')).toBeInTheDocument();
   });
 });

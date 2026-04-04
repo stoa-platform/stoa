@@ -5,7 +5,7 @@
 
 [package]
 name = "stoa-gateway"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 authors = ["STOA Platform <contact@gostoa.dev>"]
 description = "STOA MCP Gateway - Legacy-to-AI Bridge"
@@ -35,7 +35,7 @@ hostname = "0.4"                         # Get local hostname for auto-registrat
 # === NEW - Phase 2: MCP SSE Transport ===
 tokio-stream = "0.1"                    # SSE event streams
 futures = "0.3"                          # Stream combinators
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
 rand = "0.10"                                # Thread-local PRNG for traceparent (perf)
 socket2 = "0.6"                             # TCP backlog tuning (perf)
@@ -57,7 +57,7 @@ sha2 = "0.10"                                # SHA-256 for DPoP access token has
 form_urlencoded = "1"                        # Parse application/x-www-form-urlencoded (RFC 7523 client_assertion)
 
 # === SOAP/XML Bridge (CAB-1762) ===
-quick-xml = { version = "0.37", features = ["serialize"] }  # SOAP/WSDL XML parsing
+quick-xml = { version = "0.39", features = ["serialize"] }  # SOAP/WSDL XML parsing
 
 # === Memory Budget (CAB-1829) ===
 libc = "0.2"
@@ -79,8 +79,8 @@ rdkafka = { version = "0.39", features = ["cmake-build"], optional = true }
 pnet = { version = "0.35", optional = true }
 
 # === WASM Plugin Runtime (CAB-1644) ===
-wasmtime = { version = "42", optional = true }
-toml = "0.8"                                         # Plugin manifest parsing
+wasmtime = { version = "43", optional = true }
+toml = "1.0"                                         # Plugin manifest parsing
 
 # === Pingora Connection Pool (CAB-1849) ===
 pingora-core = { version = "0.8", optional = true }

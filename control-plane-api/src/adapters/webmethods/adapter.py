@@ -53,11 +53,37 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
 
     async def sync_api(self, api_spec: dict, tenant_id: str, auth_token: str | None = None) -> AdapterResult:
         try:
+            # Support both camelCase (legacy /v1/gateway/) and snake_case (deployment orchestration)
+            api_name = api_spec.get("apiName") or api_spec.get("api_name", "unknown")
+            api_version = api_spec.get("apiVersion") or api_spec.get("version", "1.0.0")
+            openapi_url = api_spec.get("url") or api_spec.get("backend_url")
+            openapi_spec = api_spec.get("apiDefinition") or api_spec.get("openapi_spec")
+
+            # Upsert: if API with same name+version exists, delete then reimport
+            # so the latest spec is always applied. list_apis returns normalized
+            # flat objects (see list_apis below).
+            existing_apis = await self.list_apis(auth_token=auth_token)
+            existing = next(
+                (a for a in existing_apis if a.get("apiName") == api_name and a.get("apiVersion") == api_version),
+                None,
+            )
+
+            if existing:
+                existing_id = existing.get("id", "")
+                logger.info(
+                    "API '%s' v%s already exists (id=%s), deleting before reimport",
+                    api_name,
+                    api_version,
+                    existing_id,
+                )
+                if existing_id:
+                    await self._svc.delete_api(existing_id, auth_token=auth_token)
+
             result = await self._svc.import_api(
-                api_name=api_spec["apiName"],
-                api_version=api_spec["apiVersion"],
-                openapi_url=api_spec.get("url"),
-                openapi_spec=api_spec.get("apiDefinition"),
+                api_name=api_name,
+                api_version=api_version,
+                openapi_url=openapi_url if not openapi_spec else None,
+                openapi_spec=openapi_spec,
                 api_type=api_spec.get("type", "openapi"),
                 auth_token=auth_token,
             )
@@ -74,7 +100,11 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def list_apis(self, auth_token: str | None = None) -> list[dict]:
-        return await self._svc.list_apis(auth_token=auth_token)
+        # webMethods returns nested objects: {"api": {"apiName": ..., "id": ...}, "responseStatus": ...}
+        # Normalize to flat format so callers (sync_api, drift detection) can access
+        # fields like apiName, apiVersion, id directly.
+        raw = await self._svc.list_apis(auth_token=auth_token)
+        return [item.get("api", item) for item in raw]
 
     # --- Policies ---
 

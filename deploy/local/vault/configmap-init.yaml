@@ -1,0 +1,22 @@
+# =============================================================================
+# ConfigMap: Vault Init Script
+# =============================================================================
+# NOTE: This file is a reference template. The actual ConfigMap is generated
+# by setup-vault-local.sh using:
+#
+#   kubectl create configmap vault-init-script \
+#     --from-file=init-vault-local.sh=deploy/local/vault/init-vault-local.sh \
+#     -n vault --dry-run=client -o yaml | kubectl apply -f -
+#
+# This ensures the ConfigMap always reflects the latest init-vault-local.sh.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-init-script
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault-init
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/managed-by: setup-vault-local.sh
+# data: generated from init-vault-local.sh at deploy time

@@ -57,14 +57,7 @@ impl Default for TelemetryConfig {
 /// - No OTLP endpoint configured (no-op mode, CAB-1831)
 /// - Exporter creation fails (graceful degradation)
 pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_sdk::trace::Tracer> {
-    // CAB-1866: use eprintln! because tracing subscriber is not yet initialized
-    eprintln!(
-        "[otel] init_telemetry_tracer called, endpoint={:?}",
-        config.otlp_endpoint
-    );
-
     if OTEL_INITIALIZED.get().is_some() {
-        eprintln!("[otel] already initialized, skipping");
         return None;
     }
 
@@ -72,13 +65,11 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     let endpoint = match config.otlp_endpoint.as_deref() {
         Some(ep) if !ep.is_empty() => ep,
         _ => {
-            eprintln!("[otel] no endpoint configured — OTel disabled");
+            info!("STOA_OTEL_ENDPOINT not set — OTel export disabled (spans are local-only)");
             let _ = OTEL_INITIALIZED.set(false);
             return None;
         }
     };
-
-    eprintln!("[otel] building OTLP exporter for endpoint: {endpoint}");
 
     use opentelemetry::global;
     use opentelemetry::KeyValue;
@@ -91,12 +82,9 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
         .with_endpoint(endpoint)
         .build()
     {
-        Ok(e) => {
-            eprintln!("[otel] OTLP exporter created successfully");
-            e
-        }
+        Ok(e) => e,
         Err(err) => {
-            eprintln!("[otel] OTLP exporter FAILED: {err}");
+            tracing::warn!(error = %err, "Failed to create OTLP exporter — OTel disabled");
             let _ = OTEL_INITIALIZED.set(false);
             return None;
         }
@@ -113,8 +101,24 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     let ratio_sampler = Sampler::TraceIdRatioBased(config.sample_rate);
     let sampler = Sampler::ParentBased(Box::new(ratio_sampler));
 
+    // Configure batch exporter with explicit settings and error logging
+    use opentelemetry_sdk::trace::BatchConfigBuilder;
+    let batch_config = BatchConfigBuilder::default()
+        .with_max_export_batch_size(512)
+        .with_scheduled_delay(std::time::Duration::from_secs(5))
+        .with_max_export_timeout(std::time::Duration::from_secs(30))
+        .with_max_queue_size(2048)
+        .build();
+
+    let batch_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(
+        exporter,
+        opentelemetry_sdk::runtime::Tokio,
+    )
+    .with_batch_config(batch_config)
+    .build();
+
     let provider = TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .with_span_processor(batch_processor)
         .with_resource(resource)
         .with_sampler(sampler)
         .build();
@@ -125,15 +129,13 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     global::set_tracer_provider(provider);
 
     let _ = OTEL_INITIALIZED.set(true);
-    eprintln!(
-        "[otel] OpenTelemetry initialized: service={}, endpoint={}, mode={}, sample_rate={}",
-        config.service_name, endpoint, config.deployment_mode, config.sample_rate
-    );
     info!(
         service = %config.service_name,
         endpoint = endpoint,
         sample_rate = config.sample_rate,
-        "OpenTelemetry initialized"
+        batch_delay_secs = 5,
+        max_queue_size = 2048,
+        "OpenTelemetry initialized — OTLP gRPC batch exporter active"
     );
     Some(tracer)
 }

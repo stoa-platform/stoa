@@ -60,7 +60,6 @@ The `platform-config-ci.yml` workflow:
 
 - Push to `main` branch with changes in:
   - `deploy/platform-bootstrap/**`
-  - `gitops-templates/webmethods/**`
 - Manual trigger via `workflow_dispatch`
 
 ## Manual Deployment
@@ -186,7 +185,7 @@ spec:
 
 3. Check Gateway directly:
    ```bash
-   curl https://gateway.gostoa.dev/rest/apigateway/apis
+   curl https://vps-wm.gostoa.dev/rest/apigateway/apis
    ```
 
 ### Validation Errors

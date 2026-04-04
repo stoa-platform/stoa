@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-27 (C11 COMPLETE: 152/152 pts, 9 PRs, 3h wall clock)
+> Last sync: 2026-03-30
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -329,24 +329,87 @@
 
 ---
 
-## Cycle 12 (Mar 3+) — CURRENT
+## Cycle 12 (Mar 3–28) — CLOSED
 
 **Theme**: HEGEMON Runtime Integration + Gateway Hardening + Observability
 
+### Done
+
+- [x] CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (21 pts) — Council 8.13/10, PRs #1526, #1531
+  - [x] CAB-1739 [gateway] PAR proxy endpoint RFC 9126 (5 pts) — PR #1526
+  - [x] CAB-1741 [infra] Unify KC to 26.5.3 + FAPI profiles (3 pts) — PR #1526
+  - [x] CAB-1742 [gateway] OTel runtime toggle (3 pts) — PR #1526
+  - [x] CAB-1740 [gateway] private_key_jwt client auth RFC 7523 (8 pts) — PR #1531
+- [x] CAB-1781: feat(infra) Universal Gateway Self-Registration (13 pts) — Council 8.50/10
+- [x] CAB-1773: fix(ui) Grafana iframe embedding with JWT auth_token (8 pts) — Council 8.50/10
+- [x] CAB-1930: [MEGA] Deploy Single Path — SSE replaces SyncEngine (34 pts) — ADR-059, Council 8.00/10
+  - [x] CAB-1931 [api] SSE endpoint + DEPLOY_MODE (13 pts) — PR #2072
+  - [x] CAB-1932 [go] SSE client stoa-connect (8 pts) — PR #2073
+  - [x] CAB-1933 [api] Phantom instance cleanup (5 pts) — PR #2074
+  - [x] CAB-1934 [e2e] Deploy verification script (5 pts) — PR #2075
+- [x] fix(ui): API backend port 80 → 8000 — PR #2077
+- [x] fix(api): bridge git_provider DI test patches — PR #2076
+- [x] fix(gateway): audit remediations — Council 8.75/10, PR #1633
+- [x] CAB-1766: Operations Grafana embed + RBAC (13 pts) — Council 8.50/10, PR #1632
+- [x] chore(arena): Remove Kong & Gravitee from L1 Enterprise benchmark — PR #1620
+- [x] docs: Update gateway-arena.md rule for L1 changes — PR #1621
+- [x] docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22
+- [x] fix(audit): Word boundary matching for blocklist false positive — stoa-docs #111
+- [x] CAB-1725: fix(api): correct proxy backend health endpoints (5 pts) — PR #1530
+- [x] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — PR #1518
+- [x] CAB-1705: [MEGA] Multi-Environment UX Harmonization — Console & Portal (21 pts) — PRs #1507, #1510, #1515
+- [x] CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398
+- [x] CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397
+- [x] CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396
+- [x] CAB-1635: OTel Distributed Tracing (21 pts) — PR #1391
+- [x] CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393
+
+---
+
+## Cycle 14 (Mar 30 – Apr 5) — CURRENT
+
+**Scope**: ~371 pts | **Done**: 57 pts | **In Review**: 128 pts | **In Progress**: 53 pts
+**Theme**: STOA Connect + Dashboard UX + Health Checks + Real Data
+
+### Done
+
+- [x] fix(api): duplicate personal tenant cleanup (2026-04-02) — DB-only (no PR)
+  - Archived 8 duplicate tenants, fixed `owner_user_id` email→UUID on 8 originals
+- [x] CAB-1938: fix(api): slug api_id + name-version uniqueness — PRs #2106, #2109, #2111
+- [x] CAB-1936: [MEGA] STC + Security Plugins (21 pts, P3)
+  - Phase 1: ADR-058 + federation benchmark — PR #2107
+  - Phase 2+3: STC plugin + PII filter + secrets detection — PR #2108
+- [x] CAB-1935: chore(ci): cross-repo service port drift detection (5 pts, P2) — PR #2079
+- [x] CAB-1953: feat(api,ui): add ui_url to GatewayInstance for admin UI links (5 pts, P3) — PR #2149
+
+### In Review
+
+- [~] CAB-1869: [MEGA] Call Flow Dashboard — Vue globale + Detail trace temps reel (21 pts, P2)
+- [~] CAB-1916: [MEGA] Normaliser les health checks — Connect, Gateway, Adapters (21 pts, P2)
+- [~] CAB-1775: feat(ui): Console Dashboard — Platform Health KPIs & Gauges (21 pts, P3)
+- [~] CAB-1903: feat(portal): [MEGA] Core UX Upgrades — intent homepage, CmdK (21 pts, P3)
+- [~] CAB-1814: feat(gateway,ui): [MEGA] MCP Tool Lifecycle Management (13 pts, P3)
+- [~] CAB-1874: feat(infra): deploy Portainer CE for VPS fleet observability (8 pts, P3)
+- [~] CAB-1876: docs(reference): platform tooling map — full stack inventory (2 pts, P4)
+- [~] CAB-1858: chore(infra): dedicated VPS traffic generator (5 pts, P2) — sub of CAB-1855
+- [~] CAB-1900: [stoa-go] Credential relay — Vault consumer secret injection (8 pts, P3) — sub of CAB-1896
+- [~] CAB-1898: [stoa-go] Route sync loop — fetch CP routes, push to local gw (8 pts, P3) — sub of CAB-1896
+
 ### In Progress
 
-- [~] CAB-1733: [MEGA] FAPI 2.0 + API Fabric + Gouvernance Agentique (34 pts) — Council 8.13/10, 5 subs
-  - **Phase 1** (parallel) [owner: —] — PR #1526
-    - [x] CAB-1739 [gateway] PAR proxy endpoint RFC 9126 (5 pts) — PR #1526
-    - [x] CAB-1741 [infra] Unify KC to 26.5.3 + FAPI profiles (3 pts) — PR #1526
-    - [x] CAB-1742 [gateway] OTel runtime toggle (3 pts) — PR #1526
-    - [ ] CAB-1743 [docs] FAPI 2.0 architecture guide (5 pts) — ADR-056 drafted, needs stoa-docs PR
-  - **Phase 2** (after Phase 1) [owner: —] — PR #1531
-    - [x] CAB-1740 [gateway] private_key_jwt client auth RFC 7523 (8 pts) — PR #1531
+- [~] CAB-1817: [MEGA] STOA Connect — Go agent for third-party gateway control plane (21 pts, P2)
+- [~] CAB-1791: feat(api,ui): MCP Servers page operational — multi-env + credentials (21 pts, P2)
+- [~] CAB-1880: feat(api): Python SDK generator pipeline (8 pts, P3) — sub of CAB-1449
+- [~] CAB-1859: feat(auth): Keycloak service account + OPA policy for demo traffic (3 pts, P2) — sub of CAB-1855
 
 ### Todo
 
-- [ ] CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (44 pts) — Council 8.25/10, 6 phases
+**Code**:
+- [ ] CAB-1887: fix(ui): [MEGA] Gateway Dashboard Inconsistencies (21 pts, P1-Urgent)
+- [ ] CAB-1917: [MEGA] fix(api): Fix API creation and deployment pipeline (21 pts, P2)
+- [ ] CAB-1867: chore(ops): Bus Factor Mitigation — Break Glass + Bootstrap (13 pts, P2)
+- [ ] CAB-1855: [MEGA] feat(gateway): constant real data in prod — 5 APIs + traffic (21 pts, P2) — subs 1858 (In Review), 1859 (In Progress)
+- [ ] CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (21 pts, P2) — Council 8.25/10
   - **Phase 0** [owner: —]
     - [ ] CAB-1796 [infra] Setup Vault on spare-gra-vps (8 pts)
   - **Phase 1** (after Phase 0) [owner: —]
@@ -359,27 +422,36 @@
     - [ ] CAB-1801 [infra] Extended rotation VPS (5 pts)
   - **Phase 5** (after Phase 0, nice-to-have) [owner: —]
     - [ ] CAB-1802 [infra] SSH signing + PKI engine (5 pts)
-- [ ] CAB-1781: feat(infra) Universal Gateway Self-Registration (13 pts) — Council 8.50/10
-- [ ] CAB-1773: fix(ui) Grafana iframe embedding with JWT auth_token (8 pts) — Council 8.50/10
+- [ ] CAB-1602: [INFRA] Provisionner VPS STOA-bench (3 pts, P3)
 
-### Done
+**Strategy/Comm — HUMAN ONLY**:
+- [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1-Urgent)
+- [ ] CAB-1576: [GTM-01] Restructurer le pitch en 3 couches narratives (5 pts, P1-Urgent)
+- [ ] CAB-1577: [GTM-02] Definir les packages forfaitaires (2 pts, P1-Urgent)
+- [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2) — sub of CAB-1442
+- [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2) — sub of CAB-1442
+- [ ] CAB-1127: Dual-Track Content (5 pts, P2) — sub of CAB-1442
+- [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
+- [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
 
-- [x] fix(gateway): audit remediations — Council 8.75/10, PR #1633
-  - SSE panic (HIGH), parking_lot RwLock (MEDIUM), mode Option accessors (MEDIUM), dep vuln docs (SECURITY), README sync (DX)
-- [x] CAB-1766: Operations Grafana embed + RBAC (13 pts) — Council 8.50/10, PR #1632
-- [x] chore(arena): Remove Kong & Gravitee from L1 Enterprise benchmark — PR #1620
-- [x] docs: Update gateway-arena.md rule for L1 changes — PR #1621
-- [x] docs: Simplify banking terminology across repos — PRs #1622, stoa-docs #111, stoa-web #22
-- [x] fix(audit): Word boundary matching for blocklist false positive — stoa-docs #111
-- [x] CAB-1725: fix(api): correct proxy backend health endpoints (5 pts) — PR #1530
-- [x] CAB-1731: fix(ui): honest environment scoping — remove guards from cross-env pages (13 pts) — PR #1518
+### Done (4 issues, 31 pts)
 
-- [x] CAB-1705: [MEGA] Multi-Environment UX Harmonization — Console & Portal (21 pts) — PRs #1507, #1510, #1515
-- [x] CAB-1543: [MEGA] Observability Alert Pipeline (21 pts) — PR #1398 (2 files, 430 LOC). 17 PrometheusRule alerts + AlertManagerConfig. Gap-fill: portal/console, LLM cost, auth anomaly, SLO burn-rate, rollout
-- [x] CAB-1637: API/MCP Discovery — Smart Connector Catalog (13 pts) — PR #1397 (2 files, ~250 LOC). 12 EU APIs + MCP endpoints, auto-detect, search. 21 tests
-- [x] CAB-1634: RBAC Taxonomy v2 (21 pts) — PR #1396 (6 files, ~380 LOC). 32 permissions, 4 domains, RBACContext, 57 tests
-- [x] CAB-1635: OTel Distributed Tracing (21 pts) — PR #1391. Per-tenant spans
-- [x] CAB-1636: [MEGA] HEGEMON Runtime × STOA Gateway Integration (28 pts) — PR #1393 (18 files, 2687 LOC). Supervision middleware, MCP Server v0, Grafana dashboard, integration tests | `instance:mcp`
+- [x] CAB-1931: feat(api): SSE endpoint + DEPLOY_MODE (13 pts) — PR #2072 (sub of CAB-1930)
+- [x] CAB-1932: feat(go): stoa-connect SSE client (8 pts) — PR #2073 (sub of CAB-1930)
+- [x] CAB-1933: chore(api): cleanup phantom gateway instances (5 pts) — PR #2074 (sub of CAB-1930)
+- [x] CAB-1934: test(e2e): deploy single path E2E script (5 pts) — PR #2075 (sub of CAB-1930)
+
+### Backlog (in cycle, not committed)
+
+- CAB-1478: [MEGA] eBPF Gateway — Kernel-Level API Governance (P2)
+- CAB-1544: [MEGA] Community: SEO Content Pipeline — 10 Blog Posts (P3)
+- CAB-1591: [AI-Factory] STOA-bench v1 — Framework eval LLM (P3)
+- CAB-1442: [MEGA] Comm: Demo Video & Marketing Content Package (P2)
+- CAB-1751: chore(infra): Decommission Hetzner K3s staging (P3)
+- CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (P1-Urgent)
+- CAB-1600: [CIR] Preparer dossier CIR 2025 (P3)
+- CAB-1599: [GTM] Kit contractuel (P3)
+- CAB-1604: [GTM] Contacter Anthropic (P3)
 
 ---
 

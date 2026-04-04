@@ -110,8 +110,8 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
         'https://api.test.com'
       );
 
-      // Submit the form directly (button is outside form in the DOM)
-      fireEvent.submit(getForm());
+      // Submit via button click (button is connected to form via form attribute)
+      await user.click(screen.getByRole('button', { name: /register api/i }));
 
       await waitFor(() => {
         expect(mockCreateBackendApi).toHaveBeenCalledWith(

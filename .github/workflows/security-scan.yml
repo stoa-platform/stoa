@@ -191,7 +191,6 @@ jobs:
   dependency-scan:
     name: Dependency Scan
     runs-on: ubuntu-latest
-    continue-on-error: true  # Tracked vulnerabilities, not blocking
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -218,6 +217,7 @@ jobs:
         run: pip install pip-audit
 
       - name: Pip audit — control-plane-api
+        continue-on-error: true  # tracked vulns (CVE-2024-23342), not blocking
         run: |
           if [ -f "control-plane-api/requirements.txt" ]; then
             # CVE-2024-23342: ecdsa Minerva timing attack — transitive dep of python-jose.
@@ -235,6 +235,7 @@ jobs:
           node-version: '20'
 
       - name: NPM audit — control-plane-ui
+        continue-on-error: true  # GHSA-3ppc-4f35-3m26 in dev chain, not blocking
         run: |
           if [ -f "control-plane-ui/package-lock.json" ]; then
             # --omit=dev: audit only production dependencies.
@@ -245,6 +246,7 @@ jobs:
           fi
 
       - name: NPM audit — portal
+        continue-on-error: true  # audit-level=high, non-blocking
         run: |
           if [ -f "portal/package-lock.json" ]; then
             cd portal && npm audit --audit-level=high --omit=dev

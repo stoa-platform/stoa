@@ -140,7 +140,7 @@ Pushgateway credentials are stored in Vault at `stoa/shared/pushgateway`.
 | Environment | Path | Auto-provisioned |
 |-------------|------|-----------------|
 | K8s (prod) | `k8s/grafana/dashboards/hegemon-cost.json` | Via ConfigMap |
-| Docker (local) | `docker/observability/grafana/dashboards/hegemon-cost.json` | Via volume mount |
+| Docker (local) | `stoa-infra:docker/observability/grafana/dashboards/hegemon-cost.json` | Via volume mount |
 
 ### Available metrics
 

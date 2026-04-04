@@ -113,7 +113,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.post(
-                "/v1/contracts",
+                "/v1/tenants/acme/contracts",
                 json={
                     "name": "payment-service",
                     "display_name": "Payment Service API",
@@ -142,7 +142,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.post(
-                "/v1/contracts",
+                "/v1/tenants/acme/contracts",
                 json={
                     "name": "payment-service",
                     "display_name": "Payment Service API",
@@ -152,21 +152,21 @@ class TestContractsRouter:
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"]
 
-    def test_create_contract_400_no_tenant(
+    def test_create_contract_403_no_tenant(
         self, app_with_no_tenant_user, mock_db_session
     ):
         """Test user without tenant cannot create contract."""
         with TestClient(app_with_no_tenant_user) as client:
             response = client.post(
-                "/v1/contracts",
+                "/v1/tenants/acme/contracts",
                 json={
                     "name": "orphan-contract",
                     "display_name": "Should Fail",
                 },
             )
 
-        assert response.status_code == 400
-        assert "must belong to a tenant" in response.json()["detail"]
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
 
     # ============== List Contracts Tests ==============
 
@@ -202,7 +202,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(side_effect=mock_execute)
 
         with TestClient(app_with_tenant_admin) as client:
-            response = client.get("/v1/contracts?page=1&page_size=20")
+            response = client.get("/v1/tenants/acme/contracts?page=1&page_size=20")
 
         assert response.status_code == 200
         data = response.json()
@@ -240,7 +240,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(side_effect=mock_execute)
 
         with TestClient(app_with_tenant_admin) as client:
-            response = client.get(f"/v1/contracts/{sample_contract_data['id']}")
+            response = client.get(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}")
 
         assert response.status_code == 200
         data = response.json()
@@ -259,7 +259,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_other_tenant) as client:
-            response = client.get(f"/v1/contracts/{sample_contract_data['id']}")
+            response = client.get(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}")
 
         assert response.status_code == 403
         assert "Access denied" in response.json()["detail"]
@@ -298,7 +298,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.post(
-                f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",
                 json={"protocol": "graphql"},
             )
 
@@ -340,7 +340,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.post(
-                f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",
                 json={"protocol": "rest"},
             )
 
@@ -391,11 +391,10 @@ class TestContractsRouter:
         mock_dispatch_result.success = True
         mock_adapter.deploy_contract = AsyncMock(return_value=mock_dispatch_result)
 
-        with patch("src.routers.contracts.AdapterRegistry") as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+        with patch("src.routers.contracts.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter):
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
-                    f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                    f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",
                     json={"protocol": "mcp"},
                 )
 
@@ -450,11 +449,10 @@ class TestContractsRouter:
         mock_fail_result.error = "connection refused"
         mock_adapter.deploy_contract = AsyncMock(return_value=mock_fail_result)
 
-        with patch("src.routers.contracts.AdapterRegistry") as mock_registry:
-            mock_registry.create.return_value = mock_adapter
+        with patch("src.routers.contracts.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter):
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
-                    f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                    f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",
                     json={"protocol": "mcp"},
                 )
 
@@ -498,7 +496,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.delete(
-                f"/v1/contracts/{sample_contract_data['id']}/bindings/rest"
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings/rest"
             )
 
         assert response.status_code == 200
@@ -536,7 +534,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.patch(
-                f"/v1/contracts/{sample_contract_data['id']}",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}",
                 json={"display_name": "Updated Payment API", "description": "Updated description"},
             )
 
@@ -554,7 +552,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.patch(
-                f"/v1/contracts/{uuid4()}",
+                f"/v1/tenants/acme/contracts/{uuid4()}",
                 json={"display_name": "Updated Name"},
             )
 
@@ -573,7 +571,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_other_tenant) as client:
             response = client.patch(
-                f"/v1/contracts/{sample_contract_data['id']}",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}",
                 json={"display_name": "Hacked Name"},
             )
 
@@ -593,7 +591,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            response = client.delete(f"/v1/contracts/{sample_contract_data['id']}")
+            response = client.delete(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}")
 
         assert response.status_code == 204
 
@@ -606,7 +604,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            response = client.delete(f"/v1/contracts/{uuid4()}")
+            response = client.delete(f"/v1/tenants/acme/contracts/{uuid4()}")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
@@ -622,7 +620,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_other_tenant) as client:
-            response = client.delete(f"/v1/contracts/{sample_contract_data['id']}")
+            response = client.delete(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}")
 
         assert response.status_code == 403
         assert "Access denied" in response.json()["detail"]
@@ -638,7 +636,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with TestClient(app_with_tenant_admin) as client:
-            response = client.get(f"/v1/contracts/{uuid4()}")
+            response = client.get(f"/v1/tenants/acme/contracts/{uuid4()}")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
@@ -670,7 +668,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.delete(
-                f"/v1/contracts/{sample_contract_data['id']}/bindings/grpc"
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings/grpc"
             )
 
         assert response.status_code == 404
@@ -710,7 +708,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(side_effect=mock_execute)
 
         with TestClient(app_with_cpi_admin) as client:
-            response = client.get("/v1/contracts?page=1&page_size=20")
+            response = client.get("/v1/tenants/acme/contracts?page=1&page_size=20")
 
         # CPI admin should see contracts from all tenants
         assert response.status_code == 200
@@ -747,7 +745,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.patch(
-                f"/v1/contracts/{sample_contract_data['id']}",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}",
                 json={
                     "display_name": "Updated Display Name",
                     "description": "Updated description",
@@ -791,7 +789,7 @@ class TestContractsRouter:
         mock_db_session.execute = AsyncMock(side_effect=mock_execute)
 
         with TestClient(app_with_tenant_admin) as client:
-            response = client.get(f"/v1/contracts/{sample_contract_data['id']}/bindings")
+            response = client.get(f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings")
 
         assert response.status_code == 200
         data = response.json()
@@ -828,7 +826,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.post(
-                f"/v1/contracts/{sample_contract_data['id']}/bindings",
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings",
                 json={"protocol": "mcp"},
             )
 
@@ -873,7 +871,7 @@ class TestContractsRouter:
 
         with TestClient(app_with_tenant_admin) as client:
             response = client.delete(
-                f"/v1/contracts/{sample_contract_data['id']}/bindings/kafka"
+                f"/v1/tenants/acme/contracts/{sample_contract_data['id']}/bindings/kafka"
             )
 
         assert response.status_code == 409

@@ -44,6 +44,7 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   deployed_dev: boolean;
   deployed_staging: boolean;
+  openapi_spec?: string | Record<string, unknown>;
   tags?: string[];
   portal_promoted?: boolean; // Whether API is promoted to Developer Portal
   audience?: 'public' | 'internal' | 'partner';
@@ -173,10 +174,37 @@ export interface TenantCAInfo {
 }
 
 export interface CSRSignResponse {
+  id: string;
   signed_certificate_pem: string;
   subject_dn: string;
   issuer_dn: string;
+  serial_number: string;
+  fingerprint_sha256: string;
+  not_before: string;
+  not_after: string;
   validity_days: number;
+  status: string;
+}
+
+export interface IssuedCertificate {
+  id: string;
+  subject_dn: string;
+  issuer_dn: string;
+  serial_number: string;
+  fingerprint_sha256: string;
+  not_before: string;
+  not_after: string;
+  key_algorithm: string;
+  status: string;
+  consumer_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface IssuedCertificateListResponse {
+  items: IssuedCertificate[];
+  total: number;
 }
 
 // Environment types (ADR-040 — Born GitOps)
@@ -1137,6 +1165,9 @@ export interface GatewayInstance {
   environment: string;
   tenant_id?: string;
   base_url: string;
+  target_gateway_url?: string | null;
+  public_url?: string | null;
+  ui_url?: string | null;
   auth_config: Record<string, unknown>;
   status: GatewayInstanceStatus;
   last_health_check?: string;
@@ -1188,6 +1219,14 @@ export interface PaginatedGatewayInstances {
   page_size: number;
 }
 
+export interface SyncStep {
+  name: string;
+  status: 'running' | 'success' | 'failed' | 'skipped';
+  started_at: string;
+  completed_at?: string;
+  detail?: string;
+}
+
 export interface GatewayDeployment {
   id: string;
   api_catalog_id: string;
@@ -1201,9 +1240,14 @@ export interface GatewayDeployment {
   last_sync_success?: string;
   sync_error?: string;
   sync_attempts: number;
+  sync_steps?: SyncStep[];
   gateway_resource_id?: string;
   created_at: string;
   updated_at: string;
+  gateway_name?: string;
+  gateway_display_name?: string;
+  gateway_type?: string;
+  gateway_environment?: string;
 }
 
 export interface DeploymentStatusSummary {
@@ -1875,4 +1919,42 @@ export interface PromotionDiffResponse {
   source_spec: Record<string, unknown> | null;
   target_spec: Record<string, unknown> | null;
   diff_summary: Record<string, unknown> | null;
+}
+
+// ─── EU API Catalog (CAB-1639) ────────────────────────────────────────────────
+
+export interface CatalogTool {
+  name: string;
+  description?: string;
+}
+
+export interface CatalogEntry {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  country: string;
+  region: string;
+  spec_url?: string;
+  mcp_endpoint?: string;
+  protocol: 'openapi' | 'mcp' | 'graphql';
+  auth_type: 'none' | 'api_key' | 'oauth2' | 'basic';
+  tools: CatalogTool[];
+  status: 'verified' | 'community' | 'experimental';
+  tags: string[];
+  documentation_url?: string;
+  icon?: string;
+}
+
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
+export interface CatalogResponse {
+  entries: CatalogEntry[];
+  total: number;
+  categories: CatalogCategory[];
 }

@@ -2,8 +2,11 @@
   Bootstrap Job (CAB-1864) — provisions Keycloak realm, OIDC clients, roles,
   scopes, and default tenant on first install.
   Runs as a Helm post-install hook. Idempotent — safe to re-run.
+
+  CAB-1958: Skipped when keycloak.operator.enabled=true — realm is managed
+  by the Keycloak Operator via KeycloakRealmImport CR in stoa-infra.
 */}}
-{{- if .Values.stoa.bootstrap.enabled }}
+{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values)) }}
 ---
 apiVersion: v1
 kind: ConfigMap

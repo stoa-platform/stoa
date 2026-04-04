@@ -14478,7 +14478,7 @@
           "Monitoring"
         ],
         "summary": "List Transactions",
-        "description": "List recent API transactions.\n\nReturns transaction summaries for efficient list display.\nUses real OpenSearch data when available, falls back to demo data.",
+        "description": "List recent API transactions.\n\nReturns transaction summaries from OpenSearch or Tempo.\nFalls back to empty list when no data source is available.",
         "operationId": "list_transactions",
         "security": [
           {
@@ -14541,6 +14541,24 @@
               "default": 60,
               "title": "Time Range"
             }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pagination cursor from previous response",
+              "title": "Cursor"
+            },
+            "description": "Pagination cursor from previous response"
           }
         ],
         "responses": {
@@ -14573,7 +14591,7 @@
           "Monitoring"
         ],
         "summary": "Get Transaction Stats",
-        "description": "Get API transaction statistics.\n\nReturns aggregated metrics about API calls.\nUses real OpenSearch data when available, falls back to demo data.",
+        "description": "Get API transaction statistics.\n\nReturns aggregated metrics from OpenSearch.\nTempo does not support aggregation \u2014 returns zeroed stats with source indicator.",
         "operationId": "get_transaction_stats",
         "security": [
           {
@@ -14624,7 +14642,7 @@
           "Monitoring"
         ],
         "summary": "Get Transaction",
-        "description": "Get detailed information about a specific transaction.\n\nIncludes all spans with timing and metadata.\nUses real OpenSearch data when available, falls back to demo data.",
+        "description": "Get detailed information about a specific transaction.\n\nIncludes all spans with timing and metadata.\nChecks OpenSearch first, then Tempo for trace detail.",
         "operationId": "get_transaction",
         "security": [
           {
@@ -53309,6 +53327,11 @@
             "type": "boolean",
             "title": "Demo Mode",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "none"
           }
         },
         "type": "object",
@@ -53325,7 +53348,7 @@
           "spans"
         ],
         "title": "TransactionDetailWithDemoResponse",
-        "description": "Transaction detail with demo mode indicator."
+        "description": "Transaction detail with data source indicator."
       },
       "TransactionListResponse": {
         "properties": {
@@ -53347,11 +53370,27 @@
             "type": "boolean",
             "title": "Demo Mode",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "none"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
           }
         },
         "type": "object",
         "title": "TransactionListResponse",
-        "description": "Transaction list with demo mode indicator."
+        "description": "Transaction list with data source indicator."
       },
       "TransactionSpan": {
         "properties": {
@@ -53440,6 +53479,11 @@
             "type": "boolean",
             "title": "Demo Mode",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "none"
           }
         },
         "type": "object",
@@ -53456,7 +53500,7 @@
           "by_status_code"
         ],
         "title": "TransactionStatsWithDemoResponse",
-        "description": "Transaction stats with demo mode indicator."
+        "description": "Transaction stats with data source indicator."
       },
       "TransportTypeEnum": {
         "type": "string",

@@ -408,12 +408,30 @@ function Login() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-500 to-purple-600">
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-96">
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <div
+      className="flex items-center justify-center min-h-screen"
+      style={{
+        background:
+          'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5,150,105,0.15), transparent), radial-gradient(circle at 20% 80%, rgba(5,150,105,0.08), transparent), linear-gradient(to bottom, #0a0a0a, #111111)',
+      }}
+    >
+      <div
+        className="p-0 rounded-2xl w-96 overflow-hidden"
+        style={{
+          background: '#18181b',
+          border: '1px solid #3f3f46',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 60px rgba(5,150,105,0.15)',
+        }}
+      >
+        <div
+          className="px-8 py-10 text-center"
+          style={{
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+          }}
+        >
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-white/20 backdrop-blur-sm">
             <svg
-              className="w-8 h-8 text-blue-600"
+              className="w-8 h-8 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -426,33 +444,39 @@ function Login() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900">{t('login.title')}</h1>
-          <p className="text-neutral-500 mt-1">{t('login.subtitle')}</p>
+          <h1 className="text-2xl font-bold text-white">{t('login.title')}</h1>
+          <p className="text-white/80 mt-1">{t('login.subtitle')}</p>
         </div>
-        <button
-          onClick={login}
-          disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              {t('common.loading')}
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
-                />
-              </svg>
-              {t('login.button')}
-            </>
-          )}
-        </button>
+        <div className="px-8 py-8">
+          <button
+            onClick={login}
+            disabled={isLoading}
+            className="w-full text-white py-3.5 rounded-xl font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5"
+            style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+              boxShadow: isLoading ? 'none' : '0 10px 30px -10px rgba(5,150,105,0.5)',
+            }}
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                {t('common.loading')}
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+                  />
+                </svg>
+                {t('login.button')}
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

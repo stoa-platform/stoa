@@ -171,16 +171,16 @@ class GatewayInstanceService:
             }
 
         adapter = await create_adapter_with_credentials(
-            instance.gateway_type.value, instance.base_url, instance.auth_config,
+            instance.gateway_type.value,
+            instance.base_url,
+            instance.auth_config,
         )
 
         try:
             await adapter.connect()
             result = await adapter.health_check()
 
-            new_status = (
-                GatewayInstanceStatus.ONLINE if result.success else GatewayInstanceStatus.DEGRADED
-            )
+            new_status = GatewayInstanceStatus.ONLINE if result.success else GatewayInstanceStatus.DEGRADED
             details = result.data or {}
             if not result.success and result.error:
                 details = {**details, "error": result.error}

@@ -79,9 +79,7 @@ async def list_gateways(
     # Visibility filtering for non-admin users
     if not is_platform_admin and user.tenant_id:
         items = [
-            gw
-            for gw in items
-            if gw.visibility is None or user.tenant_id in (gw.visibility.get("tenant_ids") or [])
+            gw for gw in items if gw.visibility is None or user.tenant_id in (gw.visibility.get("tenant_ids") or [])
         ]
         total = len(items)
     return PaginatedGatewayInstances(items=items, total=total, page=page, page_size=page_size)

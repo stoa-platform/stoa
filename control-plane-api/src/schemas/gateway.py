@@ -57,9 +57,7 @@ class GatewayInstanceResponse(BaseModel):
     target_gateway_url: str | None = Field(
         None, description="URL of the third-party gateway managed by this Link/Connect instance"
     )
-    public_url: str | None = Field(
-        None, description="Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)"
-    )
+    public_url: str | None = Field(None, description="Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)")
     ui_url: str | None = Field(
         None, description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)"
     )

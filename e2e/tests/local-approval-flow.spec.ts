@@ -128,9 +128,9 @@ test.describe.serial('Approval Flow — Full State Machine', () => {
     mcpServerId = (await sr.json()).id;
   });
 
-  // ─── Phase 1: Console Approve ─────────────────────────────────
+  // ─── Phase 1: Console Reject (first — no DB lock issues) ──────
 
-  test('1.1 — Console: click Approve on first pending row (VIDEO)', async ({ page }) => {
+  test('1.1 — Console: click Reject + enter reason (VIDEO)', async ({ page }) => {
     test.setTimeout(120000);
     await loginConsole(page);
     await gotoSubscriptions(page);
@@ -138,65 +138,52 @@ test.describe.serial('Approval Flow — Full State Machine', () => {
     await expect(page.locator('text=Pending Requests')).toBeVisible({ timeout: 15000 });
     await page.screenshot({ path: 'test-results/approval-01-console-pending.png', fullPage: true });
 
-    const approveBtn = page.locator('button', { hasText: 'Approve' }).first();
-    await expect(approveBtn).toBeVisible({ timeout: 10000 });
-
-    await approveBtn.click();
-    await expect(page.getByText('Approve Subscription')).toBeVisible({ timeout: 5000 });
-    await page.screenshot({ path: 'test-results/approval-02-confirm-dialog.png', fullPage: true });
-    // Click the Approve button inside the confirm dialog (not the row buttons)
-    await page.getByLabel('Approve Subscription').getByRole('button', { name: 'Approve' }).click();
-
-    await page.waitForTimeout(3000);
-    await page.screenshot({ path: 'test-results/approval-03-after-approve.png', fullPage: true });
-
-    await page.locator('button', { hasText: /^Active/ }).click();
-    await page.waitForTimeout(2000);
-    await page.screenshot({ path: 'test-results/approval-04-active-tab.png', fullPage: true });
-
-    console.log('  1.1 PASS: Approved via Console UI');
-  });
-
-  // ─── Phase 2: Console Reject ──────────────────────────────────
-
-  test('2.1 — Console: click Reject + enter reason (VIDEO)', async ({ page }) => {
-    test.setTimeout(120000);
-    await loginConsole(page);
-    await gotoSubscriptions(page);
-
-    // Wait for stats then ensure Pending tab is active by looking for Approve buttons in rows
-    await expect(page.locator('text=Pending Requests')).toBeVisible({ timeout: 15000 });
-    // If no Approve button visible (wrong tab), click the Pending tab text
-    if (!(await page.locator('td button', { hasText: 'Approve' }).first().isVisible({ timeout: 3000 }).catch(() => false))) {
-      // Click the Pending tab — it's a <button> inside the tab bar
-      await page.getByText(/^Pending\s*\(\d+\)/).click();
-      await page.waitForTimeout(2000);
-    }
-
     const rejectBtn = page.locator('td button', { hasText: 'Reject' }).first();
     await expect(rejectBtn).toBeVisible({ timeout: 10000 });
 
     await rejectBtn.click();
     await expect(page.getByText('Reject Subscription')).toBeVisible({ timeout: 5000 });
-    await page.screenshot({ path: 'test-results/approval-05-reject-modal.png', fullPage: true });
+    await page.screenshot({ path: 'test-results/approval-02-reject-modal.png', fullPage: true });
 
-    // Fill reason textarea in the modal
     await page.locator('.fixed.inset-0 textarea').fill('Insufficient justification for API access');
-    // Click the red Reject button in the modal (variant="danger")
-    // The modal has Cancel + Reject buttons. Click the last button inside the modal's button group.
-    const modalButtons = page.locator('.fixed.inset-0 .flex.justify-end button');
-    await modalButtons.last().click();
+    await page.locator('.fixed.inset-0').locator('button', { hasText: 'Reject' }).click();
 
-    // Wait for modal to close and table to reload
-    await expect(page.locator('text=Reject Subscription')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Reject Subscription')).not.toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(2000);
-    await page.screenshot({ path: 'test-results/approval-06-after-reject.png', fullPage: true });
+    await page.screenshot({ path: 'test-results/approval-03-after-reject.png', fullPage: true });
 
     await page.getByText(/^Rejected\s*\(\d+\)/).click();
     await page.waitForTimeout(2000);
-    await page.screenshot({ path: 'test-results/approval-07-rejected-tab.png', fullPage: true });
+    await page.screenshot({ path: 'test-results/approval-04-rejected-tab.png', fullPage: true });
 
-    console.log('  2.1 PASS: Rejected via Console UI');
+    console.log('  1.1 PASS: Rejected via Console UI');
+  });
+
+  // ─── Phase 2: Console Approve (after reject — may leave DB lock from provision_on_approval) ──
+
+  test('2.1 — Console: click Approve on pending row (VIDEO)', async ({ page }) => {
+    test.setTimeout(120000);
+    await loginConsole(page);
+    await gotoSubscriptions(page);
+
+    await expect(page.locator('text=Pending Requests')).toBeVisible({ timeout: 15000 });
+
+    const approveBtn = page.locator('button', { hasText: 'Approve' }).first();
+    await expect(approveBtn).toBeVisible({ timeout: 10000 });
+
+    await approveBtn.click();
+    await expect(page.getByText('Approve Subscription')).toBeVisible({ timeout: 5000 });
+    await page.screenshot({ path: 'test-results/approval-05-confirm-dialog.png', fullPage: true });
+    await page.getByLabel('Approve Subscription').getByRole('button', { name: 'Approve' }).click();
+
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: 'test-results/approval-06-after-approve.png', fullPage: true });
+
+    await page.locator('button', { hasText: /^Active/ }).click();
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: 'test-results/approval-07-active-tab.png', fullPage: true });
+
+    console.log('  2.1 PASS: Approved via Console UI');
   });
 
   // ─── Phase 3-4: MCP state machine (API) ──────────────────────

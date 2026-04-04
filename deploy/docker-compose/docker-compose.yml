@@ -243,14 +243,15 @@ services:
     build:
       context: ../../
       dockerfile: control-plane-ui/Dockerfile
+      args:
+        VITE_KEYCLOAK_URL: http://localhost:${PORT_KEYCLOAK:-8080}
+        VITE_KEYCLOAK_REALM: stoa
+        VITE_KEYCLOAK_CLIENT_ID: control-plane-ui
+        VITE_API_URL: http://localhost:${PORT_API:-8000}
     image: stoa-console:local
     container_name: stoa-console
     ports:
       - "${PORT_CONSOLE:-3000}:8080"
-    environment:
-      # These are baked at build time, but we expose them for documentation
-      VITE_API_URL: http://localhost:${PORT_API:-8000}
-      VITE_KEYCLOAK_URL: http://localhost:${PORT_KEYCLOAK:-8080}
     depends_on:
       control-plane-api:
         condition: service_healthy

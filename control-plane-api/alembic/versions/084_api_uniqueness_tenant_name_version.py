@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "084"
-down_revision = "083"
+down_revision = "083_cleanup_phantom_instances"
 branch_labels = None
 depends_on = None
 

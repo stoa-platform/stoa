@@ -158,9 +158,7 @@ describe('ExternalMCPServersList', () => {
   });
 
   it('calls updateServer when toggle is clicked', async () => {
-    const { externalMcpServersService } = await import(
-      '../../services/externalMcpServersApi'
-    );
+    const { externalMcpServersService } = await import('../../services/externalMcpServersApi');
     renderComponent();
     await waitFor(() => {
       expect(screen.getByText('Enabled')).toBeInTheDocument();

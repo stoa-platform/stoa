@@ -49,6 +49,7 @@
     "proxyOwner": "Propriétaire de proxy",
     "callFlow": "Flux d'appels",
     "apiTraffic": "Trafic API",
+    "toolPermissions": "Permissions des outils",
     "llmCost": "Coûts LLM",
     "subscriptions": "Abonnements",
     "webhooks": "Webhooks",

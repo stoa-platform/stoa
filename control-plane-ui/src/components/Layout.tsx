@@ -147,6 +147,12 @@ const navigationSections: NavSection[] = [
         permission: 'apis:read',
       },
       {
+        name: 'nav.toolPermissions',
+        href: '/tool-permissions',
+        icon: Shield,
+        permission: 'apis:read',
+      },
+      {
         name: 'nav.llmCost',
         href: '/llm-cost',
         icon: DollarSign,

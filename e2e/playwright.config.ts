@@ -124,6 +124,32 @@ export default defineConfig({
       },
       testMatch: /.*-smoke\.spec\.ts/,
     },
+
+    // Cross-validation: seeded data visible in Console (CAB-1993)
+    {
+      name: 'cross-validation-console',
+      testDir: './tests',
+      testMatch: /cross-validation-console\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev',
+        storageState: 'fixtures/.auth/parzival.json',
+      },
+      dependencies: ['auth-setup'],
+    },
+
+    // Cross-validation: seeded data visible in Portal (CAB-1993)
+    {
+      name: 'cross-validation-portal',
+      testDir: './tests',
+      testMatch: /cross-validation-portal\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev',
+        storageState: 'fixtures/.auth/parzival.json',
+      },
+      dependencies: ['auth-setup'],
+    },
   ],
 
   // Global setup/teardown if needed

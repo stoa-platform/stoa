@@ -328,7 +328,7 @@ class MonitoringService:
                 trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
                 if trace_dur_nanos == 0:
                     trace_dur_nanos = int(src.get("durationInNanos", 0))
-                duration_ms = max(int(trace_dur_nanos / 1_000_000), 1)
+                duration_ms = round(trace_dur_nanos / 1_000_000, 3)
 
                 # Real HTTP status code from span attribute (gateway Phase 3A)
                 http_code_raw = src.get("span.attributes.http@status_code")
@@ -417,18 +417,32 @@ class MonitoringService:
             for hit in hits:
                 src = hit["_source"]
                 duration_nanos = int(src.get("durationInNanos", 0))
-                duration_ms = max(int(duration_nanos / 1_000_000), 1)
+                duration_ms = round(duration_nanos / 1_000_000, 3)
                 otel_name = src.get("name", "unknown")
 
                 otel_code = int(src.get("status.code", 0) or 0)
                 span_status = "error" if otel_code == 2 else "success"
 
-                # Collect metadata from flattened span attributes
+                # Collect metadata from flattened span attributes.
+                # Data Prepper flattens OTLP dots to @ separator:
+                #   http.method → span.attributes.http@method
+                #   upstream.rtt_ms → span.attributes.upstream@rtt_ms
+                # http@ keeps bare keys (backward compat); others get prefixed.
+                _ATTR_PREFIXES = [
+                    ("span.attributes.http@", None),
+                    ("span.attributes.upstream@", "upstream"),
+                    ("span.attributes.process@", "process"),
+                ]
                 metadata: dict = {}
                 for key, val in src.items():
-                    if key.startswith("span.attributes.http@"):
-                        short = key.replace("span.attributes.http@", "")
-                        metadata[short] = val
+                    for prefix, category in _ATTR_PREFIXES:
+                        if key.startswith(prefix):
+                            short_key = key[len(prefix) :]
+                            if category:
+                                metadata[f"{category}.{short_key}"] = val
+                            else:
+                                metadata[short_key] = val
+                            break
 
                 # Map OTLP names → UI-expected names
                 ui_name = _OTEL_TO_UI_SPAN_NAME.get(otel_name, otel_name)
@@ -470,7 +484,7 @@ class MonitoringService:
                         spans[i] = TransactionSpan(
                             name=spans[i].name,
                             service=spans[i].service,
-                            start_offset_ms=max(int(delta.total_seconds() * 1000), 0),
+                            start_offset_ms=round(max(delta.total_seconds() * 1000, 0), 3),
                             duration_ms=spans[i].duration_ms,
                             status=spans[i].status,
                             metadata=spans[i].metadata,
@@ -505,7 +519,7 @@ class MonitoringService:
             if trace_dur_nanos == 0:
                 tgf = root_src.get("traceGroupFields", {}) or {}
                 trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
-            total_ms = max(int(trace_dur_nanos / 1_000_000), 1)
+            total_ms = round(trace_dur_nanos / 1_000_000, 3)
 
             # Real HTTP status code from primary span
             http_code_raw = primary_src.get("span.attributes.http@status_code")

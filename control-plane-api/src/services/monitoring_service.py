@@ -265,9 +265,18 @@ class MonitoringService:
         duration/status and enrich with HTTP info from child spans.
         """
         try:
+            # Query request-level spans (not internal middleware heartbeats).
+            # http.request root spans are not exported by tracing-opentelemetry,
+            # so we target the handler spans that carry HTTP status codes.
+            request_span_names = [
+                "mcp.tools.call",
+                "mcp.tools.list",
+                "proxy.dynamic",
+                "http.request",
+            ]
             filters: list[dict] = [
                 {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
-                {"term": {"parentSpanId": ""}},
+                {"terms": {"name": request_span_names}},
             ]
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
@@ -542,7 +551,16 @@ class MonitoringService:
                     "bool": {
                         "filter": [
                             {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
-                            {"term": {"parentSpanId": ""}},
+                            {
+                                "terms": {
+                                    "name": [
+                                        "mcp.tools.call",
+                                        "mcp.tools.list",
+                                        "proxy.dynamic",
+                                        "http.request",
+                                    ]
+                                }
+                            },
                         ]
                     }
                 },

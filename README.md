@@ -21,15 +21,15 @@
 > **Universal API Contract (UAC):** Define Once, Expose Everywhere.
 
 <p align="center">
-  <img src="docs/assets/screenshot-dashboard.png" alt="STOA Console — Dashboard with live gateways" width="800">
+  <img src="docs/assets/screenshot-apis.png" alt="STOA Console — API Catalog with 24 published APIs" width="800">
 </p>
 
 <details>
 <summary>More screenshots</summary>
 
-| API Catalog (24 APIs) | Gateway Overview (3 online) |
-|---|---|
-| <img src="docs/assets/screenshot-apis.png" width="400"> | <img src="docs/assets/screenshot-gateway.png" width="400"> |
+<p align="center">
+  <img src="docs/assets/screenshot-gateway.png" alt="STOA Console — Gateway Overview, 3 gateways online" width="800">
+</p>
 
 </details>
 
@@ -242,5 +242,5 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ---
 
 <p align="center">
-  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Bordeaux, France</em>
+  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Paris, France</em>
 </p>

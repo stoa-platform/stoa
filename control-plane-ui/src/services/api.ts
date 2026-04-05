@@ -68,6 +68,9 @@ import type {
   TenantCAInfo,
   CSRSignResponse,
   IssuedCertificateListResponse,
+  TenantToolPermission,
+  TenantToolPermissionCreate,
+  TenantToolPermissionListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -1070,6 +1073,29 @@ class ApiService {
   async seedWorkflowTemplates(tenantId: string): Promise<{ message: string }> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/workflows/templates/seed`);
     return data;
+  }
+
+  // Tool Permissions (CAB-1982)
+  async listToolPermissions(
+    tenantId: string,
+    params?: { mcp_server_id?: string; page?: number; page_size?: number }
+  ): Promise<TenantToolPermissionListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/tool-permissions`, {
+      params: { ...params, page_size: params?.page_size ?? 100 },
+    });
+    return data;
+  }
+
+  async upsertToolPermission(
+    tenantId: string,
+    body: TenantToolPermissionCreate
+  ): Promise<TenantToolPermission> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/tool-permissions`, body);
+    return data;
+  }
+
+  async deleteToolPermission(tenantId: string, permissionId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/tool-permissions/${permissionId}`);
   }
 
   // Chat Settings (CAB-1852)

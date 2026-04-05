@@ -5,7 +5,22 @@ globs: ".github/**,*-ci.yml"
 
 # CI Quality Gates
 
-## Full Deployment Lifecycle
+## Pre-Push Local Gate (Gate 1)
+
+The pre-push hook (`pre-push-quality-gate.sh`) runs **automatically on `git push`**. It detects changed components and runs their quality checks locally in ~60s. If any check fails, the push is blocked. This prevents creating PRs with lint/format/compile errors.
+
+| Component | Checks | ~Duration |
+|-----------|--------|-----------|
+| Python (api) | ruff + black | ~2s |
+| TypeScript (console) | eslint + prettier + tsc + axe-core | ~18s |
+| TypeScript (portal) | eslint + prettier + tsc | ~8s |
+| Rust (gateway) | cargo fmt + clippy (strict) | ~30s |
+| E2E | axe-core (10 Console pages) | ~10s |
+| Docs-only | skip | 0s |
+
+Kill switch: `DISABLE_PRE_PUSH_GATE=1`. Emergency bypass: `SKIP_QUALITY_GATE=1` in push command.
+
+## Full Deployment Lifecycle (Gate 2 — CI)
 
 A change is NOT done until ArgoCD has synced the new image. The complete lifecycle:
 
@@ -41,6 +56,9 @@ A change is NOT done until ArgoCD has synced the new image. The complete lifecyc
 
 Each workflow only triggers on its own component paths:
 - `control-plane-api/**`, `control-plane-ui/**` + `shared/**`, `portal/**` + `shared/**`, `stoa-gateway/**`, `mcp-gateway/**`
+- `e2e-a11y-gate.yml` triggers on `control-plane-ui/**`, `portal/**`, `e2e/smoke-mock/**`, `e2e/fixtures/axe-helper*`
+- `e2e-visual-regression.yml` triggers on `control-plane-ui/**`, `portal/**`, `e2e/visual/**`, `e2e/golden/**`
+- `e2e-cross-validation.yml` triggers daily 07:00 UTC + manual (self-hosted, `continue-on-error: true`)
 - `required-checks.yml` + `security-scan.yml` run on **ALL** PRs (no path filter)
 - Docs-only changes (`*.md`, `.claude/**`) trigger these but NOT component CI
 

@@ -216,7 +216,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       KAFKA_ENABLED: "true"
       # Disable optional integrations not available in quick start
-      OPENSEARCH_HOST: ""
+      OPENSEARCH_HOST: https://opensearch:9200
       GITLAB_URL: ""
       ENABLE_DEPLOYMENT_WORKER: "false"
       ENABLE_SNAPSHOT_CONSUMER: "false"
@@ -319,7 +319,7 @@ services:
       STOA_KAFKA_METERING_TOPIC: stoa.metering
       STOA_KAFKA_ERRORS_TOPIC: stoa.errors.snapshots
       # OpenTelemetry tracing (Tempo)
-      STOA_OTEL_ENDPOINT: http://tempo:4317
+      STOA_OTEL_ENDPOINT: http://data-prepper:4317
       STOA_OTEL_ENABLED: "true"
       STOA_OTEL_SAMPLE_RATE: "1.0"
     depends_on:
@@ -512,9 +512,38 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Data Prepper (OTLP Collector → OpenSearch) — CAB-1976
+  # Receives OTLP gRPC from stoa-gateway, writes traces to OpenSearch
+  # otel-v1-apm-span-* indices. Tempo receives spans via metrics-generator only.
+  # ==========================================================================
+  data-prepper:
+    image: opensearchproject/data-prepper:2.6.2
+    container_name: stoa-data-prepper
+    ports:
+      - "${PORT_DATA_PREPPER_GRPC:-4320}:4317"
+      - "${PORT_DATA_PREPPER_HTTP:-4321}:4318"
+    volumes:
+      - ./config/data-prepper/pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml:ro
+      - ./config/data-prepper/data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml:ro
+    environment:
+      OPENSEARCH_USER: ${OPENSEARCH_USER:-admin}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:-REPLACE_FROM_VAULT}
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4900/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+
+  # ==========================================================================
   # Tempo (Distributed Tracing) — CAB-1975
-  # Receives OTLP spans from stoa-gateway, generates service graph metrics
-  # for Call Flow Console via metrics_generator → Prometheus remote write.
+  # Receives OTLP spans via Data Prepper fan-out for metrics_generator only.
   # ==========================================================================
   tempo:
     image: grafana/tempo:2.3.1

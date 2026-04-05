@@ -606,6 +606,34 @@ def app_with_other_tenant(app, mock_user_other_tenant, mock_db_session):
 
 
 @pytest.fixture
+def app_with_viewer(app, mock_user_viewer, mock_db_session):
+    """App with viewer (read-only) auth and db overrides."""
+    from src.auth.dependencies import get_current_user
+    from src.database import get_db
+
+    async def override_get_current_user():
+        return mock_user_viewer
+
+    async def override_get_db():
+        yield mock_db_session
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_db] = override_get_db
+    _add_http_bearer_overrides(app)
+
+    yield app
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as_viewer(app_with_viewer) -> Generator[TestClient, None, None]:
+    """Test client authenticated as viewer (read-only)."""
+    with TestClient(app_with_viewer) as c:
+        yield c
+
+
+@pytest.fixture
 def app_with_no_tenant_user(app, mock_user_no_tenant, mock_db_session):
     """App with user that has no tenant assignment."""
     from src.auth.dependencies import get_current_user

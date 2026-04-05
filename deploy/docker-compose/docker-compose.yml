@@ -320,8 +320,8 @@ services:
       STOA_KAFKA_BROKERS: redpanda:9092
       STOA_KAFKA_METERING_TOPIC: stoa.metering
       STOA_KAFKA_ERRORS_TOPIC: stoa.errors.snapshots
-      # OpenTelemetry tracing (Tempo)
-      STOA_OTEL_ENDPOINT: http://tempo:4317
+      # OpenTelemetry tracing (Data Prepper → OpenSearch)
+      STOA_OTEL_ENDPOINT: http://data-prepper:4317
       STOA_OTEL_ENABLED: "true"
       STOA_OTEL_SAMPLE_RATE: "1.0"
     depends_on:

@@ -120,7 +120,12 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
 /// 2. If found + activated: proxy to backend_url
 /// 3. If found but not activated: 503
 /// 4. If not found: 404
-#[instrument(name = "proxy.dynamic", skip(state, request), fields(otel.kind = "client"))]
+#[instrument(name = "proxy.dynamic", skip(state, request), fields(
+    otel.kind = "client",
+    http.status_code = tracing::field::Empty,
+    otel.status_code = tracing::field::Empty,
+    otel.status_message = tracing::field::Empty,
+))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
     let raw_path = request.uri().path();
     let path = urlencoding::decode(raw_path).unwrap_or(std::borrow::Cow::Borrowed(raw_path));
@@ -379,6 +384,17 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     }
 
     let upstream_duration = upstream_start.elapsed().as_secs_f64();
+
+    // Record HTTP status on the OTLP span so Tempo marks errors (CAB-1976)
+    let resp_status = response.status().as_u16();
+    tracing::Span::current().record("http.status_code", resp_status as i64);
+    if resp_status >= 400 {
+        tracing::Span::current().record("otel.status_code", "ERROR");
+        tracing::Span::current().record(
+            "otel.status_message",
+            &format!("HTTP {resp_status}") as &str,
+        );
+    }
 
     // Record upstream latency metric
     crate::metrics::record_upstream_latency(

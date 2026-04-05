@@ -183,6 +183,35 @@ def _build_spans_from_timings(
     return spans
 
 
+# Map OTLP span names → UI-expected names (TraceDetail.tsx, LiveTraces.tsx)
+_OTEL_TO_UI_SPAN_NAME: dict[str, str] = {
+    "auth.profile": "auth_validation",
+    "policy.quota": "rate_limiting",
+    "policy.supervision": "policy_eval",
+    "policy.guardrails": "guardrails",
+    "policy.opa": "policy_eval",
+    "proxy.dynamic": "routing",
+    "upstream.call": "backend_call",
+    "http.request": "http_request",
+    "mcp.tools.list": "mcp_discovery",
+    "mcp.tools.call": "mcp_tool_call",
+    "cache.semantic": "cache_lookup",
+    "metering.emit": "metering",
+    "resilience.circuit_breaker": "circuit_breaker",
+    "optimization.token": "token_optimization",
+}
+
+# Map OTLP span names → service labels for the UI
+_OTEL_TO_UI_SERVICE: dict[str, str] = {
+    "auth.profile": "keycloak",
+    "policy.quota": "stoa-gateway",
+    "policy.supervision": "stoa-gateway",
+    "proxy.dynamic": "stoa-gateway",
+    "upstream.call": "upstream-api",
+    "http.request": "stoa-gateway",
+}
+
+
 def _span_status_from_otel(status: dict, attrs: dict) -> str:
     """Derive transaction status from OTel span status and attributes."""
     http_code = attrs.get("http@status_code")
@@ -324,7 +353,7 @@ class MonitoringService:
                 src = hit["_source"]
                 duration_nanos = int(src.get("durationInNanos", 0))
                 duration_ms = max(int(duration_nanos / 1_000_000), 1)
-                span_name = src.get("name", "unknown")
+                otel_name = src.get("name", "unknown")
 
                 otel_code = int(src.get("status.code", 0) or 0)
                 span_status = "error" if otel_code == 2 else "success"
@@ -336,10 +365,14 @@ class MonitoringService:
                         short = key.replace("span.attributes.http@", "")
                         metadata[short] = val
 
+                # Map OTLP names → UI-expected names
+                ui_name = _OTEL_TO_UI_SPAN_NAME.get(otel_name, otel_name)
+                ui_service = _OTEL_TO_UI_SERVICE.get(otel_name, src.get("serviceName", "unknown"))
+
                 spans.append(
                     TransactionSpan(
-                        name=span_name,
-                        service=src.get("serviceName", "unknown"),
+                        name=ui_name,
+                        service=ui_service,
                         start_offset_ms=0,  # recomputed below
                         duration_ms=duration_ms,
                         status=span_status,
@@ -400,6 +433,28 @@ class MonitoringService:
             if tx_status == "error":
                 error_msg = "Trace completed with error status"
 
+            # Build request/response headers from available span attributes
+            req_headers: dict[str, str] = {}
+            res_headers: dict[str, str] = {}
+            for hit in hits:
+                src = hit["_source"]
+                if src.get("span.attributes.http@method"):
+                    req_headers.setdefault("method", str(src["span.attributes.http@method"]))
+                if src.get("span.attributes.http@route"):
+                    req_headers.setdefault("path", str(src["span.attributes.http@route"]))
+                if src.get("span.attributes.http@url"):
+                    req_headers.setdefault("upstream-url", str(src["span.attributes.http@url"]))
+                if src.get("span.attributes.stoa@deployment_mode"):
+                    res_headers.setdefault("x-stoa-mode", str(src["span.attributes.stoa@deployment_mode"]))
+                if src.get("span.attributes.tenant_id"):
+                    req_headers.setdefault("x-tenant-id", str(src["span.attributes.tenant_id"]))
+
+            # Add trace context
+            req_headers["x-trace-id"] = trace_id
+            res_version = root_src.get("resource.attributes.service@version")
+            if res_version:
+                res_headers["x-stoa-version"] = str(res_version)
+
             return APITransaction(
                 id=trace_id,
                 trace_id=trace_id,
@@ -416,6 +471,8 @@ class MonitoringService:
                 started_at=root_src.get("startTime", ""),
                 total_duration_ms=total_ms,
                 spans=spans,
+                request_headers=req_headers or None,
+                response_headers=res_headers or None,
                 error_message=error_msg,
             )
 

@@ -28,6 +28,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!(
         version = env!("CARGO_PKG_VERSION"),
         mode = ?config.gateway_mode,
+        otel_enabled = config.otel_enabled,
+        otel_endpoint = config.otel_endpoint.as_deref().unwrap_or("(none)"),
+        otel_active = stoa_gateway::telemetry::is_otel_active(),
         "Starting STOA Gateway"
     );
 

@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 use std::time::Instant;
+use tracing::Instrument;
 
 use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
@@ -744,13 +745,20 @@ impl AppState {
                 let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
                 loop {
                     interval.tick().await;
-                    // Mark zombies first
-                    zombie_detector.check_zombies().await;
-                    // Reap dead sessions and cross-remove from SessionManager
-                    let reaped = zombie_detector.reap_dead_sessions().await;
-                    for id in &reaped {
-                        session_manager.remove(id).await;
+                    async {
+                        // Mark zombies first
+                        zombie_detector.check_zombies().await;
+                        // Reap dead sessions and cross-remove from SessionManager
+                        let reaped = zombie_detector.reap_dead_sessions().await;
+                        for id in &reaped {
+                            session_manager.remove(id).await;
+                        }
                     }
+                    .instrument(tracing::info_span!(
+                        "governance.zombie_reap",
+                        otel.kind = "internal"
+                    ))
+                    .await;
                 }
             });
             tracing::info!("Zombie reaper background task started (60s interval)");

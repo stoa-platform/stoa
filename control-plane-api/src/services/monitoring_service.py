@@ -465,24 +465,43 @@ class MonitoringService:
             if root_src is None:
                 root_src = hits[0]["_source"]
 
-            # Use traceGroupFields for overall trace duration and status
-            tgf = root_src.get("traceGroupFields", {}) or {}
-            trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
+            # Find the primary request span (the one with http.status_code).
+            # http.request root spans are not exported, so the request-level span
+            # is typically mcp.tools.call, proxy.dynamic, or mcp.tools.list.
+            _REQUEST_SPAN_NAMES = {
+                "mcp.tools.call",
+                "mcp.tools.list",
+                "proxy.dynamic",
+                "http.request",
+            }
+            primary_src = root_src
+            for hit in hits:
+                src = hit["_source"]
+                if src.get("name") in _REQUEST_SPAN_NAMES:
+                    primary_src = src
+                    break
+                # Fallback: any span with http.status_code
+                if src.get("span.attributes.http@status_code") is not None:
+                    primary_src = src
+
+            # Duration: use primary span duration (actual request time)
+            trace_dur_nanos = int(primary_src.get("durationInNanos", 0))
             if trace_dur_nanos == 0:
-                trace_dur_nanos = int(root_src.get("durationInNanos", 0))
+                tgf = root_src.get("traceGroupFields", {}) or {}
+                trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
             total_ms = max(int(trace_dur_nanos / 1_000_000), 1)
 
-            # Real HTTP status code from root span (gateway Phase 3A)
-            http_code_raw = root_src.get("span.attributes.http@status_code")
+            # Real HTTP status code from primary span
+            http_code_raw = primary_src.get("span.attributes.http@status_code")
             if http_code_raw is not None:
                 http_code = int(http_code_raw)
                 tx_status = _status_from_code(http_code)
             else:
-                otel_status = int(tgf.get("statusCode", 0) or 0)
-                tx_status = "error" if otel_status == 2 else "success"
+                otel_code = int(primary_src.get("status.code", 0) or 0)
+                tx_status = "error" if otel_code == 2 else "success"
                 http_code = 500 if tx_status == "error" else 200
 
-            path = http_route or root_src.get("traceGroup") or root_src.get("name", "")
+            path = http_route or primary_src.get("name", root_src.get("name", ""))
 
             error_msg = None
             if tx_status == "error":
@@ -510,24 +529,24 @@ class MonitoringService:
 
             # Add trace context
             req_headers["x-trace-id"] = trace_id
-            res_version = root_src.get("resource.attributes.service@version")
+            res_version = primary_src.get("resource.attributes.service@version")
             if res_version:
                 res_headers["x-stoa-version"] = str(res_version)
 
             return APITransaction(
                 id=trace_id,
                 trace_id=trace_id,
-                api_name=root_src.get("serviceName", "stoa-gateway"),
-                tenant_id=root_src.get("span.attributes.tenant_id"),
+                api_name=primary_src.get("serviceName", "stoa-gateway"),
+                tenant_id=primary_src.get("span.attributes.tenant_id"),
                 method=http_method,
                 path=path,
                 status_code=http_code,
                 status=tx_status,
                 status_text=_status_text(http_code),
                 error_source=_error_source(path, http_code) if http_code >= 400 else None,
-                client_ip=root_src.get("span.attributes.http@client_ip"),
-                user_id=root_src.get("span.attributes.user_id"),
-                started_at=root_src.get("startTime", ""),
+                client_ip=primary_src.get("span.attributes.http@client_ip"),
+                user_id=primary_src.get("span.attributes.user_id"),
+                started_at=primary_src.get("startTime", ""),
                 total_duration_ms=total_ms,
                 spans=spans,
                 request_headers=req_headers or None,

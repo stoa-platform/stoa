@@ -1,8 +1,6 @@
-# Data Prepper pipeline: OTLP traces → OpenSearch (CAB-1997)
-#
-# Template — envsubst resolves credentials at container startup.
-# Receives OTLP gRPC spans from stoa-gateway on port 4317.
-
+#!/bin/bash
+# Resolve env vars in pipeline template before starting Data Prepper
+cat > /usr/share/data-prepper/pipelines/pipelines.yaml << YAML
 otel-traces-pipeline:
   source:
     otel_trace_source:
@@ -16,3 +14,6 @@ otel-traces-pipeline:
         password: "${OPENSEARCH_PASSWORD}"
         insecure: true
         index_type: trace-analytics-raw
+YAML
+
+exec /usr/share/data-prepper/bin/data-prepper

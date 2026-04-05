@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.9.2](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.1...stoa-gateway-v0.9.2) (2026-04-05)
+
+
+### Features
+
+* add target_gateway_url to gateway detail panel ([#2069](https://github.com/stoa-platform/stoa/issues/2069)) ([c07557f](https://github.com/stoa-platform/stoa/commit/c07557feb537c2f029909763e62cf719eacb18db))
+* **api:** gateway enabled flag + visibility + soft disable (CAB-1979) ([#2201](https://github.com/stoa-platform/stoa/issues/2201)) ([0136dd7](https://github.com/stoa-platform/stoa/commit/0136dd749acfb8b4d0e64be3a5a3388c4f6b17b8))
+* **gateway:** add github_* config fields alongside gitlab_* (CAB-1891) ([#2042](https://github.com/stoa-platform/stoa/issues/2042)) ([de4e88f](https://github.com/stoa-platform/stoa/commit/de4e88f63a6dd4ea8fe57194b7bca708f2808620))
+* **gateway:** add STC compression plugin + SDK body extension (CAB-1936) ([#2108](https://github.com/stoa-platform/stoa/issues/2108)) ([68d685a](https://github.com/stoa-platform/stoa/commit/68d685abe146dc424a8d9ae17e9e282459cb9c79))
+* **gateway:** dispatch shadow mode git client by git_provider config (CAB-1891) ([#2050](https://github.com/stoa-platform/stoa/issues/2050)) ([ce48b3f](https://github.com/stoa-platform/stoa/commit/ce48b3f2d5dbcbda9121c38f7d55e6621262aa95))
+* **gateway:** GitHubClient + GitProvider dispatch (CAB-1891) ([#2045](https://github.com/stoa-platform/stoa/issues/2045)) ([dc9ccfb](https://github.com/stoa-platform/stoa/commit/dc9ccfbbbc27f391dbb4abb535605c816174e25a))
+* **gateway:** report git_provider in health endpoint (CAB-1891) ([#2053](https://github.com/stoa-platform/stoa/issues/2053)) ([4e2c825](https://github.com/stoa-platform/stoa/commit/4e2c825c39ce6269d6e4870c7032938b744af6cf))
+
+
+### Bug Fixes
+
+* **api,gateway,go:** normalize health check payloads (CAB-1916) ([#2008](https://github.com/stoa-platform/stoa/issues/2008)) ([0366d18](https://github.com/stoa-platform/stoa/commit/0366d18066aad1610cab0cacc15e554d26ebe0de))
+* **gateway,api:** scope API discovery by gateway mode + gateway_id filter (CAB-1940) ([#2121](https://github.com/stoa-platform/stoa/issues/2121)) ([a01b245](https://github.com/stoa-platform/stoa/commit/a01b245e69f8dc5f2574762098e8d9ed361df930))
+* **gateway,ui:** broaden discovery gate + discovery banner in GatewayDetail (CAB-1949) ([#2134](https://github.com/stoa-platform/stoa/issues/2134)) ([c2c4f42](https://github.com/stoa-platform/stoa/commit/c2c4f4284109e14dd1c48e4f8a2b8786fbed5d61))
+* **gateway:** add registration retry with exponential backoff (CAB-1915) ([#2005](https://github.com/stoa-platform/stoa/issues/2005)) ([2d52644](https://github.com/stoa-platform/stoa/commit/2d526441e330b518b7e6c0e835680b8ab425a366))
+* **gateway:** explicit OTLP batch config for Tempo (CAB-1974) ([#2193](https://github.com/stoa-platform/stoa/issues/2193)) ([80d09cd](https://github.com/stoa-platform/stoa/commit/80d09cdf0a96b5f882ae35f0859c85e58f586368))
+* **gateway:** fix trace_id in access logs + remove eprintln diagnostics (CAB-1866) ([#2024](https://github.com/stoa-platform/stoa/issues/2024)) ([770a042](https://github.com/stoa-platform/stoa/commit/770a04287026624da8430007dbea62d4a5022f2c))
+* **gateway:** pass gateway_id in API catalog sync + fallback (CAB-1940) ([#2122](https://github.com/stoa-platform/stoa/issues/2122)) ([8163187](https://github.com/stoa-platform/stoa/commit/8163187b941644a730fceb276d176a5bf52790fe))
+* **gateway:** re-register on heartbeat 404 after CP auto-purge ([#2103](https://github.com/stoa-platform/stoa/issues/2103)) ([12fac24](https://github.com/stoa-platform/stoa/commit/12fac2494c620cdfbbc9f0ff62dfe071dbabcd65))
+* **gateway:** URL-decode path before route matching (CAB-1964) ([#2170](https://github.com/stoa-platform/stoa/issues/2170)) ([6269c5e](https://github.com/stoa-platform/stoa/commit/6269c5e4a0813862323469735b1e0de907f09b03))
+* **ui:** show gateway URLs for all modes + fix stoa-link hostname (CAB-1953) ([#2160](https://github.com/stoa-platform/stoa/issues/2160)) ([3ee4c66](https://github.com/stoa-platform/stoa/commit/3ee4c66397b89d506bbfcd6829637f0bc46ee563))
+
 ## [0.9.1](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.0...stoa-gateway-v0.9.1) (2026-03-25)
 
 

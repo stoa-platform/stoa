@@ -754,7 +754,10 @@ impl AppState {
                             session_manager.remove(id).await;
                         }
                     }
-                    .instrument(tracing::info_span!("governance.zombie_reap", otel.kind = "internal"))
+                    .instrument(tracing::info_span!(
+                        "governance.zombie_reap",
+                        otel.kind = "internal"
+                    ))
                     .await;
                 }
             });

@@ -217,7 +217,11 @@ class MonitoringService:
     ) -> list[APITransactionSummary] | None:
         """List recent transactions from OTel span index (root spans only).
 
-        Note: no tenant_id filter — gateway OTLP spans don't carry per-tenant IDs.
+        Data Prepper flattens span attributes as top-level dot-keys
+        (e.g. ``span.attributes.http@method``).  Root spans are internal
+        middleware stages (``policy.supervision``) and carry no HTTP
+        attributes.  We use ``traceGroupFields`` for overall trace
+        duration/status and enrich with HTTP info from child spans.
         """
         try:
             filters: list[dict] = [
@@ -226,23 +230,10 @@ class MonitoringService:
             ]
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
-            if status:
-                if status == "timeout":
-                    filters.append({"term": {"span.attributes.http@status_code": 504}})
-                elif status == "error":
-                    filters.append(
-                        {
-                            "bool": {
-                                "should": [
-                                    {"range": {"span.attributes.http@status_code": {"gte": 400, "lt": 504}}},
-                                    {"term": {"status.code": 2}},
-                                ],
-                                "minimum_should_match": 1,
-                            }
-                        }
-                    )
-                elif status == "success":
-                    filters.append({"range": {"span.attributes.http@status_code": {"lt": 400}}})
+            if status == "error":
+                filters.append({"term": {"traceGroupFields.statusCode": 2}})
+            elif status == "success":
+                filters.append({"bool": {"must_not": [{"term": {"traceGroupFields.statusCode": 2}}]}})
 
             body = {
                 "query": {"bool": {"filter": filters}},
@@ -259,18 +250,22 @@ class MonitoringService:
             transactions: list[APITransactionSummary] = []
             for hit in hits:
                 src = hit["_source"]
-                attrs = src.get("span.attributes", {})
-                status_obj = src.get("status", {})
-                http_code = int(attrs.get("http@status_code", 200))
-                duration_nanos = int(src.get("durationInNanos", 0))
-                duration_ms = max(int(duration_nanos / 1_000_000), 1)
+                tgf = src.get("traceGroupFields", {}) or {}
+                otel_status_code = int(tgf.get("statusCode", 0) or 0)
 
-                span_status = _span_status_from_otel(status_obj, attrs)
-                method = str(attrs.get("http@method", "POST"))
-                span_name = src.get("name", src.get("traceGroup", "unknown"))
+                # Use traceGroupFields for overall trace duration
+                trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
+                if trace_dur_nanos == 0:
+                    trace_dur_nanos = int(src.get("durationInNanos", 0))
+                duration_ms = max(int(trace_dur_nanos / 1_000_000), 1)
 
-                # Count related spans via traceGroup (approximation from root)
-                spans_count = 1
+                # Derive status from OTel status code (0=unset/OK, 2=error)
+                tx_status = "error" if otel_status_code == 2 else "success"
+
+                # HTTP method from child span attribute (flattened)
+                method = src.get("span.attributes.http@method", "POST")
+                route = src.get("span.attributes.http@route", "")
+                span_name = route or src.get("traceGroup") or src.get("name", "unknown")
 
                 transactions.append(
                     APITransactionSummary(
@@ -279,13 +274,13 @@ class MonitoringService:
                         api_name=src.get("serviceName", "stoa-gateway"),
                         method=method,
                         path=span_name,
-                        status_code=http_code,
-                        status=span_status,
-                        status_text=_status_text(http_code),
-                        error_source=_error_source(span_name, http_code) if http_code >= 400 else None,
+                        status_code=200 if tx_status == "success" else 500,
+                        status=tx_status,
+                        status_text=_status_text(200 if tx_status == "success" else 500),
+                        error_source=None if tx_status == "success" else "gateway",
                         started_at=src.get("startTime", ""),
                         total_duration_ms=duration_ms,
-                        spans_count=spans_count,
+                        spans_count=1,
                     )
                 )
             return transactions
@@ -298,7 +293,14 @@ class MonitoringService:
         self,
         trace_id: str,
     ) -> APITransaction | None:
-        """Get detailed transaction with waterfall from OTel span index."""
+        """Get detailed transaction with waterfall from OTel span index.
+
+        Data Prepper flattens attributes as top-level dot-keys.  Root
+        spans are internal middleware stages without HTTP info.  We
+        collect HTTP metadata from child spans (``http.request``,
+        ``upstream.call``) and use ``traceGroupFields`` for overall
+        trace duration.
+        """
         try:
             body = {
                 "query": {"bool": {"filter": [{"term": {"traceId": trace_id}}]}},
@@ -312,27 +314,31 @@ class MonitoringService:
             if not hits:
                 return None
 
-            # Parse all spans and find root
+            # First pass: collect all spans, find root, find HTTP info
             spans: list[TransactionSpan] = []
             root_src: dict | None = None
+            http_method: str = "POST"
+            http_route: str = ""
 
             for hit in hits:
                 src = hit["_source"]
                 duration_nanos = int(src.get("durationInNanos", 0))
                 duration_ms = max(int(duration_nanos / 1_000_000), 1)
+                span_name = src.get("name", "unknown")
 
-                attrs = src.get("span.attributes", {})
-                status_obj = src.get("status", {})
-                span_status = "error" if status_obj.get("code") == 2 else "success"
+                otel_code = int(src.get("status.code", 0) or 0)
+                span_status = "error" if otel_code == 2 else "success"
 
+                # Collect metadata from flattened span attributes
                 metadata: dict = {}
-                for key, val in attrs.items():
-                    if key.startswith("http@"):
-                        metadata[key.replace("http@", "")] = val
+                for key, val in src.items():
+                    if key.startswith("span.attributes.http@"):
+                        short = key.replace("span.attributes.http@", "")
+                        metadata[short] = val
 
                 spans.append(
                     TransactionSpan(
-                        name=src.get("name", "unknown"),
+                        name=span_name,
                         service=src.get("serviceName", "unknown"),
                         start_offset_ms=0,  # recomputed below
                         duration_ms=duration_ms,
@@ -341,10 +347,16 @@ class MonitoringService:
                     )
                 )
 
+                # Identify root span
                 parent_id = src.get("parentSpanId", "")
-                if not parent_id or parent_id == "":
+                if not parent_id:
                     root_src = src
 
+                # Collect HTTP info from child spans
+                if src.get("span.attributes.http@method"):
+                    http_method = str(src["span.attributes.http@method"])
+                if src.get("span.attributes.http@route"):
+                    http_route = str(src["span.attributes.http@route"])
             # Recompute start_offset_ms using startTime strings
             if spans and hits:
                 from datetime import datetime
@@ -371,29 +383,36 @@ class MonitoringService:
             if root_src is None:
                 root_src = hits[0]["_source"]
 
-            root_attrs = root_src.get("span.attributes", {})
-            http_code = int(root_attrs.get("http@status_code", 200))
-            method = str(root_attrs.get("http@method", "POST"))
-            total_ms = int(int(root_src.get("durationInNanos", 0)) / 1_000_000)
-            total_ms = max(total_ms, 1)
+            # Use traceGroupFields for overall trace duration and status
+            tgf = root_src.get("traceGroupFields", {}) or {}
+            trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
+            if trace_dur_nanos == 0:
+                trace_dur_nanos = int(root_src.get("durationInNanos", 0))
+            total_ms = max(int(trace_dur_nanos / 1_000_000), 1)
+
+            otel_status = int(tgf.get("statusCode", 0) or 0)
+            tx_status = "error" if otel_status == 2 else "success"
+            http_code = 500 if tx_status == "error" else 200
+
+            path = http_route or root_src.get("traceGroup") or root_src.get("name", "")
 
             error_msg = None
-            if http_code >= 400:
-                error_msg = _status_text(http_code)
+            if tx_status == "error":
+                error_msg = "Trace completed with error status"
 
             return APITransaction(
                 id=trace_id,
                 trace_id=trace_id,
                 api_name=root_src.get("serviceName", "stoa-gateway"),
-                tenant_id=root_attrs.get("tenant_id"),
-                method=method,
-                path=root_src.get("name", root_src.get("traceGroup", "")),
+                tenant_id=root_src.get("span.attributes.tenant_id"),
+                method=http_method,
+                path=path,
                 status_code=http_code,
-                status=_span_status_from_otel(root_src.get("status", {}), root_attrs),
+                status=tx_status,
                 status_text=_status_text(http_code),
-                error_source=_error_source(root_src.get("name", ""), http_code) if http_code >= 400 else None,
-                client_ip=root_attrs.get("net@peer@ip"),
-                user_id=root_attrs.get("user_id"),
+                error_source="gateway" if tx_status == "error" else None,
+                client_ip=None,
+                user_id=root_src.get("span.attributes.user_id"),
                 started_at=root_src.get("startTime", ""),
                 total_duration_ms=total_ms,
                 spans=spans,

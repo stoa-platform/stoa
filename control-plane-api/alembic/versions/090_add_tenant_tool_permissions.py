@@ -1,7 +1,7 @@
 """add tenant_tool_permissions table
 
-Revision ID: 078
-Revises: 077
+Revision ID: 090
+Revises: 089_add_gateway_enabled_visibility
 Create Date: 2026-04-04
 
 CAB-1980: Tenant-level tool permission overrides with composite unique index.
@@ -12,8 +12,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "078"
-down_revision: str | None = "077"
+revision: str = "090_add_tenant_tool_permissions"
+down_revision: str | None = "089_add_gateway_enabled_visibility"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

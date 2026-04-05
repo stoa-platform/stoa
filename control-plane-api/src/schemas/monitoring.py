@@ -25,6 +25,7 @@ class APITransactionSummary(BaseModel):
     started_at: str
     total_duration_ms: float
     spans_count: int
+    spans: list[TransactionSpan] = []
 
 
 class APITransaction(BaseModel):

@@ -21,7 +21,7 @@
 > **Universal API Contract (UAC):** Define Once, Expose Everywhere.
 
 <p align="center">
-  <img src="docs/assets/screenshot-apis.png" alt="STOA Console — API Catalog with 24 published APIs" width="800">
+  <img src="docs/assets/screenshot-call-flow.png" alt="STOA Console — Call Flow Dashboard with live traces and traffic heatmap" width="800">
 </p>
 
 <details>
@@ -108,7 +108,7 @@ For component-by-component local development (without Docker), see [DEVELOPMENT.
 - **Multi-Tenant** — full isolation between organizations with RBAC
 - **Multi-Gateway** — 7 adapter integrations (Kong, Gravitee, Apigee, Azure APIM, AWS, webMethods, STOA native)
 
-### Rust Gateway (90K LOC, 1,800+ tests)
+### Rust Gateway (93K LOC, 2,300+ tests)
 - **Sub-millisecond proxy** — built with Tokio + axum for maximum throughput
 - **JWT validation** — Keycloak OIDC integration with JWKS caching
 - **Per-consumer rate limiting** — plan-based quotas with 429 responses
@@ -142,7 +142,7 @@ For component-by-component local development (without Docker), see [DEVELOPMENT.
 | Control Plane API | Python 3.11, FastAPI, SQLAlchemy 2.0 | Backend API with RBAC, multi-gateway adapters |
 | Console UI | React 19, TypeScript, Vite, TanStack Query | Admin interface |
 | Developer Portal | React 19, TypeScript, Vite, TanStack Query | Developer self-service |
-| Rust Gateway | Rust (stable), Tokio, axum 0.7 | API proxy + MCP bridge (90K LOC) |
+| Rust Gateway | Rust (stable), Tokio, axum 0.7 | API proxy + MCP bridge (93K LOC) |
 | stoactl | Go 1.25, Cobra | GitOps CLI + VPS connect agent |
 | Keycloak | Keycloak 26.5 | Authentication + federation |
 | K8s Operator | Python, Kopf | CRD controller for MCP resources |
@@ -153,7 +153,7 @@ For component-by-component local development (without Docker), see [DEVELOPMENT.
 | Component | Framework | Tests | Coverage |
 |-----------|-----------|-------|----------|
 | Control Plane API | pytest + pytest-asyncio | 7,100+ | 70% min |
-| Rust Gateway | cargo test | 1,800+ | Unit + contract + integration + security |
+| Rust Gateway | cargo test | 2,300+ | Unit + contract + integration + security |
 | Console UI | vitest + React Testing Library | Per-component | Persona-based (4 RBAC roles) |
 | Portal | vitest + React Testing Library | Per-component | Persona-based (4 RBAC roles) |
 | E2E | Playwright + BDD (Gherkin) | 77 feature files | @smoke, @critical, @portal, @console, @gateway |

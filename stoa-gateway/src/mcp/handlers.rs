@@ -334,14 +334,12 @@ fn record_span_status(code: u16) {
 }
 
 /// Helper to add rate limit headers to a response.
-/// Also records HTTP status code on the current span for OTel export (CAB-1997).
 fn with_rate_limit_headers(
     status: StatusCode,
     body: Json<ToolsCallResponse>,
     rate_result: &crate::rate_limit::RateLimitResult,
 ) -> Response {
     let mut response = (status, body).into_response();
-    record_span_status(status.as_u16());
 
     // Add rate limit headers
     for (key, value) in rate_result.headers() {
@@ -373,6 +371,10 @@ fn with_rate_limit_headers(
         http.status_code = tracing::field::Empty,
         otel.status_code = tracing::field::Empty,
         otel.status_message = tracing::field::Empty,
+        process.rss_bytes = tracing::field::Empty,
+        process.fd_count = tracing::field::Empty,
+        process.thread_count = tracing::field::Empty,
+        upstream.cb_state = tracing::field::Empty,
     )
 )]
 pub async fn mcp_tools_call(
@@ -407,6 +409,10 @@ async fn mcp_tools_call_inner(
     if let Some(ref uid) = auth.user_id {
         current_span.record("user_id", uid.as_str());
     }
+    // Snapshot process metrics as span attributes (CAB-1997)
+    current_span.record("process.rss_bytes", crate::memory::read_rss_bytes());
+    current_span.record("process.fd_count", crate::memory::read_fd_count());
+    current_span.record("process.thread_count", crate::memory::read_thread_count());
 
     debug!(
         tenant_id = %auth.tenant_id,
@@ -970,6 +976,12 @@ async fn mcp_tools_call_inner(
         );
     }
 
+    // Record circuit breaker state as span attribute (CAB-1997)
+    current_span.record(
+        "upstream.cb_state",
+        if cb_allowed { "closed" } else { "open" },
+    );
+
     // Execute tool (measure backend time separately)
     let t_backend_start = Instant::now();
     let primary_result = tool.execute(arguments.clone(), &ctx).await;
@@ -1116,8 +1128,6 @@ async fn mcp_tools_call_inner(
                     resp.headers_mut().insert("x-stoa-guardrail", val);
                 }
             }
-            tracing::Span::current().record("http.status_code", 200u16);
-            tracing::Span::current().record("otel.status_code", "OK");
             resp
         }
         Err(e) => {
@@ -1170,10 +1180,6 @@ async fn mcp_tools_call_inner(
                 },
             );
 
-            tracing::Span::current().record("http.status_code", 500u16);
-            tracing::Span::current().record("otel.status_code", "ERROR");
-            tracing::Span::current()
-                .record("otel.status_message", &format!("Tool error: {e}") as &str);
             with_rate_limit_headers(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ToolsCallResponse {

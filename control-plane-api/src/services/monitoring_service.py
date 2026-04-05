@@ -345,11 +345,15 @@ class MonitoringService:
                 route = src.get("span.attributes.http@route", "")
                 span_name = route or src.get("traceGroup") or src.get("name", "unknown")
 
+                # Prefer tool_name from span attributes for api_name (CAB-1997)
+                tool_name = src.get("span.attributes.tool_name") or src.get("span.attributes.tool")
+                api_name = tool_name or _extract_api_name(span_name)
+
                 transactions.append(
                     APITransactionSummary(
                         id=src.get("spanId", hit["_id"]),
                         trace_id=src.get("traceId", ""),
-                        api_name=src.get("serviceName", "stoa-gateway"),
+                        api_name=api_name,
                         method=method,
                         path=span_name,
                         status_code=http_code,
@@ -361,6 +365,66 @@ class MonitoringService:
                         spans_count=1,
                     )
                 )
+            # Fetch child spans for all traces in a single query
+            trace_ids = [t.trace_id for t in transactions if t.trace_id]
+            if trace_ids:
+                child_body = {
+                    "query": {
+                        "bool": {
+                            "filter": [
+                                {"terms": {"traceId": trace_ids}},
+                            ],
+                            "must_not": [
+                                {"terms": {"name": request_span_names}},
+                            ],
+                        }
+                    },
+                    "sort": [{"startTime": {"order": "asc"}}],
+                    "size": limit * 10,
+                }
+                child_resp = await self.client.search(index="otel-v1-apm-span-*", body=child_body)
+                child_hits = child_resp.get("hits", {}).get("hits", [])
+
+                # Group child spans by traceId
+                children_by_trace: dict[str, list[TransactionSpan]] = {}
+                for hit in child_hits:
+                    src = hit["_source"]
+                    tid = src.get("traceId", "")
+                    otel_name = src.get("name", "unknown")
+                    ui_name = _OTEL_TO_UI_SPAN_NAME.get(otel_name, otel_name)
+                    ui_service = _OTEL_TO_UI_SERVICE.get(otel_name, src.get("serviceName", "unknown"))
+                    dur_nanos = int(src.get("durationInNanos", 0))
+                    dur_ms = round(dur_nanos / 1_000_000, 3)
+                    otel_code = int(src.get("status.code", 0) or 0)
+                    span_status = "error" if otel_code == 2 else "success"
+                    children_by_trace.setdefault(tid, []).append(
+                        TransactionSpan(
+                            name=ui_name,
+                            service=ui_service,
+                            start_offset_ms=0,
+                            duration_ms=dur_ms,
+                            status=span_status,
+                            metadata={},
+                        )
+                    )
+
+                # Chain spans sequentially and attach to transactions
+                for tx in transactions:
+                    child_spans = children_by_trace.get(tx.trace_id, [])
+                    offset = 0.0
+                    for i, span in enumerate(child_spans):
+                        child_spans[i] = TransactionSpan(
+                            name=span.name,
+                            service=span.service,
+                            start_offset_ms=round(offset, 3),
+                            duration_ms=span.duration_ms,
+                            status=span.status,
+                            metadata={},
+                        )
+                        offset += span.duration_ms
+                    tx.spans = child_spans
+                    tx.spans_count = len(child_spans) + 1  # +1 for parent
+
             return transactions
 
         except Exception:
@@ -469,28 +533,34 @@ class MonitoringService:
                     http_method = str(src["span.attributes.http@method"])
                 if src.get("span.attributes.http@route"):
                     http_route = str(src["span.attributes.http@route"])
-            # Recompute start_offset_ms using startTime strings
-            if spans and hits:
-                from datetime import datetime
-
-                base_time: datetime | None = None
-                for i, hit in enumerate(hits):
-                    st = hit["_source"].get("startTime", "")
-                    try:
-                        dt = datetime.fromisoformat(st.replace("Z", "+00:00"))
-                        if base_time is None:
-                            base_time = dt
-                        delta = dt - base_time
+            # Recompute start_offset_ms as a sequential pipeline.
+            # The parent span (http_request / mcp.tools.call) stays at offset 0
+            # and covers the full duration.  Child spans are chained so that
+            # each one starts where the previous one ended.
+            _PARENT_SPAN_NAMES = {"http_request", "mcp_tool_call", "mcp_discovery"}
+            if spans:
+                offset_cursor = 0.0
+                for i, span in enumerate(spans):
+                    if span.name in _PARENT_SPAN_NAMES:
+                        # Parent span: offset 0, full duration
                         spans[i] = TransactionSpan(
-                            name=spans[i].name,
-                            service=spans[i].service,
-                            start_offset_ms=round(max(delta.total_seconds() * 1000, 0), 3),
-                            duration_ms=spans[i].duration_ms,
-                            status=spans[i].status,
-                            metadata=spans[i].metadata,
+                            name=span.name,
+                            service=span.service,
+                            start_offset_ms=0,
+                            duration_ms=span.duration_ms,
+                            status=span.status,
+                            metadata=span.metadata,
                         )
-                    except (ValueError, TypeError):
-                        pass
+                    else:
+                        spans[i] = TransactionSpan(
+                            name=span.name,
+                            service=span.service,
+                            start_offset_ms=round(offset_cursor, 3),
+                            duration_ms=span.duration_ms,
+                            status=span.status,
+                            metadata=span.metadata,
+                        )
+                        offset_cursor += span.duration_ms
 
             if root_src is None:
                 root_src = hits[0]["_source"]
@@ -563,10 +633,19 @@ class MonitoringService:
             if res_version:
                 res_headers["x-stoa-version"] = str(res_version)
 
+            # Prefer tool_name from span attributes for api_name (CAB-1997)
+            detail_tool_name = None
+            for hit in hits:
+                src = hit["_source"]
+                detail_tool_name = src.get("span.attributes.tool_name") or src.get("span.attributes.tool")
+                if detail_tool_name:
+                    break
+            detail_api_name = detail_tool_name or _extract_api_name(path)
+
             return APITransaction(
                 id=trace_id,
                 trace_id=trace_id,
-                api_name=primary_src.get("serviceName", "stoa-gateway"),
+                api_name=detail_api_name,
                 tenant_id=primary_src.get("span.attributes.tenant_id"),
                 method=http_method,
                 path=path,

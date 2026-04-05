@@ -58,7 +58,7 @@ jobs:
           VITE_API_URL: http://localhost:4174/api
           VITE_KEYCLOAK_URL: http://localhost:4174/auth
           VITE_BASE_DOMAIN: localhost
-        run: npm ci && npm run build
+        run: npm ci && npx vite build
 
       - name: Install E2E dependencies
         working-directory: e2e

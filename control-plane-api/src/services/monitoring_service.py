@@ -600,8 +600,12 @@ class MonitoringService:
                     }
                 },
                 "aggs": {
-                    "success_count": {"filter": {"bool": {"must_not": [{"term": {"traceGroupFields.statusCode": 2}}]}}},
-                    "error_count": {"filter": {"term": {"traceGroupFields.statusCode": 2}}},
+                    "success_count": {
+                        "filter": {
+                            "bool": {"must_not": [{"range": {"span.attributes.http@status_code": {"gte": 400}}}]}
+                        }
+                    },
+                    "error_count": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
                     "timeout_count": {"filter": {"term": {"span.attributes.http@status_code": 504}}},
                     "latency_stats": {"stats": {"field": "durationInNanos"}},
                     "latency_percentiles": {
@@ -610,11 +614,22 @@ class MonitoringService:
                             "percents": [95, 99],
                         }
                     },
-                    "by_route": {
-                        "terms": {"field": "traceGroup", "size": 20},
+                    "by_tool": {
+                        "terms": {
+                            "field": "span.attributes.tool_name",
+                            "missing": "unknown",
+                            "size": 20,
+                        },
                         "aggs": {
                             "avg_latency": {"avg": {"field": "durationInNanos"}},
-                            "errors": {"filter": {"term": {"traceGroupFields.statusCode": 2}}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
+                    "by_span_name": {
+                        "terms": {"field": "name", "size": 10},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
                         },
                     },
                     "by_status_code": {"terms": {"field": "span.attributes.http@status_code", "size": 20}},
@@ -630,10 +645,24 @@ class MonitoringService:
             percentiles = aggs["latency_percentiles"]["values"]
             avg_nanos = aggs["latency_stats"]["avg"] or 0
 
-            # Build by_api dict from traceGroup buckets
+            # Build by_api dict — tool_name for MCP, span name for proxy
             by_api: dict = {}
-            for bucket in aggs["by_route"]["buckets"]:
+            for bucket in aggs["by_tool"]["buckets"]:
                 name = bucket["key"]
+                if name == "unknown":
+                    continue  # Skip unknown tools, use span name instead
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_api[name] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+            # Add span name breakdown for non-tool spans (proxy.dynamic, mcp.tools.list)
+            for bucket in aggs["by_span_name"]["buckets"]:
+                name = bucket["key"]
+                if name in by_api:
+                    continue  # Already covered by tool_name
                 avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
                 by_api[name] = {
                     "total": bucket["doc_count"],

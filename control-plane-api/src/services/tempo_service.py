@@ -157,8 +157,10 @@ def _map_spans(trace_data: dict) -> tuple[list[TransactionSpan], dict]:
     for span in raw_spans:
         span_start = int(span.get("startTimeUnixNano", 0))
         span_end = int(span.get("endTimeUnixNano", span_start))
-        duration_ms = max(int((span_end - span_start) / 1_000_000), 0)
-        offset_ms = max(int((span_start - first_start) / 1_000_000), 0)
+        duration_ns = span_end - span_start
+        # Use max(1, ...) so sub-millisecond spans are visible in the waterfall
+        duration_ms = max(int(duration_ns / 1_000_000), 1) if duration_ns > 0 else 0
+        offset_ms = int((span_start - first_start) / 1_000_000)
 
         # Extract service name from resource
         service = "unknown"

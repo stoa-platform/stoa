@@ -59,7 +59,12 @@ export function Tenants() {
       )}
 
       {/* Tenants Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        role="list"
+        aria-label="Tenants"
+        data-testid="tenants-grid"
+      >
         {tenants.length === 0 ? (
           <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg shadow">
             <EmptyState
@@ -77,11 +82,16 @@ export function Tenants() {
           tenants.map((tenant) => (
             <div
               key={tenant.id}
+              role="listitem"
               className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+              data-testid="tenant-card"
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                  <h3
+                    className="text-lg font-semibold text-neutral-900 dark:text-white"
+                    data-testid="tenant-name"
+                  >
                     {tenant.display_name || tenant.name}
                   </h3>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
@@ -90,6 +100,7 @@ export function Tenants() {
                 </div>
                 <span
                   className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[tenant.status]}`}
+                  data-testid="tenant-status"
                 >
                   {tenant.status}
                 </span>

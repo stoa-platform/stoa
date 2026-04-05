@@ -8,6 +8,7 @@ vi.mock('../../services/api', () => ({
   apiService: {
     forceSyncDeployment: vi.fn().mockResolvedValue({}),
     undeployFromGateway: vi.fn().mockResolvedValue({}),
+    testDeployment: vi.fn().mockResolvedValue({ reachable: true, status_code: 200 }),
   },
 }));
 

@@ -32,19 +32,23 @@ export function HomePage() {
   return (
     <div className="space-y-8">
       {/* Welcome Header + Tenant Context */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2" data-testid="home-header">
         <WelcomeHeader user={user} />
         <TenantBadge />
       </div>
 
       {/* Stats Cards */}
-      <DashboardStats stats={stats ?? null} isLoading={isLoading} />
+      <div data-testid="home-stats">
+        <DashboardStats stats={stats ?? null} isLoading={isLoading} />
+      </div>
 
       {/* Quick Actions */}
-      <QuickActions />
+      <div data-testid="home-quick-actions">
+        <QuickActions />
+      </div>
 
       {/* Featured Catalogs - API and AI Tools */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="home-featured">
         <PermissionGate scope="stoa:catalog:read">
           <FeaturedAPIs />
         </PermissionGate>
@@ -55,7 +59,9 @@ export function HomePage() {
 
       {/* Recent Activity */}
       <PermissionGate scope="stoa:subscriptions:read">
-        <RecentActivity activity={activity ?? []} isLoading={isLoading} />
+        <div data-testid="home-activity">
+          <RecentActivity activity={activity ?? []} isLoading={isLoading} />
+        </div>
       </PermissionGate>
 
       {/* Onboarding Funnel - admin only */}

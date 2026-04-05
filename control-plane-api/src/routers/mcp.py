@@ -77,6 +77,11 @@ def _convert_server_to_response(server: MCPServer) -> MCPServerResponse:
         public=visibility_data.get("public", True),
     )
 
+    try:
+        raw_tools = server.tools or []
+    except Exception:
+        raw_tools = []
+
     tools = [
         MCPServerToolResponse(
             id=tool.id,
@@ -87,7 +92,7 @@ def _convert_server_to_response(server: MCPServer) -> MCPServerResponse:
             enabled=tool.enabled,
             requires_approval=tool.requires_approval,
         )
-        for tool in (server.tools or [])
+        for tool in raw_tools
     ]
 
     return MCPServerResponse(

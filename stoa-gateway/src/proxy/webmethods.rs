@@ -24,7 +24,7 @@ impl WebMethodsProxy {
     /// Create a new webMethods proxy.
     ///
     /// # Arguments
-    /// * `base_url` - Base URL of the webMethods gateway (e.g., "https://gateway.gostoa.dev")
+    /// * `base_url` - Base URL of the webMethods gateway (e.g., "https://vps-wm.gostoa.dev")
     pub fn new(base_url: String) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_proxy_creation() {
-        let proxy = WebMethodsProxy::new("https://gateway.gostoa.dev".to_string());
-        assert_eq!(proxy.base_url, "https://gateway.gostoa.dev");
+        let proxy = WebMethodsProxy::new("https://vps-wm.gostoa.dev".to_string());
+        assert_eq!(proxy.base_url, "https://vps-wm.gostoa.dev");
     }
 }

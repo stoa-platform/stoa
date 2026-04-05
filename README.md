@@ -1,34 +1,17 @@
 <p align="center">
   <strong>STOA Platform</strong><br>
   The European Agent Gateway<br>
-  <a href="https://gostoa.dev">Website</a> · <a href="https://docs.gostoa.dev">Docs</a> · <a href="https://discord.gg/j8tHSSes">Discord</a>
+  <em>Bridge enterprise APIs to AI agents. Define once, expose everywhere.</em>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/stoa-platform/stoa/actions/workflows/security-scan.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/security-scan.yml/badge.svg" alt="Security Scan"></a>
-  <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml/badge.svg" alt="API CI"></a>
-  <a href="https://github.com/stoa-platform/stoa/actions/workflows/stoa-gateway-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/stoa-gateway-ci.yml/badge.svg" alt="Gateway CI"></a>
-  <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-ui-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-ui-ci.yml/badge.svg" alt="Console CI"></a>
-  <a href="https://github.com/stoa-platform/stoa/actions/workflows/stoa-portal-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/stoa-portal-ci.yml/badge.svg" alt="Portal CI"></a>
-</p>
-<p align="center">
+  <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/stoa-platform/stoa/stargazers"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
   <a href="https://discord.gg/j8tHSSes"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://status.gostoa.dev"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/stoa-platform/status/master/api/stoa-api-gateway/uptime.json" alt="Uptime"></a>
-  <a href="https://github.com/stoa-platform/stoa/actions/workflows/scorecard.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/scorecard.yml/badge.svg" alt="OpenSSF Scorecard"></a>
 </p>
 <p align="center">
-  <a href="https://docs.gostoa.dev"><img src="https://img.shields.io/badge/docs-docs.gostoa.dev-green.svg" alt="Documentation"></a>
-  <img src="https://img.shields.io/badge/Rust-Gateway_(90K_LOC)-orange.svg" alt="Rust Gateway">
-  <img src="https://img.shields.io/badge/MCP-Compatible-purple.svg" alt="MCP Compatible">
-  <a href="https://github.com/stoa-platform/stoa/discussions"><img src="https://img.shields.io/github/discussions/stoa-platform/stoa?logo=github" alt="GitHub Discussions"></a>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/SAST-Gitleaks%20%7C%20Bandit%20%7C%20Clippy-brightgreen?logo=shieldsdotio" alt="SAST: Gitleaks, Bandit, Clippy">
-  <img src="https://img.shields.io/badge/Container-Trivy-blue?logo=aquasecurity" alt="Container Scan: Trivy">
-  <img src="https://img.shields.io/badge/SBOM-CycloneDX%20%7C%20SPDX-blue?logo=dependabot" alt="SBOM: CycloneDX + SPDX">
-  <img src="https://img.shields.io/badge/License_Scan-Trivy-blue?logo=opensourceinitiative" alt="License Scan: Trivy">
+  <a href="https://gostoa.dev">Website</a> · <a href="https://docs.gostoa.dev">Docs</a> · <a href="https://discord.gg/j8tHSSes">Community</a> · <a href="https://status.gostoa.dev">Status</a>
 </p>
 
 ---
@@ -37,13 +20,26 @@
 
 > **Universal API Contract (UAC):** Define Once, Expose Everywhere.
 
+<p align="center">
+  <img src="docs/assets/screenshot-apis.png" alt="STOA Console — API Catalog with 24 published APIs" width="800">
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+<p align="center">
+  <img src="docs/assets/screenshot-gateway.png" alt="STOA Console — Gateway Overview, 3 gateways online" width="800">
+</p>
+
+</details>
+
 ## Why STOA?
 
 | Problem | STOA Solution |
 |---------|--------------|
 | 5 days to get API access | Self-service portal, instant credentials |
 | API catalog in Excel | Searchable catalog with OpenAPI specs |
-| Gateway = black box at $500K/year | Open-source, full observability, Rust performance |
+| Gateway = vendor lock-in | Open-source, full observability, Rust performance |
 | AI agents can't use enterprise APIs | MCP bridge: legacy API → AI agent tool |
 | Multi-org identity is a nightmare | Keycloak federation across organizations |
 | Locked into one gateway vendor | Multi-gateway adapters: Kong, Gravitee, Apigee, Azure APIM, AWS, webMethods |
@@ -188,21 +184,11 @@ stoa/
 ├── stoa-gateway/          # Rust API gateway + MCP bridge
 ├── stoa-go/               # Go CLI (stoactl) + connect agent
 ├── stoa-operator/         # Kubernetes operator (Python/Kopf)
-├── stoa-ebpf/             # eBPF XDP/TC programs (Rust)
-├── services/              # Microservices
-│   ├── kafka-bridge/      #   Kafka event bridge
-│   └── opensearch-sync/   #   OpenSearch synchronization
-├── e2e/                   # Playwright BDD tests (77 features)
 ├── charts/                # Helm chart (5 CRDs, 33 templates)
-├── k8s/                   # Standalone K8s manifests + arena
-├── deploy/                # Docker Compose + VPS deploys
-│   ├── docker-compose/    #   Quick-start setup (21 services)
-│   └── vps/               #   VPS gateway deployments
-├── scripts/               # Demo, seed, arena benchmarks
-├── docs/                  # Runbooks + benchmark methodology
-├── keycloak/              # Keycloak theme + realm configs
-├── .github/workflows/     # 59 CI/CD workflows
-└── .claude/               # AI Factory config (agents, rules, skills)
+├── deploy/docker-compose/ # Quick-start setup
+├── e2e/                   # Playwright BDD tests
+├── scripts/               # Demo, seed, benchmarks
+└── docs/                  # Runbooks + methodology
 ```
 
 ## Related Repositories
@@ -216,19 +202,7 @@ stoa/
 
 ## Benchmark
 
-STOA includes an open benchmark suite (**Gateway Arena**) that continuously measures gateway performance across proxy throughput and AI-native capabilities (MCP, guardrails, governance).
-
-- **L0 — Proxy Baseline**: 7 k6 scenarios, median of 5 runs, CI95 confidence intervals
-- **L1 — Enterprise AI Readiness**: 20 dimensions across MCP, governance, security, LLM intelligence
-- **L2 — Platform CUJs**: 3 critical user journeys every 15 min (health, auth, MCP flow)
-- **Methodology**: [docs/BENCHMARK-METHODOLOGY.md](docs/BENCHMARK-METHODOLOGY.md) — scoring formula, scenarios, statistical method
-- **Latest Results**: [docs/BENCHMARK-RESULTS.md](docs/BENCHMARK-RESULTS.md) — scores for STOA, Kong, Gravitee, agentgateway
-
-Quick local run (requires [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) + Docker):
-
-```bash
-./scripts/traffic/arena/run-local.sh http://localhost:8080
-```
+STOA includes **Gateway Arena**, an open benchmark suite comparing API gateways on proxy throughput and AI-native capabilities (MCP, guardrails, governance). See [methodology](docs/BENCHMARK-METHODOLOGY.md) and [latest results](docs/BENCHMARK-RESULTS.md).
 
 ## Documentation
 
@@ -239,24 +213,7 @@ Quick local run (requires [k6](https://grafana.com/docs/k6/latest/set-up/install
 
 ## Security
 
-STOA runs a multi-job security pipeline on every PR and daily on `main`:
-
-| Tool | Scope | What It Catches |
-|------|-------|-----------------|
-| **Gitleaks** | Entire repo | Hardcoded secrets, API keys, tokens |
-| **Bandit** | Python (API, Gateway) | SQL injection, eval(), insecure crypto |
-| **ESLint Security** | TypeScript (Console, Portal) | XSS, unsafe regex, eval |
-| **Clippy SAST** | Rust (Gateway) | `todo!()`, `dbg!()`, `unwrap()`, `panic()` |
-| **CodeQL** | Multi-language | Static analysis (LGTM) |
-| **Trivy** | Container images | CVEs (CRITICAL + HIGH) |
-| **Cargo Audit** | Rust dependencies | Known vulnerability advisories |
-| **pip-audit / npm audit** | Python + Node deps | Dependency vulnerabilities |
-| **CycloneDX + SPDX** | All components | SBOM generation |
-| **Trivy License** | All components | License compliance (Apache 2.0 compatibility) |
-
-4 checks are **required** on every PR (branch protection): License Compliance, SBOM Generation, Verify Signed Commits, Regression Test Guard.
-
-See [`security-scan.yml`](.github/workflows/security-scan.yml) for the full pipeline.
+STOA runs SAST, dependency scanning, container scanning, and SBOM generation on every PR. 4 checks are required for merge: License Compliance, SBOM Generation, Signed Commits, and Regression Test Guard. See [`SECURITY.md`](SECURITY.md) for details.
 
 ## Contributing
 
@@ -285,5 +242,5 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ---
 
 <p align="center">
-  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Bordeaux, France</em>
+  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Paris, France</em>
 </p>

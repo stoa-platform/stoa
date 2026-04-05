@@ -38,6 +38,7 @@ def _deployment_to_dict(dep) -> dict:
         "last_sync_success": dep.last_sync_success,
         "sync_error": dep.sync_error,
         "sync_attempts": dep.sync_attempts,
+        "sync_steps": dep.sync_steps,
         "gateway_resource_id": dep.gateway_resource_id,
         "created_at": dep.created_at,
         "updated_at": dep.updated_at,
@@ -69,10 +70,12 @@ async def deploy_api(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin"])),
 ):
-    """Deploy an API to one or more gateways."""
+    """Deploy an API to one or more gateways. Rejects if any target gateway is disabled (409)."""
     svc = GatewayDeploymentService(db)
     try:
         deployments = await svc.deploy_api(data.api_catalog_id, data.gateway_instance_ids)
+    except PermissionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

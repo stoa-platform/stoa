@@ -8,64 +8,77 @@ Invariants:
 1. Prod filter only shows APIs deployed to both dev AND staging
 2. Staging filter only shows APIs deployed to staging
 3. DEV filter shows deployed + undeployed (draft) APIs
-4. Status is "published" when deployed to any environment, "draft" otherwise
+4. Status is read from DB catalog (set correctly during create/sync)
+
+Updated: Migrated from _api_from_yaml (GitLab) to _api_from_catalog (DB).
 """
+
+import uuid
+from unittest.mock import MagicMock
 
 import pytest
 
-from src.routers.apis import _api_from_yaml
+from src.models.catalog import APICatalog
+from src.routers.apis import _api_from_catalog
+
+
+def _mock_catalog(**overrides):
+    """Build a mock APICatalog row."""
+    defaults = {
+        "id": uuid.uuid4(),
+        "tenant_id": "oasis",
+        "api_id": overrides.get("name", "test-api"),
+        "api_name": overrides.get("name", "test-api"),
+        "version": "1.0.0",
+        "status": overrides.pop("status", "draft"),
+        "tags": overrides.pop("tags", []),
+        "portal_published": False,
+        "api_metadata": {
+            "name": overrides.get("name", "test-api"),
+            "description": overrides.get("description", ""),
+            "backend_url": overrides.get("backend_url", "https://api.example.com"),
+            "deployments": overrides.pop("deployments", {}),
+        },
+        "openapi_spec": None,
+    }
+    overrides.pop("name", None)
+    overrides.pop("description", None)
+    overrides.pop("backend_url", None)
+    defaults.update(overrides)
+    mock = MagicMock(spec=APICatalog)
+    for key, value in defaults.items():
+        setattr(mock, key, value)
+    return mock
 
 
 @pytest.fixture
 def api_draft():
     """API with no deployments (draft)."""
-    return {
-        "name": "draft-api",
-        "version": "1.0.0",
-        "description": "A draft API",
-        "backend_url": "https://api.example.com",
-        "deployments": {},
-        "tags": [],
-    }
+    return _mock_catalog(name="draft-api", status="draft", deployments={})
 
 
 @pytest.fixture
 def api_dev_only():
-    """API deployed only to dev."""
-    return {
-        "name": "dev-api",
-        "version": "1.0.0",
-        "description": "Dev-deployed API",
-        "backend_url": "https://api.example.com",
-        "deployments": {"dev": True, "staging": False},
-        "tags": [],
-    }
+    """API deployed only to dev — status should be 'published' in DB."""
+    return _mock_catalog(
+        name="dev-api", status="published", deployments={"dev": True, "staging": False}
+    )
 
 
 @pytest.fixture
 def api_staging_only():
     """API deployed only to staging."""
-    return {
-        "name": "staging-api",
-        "version": "1.0.0",
-        "description": "Staging-deployed API",
-        "backend_url": "https://api.example.com",
-        "deployments": {"dev": False, "staging": True},
-        "tags": [],
-    }
+    return _mock_catalog(
+        name="staging-api", status="published", deployments={"dev": False, "staging": True}
+    )
 
 
 @pytest.fixture
 def api_both():
     """API deployed to both dev and staging (promotion candidate)."""
-    return {
-        "name": "promoted-api",
-        "version": "1.0.0",
-        "description": "Fully promoted API",
-        "backend_url": "https://api.example.com",
-        "deployments": {"dev": True, "staging": True},
-        "tags": [],
-    }
+    return _mock_catalog(
+        name="promoted-api", status="published", deployments={"dev": True, "staging": True}
+    )
 
 
 class TestRegression_StatusDerivation:
@@ -77,39 +90,31 @@ class TestRegression_StatusDerivation:
         Ticket: CAB-1803
         PR: #1735
         """
-        result = _api_from_yaml("oasis", api_draft)
+        result = _api_from_catalog(api_draft)
         assert result.status == "draft"
 
     def test_regression_dev_deployed_becomes_published(self, api_dev_only):
         """An API deployed to dev should have status 'published', not 'draft'.
 
-        This was THE bug: GitLab YAML status was never updated on deploy,
-        so deployed APIs showed 'draft' in the UI.
-
         Ticket: CAB-1803
         PR: #1735
         """
-        result = _api_from_yaml("oasis", api_dev_only)
+        result = _api_from_catalog(api_dev_only)
         assert result.status == "published", (
             f"Expected 'published' for dev-deployed API, got '{result.status}'"
         )
 
     def test_regression_staging_deployed_becomes_published(self, api_staging_only):
         """An API deployed to staging should also be 'published'."""
-        result = _api_from_yaml("oasis", api_staging_only)
+        result = _api_from_catalog(api_staging_only)
         assert result.status == "published"
 
     def test_regression_explicit_status_preserved(self):
-        """If YAML has an explicit non-draft status, preserve it."""
-        api_data = {
-            "name": "deprecated-api",
-            "version": "1.0.0",
-            "backend_url": "https://api.example.com",
-            "status": "deprecated",
-            "deployments": {"dev": True},
-            "tags": [],
-        }
-        result = _api_from_yaml("oasis", api_data)
+        """If DB has an explicit non-draft status, preserve it."""
+        api = _mock_catalog(
+            name="deprecated-api", status="deprecated", deployments={"dev": True}
+        )
+        result = _api_from_catalog(api)
         assert result.status == "deprecated"
 
 
@@ -118,10 +123,10 @@ class TestRegression_EnvironmentFilter:
 
     def _build_api_list(self, api_draft, api_dev_only, api_staging_only, api_both):
         return [
-            _api_from_yaml("oasis", api_draft),
-            _api_from_yaml("oasis", api_dev_only),
-            _api_from_yaml("oasis", api_staging_only),
-            _api_from_yaml("oasis", api_both),
+            _api_from_catalog(api_draft),
+            _api_from_catalog(api_dev_only),
+            _api_from_catalog(api_staging_only),
+            _api_from_catalog(api_both),
         ]
 
     def test_regression_prod_filter_excludes_draft(self, api_draft, api_dev_only, api_staging_only, api_both):

@@ -4,9 +4,12 @@ Provides fast database-backed queries for the Portal API catalog
 instead of real-time GitLab API calls.
 """
 
+from uuid import UUID
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.api_gateway_assignment import ApiGatewayAssignment
 from src.models.catalog import APICatalog, AudienceEnum, MCPToolsCatalog
 
 # Role -> allowed audiences ceiling (CAB-1323)
@@ -51,6 +54,7 @@ class CatalogRepository:
         environment: str | None = None,
         sort_by: str | None = None,
         auth_type: str | None = None,
+        gateway_id: UUID | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[APICatalog], int]:
@@ -84,23 +88,31 @@ class CatalogRepository:
         elif tenant_id:
             query = query.where(APICatalog.tenant_id == tenant_id)
 
+        # Filter by gateway assignment (CAB-1940: scope APIs to a specific gateway)
+        if gateway_id is not None:
+            query = query.join(
+                ApiGatewayAssignment,
+                APICatalog.id == ApiGatewayAssignment.api_id,
+            ).where(ApiGatewayAssignment.gateway_id == gateway_id)
+
         # Filter by tags (any tag match using JSONB contains)
         if tags:
             # Match if any of the provided tags are in the API's tags array
             tag_conditions = [APICatalog.tags.contains([tag]) for tag in tags]
             query = query.where(or_(*tag_conditions))
 
-        # Search filter (name, description, api_id) - CAB-1044: escape LIKE wildcards
+        # Search filter (name, description, api_id, version) - CAB-1044, CAB-1965
         if search and search.strip():
             search_term = escape_like(search.strip().lower())
             search_pattern = f"%{search_term}%"
             query = query.where(
                 or_(
-                    func.lower(APICatalog.api_name).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(APICatalog.api_name, "")).like(search_pattern, escape="\\"),
                     func.lower(func.coalesce(APICatalog.api_metadata["description"].astext, "")).like(
                         search_pattern, escape="\\"
                     ),
                     func.lower(APICatalog.api_id).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(APICatalog.version, "")).like(search_pattern, escape="\\"),
                 )
             )
 

@@ -44,6 +44,9 @@ def _mock_deployment(**kwargs):
     d.api_catalog_id = kwargs.get("api_catalog_id", uuid4())
     d.last_sync_attempt = None
     d.last_sync_success = None
+    d.desired_generation = kwargs.get("desired_generation", 1)
+    d.attempted_generation = kwargs.get("attempted_generation", 0)
+    d.synced_generation = kwargs.get("synced_generation", 0)
     return d
 
 
@@ -362,11 +365,15 @@ class TestHandleSync:
         adapter.sync_api = AsyncMock(return_value=mock_result)
         adapter.upsert_policy = AsyncMock()
 
+        from src.services.sync_step_tracker import SyncStepTracker
+
+        tracker = SyncStepTracker()
+
         with patch("src.repositories.gateway_policy.GatewayPolicyRepository") as mock_policy_repo_cls:
             mock_policy_repo = AsyncMock()
             mock_policy_repo.get_policies_for_deployment = AsyncMock(return_value=[])
             mock_policy_repo_cls.return_value = mock_policy_repo
-            await engine._handle_sync(dep, adapter, repo, session)
+            await engine._handle_sync(dep, adapter, repo, session, tracker)
 
         assert dep.sync_status == DeploymentSyncStatus.SYNCED
         repo.update.assert_called()
@@ -384,10 +391,13 @@ class TestHandleSync:
         mock_result = MagicMock(success=False, data=None, resource_id=None, error="Gateway refused")
         adapter.sync_api = AsyncMock(return_value=mock_result)
 
-        await engine._handle_sync(dep, adapter, repo, session)
+        from src.services.sync_step_tracker import SyncStepTracker
+
+        tracker = SyncStepTracker()
+        await engine._handle_sync(dep, adapter, repo, session, tracker)
 
         assert dep.sync_status == DeploymentSyncStatus.ERROR
-        assert dep.sync_error == "Gateway refused"
+        assert "Gateway refused" in dep.sync_error
 
 
 # ── _handle_delete ──

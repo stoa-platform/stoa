@@ -389,6 +389,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/catalog/apis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Apis
+         * @description List APIs across all tenants (admin only).
+         *
+         *     Pass tenant_id to filter by a specific tenant, or omit for cross-tenant view.
+         */
+        get: operations["list_all_apis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/catalog/cache": {
         parameters: {
             query?: never;
@@ -3333,6 +3355,9 @@ export interface paths {
          *
          *     Internal endpoint — no JWT auth required (service-to-service on internal network).
          *     Used by stoa-gateway to discover APIs and register them as MCP tools.
+         *
+         *     If gateway_id is provided, only APIs assigned to that gateway are returned.
+         *     Without gateway_id, all published APIs are returned (backward compatible).
          */
         get: operations["internal_list_apis"];
         put?: never;
@@ -3525,6 +3550,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/internal/gateways/{gateway_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Gateway Events
+         * @description SSE stream of deployment events for a specific gateway (ADR-059).
+         *
+         *     Used by STOA Link agents to receive real-time deployment notifications
+         *     instead of polling /config. Events include:
+         *     - sync-deployment: new deployment to apply
+         *     - sync-policy: policy update
+         *     - undeploy: API removal
+         *
+         *     Authentication: X-Gateway-Key header (same as other internal endpoints).
+         */
+        get: operations["stream_gateway_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/internal/gateways/{gateway_id}/heartbeat": {
         parameters: {
             query?: never;
@@ -3671,7 +3724,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/mcp/gitops/gitlab/health": {
+    "/v1/mcp/gitops/git/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -3679,12 +3732,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Gitlab Health
-         * @description Check GitLab connection health.
+         * Get Git Health
+         * @description Check git provider connection health.
          *
          *     Requires: cpi-admin role
          */
-        get: operations["get_gitlab_health"];
+        get: operations["get_git_health"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3693,7 +3746,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/mcp/gitops/gitlab/servers": {
+    "/v1/mcp/gitops/git/servers": {
         parameters: {
             query?: never;
             header?: never;
@@ -3701,14 +3754,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Gitlab Servers
-         * @description List all MCP servers defined in GitLab (before sync to DB).
+         * List Git Servers
+         * @description List all MCP servers defined in git provider (before sync to DB).
          *
-         *     Useful for debugging and verifying GitLab content.
+         *     Useful for debugging and verifying git content.
          *
          *     Requires: cpi-admin role
          */
-        get: operations["list_gitlab_servers"];
+        get: operations["list_git_servers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3756,12 +3809,12 @@ export interface paths {
         put?: never;
         /**
          * Trigger Full Sync
-         * @description Trigger a full sync of all MCP servers from GitLab.
+         * @description Trigger a full sync of all MCP servers from git provider.
          *
          *     This will:
-         *     1. Read all MCP server definitions from GitLab
+         *     1. Read all MCP server definitions from git
          *     2. Create/update servers in the database
-         *     3. Mark servers not in GitLab as orphans
+         *     3. Mark servers not in git as orphans
          *
          *     Requires: cpi-admin role
          */
@@ -5939,7 +5992,7 @@ export interface paths {
         };
         /**
          * List Apis
-         * @description List APIs for a tenant from GitLab (paginated).
+         * @description List APIs for a tenant from database catalog (paginated).
          *
          *     Optionally filter by environment — only returns APIs deployed to that environment.
          */
@@ -5947,11 +6000,7 @@ export interface paths {
         put?: never;
         /**
          * Create Api
-         * @description Create a new API in GitLab and emit event.
-         *
-         *     This creates the API definition in the GitOps repository:
-         *     - tenants/{tenant_id}/apis/{api_name}/api.yaml
-         *     - tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)
+         * @description Create a new API in the database catalog and emit event.
          *
          *     Trial tenants are subject to limits (CAB-1549):
          *     - Max 3 APIs (configurable via tenant.settings.max_apis)
@@ -5973,18 +6022,18 @@ export interface paths {
         };
         /**
          * Get Api
-         * @description Get API by ID from GitLab
+         * @description Get API by ID from database catalog
          */
         get: operations["get_api"];
         /**
          * Update Api
-         * @description Update API in GitLab
+         * @description Update API in database catalog
          */
         put: operations["update_api"];
         post?: never;
         /**
          * Delete Api
-         * @description Delete API from GitLab
+         * @description Soft-delete API from database catalog
          */
         delete: operations["delete_api"];
         options?: never;
@@ -6093,7 +6142,9 @@ export interface paths {
         };
         /**
          * List Api Versions
-         * @description List version history (git commits) for a specific API.
+         * @description List version history for a specific API.
+         *
+         *     Git history unavailable — returns empty list pending GitHub migration (CAB-1890).
          */
         get: operations["list_api_versions"];
         put?: never;
@@ -7226,18 +7277,18 @@ export interface paths {
         };
         /**
          * Get File
-         * @description Get file content from GitLab
+         * @description Get file content from git provider
          */
         get: operations["get_file"];
         put?: never;
         /**
          * Create Or Update File
-         * @description Create or update a file in GitLab
+         * @description Create or update a file in git provider
          */
         post: operations["create_or_update_file"];
         /**
          * Delete File
-         * @description Delete a file from GitLab
+         * @description Delete a file from git provider
          */
         delete: operations["delete_file"];
         options?: never;
@@ -7298,7 +7349,7 @@ export interface paths {
         };
         /**
          * Get Tree
-         * @description Get directory tree from GitLab
+         * @description Get directory tree from git provider
          */
         get: operations["get_tree"];
         put?: never;
@@ -8556,6 +8607,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/webhooks/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Github Webhook
+         * @description Handle GitHub webhooks for GitOps.
+         */
+        post: operations["github_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/gitlab": {
         parameters: {
             query?: never;
@@ -9083,6 +9154,45 @@ export interface components {
          * @enum {string}
          */
         ActivityType: "subscription.created" | "subscription.approved" | "subscription.revoked" | "api.call" | "key.rotated";
+        /** AdminAPIPaginatedResponse */
+        AdminAPIPaginatedResponse: {
+            /** Items */
+            items: components["schemas"]["AdminAPIResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * AdminAPIResponse
+         * @description API response for cross-tenant admin listing.
+         */
+        AdminAPIResponse: {
+            /** Description */
+            description: string;
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @default draft
+             */
+            status: string;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Tenant Id */
+            tenant_id: string;
+            /** Version */
+            version: string;
+        };
         /** ApplicationCreate */
         ApplicationCreate: {
             /**
@@ -13191,6 +13301,10 @@ export interface components {
             sync_error?: string | null;
             /** Sync Status */
             sync_status: string;
+            /** Sync Steps */
+            sync_steps?: {
+                [key: string]: unknown;
+            }[] | null;
             /**
              * Updated At
              * Format: date-time
@@ -13333,10 +13447,20 @@ export interface components {
              * @default false
              */
             protected: boolean;
+            /**
+             * Public Url
+             * @description Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)
+             */
+            public_url?: string | null;
             /** Status */
             status: string;
             /** Tags */
             tags: string[];
+            /**
+             * Target Gateway Url
+             * @description URL of the third-party gateway managed by this Link/Connect instance
+             */
+            target_gateway_url?: string | null;
             /** Tenant Id */
             tenant_id: string | null;
             /**
@@ -13516,6 +13640,16 @@ export interface components {
              */
             mode: string;
             /**
+             * Public Url
+             * @description Public DNS URL of this gateway for Console display (CAB-1940)
+             */
+            public_url?: string | null;
+            /**
+             * Target Gateway Url
+             * @description URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)
+             */
+            target_gateway_url?: string | null;
+            /**
              * Tenant Id
              * @description Optional tenant restriction
              */
@@ -13588,10 +13722,10 @@ export interface components {
             tool_name?: string | null;
         };
         /**
-         * GitLabHealthResponse
-         * @description GitLab connection health status.
+         * GitHealthResponse
+         * @description Git provider connection health status.
          */
-        GitLabHealthResponse: {
+        GitHealthResponse: {
             /** Default Branch */
             default_branch?: string | null;
             /** Error */
@@ -13604,10 +13738,22 @@ export interface components {
             status: string;
         };
         /**
-         * GitLabServerSummary
-         * @description Summary of a GitLab-defined MCP server.
+         * GitOpsStatus
+         * @description Overall GitOps sync status.
          */
-        GitLabServerSummary: {
+        GitOpsStatus: {
+            /** Checked At */
+            checked_at: string;
+            /** Components */
+            components: components["schemas"]["ComponentStatus"][];
+            /** Status */
+            status: string;
+        };
+        /**
+         * GitServerSummary
+         * @description Summary of a git-defined MCP server.
+         */
+        GitServerSummary: {
             /** Category */
             category?: string | null;
             /** Display Name */
@@ -13627,32 +13773,20 @@ export interface components {
             tools_count: number;
         };
         /**
-         * GitLabServersResponse
-         * @description List of MCP servers found in GitLab.
+         * GitServersResponse
+         * @description List of MCP servers found in the git provider.
          */
-        GitLabServersResponse: {
+        GitServersResponse: {
             /**
              * Servers
              * @default []
              */
-            servers: components["schemas"]["GitLabServerSummary"][];
+            servers: components["schemas"]["GitServerSummary"][];
             /**
              * Total
              * @default 0
              */
             total: number;
-        };
-        /**
-         * GitOpsStatus
-         * @description Overall GitOps sync status.
-         */
-        GitOpsStatus: {
-            /** Checked At */
-            checked_at: string;
-            /** Components */
-            components: components["schemas"]["ComponentStatus"][];
-            /** Status */
-            status: string;
         };
         /**
          * GovernanceEntity
@@ -18524,6 +18658,13 @@ export interface components {
              * @description Sync result: applied or failed
              */
             status: string;
+            /**
+             * Steps
+             * @description Ordered sync step trace (optional)
+             */
+            steps?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /**
          * SystemInfoResponse
@@ -21757,6 +21898,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArgoCDSyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_apis: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Filter by tenant (omit for all) */
+                tenant_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAPIPaginatedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -26320,7 +26495,10 @@ export interface operations {
     };
     internal_list_apis: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter APIs assigned to this gateway (CAB-1940) */
+                gateway_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -26334,6 +26512,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InternalAPIsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -26586,6 +26773,39 @@ export interface operations {
                 "application/json": components["schemas"]["DiscoveryPayload"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_gateway_events: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Gateway-Key": string;
+            };
+            path: {
+                gateway_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -26908,7 +27128,7 @@ export interface operations {
             };
         };
     };
-    get_gitlab_health: {
+    get_git_health: {
         parameters: {
             query?: never;
             header?: never;
@@ -26923,12 +27143,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GitLabHealthResponse"];
+                    "application/json": components["schemas"]["GitHealthResponse"];
                 };
             };
         };
     };
-    list_gitlab_servers: {
+    list_git_servers: {
         parameters: {
             query?: never;
             header?: never;
@@ -26943,7 +27163,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GitLabServersResponse"];
+                    "application/json": components["schemas"]["GitServersResponse"];
                 };
             };
         };
@@ -36018,6 +36238,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenUsageCompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_webhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Hub-Signature-256"?: string | null;
+                "X-GitHub-Event"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookProcessedResponse"];
                 };
             };
             /** @description Validation Error */

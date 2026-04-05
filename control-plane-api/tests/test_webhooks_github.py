@@ -132,12 +132,12 @@ class TestGithubWebhookEndpoint:
 
     @pytest.fixture
     def mock_deps(self):
-        """Patch TraceService and Kafka for webhook endpoint tests."""
+        """Patch TraceService, Kafka, and HMAC verification for webhook endpoint tests."""
         mock_trace = _mock_trace()
         with (
             patch("src.routers.webhooks.TraceService") as mock_trace_svc_cls,
             patch("src.routers.webhooks.kafka_service") as mock_kafka,
-            patch("src.routers.webhooks.settings") as mock_settings,
+            patch("src.routers.webhooks.verify_github_signature", return_value=True) as mock_verify,
         ):
             mock_trace_svc = AsyncMock()
             mock_trace_svc.create.return_value = mock_trace
@@ -145,11 +145,10 @@ class TestGithubWebhookEndpoint:
             mock_trace_svc.complete = AsyncMock()
             mock_trace_svc_cls.return_value = mock_trace_svc
             mock_kafka.publish = AsyncMock(return_value="event-id-1")
-            mock_settings.GITHUB_WEBHOOK_SECRET = WEBHOOK_SECRET
             yield {
                 "trace_service": mock_trace_svc,
                 "kafka": mock_kafka,
-                "settings": mock_settings,
+                "verify": mock_verify,
                 "trace": mock_trace,
             }
 
@@ -186,6 +185,7 @@ class TestGithubWebhookEndpoint:
         assert data["trace_id"] == "trace-uuid-123"
 
     async def test_push_event_invalid_hmac(self, test_client, mock_deps):
+        mock_deps["verify"].return_value = False
         payload = _push_payload()
         resp = await test_client.post(
             "/webhooks/github",
@@ -199,6 +199,7 @@ class TestGithubWebhookEndpoint:
         assert "Invalid signature" in resp.json()["detail"]
 
     async def test_push_event_missing_signature(self, test_client, mock_deps):
+        mock_deps["verify"].return_value = False
         payload = _push_payload()
         resp = await test_client.post(
             "/webhooks/github",

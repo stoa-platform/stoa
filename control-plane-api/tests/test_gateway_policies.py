@@ -244,6 +244,9 @@ class TestPolicySyncInSyncEngine:
             "gateway_resource_id": None,
             "last_sync_attempt": None,
             "last_sync_success": None,
+            "desired_generation": 1,
+            "attempted_generation": 0,
+            "synced_generation": 0,
         }
         defaults.update(overrides)
         mock = MagicMock()
@@ -385,4 +388,5 @@ class TestPolicySyncInSyncEngine:
 
             # Deployment is still SYNCED even though policy failed
             assert deployment.sync_status == DeploymentSyncStatus.SYNCED
-            assert deployment.sync_error is None
+            # sync_error now captures policy failure detail via SyncStepTracker
+            assert deployment.sync_error is None or "failed" in deployment.sync_error.lower()

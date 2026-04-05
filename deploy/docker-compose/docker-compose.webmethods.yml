@@ -39,5 +39,38 @@ services:
       retries: 20
       start_period: 60s
 
+  # ==========================================================================
+  # STOA Connect — Bridge agent (webMethods → Control Plane)
+  # ==========================================================================
+  stoa-connect:
+    build:
+      context: ../../stoa-go
+      dockerfile: Dockerfile.connect
+    container_name: stoa-connect-wm
+    environment:
+      # Control Plane registration
+      STOA_CONTROL_PLANE_URL: http://host.docker.internal:8000
+      STOA_GATEWAY_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
+      STOA_INSTANCE_NAME: "stoa-connect-wm-local"
+      STOA_ENVIRONMENT: "dev"
+      STOA_GATEWAY_MODE: "connect"
+      # Target gateway (webMethods)
+      STOA_GATEWAY_ADMIN_URL: http://apigateway:5555
+      STOA_GATEWAY_TYPE: webmethods
+      STOA_TARGET_GATEWAY_URL: http://host.docker.internal:5555
+      STOA_UI_URL: http://localhost:9072
+      STOA_PUBLIC_URL: http://localhost:5555
+    ports:
+      - "8090:8090"
+    depends_on:
+      apigateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   es-data:

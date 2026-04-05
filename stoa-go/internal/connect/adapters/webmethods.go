@@ -15,9 +15,15 @@ import (
 
 // WebMethodsAdapter implements GatewayAdapter for webMethods API Gateway (port 5555).
 type WebMethodsAdapter struct {
-	client      *http.Client
-	cfg         AdapterConfig
-	syncedHashes map[string]string // tracks last-synced SpecHash per route name
+	client       *http.Client
+	cfg          AdapterConfig
+	syncedHashes map[string]string            // tracks last-synced SpecHash per route name
+	FailedRoutes map[string]string            // deployment_id → error (populated after SyncRoutes)
+}
+
+// GetFailedRoutes returns the per-deployment-id error map from the last SyncRoutes call.
+func (w *WebMethodsAdapter) GetFailedRoutes() map[string]string {
+	return w.FailedRoutes
 }
 
 // NewWebMethodsAdapter creates a new webMethods adapter.
@@ -26,6 +32,7 @@ func NewWebMethodsAdapter(cfg AdapterConfig) *WebMethodsAdapter {
 		client:       &http.Client{Timeout: 10 * time.Second},
 		cfg:          cfg,
 		syncedHashes: make(map[string]string),
+		FailedRoutes: make(map[string]string),
 	}
 }
 
@@ -468,6 +475,14 @@ func (w *WebMethodsAdapter) DeleteAPI(ctx context.Context, adminURL string, apiN
 // openAPI31Re matches OpenAPI 3.1.x version strings.
 var openAPI31Re = regexp.MustCompile(`"openapi"\s*:\s*"3\.1\.\d+"`)
 
+// sanitizeWMName removes characters that webMethods rejects in apiName.
+// webMethods only accepts alphanumeric, hyphens, underscores, and dots.
+var wmNameRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+
+func sanitizeWMName(name string) string {
+	return wmNameRe.ReplaceAllString(name, "-")
+}
+
 // downgradeOpenAPI31 rewrites an OpenAPI 3.1.x spec to 3.0.3.
 // webMethods only accepts OpenAPI 3.0.x.
 func downgradeOpenAPI31(spec []byte) []byte {
@@ -475,6 +490,148 @@ func downgradeOpenAPI31(spec []byte) []byte {
 		return spec
 	}
 	return openAPI31Re.ReplaceAll(spec, []byte(`"openapi": "3.0.3"`))
+}
+
+// fixExternalDocs wraps externalDocs object into an array if needed.
+// webMethods expects externalDocs as an array, but OpenAPI/Swagger specs
+// define it as a single object. This causes deserialization errors on PUT.
+func fixExternalDocs(spec []byte) []byte {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
+		return spec
+	}
+
+	ed, ok := parsed["externalDocs"]
+	if !ok {
+		return spec
+	}
+
+	// If it's already an array, no fix needed
+	if _, isArray := ed.([]interface{}); isArray {
+		return spec
+	}
+
+	// If it's an object, wrap in array
+	if obj, isObj := ed.(map[string]interface{}); isObj {
+		parsed["externalDocs"] = []interface{}{obj}
+		fixed, err := json.Marshal(parsed)
+		if err != nil {
+			return spec
+		}
+		return fixed
+	}
+
+	return spec
+}
+
+// fixSecuritySchemeTypes uppercases securityScheme enum values.
+// webMethods expects OAUTH2/HTTP/APIKEY/OPENIDCONNECT and HEADER/QUERY/COOKIE,
+// but OpenAPI specs use lowercase: oauth2, http, apiKey, header, query.
+func fixSecuritySchemeTypes(spec []byte) []byte {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
+		return spec
+	}
+
+	components, ok := parsed["components"].(map[string]interface{})
+	if !ok {
+		return spec
+	}
+	schemes, ok := components["securitySchemes"].(map[string]interface{})
+	if !ok {
+		return spec
+	}
+
+	modified := false
+	for name, v := range schemes {
+		scheme, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, field := range []string{"type", "in"} {
+			if val, ok := scheme[field].(string); ok {
+				upper := strings.ToUpper(val)
+				if upper != val {
+					scheme[field] = upper
+					modified = true
+				}
+			}
+		}
+		schemes[name] = scheme
+	}
+
+	if !modified {
+		return spec
+	}
+
+	fixed, err := json.Marshal(parsed)
+	if err != nil {
+		return spec
+	}
+	return fixed
+}
+
+// stripSwagger2ResponseRefs removes $ref from response schemas in Swagger 2.0 specs.
+// webMethods 10.15 RefProperty parser crashes on $ref inside response schema objects
+// (e.g. {"schema":{"$ref":"#/definitions/Pet"}}). We strip the schema entirely since
+// webMethods doesn't use response schemas for routing — it only needs paths + methods.
+func stripSwagger2ResponseRefs(spec []byte) []byte {
+	if !bytes.Contains(spec, []byte(`"swagger"`)) {
+		return spec // Not Swagger 2.0
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
+		return spec
+	}
+
+	paths, ok := parsed["paths"].(map[string]interface{})
+	if !ok {
+		return spec
+	}
+
+	modified := false
+	for _, pathItem := range paths {
+		pi, ok := pathItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, method := range []string{"get", "post", "put", "delete", "patch", "options", "head"} {
+			op, ok := pi[method].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			responses, ok := op["responses"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			for code, resp := range responses {
+				r, ok := resp.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				// Strip ALL response schemas — webMethods RefProperty parser
+				// crashes on $ref, additionalProperties, and other complex
+				// schema constructs during PUT. Response schemas aren't needed
+				// for gateway routing.
+				if _, hasSchema := r["schema"]; hasSchema {
+					delete(r, "schema")
+					responses[code] = r
+					modified = true
+				}
+			}
+		}
+	}
+
+	if !modified {
+		return spec
+	}
+
+	fixed, err := json.Marshal(parsed)
+	if err != nil {
+		return spec
+	}
+	return fixed
 }
 
 // SyncRoutes pushes CP routes to webMethods via REST API import.
@@ -486,8 +643,12 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		return fmt.Errorf("list existing apis: %w", err)
 	}
 
+	// Reset per-route failure tracking
+	w.FailedRoutes = make(map[string]string)
+	var syncErrors []string
+
 	for _, route := range routes {
-		wmName := "stoa-" + route.Name
+		wmName := sanitizeWMName("stoa-" + route.Name)
 
 		// Deactivated route: deactivate on gateway if it exists
 		if !route.Activated {
@@ -506,10 +667,13 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			}
 		}
 
-		// Downgrade OpenAPI 3.1 spec if present
+		// Fix spec compatibility issues before sending to webMethods
 		spec := route.OpenAPISpec
 		if len(spec) > 0 {
 			spec = downgradeOpenAPI31(spec)
+			spec = fixExternalDocs(spec)
+			spec = fixSecuritySchemeTypes(spec)
+			spec = stripSwagger2ResponseRefs(spec)
 		}
 
 		var apiPayload map[string]interface{}
@@ -551,6 +715,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if err != nil {
 			return fmt.Errorf("marshal webmethods api: %w", err)
 		}
+		data = fixExternalDocs(data)
 
 		var method string
 		var apiURL string
@@ -581,7 +746,16 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		}
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 			log.Printf("webmethods: sync %s failed (%d): %s", wmName, resp.StatusCode, string(respBody))
-			return fmt.Errorf("webmethods api sync failed (%d)", resp.StatusCode)
+			detail := string(respBody)
+			if len(detail) > 300 {
+				detail = detail[:300]
+			}
+			errMsg := fmt.Sprintf("%s: %d — %s", wmName, resp.StatusCode, detail)
+			syncErrors = append(syncErrors, errMsg)
+			if route.DeploymentID != "" {
+				w.FailedRoutes[route.DeploymentID] = fmt.Sprintf("webmethods api sync failed (%d): %s", resp.StatusCode, detail)
+			}
+			continue
 		}
 
 		// Determine API ID for post-deploy verification
@@ -620,6 +794,10 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if route.SpecHash != "" {
 			w.syncedHashes[wmName] = route.SpecHash
 		}
+	}
+
+	if len(syncErrors) > 0 {
+		return fmt.Errorf("webmethods api sync failed (%d/%d): %s", len(syncErrors), len(routes), strings.Join(syncErrors, "; "))
 	}
 
 	return nil

@@ -67,7 +67,7 @@ Create CNAME records pointing to the Load Balancer:
 
 | DNS | Target | Purpose |
 |-----|--------|---------|
-| `gateway.gostoa.dev` | `<elb-hostname>` | Admin UI (port 9072) |
+| `vps-wm.gostoa.dev` | `<elb-hostname>` | Admin UI (port 9072) |
 | `apis.gostoa.dev` | `<elb-hostname>` | API Runtime (port 5543) |
 
 ## Sources & Documentation

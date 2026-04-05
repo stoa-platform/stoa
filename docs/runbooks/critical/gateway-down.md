@@ -20,7 +20,7 @@
 ### Observed Behavior
 
 - All APIs return 502/503/504
-- Timeout on `https://gateway.gostoa.dev`
+- Timeout on `https://vps-wm.gostoa.dev`
 - Health check `/rest/apigateway/health` fails
 - Developer Portal displays "Gateway unavailable"
 
@@ -196,10 +196,10 @@ kubectl rollout undo deployment -n stoa apigateway --to-revision=<N>
 
 ```bash
 # Health check
-curl -s https://gateway.gostoa.dev/rest/apigateway/health | jq .
+curl -s https://vps-wm.gostoa.dev/rest/apigateway/health | jq .
 
 # Test a public API
-curl -s https://gateway.gostoa.dev/gateway/ControlPlane/v1/health
+curl -s https://vps-wm.gostoa.dev/gateway/ControlPlane/v1/health
 
 # Check metrics
 kubectl exec -n stoa deploy/apigateway -- \

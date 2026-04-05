@@ -292,3 +292,73 @@ func TestStartHeartbeatStopsOnCancel(t *testing.T) {
 		t.Errorf("expected at least 2 heartbeats, got %d", callCount.Load())
 	}
 }
+
+// Regression: heartbeat 404 returns ErrGatewayNotFound, enabling re-registration.
+func TestHeartbeat404ReturnsNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Gateway instance not found"}`))
+	}))
+	defer server.Close()
+
+	agent := New(Config{
+		ControlPlaneURL: server.URL,
+		GatewayAPIKey:   "key",
+		InstanceName:    "test-agent",
+	})
+	agent.gatewayID = "purged-id"
+
+	err := agent.Heartbeat(context.Background())
+	if err == nil {
+		t.Fatal("expected error on 404 heartbeat")
+	}
+	if err != ErrGatewayNotFound {
+		t.Errorf("expected ErrGatewayNotFound, got: %v", err)
+	}
+}
+
+// Regression: heartbeat 404 triggers re-registration after 3 consecutive failures.
+func TestStartHeartbeat404ReRegisters(t *testing.T) {
+	var heartbeatCount atomic.Int32
+	var registerCount atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/internal/gateways/register" {
+			registerCount.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(RegistrationResponse{
+				ID:   "new-id",
+				Name: "re-registered",
+			})
+			return
+		}
+		// Heartbeat always returns 404
+		heartbeatCount.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	agent := New(Config{
+		ControlPlaneURL:   server.URL,
+		GatewayAPIKey:     "key",
+		InstanceName:      "test-agent",
+		HeartbeatInterval: 20 * time.Millisecond,
+	})
+	agent.gatewayID = "old-purged-id"
+	agent.healthPort = "8090"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	agent.StartHeartbeat(ctx)
+
+	// Wait for 3 heartbeat 404s + re-registration
+	time.Sleep(250 * time.Millisecond)
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+
+	if registerCount.Load() < 1 {
+		t.Errorf("expected at least 1 re-registration, got %d", registerCount.Load())
+	}
+	if agent.gatewayID != "new-id" {
+		t.Errorf("expected gatewayID=new-id after re-registration, got %s", agent.gatewayID)
+	}
+}

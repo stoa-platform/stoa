@@ -4,9 +4,11 @@ updates:
   - package-ecosystem: "pip"
     directory: "/control-plane-api"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 5
+    groups:
+      python-deps:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
 
@@ -14,9 +16,11 @@ updates:
   - package-ecosystem: "npm"
     directory: "/portal"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      npm-portal:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
 
@@ -24,8 +28,10 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
+    groups:
+      gha-deps:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(ci)"
 
@@ -33,9 +39,11 @@ updates:
   - package-ecosystem: "npm"
     directory: "/control-plane-ui"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      npm-ui:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
 
@@ -43,9 +51,11 @@ updates:
   - package-ecosystem: "npm"
     directory: "/e2e"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      npm-e2e:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
 
@@ -53,9 +63,11 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/stoa-gateway"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      cargo-deps:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
 
@@ -63,9 +75,11 @@ updates:
   - package-ecosystem: "pip"
     directory: "/cli"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      python-cli:
+        patterns: ["*"]
     commit-message:
       prefix: "chore(deps)"
 

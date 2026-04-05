@@ -13,7 +13,7 @@ import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
-import type { GatewayDeployment } from '../../types';
+import type { GatewayDeployment, SyncStep } from '../../types';
 
 interface DeploymentDetailDrawerProps {
   deployment: GatewayDeployment;
@@ -103,6 +103,59 @@ function StateViewer({ title, state }: { title: string; state?: Record<string, u
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+const stepStatusStyles: Record<string, { dot: string; text: string }> = {
+  success: { dot: 'bg-green-500', text: 'text-green-700 dark:text-green-400' },
+  failed: { dot: 'bg-red-500', text: 'text-red-700 dark:text-red-400' },
+  running: { dot: 'bg-blue-500 animate-pulse', text: 'text-blue-700 dark:text-blue-400' },
+  skipped: { dot: 'bg-neutral-300 dark:bg-neutral-600', text: 'text-neutral-500' },
+};
+
+function SyncStepsView({ steps }: { steps: SyncStep[] }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">Sync Steps</h3>
+      <div className="space-y-2">
+        {steps.map((step, i) => {
+          const style = stepStatusStyles[step.status] || stepStatusStyles.skipped;
+          const duration =
+            step.started_at && step.completed_at
+              ? Math.round(
+                  (new Date(step.completed_at).getTime() - new Date(step.started_at).getTime()) /
+                    1000
+                )
+              : null;
+          return (
+            <div key={i} className="flex items-start gap-3">
+              <div className="flex flex-col items-center">
+                <div className={`w-3 h-3 rounded-full mt-1 ${style.dot}`} />
+                {i < steps.length - 1 && (
+                  <div className="w-0.5 h-6 bg-neutral-200 dark:bg-neutral-700" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className={`text-sm font-medium ${style.text}`}>{step.name}</p>
+                  <span className="text-[10px] uppercase font-semibold text-neutral-400">
+                    {step.status}
+                  </span>
+                  {duration !== null && (
+                    <span className="text-[10px] text-neutral-400">{duration}s</span>
+                  )}
+                </div>
+                {step.detail && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+                    {step.detail}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -253,6 +306,9 @@ export function DeploymentDetailDrawer({
               </div>
             </div>
           )}
+
+          {/* Sync Steps (from REST API — written by sync engine) */}
+          {d.sync_steps && d.sync_steps.length > 0 && <SyncStepsView steps={d.sync_steps} />}
 
           {/* Connectivity Test */}
           <div>

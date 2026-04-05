@@ -120,12 +120,18 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
 /// 2. If found + activated: proxy to backend_url
 /// 3. If found but not activated: 503
 /// 4. If not found: 404
-#[instrument(name = "proxy.dynamic", skip(state, request), fields(otel.kind = "client"))]
+#[instrument(name = "proxy.dynamic", skip(state, request), fields(
+    otel.kind = "client",
+    http.status_code = tracing::field::Empty,
+    otel.status_code = tracing::field::Empty,
+    otel.status_message = tracing::field::Empty,
+))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
-    let path = request.uri().path().to_string();
+    let raw_path = request.uri().path();
+    let path = urlencoding::decode(raw_path).unwrap_or(std::borrow::Cow::Borrowed(raw_path));
     let method = request.method().clone();
 
-    // Find matching route
+    // Find matching route (path is percent-decoded so spaces in API names match)
     let route = match state.route_registry.find_by_path(&path) {
         Some(r) => r,
         None => {
@@ -426,6 +432,16 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         response.headers_mut().insert("x-stoa-timing", hv);
     }
 
+    // Record HTTP status on the proxy span for Tempo trace filtering
+    let status = response.status().as_u16();
+    tracing::Span::current().record("http.status_code", status);
+    if status >= 500 {
+        tracing::Span::current().record("otel.status_code", "ERROR");
+        tracing::Span::current().record("otel.status_message", &format!("HTTP {status}") as &str);
+    } else {
+        tracing::Span::current().record("otel.status_code", "OK");
+    }
+
     response
 }
 
@@ -435,6 +451,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 /// Headers (hop-by-hop filtering, credential injection, traceparent, Via)
 /// are handled identically to the reqwest path for consistency.
 #[cfg(feature = "pingora")]
+#[instrument(name = "upstream.call", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn forward_request_pingora(
     pool: &std::sync::Arc<crate::proxy::pingora_pool::PingoraPool>,
     request: Request<Body>,
@@ -544,6 +561,7 @@ async fn forward_request_pingora(
 ///
 /// When a resolved header tuple is provided, it is injected into the
 /// outgoing request (BYOK credential proxy — CAB-1250, OAuth2 — CAB-1317).
+#[instrument(name = "upstream.call", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn forward_request(
     request: Request<Body>,
     method: &Method,
@@ -693,6 +711,7 @@ fn is_idempotent(method: &Method) -> bool {
 ///
 /// Rebuilds the outgoing request from saved headers — used when the original
 /// request body has already been consumed by the first attempt.
+#[instrument(name = "upstream.retry", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn retry_forward(
     method: &Method,
     target_url: &str,

@@ -598,7 +598,11 @@ function EnvironmentSection({
       )}
 
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden border border-neutral-200 dark:border-neutral-700">
-        <div className="divide-y divide-neutral-100 dark:divide-neutral-700/50">
+        <div
+          className="divide-y divide-neutral-100 dark:divide-neutral-700/50"
+          role="list"
+          aria-label={`${ENV_LABELS[env]} gateways`}
+        >
           {gateways.map((gw) => (
             <GatewayRow
               key={gw.id}
@@ -647,6 +651,7 @@ function GatewayRow({
         isDeleted ? 'opacity-50' : ''
       }`}
       onClick={onSelect}
+      data-testid="gateway-row"
     >
       {/* Status indicator */}
       <div className="flex-shrink-0 relative">
@@ -751,6 +756,7 @@ function GatewayRow({
       <div className="flex-shrink-0 hidden sm:block">
         <span
           className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${status.badge}`}
+          data-testid="gateway-status"
         >
           <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
           {status.label}

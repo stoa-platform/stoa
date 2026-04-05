@@ -354,6 +354,9 @@ fn with_rate_limit_headers(
         tenant_id = tracing::field::Empty,
         tool_name = tracing::field::Empty,
         user_id = tracing::field::Empty,
+        http.status_code = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+        otel.status_message = tracing::field::Empty,
     )
 )]
 pub async fn mcp_tools_call(

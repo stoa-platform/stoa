@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
-from ..services.git_provider import GitProvider, get_git_provider
+from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
 
 
 class TreeItem(BaseModel):
@@ -38,6 +38,9 @@ class MergeResultResponse(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+
+# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
+git_service = git_provider_factory()
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/git", tags=["Advanced — GitOps"])
 

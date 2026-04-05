@@ -85,6 +85,35 @@ patch('src.services.git_service.git_service', _mock_git_service).start()
 patch('src.services.keycloak_service.keycloak_service', _mock_keycloak_service).start()
 patch('src.services.metrics_service.metrics_service', _mock_metrics_service).start()
 
+# Bridge DI with module-level patches (CAB-1889 git_provider migration).
+# Routers use Depends(get_git_provider), tests patch module-level git_service.
+# DI override delegates to the router's patchable module attribute so both paths work.
+from src.services.git_provider import get_git_provider
+from src.main import app as _app
+
+
+def _git_di_bridge() -> object:
+    """Return whichever router's git_service was most recently patched.
+
+    Tests patch different routers (apis, git, deployments, etc.) — check the
+    first one that differs from the original factory instance.
+    """
+    import src.routers.apis as _apis
+    import src.routers.git as _git
+    import src.routers.deployments as _deploy
+
+    # Factory-created originals are GitProvider instances; mocks are MagicMock
+    from unittest.mock import MagicMock
+
+    for mod in (_apis, _git, _deploy):
+        val = getattr(mod, "git_service", None)
+        if val is not None and isinstance(val, MagicMock):
+            return val
+    return getattr(_apis, "git_service", _mock_git_service)
+
+
+_app.dependency_overrides[get_git_provider] = _git_di_bridge
+
 # Patch OpenSearch setup
 patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
 

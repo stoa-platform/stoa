@@ -140,7 +140,7 @@ pub fn backpressure_response() -> Response {
 /// - Linux: reads `/proc/self/statm` (field 1 = resident pages).
 /// - macOS: uses `mach_task_basic_info` via libc.
 /// - Other: returns 0 (backpressure never triggers).
-fn read_rss_bytes() -> u64 {
+pub fn read_rss_bytes() -> u64 {
     #[cfg(target_os = "linux")]
     {
         read_rss_linux()
@@ -206,6 +206,42 @@ fn read_rss_macos() -> u64 {
         } else {
             0
         }
+    }
+}
+
+
+/// Read the number of open file descriptors for the current process.
+pub fn read_fd_count() -> u64 {
+    #[cfg(target_os = "linux")]
+    {
+        match std::fs::read_dir("/proc/self/fd") {
+            Ok(entries) => entries.count() as u64,
+            Err(_) => 0,
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        0
+    }
+}
+
+/// Read the number of threads in the current process.
+pub fn read_thread_count() -> u64 {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+            return 0;
+        };
+        for line in status.lines() {
+            if let Some(val) = line.strip_prefix("Threads:") {
+                return val.trim().parse().unwrap_or(0);
+            }
+        }
+        0
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        0
     }
 }
 

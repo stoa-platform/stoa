@@ -17,7 +17,7 @@ use axum::{
 };
 use serde::Serialize;
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 
 use super::claims::Claims;
 use super::jwt::{JwtError, JwtValidator, ValidatedToken};
@@ -182,6 +182,7 @@ impl IntoResponse for AuthError {
 ///
 /// Extracts and validates JWT from Authorization header.
 /// If valid, injects `AuthenticatedUser` into request extensions.
+#[instrument(name = "auth.jwt", skip_all, fields(otel.kind = "internal"))]
 pub async fn auth_middleware(
     State(auth_state): State<AuthState>,
     mut request: Request<Body>,
@@ -280,6 +281,7 @@ pub struct SubscriptionState {
 /// If not present, the middleware is skipped (non-proxy routes).
 ///
 /// Returns 401 if `azp` claim is missing, 403 if no active subscription.
+#[instrument(name = "auth.subscription", skip_all, fields(otel.kind = "internal"))]
 pub async fn subscription_middleware(
     State(sub_state): State<SubscriptionState>,
     mut request: Request<Body>,

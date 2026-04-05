@@ -186,12 +186,18 @@ def _build_spans_from_timings(
 # Map OTLP span names → UI-expected names (TraceDetail.tsx, LiveTraces.tsx)
 _OTEL_TO_UI_SPAN_NAME: dict[str, str] = {
     "auth.profile": "auth_validation",
+    "auth.jwt": "auth_validation",
+    "auth.subscription": "subscription_check",
+    "auth.mtls.extract": "tls_termination",
+    "auth.mtls.binding": "mtls_binding",
+    "auth.sender_constraint": "sender_constraint",
     "policy.quota": "rate_limiting",
     "policy.supervision": "policy_eval",
     "policy.guardrails": "guardrails",
     "policy.opa": "policy_eval",
     "proxy.dynamic": "routing",
     "upstream.call": "backend_call",
+    "upstream.retry": "backend_retry",
     "http.request": "http_request",
     "mcp.tools.list": "mcp_discovery",
     "mcp.tools.call": "mcp_tool_call",
@@ -204,10 +210,16 @@ _OTEL_TO_UI_SPAN_NAME: dict[str, str] = {
 # Map OTLP span names → service labels for the UI
 _OTEL_TO_UI_SERVICE: dict[str, str] = {
     "auth.profile": "keycloak",
+    "auth.jwt": "keycloak",
+    "auth.subscription": "stoa-gateway",
+    "auth.mtls.extract": "stoa-gateway",
+    "auth.mtls.binding": "stoa-gateway",
+    "auth.sender_constraint": "stoa-gateway",
     "policy.quota": "stoa-gateway",
     "policy.supervision": "stoa-gateway",
     "proxy.dynamic": "stoa-gateway",
     "upstream.call": "upstream-api",
+    "upstream.retry": "upstream-api",
     "http.request": "stoa-gateway",
 }
 
@@ -260,9 +272,30 @@ class MonitoringService:
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
             if status == "error":
-                filters.append({"term": {"traceGroupFields.statusCode": 2}})
+                filters.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"range": {"span.attributes.http@status_code": {"gte": 400}}},
+                                {"term": {"traceGroupFields.statusCode": 2}},
+                            ],
+                            "minimum_should_match": 1,
+                        }
+                    }
+                )
             elif status == "success":
-                filters.append({"bool": {"must_not": [{"term": {"traceGroupFields.statusCode": 2}}]}})
+                filters.append(
+                    {
+                        "bool": {
+                            "must_not": [
+                                {"range": {"span.attributes.http@status_code": {"gte": 400}}},
+                                {"term": {"traceGroupFields.statusCode": 2}},
+                            ]
+                        }
+                    }
+                )
+            elif status == "timeout":
+                filters.append({"term": {"span.attributes.http@status_code": 504}})
 
             body = {
                 "query": {"bool": {"filter": filters}},
@@ -288,8 +321,15 @@ class MonitoringService:
                     trace_dur_nanos = int(src.get("durationInNanos", 0))
                 duration_ms = max(int(trace_dur_nanos / 1_000_000), 1)
 
-                # Derive status from OTel status code (0=unset/OK, 2=error)
-                tx_status = "error" if otel_status_code == 2 else "success"
+                # Real HTTP status code from span attribute (gateway Phase 3A)
+                http_code_raw = src.get("span.attributes.http@status_code")
+                if http_code_raw is not None:
+                    http_code = int(http_code_raw)
+                    tx_status = _status_from_code(http_code)
+                else:
+                    # Fallback for spans without http.status_code (pre-Phase 3A)
+                    tx_status = "error" if otel_status_code == 2 else "success"
+                    http_code = 500 if tx_status == "error" else 200
 
                 # HTTP method from child span attribute (flattened)
                 method = src.get("span.attributes.http@method", "POST")
@@ -303,10 +343,10 @@ class MonitoringService:
                         api_name=src.get("serviceName", "stoa-gateway"),
                         method=method,
                         path=span_name,
-                        status_code=200 if tx_status == "success" else 500,
+                        status_code=http_code,
                         status=tx_status,
-                        status_text=_status_text(200 if tx_status == "success" else 500),
-                        error_source=None if tx_status == "success" else "gateway",
+                        status_text=_status_text(http_code),
+                        error_source=_error_source(span_name, http_code) if http_code >= 400 else None,
                         started_at=src.get("startTime", ""),
                         total_duration_ms=duration_ms,
                         spans_count=1,
@@ -423,15 +463,21 @@ class MonitoringService:
                 trace_dur_nanos = int(root_src.get("durationInNanos", 0))
             total_ms = max(int(trace_dur_nanos / 1_000_000), 1)
 
-            otel_status = int(tgf.get("statusCode", 0) or 0)
-            tx_status = "error" if otel_status == 2 else "success"
-            http_code = 500 if tx_status == "error" else 200
+            # Real HTTP status code from root span (gateway Phase 3A)
+            http_code_raw = root_src.get("span.attributes.http@status_code")
+            if http_code_raw is not None:
+                http_code = int(http_code_raw)
+                tx_status = _status_from_code(http_code)
+            else:
+                otel_status = int(tgf.get("statusCode", 0) or 0)
+                tx_status = "error" if otel_status == 2 else "success"
+                http_code = 500 if tx_status == "error" else 200
 
             path = http_route or root_src.get("traceGroup") or root_src.get("name", "")
 
             error_msg = None
             if tx_status == "error":
-                error_msg = "Trace completed with error status"
+                error_msg = _status_text(http_code)
 
             # Build request/response headers from available span attributes
             req_headers: dict[str, str] = {}
@@ -444,6 +490,10 @@ class MonitoringService:
                     req_headers.setdefault("path", str(src["span.attributes.http@route"]))
                 if src.get("span.attributes.http@url"):
                     req_headers.setdefault("upstream-url", str(src["span.attributes.http@url"]))
+                if src.get("span.attributes.http@client_ip"):
+                    req_headers.setdefault("x-forwarded-for", str(src["span.attributes.http@client_ip"]))
+                if src.get("span.attributes.net@peer@ip"):
+                    req_headers.setdefault("x-real-ip", str(src["span.attributes.net@peer@ip"]))
                 if src.get("span.attributes.stoa@deployment_mode"):
                     res_headers.setdefault("x-stoa-mode", str(src["span.attributes.stoa@deployment_mode"]))
                 if src.get("span.attributes.tenant_id"):
@@ -465,8 +515,8 @@ class MonitoringService:
                 status_code=http_code,
                 status=tx_status,
                 status_text=_status_text(http_code),
-                error_source="gateway" if tx_status == "error" else None,
-                client_ip=None,
+                error_source=_error_source(path, http_code) if http_code >= 400 else None,
+                client_ip=root_src.get("span.attributes.http@client_ip"),
                 user_id=root_src.get("span.attributes.user_id"),
                 started_at=root_src.get("startTime", ""),
                 total_duration_ms=total_ms,
@@ -478,6 +528,87 @@ class MonitoringService:
 
         except Exception:
             logger.exception("Failed to get transaction from otel spans")
+            return None
+
+    async def get_transaction_stats_from_spans(
+        self,
+        time_range_minutes: int = 60,
+    ) -> APITransactionStats | None:
+        """Get aggregated transaction statistics from OTel span index."""
+        try:
+            body = {
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+                            {"term": {"parentSpanId": ""}},
+                        ]
+                    }
+                },
+                "aggs": {
+                    "success_count": {"filter": {"bool": {"must_not": [{"term": {"traceGroupFields.statusCode": 2}}]}}},
+                    "error_count": {"filter": {"term": {"traceGroupFields.statusCode": 2}}},
+                    "timeout_count": {"filter": {"term": {"span.attributes.http@status_code": 504}}},
+                    "latency_stats": {"stats": {"field": "durationInNanos"}},
+                    "latency_percentiles": {
+                        "percentiles": {
+                            "field": "durationInNanos",
+                            "percents": [95, 99],
+                        }
+                    },
+                    "by_route": {
+                        "terms": {"field": "traceGroup", "size": 20},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"term": {"traceGroupFields.statusCode": 2}}},
+                        },
+                    },
+                    "by_status_code": {"terms": {"field": "span.attributes.http@status_code", "size": 20}},
+                },
+            }
+
+            resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+            total = resp["hits"]["total"]["value"]
+            aggs = resp["aggregations"]
+
+            # Convert nanos to ms for percentiles and averages
+            nanos_to_ms = 1_000_000
+            percentiles = aggs["latency_percentiles"]["values"]
+            avg_nanos = aggs["latency_stats"]["avg"] or 0
+
+            # Build by_api dict from traceGroup buckets
+            by_api: dict = {}
+            for bucket in aggs["by_route"]["buckets"]:
+                name = bucket["key"]
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_api[name] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+
+            # Build by_status_code dict
+            by_status_code: dict = {}
+            for bucket in aggs["by_status_code"]["buckets"]:
+                by_status_code[bucket["key"]] = bucket["doc_count"]
+
+            return APITransactionStats(
+                total_requests=total,
+                success_count=aggs["success_count"]["doc_count"],
+                error_count=aggs["error_count"]["doc_count"],
+                timeout_count=aggs["timeout_count"]["doc_count"],
+                avg_latency_ms=round(avg_nanos / nanos_to_ms, 2),
+                p95_latency_ms=round((percentiles.get("95.0", 0) or 0) / nanos_to_ms, 2),
+                p99_latency_ms=round((percentiles.get("99.0", 0) or 0) / nanos_to_ms, 2),
+                requests_per_minute=round(total / max(time_range_minutes, 1), 2),
+                by_api=by_api,
+                by_status_code=by_status_code,
+            )
+
+        except Exception:
+            logger.exception("Failed to get transaction stats from otel spans")
             return None
 
     # =========================================================================

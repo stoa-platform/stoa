@@ -1468,6 +1468,11 @@ class ApiService {
     return data;
   }
 
+  async getKernelMetrics(): Promise<KernelMetrics> {
+    const { data } = await this.client.get('/v1/monitoring/kernel-metrics');
+    return data;
+  }
+
   async getTransactionStats(timeRange?: string): Promise<MonitoringStats> {
     const params: Record<string, string> = {};
     if (timeRange) params.time_range = timeRange;
@@ -1499,6 +1504,39 @@ export interface TopAPI {
   tool_name: string;
   display_name: string;
   calls: number;
+}
+
+// Kernel metrics types (CAB-1976)
+export interface KernelMetrics {
+  collected_at: string;
+  source: 'proc' | 'partial' | 'unavailable';
+  process: {
+    rss_bytes?: number;
+    virt_bytes?: number;
+    cpu_user_ms?: number;
+    cpu_sys_ms?: number;
+    ctx_switches_vol?: number;
+    ctx_switches_invol?: number;
+    fd_count?: number;
+    thread_count?: number;
+  };
+  network: {
+    active_connections?: number;
+    pool_reuse_ratio?: number;
+    avg_rtt_ms?: number;
+    est_conn_overhead_ms?: number;
+    retransmits?: number;
+  };
+  dns_tls: {
+    tls_version?: string;
+    alpn?: string;
+    pool_reuse?: boolean;
+    est_tls_overhead_ms?: number;
+  };
+  upstream_pod: {
+    available: boolean;
+    note?: string;
+  };
 }
 
 // Chat Settings types (CAB-1852)

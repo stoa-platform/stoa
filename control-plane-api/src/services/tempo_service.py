@@ -173,15 +173,18 @@ def _map_spans(trace_data: dict) -> tuple[list[TransactionSpan], dict]:
 
         span_name = span.get("name", "unknown")
 
-        # Collect metadata from attributes
+        # Collect ALL attributes (not just http.*)
         metadata: dict = {}
         for attr in span.get("attributes", []):
             key = attr.get("key", "")
             val = attr.get("value", {})
-            if key.startswith("http."):
-                # Flatten http attributes
-                short_key = key.replace("http.", "")
-                metadata[short_key] = val.get("stringValue") or val.get("intValue") or val.get("boolValue")
+            resolved = val.get("stringValue") or val.get("intValue") or val.get("doubleValue") or val.get("boolValue")
+            if resolved is not None:
+                # Flatten http attributes for backward compat
+                if key.startswith("http."):
+                    metadata[key.replace("http.", "")] = resolved
+                else:
+                    metadata[key] = resolved
 
         result_spans.append(
             TransactionSpan(
@@ -197,10 +200,11 @@ def _map_spans(trace_data: dict) -> tuple[list[TransactionSpan], dict]:
         # Identify root span (no parentSpanId or empty)
         if not span.get("parentSpanId"):
             root_info = {
-                "method": metadata.get("method", "GET"),
+                "method": metadata.get("method", "POST"),
                 "path": metadata.get("target", metadata.get("url", span_name)),
                 "status_code": int(metadata.get("status_code", 200)),
                 "service": service,
+                "metadata": metadata,
             }
 
     return result_spans, root_info
@@ -244,15 +248,15 @@ async def search_traces(
         if tags:
             params["tags"] = " && ".join(tags)
 
-        # Time range
-        end_ns = int(time.time() * 1_000_000_000)
-        start_ns = end_ns - (time_range_minutes * 60 * 1_000_000_000)
-        params["start"] = start_ns
-        params["end"] = end_ns
+        # Time range — Tempo /api/search accepts epoch seconds (not nanoseconds)
+        end_epoch = int(time.time())
+        start_epoch = end_epoch - (time_range_minutes * 60)
+        params["start"] = start_epoch
+        params["end"] = end_epoch
 
-        # Cursor for pagination
+        # Cursor for pagination — cursor is startTimeUnixNano, convert to seconds
         if cursor:
-            params["start"] = cursor
+            params["start"] = int(int(cursor) / 1_000_000_000)
 
         async with httpx.AsyncClient(
             base_url=settings.TEMPO_INTERNAL_URL,
@@ -306,25 +310,40 @@ async def get_trace(trace_id: str) -> APITransaction | None:
             _cb_record_success()
             return None
 
-        method = root_info.get("method", "GET")
+        method = root_info.get("method", "POST")
         path = root_info.get("path", "")
         status_code = root_info.get("status_code", 200)
         service = root_info.get("service", "unknown")
         total_ms = spans[-1].start_offset_ms + spans[-1].duration_ms if spans else 0
 
+        # Build synthetic headers from span attributes
+        root_meta = root_info.get("metadata", {})
+        request_headers = {}
+        response_headers = {}
+        if root_meta.get("tool_name"):
+            request_headers["X-STOA-Tool"] = str(root_meta["tool_name"])
+        if root_meta.get("tenant_id"):
+            request_headers["X-STOA-Tenant"] = str(root_meta["tenant_id"])
+        if root_meta.get("code.filepath"):
+            response_headers["X-STOA-Handler"] = str(root_meta["code.filepath"])
+        response_headers["X-STOA-Duration-Ms"] = str(total_ms)
+        response_headers["X-STOA-Service"] = service
+
         _cb_record_success()
         return APITransaction(
             id=trace_id,
             trace_id=trace_id,
-            api_name=service,
+            api_name=root_meta.get("tool_name", service),
             method=method,
-            path=path,
+            path=path or root_meta.get("tool_name", ""),
             status_code=status_code,
             status=_status_from_code(status_code),
             status_text="",
             started_at=spans[0].metadata.get("started_at", "") if spans else "",
             total_duration_ms=total_ms,
             spans=spans,
+            request_headers=request_headers or None,
+            response_headers=response_headers or None,
         )
 
     except Exception:

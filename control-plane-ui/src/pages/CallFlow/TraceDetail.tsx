@@ -332,50 +332,91 @@ function MiddlewarePipeline({ spans }: { spans: TransactionSpan[] }) {
   );
 }
 
-function KernelMetricsGrid() {
+function fmt(v: number | undefined | null, unit: string): string {
+  if (v == null) return '\u2014';
+  if (unit === 'bytes') {
+    if (v > 1024 * 1024 * 1024) return `${(v / (1024 * 1024 * 1024)).toFixed(1)}GB`;
+    if (v > 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(0)}MB`;
+    if (v > 1024) return `${(v / 1024).toFixed(1)}KB`;
+    return `${v}B`;
+  }
+  return `${v.toFixed(1)}${unit}`;
+}
+
+function KernelMetricsGrid({ data }: { data: import('../../services/api').KernelMetrics | null }) {
+  const p = data?.process;
+  const n = data?.network;
+  const dt = data?.dns_tls;
+  const up = data?.upstream_pod;
+  const dash = '\u2014';
+
   const quadrants = [
     {
       title: 'Network (Socket)',
       icon: Globe,
       metrics: [
-        { label: 'TCP Connect', value: '2.1ms' },
-        { label: 'Retransmits', value: '0' },
-        { label: 'Bytes Sent', value: '1.2KB' },
-        { label: 'Bytes Received', value: '4.8KB' },
-        { label: 'Connection Reuse', value: 'Yes' },
+        { label: 'Avg RTT', value: n?.avg_rtt_ms != null ? fmt(n.avg_rtt_ms, 'ms') : dash },
+        { label: 'Retransmits', value: String(n?.retransmits ?? dash) },
+        { label: 'Active Conns', value: String(n?.active_connections ?? dash) },
+        {
+          label: 'Conn Overhead',
+          value: n?.est_conn_overhead_ms != null ? fmt(n.est_conn_overhead_ms, 'ms') : dash,
+        },
+        {
+          label: 'Connection Reuse',
+          value: n?.pool_reuse_ratio != null ? `${(n.pool_reuse_ratio * 100).toFixed(0)}%` : dash,
+        },
       ],
     },
     {
       title: 'Process (Gateway)',
       icon: Cpu,
       metrics: [
-        { label: 'CPU usr/sys', value: '1.2 / 0.3 ms' },
-        { label: 'Context Switches', value: '4' },
-        { label: 'RSS', value: '48MB' },
-        { label: 'FD Count', value: '127' },
-        { label: 'Thread Pool', value: '3/16 active' },
+        {
+          label: 'CPU usr/sys',
+          value:
+            p?.cpu_user_ms != null && p?.cpu_sys_ms != null
+              ? `${p.cpu_user_ms.toFixed(1)} / ${p.cpu_sys_ms.toFixed(1)} ms`
+              : dash,
+        },
+        {
+          label: 'Context Switches',
+          value: p?.ctx_switches_vol != null ? String(p.ctx_switches_vol) : dash,
+        },
+        { label: 'RSS', value: fmt(p?.rss_bytes, 'bytes') },
+        { label: 'FD Count', value: p?.fd_count != null ? String(p.fd_count) : dash },
+        { label: 'Threads', value: p?.thread_count != null ? String(p.thread_count) : dash },
       ],
     },
     {
       title: 'Upstream Pod',
       icon: Server,
-      metrics: [
-        { label: 'CPU Usage', value: '12%' },
-        { label: 'RSS / Limit', value: '256 / 512 MB' },
-        { label: 'Disk I/O Wait', value: '0.1ms' },
-        { label: 'Open Conns', value: '42' },
-        { label: 'Queue Depth', value: '0' },
-      ],
+      metrics: up?.available
+        ? [
+            { label: 'CPU Usage', value: dash },
+            { label: 'RSS / Limit', value: dash },
+          ]
+        : [{ label: 'Status', value: 'No agent' }],
     },
     {
       title: 'DNS / TLS',
       icon: Lock,
       metrics: [
-        { label: 'DNS Resolution', value: 'cached (0ms)' },
-        { label: 'TLS Handshake', value: 'reused' },
-        { label: 'TLS Version', value: '1.3' },
-        { label: 'Cipher', value: 'AES-256-GCM' },
-        { label: 'ALPN', value: 'h2' },
+        { label: 'DNS Resolution', value: dt?.pool_reuse ? 'cached' : dash },
+        {
+          label: 'TLS Handshake',
+          value: dt?.pool_reuse
+            ? 'reused'
+            : dt?.est_tls_overhead_ms != null
+              ? fmt(dt.est_tls_overhead_ms, 'ms')
+              : dash,
+        },
+        { label: 'TLS Version', value: dt?.tls_version ?? dash },
+        { label: 'ALPN', value: dt?.alpn ?? dash },
+        {
+          label: 'Pool Reuse',
+          value: dt?.pool_reuse != null ? (dt.pool_reuse ? 'Yes' : 'No') : dash,
+        },
       ],
     },
   ];
@@ -416,6 +457,16 @@ export function TraceDetail() {
     loading: true,
   });
   const [headerTab, setHeaderTab] = useState<'request' | 'response'>('request');
+  const [kernelMetrics, setKernelMetrics] = useState<
+    import('../../services/api').KernelMetrics | null
+  >(null);
+
+  useEffect(() => {
+    apiService
+      .getKernelMetrics()
+      .then(setKernelMetrics)
+      .catch(() => setKernelMetrics(null));
+  }, []);
 
   useEffect(() => {
     if (!traceId) return;
@@ -599,17 +650,29 @@ export function TraceDetail() {
         />
       </div>
 
-      {/* ─── Kernel Metrics (eBPF) ─── */}
+      {/* ─── Kernel Metrics (CAB-1976) ─── */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-            Kernel Metrics (eBPF)
+            Kernel Metrics
           </h2>
-          <span className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full font-medium">
-            Demo data
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+              kernelMetrics?.source === 'proc'
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                : kernelMetrics?.source === 'partial'
+                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                  : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
+            }`}
+          >
+            {kernelMetrics?.source === 'proc'
+              ? 'Live'
+              : kernelMetrics?.source === 'partial'
+                ? 'Partial'
+                : 'Unavailable'}
           </span>
         </div>
-        <KernelMetricsGrid />
+        <KernelMetricsGrid data={kernelMetrics} />
       </div>
 
       {/* ─── Middleware Pipeline ─── */}

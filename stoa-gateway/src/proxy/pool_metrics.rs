@@ -11,12 +11,26 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use serde::Serialize;
+
+/// Snapshot of pool network state for the kernel-metrics endpoint.
+#[derive(Debug, Serialize)]
+pub struct PoolNetworkSnapshot {
+    pub active_connections: u64,
+    pub reuse_ratio: f64,
+    pub avg_rtt_ms: Option<f64>,
+    pub est_conn_overhead_ms: Option<f64>,
+}
 
 /// Per-upstream connection tracking counters.
 struct UpstreamCounters {
     total_requests: AtomicU64,
     new_connections: AtomicU64,
     active: AtomicU64,
+    pooled_rtt_sum_us: AtomicU64,
+    pooled_rtt_count: AtomicU64,
+    new_conn_rtt_sum_us: AtomicU64,
+    new_conn_rtt_count: AtomicU64,
 }
 
 impl UpstreamCounters {
@@ -25,6 +39,10 @@ impl UpstreamCounters {
             total_requests: AtomicU64::new(0),
             new_connections: AtomicU64::new(0),
             active: AtomicU64::new(0),
+            pooled_rtt_sum_us: AtomicU64::new(0),
+            pooled_rtt_count: AtomicU64::new(0),
+            new_conn_rtt_sum_us: AtomicU64::new(0),
+            new_conn_rtt_count: AtomicU64::new(0),
         }
     }
 }
@@ -94,6 +112,54 @@ impl PoolMetrics {
         crate::metrics::POOL_NEW_CONNECTIONS
             .with_label_values(&[upstream])
             .inc();
+    }
+
+    pub fn record_request_done(&self, upstream: &str, rtt_ms: f64, was_pooled: bool) {
+        let counters = self.get_counters(upstream);
+        let rtt_us = (rtt_ms * 1000.0) as u64;
+        if was_pooled {
+            counters.pooled_rtt_sum_us.fetch_add(rtt_us, Ordering::Relaxed);
+            counters.pooled_rtt_count.fetch_add(1, Ordering::Relaxed);
+        } else {
+            counters.new_conn_rtt_sum_us.fetch_add(rtt_us, Ordering::Relaxed);
+            counters.new_conn_rtt_count.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn avg_pooled_rtt_ms(&self, upstream: &str) -> Option<f64> {
+        let counters = self.get_counters(upstream);
+        let count = counters.pooled_rtt_count.load(Ordering::Relaxed);
+        if count == 0 { return None; }
+        Some(counters.pooled_rtt_sum_us.load(Ordering::Relaxed) as f64 / count as f64 / 1000.0)
+    }
+
+    pub fn avg_new_conn_rtt_ms(&self, upstream: &str) -> Option<f64> {
+        let counters = self.get_counters(upstream);
+        let count = counters.new_conn_rtt_count.load(Ordering::Relaxed);
+        if count == 0 { return None; }
+        Some(counters.new_conn_rtt_sum_us.load(Ordering::Relaxed) as f64 / count as f64 / 1000.0)
+    }
+
+    pub fn est_conn_overhead_ms(&self, upstream: &str) -> Option<f64> {
+        let pooled = self.avg_pooled_rtt_ms(upstream)?;
+        let new_conn = self.avg_new_conn_rtt_ms(upstream)?;
+        Some((new_conn - pooled).max(0.0))
+    }
+
+    pub fn network_snapshot(&self, upstream: &str) -> PoolNetworkSnapshot {
+        let counters = self.get_counters(upstream);
+        let total = counters.total_requests.load(Ordering::Relaxed);
+        let new = counters.new_connections.load(Ordering::Relaxed);
+        PoolNetworkSnapshot {
+            active_connections: counters.active.load(Ordering::Relaxed),
+            reuse_ratio: if total == 0 { 0.0 } else { 1.0 - (new as f64 / total as f64) },
+            avg_rtt_ms: self.avg_pooled_rtt_ms(upstream),
+            est_conn_overhead_ms: self.est_conn_overhead_ms(upstream),
+        }
+    }
+
+    pub fn upstream_names(&self) -> Vec<String> {
+        self.upstreams.lock().keys().cloned().collect()
     }
 
     /// Publish current reuse ratio to Prometheus for a given upstream.

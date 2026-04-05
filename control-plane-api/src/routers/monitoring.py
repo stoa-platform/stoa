@@ -8,10 +8,12 @@ Data sources (priority order):
 
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..auth import User, get_current_user
+from ..config import settings
 from ..schemas.monitoring import (
     APITransaction,
     APITransactionStats,
@@ -224,3 +226,31 @@ async def get_transaction(
         demo_mode=False,
         source="none",
     )
+
+
+@router.get("/kernel-metrics")
+async def get_kernel_metrics(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Proxy kernel metrics from the gateway (CAB-1976)."""
+    gateway_url = settings.MCP_GATEWAY_URL
+    if not gateway_url:
+        return {"source": "unavailable", "error": "MCP_GATEWAY_URL not configured"}
+    try:
+        headers = {}
+        admin_token = getattr(settings, "STOA_ADMIN_API_TOKEN", "")
+        if admin_token:
+            headers["Authorization"] = f"Bearer {admin_token}"
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{gateway_url}/admin/kernel-metrics", headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        logger.warning("kernel-metrics gateway call failed: %s", e)
+        return {
+            "source": "unavailable",
+            "process": {},
+            "network": {},
+            "dns_tls": {},
+            "upstream_pod": {"available": False, "note": str(e)},
+        }

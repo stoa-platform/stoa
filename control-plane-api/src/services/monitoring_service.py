@@ -346,9 +346,7 @@ class MonitoringService:
                 span_name = route or src.get("traceGroup") or src.get("name", "unknown")
 
                 # Prefer tool_name from span attributes for api_name (CAB-1997)
-                tool_name = src.get("span.attributes.tool_name") or src.get(
-                    "span.attributes.tool"
-                )
+                tool_name = src.get("span.attributes.tool_name") or src.get("span.attributes.tool")
                 api_name = tool_name or _extract_api_name(span_name)
 
                 transactions.append(
@@ -384,9 +382,7 @@ class MonitoringService:
                     "sort": [{"startTime": {"order": "asc"}}],
                     "size": limit * 10,
                 }
-                child_resp = await self.client.search(
-                    index="otel-v1-apm-span-*", body=child_body
-                )
+                child_resp = await self.client.search(index="otel-v1-apm-span-*", body=child_body)
                 child_hits = child_resp.get("hits", {}).get("hits", [])
 
                 # Group child spans by traceId
@@ -396,9 +392,7 @@ class MonitoringService:
                     tid = src.get("traceId", "")
                     otel_name = src.get("name", "unknown")
                     ui_name = _OTEL_TO_UI_SPAN_NAME.get(otel_name, otel_name)
-                    ui_service = _OTEL_TO_UI_SERVICE.get(
-                        otel_name, src.get("serviceName", "unknown")
-                    )
+                    ui_service = _OTEL_TO_UI_SERVICE.get(otel_name, src.get("serviceName", "unknown"))
                     dur_nanos = int(src.get("durationInNanos", 0))
                     dur_ms = round(dur_nanos / 1_000_000, 3)
                     otel_code = int(src.get("status.code", 0) or 0)
@@ -643,9 +637,7 @@ class MonitoringService:
             detail_tool_name = None
             for hit in hits:
                 src = hit["_source"]
-                detail_tool_name = src.get("span.attributes.tool_name") or src.get(
-                    "span.attributes.tool"
-                )
+                detail_tool_name = src.get("span.attributes.tool_name") or src.get("span.attributes.tool")
                 if detail_tool_name:
                     break
             detail_api_name = detail_tool_name or _extract_api_name(path)

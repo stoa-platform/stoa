@@ -10,11 +10,24 @@ const API_BASE = 'https://api.gostoa.dev';
 export const handlers = [
   // API Catalog
   http.get(`${API_BASE}/v1/portal/apis`, () => {
-    return HttpResponse.json(mockApis);
+    return HttpResponse.json({
+      apis: mockApis,
+      total: mockApis.length,
+      page: 1,
+      page_size: 20,
+    });
   }),
   http.get(`${API_BASE}/v1/portal/apis/:apiId`, ({ params }) => {
     const api = mockApis.find((a) => a.id === params.apiId);
     return api ? HttpResponse.json(api) : new HttpResponse(null, { status: 404 });
+  }),
+
+  // API Categories & Universes
+  http.get(`${API_BASE}/v1/portal/api-categories`, () => {
+    return HttpResponse.json([]);
+  }),
+  http.get(`${API_BASE}/v1/portal/api-universes`, () => {
+    return HttpResponse.json([]);
   }),
 
   // Tools
@@ -25,6 +38,12 @@ export const handlers = [
   // Subscriptions
   http.get(`${API_BASE}/v1/portal/subscriptions`, () => {
     return HttpResponse.json(mockSubscriptions);
+  }),
+  http.get(`${API_BASE}/v1/mcp/subscriptions`, () => {
+    return HttpResponse.json({ subscriptions: [], total: 0, page: 1, page_size: 20 });
+  }),
+  http.get('https://mcp.gostoa.dev/mcp/v1/subscriptions', () => {
+    return HttpResponse.json({ subscriptions: [], total: 0, page: 1, page_size: 20 });
   }),
   http.post(`${API_BASE}/v1/portal/subscriptions`, async ({ request }) => {
     const body = (await request.json()) as Record<string, string>;

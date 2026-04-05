@@ -215,7 +215,10 @@ export function APICatalog() {
 
       {/* Results count */}
       {!apisLoading && !apisError && (
-        <div className="text-sm text-neutral-500 dark:text-neutral-400">
+        <div
+          className="text-sm text-neutral-500 dark:text-neutral-400"
+          data-testid="catalog-results-count"
+        >
           {i18nEnabled
             ? totalCount === 0
               ? t('apiCount.zero')
@@ -303,7 +306,12 @@ export function APICatalog() {
       {!apisLoading && !apisError && apis.length > 0 && (
         <>
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              role="list"
+              aria-label="API catalog"
+              data-testid="catalog-grid"
+            >
               {apis.map((api: API) => (
                 <APICard key={api.id} api={api} onMouseEnter={() => prefetchAPI(api.id)} />
               ))}
@@ -318,7 +326,12 @@ export function APICatalog() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-neutral-200 dark:border-neutral-700 pt-4">
+            <div
+              className="flex items-center justify-between border-t border-neutral-200 dark:border-neutral-700 pt-4"
+              data-testid="catalog-pagination"
+              role="navigation"
+              aria-label="Pagination"
+            >
               <div className="text-sm text-neutral-500 dark:text-neutral-400">
                 {i18nEnabled
                   ? t('pagination.page', { current: page, total: totalPages })

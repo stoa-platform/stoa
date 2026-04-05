@@ -199,7 +199,10 @@ export function PlatformDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+          <h1
+            className="text-2xl font-bold text-neutral-900 dark:text-white"
+            data-testid="dashboard-title"
+          >
             {t('dashboard.title')}
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
@@ -247,13 +250,19 @@ export function PlatformDashboard() {
       ) : (
         <>
           {/* Hero KPI Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div
+            className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            role="region"
+            aria-label="Platform KPIs"
+            data-testid="dashboard-kpi-grid"
+          >
             <StatCard
               label={`Requests (${timeRange})`}
               value={displayTotalReq !== null ? formatNumber(displayTotalReq) : '--'}
               icon={Activity}
               colorClass="text-blue-600"
               subtitle="Total tool calls"
+              data-testid="dashboard-requests-count"
             />
             <StatCard
               label="Error Rate (5m)"
@@ -263,6 +272,7 @@ export function PlatformDashboard() {
                 displayErrorRate !== null ? getErrorRateColor(displayErrorRate) : undefined
               }
               subtitle="5xx + tool errors"
+              data-testid="dashboard-error-rate-count"
             />
             <StatCard
               label="Latency P95 (5m)"
@@ -271,11 +281,13 @@ export function PlatformDashboard() {
               icon={Clock}
               colorClass={displayP95 !== null ? getLatencyColor(displayP95 * 1000) : undefined}
               subtitle="Response time"
+              data-testid="dashboard-latency-count"
             />
             <StatCard
               label="Gateways"
               value={`${gatewaysOnline}/${gatewaysTotal}`}
               icon={Radio}
+              data-testid="dashboard-gateways-count"
               colorClass={
                 gatewaysTotal === 0
                   ? 'text-neutral-500'
@@ -296,7 +308,10 @@ export function PlatformDashboard() {
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Traffic Trend */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4"
+              data-testid="dashboard-traffic-chart"
+            >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
@@ -327,7 +342,10 @@ export function PlatformDashboard() {
             </div>
 
             {/* Error Trend */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4"
+              data-testid="dashboard-error-chart"
+            >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
@@ -361,7 +379,10 @@ export function PlatformDashboard() {
           {/* Gateway Health Cards + Top APIs */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Gateway Instances */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4"
+              data-testid="dashboard-gateway-instances"
+            >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Gateway Instances
@@ -430,7 +451,10 @@ export function PlatformDashboard() {
             </div>
 
             {/* Top APIs */}
-            <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4"
+              data-testid="dashboard-top-apis"
+            >
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
                 Top APIs ({timeRange})
               </h2>

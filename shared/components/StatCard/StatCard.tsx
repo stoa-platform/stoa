@@ -19,6 +19,8 @@ export interface StatCardProps {
   sparkline?: ReactNode;
   /** Trend arrow indicator */
   trend?: TrendDirection;
+  /** Test identifier for E2E and visual regression tests */
+  'data-testid'?: string;
 }
 
 const BG_MAP: Record<string, string> = {
@@ -61,11 +63,12 @@ export function StatCard({
   subtitle,
   sparkline,
   trend,
+  'data-testid': testId,
 }: StatCardProps) {
   const bgClass = inferBg(colorClass);
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4" aria-label={label} data-testid={testId}>
       {Icon && (
         <div className={`p-2 rounded-lg ${bgClass}`}>
           <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />

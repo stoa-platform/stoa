@@ -319,13 +319,29 @@ pub async fn mcp_tools_list(
     })
 }
 
-/// Helper to add rate limit headers to a response
+/// Record HTTP status on the current OTel span (CAB-1997).
+/// Call before returning from any handler with an `#[instrument]` span that
+/// declares `http.status_code = tracing::field::Empty`.
+fn record_span_status(code: u16) {
+    let span = tracing::Span::current();
+    span.record("http.status_code", code);
+    if code >= 500 {
+        span.record("otel.status_code", "ERROR");
+        span.record("otel.status_message", &format!("HTTP {code}") as &str);
+    } else {
+        span.record("otel.status_code", "OK");
+    }
+}
+
+/// Helper to add rate limit headers to a response.
+/// Also records HTTP status code on the current span for OTel export (CAB-1997).
 fn with_rate_limit_headers(
     status: StatusCode,
     body: Json<ToolsCallResponse>,
     rate_result: &crate::rate_limit::RateLimitResult,
 ) -> Response {
     let mut response = (status, body).into_response();
+    record_span_status(status.as_u16());
 
     // Add rate limit headers
     for (key, value) in rate_result.headers() {
@@ -363,7 +379,17 @@ pub async fn mcp_tools_call(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(request): Json<ToolsCallRequest>,
-) -> impl IntoResponse {
+) -> Response {
+    let response = mcp_tools_call_inner(state, headers, request).await;
+    record_span_status(response.status().as_u16());
+    response
+}
+
+async fn mcp_tools_call_inner(
+    state: AppState,
+    headers: HeaderMap,
+    request: ToolsCallRequest,
+) -> Response {
     let start = Instant::now();
     let request_id = uuid::Uuid::new_v4().to_string();
     let request_size = serde_json::to_string(&request.arguments)
@@ -1090,8 +1116,6 @@ pub async fn mcp_tools_call(
                     resp.headers_mut().insert("x-stoa-guardrail", val);
                 }
             }
-            tracing::Span::current().record("http.status_code", 200u16);
-            tracing::Span::current().record("otel.status_code", "OK");
             resp
         }
         Err(e) => {
@@ -1144,10 +1168,6 @@ pub async fn mcp_tools_call(
                 },
             );
 
-            tracing::Span::current().record("http.status_code", 500u16);
-            tracing::Span::current().record("otel.status_code", "ERROR");
-            tracing::Span::current()
-                .record("otel.status_message", &format!("Tool error: {e}") as &str);
             with_rate_limit_headers(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ToolsCallResponse {

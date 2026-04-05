@@ -1,0 +1,72 @@
+# =============================================================================
+# E2E Accessibility Gate (axe-core WCAG 2.1 AA)
+# =============================================================================
+# Builds Console UI and runs axe-core scans on 10 mocked pages.
+# Blocks PRs if serious/critical WCAG violations are found.
+# No live backend required.
+# =============================================================================
+
+name: E2E A11y Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'control-plane-ui/**'
+      - 'shared/**'
+      - 'e2e/smoke-mock/**'
+      - 'e2e/fixtures/axe-helper*'
+      - '.github/workflows/e2e-a11y-gate.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  a11y-console:
+    name: axe-core Console Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install shared dependencies
+        run: cd shared && npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Install Console dependencies
+        working-directory: control-plane-ui
+        run: npm ci
+
+      - name: Build Console
+        working-directory: control-plane-ui
+        env:
+          VITE_API_URL: http://localhost:4173/api
+          VITE_KEYCLOAK_URL: http://localhost:4173/auth
+          VITE_BASE_DOMAIN: localhost
+        run: npm run build
+
+      - name: Install Playwright + axe-core
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run axe-core a11y scan
+        working-directory: e2e/smoke-mock
+        run: npx playwright test --config=playwright.config.ts a11y-axe
+
+      - name: Upload violation reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: a11y-violations-${{ github.run_id }}
+          path: e2e/test-results/smoke-mock/
+          retention-days: 14

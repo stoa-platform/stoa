@@ -43,6 +43,15 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-no-k8s-secrets.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-push-quality-gate.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [

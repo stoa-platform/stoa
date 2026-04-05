@@ -86,18 +86,36 @@ git commit -m "test(api): add consumer unit tests (CAB-XXXX)"
 - First commit includes ticket ID, subsequent commits optional
 - All commits squashed on merge — commit often, don't overthink messages
 
-### 3. Local Quality Gate
-Run checks BEFORE pushing (see `ci-quality-gates.md` for exact commands).
+### 3. Push (includes Local Quality Gate)
 
-### 4. Push + PR
+`git push` triggers the **pre-push hook** (`pre-push-quality-gate.sh`) which automatically:
+1. Detects which components changed vs `origin/main`
+2. Runs lint + format + compile checks for each affected component
+3. Runs axe-core a11y scan if Console/Portal/E2E changed
+4. **Blocks the push** if any check fails (exit 2)
+
 ```bash
 git push -u origin HEAD
+# Hook output:
+#   ⏳ [ui:lint] running...
+#   ✅ [ui:lint] passed
+#   ⏳ [ui:tsc] running...
+#   ✅ [ui:tsc] passed
+#   ✅ Pre-push quality gate passed (4 checks)
+```
+
+If the hook fails: fix the issue, `git add`, `git commit`, and `git push` again. **Do NOT bypass** unless emergency (`SKIP_QUALITY_GATE=1` or `DISABLE_PRE_PUSH_GATE=1`).
+
+The push succeeding means the code is locally validated. CI will only catch heavier checks (container scans, SAST, E2E on live infra).
+
+### 4. PR
+```bash
 gh pr create --title "feat(scope): description (CAB-XXXX)" --body "$(cat <<'EOF'
 ## Summary
 - <1-3 bullets: what changed and why>
 
 ## Test plan
-- [ ] Local quality gate passed
+- [x] Pre-push quality gate passed (lint, format, tsc, axe)
 - [ ] CI green
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>

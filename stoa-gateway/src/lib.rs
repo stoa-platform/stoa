@@ -726,6 +726,26 @@ async fn http_metrics_middleware(
     // Skip span creation when proxy tracing is disabled to save ~0.4ms per request.
     // Env: STOA_PROXY_TRACING_ENABLED (default: true)
     use tracing::Instrument;
+    // Extract remote IP (TCP peer) and client IP (X-Forwarded-For / X-Real-IP)
+    let remote_ip = request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.ip().to_string())
+        .unwrap_or_else(|| "-".to_string());
+    let client_ip = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(|s| s.trim().to_string())
+        .or_else(|| {
+            request
+                .headers()
+                .get("x-real-ip")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| remote_ip.clone());
     let (response, captured_trace_id) = if tracing_enabled {
         let deployment_mode = state.config.gateway_mode.to_string();
         let request_span = tracing::span!(
@@ -735,12 +755,27 @@ async fn http_metrics_middleware(
             "stoa.deployment_mode" = %deployment_mode,
             http.method = %method,
             http.route = %path,
+            "net.peer.ip" = %remote_ip,
+            "http.client_ip" = %client_ip,
+            http.status_code = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+            otel.status_message = tracing::field::Empty,
         );
         // CAB-1866: capture trace_id inside the span so access_log_middleware can read it.
         // access_log is an outer layer — by the time it sees the response, this span has
         // already closed and tracing::Span::current() returns Span::none().
+        // Status code + OTel status are recorded inside the span before it closes.
         let (resp, trace_id) = async {
             let r = next.run(request).await;
+            let status = r.status().as_u16();
+            let current = tracing::Span::current();
+            current.record("http.status_code", status);
+            if status >= 500 {
+                current.record("otel.status_code", "ERROR");
+                current.record("otel.status_message", &format!("HTTP {status}") as &str);
+            } else {
+                current.record("otel.status_code", "OK");
+            }
             let tid = crate::telemetry::extract_trace_id();
             (r, tid)
         }

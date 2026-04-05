@@ -40,6 +40,30 @@ if [ -f "$MEMORY" ]; then
   [ -n "$IN_PROGRESS" ] && STATE="${STATE}In progress:\n${IN_PROGRESS}\n"
 fi
 
+# 5. Git hygiene: clean up stale branches (non-blocking background)
+(
+  cd "$PROJECT_DIR" 2>/dev/null || exit 0
+  git worktree prune 2>/dev/null
+  git remote prune origin 2>/dev/null
+  CURRENT_BRANCH="$BRANCH"
+  WT_BRANCHES=$(git worktree list --porcelain 2>/dev/null | grep '^branch ' | sed 's|branch refs/heads/||')
+  for b in $(git branch --merged main 2>/dev/null | sed 's/^[* ]*//' | grep -v '^main$'); do
+    [ "$b" = "$CURRENT_BRANCH" ] && continue
+    echo "$WT_BRANCHES" | grep -qx "$b" && continue
+    [[ "$b" == wt/* ]] && continue
+    git branch -d "$b" 2>/dev/null
+  done
+  for b in $(git branch --format='%(refname:short) %(upstream:track)' 2>/dev/null | grep '\[gone\]$' | awk '{print $1}'); do
+    [ "$b" = "$CURRENT_BRANCH" ] && continue
+    echo "$WT_BRANCHES" | grep -qx "$b" && continue
+    git branch -D "$b" 2>/dev/null
+  done
+  for wt_dir in "$PROJECT_DIR/.claude/worktrees"/agent-*; do
+    [ -d "$wt_dir" ] || continue
+    git worktree list 2>/dev/null | grep -q "$wt_dir" || rm -rf "$wt_dir"
+  done
+) &
+
 # Output as JSON with systemMessage
 if [ -n "$STATE" ]; then
   MSG=$(printf 'Post-compact state recovery:\n%s' "$STATE")

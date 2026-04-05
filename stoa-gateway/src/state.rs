@@ -146,6 +146,10 @@ pub struct AppState {
     pub snapshot_store: Arc<SnapshotStore>,
     /// Memory budget monitor for backpressure (CAB-1829).
     pub memory_monitor: MemoryMonitor,
+    /// Kernel metrics collector — process + network snapshot (CAB-1976).
+    pub kernel_metrics: crate::kernel_metrics::KernelMetricsCollector,
+    /// Connection pool metrics across all upstreams (CAB-1976).
+    pub pool_metrics: Arc<crate::proxy::pool_metrics::PoolMetrics>,
     /// eBPF sync client for kernel-level policy enforcement (CAB-1848).
     /// None when STOA_EBPF_DAEMON_URL is not set.
     pub ebpf_client: Option<Arc<crate::ebpf::EbpfSyncClient>>,
@@ -644,6 +648,8 @@ impl AppState {
             a2a_registry,
             snapshot_store,
             memory_monitor,
+            kernel_metrics: crate::kernel_metrics::KernelMetricsCollector::new(),
+            pool_metrics: Arc::new(crate::proxy::pool_metrics::PoolMetrics::new()),
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")
                 .ok()
                 .map(|url| Arc::new(crate::ebpf::EbpfSyncClient::new(&url))),
@@ -660,6 +666,8 @@ impl AppState {
     pub fn start_background_tasks(&self) {
         // Start memory budget polling (CAB-1829)
         self.memory_monitor.start_polling();
+        // Start kernel metrics polling (CAB-1976)
+        self.kernel_metrics.start_polling();
 
         // Start prompt cache file watcher (CAB-1123)
         if let Some(ref watch_dir) = self.config.prompt_cache_watch_dir {

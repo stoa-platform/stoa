@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     # MCP Gateway URL (for tools proxy)
     # Default to internal K8s service, can be overridden for external access
     MCP_GATEWAY_URL: str = "http://stoa-gateway.stoa-system.svc.cluster.local:80"
+    STOA_ADMIN_API_TOKEN: str = ""
 
     # ArgoCD (GitOps Observability - CAB-654)
     # Uses static API token (stoa-api service account) for platform status

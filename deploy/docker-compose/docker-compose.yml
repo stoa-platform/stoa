@@ -204,6 +204,8 @@ services:
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100
       TEMPO_INTERNAL_URL: http://tempo:3200
+      MCP_GATEWAY_URL: http://stoa-gateway:8080
+      STOA_ADMIN_API_TOKEN: ${STOA_ADMIN_API_TOKEN:-stoa-local-admin-token}
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
       # Logging
@@ -317,6 +319,7 @@ services:
       STOA_OTEL_ENDPOINT: http://tempo:4317
       STOA_OTEL_ENABLED: "true"
       STOA_OTEL_SAMPLE_RATE: "1.0"
+      STOA_ADMIN_API_TOKEN: ${STOA_ADMIN_API_TOKEN:-stoa-local-admin-token}
     depends_on:
       control-plane-api:
         condition: service_healthy

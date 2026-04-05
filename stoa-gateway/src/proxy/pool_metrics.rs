@@ -116,12 +116,20 @@ impl PoolMetrics {
 
     pub fn record_request_done(&self, upstream: &str, rtt_ms: f64, was_pooled: bool) {
         let counters = self.get_counters(upstream);
+        counters.total_requests.fetch_add(1, Ordering::Relaxed);
+        if !was_pooled {
+            counters.new_connections.fetch_add(1, Ordering::Relaxed);
+        }
         let rtt_us = (rtt_ms * 1000.0) as u64;
         if was_pooled {
-            counters.pooled_rtt_sum_us.fetch_add(rtt_us, Ordering::Relaxed);
+            counters
+                .pooled_rtt_sum_us
+                .fetch_add(rtt_us, Ordering::Relaxed);
             counters.pooled_rtt_count.fetch_add(1, Ordering::Relaxed);
         } else {
-            counters.new_conn_rtt_sum_us.fetch_add(rtt_us, Ordering::Relaxed);
+            counters
+                .new_conn_rtt_sum_us
+                .fetch_add(rtt_us, Ordering::Relaxed);
             counters.new_conn_rtt_count.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -129,14 +137,18 @@ impl PoolMetrics {
     pub fn avg_pooled_rtt_ms(&self, upstream: &str) -> Option<f64> {
         let counters = self.get_counters(upstream);
         let count = counters.pooled_rtt_count.load(Ordering::Relaxed);
-        if count == 0 { return None; }
+        if count == 0 {
+            return None;
+        }
         Some(counters.pooled_rtt_sum_us.load(Ordering::Relaxed) as f64 / count as f64 / 1000.0)
     }
 
     pub fn avg_new_conn_rtt_ms(&self, upstream: &str) -> Option<f64> {
         let counters = self.get_counters(upstream);
         let count = counters.new_conn_rtt_count.load(Ordering::Relaxed);
-        if count == 0 { return None; }
+        if count == 0 {
+            return None;
+        }
         Some(counters.new_conn_rtt_sum_us.load(Ordering::Relaxed) as f64 / count as f64 / 1000.0)
     }
 
@@ -152,7 +164,11 @@ impl PoolMetrics {
         let new = counters.new_connections.load(Ordering::Relaxed);
         PoolNetworkSnapshot {
             active_connections: counters.active.load(Ordering::Relaxed),
-            reuse_ratio: if total == 0 { 0.0 } else { 1.0 - (new as f64 / total as f64) },
+            reuse_ratio: if total == 0 {
+                0.0
+            } else {
+                1.0 - (new as f64 / total as f64)
+            },
             avg_rtt_ms: self.avg_pooled_rtt_ms(upstream),
             est_conn_overhead_ms: self.est_conn_overhead_ms(upstream),
         }

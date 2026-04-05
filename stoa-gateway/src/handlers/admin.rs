@@ -116,7 +116,7 @@ pub async fn upsert_api(
     let aid = Some(api_id.as_str());
     let tid = Some(tenant.as_str());
 
-    // Step 1: Validating
+    // Step 1: Validating — input validation + SSRF pre-check (CAB-1920)
     emitter.step_started(
         deployment_id,
         DeployStep::Validating,
@@ -124,6 +124,44 @@ pub async fn upsert_api(
         aid,
         tid,
     );
+
+    // Reject empty or blank required fields
+    if route.name.trim().is_empty() {
+        warn!(api_id = %api_id, "Admin API rejected: empty name");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "name must not be empty"})),
+        )
+            .into_response();
+    }
+    if route.backend_url.trim().is_empty() {
+        warn!(api_id = %api_id, "Admin API rejected: empty backend_url");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "backend_url must not be empty"})),
+        )
+            .into_response();
+    }
+
+    // SSRF pre-check: block private/internal IPs at registration time,
+    // even though trusted_backend bypasses the proxy-time check (CAB-1893).
+    // Defense-in-depth: validate before storing, not just before proxying.
+    if is_blocked_url(&route.backend_url) {
+        warn!(
+            api_id = %api_id,
+            backend_url = %route.backend_url,
+            "Admin API rejected: backend_url targets private/internal IP range"
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "backend_url targets a private/internal IP range",
+                "detail": "URLs pointing to localhost, RFC 1918, link-local, or IPv6 loopback are not allowed"
+            })),
+        )
+            .into_response();
+    }
+
     emitter.step_completed(
         deployment_id,
         DeployStep::Validating,
@@ -210,6 +248,7 @@ pub async fn upsert_api(
             "deployment_id": deployment_id.to_string()
         })),
     )
+        .into_response()
 }
 
 pub async fn list_apis(State(state): State<AppState>) -> Json<Vec<Arc<ApiRoute>>> {

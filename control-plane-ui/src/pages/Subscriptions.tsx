@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { useDebounce } from '../hooks/useDebounce';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -37,7 +36,6 @@ const statusColors: Record<SubscriptionStatus, string> = {
 
 export function Subscriptions() {
   const { isReady } = useAuth();
-  const { activeEnvironment } = useEnvironment();
   const { canEdit } = useEnvironmentMode();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
@@ -83,13 +81,7 @@ export function Subscriptions() {
         setLoading(true);
         setError(null);
         const statusParam = status === 'all' ? undefined : status;
-        const data = await apiService.getSubscriptions(
-          tenantId,
-          statusParam,
-          page,
-          PAGE_SIZE,
-          activeEnvironment || undefined
-        );
+        const data = await apiService.getSubscriptions(tenantId, statusParam, page, PAGE_SIZE);
         setSubscriptions(data.items);
         setTotal(data.total);
       } catch (err) {
@@ -100,7 +92,7 @@ export function Subscriptions() {
         setLoading(false);
       }
     },
-    [activeEnvironment]
+    []
   );
 
   useEffect(() => {

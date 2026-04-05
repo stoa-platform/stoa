@@ -1,7 +1,7 @@
 """add enabled and visibility columns to gateway_instances
 
-Revision ID: 077
-Revises: 076
+Revision ID: 089
+Revises: 088
 Create Date: 2026-04-04
 
 CAB-1979: Gateway enabled flag + visibility + soft disable enforcement.
@@ -13,8 +13,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision: str = "077"
-down_revision: str | None = "076"
+revision: str = "089_add_gateway_enabled_visibility"
+down_revision: str | None = "088"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

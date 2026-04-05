@@ -21,7 +21,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use subtle::ConstantTimeEq;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::config::MtlsConfig;
 use crate::metrics;
@@ -377,6 +377,7 @@ fn is_required_route(path: &str, required_routes: &[String]) -> bool {
 ///
 /// Reads X-SSL-* headers, validates certificate, stores ClientCertInfo in extensions.
 /// If mTLS is disabled, this is a no-op (zero overhead).
+#[instrument(name = "auth.mtls.extract", skip_all, fields(otel.kind = "internal"))]
 pub async fn mtls_extraction_middleware(
     config: MtlsConfig,
     stats: std::sync::Arc<MtlsStats>,
@@ -646,6 +647,7 @@ fn extract_cnf_from_jwt(token: &str) -> Option<String> {
 ///
 /// Runs after Stage 1 (extraction). Compares cert fingerprint from X-SSL-* headers
 /// with cnf.x5t#S256 from the JWT. Returns 403 on mismatch (stolen token detection).
+#[instrument(name = "auth.mtls.binding", skip_all, fields(otel.kind = "internal"))]
 pub async fn mtls_binding_middleware(
     config: MtlsConfig,
     stats: std::sync::Arc<MtlsStats>,

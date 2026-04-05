@@ -434,6 +434,12 @@ pub async fn api_proxy_handler(
     metrics::record_api_proxy_request(&backend_name, &method_str, status.as_u16(), duration);
     metrics::record_upstream_latency(&cb_name, status.as_u16(), duration);
 
+    // Record RTT for kernel-metrics network snapshot (CAB-1976)
+    state
+        .pool_metrics
+        .record_request_done(&backend_name, duration * 1000.0, false);
+    state.pool_metrics.publish_reuse_ratio(&backend_name);
+
     match response_builder.body(Body::from(body_bytes)) {
         Ok(response) => response,
         Err(e) => {

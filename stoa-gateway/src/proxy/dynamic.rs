@@ -387,6 +387,17 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         upstream_duration,
     );
 
+    // Record RTT for kernel-metrics network snapshot (CAB-1976)
+    let was_pooled = response
+        .headers()
+        .get("connection")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.eq_ignore_ascii_case("keep-alive"));
+    state
+        .pool_metrics
+        .record_request_done(&selected_backend, upstream_duration * 1000.0, was_pooled);
+    state.pool_metrics.publish_reuse_ratio(&selected_backend);
+
     // Record success/failure for circuit breaker (single-backend routes)
     // or per-upstream circuit breaker (multi-upstream routes) (CAB-1833)
     if let Some(ref cb) = cb {

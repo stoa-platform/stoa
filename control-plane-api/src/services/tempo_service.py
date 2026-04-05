@@ -92,7 +92,7 @@ def _extract_service_name(span: dict) -> str:
     return "unknown"
 
 
-def _map_trace_to_summary(trace: dict) -> APITransactionSummary:
+def _map_trace_to_summary(trace: dict, error_trace_ids: set | None = None) -> APITransactionSummary:
     """Map a Tempo search result trace to APITransactionSummary."""
     root = trace.get("rootServiceName", "unknown")
     root_trace_name = trace.get("rootTraceName", "")
@@ -109,13 +109,15 @@ def _map_trace_to_summary(trace: dict) -> APITransactionSummary:
         method = parts[0]
         path = parts[1]
 
-    # Extract status code from spanSet attributes if available
+    # Determine status code: check error set first, then spanSet attributes
     status_code = 200
+    if error_trace_ids and trace_id in error_trace_ids:
+        status_code = 500  # Mark as error (exact code unknown from search)
     span_sets = trace.get("spanSets", [])
     if span_sets:
         for span_attr in span_sets[0].get("attributes", []):
             if span_attr.get("key") == "http.status_code":
-                status_code = int(span_attr.get("value", {}).get("intValue", 200))
+                status_code = int(span_attr.get("value", {}).get("intValue", status_code))
 
     return APITransactionSummary(
         id=trace_id,
@@ -270,7 +272,27 @@ async def search_traces(
         data = resp.json()
         traces = data.get("traces", [])
 
-        summaries = [_map_trace_to_summary(t) for t in traces]
+        # Fetch error trace IDs via TraceQL to mark errors in the list
+        error_trace_ids: set[str] = set()
+        try:
+            error_params: dict[str, str | int] = {
+                "q": "{ .http.status_code >= 400 }",
+                "limit": limit,
+                "start": params["start"],
+                "end": params["end"],
+            }
+            async with httpx.AsyncClient(
+                base_url=settings.TEMPO_INTERNAL_URL,
+                timeout=5,
+            ) as err_client:
+                err_resp = await err_client.get("/api/search", params=error_params)
+                if err_resp.status_code == 200:
+                    for et in err_resp.json().get("traces", []):
+                        error_trace_ids.add(et.get("traceID", ""))
+        except Exception:
+            pass  # non-critical
+
+        summaries = [_map_trace_to_summary(t, error_trace_ids) for t in traces]
 
         # Cursor for next page: use the last trace's start time
         next_cursor = None

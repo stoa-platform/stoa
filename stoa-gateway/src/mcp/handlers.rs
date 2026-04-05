@@ -611,7 +611,8 @@ pub async fn mcp_tools_call(
 
     // CAB-707: Guardrails check (PII + prompt injection)
     // CAB-1337: Extended with content filtering + per-tenant policy (Phase 3)
-    let _guardrails_span = tracing::info_span!("policy.guardrails", otel.kind = "internal").entered();
+    let _guardrails_span =
+        tracing::info_span!("policy.guardrails", otel.kind = "internal").entered();
     let global_guardrails_cfg = crate::guardrails::GuardrailsConfig {
         pii_enabled: state.config.guardrails_pii_enabled,
         pii_redact: state.config.guardrails_pii_redact,
@@ -865,7 +866,11 @@ pub async fn mcp_tools_call(
                 .get(&request.name, &auth.tenant_id, &request.arguments)
                 .await
         }
-        .instrument(tracing::info_span!("cache.semantic", otel.kind = "internal", cache.op = "get"))
+        .instrument(tracing::info_span!(
+            "cache.semantic",
+            otel.kind = "internal",
+            cache.op = "get"
+        ))
         .await;
         if let Some(cached) = cache_result {
             let t_gateway_ms = (t_auth + t_policy).as_millis() as u64;
@@ -908,7 +913,8 @@ pub async fn mcp_tools_call(
     let tool_cb_key = format!("tool:{}", request.name);
     let tool_cb = state.circuit_breakers.get_or_create(&tool_cb_key);
     let cb_allowed = {
-        let _cb_span = tracing::info_span!("resilience.circuit_breaker", otel.kind = "internal").entered();
+        let _cb_span =
+            tracing::info_span!("resilience.circuit_breaker", otel.kind = "internal").entered();
         tool_cb.allow_request()
     };
     if !cb_allowed {
@@ -989,7 +995,8 @@ pub async fn mcp_tools_call(
                 .collect();
 
             // Phase 4: Apply token optimization if requested
-            let _opt_span = tracing::info_span!("optimization.token", otel.kind = "internal").entered();
+            let _opt_span =
+                tracing::info_span!("optimization.token", otel.kind = "internal").entered();
             let opt_level = extract_optimization_level(&headers);
             let content = if opt_level != OptimizationLevel::None {
                 let optimizer = TokenOptimizer::new(OptimizationSettings {
@@ -1035,7 +1042,11 @@ pub async fn mcp_tools_call(
                                 .put(&request.name, &auth.tenant_id, &request.arguments, json_val)
                                 .await;
                         }
-                        .instrument(tracing::info_span!("cache.semantic", otel.kind = "internal", cache.op = "put"))
+                        .instrument(tracing::info_span!(
+                            "cache.semantic",
+                            otel.kind = "internal",
+                            cache.op = "put"
+                        ))
                         .await;
                     }
                 }
@@ -1043,7 +1054,8 @@ pub async fn mcp_tools_call(
 
             // Phase 3: Emit metering event
             {
-                let _meter_span = tracing::info_span!("metering.emit", otel.kind = "internal").entered();
+                let _meter_span =
+                    tracing::info_span!("metering.emit", otel.kind = "internal").entered();
                 emit_metering_event(
                     &state,
                     &auth,

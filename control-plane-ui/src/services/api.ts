@@ -1681,6 +1681,13 @@ export interface MonitoringTransaction {
   started_at: string;
   total_duration_ms: number;
   spans_count: number;
+  spans?: Array<{
+    name: string;
+    service: string;
+    start_offset_ms: number;
+    duration_ms: number;
+    status: string;
+  }>;
 }
 
 export interface MonitoringTransactionDetail extends MonitoringTransaction {

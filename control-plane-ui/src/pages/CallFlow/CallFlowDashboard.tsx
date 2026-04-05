@@ -65,7 +65,13 @@ function mapTransaction(tx: MonitoringTransaction): TraceEntry {
     statusCode: tx.status_code,
     durationMs: tx.total_duration_ms,
     timestamp: tx.started_at,
-    spans: [],
+    spans: (tx.spans || []).map((s) => ({
+      name: s.name,
+      service: s.service,
+      startOffsetMs: s.start_offset_ms,
+      durationMs: s.duration_ms,
+      status: (s.status as 'success' | 'error' | 'timeout') || 'success',
+    })),
   };
 }
 
@@ -527,16 +533,28 @@ export function CallFlowDashboard() {
             />
             <StatCard
               label="P50 Latency (5m)"
-              value={displayP50 !== null ? Math.round(displayP50).toString() : '--'}
-              unit="ms"
+              value={
+                displayP50 !== null
+                  ? displayP50 < 1
+                    ? Math.round(displayP50 * 1000).toString()
+                    : Math.round(displayP50).toString()
+                  : '--'
+              }
+              unit={displayP50 !== null && displayP50 < 1 ? 'µs' : 'ms'}
               icon={Gauge}
               colorClass={latencyColorClass(displayP50)}
               subtitle="Median response time"
             />
             <StatCard
               label="P99 Latency (5m)"
-              value={displayP99 !== null ? Math.round(displayP99).toString() : '--'}
-              unit="ms"
+              value={
+                displayP99 !== null
+                  ? displayP99 < 1
+                    ? Math.round(displayP99 * 1000).toString()
+                    : Math.round(displayP99).toString()
+                  : '--'
+              }
+              unit={displayP99 !== null && displayP99 < 1 ? 'µs' : 'ms'}
               icon={Timer}
               colorClass={latencyColorClass(displayP99)}
               subtitle="Tail latency"

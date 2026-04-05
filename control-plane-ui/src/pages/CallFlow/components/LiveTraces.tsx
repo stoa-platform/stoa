@@ -28,6 +28,8 @@ const SPAN_COLORS: Record<string, string> = {
   gateway_ingress: '#3B82F6',
   auth_validation: '#8B5CF6',
   rate_limiting: '#F59E0B',
+  policy_eval: '#6366F1',
+  routing: '#6B7280',
   backend_call: '#10B981',
   database_query: '#06B6D4',
   response_transform: '#6366F1',

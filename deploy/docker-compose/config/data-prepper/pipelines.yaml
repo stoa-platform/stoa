@@ -1,0 +1,18 @@
+# Data Prepper pipeline: OTLP traces → OpenSearch (CAB-1997)
+#
+# Template — envsubst resolves credentials at container startup.
+# Receives OTLP gRPC spans from stoa-gateway on port 4317.
+
+otel-traces-pipeline:
+  source:
+    otel_trace_source:
+      port: 4317
+      ssl: false
+      health_check_service: true
+  sink:
+    - opensearch:
+        hosts: ["https://opensearch:9200"]
+        username: "${OPENSEARCH_USER}"
+        password: "${OPENSEARCH_PASSWORD}"
+        insecure: true
+        index_type: trace-analytics-raw

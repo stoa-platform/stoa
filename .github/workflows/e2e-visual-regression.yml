@@ -1,0 +1,81 @@
+# =============================================================================
+# E2E Visual Regression (Docker-based pixel comparison)
+# =============================================================================
+# Compares Console + Portal screenshots against golden baselines.
+# Runs in Playwright Docker container for pixel-consistent rendering.
+# No live backend required (mocked API responses).
+# =============================================================================
+
+name: E2E Visual Regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'control-plane-ui/**'
+      - 'portal/**'
+      - 'shared/**'
+      - 'e2e/visual/**'
+      - 'e2e/golden/**'
+      - '.github/workflows/e2e-visual-regression.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual-regression:
+    name: Visual Regression
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-jammy
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install shared dependencies
+        run: cd shared && npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Install & build Console
+        working-directory: control-plane-ui
+        env:
+          VITE_API_URL: http://localhost:4173/api
+          VITE_KEYCLOAK_URL: http://localhost:4173/auth
+          VITE_BASE_DOMAIN: localhost
+        run: npm ci && npm run build
+
+      - name: Install & build Portal
+        working-directory: portal
+        env:
+          VITE_API_URL: http://localhost:4174/api
+          VITE_KEYCLOAK_URL: http://localhost:4174/auth
+          VITE_BASE_DOMAIN: localhost
+        run: npm ci && npm run build
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Run Console visual tests
+        working-directory: e2e
+        run: npx playwright test --config=visual/playwright.config.ts --project=console-visual
+
+      - name: Run Portal visual tests
+        working-directory: e2e
+        run: npx playwright test --config=visual/playwright.config.ts --project=portal-visual
+
+      - name: Upload diff artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-diffs-${{ github.run_id }}
+          path: e2e/test-results/visual/
+          retention-days: 14

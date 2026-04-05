@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.2.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.1.0...control-plane-ui-v1.2.0) (2026-04-05)
+
+
+### Features
+
+* add target_gateway_url to gateway detail panel ([#2069](https://github.com/stoa-platform/stoa/issues/2069)) ([c07557f](https://github.com/stoa-platform/stoa/commit/c07557feb537c2f029909763e62cf719eacb18db))
+* **api,ui:** add ui_url field to GatewayInstance for admin UI links (CAB-1953) ([#2149](https://github.com/stoa-platform/stoa/issues/2149)) ([725dffa](https://github.com/stoa-platform/stoa/commit/725dffa72e55e05d2befe77644d3985f18ae865d))
+* **api,ui:** gitops tenant auto-provision + admin cross-tenant API view ([#2114](https://github.com/stoa-platform/stoa/issues/2114)) ([8cebf8b](https://github.com/stoa-platform/stoa/commit/8cebf8b5352c20a215c10414a2762e67b69bfbc4))
+* **api,ui:** proxy gateway MCP tools to Console via CP API (CAB-1962) ([#2154](https://github.com/stoa-platform/stoa/issues/2154)) ([11e3d90](https://github.com/stoa-platform/stoa/commit/11e3d9023d114abd8dd518cdeb51e88e35f7e3a9))
+* **api:** gateway enabled flag + visibility + soft disable (CAB-1979) ([#2201](https://github.com/stoa-platform/stoa/issues/2201)) ([0136dd7](https://github.com/stoa-platform/stoa/commit/0136dd749acfb8b4d0e64be3a5a3388c4f6b17b8))
+* **ui,portal:** add data-testid + ARIA roles to 6 pages (CAB-1991) ([#2207](https://github.com/stoa-platform/stoa/issues/2207)) ([4a968dd](https://github.com/stoa-platform/stoa/commit/4a968dda0f75ddb9e974c0be958affc430d3cf5e))
+* **ui:** add Backend API detail/edit view + deploy dialog search (CAB-1922) ([#2016](https://github.com/stoa-platform/stoa/issues/2016)) ([1f82ecd](https://github.com/stoa-platform/stoa/commit/1f82ecda20b2559469f37912154e57cebcdd1837))
+* **ui:** chat usage dashboard with Recharts (CAB-1868) ([#2026](https://github.com/stoa-platform/stoa/issues/2026)) ([4b3fe35](https://github.com/stoa-platform/stoa/commit/4b3fe35fb2756565b8e0b9ce7f5caa5fd259c58d))
+* **ui:** EU Public API Catalog browser with 1-click deploy (CAB-1639) ([#2032](https://github.com/stoa-platform/stoa/issues/2032)) ([480b6d3](https://github.com/stoa-platform/stoa/commit/480b6d35e55041bce267d74d462f5c09de21a7b9))
+* **ui:** gateway detail page with status + config + actions (CAB-1981) ([#2203](https://github.com/stoa-platform/stoa/issues/2203)) ([37eea28](https://github.com/stoa-platform/stoa/commit/37eea28ba8e55e80bf46cc39eba73cc9813580fd))
+* **ui:** make git provider labels dynamic (CAB-1892) ([#2064](https://github.com/stoa-platform/stoa/issues/2064)) ([55ff72c](https://github.com/stoa-platform/stoa/commit/55ff72c81895db8821a1ba7463452bfd62fb3c3c))
+* **ui:** MCP server/tool enable/disable toggles (CAB-1978) ([#2197](https://github.com/stoa-platform/stoa/issues/2197)) ([70840af](https://github.com/stoa-platform/stoa/commit/70840af5d86bfa234965507a0e90ea3e42a29253))
+* **ui:** tool permissions matrix per tenant (CAB-1982) ([#2204](https://github.com/stoa-platform/stoa/issues/2204)) ([1ccea3c](https://github.com/stoa-platform/stoa/commit/1ccea3ceadfae62f44bb6224507089f0f969949d))
+* **ui:** update locales + tests for dynamic git provider (CAB-1892) ([#2066](https://github.com/stoa-platform/stoa/issues/2066)) ([39fe155](https://github.com/stoa-platform/stoa/commit/39fe1555e4ff2dbb9228baeb222b91faf194bac9))
+* **ui:** wire Kafka deploy workflow into deployment detail drawer (CAB-1951) ([#2141](https://github.com/stoa-platform/stoa/issues/2141)) ([57de865](https://github.com/stoa-platform/stoa/commit/57de8653891a56fd37966dddb180e521d5edc06c))
+
+
+### Bug Fixes
+
+* **api:** preserve health_details on failed gateway health check ([#1999](https://github.com/stoa-platform/stoa/issues/1999)) ([ac32c96](https://github.com/stoa-platform/stoa/commit/ac32c96f0aae3844eccd2cdd979b2c2382c98b66))
+* **api:** unblock CI — health test imports + prettier + mypy ([#2071](https://github.com/stoa-platform/stoa/issues/2071)) ([9ed93d0](https://github.com/stoa-platform/stoa/commit/9ed93d03060d5d03112659f309e2852dfcf2e124))
+* **deps:** patch 11 security alerts — node-forge, picomatch, go-jose ([#2187](https://github.com/stoa-platform/stoa/issues/2187)) ([0be880e](https://github.com/stoa-platform/stoa/commit/0be880e232e9c6caa968c6a5295e54ed3967d654))
+* **gateway,api:** scope API discovery by gateway mode + gateway_id filter (CAB-1940) ([#2121](https://github.com/stoa-platform/stoa/issues/2121)) ([a01b245](https://github.com/stoa-platform/stoa/commit/a01b245e69f8dc5f2574762098e8d9ed361df930))
+* **gateway,ui:** broaden discovery gate + discovery banner in GatewayDetail (CAB-1949) ([#2134](https://github.com/stoa-platform/stoa/issues/2134)) ([c2c4f42](https://github.com/stoa-platform/stoa/commit/c2c4f4284109e14dd1c48e4f8a2b8786fbed5d61))
+* **gateway:** explicit OTLP batch config for Tempo (CAB-1974) ([#2193](https://github.com/stoa-platform/stoa/issues/2193)) ([80d09cd](https://github.com/stoa-platform/stoa/commit/80d09cdf0a96b5f882ae35f0859c85e58f586368))
+* **ui:** add missing i18n keys for security + guardrails nav items ([#2196](https://github.com/stoa-platform/stoa/issues/2196)) ([3af62a4](https://github.com/stoa-platform/stoa/commit/3af62a412098c86b580df4aeb69d023bdd75e274))
+* **ui:** add missing mocks for deploy drawer tests (CAB-1951) ([#2147](https://github.com/stoa-platform/stoa/issues/2147)) ([b2ba3ba](https://github.com/stoa-platform/stoa/commit/b2ba3bad7d4a5ff5cc89c07719fcb413553720bc))
+* **ui:** connect RegisterApiModal submit button to form (CAB-1918) ([#2011](https://github.com/stoa-platform/stoa/issues/2011)) ([4dbb904](https://github.com/stoa-platform/stoa/commit/4dbb904010e5f44865ca99578b71367ddf00fd52))
+* **ui:** correct API backend port 80 → 8000 in k8s deployment ([#2077](https://github.com/stoa-platform/stoa/issues/2077)) ([77a3254](https://github.com/stoa-platform/stoa/commit/77a32542a4bbd67d26d66761c1d01d842cc7859e))
+* **ui:** fix broken imports in tenants-msw integration test (CAB-1951) ([#2148](https://github.com/stoa-platform/stoa/issues/2148)) ([d0ed6bd](https://github.com/stoa-platform/stoa/commit/d0ed6bd68982adf0fd479411a9b8c1fe0c2cd1ce))
+* **ui:** hide health check button for connect-mode gateways ([#1996](https://github.com/stoa-platform/stoa/issues/1996)) ([e003dee](https://github.com/stoa-platform/stoa/commit/e003deea5067f63983647324865e630c0c2bcdba))
+* **ui:** replace SSE/Kafka wiring with sync_steps from REST (CAB-1951) ([#2153](https://github.com/stoa-platform/stoa/issues/2153)) ([3e392fc](https://github.com/stoa-platform/stoa/commit/3e392fc5296859b8c611acbd093e326eb2c5c159))
+* **ui:** serialize openapi_spec as JSON string in API form (CAB-1941) ([#2120](https://github.com/stoa-platform/stoa/issues/2120)) ([1572cc9](https://github.com/stoa-platform/stoa/commit/1572cc98d8bb96136b00518e96ac48e57ac0c601))
+* **ui:** show gateway URLs for all modes + fix stoa-link hostname (CAB-1953) ([#2160](https://github.com/stoa-platform/stoa/issues/2160)) ([3ee4c66](https://github.com/stoa-platform/stoa/commit/3ee4c66397b89d506bbfcd6829637f0bc46ee563))
+
 ## [1.1.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.0.0...control-plane-ui-v1.1.0) (2026-03-25)
 
 

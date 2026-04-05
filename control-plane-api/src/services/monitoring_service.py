@@ -373,21 +373,37 @@ class MonitoringService:
     ) -> APITransaction | None:
         """Get detailed transaction with waterfall from OTel span index.
 
-        Data Prepper flattens attributes as top-level dot-keys.  Root
-        spans are internal middleware stages without HTTP info.  We
-        collect HTTP metadata from child spans (``http.request``,
-        ``upstream.call``) and use ``traceGroupFields`` for overall
-        trace duration.
+        ``trace_id`` can be either a traceId or a spanId (the Console
+        passes spanId from the list view).  We resolve to the full
+        trace by looking up the spanId first if the traceId query
+        returns no results.
         """
         try:
+            # Try as traceId first
             body = {
                 "query": {"bool": {"filter": [{"term": {"traceId": trace_id}}]}},
                 "sort": [{"startTime": {"order": "asc"}}],
                 "size": 200,
             }
-
             resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
             hits = resp.get("hits", {}).get("hits", [])
+
+            # If no hits, the ID might be a spanId — resolve to traceId
+            if not hits:
+                span_body = {
+                    "query": {"term": {"spanId": trace_id}},
+                    "size": 1,
+                    "_source": ["traceId"],
+                }
+                span_resp = await self.client.search(index="otel-v1-apm-span-*", body=span_body)
+                span_hits = span_resp.get("hits", {}).get("hits", [])
+                if not span_hits:
+                    return None
+                real_trace_id = span_hits[0]["_source"]["traceId"]
+                body["query"] = {"bool": {"filter": [{"term": {"traceId": real_trace_id}}]}}
+                resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+                hits = resp.get("hits", {}).get("hits", [])
+                trace_id = real_trace_id
 
             if not hits:
                 return None

@@ -312,6 +312,7 @@ services:
       STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-false}"
       STOA_INSTANCE_NAME: "stoa-quickstart"
       STOA_ENVIRONMENT: "dev"
+      STOA_ADMIN_API_TOKEN: "${STOA_ADMIN_API_TOKEN:-stoa-local-admin-token}"
       STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
       # Kafka metering (Redpanda)
       STOA_KAFKA_ENABLED: "true"

@@ -1,0 +1,88 @@
+# =============================================================================
+# E2E Cross-Validation Tests (Live Services)
+# =============================================================================
+# Seeds data via API, then verifies it appears in Console + Portal UI.
+# Requires live services — runs on self-hosted runner, NOT a PR gate.
+# =============================================================================
+
+name: E2E Cross-Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *' # Daily 07:00 UTC
+  push:
+    branches:
+      - main
+    paths:
+      - 'e2e/tests/cross-validation*'
+      - 'e2e/fixtures/cross-validation*'
+      - 'e2e/fixtures/data-seeder*'
+      - 'e2e/fixtures/aria-helpers*'
+      - '.github/workflows/e2e-cross-validation.yml'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cross-validation:
+    name: Cross-Validation (Seeded Data)
+    runs-on: self-hosted
+    continue-on-error: true # Live infra — not a PR gate
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run auth setup
+        working-directory: e2e
+        env:
+          STOA_CONSOLE_URL: ${{ secrets.STOA_CONSOLE_URL }}
+          STOA_PORTAL_URL: ${{ secrets.STOA_PORTAL_URL }}
+          STOA_API_URL: ${{ secrets.STOA_API_URL }}
+          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          PARZIVAL_PASSWORD: ${{ secrets.PARZIVAL_PASSWORD }}
+          ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
+        run: npx playwright test --project=auth-setup
+
+      - name: Run cross-validation tests
+        working-directory: e2e
+        env:
+          STOA_CONSOLE_URL: ${{ secrets.STOA_CONSOLE_URL }}
+          STOA_PORTAL_URL: ${{ secrets.STOA_PORTAL_URL }}
+          STOA_API_URL: ${{ secrets.STOA_API_URL }}
+          STOA_AUTH_URL: ${{ secrets.KEYCLOAK_URL }}
+          ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
+        run: >
+          npx playwright test
+          --project=cross-validation-console
+          --project=cross-validation-portal
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cross-validation-report-${{ github.run_id }}
+          path: e2e/reports/
+          retention-days: 14
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cross-validation-results-${{ github.run_id }}
+          path: e2e/test-results/
+          retention-days: 7

@@ -256,7 +256,12 @@ export function MySubscriptions() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        role="region"
+        aria-label="Subscription statistics"
+        data-testid="subscriptions-stats"
+      >
         {isLoading ? (
           <>
             <StatCardWithIconSkeleton />
@@ -265,7 +270,11 @@ export function MySubscriptions() {
           </>
         ) : (
           <>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4"
+              data-testid="subscriptions-active-count"
+              aria-label="Active Subscriptions"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
                   <Key className="h-5 w-5 text-primary-600" />
@@ -280,7 +289,11 @@ export function MySubscriptions() {
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4"
+              data-testid="subscriptions-server-count"
+              aria-label="Server Subscriptions"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <Server className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -295,7 +308,11 @@ export function MySubscriptions() {
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+            <div
+              className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4"
+              data-testid="subscriptions-usage-count"
+              aria-label="Total API Calls"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                   <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -314,9 +331,12 @@ export function MySubscriptions() {
 
       {/* Tabs */}
       <div className="border-b border-neutral-200 dark:border-neutral-700">
-        <nav className="flex gap-8">
+        <div className="flex gap-8" role="tablist" aria-label="Subscription tabs">
           <button
             onClick={() => setActiveTab('servers')}
+            role="tab"
+            aria-selected={activeTab === 'servers'}
+            data-testid="subscriptions-tab-servers"
             className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'servers'
                 ? 'border-primary-500 text-primary-600 dark:text-primary-400'
@@ -335,6 +355,9 @@ export function MySubscriptions() {
           </button>
           <button
             onClick={() => setActiveTab('tools')}
+            role="tab"
+            aria-selected={activeTab === 'tools'}
+            data-testid="subscriptions-tab-tools"
             className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'tools'
                 ? 'border-primary-500 text-primary-600 dark:text-primary-400'
@@ -369,7 +392,7 @@ export function MySubscriptions() {
               )}
             </span>
           </button>
-        </nav>
+        </div>
       </div>
 
       {/* Filters */}

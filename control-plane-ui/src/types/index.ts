@@ -1962,3 +1962,30 @@ export interface CatalogResponse {
   total: number;
   categories: CatalogCategory[];
 }
+
+// Tenant Tool Permissions (CAB-1982)
+// =============================================================================
+
+export interface TenantToolPermission {
+  id: string;
+  tenant_id: string;
+  mcp_server_id: string;
+  tool_name: string;
+  allowed: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantToolPermissionCreate {
+  mcp_server_id: string;
+  tool_name: string;
+  allowed: boolean;
+}
+
+export interface TenantToolPermissionListResponse {
+  items: TenantToolPermission[];
+  total: number;
+  page: number;
+  page_size: number;
+}

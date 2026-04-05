@@ -1,0 +1,115 @@
+# OpenSearch Dashboards — Init Job
+# Creates default index patterns, visualizations, and dashboards in Global tenant.
+# Run after OpenSearch security is initialized and OSD is running.
+#
+# Usage:
+#   kubectl apply -f k8s/opensearch/dashboards-init.yaml
+#   kubectl create job --from=cronjob/opensearch-dashboards-init dashboards-init-manual -n opensearch
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-dashboards-init
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/component: dashboards
+    app.kubernetes.io/part-of: stoa-platform
+data:
+  saved-objects.ndjson: |
+    {"attributes":{"title":"stoa-logs-*","timeFieldName":"@timestamp"},"id":"stoa-logs-*","type":"index-pattern"}
+    {"attributes":{"title":"Total Requests","visState":"{\"title\":\"Total Requests\",\"type\":\"metric\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"}],\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"colorSchema\":\"Green to Red\",\"useRanges\":false,\"style\":{\"bgColor\":false,\"fontSize\":60}}}}","uiStateJSON":"{}","description":"Total request count","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-total-requests","type":"visualization"}
+    {"attributes":{"title":"Error Count (4xx/5xx)","visState":"{\"title\":\"Error Count (4xx/5xx)\",\"type\":\"metric\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"}],\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"colorSchema\":\"Green to Red\",\"useRanges\":true,\"style\":{\"bgColor\":true,\"fontSize\":60},\"colorsRange\":[{\"from\":0,\"to\":100},{\"from\":100,\"to\":1000},{\"from\":1000,\"to\":999999}]}}}","uiStateJSON":"{}","description":"Error count","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"status >= 400\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-error-count","type":"visualization"}
+    {"attributes":{"title":"HTTP Status Codes","visState":"{\"title\":\"HTTP Status Codes\",\"type\":\"pie\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"params\":{\"field\":\"status\",\"order\":\"desc\",\"size\":10,\"orderBy\":\"1\"},\"schema\":\"segment\"}],\"params\":{\"type\":\"pie\",\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"isDonut\":true}}","uiStateJSON":"{}","description":"Distribution of HTTP status codes","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-status-codes","type":"visualization"}
+    {"attributes":{"title":"HTTP Methods","visState":"{\"title\":\"HTTP Methods\",\"type\":\"pie\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"params\":{\"field\":\"method.keyword\",\"order\":\"desc\",\"size\":10,\"orderBy\":\"1\"},\"schema\":\"segment\"}],\"params\":{\"type\":\"pie\",\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"isDonut\":false}}","uiStateJSON":"{}","description":"HTTP method distribution","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-http-methods","type":"visualization"}
+    {"attributes":{"title":"Requests Over Time","visState":"{\"title\":\"Requests Over Time\",\"type\":\"histogram\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"params\":{\"field\":\"@timestamp\",\"calendar_interval\":\"auto\",\"min_doc_count\":1},\"schema\":\"segment\"}],\"params\":{\"type\":\"histogram\",\"grid\":{\"categoryLines\":false},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"labels\":{\"show\":true,\"truncate\":100},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"labels\":{\"show\":true},\"title\":{\"text\":\"Count\"}}],\"addTooltip\":true,\"addLegend\":true}}","uiStateJSON":"{}","description":"Request count over time","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-requests-over-time","type":"visualization"}
+    {"attributes":{"title":"Top API Paths","visState":"{\"title\":\"Top API Paths\",\"type\":\"horizontal_bar\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"params\":{\"field\":\"path.keyword\",\"order\":\"desc\",\"size\":15,\"orderBy\":\"1\"},\"schema\":\"segment\"}],\"params\":{\"type\":\"horizontal_bar\",\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"left\",\"show\":true,\"labels\":{\"show\":true,\"truncate\":200}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"BottomAxis-1\",\"type\":\"value\",\"position\":\"bottom\",\"show\":true,\"labels\":{\"show\":true}}]}}","uiStateJSON":"{}","description":"Most requested API paths","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-top-paths","type":"visualization"}
+    {"attributes":{"title":"Top User Agents","visState":"{\"title\":\"Top User Agents\",\"type\":\"table\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"params\":{\"field\":\"user_agent.keyword\",\"order\":\"desc\",\"size\":10,\"orderBy\":\"1\"},\"schema\":\"bucket\"}],\"params\":{\"perPage\":10,\"showPartialRows\":false,\"showTotal\":true,\"totalFunc\":\"sum\"}}","uiStateJSON":"{}","description":"Top user agents by request count","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-user-agents","type":"visualization"}
+    {"attributes":{"title":"Errors Over Time (4xx/5xx)","visState":"{\"title\":\"Errors Over Time (4xx/5xx)\",\"type\":\"line\",\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"params\":{},\"schema\":\"metric\"},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"params\":{\"field\":\"@timestamp\",\"calendar_interval\":\"auto\",\"min_doc_count\":0},\"schema\":\"segment\"},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"params\":{\"field\":\"status\",\"order\":\"desc\",\"size\":5,\"orderBy\":\"1\",\"include\":\"[45].*\"},\"schema\":\"group\"}],\"params\":{\"type\":\"line\",\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"showCircles\":true,\"interpolate\":\"linear\",\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true}]}}","uiStateJSON":"{}","description":"Error responses over time","kibanaSavedObjectMeta":{"searchSourceJSON":"{\"index\":\"stoa-logs-*\",\"query\":{\"query\":\"status >= 400\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-errors-over-time","type":"visualization"}
+    {"attributes":{"title":"STOA Gateway — Overview","description":"Gateway access logs: traffic, errors, paths, user agents","panelsJSON":"[{\"version\":\"3.5.0\",\"gridData\":{\"x\":0,\"y\":0,\"w\":12,\"h\":8,\"i\":\"1\"},\"panelIndex\":\"1\",\"embeddableConfig\":{},\"panelRefName\":\"panel_1\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":12,\"y\":0,\"w\":12,\"h\":8,\"i\":\"2\"},\"panelIndex\":\"2\",\"embeddableConfig\":{},\"panelRefName\":\"panel_2\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":24,\"y\":0,\"w\":12,\"h\":8,\"i\":\"3\"},\"panelIndex\":\"3\",\"embeddableConfig\":{},\"panelRefName\":\"panel_3\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":36,\"y\":0,\"w\":12,\"h\":8,\"i\":\"4\"},\"panelIndex\":\"4\",\"embeddableConfig\":{},\"panelRefName\":\"panel_4\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":0,\"y\":8,\"w\":48,\"h\":12,\"i\":\"5\"},\"panelIndex\":\"5\",\"embeddableConfig\":{},\"panelRefName\":\"panel_5\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":0,\"y\":20,\"w\":24,\"h\":12,\"i\":\"6\"},\"panelIndex\":\"6\",\"embeddableConfig\":{},\"panelRefName\":\"panel_6\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":24,\"y\":20,\"w\":24,\"h\":12,\"i\":\"7\"},\"panelIndex\":\"7\",\"embeddableConfig\":{},\"panelRefName\":\"panel_7\"},{\"version\":\"3.5.0\",\"gridData\":{\"x\":0,\"y\":32,\"w\":48,\"h\":12,\"i\":\"8\"},\"panelIndex\":\"8\",\"embeddableConfig\":{},\"panelRefName\":\"panel_8\"}]","optionsJSON":"{\"hidePanelTitles\":false,\"useMargins\":true}","timeRestore":true,"timeTo":"now","timeFrom":"now-7d","refreshInterval":{"pause":false,"value":30000},"kibanaSavedObjectMeta":{"searchSourceJSON":"{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"id":"stoa-gateway-overview","type":"dashboard","references":[{"name":"panel_1","type":"visualization","id":"stoa-total-requests"},{"name":"panel_2","type":"visualization","id":"stoa-error-count"},{"name":"panel_3","type":"visualization","id":"stoa-status-codes"},{"name":"panel_4","type":"visualization","id":"stoa-http-methods"},{"name":"panel_5","type":"visualization","id":"stoa-requests-over-time"},{"name":"panel_6","type":"visualization","id":"stoa-top-paths"},{"name":"panel_7","type":"visualization","id":"stoa-user-agents"},{"name":"panel_8","type":"visualization","id":"stoa-errors-over-time"}]}
+  init-dashboards.sh: |
+    #!/bin/sh
+    set -e
+
+    OSD_URL="http://opensearch-dashboards.opensearch.svc:5601"
+    OS_URL="https://opensearch-cluster-master.opensearch.svc:9200"
+
+    echo "Waiting for OpenSearch Dashboards..."
+    until curl -s -o /dev/null -w '%{http_code}' "$OSD_URL/api/status" | grep -q '200\|401\|302'; do
+      sleep 5
+    done
+    echo "OSD is up."
+
+    echo "Waiting for OpenSearch security to be initialized..."
+    until curl -s -k -u "${OS_USER}:${OS_PASSWORD}" "$OS_URL/_plugins/_security/api/roles" | grep -q 'stoa_logs_admin'; do
+      sleep 5
+    done
+    echo "Security initialized."
+
+    # Import saved objects into Global tenant
+    echo "Importing dashboards into Global tenant..."
+    curl -s -k -u "${OS_USER}:${OS_PASSWORD}" \
+      -X POST "${OSD_URL}/api/saved_objects/_import?overwrite=true" \
+      -H "osd-xsrf: true" \
+      -H "securitytenant: Global" \
+      -F "file=@/config/saved-objects.ndjson;filename=export.ndjson"
+
+    echo ""
+
+    # Set default index pattern
+    curl -s -k -u "${OS_USER}:${OS_PASSWORD}" \
+      -X POST "${OSD_URL}/api/opensearch-dashboards/settings/defaultIndex" \
+      -H "Content-Type: application/json" \
+      -H "osd-xsrf: true" \
+      -H "securitytenant: Global" \
+      -d '{"value": "stoa-logs-*"}'
+
+    echo ""
+    echo "Dashboard init complete."
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opensearch-dashboards-init
+  namespace: opensearch
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/component: dashboards-init
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: init
+          image: curlimages/curl:8.7.1
+          command: ["sh", "/config/init-dashboards.sh"]
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: OS_USER
+              value: "admin"
+            - name: OS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-admin-secret
+                  key: password
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: opensearch-dashboards-init
+            defaultMode: 0555

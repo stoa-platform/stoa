@@ -19,7 +19,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::auth::middleware::AuthenticatedUser;
 use crate::auth::mtls::ClientCertInfo;
@@ -80,6 +80,7 @@ impl IntoResponse for ProfileEnforcementError {
 ///
 /// `api_key`, `oauth2_public`, and `oauth2_confidential` have no extra requirements
 /// beyond what the JWT auth middleware already validates.
+#[instrument(name = "auth.profile", skip_all, fields(otel.kind = "internal"))]
 pub async fn profile_enforcement_middleware(
     request: Request<Body>,
     next: Next,

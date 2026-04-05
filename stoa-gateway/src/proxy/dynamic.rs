@@ -436,6 +436,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 /// Headers (hop-by-hop filtering, credential injection, traceparent, Via)
 /// are handled identically to the reqwest path for consistency.
 #[cfg(feature = "pingora")]
+#[instrument(name = "upstream.call", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn forward_request_pingora(
     pool: &std::sync::Arc<crate::proxy::pingora_pool::PingoraPool>,
     request: Request<Body>,
@@ -545,6 +546,7 @@ async fn forward_request_pingora(
 ///
 /// When a resolved header tuple is provided, it is injected into the
 /// outgoing request (BYOK credential proxy — CAB-1250, OAuth2 — CAB-1317).
+#[instrument(name = "upstream.call", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn forward_request(
     request: Request<Body>,
     method: &Method,
@@ -694,6 +696,7 @@ fn is_idempotent(method: &Method) -> bool {
 ///
 /// Rebuilds the outgoing request from saved headers — used when the original
 /// request body has already been consumed by the first attempt.
+#[instrument(name = "upstream.retry", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn retry_forward(
     method: &Method,
     target_url: &str,

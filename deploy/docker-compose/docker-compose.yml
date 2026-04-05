@@ -343,6 +343,23 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Echo Backend — returns 200 JSON for any request (traffic seeder target)
+  # ==========================================================================
+  echo-backend:
+    image: nginx:1.25-alpine
+    container_name: stoa-echo-backend
+    volumes:
+      - ./config/echo/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
   # Traffic Seeder — generates multi-auth API traffic for observability demos
   # ==========================================================================
   traffic-seeder:
@@ -356,7 +373,7 @@ services:
       KC_TOKEN_URL: http://keycloak:8080/realms/stoa/protocol/openid-connect/token
       KC_CLIENT_ID: control-plane-ui
       KC_CLIENT_SECRET: ""
-      ECHO_BACKEND: http://backend-seeder:9999
+      ECHO_BACKEND: http://echo-backend:8888
       DURATION: "300"
       TENANTS: "oasis,high-five,default"
     volumes:
@@ -368,6 +385,8 @@ services:
       stoa-gateway:
         condition: service_healthy
       keycloak:
+        condition: service_healthy
+      echo-backend:
         condition: service_healthy
     networks:
       - stoa-network

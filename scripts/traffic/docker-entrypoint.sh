@@ -13,7 +13,7 @@ pip install -q requests 2>/dev/null
 GATEWAY_URL="${GATEWAY_URL:-http://stoa-gateway:8080}"
 ADMIN_TOKEN="${ADMIN_TOKEN:-local-dev-key}"
 KC_URL="${KC_TOKEN_URL:-http://keycloak:8080/realms/stoa/protocol/openid-connect/token}"
-ECHO_BACKEND="${ECHO_BACKEND:-http://backend-seeder:9999}"
+ECHO_BACKEND="${ECHO_BACKEND:-http://echo-backend:8888}"
 
 echo "[seeder] Waiting for gateway at $GATEWAY_URL..."
 until curl -sf "$GATEWAY_URL/health" > /dev/null 2>&1; do

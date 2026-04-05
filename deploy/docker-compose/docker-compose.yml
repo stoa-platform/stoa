@@ -510,6 +510,25 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Backend Seeder — multi-persona mock APIs for traffic seed (CAB-1976)
+  # Simulates 5 backends: petstore, payments, analytics, auth, legacy
+  # ==========================================================================
+  backend-seeder:
+    build:
+      context: ./backend-seeder
+    container_name: stoa-backend-seeder
+    ports:
+      - "9999:9999"
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9999/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
   # Tempo (Distributed Tracing) — CAB-1975
   # Receives OTLP spans from stoa-gateway, generates service graph metrics
   # for Call Flow Console via metrics_generator → Prometheus remote write.

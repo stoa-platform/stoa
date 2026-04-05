@@ -354,6 +354,9 @@ fn with_rate_limit_headers(
         tenant_id = tracing::field::Empty,
         tool_name = tracing::field::Empty,
         user_id = tracing::field::Empty,
+        http.status_code = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+        otel.status_message = tracing::field::Empty,
     )
 )]
 pub async fn mcp_tools_call(
@@ -1087,6 +1090,8 @@ pub async fn mcp_tools_call(
                     resp.headers_mut().insert("x-stoa-guardrail", val);
                 }
             }
+            tracing::Span::current().record("http.status_code", 200u16);
+            tracing::Span::current().record("otel.status_code", "OK");
             resp
         }
         Err(e) => {
@@ -1139,6 +1144,10 @@ pub async fn mcp_tools_call(
                 },
             );
 
+            tracing::Span::current().record("http.status_code", 500u16);
+            tracing::Span::current().record("otel.status_code", "ERROR");
+            tracing::Span::current()
+                .record("otel.status_message", &format!("Tool error: {e}") as &str);
             with_rate_limit_headers(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ToolsCallResponse {

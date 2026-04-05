@@ -2,6 +2,16 @@
   "openapi": "3.1.0",
   "info": {
     "title": "STOA Control-Plane API",
+    "description": "\n## STOA Platform API\n\n**The European Agent Gateway** \u2014 AI-Native API Gateway for modern enterprises.\n\n### Key Features\n\n- **MCP Server Subscriptions** \u2014 Subscribe to AI tools and manage API keys\n- **Tools Catalog** \u2014 Browse and discover MCP tools with role-based visibility\n- **Usage Tracking** \u2014 Monitor your API consumption in real-time\n- **Multi-tenant Management** \u2014 Create and manage isolated API tenants\n- **GitOps Integration** \u2014 Automatic sync with GitLab repositories\n- **Event-Driven Architecture** \u2014 Kafka/Redpanda message bus for async operations\n- **Pipeline Monitoring** \u2014 End-to-end tracing of deployments\n- **RBAC** \u2014 Role-based access control via Keycloak\n\n### Quick Start\n\n1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)\n2. **Browse MCP servers** (`GET /v1/mcp/servers`)\n3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)\n4. **Use your API key** with MCP Gateway (`https://mcp.gostoa.dev`)\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\nInclude the token in the `Authorization: Bearer <token>` header.\n\n```\nAuthorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...\n```\n\n### Environments\n\n| Environment | Base URL |\n|-------------|----------|\n| Production | `https://api.gostoa.dev` |\n| Via Gateway | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` |\n\n### Changelog\n\n#### v2.1.0 (Current)\n- Added MCP Server Subscriptions with admin approval workflow\n- Added API key rotation with grace period support\n- Added Dashboard home page stats (`/v1/dashboard`)\n- Added Service Accounts for M2M authentication\n\n#### v2.0.0\n- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring\n- Added GitLab Webhook integration (`/webhooks/gitlab`)\n- Added Kafka integration for event-driven deployments\n- Added Kafka integration for event-driven gateway orchestration\n\n#### v1.0.0\n- Initial release with tenant, API, and application management\n",
+    "contact": {
+      "name": "CAB Ing\u00e9nierie",
+      "url": "https://gostoa.dev/",
+      "email": "support@gostoa.dev"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
     "version": "2.0.0"
   },
   "paths": {
@@ -12697,6 +12707,203 @@
         }
       }
     },
+    "/v1/tenants/{tenant_id}/tool-permissions": {
+      "get": {
+        "tags": [
+          "Tenant Tool Permissions"
+        ],
+        "summary": "List tool permissions for tenant",
+        "description": "List tool permissions for a tenant. Requires stoa:read.",
+        "operationId": "list_permissions",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "mcp_server_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by MCP server",
+              "title": "Mcp Server Id"
+            },
+            "description": "Filter by MCP server"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantToolPermissionListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tenant Tool Permissions"
+        ],
+        "summary": "Create or update a tool permission",
+        "description": "Create or update a tool permission (upsert). Requires stoa:write.",
+        "operationId": "create_permission",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantToolPermissionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantToolPermissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/tool-permissions/{permission_id}": {
+      "delete": {
+        "tags": [
+          "Tenant Tool Permissions"
+        ],
+        "summary": "Delete a tool permission",
+        "description": "Delete a tool permission (reverts to default-allow). Requires stoa:write.",
+        "operationId": "delete_permission",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "permission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Permission Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/portal/apis": {
       "get": {
         "tags": [
@@ -14139,7 +14346,7 @@
           "MCP Tools"
         ],
         "summary": "Invoke Tool",
-        "description": "Invoke a tool with the provided arguments.\n\nProxies to stoa-gateway with user context.",
+        "description": "Invoke a tool with the provided arguments.\n\nProxies to stoa-gateway with user context.\nChecks tenant tool permissions before invocation (CAB-1980).",
         "operationId": "invoke_tool",
         "security": [
           {
@@ -14271,7 +14478,7 @@
           "Monitoring"
         ],
         "summary": "List Transactions",
-        "description": "List recent API transactions.\n\nReturns transaction summaries for efficient list display.\nUses real OpenSearch data when available, falls back to demo data.",
+        "description": "List recent API transactions.\n\nReturns transaction summaries from OpenSearch or Tempo.\nFalls back to empty list when no data source is available.",
         "operationId": "list_transactions",
         "security": [
           {
@@ -14334,6 +14541,24 @@
               "default": 60,
               "title": "Time Range"
             }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pagination cursor from previous response",
+              "title": "Cursor"
+            },
+            "description": "Pagination cursor from previous response"
           }
         ],
         "responses": {
@@ -14366,7 +14591,7 @@
           "Monitoring"
         ],
         "summary": "Get Transaction Stats",
-        "description": "Get API transaction statistics.\n\nReturns aggregated metrics about API calls.\nUses real OpenSearch data when available, falls back to demo data.",
+        "description": "Get API transaction statistics.\n\nReturns aggregated metrics from OpenSearch.\nTempo does not support aggregation \u2014 returns zeroed stats with source indicator.",
         "operationId": "get_transaction_stats",
         "security": [
           {
@@ -14417,7 +14642,7 @@
           "Monitoring"
         ],
         "summary": "Get Transaction",
-        "description": "Get detailed information about a specific transaction.\n\nIncludes all spans with timing and metadata.\nUses real OpenSearch data when available, falls back to demo data.",
+        "description": "Get detailed information about a specific transaction.\n\nIncludes all spans with timing and metadata.\nChecks OpenSearch first, then Tempo for trace detail.",
         "operationId": "get_transaction",
         "security": [
           {
@@ -16765,7 +16990,7 @@
           "Gateways"
         ],
         "summary": "List Gateways",
-        "description": "List all registered gateway instances.",
+        "description": "List all registered gateway instances.\n\nVisibility filtering (CAB-1979): tenant-admins only see gateways where\nvisibility is null (public) or visibility.tenant_ids contains their tenant.\ncpi-admins see all gateways regardless of visibility.",
         "operationId": "list_gateways",
         "security": [
           {
@@ -17313,7 +17538,7 @@
           "Gateway Deployments"
         ],
         "summary": "Deploy Api",
-        "description": "Deploy an API to one or more gateways.",
+        "description": "Deploy an API to one or more gateways. Rejects if any target gateway is disabled (409).",
         "operationId": "deploy_api",
         "security": [
           {
@@ -29529,7 +29754,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File"
           }
         },
@@ -29543,7 +29768,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File"
           }
         },
@@ -37833,6 +38058,25 @@
             "description": "Whether this gateway is protected from deletion",
             "default": false
           },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether this gateway accepts deployments and syncs",
+            "default": true
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility",
+            "description": "Visibility restriction: {tenant_ids: [...]} or null (all)"
+          },
           "deleted_at": {
             "anyOf": [
               {
@@ -37980,6 +38224,31 @@
             ],
             "title": "Protected",
             "description": "Toggle deletion protection"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled",
+            "description": "Enable/disable gateway for deployments"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility",
+            "description": "Restrict visibility to specific tenants (null = all)"
           }
         },
         "type": "object",
@@ -51301,6 +51570,118 @@
         ],
         "title": "TenantResponse"
       },
+      "TenantToolPermissionCreate": {
+        "properties": {
+          "mcp_server_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mcp Server Id"
+          },
+          "tool_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Tool Name"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "mcp_server_id",
+          "tool_name"
+        ],
+        "title": "TenantToolPermissionCreate",
+        "description": "Request body for creating/updating a tool permission."
+      },
+      "TenantToolPermissionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TenantToolPermissionResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "TenantToolPermissionListResponse",
+        "description": "Paginated list of tool permissions."
+      },
+      "TenantToolPermissionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id"
+          },
+          "mcp_server_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mcp Server Id"
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "mcp_server_id",
+          "tool_name",
+          "allowed",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TenantToolPermissionResponse",
+        "description": "Response schema for a tool permission."
+      },
       "TenantToolsResponse": {
         "properties": {
           "tenant_id": {
@@ -52946,6 +53327,11 @@
             "type": "boolean",
             "title": "Demo Mode",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "none"
           }
         },
         "type": "object",
@@ -52962,7 +53348,7 @@
           "spans"
         ],
         "title": "TransactionDetailWithDemoResponse",
-        "description": "Transaction detail with demo mode indicator."
+        "description": "Transaction detail with data source indicator."
       },
       "TransactionListResponse": {
         "properties": {
@@ -52984,11 +53370,27 @@
             "type": "boolean",
             "title": "Demo Mode",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "none"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
           }
         },
         "type": "object",
         "title": "TransactionListResponse",
-        "description": "Transaction list with demo mode indicator."
+        "description": "Transaction list with data source indicator."
       },
       "TransactionSpan": {
         "properties": {
@@ -53077,6 +53479,11 @@
             "type": "boolean",
             "title": "Demo Mode",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "none"
           }
         },
         "type": "object",
@@ -53093,7 +53500,7 @@
           "by_status_code"
         ],
         "title": "TransactionStatsWithDemoResponse",
-        "description": "Transaction stats with demo mode indicator."
+        "description": "Transaction stats with data source indicator."
       },
       "TransportTypeEnum": {
         "type": "string",
@@ -55249,5 +55656,151 @@
         "scheme": "bearer"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Tenants",
+      "description": "Tenant management operations"
+    },
+    {
+      "name": "APIs",
+      "description": "API lifecycle management"
+    },
+    {
+      "name": "Applications",
+      "description": "Application and subscription management"
+    },
+    {
+      "name": "Deployments",
+      "description": "Deployment operations and status"
+    },
+    {
+      "name": "Advanced \u2014 GitOps",
+      "description": "GitLab integration (commits, MRs, files, branches)"
+    },
+    {
+      "name": "Events",
+      "description": "Real-time event streaming (SSE)"
+    },
+    {
+      "name": "Webhooks",
+      "description": "GitLab webhook handlers for GitOps"
+    },
+    {
+      "name": "Traces",
+      "description": "Pipeline monitoring and tracing"
+    },
+    {
+      "name": "Gateway",
+      "description": "webMethods Gateway administration via OIDC proxy"
+    },
+    {
+      "name": "Subscriptions",
+      "description": "API subscription and API key management"
+    },
+    {
+      "name": "Tenant Webhooks",
+      "description": "Webhook notifications for subscription events (CAB-315)"
+    },
+    {
+      "name": "certificates",
+      "description": "Certificate validation for mTLS subscriptions (CAB-313)"
+    },
+    {
+      "name": "Search",
+      "description": "Full-text search across tools and APIs (CAB-307)"
+    },
+    {
+      "name": "Usage",
+      "description": "Usage dashboard for API consumers (CAB-280)"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Home dashboard stats and activity (CAB-299)"
+    },
+    {
+      "name": "Service Accounts",
+      "description": "OAuth2 Service Accounts for MCP access (CAB-296)"
+    },
+    {
+      "name": "Contracts",
+      "description": "Universal API Contracts with multi-protocol bindings (UAC)"
+    },
+    {
+      "name": "MCP Servers",
+      "description": "Browse and discover MCP servers"
+    },
+    {
+      "name": "MCP Subscriptions",
+      "description": "Subscribe to MCP servers and manage API keys"
+    },
+    {
+      "name": "MCP Validation",
+      "description": "API key validation for MCP Gateway (internal)"
+    },
+    {
+      "name": "MCP Admin - Subscriptions",
+      "description": "Admin approval workflow for MCP subscriptions"
+    },
+    {
+      "name": "MCP Admin - Servers",
+      "description": "MCP server management (admin)"
+    },
+    {
+      "name": "Portal",
+      "description": "Developer Portal API catalog and MCP server browsing"
+    },
+    {
+      "name": "MCP GitOps",
+      "description": "GitOps synchronization for MCP servers"
+    },
+    {
+      "name": "MCP Tools",
+      "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"
+    },
+    {
+      "name": "Platform",
+      "description": "Platform status and GitOps observability (CAB-654)"
+    },
+    {
+      "name": "Gateways",
+      "description": "Gateway instance management (multi-gateway orchestration)"
+    },
+    {
+      "name": "Gateway Deployments",
+      "description": "API deployment to gateways (sync engine)"
+    },
+    {
+      "name": "Gateway Policies",
+      "description": "Gateway-agnostic policy management"
+    },
+    {
+      "name": "Gateway Observability",
+      "description": "Multi-gateway health and sync metrics"
+    },
+    {
+      "name": "Gateway Internal",
+      "description": "Internal gateway auto-registration (ADR-028)"
+    },
+    {
+      "name": "Consumers",
+      "description": "Consumer onboarding and lifecycle management (CAB-1121)"
+    },
+    {
+      "name": "Plans",
+      "description": "Subscription plan management with quotas (CAB-1121)"
+    },
+    {
+      "name": "Quotas",
+      "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)"
+    },
+    {
+      "name": "MCP Discovery",
+      "description": "Gateway discovery for UAC-generated MCP tools (CAB-605)"
+    },
+    {
+      "name": "Data Governance",
+      "description": "Source-of-truth classification, drift detection, reconciliation (CAB-1324)"
+    }
+  ]
 }

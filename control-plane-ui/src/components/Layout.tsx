@@ -147,6 +147,12 @@ const navigationSections: NavSection[] = [
         permission: 'apis:read',
       },
       {
+        name: 'nav.toolPermissions',
+        href: '/tool-permissions',
+        icon: Shield,
+        permission: 'apis:read',
+      },
+      {
         name: 'nav.llmCost',
         href: '/llm-cost',
         icon: DollarSign,
@@ -203,6 +209,18 @@ const navigationSections: NavSection[] = [
         name: 'nav.configSync',
         href: '/drift',
         icon: GitCompareArrows,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.security',
+        href: '/gateway-security',
+        icon: Shield,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'nav.guardrails',
+        href: '/gateway-guardrails',
+        icon: Shield,
         permission: 'tenants:read',
       },
       {

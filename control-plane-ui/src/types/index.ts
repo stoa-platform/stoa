@@ -1176,6 +1176,8 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  enabled: boolean;
+  visibility?: { tenant_ids: string[] } | null;
   source?: 'argocd' | 'self_register' | 'manual';
   protected?: boolean;
   deleted_at?: string | null;
@@ -1203,6 +1205,8 @@ export interface GatewayInstanceUpdate {
   auth_config?: Record<string, unknown>;
   capabilities?: string[];
   tags?: string[];
+  enabled?: boolean;
+  visibility?: { tenant_ids: string[] } | null;
 }
 
 export interface GatewayHealthCheckResponse {
@@ -1957,4 +1961,31 @@ export interface CatalogResponse {
   entries: CatalogEntry[];
   total: number;
   categories: CatalogCategory[];
+}
+
+// Tenant Tool Permissions (CAB-1982)
+// =============================================================================
+
+export interface TenantToolPermission {
+  id: string;
+  tenant_id: string;
+  mcp_server_id: string;
+  tool_name: string;
+  allowed: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantToolPermissionCreate {
+  mcp_server_id: string;
+  tool_name: string;
+  allowed: boolean;
+}
+
+export interface TenantToolPermissionListResponse {
+  items: TenantToolPermission[];
+  total: number;
+  page: number;
+  page_size: number;
 }

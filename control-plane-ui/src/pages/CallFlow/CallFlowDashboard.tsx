@@ -146,42 +146,42 @@ export function CallFlowDashboard() {
   // ─── KPI Queries ───
 
   const totalRequests = usePrometheusQuery(
-    `sum(increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
+    `sum(increase(stoa_http_requests_total[${timeRange}]))`,
     refreshMs || 15_000
   );
   const totalErrors = usePrometheusQuery(
-    `sum(increase(traces_service_graph_request_failed_total{server="stoa-gateway"}[${timeRange}]))`,
+    `sum(increase(stoa_http_requests_total{status=~"5.."}[${timeRange}]))`,
     refreshMs || 15_000
   );
   const p50Latency = usePrometheusQuery(
-    `histogram_quantile(0.50, sum(rate(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[5m])) by (le))`,
+    `histogram_quantile(0.50, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le))`,
     refreshMs || 15_000
   );
   const p99Latency = usePrometheusQuery(
-    `histogram_quantile(0.99, sum(rate(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[5m])) by (le))`,
+    `histogram_quantile(0.99, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le))`,
     refreshMs || 15_000
   );
   const activeModes = usePrometheusQuery(
-    `count(count by (stoa_deployment_mode) (traces_service_graph_request_total{server="stoa-gateway"}))`,
+    `count(count by (path) (stoa_http_requests_total))`,
     refreshMs || 15_000
   );
 
   // ─── Throughput (per-mode range queries for stacked area) ───
 
   const edgeMcpTrend = usePrometheusRange(
-    `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="edge-mcp"}[5m]))`,
+    `sum(rate(stoa_http_requests_total{path=~"/mcp/.*"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
   );
   const sidecarTrend = usePrometheusRange(
-    `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="sidecar"}[5m]))`,
+    `sum(rate(stoa_http_requests_total{path=~"/proxy/.*"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
   );
   const connectTrend = usePrometheusRange(
-    `sum(rate(traces_service_graph_request_total{server="stoa-gateway",stoa_deployment_mode="connect"}[5m]))`,
+    `sum(rate(stoa_http_requests_total{path=~"/admin/.*"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
@@ -190,25 +190,25 @@ export function CallFlowDashboard() {
   // ─── Latency histogram buckets ───
 
   const latencyBuckets = usePrometheusQuery(
-    `sum(increase(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[${timeRange}])) by (le)`,
+    `sum(increase(stoa_http_request_duration_seconds_bucket[${timeRange}])) by (le)`,
     refreshMs || 15_000
   );
 
   // ─── Error breakdown by status code ───
 
   const errorsByStatus = usePrometheusQuery(
-    `sum by (server_status_code) (increase(traces_service_graph_request_total{server="stoa-gateway",server_status_code=~"4..|5.."}[${timeRange}]))`,
+    `sum by (status) (increase(stoa_http_requests_total{status=~"4..|5.."}[${timeRange}]))`,
     refreshMs || 15_000
   );
 
   // ─── Top routes by P95 latency ───
 
   const topRoutesP95 = usePrometheusQuery(
-    `topk(8, histogram_quantile(0.95, sum by (le, client) (rate(traces_service_graph_request_server_seconds_bucket{server="stoa-gateway"}[5m]))))`,
+    `topk(8, histogram_quantile(0.95, sum by (le, path) (rate(stoa_http_request_duration_seconds_bucket[5m]))))`,
     refreshMs || 15_000
   );
   const topRoutesCalls = usePrometheusQuery(
-    `sum by (client) (increase(traces_service_graph_request_total{server="stoa-gateway"}[${timeRange}]))`,
+    `sum by (path) (increase(stoa_http_requests_total[${timeRange}]))`,
     refreshMs || 15_000
   );
 
@@ -304,7 +304,7 @@ export function CallFlowDashboard() {
   // ─── Parse error breakdown ───
 
   const errorEntries = useMemo(() => {
-    const map = groupByLabel(errorsByStatus.data, 'server_status_code');
+    const map = groupByLabel(errorsByStatus.data, 'status');
     return Object.entries(map)
       .map(([code, count]) => ({ code, count: Math.round(count) }))
       .filter((e) => e.count > 0)
@@ -314,8 +314,8 @@ export function CallFlowDashboard() {
   // ─── Parse top routes ───
 
   const topRoutes = useMemo(() => {
-    const p95Map = groupByLabel(topRoutesP95.data, 'client');
-    const callsMap = groupByLabel(topRoutesCalls.data, 'client');
+    const p95Map = groupByLabel(topRoutesP95.data, 'path');
+    const callsMap = groupByLabel(topRoutesCalls.data, 'path');
     return Object.entries(p95Map)
       .map(([route, p95Secs]) => ({
         route,

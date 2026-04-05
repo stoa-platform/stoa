@@ -30,7 +30,7 @@ fn make_tool_with_name(name: &str) -> Arc<dyn Tool> {
     Arc::new(
         DynamicTool::new(
             name,
-            &format!("Tool: {name}"),
+            format!("Tool: {name}"),
             "http://localhost:9999/noop",
             "POST",
             schema,

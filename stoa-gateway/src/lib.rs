@@ -261,13 +261,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health/live", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
-        .nest("/admin", admin_router)
-        // HTTP metrics middleware: records method, path, status, duration for ALL requests.
-        // Also triggers auto-RCA on 5xx responses (CAB-1542 Phase 3).
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            http_metrics_middleware,
-        ));
+        .nest("/admin", admin_router);
 
     // Build mTLS layers only when mTLS is enabled (CAB-864, CAB-1359 perf).
     // When disabled, skip the middleware entirely — avoids 2 async fn calls per request.
@@ -295,6 +289,7 @@ pub fn build_router(state: AppState) -> Router {
         None
     };
 
+    let metrics_state = state.clone();
     let mode_router = match state.config.gateway_mode {
         GatewayMode::EdgeMcp => {
             // Full MCP protocol: OAuth discovery, MCP tools, SSE transport
@@ -617,9 +612,17 @@ pub fn build_router(state: AppState) -> Router {
         }
     };
 
+    // HTTP metrics middleware: records method, path, status, duration for ALL requests.
+    // Also triggers auto-RCA on 5xx responses (CAB-1542 Phase 3).
+    // Applied AFTER all routes are registered so every route (MCP, proxy, admin) gets metrics.
+    let with_metrics = mode_router.layer(axum::middleware::from_fn_with_state(
+        metrics_state,
+        http_metrics_middleware,
+    ));
+
     // Memory backpressure: reject early with 503 when RSS exceeds threshold (CAB-1829).
     // Runs BEFORE trace context / access log to short-circuit without overhead.
-    let with_backpressure = mode_router.layer(axum::middleware::from_fn(move |request, next| {
+    let with_backpressure = with_metrics.layer(axum::middleware::from_fn(move |request, next| {
         let m = memory_monitor.clone();
         memory_backpressure_middleware(m, request, next)
     }));

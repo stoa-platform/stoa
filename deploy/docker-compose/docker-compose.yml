@@ -217,6 +217,8 @@ services:
       KAFKA_ENABLED: "true"
       # Disable optional integrations not available in quick start
       OPENSEARCH_HOST: https://opensearch:9200
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD:-REPLACE_FROM_VAULT}
+      OPENSEARCH_VERIFY_CERTS: "false"
       GITLAB_URL: ""
       ENABLE_DEPLOYMENT_WORKER: "false"
       ENABLE_SNAPSHOT_CONSUMER: "false"
@@ -312,15 +314,15 @@ services:
       STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-false}"
       STOA_INSTANCE_NAME: "stoa-quickstart"
       STOA_ENVIRONMENT: "dev"
-      STOA_ADMIN_API_TOKEN: "${STOA_ADMIN_API_TOKEN:-stoa-local-admin-token}"
       STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
+      STOA_ADMIN_API_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
       # Kafka metering (Redpanda)
       STOA_KAFKA_ENABLED: "true"
       STOA_KAFKA_BROKERS: redpanda:9092
       STOA_KAFKA_METERING_TOPIC: stoa.metering
       STOA_KAFKA_ERRORS_TOPIC: stoa.errors.snapshots
-      # OpenTelemetry tracing (Tempo)
-      STOA_OTEL_ENDPOINT: http://tempo:4317
+      # OpenTelemetry tracing (Data Prepper → OpenSearch)
+      STOA_OTEL_ENDPOINT: http://data-prepper:4317
       STOA_OTEL_ENABLED: "true"
       STOA_OTEL_SAMPLE_RATE: "1.0"
     depends_on:
@@ -338,6 +340,56 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Echo Backend — returns 200 JSON for any request (traffic seeder target)
+  # ==========================================================================
+  echo-backend:
+    image: nginx:1.25-alpine
+    container_name: stoa-echo-backend
+    volumes:
+      - ./config/echo/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Traffic Seeder — generates multi-auth API traffic for observability demos
+  # ==========================================================================
+  traffic-seeder:
+    image: python:3.11-slim
+    container_name: stoa-traffic-seeder
+    entrypoint: ["/bin/bash", "/app/docker-entrypoint.sh"]
+    working_dir: /app
+    environment:
+      GATEWAY_URL: http://stoa-gateway:8080
+      ADMIN_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
+      KC_TOKEN_URL: http://keycloak:8080/realms/stoa/protocol/openid-connect/token
+      KC_CLIENT_ID: control-plane-ui
+      KC_CLIENT_SECRET: ""
+      ECHO_BACKEND: http://echo-backend:8888
+      DURATION: "300"
+      TENANTS: "oasis,high-five,default"
+    volumes:
+      - ../../scripts/traffic/docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
+      - ../../scripts/traffic/realistic-seeder.py:/app/realistic-seeder.py:ro
+      - ../../scripts/traffic/auth_helpers.py:/app/scripts/traffic/auth_helpers.py:ro
+      - ../../scripts/traffic/scenarios.py:/app/scripts/traffic/scenarios.py:ro
+    depends_on:
+      stoa-gateway:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      echo-backend:
+        condition: service_healthy
+    networks:
+      - stoa-network
     restart: unless-stopped
 
   # ==========================================================================

@@ -62,10 +62,12 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     }
 
     // CAB-1831: no endpoint → no-op (tracing spans still work, just not exported)
+    // NOTE: eprintln! is intentional — tracing subscriber is not yet initialized when this runs,
+    // so tracing::info!/warn! are silently dropped. eprintln! goes to stderr (visible in container logs).
     let endpoint = match config.otlp_endpoint.as_deref() {
         Some(ep) if !ep.is_empty() => ep,
         _ => {
-            info!("STOA_OTEL_ENDPOINT not set — OTel export disabled (spans are local-only)");
+            eprintln!("[otel-init] STOA_OTEL_ENDPOINT not set — OTel export disabled (spans are local-only)");
             let _ = OTEL_INITIALIZED.set(false);
             return None;
         }
@@ -84,7 +86,7 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     {
         Ok(e) => e,
         Err(err) => {
-            tracing::warn!(error = %err, "Failed to create OTLP exporter — OTel disabled");
+            eprintln!("[otel-init] Failed to create OTLP exporter: {err} — OTel disabled");
             let _ = OTEL_INITIALIZED.set(false);
             return None;
         }
@@ -129,13 +131,9 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     global::set_tracer_provider(provider);
 
     let _ = OTEL_INITIALIZED.set(true);
-    info!(
-        service = %config.service_name,
-        endpoint = endpoint,
-        sample_rate = config.sample_rate,
-        batch_delay_secs = 5,
-        max_queue_size = 2048,
-        "OpenTelemetry initialized — OTLP gRPC batch exporter active"
+    eprintln!(
+        "[otel-init] OpenTelemetry initialized — endpoint={endpoint} sample_rate={} batch_delay=5s queue=2048",
+        config.sample_rate,
     );
     Some(tracer)
 }
@@ -143,7 +141,7 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
 /// Initialize telemetry as no-op (runtime toggle off).
 pub fn init_telemetry_noop() {
     let _ = OTEL_INITIALIZED.set(false);
-    info!("OpenTelemetry disabled");
+    eprintln!("[otel-init] OpenTelemetry disabled (noop)");
 }
 
 /// Check if OTel is active

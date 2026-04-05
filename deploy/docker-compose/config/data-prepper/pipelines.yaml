@@ -1,17 +1,14 @@
-# Data Prepper pipeline: OTLP traces → OpenSearch + service map (CAB-1976)
+# Data Prepper pipeline: OTLP traces → OpenSearch (CAB-1997)
 #
-# Receives OTLP gRPC spans from stoa-gateway, writes to:
-#   1. OpenSearch otel-v1-apm-span-* indices (primary, queryable by Call Flow)
-#   2. Service map indices for OpenSearch Trace Analytics
-#
-# Credentials injected via environment variables.
+# Template — envsubst resolves credentials at container startup.
+# Receives OTLP gRPC spans from stoa-gateway on port 4317.
 
 otel-traces-pipeline:
   source:
     otel_trace_source:
+      port: 4317
       ssl: false
-  processor:
-    - otel_traces:
+      health_check_service: true
   sink:
     - opensearch:
         hosts: ["https://opensearch:9200"]
@@ -19,17 +16,3 @@ otel-traces-pipeline:
         password: "${OPENSEARCH_PASSWORD}"
         insecure: true
         index_type: trace-analytics-raw
-
-otel-traces-service-map:
-  source:
-    pipeline:
-      name: "otel-traces-pipeline"
-  processor:
-    - service_map:
-  sink:
-    - opensearch:
-        hosts: ["https://opensearch:9200"]
-        username: "${OPENSEARCH_USER}"
-        password: "${OPENSEARCH_PASSWORD}"
-        insecure: true
-        index_type: trace-analytics-service-map

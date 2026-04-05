@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.3](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.2...stoa-go-v0.3.3) (2026-04-05)
+
+
+### Features
+
+* add target_gateway_url to gateway detail panel ([#2069](https://github.com/stoa-platform/stoa/issues/2069)) ([c07557f](https://github.com/stoa-platform/stoa/commit/c07557feb537c2f029909763e62cf719eacb18db))
+* **api,gateway:** generation-based sync reconciliation (CAB-1950) ([#2132](https://github.com/stoa-platform/stoa/issues/2132)) ([d78db2b](https://github.com/stoa-platform/stoa/commit/d78db2b087becfd7a8ae4bf6862f23f5fbb5545e))
+* **api:** gateway enabled flag + visibility + soft disable (CAB-1979) ([#2201](https://github.com/stoa-platform/stoa/issues/2201)) ([0136dd7](https://github.com/stoa-platform/stoa/commit/0136dd749acfb8b4d0e64be3a5a3388c4f6b17b8))
+* **api:** outbound-only connect — webmethods lifecycle + OpenAPI spec delivery (CAB-1929) ([#2025](https://github.com/stoa-platform/stoa/issues/2025)) ([0fb3266](https://github.com/stoa-platform/stoa/commit/0fb326683f159da2da42aa16f9f145d8f48bc6e3))
+* **api:** promotion deploy chain — state machine, route-sync-ack, verify+activate ([#2034](https://github.com/stoa-platform/stoa/issues/2034)) ([fe242c8](https://github.com/stoa-platform/stoa/commit/fe242c821b2a412b94b84614f607f0d8f3ade21a))
+* **gateway:** add ui_url + public_url to stoa-connect registration (CAB-1953) ([#2167](https://github.com/stoa-platform/stoa/issues/2167)) ([0bdbe08](https://github.com/stoa-platform/stoa/commit/0bdbe08bf0f17827e4fd6be645aed0adeffc9341))
+* **gateway:** agent-side sync step tracking (CAB-1947) ([#2130](https://github.com/stoa-platform/stoa/issues/2130)) ([5eaa4e4](https://github.com/stoa-platform/stoa/commit/5eaa4e4e710787b6745f3cbcc482f145254dd7ce))
+* **gateway:** SSE deployment stream client for stoa-connect (CAB-1932) ([#2073](https://github.com/stoa-platform/stoa/issues/2073)) ([cd4a7e3](https://github.com/stoa-platform/stoa/commit/cd4a7e3bd963eea37aa73542ebac420f51ab318d))
+* **gateway:** STOA Connect webMethods bridge — POC March 31 ([#1992](https://github.com/stoa-platform/stoa/issues/1992)) ([ccd1c3c](https://github.com/stoa-platform/stoa/commit/ccd1c3cafa7911c08912f0e113fbf9c3090d51a0))
+* **gateway:** webMethods robustness — route sync ack + tests (CAB-1927) ([#2031](https://github.com/stoa-platform/stoa/issues/2031)) ([12b51af](https://github.com/stoa-platform/stoa/commit/12b51af19bb8aeb76663d7d8c80907680b7057d7))
+* **go:** add webMethods OIDC + alias support (CAB-1926) ([#2021](https://github.com/stoa-platform/stoa/issues/2021)) ([28d6cb6](https://github.com/stoa-platform/stoa/commit/28d6cb68749f94bf75969758b8da00960711b0ea))
+* **go:** add webMethods telemetry collection + config sync (CAB-1928) ([#2020](https://github.com/stoa-platform/stoa/issues/2020)) ([d645456](https://github.com/stoa-platform/stoa/commit/d64545607c894fccaba90e55f0750736f817466a))
+
+
+### Bug Fixes
+
+* **api,gateway,go:** normalize health check payloads (CAB-1916) ([#2008](https://github.com/stoa-platform/stoa/issues/2008)) ([0366d18](https://github.com/stoa-platform/stoa/commit/0366d18066aad1610cab0cacc15e554d26ebe0de))
+* **api:** send openapi_spec as JSON object to stoa-connect ([#2036](https://github.com/stoa-platform/stoa/issues/2036)) ([a1fdec1](https://github.com/stoa-platform/stoa/commit/a1fdec199eff563bb9abf6d4e7be3c014548500e))
+* **deps:** patch 11 security alerts — node-forge, picomatch, go-jose ([#2187](https://github.com/stoa-platform/stoa/issues/2187)) ([0be880e](https://github.com/stoa-platform/stoa/commit/0be880e232e9c6caa968c6a5295e54ed3967d654))
+* **gateway,api:** resolve sync drift errors 400/401/500 (CAB-1944) ([#2126](https://github.com/stoa-platform/stoa/issues/2126)) ([65e2384](https://github.com/stoa-platform/stoa/commit/65e2384931d4c2ee5c28508de720a6e0c17920a8))
+* **gateway:** re-register on heartbeat 404 after CP auto-purge ([#2103](https://github.com/stoa-platform/stoa/issues/2103)) ([12fac24](https://github.com/stoa-platform/stoa/commit/12fac2494c620cdfbbc9f0ff62dfe071dbabcd65))
+* **gateway:** strip Swagger 2.0 $ref in responses + per-route sync-ack (CAB-1944) ([#2131](https://github.com/stoa-platform/stoa/issues/2131)) ([8c9f6a5](https://github.com/stoa-platform/stoa/commit/8c9f6a5dbc3e8ce6aa7f3c668ceaa47915eb31d1))
+* **gateway:** uppercase securityScheme types + continue on sync error (CAB-1944) ([#2127](https://github.com/stoa-platform/stoa/issues/2127)) ([5598f62](https://github.com/stoa-platform/stoa/commit/5598f62aff005cfe8cd1debf2a4495b58eb42fd4))
+* **gateway:** wM sync — swagger detection + spec-only payload ([#2037](https://github.com/stoa-platform/stoa/issues/2037)) ([e3a85c3](https://github.com/stoa-platform/stoa/commit/e3a85c36421562481aac85119c76c40c5754b714))
+* **go:** fix webMethods adapter critical bugs (CAB-1925) ([#2019](https://github.com/stoa-platform/stoa/issues/2019)) ([a9d4a37](https://github.com/stoa-platform/stoa/commit/a9d4a37061198906aecfbb39103a7aa9c1307e32))
+* **ui:** show gateway URLs for all modes + fix stoa-link hostname (CAB-1953) ([#2160](https://github.com/stoa-platform/stoa/issues/2160)) ([3ee4c66](https://github.com/stoa-platform/stoa/commit/3ee4c66397b89d506bbfcd6829637f0bc46ee563))
+
 ## [0.3.2](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.1...stoa-go-v0.3.2) (2026-03-25)
 
 

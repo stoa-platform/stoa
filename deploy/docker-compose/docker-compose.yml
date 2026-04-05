@@ -315,6 +315,7 @@ services:
       STOA_INSTANCE_NAME: "stoa-quickstart"
       STOA_ENVIRONMENT: "dev"
       STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
+      STOA_ADMIN_API_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
       # Kafka metering (Redpanda)
       STOA_KAFKA_ENABLED: "true"
       STOA_KAFKA_BROKERS: redpanda:9092
@@ -339,6 +340,37 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Traffic Seeder — generates multi-auth API traffic for observability demos
+  # ==========================================================================
+  traffic-seeder:
+    image: python:3.11-slim
+    container_name: stoa-traffic-seeder
+    entrypoint: ["/bin/bash", "/app/docker-entrypoint.sh"]
+    working_dir: /app
+    environment:
+      GATEWAY_URL: http://stoa-gateway:8080
+      ADMIN_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
+      KC_TOKEN_URL: http://keycloak:8080/realms/stoa/protocol/openid-connect/token
+      KC_CLIENT_ID: control-plane-ui
+      KC_CLIENT_SECRET: ""
+      ECHO_BACKEND: http://backend-seeder:9999
+      DURATION: "300"
+      TENANTS: "oasis,high-five,default"
+    volumes:
+      - ../../scripts/traffic/docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
+      - ../../scripts/traffic/realistic-seeder.py:/app/realistic-seeder.py:ro
+      - ../../scripts/traffic/auth_helpers.py:/app/scripts/traffic/auth_helpers.py:ro
+      - ../../scripts/traffic/scenarios.py:/app/scripts/traffic/scenarios.py:ro
+    depends_on:
+      stoa-gateway:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - stoa-network
     restart: unless-stopped
 
   # ==========================================================================

@@ -174,3 +174,4 @@ backups/
 .gcloud/
 kubeconfig*
 .kube/
+.env.keycloak

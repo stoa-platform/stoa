@@ -130,10 +130,7 @@ class PromotionService:
                 f"(expected '{PromotionStatus.PENDING.value}')"
             )
         # 4-eyes principle: self-approval blocked for production promotions
-        if (
-            promotion.requested_by == approved_by
-            and promotion.target_environment == "production"
-        ):
+        if promotion.requested_by == approved_by and promotion.target_environment == "production":
             raise ValueError(
                 "Cannot approve your own promotion to production (4-eyes principle). "
                 "A different team member must approve production deployments."
@@ -144,6 +141,26 @@ class PromotionService:
         promotion = await self.repo.update(promotion)
 
         logger.info("Promotion %s approved by %s", promotion_id, approved_by)
+
+        # Trigger auto-deploy to assigned gateways (CAB-1917)
+        from ..services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        orchestration_svc = DeploymentOrchestrationService(self.db)
+        try:
+            deployments = await orchestration_svc.auto_deploy_on_promotion(
+                api_id=promotion.api_id,
+                tenant_id=tenant_id,
+                target_environment=promotion.target_environment,
+                approved_by=approved_by,
+            )
+            if deployments:
+                logger.info(
+                    "Auto-deploy triggered for promotion %s: %d deployments",
+                    promotion_id,
+                    len(deployments),
+                )
+        except Exception as e:
+            logger.error("Auto-deploy failed for promotion %s: %s", promotion_id, e)
 
         await kafka_service.publish(
             topic=Topics.DEPLOY_REQUESTS,

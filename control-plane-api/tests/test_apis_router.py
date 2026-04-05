@@ -79,13 +79,14 @@ class TestListAPIs:
         body = resp.json()
         assert body["total"] == 1
 
-    def test_list_error_returns_empty(self, app_with_tenant_admin, client_as_tenant_admin):
+    def test_list_error_returns_503(self, app_with_tenant_admin, client_as_tenant_admin):
+        """CAB-1917: list_apis must return 503 on backend errors, not swallow them."""
         with patch(CATALOG_REPO_PATH) as MockRepo:
             MockRepo.return_value.get_portal_apis = AsyncMock(side_effect=RuntimeError("DB down"))
             resp = client_as_tenant_admin.get("/v1/tenants/acme/apis")
 
-        assert resp.status_code == 200
-        assert resp.json()["total"] == 0
+        assert resp.status_code == 503
+        assert "temporarily unavailable" in resp.json()["detail"]
 
     def test_other_tenant_forbidden(self, app_with_other_tenant, client_as_other_tenant):
         with patch(CATALOG_REPO_PATH) as MockRepo:

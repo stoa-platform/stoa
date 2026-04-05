@@ -59,7 +59,7 @@ jobs:
 
       - name: Setup sccache
         id: sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
         continue-on-error: true
         env:
           SCCACHE_GHA_ENABLED: 'true'
@@ -90,7 +90,7 @@ jobs:
       # --- Step 4: Coverage (reuses test artifacts via llvm-cov) ---
       - name: Cache cargo-llvm-cov binary
         id: cache-llvm-cov
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-llvm-cov-${{ runner.os }}-v0.6

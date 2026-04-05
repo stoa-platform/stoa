@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Record Start Time
         run: echo "SCAN_START=$(date +%s)" >> "$GITHUB_ENV"

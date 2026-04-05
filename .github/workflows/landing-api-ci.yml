@@ -86,7 +86,7 @@ jobs:
           retention-days: 30
 
       - name: Test Report
-        uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1
+        uses: dorny/test-reporter@4a3df5aacc53b895ede8b2d9e35352ccaa3ad004 # v1
         if: always()
         with:
           name: 'landing-api Tests'

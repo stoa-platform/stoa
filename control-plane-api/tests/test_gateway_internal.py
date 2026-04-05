@@ -865,8 +865,9 @@ class TestRouteSyncAck:
         """Two deployments applied → sync_status=SYNCED + last_sync_success set."""
         from src.models.gateway_deployment import DeploymentSyncStatus
 
-        dep1 = _make_deployment()
-        dep2 = _make_deployment()
+        gw_id = uuid4()
+        dep1 = _make_deployment(gateway_instance_id=gw_id)
+        dep2 = _make_deployment(gateway_instance_id=gw_id)
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -885,7 +886,7 @@ class TestRouteSyncAck:
             mock_deploy_repo.update = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep1.id), "status": "applied"},
@@ -921,7 +922,7 @@ class TestRouteSyncAck:
             mock_deploy_repo.update = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "failed", "error": "connection refused"},
@@ -941,8 +942,9 @@ class TestRouteSyncAck:
         """One applied + one failed → each updated independently."""
         from src.models.gateway_deployment import DeploymentSyncStatus
 
-        dep_ok = _make_deployment()
-        dep_fail = _make_deployment()
+        gw_id = uuid4()
+        dep_ok = _make_deployment(gateway_instance_id=gw_id)
+        dep_fail = _make_deployment(gateway_instance_id=gw_id)
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -961,7 +963,7 @@ class TestRouteSyncAck:
             mock_deploy_repo.update = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep_ok.id), "status": "applied"},
@@ -1191,7 +1193,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "applied"},
@@ -1208,8 +1210,9 @@ class TestRouteSyncAckPromotionCompletion:
     def test_route_ack_partial_does_not_complete(self, client):
         """1 promotion, 2 gateways, only 1 ack → promotion NOT completed yet."""
         promo_id = uuid4()
-        dep1 = _make_deployment(promotion_id=promo_id)
-        dep2 = _make_deployment(promotion_id=promo_id)  # Not in the ack payload
+        gw_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)
+        _dep2 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)  # Not in the ack payload
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -1231,7 +1234,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep1.id), "status": "applied"},
@@ -1251,8 +1254,9 @@ class TestRouteSyncAckPromotionCompletion:
         from src.models.gateway_deployment import DeploymentSyncStatus
 
         promo_id = uuid4()
-        dep1 = _make_deployment(promotion_id=promo_id)
-        dep2 = _make_deployment(promotion_id=promo_id)
+        gw_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)
+        dep2 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -1275,7 +1279,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep1.id), "status": "applied"},
@@ -1313,7 +1317,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "failed", "error": "timeout"},
@@ -1348,7 +1352,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep_err.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep_err.id), "status": "failed", "error": "connection refused"},

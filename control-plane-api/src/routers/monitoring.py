@@ -91,13 +91,11 @@ async def list_transactions(
     Returns transaction summaries from OpenSearch or Tempo.
     Falls back to empty list when no data source is available.
     """
-    tenant_id = user.tenant_id
     svc = _get_monitoring_service()
 
     # Source 1: OpenSearch otel-v1-apm-span-* (Data Prepper OTLP — CAB-1997)
     if svc and settings.OPENSEARCH_TRACES_ENABLED:
         result = await svc.list_transactions_from_spans(
-            tenant_id=tenant_id,
             limit=limit,
             api_name=api_name,
             status=status,

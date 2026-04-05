@@ -210,20 +210,20 @@ class MonitoringService:
 
     async def list_transactions_from_spans(
         self,
-        tenant_id: str | None = None,
         limit: int = 50,
         api_name: str | None = None,
         status: str | None = None,
         time_range_minutes: int = 60,
     ) -> list[APITransactionSummary] | None:
-        """List recent transactions from OTel span index (root spans only)."""
+        """List recent transactions from OTel span index (root spans only).
+
+        Note: no tenant_id filter — gateway OTLP spans don't carry per-tenant IDs.
+        """
         try:
             filters: list[dict] = [
                 {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
                 {"term": {"parentSpanId": ""}},
             ]
-            if tenant_id:
-                filters.append({"term": {"span.attributes.tenant_id": tenant_id}})
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
             if status:

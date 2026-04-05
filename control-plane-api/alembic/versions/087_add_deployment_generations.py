@@ -1,7 +1,7 @@
 """Add generation columns for K8s-style reconciliation (CAB-1950).
 
 Revision ID: 087_add_deployment_generations
-Revises: 086_add_sync_steps
+Revises: 086
 """
 
 from alembic import op

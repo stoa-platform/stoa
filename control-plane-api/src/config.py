@@ -129,6 +129,9 @@ class Settings(BaseSettings):
     TEMPO_TIMEOUT_SECONDS: int = 30
     TEMPO_ENABLED: bool = True
 
+    # OpenSearch Traces (CAB-1997) - query otel-v1-apm-span-* from Data Prepper
+    OPENSEARCH_TRACES_ENABLED: bool = True
+
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes

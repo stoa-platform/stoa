@@ -1,9 +1,9 @@
-"""API Monitoring endpoints for transaction tracking and analytics (CAB-1984).
+"""API Monitoring endpoints for transaction tracking and analytics (CAB-1984, CAB-1997).
 
 Data sources (priority order):
-1. OpenSearch (full-text search, aggregations)
-2. Tempo (distributed traces from gateway OTLP)
-3. Empty response (no mock fallback)
+1. OpenSearch otel-v1-apm-span-* (OTLP traces via Data Prepper — CAB-1997)
+2. Tempo (distributed traces — fallback)
+3. Empty response (no data source available)
 """
 
 import logging
@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..auth import User, get_current_user
+from ..config import settings
 from ..schemas.monitoring import (
     APITransaction,
     APITransactionStats,
@@ -91,11 +92,11 @@ async def list_transactions(
     Falls back to empty list when no data source is available.
     """
     tenant_id = user.tenant_id
-
-    # Source 1: OpenSearch
     svc = _get_monitoring_service()
-    if svc:
-        result = await svc.list_transactions(
+
+    # Source 1: OpenSearch otel-v1-apm-span-* (Data Prepper OTLP — CAB-1997)
+    if svc and settings.OPENSEARCH_TRACES_ENABLED:
+        result = await svc.list_transactions_from_spans(
             tenant_id=tenant_id,
             limit=limit,
             api_name=api_name,
@@ -110,7 +111,7 @@ async def list_transactions(
                 source="opensearch",
             )
 
-    # Source 2: Tempo
+    # Source 2: Tempo (fallback)
     tempo_result = await tempo_service.search_traces(
         limit=limit,
         api_name=api_name,
@@ -187,12 +188,11 @@ async def get_transaction(
     Includes all spans with timing and metadata.
     Checks OpenSearch first, then Tempo for trace detail.
     """
-    tenant_id = user.tenant_id
-
-    # Source 1: OpenSearch
     svc = _get_monitoring_service()
-    if svc:
-        result = await svc.get_transaction(event_id=transaction_id, tenant_id=tenant_id)
+
+    # Source 1: OpenSearch otel-v1-apm-span-* (Data Prepper OTLP — CAB-1997)
+    if svc and settings.OPENSEARCH_TRACES_ENABLED:
+        result = await svc.get_transaction_from_spans(trace_id=transaction_id)
         if result is not None:
             return TransactionDetailWithDemoResponse(
                 **result.model_dump(),
@@ -200,7 +200,7 @@ async def get_transaction(
                 source="opensearch",
             )
 
-    # Source 2: Tempo (trace_id lookup)
+    # Source 2: Tempo (fallback — trace_id lookup)
     trace = await tempo_service.get_trace(transaction_id)
     if trace is not None:
         return TransactionDetailWithDemoResponse(

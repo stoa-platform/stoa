@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,21 +120,30 @@ class DeployToEnvRequest(BaseModel):
     gateway_ids: list[UUID] | None = None  # None = use auto-deploy assignments
 
 
-@router.post("/deploy", status_code=201)
+@router.post("/deploy", status_code=201, deprecated=True)
 async def deploy_to_environment(
     tenant_id: str,
     api_id: str,
     data: DeployToEnvRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Deploy an API to gateways in a specific environment.
+
+    .. deprecated::
+        Use the promotion flow (POST /promotions + approve) for production deployments,
+        or DeploymentOrchestrationService.deploy_api_to_env() directly.
 
     api_id can be a UUID (catalog entry ID) or a string (Git API name).
     If the API is not in the catalog, it will be synced from Git on-demand.
     Validates promotion prerequisites (staging/prod require active promotion).
     If gateway_ids is omitted, uses auto-deploy assignments for the environment.
     """
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = "2026-06-01"
+    response.headers["Link"] = '</v1/tenants/{tenant_id}/promotions>; rel="successor-version"'
+
     svc = DeploymentOrchestrationService(db)
     try:
         deployments = await svc.deploy_api_to_env(
@@ -168,7 +177,5 @@ async def get_deployable_environments(
     Dev is always available. Staging/prod require an active promotion.
     """
     svc = DeploymentOrchestrationService(db)
-    environments = await svc.get_deployable_environments(
-        tenant_id=tenant_id, api_identifier=api_id
-    )
+    environments = await svc.get_deployable_environments(tenant_id=tenant_id, api_identifier=api_id)
     return {"environments": environments}

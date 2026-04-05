@@ -84,14 +84,14 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Cache Trivy DB
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cache/trivy
           key: ${{ runner.os }}-trivy-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-trivy-
 
       - name: Scan licenses
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # master
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -145,14 +145,14 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Cache Trivy DB
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cache/trivy
           key: ${{ runner.os }}-trivy-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-trivy-
 
       - name: Generate CycloneDX SBOM
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # master
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -160,7 +160,7 @@ jobs:
           output: 'sbom-cyclonedx.json'
 
       - name: Generate SPDX SBOM
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # master
         with:
           scan-type: 'fs'
           scan-ref: '.'

@@ -1116,6 +1116,8 @@ async fn mcp_tools_call_inner(
                     resp.headers_mut().insert("x-stoa-guardrail", val);
                 }
             }
+            tracing::Span::current().record("http.status_code", 200u16);
+            tracing::Span::current().record("otel.status_code", "OK");
             resp
         }
         Err(e) => {
@@ -1168,6 +1170,10 @@ async fn mcp_tools_call_inner(
                 },
             );
 
+            tracing::Span::current().record("http.status_code", 500u16);
+            tracing::Span::current().record("otel.status_code", "ERROR");
+            tracing::Span::current()
+                .record("otel.status_message", &format!("Tool error: {e}") as &str);
             with_rate_limit_headers(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ToolsCallResponse {

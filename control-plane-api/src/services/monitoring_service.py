@@ -183,11 +183,230 @@ def _build_spans_from_timings(
     return spans
 
 
+def _span_status_from_otel(status: dict, attrs: dict) -> str:
+    """Derive transaction status from OTel span status and attributes."""
+    http_code = attrs.get("http@status_code")
+    if http_code is not None:
+        code = int(http_code)
+        if code == 504:
+            return "timeout"
+        if code >= 400:
+            return "error"
+        return "success"
+    if status.get("code") == 2:
+        return "error"
+    return "success"
+
+
 class MonitoringService:
     """Queries OpenSearch audit-* index for transaction analytics."""
 
     def __init__(self, client: AsyncOpenSearch):
         self.client = client
+
+    # =========================================================================
+    # OTEL SPAN QUERIES (CAB-1997 — Data Prepper otel-v1-apm-span-*)
+    # =========================================================================
+
+    async def list_transactions_from_spans(
+        self,
+        tenant_id: str | None = None,
+        limit: int = 50,
+        api_name: str | None = None,
+        status: str | None = None,
+        time_range_minutes: int = 60,
+    ) -> list[APITransactionSummary] | None:
+        """List recent transactions from OTel span index (root spans only)."""
+        try:
+            filters: list[dict] = [
+                {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+                {"term": {"parentSpanId": ""}},
+            ]
+            if tenant_id:
+                filters.append({"term": {"span.attributes.tenant_id": tenant_id}})
+            if api_name:
+                filters.append({"term": {"serviceName": api_name}})
+            if status:
+                if status == "timeout":
+                    filters.append({"term": {"span.attributes.http@status_code": 504}})
+                elif status == "error":
+                    filters.append(
+                        {
+                            "bool": {
+                                "should": [
+                                    {"range": {"span.attributes.http@status_code": {"gte": 400, "lt": 504}}},
+                                    {"term": {"status.code": 2}},
+                                ],
+                                "minimum_should_match": 1,
+                            }
+                        }
+                    )
+                elif status == "success":
+                    filters.append({"range": {"span.attributes.http@status_code": {"lt": 400}}})
+
+            body = {
+                "query": {"bool": {"filter": filters}},
+                "sort": [{"startTime": {"order": "desc"}}],
+                "size": limit,
+            }
+
+            resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+            hits = resp.get("hits", {}).get("hits", [])
+
+            if not hits:
+                return None
+
+            transactions: list[APITransactionSummary] = []
+            for hit in hits:
+                src = hit["_source"]
+                attrs = src.get("span.attributes", {})
+                status_obj = src.get("status", {})
+                http_code = int(attrs.get("http@status_code", 200))
+                duration_nanos = int(src.get("durationInNanos", 0))
+                duration_ms = max(int(duration_nanos / 1_000_000), 1)
+
+                span_status = _span_status_from_otel(status_obj, attrs)
+                method = str(attrs.get("http@method", "POST"))
+                span_name = src.get("name", src.get("traceGroup", "unknown"))
+
+                # Count related spans via traceGroup (approximation from root)
+                spans_count = 1
+
+                transactions.append(
+                    APITransactionSummary(
+                        id=src.get("spanId", hit["_id"]),
+                        trace_id=src.get("traceId", ""),
+                        api_name=src.get("serviceName", "stoa-gateway"),
+                        method=method,
+                        path=span_name,
+                        status_code=http_code,
+                        status=span_status,
+                        status_text=_status_text(http_code),
+                        error_source=_error_source(span_name, http_code) if http_code >= 400 else None,
+                        started_at=src.get("startTime", ""),
+                        total_duration_ms=duration_ms,
+                        spans_count=spans_count,
+                    )
+                )
+            return transactions
+
+        except Exception:
+            logger.exception("Failed to list transactions from otel spans")
+            return None
+
+    async def get_transaction_from_spans(
+        self,
+        trace_id: str,
+    ) -> APITransaction | None:
+        """Get detailed transaction with waterfall from OTel span index."""
+        try:
+            body = {
+                "query": {"bool": {"filter": [{"term": {"traceId": trace_id}}]}},
+                "sort": [{"startTime": {"order": "asc"}}],
+                "size": 200,
+            }
+
+            resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+            hits = resp.get("hits", {}).get("hits", [])
+
+            if not hits:
+                return None
+
+            # Parse all spans and find root
+            spans: list[TransactionSpan] = []
+            root_src: dict | None = None
+
+            for hit in hits:
+                src = hit["_source"]
+                duration_nanos = int(src.get("durationInNanos", 0))
+                duration_ms = max(int(duration_nanos / 1_000_000), 1)
+
+                attrs = src.get("span.attributes", {})
+                status_obj = src.get("status", {})
+                span_status = "error" if status_obj.get("code") == 2 else "success"
+
+                metadata: dict = {}
+                for key, val in attrs.items():
+                    if key.startswith("http@"):
+                        metadata[key.replace("http@", "")] = val
+
+                spans.append(
+                    TransactionSpan(
+                        name=src.get("name", "unknown"),
+                        service=src.get("serviceName", "unknown"),
+                        start_offset_ms=0,  # recomputed below
+                        duration_ms=duration_ms,
+                        status=span_status,
+                        metadata=metadata,
+                    )
+                )
+
+                parent_id = src.get("parentSpanId", "")
+                if not parent_id or parent_id == "":
+                    root_src = src
+
+            # Recompute start_offset_ms using startTime strings
+            if spans and hits:
+                from datetime import datetime
+
+                base_time: datetime | None = None
+                for i, hit in enumerate(hits):
+                    st = hit["_source"].get("startTime", "")
+                    try:
+                        dt = datetime.fromisoformat(st.replace("Z", "+00:00"))
+                        if base_time is None:
+                            base_time = dt
+                        delta = dt - base_time
+                        spans[i] = TransactionSpan(
+                            name=spans[i].name,
+                            service=spans[i].service,
+                            start_offset_ms=max(int(delta.total_seconds() * 1000), 0),
+                            duration_ms=spans[i].duration_ms,
+                            status=spans[i].status,
+                            metadata=spans[i].metadata,
+                        )
+                    except (ValueError, TypeError):
+                        pass
+
+            if root_src is None:
+                root_src = hits[0]["_source"]
+
+            root_attrs = root_src.get("span.attributes", {})
+            http_code = int(root_attrs.get("http@status_code", 200))
+            method = str(root_attrs.get("http@method", "POST"))
+            total_ms = int(int(root_src.get("durationInNanos", 0)) / 1_000_000)
+            total_ms = max(total_ms, 1)
+
+            error_msg = None
+            if http_code >= 400:
+                error_msg = _status_text(http_code)
+
+            return APITransaction(
+                id=trace_id,
+                trace_id=trace_id,
+                api_name=root_src.get("serviceName", "stoa-gateway"),
+                tenant_id=root_attrs.get("tenant_id"),
+                method=method,
+                path=root_src.get("name", root_src.get("traceGroup", "")),
+                status_code=http_code,
+                status=_span_status_from_otel(root_src.get("status", {}), root_attrs),
+                status_text=_status_text(http_code),
+                error_source=_error_source(root_src.get("name", ""), http_code) if http_code >= 400 else None,
+                client_ip=root_attrs.get("net@peer@ip"),
+                user_id=root_attrs.get("user_id"),
+                started_at=root_src.get("startTime", ""),
+                total_duration_ms=total_ms,
+                spans=spans,
+                error_message=error_msg,
+            )
+
+        except Exception:
+            logger.exception("Failed to get transaction from otel spans")
+            return None
+
+    # =========================================================================
+    # AUDIT INDEX QUERIES (legacy audit-* index)
+    # =========================================================================
 
     async def list_transactions(
         self,

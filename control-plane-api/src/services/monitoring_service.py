@@ -486,28 +486,31 @@ class MonitoringService:
                         )
                     )
 
-                # Compute real offsets from parent startTime
+                # Convert nested spans to sequential pipeline per transaction
                 for tx in transactions:
                     raw_children = children_by_trace.get(tx.trace_id, [])
                     if not raw_children:
                         continue
-                    parent_start = tx.started_at
-                    spans: list[TransactionSpan] = []
-                    for child_start, span in raw_children:
-                        offset_ms = _time_diff_ms(parent_start, child_start)
-                        spans.append(
+                    # Sort by duration descending (outermost nested span first)
+                    by_dur = sorted(raw_children, key=lambda t: t[1].duration_ms, reverse=True)
+                    pipeline: list[TransactionSpan] = []
+                    offset_cursor = 0.0
+                    for i, (_, span) in enumerate(by_dur):
+                        next_dur = by_dur[i + 1][1].duration_ms if i + 1 < len(by_dur) else 0
+                        own_time = max(span.duration_ms - next_dur, 0.001)
+                        pipeline.append(
                             TransactionSpan(
                                 name=span.name,
                                 service=span.service,
-                                start_offset_ms=round(max(offset_ms, 0), 3),
-                                duration_ms=span.duration_ms,
+                                start_offset_ms=round(offset_cursor, 3),
+                                duration_ms=round(own_time, 3),
                                 status=span.status,
                                 metadata={},
                             )
                         )
-                    spans.sort(key=lambda s: s.start_offset_ms)
-                    tx.spans = spans
-                    tx.spans_count = len(spans) + 1  # +1 for parent
+                        offset_cursor += own_time
+                    tx.spans = pipeline
+                    tx.spans_count = len(pipeline) + 1  # +1 for parent
 
             return transactions
 
@@ -621,25 +624,30 @@ class MonitoringService:
                     http_method = str(src["span.attributes.http@method"])
                 if src.get("span.attributes.http@route"):
                     http_route = str(src["span.attributes.http@route"])
-            # Compute real offsets from earliest span startTime
+            # Convert nested spans to sequential pipeline.
+            # Gateway middlewares produce nested spans (each wraps the next):
+            #   policy_eval(963µs) contains rate_limit(921µs) contains auth(899µs) ...
+            # Sort by duration descending (outermost first), then compute each
+            # stage's own time = its duration minus the next span's duration.
             if spans:
-                # Find the earliest startTime as the reference point
-                earliest_ts = min(ts for ts, _ in spans if ts)
-                resolved: list[TransactionSpan] = []
-                for child_ts, span in spans:
-                    offset_ms = _time_diff_ms(earliest_ts, child_ts)
-                    resolved.append(
+                by_dur = sorted(spans, key=lambda t: t[1].duration_ms, reverse=True)
+                pipeline: list[TransactionSpan] = []
+                offset_cursor = 0.0
+                for i, (_, span) in enumerate(by_dur):
+                    next_dur = by_dur[i + 1][1].duration_ms if i + 1 < len(by_dur) else 0
+                    own_time = max(span.duration_ms - next_dur, 0.001)
+                    pipeline.append(
                         TransactionSpan(
                             name=span.name,
                             service=span.service,
-                            start_offset_ms=round(max(offset_ms, 0), 3),
-                            duration_ms=span.duration_ms,
+                            start_offset_ms=round(offset_cursor, 3),
+                            duration_ms=round(own_time, 3),
                             status=span.status,
                             metadata=span.metadata,
                         )
                     )
-                resolved.sort(key=lambda s: s.start_offset_ms)
-                spans = [("", s) for s in resolved]
+                    offset_cursor += own_time
+                spans = [("", s) for s in pipeline]
 
             if root_src is None:
                 root_src = hits[0]["_source"]

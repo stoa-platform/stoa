@@ -63,10 +63,11 @@ async def get_my_usage_summary(current_user: User = Depends(get_current_user)) -
     - Prometheus for metrics
     - Falls back to empty data if Prometheus unavailable
     """
-    user_id = current_user.id
+    is_admin = bool({"cpi-admin", "tenant-admin"} & set(current_user.roles))
+    user_id = "" if is_admin else current_user.id
     tenant_id = current_user.tenant_id or "default"
 
-    logger.info(f"Fetching usage summary for user={user_id} tenant={tenant_id}")
+    logger.info(f"Fetching usage summary for user={user_id or 'ALL'} tenant={tenant_id}")
 
     try:
         return await metrics_service.get_usage_summary(user_id, tenant_id)
@@ -102,10 +103,11 @@ async def get_my_calls(
     - Loki for call logs
     - Falls back to empty list if Loki unavailable
     """
-    user_id = current_user.id
+    is_admin = bool({"cpi-admin", "tenant-admin"} & set(current_user.roles))
+    user_id = "" if is_admin else current_user.id
     tenant_id = current_user.tenant_id or "default"
 
-    logger.info(f"Fetching calls for user={user_id} limit={limit} offset={offset} status={status}")
+    logger.info(f"Fetching calls for user={user_id or 'ALL'} limit={limit} offset={offset} status={status}")
 
     try:
         return await metrics_service.get_user_calls(
@@ -139,9 +141,10 @@ async def get_my_active_subscriptions(
     - PostgreSQL for subscription data
     - Prometheus for usage counts (with DB fallback)
     """
-    user_id = current_user.id
+    is_admin = bool({"cpi-admin", "tenant-admin"} & set(current_user.roles))
+    user_id = "" if is_admin else current_user.id
 
-    logger.info(f"Fetching active subscriptions for user={user_id}")
+    logger.info(f"Fetching active subscriptions for user={user_id or 'ALL'}")
 
     try:
         return await metrics_service.get_active_subscriptions(user_id, db)

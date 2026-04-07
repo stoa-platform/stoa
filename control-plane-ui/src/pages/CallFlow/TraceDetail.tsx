@@ -386,6 +386,7 @@ function KernelMetricsGrid({ spans, demoMode }: { spans: TransactionSpan[]; demo
   const rttMs = m['upstream.rtt_ms'];
   const poolReuse = m['upstream.pool_reuse'];
   const cbState = m['upstream.cb_state'];
+  const activeConns = m['upstream.active_conns'];
   const rssBytesRaw = m['process.rss_bytes'];
   const fdCount = m['process.fd_count'];
   const threadCount = m['process.thread_count'];
@@ -416,21 +417,43 @@ function KernelMetricsGrid({ spans, demoMode }: { spans: TransactionSpan[]; demo
       ],
     },
     {
-      title: 'Upstream Pod',
+      title: 'Connection Pool',
       icon: Server,
       metrics: [
-        { label: 'CPU Usage', value: undefined },
-        { label: 'RSS / Limit', value: undefined },
-        { label: 'Open Conns', value: undefined },
+        {
+          label: 'Active Conns',
+          value: activeConns != null ? activeConns : undefined,
+        },
+        {
+          label: 'Pool Reuse',
+          value: poolReuse === 'true' ? 'Yes' : poolReuse === 'false' ? 'No' : undefined,
+        },
+        { label: 'Upstream RTT', value: rttMs ? `${rttMs}ms` : undefined },
       ],
     },
     {
-      title: 'DNS / TLS',
+      title: 'Resilience',
       icon: Lock,
       metrics: [
-        { label: 'DNS Resolution', value: undefined },
-        { label: 'TLS Version', value: undefined },
-        { label: 'TLS Handshake', value: undefined },
+        { label: 'Circuit Breaker', value: cbState },
+        {
+          label: 'RSS Pressure',
+          value:
+            rssBytesRaw && Number(rssBytesRaw) > 0
+              ? Number(rssBytesRaw) > 256 * 1024 * 1024
+                ? 'High'
+                : 'Normal'
+              : undefined,
+        },
+        {
+          label: 'Open FDs',
+          value:
+            fdCount && Number(fdCount) > 0
+              ? Number(fdCount) > 1000
+                ? 'High'
+                : 'Normal'
+              : undefined,
+        },
       ],
     },
   ];

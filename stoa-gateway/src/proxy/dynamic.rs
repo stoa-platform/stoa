@@ -114,6 +114,18 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
     }
 }
 
+/// Record HTTP status on the current proxy span for all exit paths.
+fn record_proxy_status(code: u16) {
+    let span = tracing::Span::current();
+    span.record("http.status_code", code);
+    if code >= 500 {
+        span.record("otel.status_code", "ERROR");
+        span.record("otel.status_message", &format!("HTTP {code}") as &str);
+    } else if code >= 400 {
+        span.record("otel.status_code", "OK");
+    }
+}
+
 /// Dynamic proxy handler — catch-all fallback route.
 ///
 /// 1. Look up request path in RouteRegistry (longest prefix match)
@@ -126,6 +138,10 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
     otel.status_code = tracing::field::Empty,
     otel.status_message = tracing::field::Empty,
     auth_type = tracing::field::Empty,
+    upstream.rtt_ms = tracing::field::Empty,
+    upstream.cb_state = tracing::field::Empty,
+    upstream.pool_reuse = tracing::field::Empty,
+    upstream.active_conns = tracing::field::Empty,
 ))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
     // Record inbound auth type on the span for observability (by_auth_type breakdown).
@@ -165,17 +181,20 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     let route = match state.route_registry.find_by_path(&path) {
         Some(r) => r,
         None => {
+            record_proxy_status(404);
             return (StatusCode::NOT_FOUND, "No matching API route").into_response();
         }
     };
 
     if !route.activated {
+        record_proxy_status(503);
         return (StatusCode::SERVICE_UNAVAILABLE, "API not activated").into_response();
     }
 
     // Check method allowed (empty methods list = all methods allowed)
     // Compare Method::as_str() directly — avoids method.to_string() allocation (CAB-1332)
     if !route.methods.is_empty() && !route.methods.iter().any(|m| m == method.as_str()) {
+        record_proxy_status(405);
         return (
             StatusCode::METHOD_NOT_ALLOWED,
             "Method not allowed for this API",
@@ -232,6 +251,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                     route_name = %route.name,
                     "All upstreams unhealthy (circuit breakers open)"
                 );
+                record_proxy_status(503);
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "All upstreams unavailable".to_string(),
@@ -248,6 +268,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                 route_name = %route.name,
                 "Circuit breaker open for upstream"
             );
+            record_proxy_status(503);
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 format!("Circuit breaker open for upstream: {}", route.name),
@@ -462,15 +483,44 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         response.headers_mut().insert("x-stoa-timing", hv);
     }
 
-    // Record HTTP status on the proxy span for Tempo trace filtering
-    let status = response.status().as_u16();
-    tracing::Span::current().record("http.status_code", status);
-    if status >= 500 {
-        tracing::Span::current().record("otel.status_code", "ERROR");
-        tracing::Span::current().record("otel.status_message", &format!("HTTP {status}") as &str);
+    // Record upstream metrics on the proxy span for trace detail view
+    let span = tracing::Span::current();
+    let upstream_rtt_ms = upstream_duration * 1000.0;
+    span.record("upstream.rtt_ms", format!("{upstream_rtt_ms:.2}"));
+    let cb_state_str = if let Some(ref cb) = cb {
+        if cb.allow_request() {
+            "closed"
+        } else {
+            "open"
+        }
     } else {
-        tracing::Span::current().record("otel.status_code", "OK");
-    }
+        let upstream_cb = state.circuit_breakers.get_or_create(&selected_backend);
+        if upstream_cb.allow_request() {
+            "closed"
+        } else {
+            "open"
+        }
+    };
+    span.record("upstream.cb_state", cb_state_str);
+    // Connection reuse heuristic: if response has `connection: keep-alive` or
+    // no `connection: close`, the pool likely reused an existing connection.
+    let pool_reuse = !response
+        .headers()
+        .get("connection")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.eq_ignore_ascii_case("close"));
+    span.record(
+        "upstream.pool_reuse",
+        if pool_reuse { "true" } else { "false" },
+    );
+    // Active in-flight connections from Prometheus gauge
+    let active = crate::metrics::POOL_CONNECTIONS_ACTIVE
+        .with_label_values(&[&selected_backend])
+        .get() as u64;
+    span.record("upstream.active_conns", format!("{active}"));
+
+    // Record HTTP status on the proxy span for Tempo trace filtering
+    record_proxy_status(response.status().as_u16());
 
     response
 }

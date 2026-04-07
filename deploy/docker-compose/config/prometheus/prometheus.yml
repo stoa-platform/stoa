@@ -36,6 +36,30 @@ scrape_configs:
     scrape_interval: 10s
 
   # -------------------------------------------------------------------------
+  # STOA Gateway — Link/Sidecar Mode
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-link'
+    static_configs:
+      - targets: ['stoa-gateway-link:8081']
+        labels:
+          service: 'stoa-gateway'
+          mode: 'sidecar'
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # -------------------------------------------------------------------------
+  # STOA Gateway — Connect Mode
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-connect'
+    static_configs:
+      - targets: ['stoa-gateway-connect:8083']
+        labels:
+          service: 'stoa-gateway'
+          mode: 'connect'
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # -------------------------------------------------------------------------
   # STOA Gateway — K3s Staging (Hetzner)
   # -------------------------------------------------------------------------
   - job_name: 'stoa-gateway-k3s'

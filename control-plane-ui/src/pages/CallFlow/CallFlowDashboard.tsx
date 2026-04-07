@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, RefreshCw, Zap, AlertTriangle, Network, Gauge, Timer } from 'lucide-react';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
@@ -175,14 +175,15 @@ function generateDemoTraces(count: number): TraceEntry[] {
 
 export function CallFlowDashboard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const [autoRefresh, setAutoRefresh] = useState(DEFAULT_REFRESH);
   const [traces, setTraces] = useState<TraceEntry[]>([]);
   const [tracesDemo, setTracesDemo] = useState(false);
-  const [serviceType, setServiceType] = useState<string>('');
-  const [routeFilter, setRouteFilter] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [latencyFilter, setLatencyFilter] = useState<string>('');
+  const [serviceType, setServiceType] = useState<string>(searchParams.get('serviceType') || '');
+  const [routeFilter, setRouteFilter] = useState<string>(searchParams.get('route') || '');
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || '');
+  const [latencyFilter, setLatencyFilter] = useState<string>(searchParams.get('latency') || '');
   const tracesRef = useRef(false);
 
   const refreshMs = autoRefresh > 0 ? autoRefresh * 1000 : 0;
@@ -226,7 +227,7 @@ export function CallFlowDashboard() {
     refreshMs || 15_000
   );
   const connectTrend = usePrometheusRange(
-    `sum(rate(stoa_connect_admin_api_latency_seconds_count[5m]))`,
+    `sum(rate(stoa_http_requests_total{job="stoa-connect"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000

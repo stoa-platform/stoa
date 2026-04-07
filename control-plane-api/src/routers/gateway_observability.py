@@ -45,6 +45,68 @@ async def get_aggregated_metrics(
     return await svc.get_aggregated_metrics(tenant_id=_tenant_filter(user))
 
 
+@router.get("/metrics/guardrails/events")
+async def get_guardrails_events(
+    limit: int = 50,
+    time_range_minutes: int = 60,
+    user=Depends(require_role(["cpi-admin", "tenant-admin"])),
+):
+    """Recent guardrails events (blocked, redacted, flagged) from OpenSearch spans.
+
+    Returns per-event: timestamp, tool, action, reason, trace_id.
+    """
+    from src.opensearch.opensearch_integration import get_opensearch_client
+
+    client = await get_opensearch_client()
+    if not client:
+        return {"events": [], "total": 0}
+
+    try:
+        body = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+                        {"term": {"name": "policy.guardrails"}},
+                        {"exists": {"field": "span.attributes.guardrails@action"}},
+                    ],
+                    "must_not": [
+                        {"term": {"span.attributes.guardrails@action": "pass"}},
+                    ],
+                }
+            },
+            "sort": [{"startTime": {"order": "desc"}}],
+            "size": limit,
+            "_source": [
+                "startTime",
+                "traceId",
+                "spanId",
+                "span.attributes.guardrails@tool",
+                "span.attributes.guardrails@action",
+                "span.attributes.guardrails@reason",
+            ],
+        }
+        resp = await client.search(index="otel-v1-apm-span-*", body=body)
+        hits = resp.get("hits", {}).get("hits", [])
+        events = []
+        for hit in hits:
+            src = hit["_source"]
+            events.append(
+                {
+                    "timestamp": src.get("startTime", ""),
+                    "trace_id": src.get("traceId", ""),
+                    "span_id": src.get("spanId", ""),
+                    "tool": src.get("span.attributes.guardrails@tool", "unknown"),
+                    "action": src.get("span.attributes.guardrails@action", "unknown"),
+                    "reason": src.get("span.attributes.guardrails@reason", ""),
+                }
+            )
+        return {"events": events, "total": len(events)}
+    except Exception:
+        logger.exception("Failed to fetch guardrails events")
+        return {"events": [], "total": 0}
+
+
 @router.get("/health-summary")
 async def get_health_summary(
     db: AsyncSession = Depends(get_db),

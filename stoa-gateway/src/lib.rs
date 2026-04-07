@@ -763,7 +763,15 @@ async fn http_metrics_middleware(
             http.status_code = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_message = tracing::field::Empty,
+            "process.rss_bytes" = tracing::field::Empty,
+            "process.fd_count" = tracing::field::Empty,
+            "process.thread_count" = tracing::field::Empty,
         );
+        // Snapshot process metrics on the parent span so they appear on all
+        // request types (MCP tool calls, proxy, discovery).
+        request_span.record("process.rss_bytes", crate::memory::read_rss_bytes());
+        request_span.record("process.fd_count", crate::memory::read_fd_count());
+        request_span.record("process.thread_count", crate::memory::read_thread_count());
         // CAB-1866: capture trace_id inside the span so access_log_middleware can read it.
         // access_log is an outer layer — by the time it sees the response, this span has
         // already closed and tracing::Span::current() returns Span::none().

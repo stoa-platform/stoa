@@ -209,7 +209,6 @@ fn read_rss_macos() -> u64 {
     }
 }
 
-
 /// Read the number of open file descriptors for the current process.
 pub fn read_fd_count() -> u64 {
     #[cfg(target_os = "linux")]

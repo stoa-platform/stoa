@@ -1,6 +1,7 @@
 """Monitoring service — queries audit index in OpenSearch for real transaction data."""
 
 import logging
+from datetime import datetime
 
 from opensearchpy import AsyncOpenSearch
 
@@ -239,6 +240,40 @@ def _span_status_from_otel(status: dict, attrs: dict) -> str:
     return "success"
 
 
+def _parse_iso_ns(ts: str) -> int:
+    """Parse ISO 8601 timestamp to nanoseconds since epoch.
+
+    Handles both standard ISO (``2026-04-07T09:15:00.667Z``) and
+    high-precision variants with >6 fractional digits that Python's
+    ``fromisoformat`` rejects (e.g. ``...667797258Z``).
+    """
+    if not ts:
+        return 0
+    try:
+        clean = ts.replace("Z", "+00:00")
+        # Python fromisoformat only handles up to 6 fractional digits.
+        # Truncate excess digits before the timezone offset.
+        dot_idx = clean.find(".")
+        if dot_idx != -1:
+            plus_idx = clean.find("+", dot_idx)
+            frac = clean[dot_idx + 1 : plus_idx]
+            if len(frac) > 6:
+                clean = clean[: dot_idx + 7] + clean[plus_idx:]
+        dt = datetime.fromisoformat(clean)
+        return int(dt.timestamp() * 1_000_000_000)
+    except Exception:
+        return 0
+
+
+def _time_diff_ms(parent_ts: str, child_ts: str) -> float:
+    """Return millisecond difference between two ISO timestamps."""
+    p = _parse_iso_ns(parent_ts)
+    c = _parse_iso_ns(child_ts)
+    if p == 0 or c == 0:
+        return 0.0
+    return (c - p) / 1_000_000
+
+
 class MonitoringService:
     """Queries OpenSearch audit-* index for transaction analytics."""
 
@@ -423,8 +458,9 @@ class MonitoringService:
                 child_resp = await self.client.search(index="otel-v1-apm-span-*", body=child_body)
                 child_hits = child_resp.get("hits", {}).get("hits", [])
 
-                # Group child spans by traceId
-                children_by_trace: dict[str, list[TransactionSpan]] = {}
+                # Group child spans by traceId with their startTime
+                # Each entry: (startTime_str, TransactionSpan)
+                children_by_trace: dict[str, list[tuple[str, TransactionSpan]]] = {}
                 for hit in child_hits:
                     src = hit["_source"]
                     tid = src.get("traceId", "")
@@ -435,33 +471,46 @@ class MonitoringService:
                     dur_ms = round(dur_nanos / 1_000_000, 3)
                     otel_code = int(src.get("status.code", 0) or 0)
                     span_status = "error" if otel_code == 2 else "success"
+                    start_time = src.get("startTime", "")
                     children_by_trace.setdefault(tid, []).append(
-                        TransactionSpan(
-                            name=ui_name,
-                            service=ui_service,
-                            start_offset_ms=0,
-                            duration_ms=dur_ms,
-                            status=span_status,
-                            metadata={},
+                        (
+                            start_time,
+                            TransactionSpan(
+                                name=ui_name,
+                                service=ui_service,
+                                start_offset_ms=0,
+                                duration_ms=dur_ms,
+                                status=span_status,
+                                metadata={},
+                            ),
                         )
                     )
 
-                # Chain spans sequentially and attach to transactions
+                # Convert nested spans to sequential pipeline per transaction
                 for tx in transactions:
-                    child_spans = children_by_trace.get(tx.trace_id, [])
-                    offset = 0.0
-                    for i, span in enumerate(child_spans):
-                        child_spans[i] = TransactionSpan(
-                            name=span.name,
-                            service=span.service,
-                            start_offset_ms=round(offset, 3),
-                            duration_ms=span.duration_ms,
-                            status=span.status,
-                            metadata={},
+                    raw_children = children_by_trace.get(tx.trace_id, [])
+                    if not raw_children:
+                        continue
+                    # Sort by duration descending (outermost nested span first)
+                    by_dur = sorted(raw_children, key=lambda t: t[1].duration_ms, reverse=True)
+                    pipeline: list[TransactionSpan] = []
+                    offset_cursor = 0.0
+                    for i, (_, span) in enumerate(by_dur):
+                        next_dur = by_dur[i + 1][1].duration_ms if i + 1 < len(by_dur) else 0
+                        own_time = max(span.duration_ms - next_dur, 0.001)
+                        pipeline.append(
+                            TransactionSpan(
+                                name=span.name,
+                                service=span.service,
+                                start_offset_ms=round(offset_cursor, 3),
+                                duration_ms=round(own_time, 3),
+                                status=span.status,
+                                metadata={},
+                            )
                         )
-                        offset += span.duration_ms
-                    tx.spans = child_spans
-                    tx.spans_count = len(child_spans) + 1  # +1 for parent
+                        offset_cursor += own_time
+                    tx.spans = pipeline
+                    tx.spans_count = len(pipeline) + 1  # +1 for parent
 
             return transactions
 
@@ -511,7 +560,7 @@ class MonitoringService:
                 return None
 
             # First pass: collect all spans, find root, find HTTP info
-            spans: list[TransactionSpan] = []
+            spans: list[tuple[str, TransactionSpan]] = []  # (startTime, span)
             root_src: dict | None = None
             http_method: str = "POST"
             http_route: str = ""
@@ -521,6 +570,7 @@ class MonitoringService:
                 duration_nanos = int(src.get("durationInNanos", 0))
                 duration_ms = round(duration_nanos / 1_000_000, 3)
                 otel_name = src.get("name", "unknown")
+                span_start_time = src.get("startTime", "")
 
                 otel_code = int(src.get("status.code", 0) or 0)
                 span_status = "error" if otel_code == 2 else "success"
@@ -551,13 +601,16 @@ class MonitoringService:
                 ui_service = _OTEL_TO_UI_SERVICE.get(otel_name, src.get("serviceName", "unknown"))
 
                 spans.append(
-                    TransactionSpan(
-                        name=ui_name,
-                        service=ui_service,
-                        start_offset_ms=0,  # recomputed below
-                        duration_ms=duration_ms,
-                        status=span_status,
-                        metadata=metadata,
+                    (
+                        span_start_time,
+                        TransactionSpan(
+                            name=ui_name,
+                            service=ui_service,
+                            start_offset_ms=0,  # recomputed below
+                            duration_ms=duration_ms,
+                            status=span_status,
+                            metadata=metadata,
+                        ),
                     )
                 )
 
@@ -571,34 +624,30 @@ class MonitoringService:
                     http_method = str(src["span.attributes.http@method"])
                 if src.get("span.attributes.http@route"):
                     http_route = str(src["span.attributes.http@route"])
-            # Recompute start_offset_ms as a sequential pipeline.
-            # The parent span (http_request / mcp.tools.call) stays at offset 0
-            # and covers the full duration.  Child spans are chained so that
-            # each one starts where the previous one ended.
-            _PARENT_SPAN_NAMES = {"http_request", "mcp_tool_call", "mcp_discovery"}
+            # Convert nested spans to sequential pipeline.
+            # Gateway middlewares produce nested spans (each wraps the next):
+            #   policy_eval(963µs) contains rate_limit(921µs) contains auth(899µs) ...
+            # Sort by duration descending (outermost first), then compute each
+            # stage's own time = its duration minus the next span's duration.
             if spans:
+                by_dur = sorted(spans, key=lambda t: t[1].duration_ms, reverse=True)
+                pipeline: list[TransactionSpan] = []
                 offset_cursor = 0.0
-                for i, span in enumerate(spans):
-                    if span.name in _PARENT_SPAN_NAMES:
-                        # Parent span: offset 0, full duration
-                        spans[i] = TransactionSpan(
-                            name=span.name,
-                            service=span.service,
-                            start_offset_ms=0,
-                            duration_ms=span.duration_ms,
-                            status=span.status,
-                            metadata=span.metadata,
-                        )
-                    else:
-                        spans[i] = TransactionSpan(
+                for i, (_, span) in enumerate(by_dur):
+                    next_dur = by_dur[i + 1][1].duration_ms if i + 1 < len(by_dur) else 0
+                    own_time = max(span.duration_ms - next_dur, 0.001)
+                    pipeline.append(
+                        TransactionSpan(
                             name=span.name,
                             service=span.service,
                             start_offset_ms=round(offset_cursor, 3),
-                            duration_ms=span.duration_ms,
+                            duration_ms=round(own_time, 3),
                             status=span.status,
                             metadata=span.metadata,
                         )
-                        offset_cursor += span.duration_ms
+                    )
+                    offset_cursor += own_time
+                spans = [("", s) for s in pipeline]
 
             if root_src is None:
                 root_src = hits[0]["_source"]
@@ -695,7 +744,7 @@ class MonitoringService:
                 user_id=primary_src.get("span.attributes.user_id"),
                 started_at=primary_src.get("startTime", ""),
                 total_duration_ms=total_ms,
-                spans=spans,
+                spans=[s for _, s in spans],
                 request_headers=req_headers or None,
                 response_headers=res_headers or None,
                 error_message=error_msg,

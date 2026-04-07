@@ -48,6 +48,28 @@ register_route "seed-oauth2"     "echo-oauth2"      "/oauth2"        "$ECHO_BACK
 register_route "seed-accounts"   "fapi-accounts"    "/api/v1/accounts"  "$ECHO_BACKEND/api/v1/accounts"  '["GET"]'
 register_route "seed-transfers"  "fapi-transfers"    "/api/v1/transfers" "$ECHO_BACKEND/api/v1/transfers" '["GET","POST"]'
 
+# Register same routes on connect gateway (if available)
+CONNECT_GW="${CONNECT_URL:-}"
+if [ -n "$CONNECT_GW" ]; then
+  echo "[seeder] Registering routes on connect gateway at $CONNECT_GW..."
+  for attempt in 1 2 3 4 5; do
+    curl -sf "$CONNECT_GW/health" > /dev/null 2>&1 && break
+    echo "  waiting for connect gateway... ($attempt)"
+    sleep 3
+  done
+  # Reuse register_route but target connect gateway
+  register_connect() {
+    local id="$1" name="$2" path="$3" backend="$4" methods="${5:-[]}"
+    curl -sf -X POST "$CONNECT_GW/admin/apis" \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"id\":\"$id\",\"name\":\"$name\",\"tenant_id\":\"default\",\"path_prefix\":\"$path\",\"backend_url\":\"$backend\",\"methods\":$methods,\"spec_hash\":\"seed-local\",\"activated\":true}" \
+      > /dev/null 2>&1 && echo "  + [connect] $name -> $path" || echo "  ! [connect] $name FAILED (may exist)"
+  }
+  register_connect "connect-eurostat"  "eurostat"     "/nama_10_gdp"       "$ECHO_BACKEND"
+  register_connect "connect-accounts"  "echo-bearer"  "/api/v1/accounts"   "$ECHO_BACKEND/api/v1/accounts"  '["GET"]'
+fi
+
 echo "[seeder] Routes registered"
 
 # --- Run seeder in loop ---

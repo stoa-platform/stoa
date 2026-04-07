@@ -28,8 +28,11 @@ const statusColors: Record<string, string> = {
   deprecated: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
 };
 
+const ALL_TENANTS = '__all__';
+
 export function APIs() {
-  const { isReady } = useAuth();
+  const { isReady, hasRole } = useAuth();
+  const isAdmin = hasRole('cpi-admin');
   const { activeEnvironment } = useEnvironment();
   const { canCreate, canEdit, canDelete, canDeploy, isReadOnly } = useEnvironmentMode();
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -62,12 +65,16 @@ export function APIs() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Auto-select first tenant when tenants load
+  // Auto-select: admin defaults to "All tenants", others get first tenant
   useEffect(() => {
-    if (tenants.length > 0 && !selectedTenant) {
-      setSelectedTenant(tenants[0].id);
+    if (!selectedTenant) {
+      if (isAdmin) {
+        setSelectedTenant(ALL_TENANTS);
+      } else if (tenants.length > 0) {
+        setSelectedTenant(tenants[0].id);
+      }
     }
-  }, [tenants, selectedTenant]);
+  }, [tenants, selectedTenant, isAdmin]);
 
   // Fetch APIs for selected tenant via React Query
   const {
@@ -76,7 +83,10 @@ export function APIs() {
     error: apisError,
   } = useQuery({
     queryKey: ['apis', selectedTenant, activeEnvironment],
-    queryFn: () => apiService.getApis(selectedTenant, activeEnvironment),
+    queryFn: () =>
+      selectedTenant === ALL_TENANTS
+        ? apiService.getAdminApis()
+        : apiService.getApis(selectedTenant, activeEnvironment),
     enabled: !!selectedTenant,
   });
 
@@ -279,6 +289,7 @@ export function APIs() {
               onChange={(e) => setSelectedTenant(e.target.value)}
               className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
+              {isAdmin && <option value={ALL_TENANTS}>All tenants</option>}
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
                   {tenant.display_name || tenant.name}
@@ -471,6 +482,11 @@ export function APIs() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                     Name
                   </th>
+                  {selectedTenant === ALL_TENANTS && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      Tenant
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                     Version
                   </th>
@@ -493,7 +509,7 @@ export function APIs() {
                   <tr
                     key={api.id}
                     className="hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
-                    onClick={() => navigate(`/apis/${selectedTenant}/${api.name}`)}
+                    onClick={() => navigate(`/apis/${api.tenant_id || selectedTenant}/${api.name}`)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -505,6 +521,11 @@ export function APIs() {
                         </div>
                       </div>
                     </td>
+                    {selectedTenant === ALL_TENANTS && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600 dark:text-neutral-300">
+                        {api.tenant_id}
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 dark:text-neutral-400">
                       v{api.version}
                     </td>
@@ -674,7 +695,10 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     version: api?.version || '1.0.0',
     description: api?.description || '',
     backend_url: api?.backend_url || '',
-    openapi_spec: '',
+    openapi_spec:
+      api?.openapi_spec && typeof api.openapi_spec === 'object'
+        ? JSON.stringify(api.openapi_spec, null, 2)
+        : (api?.openapi_spec as string) || '',
     tags: api?.tags || [],
     portal_promoted: api?.portal_promoted || api?.tags?.includes('portal:published') || false,
   });

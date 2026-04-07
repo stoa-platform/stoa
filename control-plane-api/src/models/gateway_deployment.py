@@ -70,6 +70,13 @@ class GatewayDeployment(Base):
     # Example: {"gateway_api_id": "xyz", "spec_hash": "abc123", "activated": true}
     actual_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Generation-based reconciliation (K8s observedGeneration pattern, CAB-1950)
+    # Sync only when desired_generation > attempted_generation.
+    # Force Sync or catalog update bumps desired_generation.
+    desired_generation = Column(Integer, nullable=False, default=1, server_default="1")
+    synced_generation = Column(Integer, nullable=False, default=0, server_default="0")
+    attempted_generation = Column(Integer, nullable=False, default=0, server_default="0")
+
     # Sync tracking
     sync_status = Column(
         SQLEnum(
@@ -85,6 +92,7 @@ class GatewayDeployment(Base):
     last_sync_success = Column(DateTime(timezone=True), nullable=True)
     sync_error = Column(Text, nullable=True)
     sync_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    sync_steps = Column(JSONB, nullable=True)  # Ordered list of SyncStep dicts for step-level observability
 
     # Policy sync tracking
     policy_sync_status = Column(

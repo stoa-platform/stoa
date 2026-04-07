@@ -68,10 +68,10 @@ class TestGitHubProviderDisconnect:
 
 
 class TestDefaultProviderIsGitLab:
-    """Verify the default GIT_PROVIDER in Settings is 'gitlab'."""
+    """Verify the default GIT_PROVIDER in Settings is 'github'."""
 
     def test_settings_default(self):
         from src.config import Settings
 
         field = Settings.model_fields["GIT_PROVIDER"]
-        assert field.default == "gitlab"
+        assert field.default == "github"

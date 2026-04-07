@@ -19,6 +19,7 @@ from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeploymen
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.services.kafka_service import Topics, kafka_service
+from src.services.sync_step_tracker import SyncStepTracker
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,8 @@ class GatewayDeploymentService:
             gateway = await self.gw_repo.get_by_id(gw_id)
             if not gateway:
                 raise ValueError(f"Gateway instance {gw_id} not found")
+            if not gateway.enabled:
+                raise PermissionError(f"Gateway '{gateway.name}' is disabled. " f"Enable it before deploying.")
 
             existing = await self.deploy_repo.get_by_api_and_gateway(api_catalog_id, gw_id)
             if existing:
@@ -125,6 +128,18 @@ class GatewayDeploymentService:
 
         if settings.is_sse_enabled:
             await self._emit_sse_events(deployments, api_catalog.tenant_id)
+
+        # Record event_emitted step for observability
+        for dep in deployments:
+            tracker = SyncStepTracker.from_list(dep.sync_steps or [])
+            tracker.start("event_emitted")
+            tracker.complete(
+                "event_emitted",
+                detail=f"kafka={'yes' if settings.is_sync_engine_enabled else 'no'} "
+                f"sse={'yes' if settings.is_sse_enabled else 'no'}",
+            )
+            dep.sync_steps = tracker.to_list()
+            await self.deploy_repo.update(dep)
 
         logger.info(
             "Deployed API %s to %d gateway(s) (mode=%s)",
@@ -160,6 +175,7 @@ class GatewayDeploymentService:
         deployment.sync_status = DeploymentSyncStatus.PENDING
         deployment.sync_error = None
         deployment.sync_attempts = 0
+        deployment.desired_generation = (deployment.desired_generation or 0) + 1
         await self.deploy_repo.update(deployment)
 
         await self._emit_sync_request(deployment)

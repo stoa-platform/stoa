@@ -114,32 +114,87 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
     }
 }
 
+/// Record HTTP status on the current proxy span for all exit paths.
+fn record_proxy_status(code: u16) {
+    let span = tracing::Span::current();
+    span.record("http.status_code", code);
+    if code >= 500 {
+        span.record("otel.status_code", "ERROR");
+        span.record("otel.status_message", &format!("HTTP {code}") as &str);
+    } else if code >= 400 {
+        span.record("otel.status_code", "OK");
+    }
+}
+
 /// Dynamic proxy handler — catch-all fallback route.
 ///
 /// 1. Look up request path in RouteRegistry (longest prefix match)
 /// 2. If found + activated: proxy to backend_url
 /// 3. If found but not activated: 503
 /// 4. If not found: 404
-#[instrument(name = "proxy.dynamic", skip(state, request), fields(otel.kind = "client"))]
+#[instrument(name = "proxy.dynamic", skip(state, request), fields(
+    otel.kind = "client",
+    http.status_code = tracing::field::Empty,
+    otel.status_code = tracing::field::Empty,
+    otel.status_message = tracing::field::Empty,
+    auth_type = tracing::field::Empty,
+    upstream.rtt_ms = tracing::field::Empty,
+    upstream.cb_state = tracing::field::Empty,
+    upstream.pool_reuse = tracing::field::Empty,
+    upstream.active_conns = tracing::field::Empty,
+))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
-    let path = request.uri().path().to_string();
+    // Record inbound auth type on the span for observability (by_auth_type breakdown).
+    // Detection order: DPoP > Bearer > API key > mTLS > none.
+    // DPoP checked first because DPoP requests also carry Authorization: DPoP <token>.
+    let auth_header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let has_api_key =
+        request.headers().contains_key("X-API-Key") || request.headers().contains_key("X-Api-Key");
+    let inbound_auth = if request.headers().contains_key("DPoP") {
+        "dpop"
+    } else if auth_header.starts_with("Bearer ") {
+        "bearer"
+    } else if auth_header.starts_with("Basic ") {
+        "basic"
+    } else if has_api_key {
+        "api_key"
+    } else if request
+        .extensions()
+        .get::<crate::auth::mtls::ClientCertInfo>()
+        .is_some()
+    {
+        "mtls"
+    } else {
+        "none"
+    };
+    tracing::Span::current().record("auth_type", inbound_auth);
+
+    let raw_path = request.uri().path();
+    let path = urlencoding::decode(raw_path).unwrap_or(std::borrow::Cow::Borrowed(raw_path));
     let method = request.method().clone();
 
-    // Find matching route
+    // Find matching route (path is percent-decoded so spaces in API names match)
     let route = match state.route_registry.find_by_path(&path) {
         Some(r) => r,
         None => {
+            record_proxy_status(404);
             return (StatusCode::NOT_FOUND, "No matching API route").into_response();
         }
     };
 
     if !route.activated {
+        record_proxy_status(503);
         return (StatusCode::SERVICE_UNAVAILABLE, "API not activated").into_response();
     }
 
     // Check method allowed (empty methods list = all methods allowed)
     // Compare Method::as_str() directly — avoids method.to_string() allocation (CAB-1332)
     if !route.methods.is_empty() && !route.methods.iter().any(|m| m == method.as_str()) {
+        record_proxy_status(405);
         return (
             StatusCode::METHOD_NOT_ALLOWED,
             "Method not allowed for this API",
@@ -196,6 +251,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                     route_name = %route.name,
                     "All upstreams unhealthy (circuit breakers open)"
                 );
+                record_proxy_status(503);
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "All upstreams unavailable".to_string(),
@@ -212,6 +268,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                 route_name = %route.name,
                 "Circuit breaker open for upstream"
             );
+            record_proxy_status(503);
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 format!("Circuit breaker open for upstream: {}", route.name),
@@ -426,6 +483,45 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         response.headers_mut().insert("x-stoa-timing", hv);
     }
 
+    // Record upstream metrics on the proxy span for trace detail view
+    let span = tracing::Span::current();
+    let upstream_rtt_ms = upstream_duration * 1000.0;
+    span.record("upstream.rtt_ms", format!("{upstream_rtt_ms:.2}"));
+    let cb_state_str = if let Some(ref cb) = cb {
+        if cb.allow_request() {
+            "closed"
+        } else {
+            "open"
+        }
+    } else {
+        let upstream_cb = state.circuit_breakers.get_or_create(&selected_backend);
+        if upstream_cb.allow_request() {
+            "closed"
+        } else {
+            "open"
+        }
+    };
+    span.record("upstream.cb_state", cb_state_str);
+    // Connection reuse heuristic: if response has `connection: keep-alive` or
+    // no `connection: close`, the pool likely reused an existing connection.
+    let pool_reuse = !response
+        .headers()
+        .get("connection")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.eq_ignore_ascii_case("close"));
+    span.record(
+        "upstream.pool_reuse",
+        if pool_reuse { "true" } else { "false" },
+    );
+    // Active in-flight connections from Prometheus gauge
+    let active = crate::metrics::POOL_CONNECTIONS_ACTIVE
+        .with_label_values(&[&selected_backend])
+        .get() as u64;
+    span.record("upstream.active_conns", format!("{active}"));
+
+    // Record HTTP status on the proxy span for Tempo trace filtering
+    record_proxy_status(response.status().as_u16());
+
     response
 }
 
@@ -435,6 +531,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 /// Headers (hop-by-hop filtering, credential injection, traceparent, Via)
 /// are handled identically to the reqwest path for consistency.
 #[cfg(feature = "pingora")]
+#[instrument(name = "upstream.call", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn forward_request_pingora(
     pool: &std::sync::Arc<crate::proxy::pingora_pool::PingoraPool>,
     request: Request<Body>,
@@ -544,6 +641,7 @@ async fn forward_request_pingora(
 ///
 /// When a resolved header tuple is provided, it is injected into the
 /// outgoing request (BYOK credential proxy — CAB-1250, OAuth2 — CAB-1317).
+#[instrument(name = "upstream.call", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn forward_request(
     request: Request<Body>,
     method: &Method,
@@ -693,6 +791,7 @@ fn is_idempotent(method: &Method) -> bool {
 ///
 /// Rebuilds the outgoing request from saved headers — used when the original
 /// request body has already been consumed by the first attempt.
+#[instrument(name = "upstream.retry", skip_all, fields(otel.kind = "client", http.method = %method, http.url = %target_url))]
 async fn retry_forward(
     method: &Method,
     target_url: &str,

@@ -33,6 +33,8 @@ spec:
               value: "info"
             - name: STOA_LOG_FORMAT
               value: "json"
+            - name: STOA_INSTANCE_NAME
+              value: "stoa-link-wm"
             - name: STOA_GATEWAY_MODE
               value: "sidecar"
             - name: STOA_AUTO_REGISTER
@@ -46,7 +48,7 @@ spec:
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
             - name: STOA_SIDECAR_UPSTREAM_URL
-              value: "https://webmethods.gostoa.dev"
+              value: "https://vps-wm.gostoa.dev"
             - name: STOA_RATE_LIMIT_DEFAULT
               value: "1000"
             - name: STOA_POLICY_ENABLED

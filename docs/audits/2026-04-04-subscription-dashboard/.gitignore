@@ -1,0 +1,4 @@
+# Videos kept locally, not committed (too heavy for git)
+# Re-generate: cd e2e && npx playwright test --config playwright.local.config.ts tests/local-subscription-auth.spec.ts
+videos/
+report/data/*.webm

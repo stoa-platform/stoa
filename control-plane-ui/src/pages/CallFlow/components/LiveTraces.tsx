@@ -1,4 +1,5 @@
-import { AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface TraceSpan {
   name: string;
@@ -22,12 +23,22 @@ export interface TraceEntry {
 interface LiveTracesProps {
   traces: TraceEntry[];
   onSelectTrace?: (traceId: string) => void;
+  pageSize?: number;
+  emptyMessage?: string;
 }
+
+const MODE_LABELS: Record<string, string> = {
+  'edge-mcp': 'Gateway',
+  sidecar: 'Link',
+  connect: 'Connect',
+};
 
 const SPAN_COLORS: Record<string, string> = {
   gateway_ingress: '#3B82F6',
   auth_validation: '#8B5CF6',
   rate_limiting: '#F59E0B',
+  policy_eval: '#6366F1',
+  routing: '#6B7280',
   backend_call: '#10B981',
   database_query: '#06B6D4',
   response_transform: '#6366F1',
@@ -100,11 +111,20 @@ function WaterfallBar({ spans, totalMs }: { spans: TraceSpan[]; totalMs: number 
   );
 }
 
-export function LiveTraces({ traces, onSelectTrace }: LiveTracesProps) {
+export function LiveTraces({
+  traces,
+  onSelectTrace,
+  pageSize = 10,
+  emptyMessage,
+}: LiveTracesProps) {
+  const [page, setPage] = useState(0);
+  const totalPages = Math.ceil(traces.length / pageSize);
+  const pagedTraces = traces.slice(page * pageSize, (page + 1) * pageSize);
+
   if (traces.length === 0) {
     return (
       <div className="h-[200px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-        No recent traces
+        {emptyMessage || 'No recent traces'}
       </div>
     );
   }
@@ -137,7 +157,7 @@ export function LiveTraces({ traces, onSelectTrace }: LiveTracesProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {traces.map((t) => {
+            {pagedTraces.map((t) => {
               const isError = t.statusCode >= 400;
               const sb = statusBadge(t.statusCode);
               const mb = modeBadge(t.mode);
@@ -167,7 +187,7 @@ export function LiveTraces({ traces, onSelectTrace }: LiveTracesProps) {
                     <span
                       className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${mb.bg} ${mb.text}`}
                     >
-                      {t.mode === 'edge-mcp' ? 'Gateway' : t.mode}
+                      {MODE_LABELS[t.mode] || t.mode}
                     </span>
                   </td>
                   <td className="py-2 pr-2">
@@ -189,6 +209,45 @@ export function LiveTraces({ traces, onSelectTrace }: LiveTracesProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+            {page * pageSize + 1}–{Math.min((page + 1) * pageSize, traces.length)} of{' '}
+            {traces.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i)}
+                className={`px-2 py-0.5 text-xs rounded ${
+                  i === page
+                    ? 'bg-blue-600 text-white'
+                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-30"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

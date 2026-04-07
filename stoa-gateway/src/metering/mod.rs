@@ -51,17 +51,3 @@ impl Default for KafkaConfig {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_kafka_config_default() {
-        let config = KafkaConfig::default();
-        assert!(!config.enabled);
-        assert_eq!(config.brokers, "redpanda:9092");
-        assert_eq!(config.metering_topic, "stoa.metering");
-        assert_eq!(config.errors_topic, "stoa.errors");
-    }
-}

@@ -58,6 +58,7 @@ export function ExternalMCPServersList() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [testingServerId, setTestingServerId] = useState<string | null>(null);
   const [syncingServerId, setSyncingServerId] = useState<string | null>(null);
+  const [togglingServerId, setTogglingServerId] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -137,6 +138,26 @@ export function ExternalMCPServersList() {
         toast.error('Sync failed', err.message);
       } finally {
         setSyncingServerId(null);
+      }
+    },
+    [toast]
+  );
+
+  const handleToggleEnabled = useCallback(
+    async (server: ExternalMCPServer) => {
+      try {
+        setTogglingServerId(server.id);
+        const newEnabled = !server.enabled;
+        await externalMcpServersService.updateServer(server.id, { enabled: newEnabled });
+        if (!mountedRef.current) return;
+        setServers((prev) =>
+          prev.map((s) => (s.id === server.id ? { ...s, enabled: newEnabled } : s))
+        );
+        toast.success(newEnabled ? 'Server enabled' : 'Server disabled');
+      } catch (err) {
+        toast.error('Failed to update server', (err as Error).message);
+      } finally {
+        setTogglingServerId(null);
       }
     },
     [toast]
@@ -295,11 +316,23 @@ export function ExternalMCPServersList() {
                   )}
                   <div className="flex justify-between items-center">
                     <span className="text-neutral-500 dark:text-neutral-400">Status:</span>
-                    <span
-                      className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-neutral-100 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-300'}`}
-                    >
-                      {server.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={server.enabled}
+                        onChange={() => handleToggleEnabled(server)}
+                        disabled={togglingServerId === server.id}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-neutral-200 dark:bg-neutral-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      <span className="ml-2 text-xs text-neutral-600 dark:text-neutral-400">
+                        {togglingServerId === server.id
+                          ? '...'
+                          : server.enabled
+                            ? 'Enabled'
+                            : 'Disabled'}
+                      </span>
+                    </label>
                   </div>
                 </div>
 

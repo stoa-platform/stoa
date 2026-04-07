@@ -22,13 +22,16 @@ from ..schemas.tenant import (
 )
 from ..schemas.tenant_dr import ImportResult, TenantExportResponse, TenantImportRequest
 from ..services.cache_service import tenant_cache
-from ..services.git_provider import GitProvider, get_git_provider
+from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
 from ..services.kafka_service import Topics, kafka_service
 from ..services.keycloak_service import keycloak_service
 from ..services.tenant_dr_service import TenantExportService, TenantImportService
 from ..services.tenant_provisioning_service import deprovision_tenant, provision_tenant
 
 logger = logging.getLogger(__name__)
+
+# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
+git_service = git_provider_factory()
 
 DEFAULT_MAX_APIS = 10
 DEFAULT_MAX_APPLICATIONS = 20

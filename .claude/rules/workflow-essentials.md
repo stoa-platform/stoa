@@ -35,30 +35,62 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 
 ## Binary Definition of Done
 
+### Two-Gate Validation Model
+
+Every code change passes through **two gates** before reaching main:
+
+```
+Code → Commit → git push → [GATE 1: pre-push hook] → PR → [GATE 2: CI] → Merge
+                                    │                            │
+                            Local (~60s)                   Remote (~5min)
+                         lint, format, tsc,              License, SBOM, Signed,
+                         axe-core, clippy               Security, Container Scan
+```
+
+**Gate 1 (pre-push hook)** catches 80% of issues locally in ~60s. The hook `pre-push-quality-gate.sh` runs automatically on `git push` — it detects which components changed and runs the matching quality checks. If any check fails, the push is **blocked**. Fix locally before re-pushing. No PR should ever be created with lint/format/compile errors.
+
+**Gate 2 (CI)** runs heavier checks that need cloud infra (container scans, SAST, E2E on live services). By the time CI runs, the code is already clean.
+
+**Kill switch**: `DISABLE_PRE_PUSH_GATE=1` env var skips Gate 1 entirely.
+
 ### Universal Checks (every task)
 
-| # | Check | Pass Criteria | How to Verify |
-|---|-------|--------------|---------------|
-| 1 | Code compiles | Zero errors | `cargo check` / `tsc --noEmit` / `ruff check` |
+Checks 1/4/5/6 are enforced by the pre-push hook (Gate 1). Checks 7-10 happen after.
+
+| # | Check | Pass Criteria | Enforced By |
+|---|-------|--------------|-------------|
+| 1 | Code compiles | Zero errors | **Pre-push hook** (auto) |
 | 2 | Tests pass | Zero failures | `cargo test` / `npm test -- --run` / `pytest` |
 | 3 | No regressions | Existing tests still green | Full test suite run |
-| 4 | Lint clean | Zero new warnings | Component lint command |
-| 5 | Format clean | Zero diffs | `cargo fmt --check` / `npm run format:check` |
-| 6 | No secrets | Zero matches | `gitleaks detect --no-git` on changed files |
+| 4 | Lint clean | Zero new warnings | **Pre-push hook** (auto) |
+| 5 | Format clean | Zero diffs | **Pre-push hook** (auto) |
+| 6 | a11y clean | Zero critical WCAG violations | **Pre-push hook** (axe-core, if UI changed) |
 | 7 | PR created | PR URL exists | `gh pr view` |
 | 8 | CI green | 4 required checks pass | `gh pr checks` |
 | 9 | State files updated | `memory.md` reflects changes | Manual check |
 | 10 | Session logged | SESSION-START exists in operations.log | `tail -20 operations.log` |
 
+### Pre-Push Hook — What Runs Per Component
+
+| Component Changed | Checks Run | ~Duration |
+|-------------------|-----------|-----------|
+| `control-plane-api/**` | ruff + black | ~2s |
+| `control-plane-ui/**` | eslint + prettier + tsc + axe-core (10 pages) | ~18s |
+| `portal/**` | eslint + prettier + tsc | ~8s |
+| `stoa-gateway/**` | cargo fmt + clippy (strict) | ~30s |
+| `e2e/**` | axe-core (10 pages) | ~10s |
+| docs-only (`.md`, `.claude/**`) | skip (no checks) | 0s |
+
 ### Component-Specific Checks
 
-| Component | Extra Checks |
+| Component | Extra Checks (beyond pre-push) |
 |-----------|-------------|
-| Python (api, mcp) | Coverage >= threshold, ruff + black clean, mypy clean |
-| TypeScript (ui, portal) | ESLint max-warnings not exceeded, prettier clean, tsc clean |
-| Rust (gateway) | Clippy zero warnings (strict + SAST rules), cargo test --all-features |
+| Python (api, mcp) | Coverage >= threshold, mypy clean |
+| TypeScript (ui, portal) | ESLint max-warnings not exceeded, vitest green |
+| Rust (gateway) | cargo test --all-features, SAST clippy rules |
 | K8s/Helm | `helm lint`, `privileged: false` present, probes use `/health` |
 | Docs/Content | Content compliance scan (no P0/P1 violations) |
+| UI (console, portal) | Visual regression baselines updated if appearance changed |
 
 ### Post-Merge Checks (code changes only)
 
@@ -70,12 +102,13 @@ description: Core behavioral rules — Ship/Show/Ask, DoD, State Machine, Operat
 | 4 | ArgoCD synced | Synced + Healthy (if ArgoCD-managed) |
 | 5 | Verification proof | Linear comment includes CI link + E2E + pod status |
 
-### Verification Rules (4 non-negotiable)
+### Verification Rules (5 non-negotiable)
 
 1. **No DONE without proof** — Linear completion comment MUST include: CI pipeline link, E2E pass/fail, live pod confirmation. No proof = ticket stays open.
 2. **E2E co-evolves with code** — Feature/fix tickets MUST update Playwright scenarios in the same PR. No separate "test later" tickets.
 3. **CI noise = P0** — Red `main` blocks ALL new work. Fix CI before starting any feature. `/ci-fix` has priority over backlog.
 4. **Multi-env gate** — DoD requires 3 proofs: local tests pass, CI pipeline green, staging/prod pod healthy.
+5. **Evidence archive** — Every Playwright run MUST archive results in `docs/audits/<date>-<topic>/`. See `e2e-audit.md` for the single canonical process. No archive = session incomplete.
 
 ### MEGA Close Gate (titles containing `[MEGA]` or has children)
 

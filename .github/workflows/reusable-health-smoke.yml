@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       environment:
-        description: 'Target environment (dev, staging, prod)'
+        description: 'Target environment (dev, prod)'
         required: false
         type: string
         default: 'dev'
@@ -36,17 +36,13 @@ jobs:
         run: sleep 30
 
       - name: Health checks
-        env:
-          ENV_PREFIX: ${{ inputs.environment == 'staging' && 'staging-' || '' }}
-          CURL_INSECURE: ${{ inputs.environment == 'staging' && '--insecure' || '' }}
         run: |
           set -euo pipefail
           PASS=0; FAIL=0
 
           check() {
             local name="$1" url="$2" expected="${3:-200}"
-            # shellcheck disable=SC2086
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 $CURL_INSECURE "$url") || status="000"
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
             if [ "$status" = "$expected" ]; then
               echo "  $name: $status"
               PASS=$((PASS+1))
@@ -56,15 +52,14 @@ jobs:
             fi
           }
 
-          BASE="${ENV_PREFIX}gostoa.dev"
-          echo "Health checks for ${BASE} (after ${{ inputs.component }} deploy)"
+          echo "Health checks for gostoa.dev (after ${{ inputs.component }} deploy)"
           echo "---"
 
-          check "API Health"      "https://${ENV_PREFIX}api.gostoa.dev/health"
-          check "Gateway Health"  "https://${ENV_PREFIX}mcp.gostoa.dev/health/ready"
-          check "Portal"          "https://${ENV_PREFIX}portal.gostoa.dev"
-          check "Console"         "https://${ENV_PREFIX}console.gostoa.dev"
-          check "Keycloak OIDC"   "https://${ENV_PREFIX}auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+          check "API Health"      "https://api.gostoa.dev/health"
+          check "Gateway Health"  "https://mcp.gostoa.dev/health/ready"
+          check "Portal"          "https://portal.gostoa.dev"
+          check "Console"         "https://console.gostoa.dev"
+          check "Keycloak OIDC"   "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
 
           echo "---"
           echo "Results: $PASS passed, $FAIL failed (component: ${{ inputs.component }})"

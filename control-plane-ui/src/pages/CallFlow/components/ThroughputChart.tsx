@@ -25,6 +25,8 @@ interface ModeTimeSeries {
 interface ThroughputChartProps {
   series: ModeTimeSeries[];
   timeRange: string;
+  activeLabel?: string;
+  onLegendClick?: (label: string) => void;
 }
 
 function mergeTimeSeries(series: ModeTimeSeries[]): Record<string, number | string>[] {
@@ -52,12 +54,22 @@ function formatTime(ts: number): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
-export function ThroughputChart({ series, timeRange }: ThroughputChartProps) {
+export function ThroughputChart({
+  series,
+  timeRange,
+  activeLabel,
+  onLegendClick,
+}: ThroughputChartProps) {
   const merged = mergeTimeSeries(series);
 
   if (merged.length === 0) {
     return <ChartEmptyState message={`No throughput data for ${timeRange}`} />;
   }
+
+  const toggle = (label: string) => {
+    if (!onLegendClick) return;
+    onLegendClick(label === activeLabel ? '' : label);
+  };
 
   return (
     <ResponsiveContainer width="100%" height={250}>
@@ -83,7 +95,16 @@ export function ThroughputChart({ series, timeRange }: ThroughputChartProps) {
           labelFormatter={(label) => formatTime(Number(label))}
           formatter={(value) => [Number(value).toFixed(2), undefined]}
         />
-        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={8} />
+        <Legend
+          wrapperStyle={{
+            fontSize: 12,
+            paddingTop: 8,
+            cursor: onLegendClick ? 'pointer' : 'default',
+          }}
+          iconType="circle"
+          iconSize={8}
+          onClick={(entry) => toggle(String(entry.value ?? ''))}
+        />
         {series.map((s) => (
           <Area
             key={s.label}
@@ -92,7 +113,10 @@ export function ThroughputChart({ series, timeRange }: ThroughputChartProps) {
             stackId="throughput"
             stroke={s.color}
             fill={s.color}
-            fillOpacity={0.4}
+            fillOpacity={!activeLabel || activeLabel === s.label ? 0.4 : 0.08}
+            strokeOpacity={!activeLabel || activeLabel === s.label ? 1 : 0.2}
+            style={{ cursor: onLegendClick ? 'pointer' : 'default' }}
+            onClick={() => toggle(s.label)}
           />
         ))}
       </AreaChart>

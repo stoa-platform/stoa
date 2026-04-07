@@ -11,6 +11,7 @@ PERFORMANCE OPTIMIZATION (CAB-682):
 
 import logging
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -142,6 +143,7 @@ class InternalAPIsResponse(BaseModel):
 
 @internal_router.get("/apis", response_model=InternalAPIsResponse)
 async def internal_list_apis(
+    gateway_id: UUID | None = Query(None, description="Filter APIs assigned to this gateway (CAB-1940)"),
     db: AsyncSession = Depends(get_async_db),
 ):
     """
@@ -149,10 +151,13 @@ async def internal_list_apis(
 
     Internal endpoint — no JWT auth required (service-to-service on internal network).
     Used by stoa-gateway to discover APIs and register them as MCP tools.
+
+    If gateway_id is provided, only APIs assigned to that gateway are returned.
+    Without gateway_id, all published APIs are returned (backward compatible).
     """
     try:
         repo = CatalogRepository(db)
-        apis, _total = await repo.get_portal_apis(page=1, page_size=100)
+        apis, _total = await repo.get_portal_apis(page=1, page_size=100, gateway_id=gateway_id)
 
         return InternalAPIsResponse(
             apis=[

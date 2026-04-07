@@ -6,11 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#059669" />
     <title>STOA Control Plane</title>
-    <!-- Preconnect to auth and API for faster initial load -->
-    <link rel="preconnect" href="https://auth.gostoa.dev" crossorigin>
-    <link rel="dns-prefetch" href="https://auth.gostoa.dev">
-    <link rel="preconnect" href="https://api.gostoa.dev" crossorigin>
-    <link rel="dns-prefetch" href="https://api.gostoa.dev">
+    <!-- Runtime config injected by container entrypoint (overrides Vite build-time defaults) -->
+    <script src="/runtime-config.js"></script>
     <!-- Prevent flash of wrong theme — runs before first paint -->
     <script>
       (function(){var t=localStorage.getItem('stoa-theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()

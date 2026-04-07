@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import UTC, datetime
 
+import yaml
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from src.models.mcp_subscription import (
     MCPServerSyncStatus,
     MCPServerTool,
 )
+from src.models.tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.services.gateway_deployment_service import GatewayDeploymentService
@@ -67,6 +69,16 @@ class CatalogSyncService:
             total_tenants = len(tenant_apis)
             total_apis = sum(len(apis) for apis in tenant_apis.values())
             logger.info(f"Found {total_tenants} tenants with {total_apis} APIs total")
+
+            # Ensure tenant records exist for all tenants discovered in Git
+            tenants_created = 0
+            for tid in tenant_apis:
+                created = await self._ensure_tenant_from_git(tid)
+                if created:
+                    tenants_created += 1
+            if tenants_created:
+                await self.db.commit()
+                logger.info(f"Created {tenants_created} missing tenant records from Git")
 
             # Track seen APIs for soft-delete
             seen_apis: set[tuple[str, str]] = set()
@@ -175,6 +187,40 @@ class CatalogSyncService:
             logger.warning(f"Failed to list tenants: {e}")
             return []
 
+    async def _ensure_tenant_from_git(self, tenant_id: str) -> bool:
+        """Create a tenant record from tenant.yaml if it doesn't exist in the DB.
+
+        Returns True if a new tenant was created, False if it already exists.
+        Skips archived tenants (will not resurrect them).
+        """
+        result = await self.db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return False
+
+        # Read tenant.yaml from Git
+        tenant_meta = {}
+        try:
+            file = self.git._project.files.get(f"tenants/{tenant_id}/tenant.yaml", ref="main")
+            tenant_meta = yaml.safe_load(file.decode()) or {}
+        except Exception as e:
+            logger.debug(f"No tenant.yaml for {tenant_id}: {e}")
+
+        metadata = tenant_meta.get("metadata", {})
+        spec = tenant_meta.get("spec", {})
+
+        tenant = Tenant(
+            id=tenant_id,
+            name=metadata.get("displayName", tenant_id),
+            description=metadata.get("description", ""),
+            status=TenantStatus.ACTIVE.value,
+            provisioning_status=TenantProvisioningStatus.READY.value,
+            settings=spec.get("settings", {}),
+        )
+        self.db.add(tenant)
+        logger.info(f"Created tenant '{tenant_id}' from Git (name='{tenant.name}')")
+        return True
+
     async def _sync_tenant_apis_parallel(
         self, tenant_id: str, api_ids: list[str], commit_sha: str | None, seen_apis: set[tuple[str, str]]
     ) -> tuple[int, int]:
@@ -235,7 +281,7 @@ class CatalogSyncService:
                 tenant_id=tenant_id,
                 api_id=api_id,
                 api_name=api.get("name", api_id),
-                version=api.get("version"),
+                version=api.get("version", "1.0.0"),
                 status=api.get("status", "active"),
                 category=api.get("category"),
                 tags=tags,
@@ -249,10 +295,11 @@ class CatalogSyncService:
                 deleted_at=None,
             )
             .on_conflict_do_update(
-                constraint="uq_api_catalog_tenant_api",
+                index_elements=["tenant_id", "api_id"],
+                index_where=APICatalog.deleted_at.is_(None),
                 set_={
                     APICatalog.api_name: api.get("name", api_id),
-                    APICatalog.version: api.get("version"),
+                    APICatalog.version: api.get("version", "1.0.0"),
                     APICatalog.status: api.get("status", "active"),
                     APICatalog.category: api.get("category"),
                     APICatalog.tags: tags,
@@ -329,6 +376,7 @@ class CatalogSyncService:
                     existing.sync_status = DeploymentSyncStatus.PENDING
                     existing.sync_error = None
                     existing.sync_attempts = 0
+                    existing.desired_generation = (existing.desired_generation or 0) + 1
                     await deploy_repo.update(existing)
                     logger.info(
                         "GitOps: updated deployment for %s/%s → %s",

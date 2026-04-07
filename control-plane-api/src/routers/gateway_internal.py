@@ -103,6 +103,7 @@ class GatewayRouteItem(BaseModel):
     spec_hash: str = ""
     openapi_spec: dict | None = None
     activated: bool = True
+    generation: int = 1
 
 
 @router.get("/routes", response_model=list[GatewayRouteItem])
@@ -125,13 +126,20 @@ async def list_gateway_routes(
 
     deploy_repo = GatewayDeploymentRepository(db)
 
-    # Get all SYNCED + PENDING deployments (PENDING = recently deployed, should be on gateway)
-    deployments = await deploy_repo.list_by_statuses(
-        [
-            DeploymentSyncStatus.SYNCED,
-            DeploymentSyncStatus.PENDING,
-        ]
-    )
+    # Get SYNCED + PENDING deployments, filtered by gateway if specified.
+    # Without filtering, a stoa-connect instance syncs routes from ALL gateways
+    # to its local gateway — causing cross-gateway pollution (CAB-1938).
+    statuses = [DeploymentSyncStatus.SYNCED, DeploymentSyncStatus.PENDING]
+
+    if gateway_name:
+        gw_repo = GatewayInstanceRepository(db)
+        gateway = await gw_repo.get_by_name(gateway_name)
+        if gateway:
+            deployments = await deploy_repo.list_by_statuses_and_gateway(statuses, gateway.id)
+        else:
+            deployments = []
+    else:
+        deployments = await deploy_repo.list_by_statuses(statuses)
 
     routes = []
     for dep in deployments:
@@ -139,7 +147,7 @@ async def list_gateway_routes(
         tenant_id = ds.get("tenant_id", "")
         route = map_api_spec_to_stoa(ds, tenant_id)
         if route.get("backend_url"):  # Skip routes without a backend
-            item = GatewayRouteItem(**route, deployment_id=str(dep.id))
+            item = GatewayRouteItem(**route, deployment_id=str(dep.id), generation=dep.desired_generation or 1)
             routes.append(item)
 
     return routes
@@ -164,6 +172,14 @@ class GatewayRegistration(BaseModel):
     target_gateway_url: str | None = Field(
         default=None,
         description="URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)",
+    )
+    public_url: str | None = Field(
+        default=None,
+        description="Public DNS URL of this gateway for Console display (CAB-1940)",
+    )
+    ui_url: str | None = Field(
+        default=None,
+        description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)",
     )
 
 
@@ -300,6 +316,10 @@ async def register_gateway(
             existing.base_url = payload.admin_url
         if payload.target_gateway_url:
             existing.target_gateway_url = payload.target_gateway_url
+        if payload.public_url:
+            existing.public_url = payload.public_url
+        if payload.ui_url:
+            existing.ui_url = payload.ui_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
         existing.mode = normalized_mode
@@ -307,6 +327,35 @@ async def register_gateway(
         instance = await repo.update(existing)
         await db.commit()
         logger.info("Gateway re-registered: id=%s, name=%s", instance.id, instance.name)
+        return instance
+
+    # 1c. Resurrect: if a soft-deleted entry exists with the same name, restore it
+    #     instead of creating a new one (would violate unique constraint on name).
+    #     Happens when a gateway re-registers after auto-purge (CAB-1897) or manual cleanup.
+    deleted_entry = await repo.get_by_name_including_deleted(instance_name)
+    if deleted_entry:
+        deleted_entry.deleted_at = None
+        deleted_entry.deleted_by = None
+        deleted_entry.version = payload.version
+        deleted_entry.capabilities = payload.capabilities
+        deleted_entry.base_url = payload.admin_url
+        if payload.target_gateway_url:
+            deleted_entry.target_gateway_url = payload.target_gateway_url
+        if payload.public_url:
+            deleted_entry.public_url = payload.public_url
+        if payload.ui_url:
+            deleted_entry.ui_url = payload.ui_url
+        deleted_entry.status = GatewayInstanceStatus.ONLINE
+        deleted_entry.last_health_check = now
+        deleted_entry.mode = normalized_mode
+        deleted_entry.health_details = {**(deleted_entry.health_details or {}), **heartbeat_details}
+        instance = await repo.update(deleted_entry)
+        await db.commit()
+        logger.info(
+            "Gateway resurrected from soft-delete: id=%s, name=%s",
+            instance.id,
+            instance.name,
+        )
         return instance
 
     # 1b. Cancel-and-replace: soft-delete stale self_register entries with same
@@ -339,6 +388,10 @@ async def register_gateway(
         argocd_entry.base_url = payload.admin_url
         if payload.target_gateway_url:
             argocd_entry.target_gateway_url = payload.target_gateway_url
+        if payload.public_url:
+            argocd_entry.public_url = payload.public_url
+        if payload.ui_url:
+            argocd_entry.ui_url = payload.ui_url
         argocd_entry.status = GatewayInstanceStatus.ONLINE
         argocd_entry.last_health_check = now
         argocd_entry.mode = normalized_mode
@@ -362,6 +415,8 @@ async def register_gateway(
         tenant_id=payload.tenant_id,
         base_url=payload.admin_url,
         target_gateway_url=payload.target_gateway_url,
+        public_url=payload.public_url,
+        ui_url=payload.ui_url,
         auth_config={"type": "gateway_key"},
         status=GatewayInstanceStatus.ONLINE,
         last_health_check=now,
@@ -550,6 +605,8 @@ class SyncedRouteResult(BaseModel):
     deployment_id: str = Field(..., description="GatewayDeployment UUID")
     status: str = Field(..., description="Sync result: applied or failed")
     error: str | None = Field(default=None, description="Error message if failed")
+    steps: list[dict] | None = Field(default=None, description="Ordered sync step trace (optional)")
+    generation: int | None = Field(default=None, description="Generation that was synced (CAB-1950)")
 
 
 class RouteSyncAckPayload(BaseModel):
@@ -599,13 +656,57 @@ async def route_sync_ack(
             not_found += 1
             continue
 
+        # Validate that this gateway owns this deployment (CAB-1938).
+        # Without this check, a stoa-connect instance can ack deployments
+        # belonging to another gateway, marking them SYNCED on the wrong host.
+        if deployment.gateway_instance_id != gateway_id:
+            logger.warning(
+                "route-sync-ack: gateway mismatch deploy=%s owns=%s ack_from=%s — skipping",
+                result.deployment_id,
+                deployment.gateway_instance_id,
+                gateway_id,
+            )
+            not_found += 1
+            continue
+
+        # Store step trace — merge CP steps with agent steps (CAB-1947)
+        if result.steps is not None:
+            from src.services.sync_step_tracker import SyncStepTracker
+
+            # Prepend CP-side event_emitted step to agent-reported steps
+            cp_tracker = SyncStepTracker()
+            cp_tracker.start("event_emitted")
+            cp_tracker.complete("event_emitted", detail="deployment dispatched to agent")
+            merged_steps = cp_tracker.to_list() + result.steps
+            deployment.sync_steps = merged_steps
+
+        # CAB-1950: reject stale generation acks
+        if result.generation is not None and result.generation < deployment.desired_generation:
+            logger.debug(
+                "route-sync-ack: stale generation %d < desired %d for deployment %s, skipping",
+                result.generation,
+                deployment.desired_generation,
+                result.deployment_id,
+            )
+            continue
+
         if result.status == "applied":
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.last_sync_success = now
             deployment.sync_error = None
+            if result.generation is not None:
+                deployment.synced_generation = result.generation
+                deployment.attempted_generation = result.generation
         elif result.status == "failed":
             deployment.sync_status = DeploymentSyncStatus.ERROR
-            deployment.sync_error = result.error
+            if result.generation is not None:
+                deployment.attempted_generation = result.generation
+            # Derive sync_error from step trace if available, else use scalar error
+            if result.steps:
+                tracker = SyncStepTracker.from_list(result.steps)
+                deployment.sync_error = tracker.first_error() or result.error
+            else:
+                deployment.sync_error = result.error
         else:
             logger.warning("route-sync-ack: unknown status=%s for deployment=%s", result.status, result.deployment_id)
             continue

@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, instrument, warn, Instrument};
 
 use crate::auth::jwt::JwtValidator;
 use crate::control_plane::ToolProxyClient;
@@ -319,7 +319,21 @@ pub async fn mcp_tools_list(
     })
 }
 
-/// Helper to add rate limit headers to a response
+/// Record HTTP status on the current OTel span (CAB-1997).
+/// Call before returning from any handler with an `#[instrument]` span that
+/// declares `http.status_code = tracing::field::Empty`.
+fn record_span_status(code: u16) {
+    let span = tracing::Span::current();
+    span.record("http.status_code", code);
+    if code >= 500 {
+        span.record("otel.status_code", "ERROR");
+        span.record("otel.status_message", &format!("HTTP {code}") as &str);
+    } else {
+        span.record("otel.status_code", "OK");
+    }
+}
+
+/// Helper to add rate limit headers to a response.
 fn with_rate_limit_headers(
     status: StatusCode,
     body: Json<ToolsCallResponse>,
@@ -354,13 +368,30 @@ fn with_rate_limit_headers(
         tenant_id = tracing::field::Empty,
         tool_name = tracing::field::Empty,
         user_id = tracing::field::Empty,
+        http.status_code = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+        otel.status_message = tracing::field::Empty,
+        process.rss_bytes = tracing::field::Empty,
+        process.fd_count = tracing::field::Empty,
+        process.thread_count = tracing::field::Empty,
+        upstream.cb_state = tracing::field::Empty,
     )
 )]
 pub async fn mcp_tools_call(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(request): Json<ToolsCallRequest>,
-) -> impl IntoResponse {
+) -> Response {
+    let response = mcp_tools_call_inner(state, headers, request).await;
+    record_span_status(response.status().as_u16());
+    response
+}
+
+async fn mcp_tools_call_inner(
+    state: AppState,
+    headers: HeaderMap,
+    request: ToolsCallRequest,
+) -> Response {
     let start = Instant::now();
     let request_id = uuid::Uuid::new_v4().to_string();
     let request_size = serde_json::to_string(&request.arguments)
@@ -378,6 +409,10 @@ pub async fn mcp_tools_call(
     if let Some(ref uid) = auth.user_id {
         current_span.record("user_id", uid.as_str());
     }
+    // Snapshot process metrics as span attributes (CAB-1997)
+    current_span.record("process.rss_bytes", crate::memory::read_rss_bytes());
+    current_span.record("process.fd_count", crate::memory::read_fd_count());
+    current_span.record("process.thread_count", crate::memory::read_thread_count());
 
     debug!(
         tenant_id = %auth.tenant_id,
@@ -611,6 +646,13 @@ pub async fn mcp_tools_call(
 
     // CAB-707: Guardrails check (PII + prompt injection)
     // CAB-1337: Extended with content filtering + per-tenant policy (Phase 3)
+    let _guardrails_span = tracing::info_span!("policy.guardrails",
+        otel.kind = "internal",
+        guardrails.tool = %request.name,
+        guardrails.action = tracing::field::Empty,
+        guardrails.reason = tracing::field::Empty,
+    )
+    .entered();
     let global_guardrails_cfg = crate::guardrails::GuardrailsConfig {
         pii_enabled: state.config.guardrails_pii_enabled,
         pii_redact: state.config.guardrails_pii_redact,
@@ -629,16 +671,23 @@ pub async fn mcp_tools_call(
         &request.name,
         &request.arguments,
     ) {
-        crate::guardrails::GuardrailsOutcome::Pass => request.arguments.clone(),
+        crate::guardrails::GuardrailsOutcome::Pass => {
+            tracing::Span::current().record("guardrails.action", "pass");
+            request.arguments.clone()
+        }
         crate::guardrails::GuardrailsOutcome::Redacted(redacted) => {
             metrics::record_guardrails_pii("redacted");
             warn!(tool = %request.name, "PII detected and redacted in arguments");
+            tracing::Span::current().record("guardrails.action", "pii-redacted");
             guardrail_action = Some("pii-redacted");
             redacted
         }
         crate::guardrails::GuardrailsOutcome::Sensitive { rule, category } => {
             metrics::record_guardrails_content_filter("sensitive", category);
             warn!(tool = %request.name, rule = %rule, category = %category, "Content filter: sensitive content detected, request allowed");
+            tracing::Span::current().record("guardrails.action", "content-flagged");
+            tracing::Span::current()
+                .record("guardrails.reason", &format!("{rule}: {category}") as &str);
             guardrail_action = Some("content-flagged");
             request.arguments.clone()
         }
@@ -656,6 +705,8 @@ pub async fn mcp_tools_call(
             } else {
                 metrics::record_guardrails_pii("blocked");
             }
+            tracing::Span::current().record("guardrails.action", "blocked");
+            tracing::Span::current().record("guardrails.reason", reason.as_str());
             warn!(tool = %request.name, reason = %reason, "Guardrails blocked request");
             let mut resp = (
                 StatusCode::BAD_REQUEST,
@@ -674,6 +725,7 @@ pub async fn mcp_tools_call(
             return resp;
         }
     };
+    drop(_guardrails_span);
 
     // CAB-1337 Phase 2: Token budget pre-execution check
     if let Some(ref tracker) = state.token_budget {
@@ -798,6 +850,7 @@ pub async fn mcp_tools_call(
     };
 
     // Phase 2: OPA policy evaluation with real scopes/roles
+    let _opa_span = tracing::info_span!("policy.opa", otel.kind = "internal").entered();
     let required_action = tool.required_action();
     let t_policy_start = Instant::now();
     if let Err(e) = state.uac_enforcer.check_with_context(
@@ -846,6 +899,7 @@ pub async fn mcp_tools_call(
             .into_response();
     }
     let t_policy = t_policy_start.elapsed();
+    drop(_opa_span);
 
     // Phase 6: Check semantic cache for read-only tools
     let annotations = tool.definition().annotations;
@@ -855,11 +909,19 @@ pub async fn mcp_tools_call(
         .unwrap_or(false);
 
     if is_read_only {
-        if let Some(cached) = state
-            .semantic_cache
-            .get(&request.name, &auth.tenant_id, &request.arguments)
-            .await
-        {
+        let cache_result = async {
+            state
+                .semantic_cache
+                .get(&request.name, &auth.tenant_id, &request.arguments)
+                .await
+        }
+        .instrument(tracing::info_span!(
+            "cache.semantic",
+            otel.kind = "internal",
+            cache.op = "get"
+        ))
+        .await;
+        if let Some(cached) = cache_result {
             let t_gateway_ms = (t_auth + t_policy).as_millis() as u64;
             metrics::record_tool_call(
                 &request.name,
@@ -899,7 +961,12 @@ pub async fn mcp_tools_call(
     // CAB-1317: Per-tool circuit breaker — fast-fail if tool backend is unhealthy
     let tool_cb_key = format!("tool:{}", request.name);
     let tool_cb = state.circuit_breakers.get_or_create(&tool_cb_key);
-    if !tool_cb.allow_request() {
+    let cb_allowed = {
+        let _cb_span =
+            tracing::info_span!("resilience.circuit_breaker", otel.kind = "internal").entered();
+        tool_cb.allow_request()
+    };
+    if !cb_allowed {
         warn!(tool = %request.name, "Tool circuit breaker open — fast-failing");
         metrics::record_tool_call(
             &request.name,
@@ -922,6 +989,12 @@ pub async fn mcp_tools_call(
             &rate_result,
         );
     }
+
+    // Record circuit breaker state as span attribute (CAB-1997)
+    current_span.record(
+        "upstream.cb_state",
+        if cb_allowed { "closed" } else { "open" },
+    );
 
     // Execute tool (measure backend time separately)
     let t_backend_start = Instant::now();
@@ -977,6 +1050,8 @@ pub async fn mcp_tools_call(
                 .collect();
 
             // Phase 4: Apply token optimization if requested
+            let _opt_span =
+                tracing::info_span!("optimization.token", otel.kind = "internal").entered();
             let opt_level = extract_optimization_level(&headers);
             let content = if opt_level != OptimizationLevel::None {
                 let optimizer = TokenOptimizer::new(OptimizationSettings {
@@ -995,6 +1070,7 @@ pub async fn mcp_tools_call(
             } else {
                 content
             };
+            drop(_opt_span);
 
             let response_size = serde_json::to_string(&content)
                 .map(|s| s.len() as u64)
@@ -1015,30 +1091,42 @@ pub async fn mcp_tools_call(
             if is_read_only {
                 if let Some(ToolContent::Text { ref text }) = content.first() {
                     if let Ok(json_val) = serde_json::from_str::<Value>(text) {
-                        state
-                            .semantic_cache
-                            .put(&request.name, &auth.tenant_id, &request.arguments, json_val)
-                            .await;
+                        async {
+                            state
+                                .semantic_cache
+                                .put(&request.name, &auth.tenant_id, &request.arguments, json_val)
+                                .await;
+                        }
+                        .instrument(tracing::info_span!(
+                            "cache.semantic",
+                            otel.kind = "internal",
+                            cache.op = "put"
+                        ))
+                        .await;
                     }
                 }
             }
 
             // Phase 3: Emit metering event
-            emit_metering_event(
-                &state,
-                &auth,
-                &request.name,
-                &format!("{:?}", required_action),
-                EventStatus::Success,
-                CallTiming {
-                    start,
-                    t_gateway_ms,
-                },
-                EventSizes {
-                    request: request_size,
-                    response: response_size,
-                },
-            );
+            {
+                let _meter_span =
+                    tracing::info_span!("metering.emit", otel.kind = "internal").entered();
+                emit_metering_event(
+                    &state,
+                    &auth,
+                    &request.name,
+                    &format!("{:?}", required_action),
+                    EventStatus::Success,
+                    CallTiming {
+                        start,
+                        t_gateway_ms,
+                    },
+                    EventSizes {
+                        request: request_size,
+                        response: response_size,
+                    },
+                );
+            }
 
             let mut resp = (
                 StatusCode::OK,

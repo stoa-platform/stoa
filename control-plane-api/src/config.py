@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     KAFKA_SASL_PASSWORD: str = ""
 
     # API Gateway
-    GATEWAY_URL: str = f"https://gateway.{_BASE_DOMAIN}"
+    GATEWAY_URL: str = f"https://vps-wm.{_BASE_DOMAIN}"
     GATEWAY_ADMIN_USER: str = "Administrator"
     GATEWAY_ADMIN_PASSWORD: str = ""
 
@@ -123,6 +123,14 @@ class Settings(BaseSettings):
     LOKI_INTERNAL_URL: str = "http://loki:3100"
     LOKI_TIMEOUT_SECONDS: int = 30
     LOKI_ENABLED: bool = True
+
+    # Tempo Internal API (CAB-1984) - for distributed trace queries
+    TEMPO_INTERNAL_URL: str = "http://tempo:3200"
+    TEMPO_TIMEOUT_SECONDS: int = 30
+    TEMPO_ENABLED: bool = True
+
+    # OpenSearch Traces (CAB-1997) - query otel-v1-apm-span-* from Data Prepper
+    OPENSEARCH_TRACES_ENABLED: bool = True
 
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
@@ -203,7 +211,8 @@ class Settings(BaseSettings):
         f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},"
         f"https://staging-console.{_BASE_DOMAIN},https://staging-portal.{_BASE_DOMAIN},"
         f"https://dev-console.{_BASE_DOMAIN},https://dev-portal.{_BASE_DOMAIN},"
-        "http://localhost:3000,http://localhost:5173"
+        "http://localhost:3000,http://localhost:3002,http://localhost:5173,"
+        "http://console.stoa.local,http://portal.stoa.local,http://api.stoa.local"
     )
 
     # Rate Limiting

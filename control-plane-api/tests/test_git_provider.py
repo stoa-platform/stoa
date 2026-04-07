@@ -94,12 +94,12 @@ class TestGitProviderConfig:
     """Verify GIT_PROVIDER config defaults in Settings."""
 
     def test_default_provider_is_gitlab(self):
-        """Default GIT_PROVIDER must be 'gitlab' for backward compatibility."""
+        """Default GIT_PROVIDER must be 'github' (migrated from GitLab — CAB-1890)."""
         from src.config import Settings
 
         # Check class-level default (not the singleton which may have env overrides)
         field = Settings.model_fields["GIT_PROVIDER"]
-        assert field.default == "gitlab"
+        assert field.default == "github"
 
     def test_github_config_defaults(self):
         """GitHub config fields must have sensible defaults."""

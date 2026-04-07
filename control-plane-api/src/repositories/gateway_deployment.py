@@ -1,4 +1,5 @@
 """Repository for gateway deployment CRUD and sync operations."""
+
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -23,14 +24,10 @@ class GatewayDeploymentRepository:
 
     async def get_by_id(self, deployment_id: UUID) -> GatewayDeployment | None:
         """Get deployment by ID."""
-        result = await self.session.execute(
-            select(GatewayDeployment).where(GatewayDeployment.id == deployment_id)
-        )
+        result = await self.session.execute(select(GatewayDeployment).where(GatewayDeployment.id == deployment_id))
         return result.scalar_one_or_none()
 
-    async def get_by_api_and_gateway(
-        self, api_catalog_id: UUID, gateway_instance_id: UUID
-    ) -> GatewayDeployment | None:
+    async def get_by_api_and_gateway(self, api_catalog_id: UUID, gateway_instance_id: UUID) -> GatewayDeployment | None:
         """Get deployment for a specific API + gateway combination."""
         result = await self.session.execute(
             select(GatewayDeployment).where(
@@ -57,9 +54,7 @@ class GatewayDeploymentRepository:
         sync_status: DeploymentSyncStatus | None = None,
     ) -> list[GatewayDeployment]:
         """List all deployments for a gateway, optionally filtered by sync status."""
-        query = select(GatewayDeployment).where(
-            GatewayDeployment.gateway_instance_id == gateway_instance_id
-        )
+        query = select(GatewayDeployment).where(GatewayDeployment.gateway_instance_id == gateway_instance_id)
         if sync_status:
             query = query.where(GatewayDeployment.sync_status == sync_status)
         query = query.order_by(GatewayDeployment.created_at.desc())
@@ -81,18 +76,15 @@ class GatewayDeploymentRepository:
         Returns dicts (not ORM objects) with gateway info merged in.
         """
         # Always join GatewayInstance for name/type/environment
-        query = (
-            select(
-                GatewayDeployment,
-                GatewayInstance.name.label("gateway_name"),
-                GatewayInstance.display_name.label("gateway_display_name"),
-                GatewayInstance.gateway_type.label("gateway_type"),
-                GatewayInstance.environment.label("gateway_environment"),
-            )
-            .join(
-                GatewayInstance,
-                GatewayDeployment.gateway_instance_id == GatewayInstance.id,
-            )
+        query = select(
+            GatewayDeployment,
+            GatewayInstance.name.label("gateway_name"),
+            GatewayInstance.display_name.label("gateway_display_name"),
+            GatewayInstance.gateway_type.label("gateway_type"),
+            GatewayInstance.environment.label("gateway_environment"),
+        ).join(
+            GatewayInstance,
+            GatewayDeployment.gateway_instance_id == GatewayInstance.id,
         )
 
         if environment:
@@ -130,6 +122,7 @@ class GatewayDeploymentRepository:
                 "last_sync_success": dep.last_sync_success,
                 "sync_error": dep.sync_error,
                 "sync_attempts": dep.sync_attempts,
+                "sync_steps": dep.sync_steps,
                 "gateway_resource_id": dep.gateway_resource_id,
                 "created_at": dep.created_at,
                 "updated_at": dep.updated_at,
@@ -143,8 +136,18 @@ class GatewayDeploymentRepository:
     async def list_by_statuses(self, statuses: list[DeploymentSyncStatus]) -> list[GatewayDeployment]:
         """List deployments matching any of the given statuses."""
         result = await self.session.execute(
+            select(GatewayDeployment).where(GatewayDeployment.sync_status.in_(statuses))
+        )
+        return list(result.scalars().all())
+
+    async def list_by_statuses_and_gateway(
+        self, statuses: list[DeploymentSyncStatus], gateway_instance_id: UUID
+    ) -> list[GatewayDeployment]:
+        """List deployments matching statuses AND a specific gateway instance."""
+        result = await self.session.execute(
             select(GatewayDeployment).where(
-                GatewayDeployment.sync_status.in_(statuses)
+                GatewayDeployment.sync_status.in_(statuses),
+                GatewayDeployment.gateway_instance_id == gateway_instance_id,
             )
         )
         return list(result.scalars().all())
@@ -153,11 +156,13 @@ class GatewayDeploymentRepository:
         """List deployments needing sync (pending, drifted, or error with retries)."""
         result = await self.session.execute(
             select(GatewayDeployment).where(
-                GatewayDeployment.sync_status.in_([
-                    DeploymentSyncStatus.PENDING,
-                    DeploymentSyncStatus.DRIFTED,
-                    DeploymentSyncStatus.DELETING,
-                ])
+                GatewayDeployment.sync_status.in_(
+                    [
+                        DeploymentSyncStatus.PENDING,
+                        DeploymentSyncStatus.DRIFTED,
+                        DeploymentSyncStatus.DELETING,
+                    ]
+                )
             )
         )
         return list(result.scalars().all())
@@ -165,18 +170,14 @@ class GatewayDeploymentRepository:
     async def list_synced(self) -> list[GatewayDeployment]:
         """List all synced deployments (for drift detection)."""
         result = await self.session.execute(
-            select(GatewayDeployment).where(
-                GatewayDeployment.sync_status == DeploymentSyncStatus.SYNCED
-            )
+            select(GatewayDeployment).where(GatewayDeployment.sync_status == DeploymentSyncStatus.SYNCED)
         )
         return list(result.scalars().all())
 
     async def list_by_promotion(self, promotion_id: UUID) -> list[GatewayDeployment]:
         """List all deployments linked to a promotion."""
         result = await self.session.execute(
-            select(GatewayDeployment).where(
-                GatewayDeployment.promotion_id == promotion_id
-            )
+            select(GatewayDeployment).where(GatewayDeployment.promotion_id == promotion_id)
         )
         return list(result.scalars().all())
 
@@ -184,9 +185,7 @@ class GatewayDeploymentRepository:
         """Get sync status counts for the dashboard."""
         counts = {}
         for status in DeploymentSyncStatus:
-            count_query = select(func.count()).where(
-                GatewayDeployment.sync_status == status
-            )
+            count_query = select(func.count()).where(GatewayDeployment.sync_status == status)
             result = await self.session.execute(count_query)
             counts[status.value] = result.scalar_one()
         return counts
@@ -202,9 +201,7 @@ class GatewayDeploymentRepository:
         await self.session.delete(deployment)
         await self.session.flush()
 
-    async def get_primary_for_api(
-        self, api_id: str, tenant_id: str
-    ) -> GatewayDeployment | None:
+    async def get_primary_for_api(self, api_id: str, tenant_id: str) -> GatewayDeployment | None:
         """Get the first synced deployment for an API (for provisioning service).
 
         Looks up the API catalog entry by api_id + tenant_id, then finds

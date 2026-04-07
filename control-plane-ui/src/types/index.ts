@@ -44,6 +44,7 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   deployed_dev: boolean;
   deployed_staging: boolean;
+  openapi_spec?: string | Record<string, unknown>;
   tags?: string[];
   portal_promoted?: boolean; // Whether API is promoted to Developer Portal
   audience?: 'public' | 'internal' | 'partner';
@@ -1165,6 +1166,8 @@ export interface GatewayInstance {
   tenant_id?: string;
   base_url: string;
   target_gateway_url?: string | null;
+  public_url?: string | null;
+  ui_url?: string | null;
   auth_config: Record<string, unknown>;
   status: GatewayInstanceStatus;
   last_health_check?: string;
@@ -1173,6 +1176,8 @@ export interface GatewayInstance {
   version?: string;
   tags: string[];
   mode?: GatewayMode;
+  enabled: boolean;
+  visibility?: { tenant_ids: string[] } | null;
   source?: 'argocd' | 'self_register' | 'manual';
   protected?: boolean;
   deleted_at?: string | null;
@@ -1200,6 +1205,8 @@ export interface GatewayInstanceUpdate {
   auth_config?: Record<string, unknown>;
   capabilities?: string[];
   tags?: string[];
+  enabled?: boolean;
+  visibility?: { tenant_ids: string[] } | null;
 }
 
 export interface GatewayHealthCheckResponse {
@@ -1216,6 +1223,14 @@ export interface PaginatedGatewayInstances {
   page_size: number;
 }
 
+export interface SyncStep {
+  name: string;
+  status: 'running' | 'success' | 'failed' | 'skipped';
+  started_at: string;
+  completed_at?: string;
+  detail?: string;
+}
+
 export interface GatewayDeployment {
   id: string;
   api_catalog_id: string;
@@ -1229,6 +1244,7 @@ export interface GatewayDeployment {
   last_sync_success?: string;
   sync_error?: string;
   sync_attempts: number;
+  sync_steps?: SyncStep[];
   gateway_resource_id?: string;
   created_at: string;
   updated_at: string;
@@ -1945,4 +1961,31 @@ export interface CatalogResponse {
   entries: CatalogEntry[];
   total: number;
   categories: CatalogCategory[];
+}
+
+// Tenant Tool Permissions (CAB-1982)
+// =============================================================================
+
+export interface TenantToolPermission {
+  id: string;
+  tenant_id: string;
+  mcp_server_id: string;
+  tool_name: string;
+  allowed: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantToolPermissionCreate {
+  mcp_server_id: string;
+  tool_name: string;
+  allowed: boolean;
+}
+
+export interface TenantToolPermissionListResponse {
+  items: TenantToolPermission[];
+  total: number;
+  page: number;
+  page_size: number;
 }

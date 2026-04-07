@@ -90,6 +90,12 @@ impl GatewayMode {
         matches!(self, GatewayMode::EdgeMcp)
     }
 
+    /// Check if this mode supports API catalog discovery (CAB-1949)
+    /// Sidecar is an ext_authz enforcer, Shadow is passive capture — neither needs discovery.
+    pub fn supports_discovery(&self) -> bool {
+        !matches!(self, GatewayMode::Sidecar | GatewayMode::Shadow)
+    }
+
     /// Check if this mode requires upstream routing
     pub fn requires_upstream(&self) -> bool {
         matches!(self, GatewayMode::Proxy | GatewayMode::Shadow)
@@ -582,6 +588,28 @@ mod tests {
     fn test_mode_config_wrong_accessor_shadow() {
         let config = ModeConfig::from_env();
         assert!(config.shadow().is_none());
+    }
+
+    /// Regression test for CAB-1949: discovery gate was too restrictive (EdgeMcp only).
+    /// EdgeMcp and Proxy MUST support discovery; Sidecar and Shadow MUST NOT.
+    #[test]
+    fn regression_cab_1949_discovery_mode_gate() {
+        assert!(
+            GatewayMode::EdgeMcp.supports_discovery(),
+            "EdgeMcp must support discovery"
+        );
+        assert!(
+            GatewayMode::Proxy.supports_discovery(),
+            "Proxy must support discovery"
+        );
+        assert!(
+            !GatewayMode::Sidecar.supports_discovery(),
+            "Sidecar must NOT support discovery"
+        );
+        assert!(
+            !GatewayMode::Shadow.supports_discovery(),
+            "Shadow must NOT support discovery"
+        );
     }
 
     #[test]

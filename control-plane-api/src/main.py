@@ -34,6 +34,7 @@ from .opensearch import search_router, setup_opensearch
 from .opensearch.audit_middleware import AuditMiddleware
 from .routers import (
     access_requests,
+    admin_logs,
     admin_prospects,
     api_gateway_assignments,
     apis,
@@ -761,6 +762,9 @@ app.include_router(roles.router)
 
 # Self-Service Logs (CAB-793 - Consumer log access with PII masking)
 app.include_router(self_service_logs.router)
+
+# Admin Logs (CAB-2004 - Structured gateway/API/auth logs via Loki)
+app.include_router(admin_logs.router)
 
 # Gateway Orchestration (Control Plane Agnostique)
 # IMPORTANT: observability router BEFORE gateway_instances (path ordering for /metrics vs /{gateway_id})

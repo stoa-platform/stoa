@@ -25,6 +25,7 @@ class APITransactionSummary(BaseModel):
     started_at: str
     total_duration_ms: float
     spans_count: int
+    deployment_mode: str = "edge-mcp"
     spans: list[TransactionSpan] = []
 
 
@@ -60,3 +61,5 @@ class APITransactionStats(BaseModel):
     requests_per_minute: float
     by_api: dict
     by_status_code: dict
+    by_auth_type: dict = {}
+    by_deployment_mode: dict = {}

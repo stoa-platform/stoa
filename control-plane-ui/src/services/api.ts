@@ -1454,11 +1454,15 @@ class ApiService {
   async getTransactions(
     limit = 20,
     status?: string,
-    timeRange?: string
+    timeRange?: string,
+    serviceType?: string,
+    statusCode?: number
   ): Promise<{ transactions: MonitoringTransaction[] }> {
     const params: Record<string, string | number> = { limit };
     if (status) params.status = status;
     if (timeRange) params.time_range = timeRange;
+    if (serviceType) params.service_type = serviceType;
+    if (statusCode) params.status_code = statusCode;
     const { data } = await this.client.get('/v1/monitoring/transactions', { params });
     return data;
   }
@@ -1681,6 +1685,7 @@ export interface MonitoringTransaction {
   started_at: string;
   total_duration_ms: number;
   spans_count: number;
+  deployment_mode?: string;
   spans?: Array<{
     name: string;
     service: string;

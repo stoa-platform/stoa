@@ -58,8 +58,9 @@ ln -sf /app/scripts/traffic/auth_helpers.py /app/scripts/traffic/auth_helpers.py
 ln -sf /app/scripts/traffic/scenarios.py /app/scripts/traffic/scenarios.py 2>/dev/null || true
 touch /app/scripts/__init__.py /app/scripts/traffic/__init__.py 2>/dev/null || true
 
+SEEDER_MODE="${SEEDER_MODE:-edge-only}"
 while true; do
-  python3 /app/realistic-seeder.py --mode edge-only 2>&1 || true
+  python3 /app/realistic-seeder.py --mode "$SEEDER_MODE" 2>&1 || true
   echo "[seeder] Cycle complete, restarting in 5s..."
   sleep 5
 done

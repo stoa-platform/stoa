@@ -61,7 +61,7 @@ function mapTransaction(tx: MonitoringTransaction): TraceEntry {
     id: tx.id,
     route: tx.path || tx.api_name,
     method: tx.method,
-    mode: 'edge-mcp',
+    mode: tx.deployment_mode || 'edge-mcp',
     statusCode: tx.status_code,
     durationMs: tx.total_duration_ms,
     timestamp: tx.started_at,
@@ -75,14 +75,49 @@ function mapTransaction(tx: MonitoringTransaction): TraceEntry {
   };
 }
 
+// Map dashboard timeRange labels to API minutes
+const LATENCY_RANGE_MAP: Record<string, [number, number]> = {
+  '0-1ms': [0, 1],
+  '1-2ms': [1, 2],
+  '2-5ms': [2, 5],
+  '5-10ms': [5, 10],
+  '10-20ms': [10, 20],
+  '20-50ms': [20, 50],
+  '50-100ms': [50, 100],
+  '100ms+': [100, Infinity],
+};
+
+const TIME_RANGE_MINUTES: Record<string, string> = {
+  '1h': '60',
+  '6h': '360',
+  '24h': '1440',
+  '7d': '10080',
+};
+
 async function fetchTransactions(
-  limit: number = 20
+  limit: number = 20,
+  serviceType?: string,
+  timeRange?: string,
+  statusFilter?: string
 ): Promise<{ traces: TraceEntry[]; isDemo: boolean }> {
   try {
-    const data = await apiService.getTransactions(limit);
+    const rangeMinutes = timeRange ? TIME_RANGE_MINUTES[timeRange] || '60' : undefined;
+    const statusCodeNum = statusFilter ? parseInt(statusFilter, 10) : undefined;
+    const data = await apiService.getTransactions(
+      limit,
+      undefined,
+      rangeMinutes,
+      serviceType || undefined,
+      statusCodeNum && !isNaN(statusCodeNum) ? statusCodeNum : undefined
+    );
     const transactions = data.transactions || [];
     if (transactions.length > 0) {
       return { traces: transactions.map(mapTransaction), isDemo: false };
+    }
+    // If a filter is active, return empty (not demo data)
+    const hasFilter = !!(serviceType || statusFilter);
+    if (hasFilter) {
+      return { traces: [], isDemo: false };
     }
     return { traces: generateDemoTraces(limit), isDemo: true };
   } catch {
@@ -144,6 +179,10 @@ export function CallFlowDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(DEFAULT_REFRESH);
   const [traces, setTraces] = useState<TraceEntry[]>([]);
   const [tracesDemo, setTracesDemo] = useState(false);
+  const [serviceType, setServiceType] = useState<string>('');
+  const [routeFilter, setRouteFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [latencyFilter, setLatencyFilter] = useState<string>('');
   const tracesRef = useRef(false);
 
   const refreshMs = autoRefresh > 0 ? autoRefresh * 1000 : 0;
@@ -175,19 +214,19 @@ export function CallFlowDashboard() {
   // ─── Throughput (per-mode range queries for stacked area) ───
 
   const edgeMcpTrend = usePrometheusRange(
-    `sum(rate(stoa_http_requests_total{path=~"/mcp/.*"}[5m]))`,
+    `sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
   );
   const sidecarTrend = usePrometheusRange(
-    `sum(rate(stoa_http_requests_total{path=~"/proxy/.*"}[5m]))`,
+    `sum(rate(stoa_http_requests_total{job="stoa-link"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
   );
   const connectTrend = usePrometheusRange(
-    `sum(rate(stoa_http_requests_total{path=~"/admin/.*"}[5m]))`,
+    `sum(rate(stoa_connect_admin_api_latency_seconds_count[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
@@ -242,24 +281,23 @@ export function CallFlowDashboard() {
   // ─── Fetch live traces ───
 
   useEffect(() => {
-    if (tracesRef.current) return;
     tracesRef.current = true;
-    fetchTransactions(20).then(({ traces: t, isDemo }) => {
+    fetchTransactions(50, serviceType, timeRange, statusFilter).then(({ traces: t, isDemo }) => {
       setTraces(t);
       setTracesDemo(isDemo);
     });
-  }, []);
+  }, [serviceType, timeRange, statusFilter]);
 
   useEffect(() => {
     if (!refreshMs) return;
     const interval = setInterval(() => {
-      fetchTransactions(20).then(({ traces: t, isDemo }) => {
+      fetchTransactions(50, serviceType, timeRange, statusFilter).then(({ traces: t, isDemo }) => {
         setTraces(t);
         setTracesDemo(isDemo);
       });
     }, refreshMs);
     return () => clearInterval(interval);
-  }, [refreshMs]);
+  }, [refreshMs, serviceType, timeRange, statusFilter]);
 
   // ─── Derived values ───
 
@@ -289,6 +327,25 @@ export function CallFlowDashboard() {
 
   const prometheusAvailable = !totalRequests.error && !fallbackRequests.error;
   const loading = totalRequests.loading && fallbackRequests.loading;
+
+  // ─── Client-side trace filters (from chart clicks) ───
+
+  const filteredTraces = useMemo(() => {
+    let result = traces;
+    if (routeFilter) {
+      result = result.filter((t) => t.route.includes(routeFilter));
+    }
+    // statusFilter is handled server-side via status_code param
+    if (latencyFilter && LATENCY_RANGE_MAP[latencyFilter]) {
+      const [min, max] = LATENCY_RANGE_MAP[latencyFilter];
+      result = result.filter((t) => t.durationMs >= min && t.durationMs < max);
+    }
+    return result;
+  }, [traces, routeFilter, latencyFilter]);
+
+  const activeFilterCount = [serviceType, routeFilter, statusFilter, latencyFilter].filter(
+    Boolean
+  ).length;
 
   // ─── Parse latency histogram ───
 
@@ -409,7 +466,7 @@ export function CallFlowDashboard() {
     fallbackErrors.refetch();
     fallbackTrend.refetch();
     requestsTrend.refetch();
-    fetchTransactions(20).then(({ traces: t, isDemo }) => {
+    fetchTransactions(50, serviceType, timeRange, statusFilter).then(({ traces: t, isDemo }) => {
       setTraces(t);
       setTracesDemo(isDemo);
     });
@@ -431,6 +488,9 @@ export function CallFlowDashboard() {
     fallbackErrors,
     fallbackTrend,
     requestsTrend,
+    serviceType,
+    statusFilter,
+    timeRange,
   ]);
 
   return (
@@ -444,6 +504,16 @@ export function CallFlowDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={serviceType}
+            onChange={(e) => setServiceType(e.target.value)}
+            className="border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm"
+          >
+            <option value="">All Services</option>
+            <option value="gateway">STOA Gateway</option>
+            <option value="link">STOA Link</option>
+            <option value="connect">STOA Connect</option>
+          </select>
           <AutoRefreshToggle value={autoRefresh} onChange={setAutoRefresh} />
           <TimeRangeSelector
             value={timeRange}
@@ -584,20 +654,51 @@ export function CallFlowDashboard() {
           {/* ─── Charts Row 1: Throughput + Latency Distribution ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ChartCard title="Throughput by Deployment Mode">
-              <ThroughputChart series={displayThroughput} timeRange={timeRange} />
+              <ThroughputChart
+                series={displayThroughput}
+                timeRange={timeRange}
+                activeLabel={
+                  (
+                    { gateway: 'Gateway', link: 'Link', connect: 'Connect' } as Record<
+                      string,
+                      string
+                    >
+                  )[serviceType] || ''
+                }
+                onLegendClick={(label) => {
+                  const map: Record<string, string> = {
+                    Gateway: 'gateway',
+                    Link: 'link',
+                    Connect: 'connect',
+                  };
+                  setServiceType(map[label] || '');
+                }}
+              />
             </ChartCard>
             <ChartCard title="Latency Distribution">
-              <LatencyHistogram buckets={histogramBuckets} />
+              <LatencyHistogram
+                buckets={histogramBuckets}
+                activeLabel={latencyFilter}
+                onBucketClick={setLatencyFilter}
+              />
             </ChartCard>
           </div>
 
           {/* ─── Charts Row 2: Error Breakdown + Top Routes ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ChartCard title="Error Breakdown">
-              <ErrorBreakdown errors={errorEntries} />
+              <ErrorBreakdown
+                errors={errorEntries}
+                activeCode={statusFilter}
+                onSliceClick={setStatusFilter}
+              />
             </ChartCard>
             <ChartCard title="Top Routes by Latency (P95)">
-              <TopRoutes routes={topRoutes} />
+              <TopRoutes
+                routes={topRoutes}
+                activeRoute={routeFilter}
+                onRouteClick={setRouteFilter}
+              />
             </ChartCard>
           </div>
 
@@ -606,7 +707,12 @@ export function CallFlowDashboard() {
             title="Traffic Heatmap (24h × Routes)"
             icon={<Activity className="h-5 w-5 text-neutral-400" />}
           >
-            <TrafficHeatmap cells={heatmapCells.cells} routes={heatmapCells.routes} />
+            <TrafficHeatmap
+              cells={heatmapCells.cells}
+              routes={heatmapCells.routes}
+              activeRoute={routeFilter}
+              onCellClick={setRouteFilter}
+            />
           </ChartCard>
 
           {/* ─── Live Traces ─── */}
@@ -614,20 +720,38 @@ export function CallFlowDashboard() {
             title="Live Traces"
             trailing={
               <div className="flex items-center gap-2">
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setServiceType('');
+                      setRouteFilter('');
+                      setStatusFilter('');
+                      setLatencyFilter('');
+                    }}
+                    className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                  >
+                    {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} — clear
+                  </button>
+                )}
                 {tracesDemo && (
                   <span className="text-[10px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full font-medium">
                     Demo data
                   </span>
                 )}
                 <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                  {traces.length} recent requests
+                  {filteredTraces.length}/{traces.length} traces
                 </span>
               </div>
             }
           >
             <LiveTraces
-              traces={traces}
+              traces={filteredTraces}
               onSelectTrace={(id) => navigate(`/call-flow/trace/${id}`)}
+              emptyMessage={
+                activeFilterCount > 0
+                  ? 'No trace spans found for this filter — metrics (Prometheus) and traces (OpenSearch) may not cover the same time window'
+                  : undefined
+              }
             />
           </ChartCard>
 

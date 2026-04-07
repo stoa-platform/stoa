@@ -93,12 +93,45 @@ async def provision_on_approval(
     This function is meant to be called via asyncio.create_task()
     so that the approval endpoint returns immediately.
 
+    IMPORTANT: This function creates its own DB session to avoid sharing
+    the caller's session (which causes idle-in-transaction locks when
+    the background task outlives the request lifecycle).
+
     Args:
-        db: Database session
+        db: Database session (only used if no session factory available)
         subscription: The approved subscription
         auth_token: JWT token for OIDC proxy mode
         correlation_id: Request correlation ID
     """
+    from ..database import get_async_session_factory
+
+    factory = get_async_session_factory()
+    if factory is not None:
+        try:
+            async with factory() as own_db:
+                from ..repositories.subscription import SubscriptionRepository
+
+                repo = SubscriptionRepository(own_db)
+                sub = await repo.get_by_id(subscription.id)
+                if sub is None:
+                    logger.error("Subscription %s not found for provisioning", subscription.id)
+                    return
+                await _provision_with_session(own_db, sub, auth_token, correlation_id)
+                await own_db.commit()
+                return
+        except Exception as e:
+            logger.warning("Own DB session failed (%s), falling back to shared session", e)
+
+    await _provision_with_session(db, subscription, auth_token, correlation_id)
+
+
+async def _provision_with_session(
+    db: AsyncSession,
+    subscription: Subscription,
+    auth_token: str | None,
+    correlation_id: str,
+) -> None:
+    """Internal provisioning logic with a given DB session."""
     subscription.provisioning_status = ProvisioningStatus.PROVISIONING
     subscription.provisioning_error = None
     await db.commit()
@@ -313,15 +346,40 @@ async def deprovision_on_revocation(
 ) -> None:
     """Remove a gateway application when a subscription is revoked.
 
-    Args:
-        db: Database session
-        subscription: The revoked subscription
-        auth_token: JWT token for OIDC proxy mode
-        correlation_id: Request correlation ID
+    Uses its own DB session to avoid idle-in-transaction locks
+    when called via asyncio.create_task().
     """
     if not subscription.gateway_app_id:
         return
 
+    from ..database import get_async_session_factory
+
+    factory = get_async_session_factory()
+    if factory is not None:
+        try:
+            async with factory() as own_db:
+                from ..repositories.subscription import SubscriptionRepository
+
+                repo = SubscriptionRepository(own_db)
+                sub = await repo.get_by_id(subscription.id)
+                if sub is None:
+                    return
+                await _deprovision_with_session(own_db, sub, auth_token, correlation_id)
+                await own_db.commit()
+                return
+        except Exception as e:
+            logger.warning("Own DB session failed for deprovision (%s), using shared", e)
+
+    await _deprovision_with_session(db, subscription, auth_token, correlation_id)
+
+
+async def _deprovision_with_session(
+    db: AsyncSession,
+    subscription: Subscription,
+    auth_token: str | None,
+    correlation_id: str,
+) -> None:
+    """Internal deprovisioning logic with a given DB session."""
     subscription.provisioning_status = ProvisioningStatus.DEPROVISIONING
     await db.commit()
 

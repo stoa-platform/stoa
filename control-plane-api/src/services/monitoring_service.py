@@ -1,6 +1,7 @@
 """Monitoring service — queries audit index in OpenSearch for real transaction data."""
 
 import logging
+from datetime import datetime
 
 from opensearchpy import AsyncOpenSearch
 
@@ -183,11 +184,749 @@ def _build_spans_from_timings(
     return spans
 
 
+# Map OTLP span names → UI-expected names (TraceDetail.tsx, LiveTraces.tsx)
+_OTEL_TO_UI_SPAN_NAME: dict[str, str] = {
+    "auth.profile": "auth_validation",
+    "auth.jwt": "auth_validation",
+    "auth.subscription": "subscription_check",
+    "auth.mtls.extract": "tls_termination",
+    "auth.mtls.binding": "mtls_binding",
+    "auth.sender_constraint": "sender_constraint",
+    "policy.quota": "rate_limiting",
+    "policy.supervision": "policy_eval",
+    "policy.guardrails": "guardrails",
+    "policy.opa": "policy_eval",
+    "proxy.dynamic": "routing",
+    "upstream.call": "backend_call",
+    "upstream.retry": "backend_retry",
+    "http.request": "http_request",
+    "mcp.tools.list": "mcp_discovery",
+    "mcp.tools.call": "mcp_tool_call",
+    "cache.semantic": "cache_lookup",
+    "metering.emit": "metering",
+    "resilience.circuit_breaker": "circuit_breaker",
+    "optimization.token": "token_optimization",
+}
+
+# Map OTLP span names → service labels for the UI
+_OTEL_TO_UI_SERVICE: dict[str, str] = {
+    "auth.profile": "keycloak",
+    "auth.jwt": "keycloak",
+    "auth.subscription": "stoa-gateway",
+    "auth.mtls.extract": "stoa-gateway",
+    "auth.mtls.binding": "stoa-gateway",
+    "auth.sender_constraint": "stoa-gateway",
+    "policy.quota": "stoa-gateway",
+    "policy.supervision": "stoa-gateway",
+    "proxy.dynamic": "stoa-gateway",
+    "upstream.call": "upstream-api",
+    "upstream.retry": "upstream-api",
+    "http.request": "stoa-gateway",
+}
+
+
+def _span_status_from_otel(status: dict, attrs: dict) -> str:
+    """Derive transaction status from OTel span status and attributes."""
+    http_code = attrs.get("http@status_code")
+    if http_code is not None:
+        code = int(http_code)
+        if code == 504:
+            return "timeout"
+        if code >= 400:
+            return "error"
+        return "success"
+    if status.get("code") == 2:
+        return "error"
+    return "success"
+
+
+def _parse_iso_ns(ts: str) -> int:
+    """Parse ISO 8601 timestamp to nanoseconds since epoch.
+
+    Handles both standard ISO (``2026-04-07T09:15:00.667Z``) and
+    high-precision variants with >6 fractional digits that Python's
+    ``fromisoformat`` rejects (e.g. ``...667797258Z``).
+    """
+    if not ts:
+        return 0
+    try:
+        clean = ts.replace("Z", "+00:00")
+        # Python fromisoformat only handles up to 6 fractional digits.
+        # Truncate excess digits before the timezone offset.
+        dot_idx = clean.find(".")
+        if dot_idx != -1:
+            plus_idx = clean.find("+", dot_idx)
+            frac = clean[dot_idx + 1 : plus_idx]
+            if len(frac) > 6:
+                clean = clean[: dot_idx + 7] + clean[plus_idx:]
+        dt = datetime.fromisoformat(clean)
+        return int(dt.timestamp() * 1_000_000_000)
+    except Exception:
+        return 0
+
+
+def _time_diff_ms(parent_ts: str, child_ts: str) -> float:
+    """Return millisecond difference between two ISO timestamps."""
+    p = _parse_iso_ns(parent_ts)
+    c = _parse_iso_ns(child_ts)
+    if p == 0 or c == 0:
+        return 0.0
+    return (c - p) / 1_000_000
+
+
 class MonitoringService:
     """Queries OpenSearch audit-* index for transaction analytics."""
 
     def __init__(self, client: AsyncOpenSearch):
         self.client = client
+
+    # =========================================================================
+    # OTEL SPAN QUERIES (CAB-1997 — Data Prepper otel-v1-apm-span-*)
+    # =========================================================================
+
+    SERVICE_TYPE_FILTERS: dict[str, dict] = {
+        "gateway": {
+            "bool": {
+                "must": [
+                    {"term": {"serviceName": "stoa-gateway"}},
+                    {"term": {"resource.attributes.stoa@deployment_mode": "edge-mcp"}},
+                ]
+            }
+        },
+        "link": {
+            "bool": {
+                "must": [
+                    {"term": {"serviceName": "stoa-gateway"}},
+                    {"term": {"resource.attributes.stoa@deployment_mode": "sidecar"}},
+                ]
+            }
+        },
+        "connect": {"term": {"serviceName": "stoa-connect"}},
+    }
+
+    async def list_transactions_from_spans(
+        self,
+        limit: int = 50,
+        api_name: str | None = None,
+        route: str | None = None,
+        status: str | None = None,
+        status_code: int | None = None,
+        time_range_minutes: int = 60,
+        service_type: str | None = None,
+    ) -> list[APITransactionSummary] | None:
+        """List recent transactions from OTel span index (root spans only).
+
+        Data Prepper flattens span attributes as top-level dot-keys
+        (e.g. ``span.attributes.http@method``).  Root spans are internal
+        middleware stages (``policy.supervision``) and carry no HTTP
+        attributes.  We use ``traceGroupFields`` for overall trace
+        duration/status and enrich with HTTP info from child spans.
+        """
+        try:
+            # Query request-level spans (not internal middleware heartbeats).
+            # http.request root spans are not exported by tracing-opentelemetry,
+            # so we target the handler spans that carry HTTP status codes.
+            request_span_names = [
+                "mcp.tools.call",
+                "mcp.tools.list",
+                "proxy.dynamic",
+                "http.request",
+                "stoa-connect.routes.fetch",
+                "stoa-connect.routes.sync",
+                "stoa-connect.heartbeat",
+                "stoa-connect.discovery",
+                "stoa-connect.sync",
+                "stoa-connect.register",
+                "HTTP GET",
+                "HTTP POST",
+            ]
+            filters: list[dict] = [
+                {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+                {"terms": {"name": request_span_names}},
+            ]
+            if api_name:
+                filters.append({"term": {"serviceName": api_name}})
+            if route:
+                filters.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"term": {"span.attributes.http@route": route}},
+                                {"wildcard": {"span.attributes.http@route": f"*{route}*"}},
+                            ],
+                            "minimum_should_match": 1,
+                        }
+                    }
+                )
+            if service_type and service_type in self.SERVICE_TYPE_FILTERS:
+                filters.append(self.SERVICE_TYPE_FILTERS[service_type])
+            if status_code is not None:
+                filters.append({"term": {"span.attributes.http@status_code": status_code}})
+            elif status == "error":
+                filters.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"range": {"span.attributes.http@status_code": {"gte": 400}}},
+                                {"term": {"traceGroupFields.statusCode": 2}},
+                            ],
+                            "minimum_should_match": 1,
+                        }
+                    }
+                )
+            elif status == "success":
+                filters.append(
+                    {
+                        "bool": {
+                            "must_not": [
+                                {"range": {"span.attributes.http@status_code": {"gte": 400}}},
+                                {"term": {"traceGroupFields.statusCode": 2}},
+                            ]
+                        }
+                    }
+                )
+            elif status == "timeout":
+                filters.append({"term": {"span.attributes.http@status_code": 504}})
+
+            body = {
+                "query": {"bool": {"filter": filters}},
+                "sort": [{"startTime": {"order": "desc"}}],
+                "size": limit,
+            }
+
+            resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+            hits = resp.get("hits", {}).get("hits", [])
+
+            if not hits:
+                return None
+
+            transactions: list[APITransactionSummary] = []
+            for hit in hits:
+                src = hit["_source"]
+                tgf = src.get("traceGroupFields", {}) or {}
+                otel_status_code = int(tgf.get("statusCode", 0) or 0)
+
+                # Use traceGroupFields for overall trace duration
+                trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
+                if trace_dur_nanos == 0:
+                    trace_dur_nanos = int(src.get("durationInNanos", 0))
+                duration_ms = round(trace_dur_nanos / 1_000_000, 3)
+
+                # Real HTTP status code from span attribute (gateway Phase 3A)
+                http_code_raw = src.get("span.attributes.http@status_code")
+                if http_code_raw is not None:
+                    http_code = int(http_code_raw)
+                    tx_status = _status_from_code(http_code)
+                else:
+                    # Fallback for spans without http.status_code (pre-Phase 3A)
+                    tx_status = "error" if otel_status_code == 2 else "success"
+                    http_code = 500 if tx_status == "error" else 200
+
+                # HTTP method from child span attribute (flattened)
+                method = src.get("span.attributes.http@method", "POST")
+                route = src.get("span.attributes.http@route", "")
+                span_name = route or src.get("traceGroup") or src.get("name", "unknown")
+
+                # Prefer tool_name from span attributes for api_name (CAB-1997)
+                tool_name = src.get("span.attributes.tool_name") or src.get("span.attributes.tool")
+                api_name = tool_name or _extract_api_name(span_name)
+
+                transactions.append(
+                    APITransactionSummary(
+                        id=src.get("spanId", hit["_id"]),
+                        trace_id=src.get("traceId", ""),
+                        api_name=api_name,
+                        method=method,
+                        path=span_name,
+                        status_code=http_code,
+                        status=tx_status,
+                        status_text=_status_text(http_code),
+                        error_source=_error_source(span_name, http_code) if http_code >= 400 else None,
+                        started_at=src.get("startTime", ""),
+                        total_duration_ms=duration_ms,
+                        spans_count=1,
+                        deployment_mode=src.get(
+                            "resource.attributes.stoa@deployment_mode",
+                            src.get("span.attributes.stoa@deployment_mode", "edge-mcp"),
+                        ),
+                    )
+                )
+            # Fetch child spans for all traces in a single query
+            trace_ids = [t.trace_id for t in transactions if t.trace_id]
+            if trace_ids:
+                child_body = {
+                    "query": {
+                        "bool": {
+                            "filter": [
+                                {"terms": {"traceId": trace_ids}},
+                            ],
+                            "must_not": [
+                                {"terms": {"name": request_span_names}},
+                            ],
+                        }
+                    },
+                    "sort": [{"startTime": {"order": "asc"}}],
+                    "size": limit * 10,
+                }
+                child_resp = await self.client.search(index="otel-v1-apm-span-*", body=child_body)
+                child_hits = child_resp.get("hits", {}).get("hits", [])
+
+                # Group child spans by traceId with their startTime
+                # Each entry: (startTime_str, TransactionSpan)
+                children_by_trace: dict[str, list[tuple[str, TransactionSpan]]] = {}
+                for hit in child_hits:
+                    src = hit["_source"]
+                    tid = src.get("traceId", "")
+                    otel_name = src.get("name", "unknown")
+                    ui_name = _OTEL_TO_UI_SPAN_NAME.get(otel_name, otel_name)
+                    ui_service = _OTEL_TO_UI_SERVICE.get(otel_name, src.get("serviceName", "unknown"))
+                    dur_nanos = int(src.get("durationInNanos", 0))
+                    dur_ms = round(dur_nanos / 1_000_000, 3)
+                    otel_code = int(src.get("status.code", 0) or 0)
+                    span_status = "error" if otel_code == 2 else "success"
+                    start_time = src.get("startTime", "")
+                    children_by_trace.setdefault(tid, []).append(
+                        (
+                            start_time,
+                            TransactionSpan(
+                                name=ui_name,
+                                service=ui_service,
+                                start_offset_ms=0,
+                                duration_ms=dur_ms,
+                                status=span_status,
+                                metadata={},
+                            ),
+                        )
+                    )
+
+                # Convert nested spans to sequential pipeline per transaction
+                for tx in transactions:
+                    raw_children = children_by_trace.get(tx.trace_id, [])
+                    if not raw_children:
+                        continue
+                    # Sort by duration descending (outermost nested span first)
+                    by_dur = sorted(raw_children, key=lambda t: t[1].duration_ms, reverse=True)
+                    pipeline: list[TransactionSpan] = []
+                    offset_cursor = 0.0
+                    for i, (_, span) in enumerate(by_dur):
+                        next_dur = by_dur[i + 1][1].duration_ms if i + 1 < len(by_dur) else 0
+                        own_time = max(span.duration_ms - next_dur, 0.001)
+                        pipeline.append(
+                            TransactionSpan(
+                                name=span.name,
+                                service=span.service,
+                                start_offset_ms=round(offset_cursor, 3),
+                                duration_ms=round(own_time, 3),
+                                status=span.status,
+                                metadata={},
+                            )
+                        )
+                        offset_cursor += own_time
+                    tx.spans = pipeline
+                    tx.spans_count = len(pipeline) + 1  # +1 for parent
+
+            return transactions
+
+        except Exception:
+            logger.exception("Failed to list transactions from otel spans")
+            return None
+
+    async def get_transaction_from_spans(
+        self,
+        trace_id: str,
+    ) -> APITransaction | None:
+        """Get detailed transaction with waterfall from OTel span index.
+
+        ``trace_id`` can be either a traceId or a spanId (the Console
+        passes spanId from the list view).  We resolve to the full
+        trace by looking up the spanId first if the traceId query
+        returns no results.
+        """
+        try:
+            # Try as traceId first
+            body = {
+                "query": {"bool": {"filter": [{"term": {"traceId": trace_id}}]}},
+                "sort": [{"startTime": {"order": "asc"}}],
+                "size": 200,
+            }
+            resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+            hits = resp.get("hits", {}).get("hits", [])
+
+            # If no hits, the ID might be a spanId — resolve to traceId
+            if not hits:
+                span_body = {
+                    "query": {"term": {"spanId": trace_id}},
+                    "size": 1,
+                    "_source": ["traceId"],
+                }
+                span_resp = await self.client.search(index="otel-v1-apm-span-*", body=span_body)
+                span_hits = span_resp.get("hits", {}).get("hits", [])
+                if not span_hits:
+                    return None
+                real_trace_id = span_hits[0]["_source"]["traceId"]
+                body["query"] = {"bool": {"filter": [{"term": {"traceId": real_trace_id}}]}}
+                resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+                hits = resp.get("hits", {}).get("hits", [])
+                trace_id = real_trace_id
+
+            if not hits:
+                return None
+
+            # First pass: collect all spans, find root, find HTTP info
+            spans: list[tuple[str, TransactionSpan]] = []  # (startTime, span)
+            root_src: dict | None = None
+            http_method: str = "POST"
+            http_route: str = ""
+
+            for hit in hits:
+                src = hit["_source"]
+                duration_nanos = int(src.get("durationInNanos", 0))
+                duration_ms = round(duration_nanos / 1_000_000, 3)
+                otel_name = src.get("name", "unknown")
+                span_start_time = src.get("startTime", "")
+
+                otel_code = int(src.get("status.code", 0) or 0)
+                span_status = "error" if otel_code == 2 else "success"
+
+                # Collect metadata from flattened span attributes.
+                # Data Prepper flattens OTLP dots to @ separator:
+                #   http.method → span.attributes.http@method
+                #   upstream.rtt_ms → span.attributes.upstream@rtt_ms
+                # http@ keeps bare keys (backward compat); others get prefixed.
+                _ATTR_PREFIXES = [
+                    ("span.attributes.http@", None),
+                    ("span.attributes.upstream@", "upstream"),
+                    ("span.attributes.process@", "process"),
+                ]
+                metadata: dict = {}
+                for key, val in src.items():
+                    for prefix, category in _ATTR_PREFIXES:
+                        if key.startswith(prefix):
+                            short_key = key[len(prefix) :]
+                            if category:
+                                metadata[f"{category}.{short_key}"] = val
+                            else:
+                                metadata[short_key] = val
+                            break
+
+                # Map OTLP names → UI-expected names
+                ui_name = _OTEL_TO_UI_SPAN_NAME.get(otel_name, otel_name)
+                ui_service = _OTEL_TO_UI_SERVICE.get(otel_name, src.get("serviceName", "unknown"))
+
+                spans.append(
+                    (
+                        span_start_time,
+                        TransactionSpan(
+                            name=ui_name,
+                            service=ui_service,
+                            start_offset_ms=0,  # recomputed below
+                            duration_ms=duration_ms,
+                            status=span_status,
+                            metadata=metadata,
+                        ),
+                    )
+                )
+
+                # Identify root span
+                parent_id = src.get("parentSpanId", "")
+                if not parent_id:
+                    root_src = src
+
+                # Collect HTTP info from child spans
+                if src.get("span.attributes.http@method"):
+                    http_method = str(src["span.attributes.http@method"])
+                if src.get("span.attributes.http@route"):
+                    http_route = str(src["span.attributes.http@route"])
+            # Convert nested spans to sequential pipeline.
+            # Gateway middlewares produce nested spans (each wraps the next):
+            #   policy_eval(963µs) contains rate_limit(921µs) contains auth(899µs) ...
+            # Sort by duration descending (outermost first), then compute each
+            # stage's own time = its duration minus the next span's duration.
+            if spans:
+                by_dur = sorted(spans, key=lambda t: t[1].duration_ms, reverse=True)
+                pipeline: list[TransactionSpan] = []
+                offset_cursor = 0.0
+                for i, (_, span) in enumerate(by_dur):
+                    next_dur = by_dur[i + 1][1].duration_ms if i + 1 < len(by_dur) else 0
+                    own_time = max(span.duration_ms - next_dur, 0.001)
+                    pipeline.append(
+                        TransactionSpan(
+                            name=span.name,
+                            service=span.service,
+                            start_offset_ms=round(offset_cursor, 3),
+                            duration_ms=round(own_time, 3),
+                            status=span.status,
+                            metadata=span.metadata,
+                        )
+                    )
+                    offset_cursor += own_time
+                spans = [("", s) for s in pipeline]
+
+            if root_src is None:
+                root_src = hits[0]["_source"]
+
+            # Find the primary request span (the one with http.status_code).
+            # http.request root spans are not exported, so the request-level span
+            # is typically mcp.tools.call, proxy.dynamic, or mcp.tools.list.
+            _REQUEST_SPAN_NAMES = {
+                "mcp.tools.call",
+                "mcp.tools.list",
+                "proxy.dynamic",
+                "http.request",
+            }
+            primary_src = root_src
+            for hit in hits:
+                src = hit["_source"]
+                if src.get("name") in _REQUEST_SPAN_NAMES:
+                    primary_src = src
+                    break
+                # Fallback: any span with http.status_code
+                if src.get("span.attributes.http@status_code") is not None:
+                    primary_src = src
+
+            # Duration: use primary span duration (actual request time)
+            trace_dur_nanos = int(primary_src.get("durationInNanos", 0))
+            if trace_dur_nanos == 0:
+                tgf = root_src.get("traceGroupFields", {}) or {}
+                trace_dur_nanos = int(tgf.get("durationInNanos", 0) or 0)
+            total_ms = round(trace_dur_nanos / 1_000_000, 3)
+
+            # Real HTTP status code from primary span
+            http_code_raw = primary_src.get("span.attributes.http@status_code")
+            if http_code_raw is not None:
+                http_code = int(http_code_raw)
+                tx_status = _status_from_code(http_code)
+            else:
+                otel_code = int(primary_src.get("status.code", 0) or 0)
+                tx_status = "error" if otel_code == 2 else "success"
+                http_code = 500 if tx_status == "error" else 200
+
+            path = http_route or primary_src.get("name", root_src.get("name", ""))
+
+            error_msg = None
+            if tx_status == "error":
+                error_msg = _status_text(http_code)
+
+            # Build request/response headers from available span attributes
+            req_headers: dict[str, str] = {}
+            res_headers: dict[str, str] = {}
+            for hit in hits:
+                src = hit["_source"]
+                if src.get("span.attributes.http@method"):
+                    req_headers.setdefault("method", str(src["span.attributes.http@method"]))
+                if src.get("span.attributes.http@route"):
+                    req_headers.setdefault("path", str(src["span.attributes.http@route"]))
+                if src.get("span.attributes.http@url"):
+                    req_headers.setdefault("upstream-url", str(src["span.attributes.http@url"]))
+                if src.get("span.attributes.http@client_ip"):
+                    req_headers.setdefault("x-forwarded-for", str(src["span.attributes.http@client_ip"]))
+                if src.get("span.attributes.net@peer@ip"):
+                    req_headers.setdefault("x-real-ip", str(src["span.attributes.net@peer@ip"]))
+                if src.get("span.attributes.stoa@deployment_mode"):
+                    res_headers.setdefault("x-stoa-mode", str(src["span.attributes.stoa@deployment_mode"]))
+                if src.get("span.attributes.tenant_id"):
+                    req_headers.setdefault("x-tenant-id", str(src["span.attributes.tenant_id"]))
+
+            # Add trace context
+            req_headers["x-trace-id"] = trace_id
+            res_version = primary_src.get("resource.attributes.service@version")
+            if res_version:
+                res_headers["x-stoa-version"] = str(res_version)
+
+            # Prefer tool_name from span attributes for api_name (CAB-1997)
+            detail_tool_name = None
+            for hit in hits:
+                src = hit["_source"]
+                detail_tool_name = src.get("span.attributes.tool_name") or src.get("span.attributes.tool")
+                if detail_tool_name:
+                    break
+            detail_api_name = detail_tool_name or _extract_api_name(path)
+
+            return APITransaction(
+                id=trace_id,
+                trace_id=trace_id,
+                api_name=detail_api_name,
+                tenant_id=primary_src.get("span.attributes.tenant_id"),
+                method=http_method,
+                path=path,
+                status_code=http_code,
+                status=tx_status,
+                status_text=_status_text(http_code),
+                error_source=_error_source(path, http_code) if http_code >= 400 else None,
+                client_ip=primary_src.get("span.attributes.http@client_ip"),
+                user_id=primary_src.get("span.attributes.user_id"),
+                started_at=primary_src.get("startTime", ""),
+                total_duration_ms=total_ms,
+                spans=[s for _, s in spans],
+                request_headers=req_headers or None,
+                response_headers=res_headers or None,
+                error_message=error_msg,
+            )
+
+        except Exception:
+            logger.exception("Failed to get transaction from otel spans")
+            return None
+
+    async def get_transaction_stats_from_spans(
+        self,
+        time_range_minutes: int = 60,
+    ) -> APITransactionStats | None:
+        """Get aggregated transaction statistics from OTel span index."""
+        try:
+            body = {
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+                            {
+                                "terms": {
+                                    "name": [
+                                        "mcp.tools.call",
+                                        "mcp.tools.list",
+                                        "proxy.dynamic",
+                                        "http.request",
+                                    ]
+                                }
+                            },
+                        ]
+                    }
+                },
+                "aggs": {
+                    "success_count": {
+                        "filter": {
+                            "bool": {"must_not": [{"range": {"span.attributes.http@status_code": {"gte": 400}}}]}
+                        }
+                    },
+                    "error_count": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                    "timeout_count": {"filter": {"term": {"span.attributes.http@status_code": 504}}},
+                    "latency_stats": {"stats": {"field": "durationInNanos"}},
+                    "latency_percentiles": {
+                        "percentiles": {
+                            "field": "durationInNanos",
+                            "percents": [95, 99],
+                        }
+                    },
+                    "by_tool": {
+                        "terms": {
+                            "field": "span.attributes.tool_name",
+                            "missing": "unknown",
+                            "size": 20,
+                        },
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
+                    "by_span_name": {
+                        "terms": {"field": "name", "size": 10},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
+                    "by_status_code": {"terms": {"field": "span.attributes.http@status_code", "size": 20}},
+                    "by_auth_type": {
+                        "terms": {"field": "span.attributes.auth_type", "size": 10},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
+                    "by_deployment_mode": {
+                        "terms": {"field": "resource.attributes.stoa@deployment_mode", "size": 10},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
+                },
+            }
+
+            resp = await self.client.search(index="otel-v1-apm-span-*", body=body)
+            total = resp["hits"]["total"]["value"]
+            aggs = resp["aggregations"]
+
+            # Convert nanos to ms for percentiles and averages
+            nanos_to_ms = 1_000_000
+            percentiles = aggs["latency_percentiles"]["values"]
+            avg_nanos = aggs["latency_stats"]["avg"] or 0
+
+            # Build by_api dict — tool_name for MCP, span name for proxy
+            by_api: dict = {}
+            for bucket in aggs["by_tool"]["buckets"]:
+                name = bucket["key"]
+                if name == "unknown":
+                    continue  # Skip unknown tools, use span name instead
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_api[name] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+            # Add span name breakdown for non-tool spans (proxy.dynamic, mcp.tools.list)
+            for bucket in aggs["by_span_name"]["buckets"]:
+                name = bucket["key"]
+                if name in by_api:
+                    continue  # Already covered by tool_name
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_api[name] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+
+            # Build by_status_code dict
+            by_status_code: dict = {}
+            for bucket in aggs["by_status_code"]["buckets"]:
+                by_status_code[bucket["key"]] = bucket["doc_count"]
+
+            # Build by_auth_type dict
+            by_auth_type: dict = {}
+            for bucket in aggs.get("by_auth_type", {}).get("buckets", []):
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_auth_type[bucket["key"]] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+
+            # Build by_deployment_mode dict
+            by_deployment_mode: dict = {}
+            for bucket in aggs.get("by_deployment_mode", {}).get("buckets", []):
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_deployment_mode[bucket["key"]] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+
+            return APITransactionStats(
+                total_requests=total,
+                success_count=aggs["success_count"]["doc_count"],
+                error_count=aggs["error_count"]["doc_count"],
+                timeout_count=aggs["timeout_count"]["doc_count"],
+                avg_latency_ms=round(avg_nanos / nanos_to_ms, 2),
+                p95_latency_ms=round((percentiles.get("95.0", 0) or 0) / nanos_to_ms, 2),
+                p99_latency_ms=round((percentiles.get("99.0", 0) or 0) / nanos_to_ms, 2),
+                requests_per_minute=round(total / max(time_range_minutes, 1), 2),
+                by_api=by_api,
+                by_status_code=by_status_code,
+                by_auth_type=by_auth_type,
+                by_deployment_mode=by_deployment_mode,
+            )
+
+        except Exception:
+            logger.exception("Failed to get transaction stats from otel spans")
+            return None
+
+    # =========================================================================
+    # AUDIT INDEX QUERIES (legacy audit-* index)
+    # =========================================================================
 
     async def list_transactions(
         self,

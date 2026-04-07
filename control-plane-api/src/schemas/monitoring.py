@@ -6,8 +6,8 @@ from pydantic import BaseModel
 class TransactionSpan(BaseModel):
     name: str
     service: str
-    start_offset_ms: int
-    duration_ms: int
+    start_offset_ms: float
+    duration_ms: float
     status: str  # success, error
     metadata: dict = {}
 
@@ -23,8 +23,10 @@ class APITransactionSummary(BaseModel):
     status_text: str = ""  # HTTP status text (e.g. "Not Implemented")
     error_source: str | None = None  # Origin of error: "backend", "gateway", "auth", etc.
     started_at: str
-    total_duration_ms: int
+    total_duration_ms: float
     spans_count: int
+    deployment_mode: str = "edge-mcp"
+    spans: list[TransactionSpan] = []
 
 
 class APITransaction(BaseModel):
@@ -41,7 +43,7 @@ class APITransaction(BaseModel):
     client_ip: str | None = None
     user_id: str | None = None
     started_at: str
-    total_duration_ms: int
+    total_duration_ms: float
     spans: list[TransactionSpan]
     request_headers: dict | None = None
     response_headers: dict | None = None
@@ -59,3 +61,5 @@ class APITransactionStats(BaseModel):
     requests_per_minute: float
     by_api: dict
     by_status_code: dict
+    by_auth_type: dict = {}
+    by_deployment_mode: dict = {}

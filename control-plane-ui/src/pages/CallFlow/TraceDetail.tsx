@@ -66,6 +66,16 @@ function redactHeaders(headers: Record<string, string> | null): Record<string, s
   return result;
 }
 
+/** Format duration: µs when < 1ms, ms with decimals when < 10ms, whole ms otherwise. */
+function fmtDuration(ms: number): string {
+  if (ms <= 0) return '0µs';
+  if (ms < 0.01) return `${(ms * 1000).toFixed(0)}µs`;
+  if (ms < 1) return `${(ms * 1000).toFixed(0)}µs`;
+  if (ms < 10) return `${ms.toFixed(2)}ms`;
+  if (ms < 100) return `${ms.toFixed(1)}ms`;
+  return `${Math.round(ms)}ms`;
+}
+
 const SPAN_COLORS: Record<string, string> = {
   gateway_ingress: '#3B82F6',
   auth_validation: '#8B5CF6',
@@ -201,15 +211,15 @@ async function fetchTraceDetail(traceId: string): Promise<TransactionDetail> {
 function TraceWaterfall({ spans, totalMs }: { spans: TransactionSpan[]; totalMs: number }) {
   if (totalMs <= 0 || spans.length === 0) return null;
 
-  const ruler = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * totalMs));
+  const ruler = [0, 0.25, 0.5, 0.75, 1].map((f) => f * totalMs);
 
   return (
     <div>
       {/* Ruler */}
       <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-500 mb-1 px-28">
-        {ruler.map((ms) => (
-          <span key={ms} className="tabular-nums">
-            {ms}ms
+        {ruler.map((ms, idx) => (
+          <span key={idx} className="tabular-nums">
+            {fmtDuration(ms)}
           </span>
         ))}
       </div>
@@ -236,14 +246,14 @@ function TraceWaterfall({ spans, totalMs }: { spans: TransactionSpan[]; totalMs:
                     width: `${width}%`,
                     backgroundColor: spanColor(span.name, span.status),
                   }}
-                  title={`${span.name} (${span.service}) — ${span.duration_ms}ms`}
+                  title={`${span.name} (${span.service}) — ${fmtDuration(span.duration_ms)}`}
                 />
               </div>
               <div className="w-16 text-right">
                 <span
                   className={`text-xs tabular-nums ${isError ? 'text-red-500 font-semibold' : 'text-neutral-500 dark:text-neutral-400'}`}
                 >
-                  {span.duration_ms}ms
+                  {fmtDuration(span.duration_ms)}
                 </span>
               </div>
               <div className="w-20 text-right">
@@ -323,7 +333,7 @@ function MiddlewarePipeline({ spans }: { spans: TransactionSpan[] }) {
             <span
               className={`text-xs tabular-nums font-medium ${isError ? 'text-red-600' : 'text-neutral-500 dark:text-neutral-400'}`}
             >
-              {span.duration_ms}ms
+              {fmtDuration(span.duration_ms)}
             </span>
           </div>
         );
@@ -332,50 +342,118 @@ function MiddlewarePipeline({ spans }: { spans: TransactionSpan[] }) {
   );
 }
 
-function KernelMetricsGrid() {
+/** Extract kernel metrics from span metadata (real data from gateway OTLP spans). */
+function extractKernelMetrics(spans: TransactionSpan[]): Record<string, string | undefined> {
+  const m: Record<string, string | undefined> = {};
+  for (const span of spans) {
+    if (!span.metadata) continue;
+    for (const [key, val] of Object.entries(span.metadata)) {
+      if (val !== undefined && val !== null && val !== '') {
+        m[key] = String(val);
+      }
+    }
+  }
+  return m;
+}
+
+function formatBytes(bytes: string | undefined): string {
+  if (!bytes) return 'N/A';
+  const n = Number(bytes);
+  if (isNaN(n)) return bytes;
+  if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(0)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${n} B`;
+}
+
+function MetricValue({ value }: { value: string | undefined }) {
+  const isNA = !value || value === 'N/A';
+  return (
+    <span
+      className={`font-mono tabular-nums ${isNA ? 'text-neutral-400 dark:text-neutral-500 italic' : 'text-neutral-700 dark:text-neutral-300'}`}
+    >
+      {value || 'N/A'}
+    </span>
+  );
+}
+
+function KernelMetricsGrid({ spans, demoMode }: { spans: TransactionSpan[]; demoMode: boolean }) {
+  const m = demoMode ? {} : extractKernelMetrics(spans);
+  const hasAnyReal = Object.keys(m).some(
+    (k) => k.startsWith('upstream.') || k.startsWith('process.')
+  );
+
+  const rttMs = m['upstream.rtt_ms'];
+  const poolReuse = m['upstream.pool_reuse'];
+  const cbState = m['upstream.cb_state'];
+  const activeConns = m['upstream.active_conns'];
+  const rssBytesRaw = m['process.rss_bytes'];
+  const fdCount = m['process.fd_count'];
+  const threadCount = m['process.thread_count'];
+
   const quadrants = [
     {
-      title: 'Network (Socket)',
+      title: 'Network (Upstream)',
       icon: Globe,
       metrics: [
-        { label: 'TCP Connect', value: '2.1ms' },
-        { label: 'Retransmits', value: '0' },
-        { label: 'Bytes Sent', value: '1.2KB' },
-        { label: 'Bytes Received', value: '4.8KB' },
-        { label: 'Connection Reuse', value: 'Yes' },
+        { label: 'Upstream RTT', value: rttMs ? `${rttMs}ms` : undefined },
+        {
+          label: 'Connection Reuse',
+          value: poolReuse === 'true' ? 'Yes' : poolReuse === 'false' ? 'No' : undefined,
+        },
+        { label: 'Circuit Breaker', value: cbState },
       ],
     },
     {
       title: 'Process (Gateway)',
       icon: Cpu,
       metrics: [
-        { label: 'CPU usr/sys', value: '1.2 / 0.3 ms' },
-        { label: 'Context Switches', value: '4' },
-        { label: 'RSS', value: '48MB' },
-        { label: 'FD Count', value: '127' },
-        { label: 'Thread Pool', value: '3/16 active' },
+        {
+          label: 'RSS',
+          value: formatBytes(rssBytesRaw) !== 'N/A' ? formatBytes(rssBytesRaw) : undefined,
+        },
+        { label: 'FD Count', value: fdCount && fdCount !== '0' ? fdCount : undefined },
+        { label: 'Threads', value: threadCount && threadCount !== '0' ? threadCount : undefined },
       ],
     },
     {
-      title: 'Upstream Pod',
+      title: 'Connection Pool',
       icon: Server,
       metrics: [
-        { label: 'CPU Usage', value: '12%' },
-        { label: 'RSS / Limit', value: '256 / 512 MB' },
-        { label: 'Disk I/O Wait', value: '0.1ms' },
-        { label: 'Open Conns', value: '42' },
-        { label: 'Queue Depth', value: '0' },
+        {
+          label: 'Active Conns',
+          value: activeConns != null ? activeConns : undefined,
+        },
+        {
+          label: 'Pool Reuse',
+          value: poolReuse === 'true' ? 'Yes' : poolReuse === 'false' ? 'No' : undefined,
+        },
+        { label: 'Upstream RTT', value: rttMs ? `${rttMs}ms` : undefined },
       ],
     },
     {
-      title: 'DNS / TLS',
+      title: 'Resilience',
       icon: Lock,
       metrics: [
-        { label: 'DNS Resolution', value: 'cached (0ms)' },
-        { label: 'TLS Handshake', value: 'reused' },
-        { label: 'TLS Version', value: '1.3' },
-        { label: 'Cipher', value: 'AES-256-GCM' },
-        { label: 'ALPN', value: 'h2' },
+        { label: 'Circuit Breaker', value: cbState },
+        {
+          label: 'RSS Pressure',
+          value:
+            rssBytesRaw && Number(rssBytesRaw) > 0
+              ? Number(rssBytesRaw) > 256 * 1024 * 1024
+                ? 'High'
+                : 'Normal'
+              : undefined,
+        },
+        {
+          label: 'Open FDs',
+          value:
+            fdCount && Number(fdCount) > 0
+              ? Number(fdCount) > 1000
+                ? 'High'
+                : 'Normal'
+              : undefined,
+        },
       ],
     },
   ];
@@ -391,17 +469,20 @@ function KernelMetricsGrid() {
             </h4>
           </div>
           <div className="space-y-1.5">
-            {q.metrics.map((m) => (
-              <div key={m.label} className="flex justify-between text-xs">
-                <span className="text-neutral-500 dark:text-neutral-400">{m.label}</span>
-                <span className="font-mono text-neutral-700 dark:text-neutral-300 tabular-nums">
-                  {m.value}
-                </span>
+            {q.metrics.map((metric) => (
+              <div key={metric.label} className="flex justify-between text-xs">
+                <span className="text-neutral-500 dark:text-neutral-400">{metric.label}</span>
+                <MetricValue value={metric.value} />
               </div>
             ))}
           </div>
         </div>
       ))}
+      {!hasAnyReal && !demoMode && (
+        <p className="col-span-2 text-xs text-neutral-400 italic text-center">
+          No gateway metrics available for this trace.
+        </p>
+      )}
     </div>
   );
 }
@@ -489,7 +570,8 @@ export function TraceDetail() {
                 </span>
               </div>
               <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                {new Date(detail.started_at).toLocaleString()} — {detail.total_duration_ms}ms —{' '}
+                {new Date(detail.started_at).toLocaleString()} —{' '}
+                {fmtDuration(detail.total_duration_ms)} —{' '}
                 <span className="font-mono">{detail.trace_id}</span>
               </div>
             </div>
@@ -512,7 +594,7 @@ export function TraceDetail() {
         />
         <StatCard
           label="Duration"
-          value={String(detail.total_duration_ms)}
+          value={fmtDuration(detail.total_duration_ms)}
           unit="ms"
           icon={Clock}
           colorClass={detail.total_duration_ms > 500 ? 'text-red-600' : 'text-green-600'}
@@ -529,7 +611,7 @@ export function TraceDetail() {
           label="Auth"
           value={
             detail.spans.find((s) => s.name === 'auth_validation')?.duration_ms
-              ? `${detail.spans.find((s) => s.name === 'auth_validation')!.duration_ms}ms`
+              ? fmtDuration(detail.spans.find((s) => s.name === 'auth_validation')!.duration_ms)
               : '--'
           }
           icon={Shield}
@@ -599,17 +681,19 @@ export function TraceDetail() {
         />
       </div>
 
-      {/* ─── Kernel Metrics (eBPF) ─── */}
+      {/* ─── Kernel Metrics ─── */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-            Kernel Metrics (eBPF)
+            Gateway Metrics
           </h2>
-          <span className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full font-medium">
-            Demo data
-          </span>
+          {detail.demo_mode && (
+            <span className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full font-medium">
+              Demo data
+            </span>
+          )}
         </div>
-        <KernelMetricsGrid />
+        <KernelMetricsGrid spans={detail.spans} demoMode={detail.demo_mode} />
       </div>
 
       {/* ─── Middleware Pipeline ─── */}

@@ -1,24 +1,24 @@
-fastapi==0.135.2
-uvicorn[standard]==0.41.0
-python-keycloak==3.9.0
+fastapi==0.135.3
+uvicorn[standard]==0.43.0
+python-keycloak==7.1.1
 pydantic[email]==2.12.5
 pydantic-settings==2.13.1
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.22
-httpx==0.27.2
+httpx==0.28.1
 kafka-python==2.3.0
 python-snappy==0.7.3
-python-gitlab==8.1.0
+python-gitlab==8.2.0
 # GitHub integration (CAB-1890 — dual-provider migration)
 PyGithub>=2.0
 pyyaml==6.0.3
-sse-starlette==3.3.3
+sse-starlette==3.3.4
 aiocache==0.12.3
 prometheus-client==0.24.1
-structlog==24.1.0
+structlog==25.5.0
 # Database
-sqlalchemy[asyncio]==2.0.48
+sqlalchemy[asyncio]==2.0.49
 asyncpg==0.31.0
 alembic==1.18.4
 psycopg2-binary==2.9.11

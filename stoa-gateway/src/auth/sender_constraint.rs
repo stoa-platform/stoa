@@ -19,7 +19,7 @@ use axum::{
 use base64::Engine;
 use serde::Serialize;
 use subtle::ConstantTimeEq;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::auth::claims::CnfClaim;
 use crate::auth::middleware::AuthenticatedUser;
@@ -119,6 +119,7 @@ impl IntoResponse for SenderConstraintError {
 ///
 /// Runs after JWT auth — requires `AuthenticatedUser` in request extensions.
 /// Checks DPoP and mTLS bindings based on the token's `cnf` claim and config.
+#[instrument(name = "auth.sender_constraint", skip_all, fields(otel.kind = "internal"))]
 pub async fn sender_constraint_middleware(
     config: SenderConstraintConfig,
     request: Request<Body>,

@@ -23,6 +23,8 @@ interface RouteLatency {
 
 interface TopRoutesProps {
   routes: RouteLatency[];
+  activeRoute?: string;
+  onRouteClick?: (route: string) => void;
 }
 
 function latencyColor(ms: number): string {
@@ -32,7 +34,7 @@ function latencyColor(ms: number): string {
   return '#EF4444';
 }
 
-export function TopRoutes({ routes }: TopRoutesProps) {
+export function TopRoutes({ routes, activeRoute, onRouteClick }: TopRoutesProps) {
   const data = routes.slice(0, 8);
 
   if (data.length === 0) {
@@ -66,9 +68,22 @@ export function TopRoutes({ routes }: TopRoutesProps) {
             return [`${v < 1 ? '<1' : Math.round(v)}ms (${calls} req)`, 'P95 Latency'];
           }}
         />
-        <Bar dataKey="p95Ms" radius={[0, 4, 4, 0]}>
+        <Bar
+          dataKey="p95Ms"
+          radius={[0, 4, 4, 0]}
+          style={{ cursor: onRouteClick ? 'pointer' : 'default' }}
+          onClick={(_data, index) => {
+            if (!onRouteClick || index === undefined) return;
+            const route = data[index]?.route || '';
+            onRouteClick(route === activeRoute ? '' : route);
+          }}
+        >
           {data.map((entry) => (
-            <Cell key={entry.route} fill={latencyColor(entry.p95Ms)} />
+            <Cell
+              key={entry.route}
+              fill={latencyColor(entry.p95Ms)}
+              fillOpacity={!activeRoute || activeRoute === entry.route ? 1 : 0.2}
+            />
           ))}
         </Bar>
       </BarChart>

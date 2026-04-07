@@ -85,6 +85,35 @@ patch('src.services.git_service.git_service', _mock_git_service).start()
 patch('src.services.keycloak_service.keycloak_service', _mock_keycloak_service).start()
 patch('src.services.metrics_service.metrics_service', _mock_metrics_service).start()
 
+# Bridge DI with module-level patches (CAB-1889 git_provider migration).
+# Routers use Depends(get_git_provider), tests patch module-level git_service.
+# DI override delegates to the router's patchable module attribute so both paths work.
+from src.services.git_provider import get_git_provider
+from src.main import app as _app
+
+
+def _git_di_bridge() -> object:
+    """Return whichever router's git_service was most recently patched.
+
+    Tests patch different routers (apis, git, deployments, etc.) — check the
+    first one that differs from the original factory instance.
+    """
+    import src.routers.apis as _apis
+    import src.routers.git as _git
+    import src.routers.deployments as _deploy
+
+    # Factory-created originals are GitProvider instances; mocks are MagicMock
+    from unittest.mock import MagicMock
+
+    for mod in (_apis, _git, _deploy):
+        val = getattr(mod, "git_service", None)
+        if val is not None and isinstance(val, MagicMock):
+            return val
+    return getattr(_apis, "git_service", _mock_git_service)
+
+
+_app.dependency_overrides[get_git_provider] = _git_di_bridge
+
 # Patch OpenSearch setup
 patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
 
@@ -98,7 +127,7 @@ patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 # This complements conftest_integration.py's integration_db fixture (which only
 # skips tests that explicitly use the fixture, not all @integration-marked tests).
 
-def pytest_collection_modifyitems(config, items):  # noqa: ARG001
+def pytest_collection_modifyitems(config, items):  # noqa: ARG001, RUF100
     """Skip @pytest.mark.integration tests when DATABASE_URL is absent."""
     if os.environ.get("DATABASE_URL"):
         return
@@ -603,6 +632,34 @@ def app_with_other_tenant(app, mock_user_other_tenant, mock_db_session):
     yield app
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def app_with_viewer(app, mock_user_viewer, mock_db_session):
+    """App with viewer (read-only) auth and db overrides."""
+    from src.auth.dependencies import get_current_user
+    from src.database import get_db
+
+    async def override_get_current_user():
+        return mock_user_viewer
+
+    async def override_get_db():
+        yield mock_db_session
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_db] = override_get_db
+    _add_http_bearer_overrides(app)
+
+    yield app
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as_viewer(app_with_viewer) -> Generator[TestClient, None, None]:
+    """Test client authenticated as viewer (read-only)."""
+    with TestClient(app_with_viewer) as c:
+        yield c
 
 
 @pytest.fixture

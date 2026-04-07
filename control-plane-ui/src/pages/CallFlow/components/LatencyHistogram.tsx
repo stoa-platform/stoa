@@ -22,6 +22,8 @@ interface LatencyBucket {
 
 interface LatencyHistogramProps {
   buckets: LatencyBucket[];
+  activeLabel?: string;
+  onBucketClick?: (label: string) => void;
 }
 
 const BUCKET_COLORS = [
@@ -35,7 +37,7 @@ const BUCKET_COLORS = [
   '#DC2626', // 100ms+
 ];
 
-export function LatencyHistogram({ buckets }: LatencyHistogramProps) {
+export function LatencyHistogram({ buckets, activeLabel, onBucketClick }: LatencyHistogramProps) {
   if (buckets.length === 0 || buckets.every((b) => b.count === 0)) {
     return <ChartEmptyState message="No latency distribution data" />;
   }
@@ -50,9 +52,22 @@ export function LatencyHistogram({ buckets }: LatencyHistogramProps) {
           contentStyle={CHART_TOOLTIP_STYLE}
           formatter={(value) => [`${value} requests`, 'Count']}
         />
-        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-          {buckets.map((_entry, index) => (
-            <Cell key={index} fill={BUCKET_COLORS[index % BUCKET_COLORS.length]} />
+        <Bar
+          dataKey="count"
+          radius={[4, 4, 0, 0]}
+          style={{ cursor: onBucketClick ? 'pointer' : 'default' }}
+          onClick={(_data, index) => {
+            if (!onBucketClick || index === undefined) return;
+            const label = buckets[index]?.label || '';
+            onBucketClick(label === activeLabel ? '' : label);
+          }}
+        >
+          {buckets.map((entry, index) => (
+            <Cell
+              key={index}
+              fill={BUCKET_COLORS[index % BUCKET_COLORS.length]}
+              fillOpacity={!activeLabel || activeLabel === entry.label ? 1 : 0.2}
+            />
           ))}
         </Bar>
       </BarChart>

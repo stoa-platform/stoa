@@ -23,9 +23,13 @@ from ..models.catalog import APICatalog
 from ..repositories.catalog import CatalogRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
+from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
 from ..services.kafka_service import kafka_service
 
 logger = logging.getLogger(__name__)
+
+# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
+git_service = git_provider_factory()
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["APIs"])
 
@@ -79,6 +83,33 @@ def _slugify(value: str) -> str:
     value = re.sub(r"[^a-z0-9\s-]", "", value)
     value = re.sub(r"[\s-]+", "-", value).strip("-")
     return value or "api"
+
+
+def _validate_openapi_spec(spec_str: str) -> None:
+    """Validate that a string is a parseable OpenAPI 3.x spec (CAB-1917)."""
+    import json
+
+    import yaml
+
+    try:
+        spec = json.loads(spec_str) if spec_str.strip().startswith("{") else yaml.safe_load(spec_str)
+    except (json.JSONDecodeError, yaml.YAMLError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid OpenAPI spec: unable to parse — {e}")
+
+    if not isinstance(spec, dict):
+        raise HTTPException(status_code=400, detail="Invalid OpenAPI spec: must be a JSON/YAML object")
+
+    version = spec.get("openapi", spec.get("swagger", ""))
+    if not version:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OpenAPI spec: missing 'openapi' or 'swagger' version field",
+        )
+    if not str(version).startswith("3") and not str(version).startswith("2"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported OpenAPI version: {version}. Supported: 2.x and 3.x",
+        )
 
 
 def _api_from_catalog(api: APICatalog) -> APIResponse:
@@ -141,7 +172,10 @@ async def list_apis(
         return PaginatedResponse(items=all_items, total=total, page=page, page_size=page_size)
     except Exception as e:
         logger.error(f"Failed to list APIs for tenant {tenant_id}: {e}")
-        return PaginatedResponse(items=[], total=0, page=page, page_size=page_size)
+        raise HTTPException(
+            status_code=503,
+            detail="API listing temporarily unavailable. Please try again later.",
+        )
 
 
 @router.get("/{api_id}", response_model=APIResponse)
@@ -198,6 +232,10 @@ async def create_api(
         )
         if len(current_apis) >= max_apis:
             raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
+
+    # Validate OpenAPI spec if provided (CAB-1917)
+    if api.openapi_spec:
+        _validate_openapi_spec(api.openapi_spec)
 
     tags = api.tags or []
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}

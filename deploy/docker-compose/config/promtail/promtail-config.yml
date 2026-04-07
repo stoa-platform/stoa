@@ -49,38 +49,33 @@ scrape_configs:
       - source_labels: ['__meta_docker_container_id']
         target_label: container_id
     pipeline_stages:
-      # Parse JSON logs (structlog format)
+      # Parse JSON to extract labels + timestamp (keep full JSON as log line)
       - json:
           expressions:
             level: level
-            message: event
-            msg: msg
             timestamp: timestamp
-            logger: logger
-            request_id: request_id
-            trace_id: trace_id
-            tenant_id: tenant_id
-            user_id: user_id
-            endpoint: endpoint
-            path: path
-            method: method
-            status_code: status_code
-            duration_ms: duration_ms
             component: component
             environment: environment
-            error: error
-            error_type: error_type
-      # Normalize message field
-      - template:
-          source: message
-          template: '{{ if .message }}{{ .message }}{{ else if .event }}{{ .event }}{{ else }}{{ .msg }}{{ end }}'
-      # Extract log level as label
+            # Nested fields (Rust tracing-subscriber format: fields.X)
+            fields_message: 'fields.message'
+            fields_trace_id: 'fields.trace_id'
+            fields_tenant_id: 'fields.tenant_id'
+            # Flat fields (Python structlog format)
+            event: event
+            msg: msg
+            logger: logger
+            tenant_id: tenant_id
+      # Extract log level and tenant as labels
       - labels:
           level:
-          logger:
-          tenant_id:
           component:
           environment:
+      # Tenant label: prefer flat tenant_id, fallback to fields.tenant_id
+      - template:
+          source: tenant_label
+          template: '{{ if .tenant_id }}{{ .tenant_id }}{{ else }}{{ .fields_tenant_id }}{{ end }}'
+      - labels:
+          tenant_id: tenant_label
       # Set timestamp from log
       - timestamp:
           source: timestamp
@@ -88,6 +83,4 @@ scrape_configs:
           fallback_formats:
             - RFC3339
             - '2006-01-02T15:04:05.000Z'
-      # Output structured fields
-      - output:
-          source: message
+      # Keep the full JSON log line (no output stage = raw line preserved)

@@ -646,8 +646,13 @@ async fn mcp_tools_call_inner(
 
     // CAB-707: Guardrails check (PII + prompt injection)
     // CAB-1337: Extended with content filtering + per-tenant policy (Phase 3)
-    let _guardrails_span =
-        tracing::info_span!("policy.guardrails", otel.kind = "internal").entered();
+    let _guardrails_span = tracing::info_span!("policy.guardrails",
+        otel.kind = "internal",
+        guardrails.tool = %request.name,
+        guardrails.action = tracing::field::Empty,
+        guardrails.reason = tracing::field::Empty,
+    )
+    .entered();
     let global_guardrails_cfg = crate::guardrails::GuardrailsConfig {
         pii_enabled: state.config.guardrails_pii_enabled,
         pii_redact: state.config.guardrails_pii_redact,
@@ -666,16 +671,23 @@ async fn mcp_tools_call_inner(
         &request.name,
         &request.arguments,
     ) {
-        crate::guardrails::GuardrailsOutcome::Pass => request.arguments.clone(),
+        crate::guardrails::GuardrailsOutcome::Pass => {
+            tracing::Span::current().record("guardrails.action", "pass");
+            request.arguments.clone()
+        }
         crate::guardrails::GuardrailsOutcome::Redacted(redacted) => {
             metrics::record_guardrails_pii("redacted");
             warn!(tool = %request.name, "PII detected and redacted in arguments");
+            tracing::Span::current().record("guardrails.action", "pii-redacted");
             guardrail_action = Some("pii-redacted");
             redacted
         }
         crate::guardrails::GuardrailsOutcome::Sensitive { rule, category } => {
             metrics::record_guardrails_content_filter("sensitive", category);
             warn!(tool = %request.name, rule = %rule, category = %category, "Content filter: sensitive content detected, request allowed");
+            tracing::Span::current().record("guardrails.action", "content-flagged");
+            tracing::Span::current()
+                .record("guardrails.reason", &format!("{rule}: {category}") as &str);
             guardrail_action = Some("content-flagged");
             request.arguments.clone()
         }
@@ -693,6 +705,8 @@ async fn mcp_tools_call_inner(
             } else {
                 metrics::record_guardrails_pii("blocked");
             }
+            tracing::Span::current().record("guardrails.action", "blocked");
+            tracing::Span::current().record("guardrails.reason", reason.as_str());
             warn!(tool = %request.name, reason = %reason, "Guardrails blocked request");
             let mut resp = (
                 StatusCode::BAD_REQUEST,

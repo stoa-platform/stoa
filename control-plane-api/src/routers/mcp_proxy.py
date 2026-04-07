@@ -94,6 +94,10 @@ async def proxy_to_mcp(
         "X-User-Email": user.email or "",
         "X-User-Roles": ",".join(user.roles or []),
         "X-Tenant-Id": user.tenant_id or "",
+        # Re-entry guard: tells the gateway this request originates from CP-API.
+        # The gateway uses this to prevent circular proxy loops where
+        # ProxyTool would call CP-API which would proxy back to gateway.
+        "X-Stoa-Source": "control-plane",
     }
 
     try:
@@ -318,10 +322,11 @@ async def invoke_tool(
     """
     Invoke a tool with the provided arguments.
 
-    Proxies to stoa-gateway with user context.
-    Checks tenant tool permissions before invocation (CAB-1980).
+    Proxies to stoa-gateway for execution. The gateway handles tool permissions
+    directly (via its own ToolPermissionService cache), so permission checking
+    here is kept as a defense-in-depth layer only.
     """
-    # Enforce tenant tool permissions
+    # Defense-in-depth: check permissions here too (gateway is the primary enforcer)
     from .tenant_tool_permissions import check_tool_allowed
 
     tenant_id = user.tenant_id or "default"
@@ -337,11 +342,15 @@ async def invoke_tool(
             detail=f"Tool '{tool_name}' is not allowed for this tenant",
         )
 
+    # Proxy to gateway for tool execution — uses /mcp/tools/call (MCP protocol)
+    # instead of /mcp/v1/tools/{name}/invoke (REST) to avoid circular proxy:
+    # previously CP-API called /mcp/v1/tools/{name}/invoke which delegated to
+    # mcp_tools_call which could call CP-API again for ProxyTool execution.
     result = await proxy_to_mcp(
         "POST",
-        f"/mcp/v1/tools/{tool_name}/invoke",
+        "/mcp/tools/call",
         user,
         credentials.credentials,
-        json_body={"tool": tool_name, "arguments": body.arguments},
+        json_body={"name": tool_name, "arguments": body.arguments},
     )
     return result

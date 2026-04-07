@@ -338,6 +338,7 @@ pub async fn handle_sse_post(
         skill_instructions: None, // SSE: skills resolved per-tool in handler
         progress_token: None,     // SSE: no progress push (half-duplex)
         consumer_id: "unknown".to_string(), // SSE: azp not yet extracted in SSE path
+        from_control_plane: false,
     };
 
     // Route to handler
@@ -607,6 +608,7 @@ pub async fn process_single_request(
         skill_instructions: None,
         progress_token: None,
         consumer_id: "unknown".to_string(),
+        from_control_plane: false,
     };
 
     // Route to handler

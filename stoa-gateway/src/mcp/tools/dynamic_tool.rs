@@ -314,6 +314,7 @@ mod tests {
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
         };
 
         let result = tool.execute(json!({}), &ctx).await;
@@ -354,6 +355,7 @@ mod tests {
             skill_instructions: Some("Always use metric units".to_string()),
             progress_token: None,
             consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
         };
 
         let result = tool.execute(json!({"query": "temp"}), &ctx).await.unwrap();
@@ -398,6 +400,7 @@ mod tests {
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
         };
 
         let result = tool.execute(json!({}), &ctx).await.unwrap();

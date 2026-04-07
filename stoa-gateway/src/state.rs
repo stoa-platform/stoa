@@ -3,7 +3,7 @@
 //! Shared state across all handlers.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tracing::Instrument;
 
 use crate::auth::api_key::ApiKeyValidator;
@@ -13,7 +13,7 @@ use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::auth::subscription::SubscriptionValidator;
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
-use crate::control_plane::{OidcConfig, ToolProxyClient};
+use crate::control_plane::{OidcConfig, ToolPermissionService, ToolProxyClient};
 use crate::diagnostics::DiagnosticEngine;
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
@@ -143,6 +143,9 @@ pub struct AppState {
     /// A2A agent registry for inter-agent communication (CAB-1754).
     /// None when STOA_A2A_ENABLED=false (default).
     pub a2a_registry: Option<Arc<crate::a2a::registry::AgentRegistry>>,
+    /// Tenant tool permission cache — checks if tools are allowed per tenant.
+    /// Fetches from CP-API and caches with 60s TTL. Default-allow on miss/error.
+    pub tool_permissions: Option<Arc<ToolPermissionService>>,
     /// Error snapshot store for 5xx response capture (CAB-1645).
     pub snapshot_store: Arc<SnapshotStore>,
     /// Memory budget monitor for backpressure (CAB-1829).
@@ -582,6 +585,16 @@ impl AppState {
             Arc::new(SnapshotStore::disabled())
         };
 
+        // Initialize tenant tool permission service
+        let tool_permissions = config.control_plane_url.as_ref().map(|cp_url| {
+            tracing::info!("Tenant tool permission cache enabled (60s TTL)");
+            Arc::new(ToolPermissionService::new(
+                http_client.clone(),
+                cp_url,
+                Duration::from_secs(60),
+            ))
+        });
+
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
             let registry = crate::a2a::registry::AgentRegistry::new(
@@ -643,6 +656,7 @@ impl AppState {
             api_proxy_registry,
             hegemon,
             a2a_registry,
+            tool_permissions,
             snapshot_store,
             memory_monitor,
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")

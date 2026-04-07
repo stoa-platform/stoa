@@ -644,6 +644,39 @@ async fn mcp_tools_call_inner(
             .into_response();
     }
 
+    // Tenant tool permission check (replaces circular CP-API proxy)
+    // Fetches permissions from CP-API and caches locally (60s TTL).
+    // Default-allow: if no permission row exists, the tool is allowed.
+    if let Some(ref perm_svc) = state.tool_permissions {
+        if !perm_svc
+            .is_tool_allowed(&auth.tenant_id, &request.name)
+            .await
+        {
+            warn!(
+                tenant = %auth.tenant_id,
+                tool = %request.name,
+                "Tool execution denied by tenant tool permissions"
+            );
+            metrics::record_tool_call(
+                &request.name,
+                &auth.tenant_id,
+                "permission_denied",
+                start.elapsed().as_secs_f64(),
+                &auth.consumer_id,
+            );
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ToolsCallResponse {
+                    content: vec![ToolContent::Text {
+                        text: format!("Tool '{}' is not allowed for this tenant", request.name),
+                    }],
+                    is_error: Some(true),
+                }),
+            )
+                .into_response();
+        }
+    }
+
     // CAB-707: Guardrails check (PII + prompt injection)
     // CAB-1337: Extended with content filtering + per-tenant policy (Phase 3)
     let _guardrails_span = tracing::info_span!("policy.guardrails",
@@ -835,6 +868,14 @@ async fn mcp_tools_call_inner(
         None
     };
 
+    // Detect re-entry from CP-API to prevent circular proxy loops.
+    // CP-API sets X-Stoa-Source: control-plane when proxying tool calls to gateway.
+    let from_control_plane = headers
+        .get("x-stoa-source")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v == "control-plane")
+        .unwrap_or(false);
+
     // Build tool context with real JWT claims (Phase 1)
     let ctx = ToolContext {
         tenant_id: auth.tenant_id.clone(),
@@ -847,6 +888,7 @@ async fn mcp_tools_call_inner(
         skill_instructions,
         progress_token: None,
         consumer_id: auth.consumer_id.clone(),
+        from_control_plane,
     };
 
     // Phase 2: OPA policy evaluation with real scopes/roles

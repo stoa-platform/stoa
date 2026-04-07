@@ -56,6 +56,18 @@ impl Tool for ProxyTool {
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        // Prevent circular proxy: CP-API → gateway → ProxyTool → CP-API → gateway → ...
+        // When the request comes from CP-API (X-Stoa-Source: control-plane), the ProxyTool
+        // must NOT call CP-API again. This tool has no direct backend, so return an error
+        // indicating the tool requires a native implementation.
+        if ctx.from_control_plane {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Tool '{}' has no direct backend (proxy-only). \
+                 Register a native or dynamic implementation to enable execution.",
+                self.tool_name
+            )));
+        }
+
         let result = self
             .cp
             .call_tool(&self.tool_name, args, ctx)
@@ -117,6 +129,7 @@ mod tests {
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
         }
     }
 

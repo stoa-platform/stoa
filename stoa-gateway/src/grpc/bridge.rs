@@ -474,6 +474,7 @@ message ItemEvent {
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test".to_string(),
+            from_control_plane: false,
         };
         let result = tool.execute(serde_json::json!({"ids": ["1"]}), &ctx).await;
         assert!(result.is_err());

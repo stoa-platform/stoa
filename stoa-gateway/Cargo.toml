@@ -13,17 +13,17 @@ license = "Apache-2.0"
 
 [dependencies]
 # === Existing (keep these) ===
-axum = { version = "0.7", features = ["macros", "ws"] }
+axum = { version = "0.8", features = ["macros", "ws"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-thiserror = "1"
+thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
-prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
+prometheus = { version = "0.14", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===
@@ -35,7 +35,7 @@ hostname = "0.4"                         # Get local hostname for auto-registrat
 # === NEW - Phase 2: MCP SSE Transport ===
 tokio-stream = "0.1"                    # SSE event streams
 futures = "0.3"                          # Stream combinators
-tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
 rand = "0.10"                                # Thread-local PRNG for traceparent (perf)
 socket2 = "0.6"                             # TCP backlog tuning (perf)
@@ -53,7 +53,7 @@ base64 = "0.22"                              # Base64url decode for RFC 8705 thu
 ipnet = "2"                                  # CIDR matching for trusted proxies
 
 # === Sender-Constrained Tokens — DPoP (CAB-438, RFC 9449) ===
-sha2 = "0.10"                                # SHA-256 for DPoP access token hash (ath claim)
+sha2 = "0.11"                                # SHA-256 for DPoP access token hash (ath claim)
 form_urlencoded = "1"                        # Parse application/x-www-form-urlencoded (RFC 7523 client_assertion)
 
 # === SOAP/XML Bridge (CAB-1762) ===

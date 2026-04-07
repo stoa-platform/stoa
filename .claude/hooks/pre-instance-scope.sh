@@ -71,26 +71,59 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
 fi
 
 # --- Bash: check command against deny patterns ---
+# SECURITY (CAB-2005): Parse compound commands to prevent bypass via &&, ||, ;, |, $()
+# Inspired by Claude Code leak CVE: permission checks must cover ALL subcommands,
+# not just the first one. A command like "echo ok && rm -rf /" must be caught.
 if [[ "$TOOL_NAME" == "Bash" ]]; then
   COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
   if [[ -z "$COMMAND" ]]; then
     exit 0
   fi
 
-  # Read Bash deny patterns from instance file
-  # Format: "Bash(rm -rf *)" or "Bash(npm:*)" or "Bash(sudo *)"
+  # Split compound command into individual subcommands
+  # Handles: &&, ||, ;, | (pipe), $(...), backticks, newlines
+  # Strip subshell wrappers and split on shell operators
+  SUBCOMMANDS=$(echo "$COMMAND" | \
+    sed 's/\$([^)]*)//g' | \
+    sed 's/`[^`]*`//g' | \
+    tr '\n' ';' | \
+    sed 's/&&/;/g; s/||/;/g; s/|/;/g' | \
+    tr ';' '\n' | \
+    sed 's/^[[:space:]]*//' | \
+    grep -v '^$')
+
+  # Also extract commands from $() and backtick subshells
+  SUBSHELL_CMDS=$(echo "$COMMAND" | \
+    grep -oE '\$\([^)]+\)' | \
+    sed 's/^\$(\(.*\))$/\1/' || true)
+  BACKTICK_CMDS=$(echo "$COMMAND" | \
+    grep -oE '`[^`]+`' | \
+    sed 's/^`\(.*\)`$/\1/' || true)
+
+  ALL_CMDS=$(printf '%s\n%s\n%s' "$SUBCOMMANDS" "$SUBSHELL_CMDS" "$BACKTICK_CMDS" | grep -v '^$')
+
+  # Count subcommands — warn if excessive (mirrors Claude Code 50-limit discovery)
+  SUBCMD_COUNT=$(echo "$ALL_CMDS" | wc -l | tr -d ' ')
+  if [[ "$SUBCMD_COUNT" -gt 50 ]]; then
+    echo "BLOCKED by instance:${STOA_INSTANCE} — compound command has ${SUBCMD_COUNT} subcommands (limit: 50). Split into smaller commands." >&2
+    exit 2
+  fi
+
+  # Check EACH subcommand against deny patterns
   while IFS= read -r pattern; do
     [[ -z "$pattern" ]] && continue
-    # Extract inner: "Bash(npm:*)" → "npm:*", strip Bash() wrapper
     inner=$(echo "$pattern" | sed -n 's/^Bash(\(.*\))/\1/p')
-    # Strip trailing :* or space-* to get the command prefix
     cmd_prefix=$(echo "$inner" | sed 's/[[:space:]:]*\*$//')
     if [[ -n "$cmd_prefix" ]]; then
-      # Check if command starts with the denied prefix
-      if [[ "$COMMAND" == "$cmd_prefix"* || "$COMMAND" == *" $cmd_prefix"* ]]; then
-        echo "BLOCKED by instance:${STOA_INSTANCE} — Bash command '${cmd_prefix}...' is not allowed for this instance." >&2
-        exit 2
-      fi
+      while IFS= read -r subcmd; do
+        [[ -z "$subcmd" ]] && continue
+        # Trim leading whitespace from subcmd
+        subcmd_trimmed=$(echo "$subcmd" | sed 's/^[[:space:]]*//')
+        if [[ "$subcmd_trimmed" == "$cmd_prefix"* || "$subcmd_trimmed" == *" $cmd_prefix"* ]]; then
+          echo "BLOCKED by instance:${STOA_INSTANCE} — Bash subcommand '${cmd_prefix}...' detected in compound command. Not allowed for this instance." >&2
+          exit 2
+        fi
+      done <<< "$ALL_CMDS"
     fi
   done < <(jq -r '.permissions.deny[]? // empty' "$INSTANCE_FILE" 2>/dev/null | grep '^Bash(')
 fi

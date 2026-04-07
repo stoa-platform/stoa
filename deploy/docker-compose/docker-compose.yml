@@ -445,6 +445,7 @@ services:
       STOA_LOG_LEVEL: ${LOG_LEVEL:-info}
       STOA_LOG_FORMAT: json
       STOA_AUTO_REGISTER: "false"
+      STOA_ADMIN_API_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
       STOA_K8S_ENABLED: "false"
       STOA_KAFKA_ENABLED: "true"
       STOA_KAFKA_BROKERS: redpanda:9092
@@ -520,7 +521,7 @@ services:
     environment:
       GATEWAY_URL: http://stoa-gateway:8080
       SIDECAR_URL: http://link-proxy:8080
-      CONNECT_URL: http://connect-proxy:8080
+      CONNECT_URL: http://stoa-gateway-connect:8083
       ADMIN_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
       KC_TOKEN_URL: http://keycloak:8080/realms/stoa/protocol/openid-connect/token
       KC_CLIENT_ID: control-plane-ui

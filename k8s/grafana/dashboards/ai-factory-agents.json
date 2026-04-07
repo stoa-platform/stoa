@@ -1,0 +1,174 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": ["ai-factory"],
+      "targetBlank": true,
+      "title": "AI Factory Dashboards",
+      "type": "dashboards"
+    }
+  ],
+  "tags": ["ai-factory", "agents", "observability"],
+  "title": "AI Factory — Agent Observability",
+  "uid": "ai-factory-agents",
+  "version": 1,
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "refresh": "5m",
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(ai_factory_agent_calls_total, type)",
+        "name": "agent_type",
+        "label": "Agent Type",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "refresh": 2
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(ai_factory_agent_calls_total, model)",
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Agent Calls by Type",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "increase(ai_factory_agent_calls_total{type=~\"$agent_type\"}[1h])",
+          "legendFormat": "{{type}} ({{model}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } }
+        }
+      }
+    },
+    {
+      "title": "Agent Duration (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "ai_factory_agent_duration_seconds{type=~\"$agent_type\", model=~\"$model\"}",
+          "legendFormat": "{{type}} ({{model}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "red", "value": 900 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Token Usage by Agent",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "ai_factory_agent_tokens{type=~\"$agent_type\", model=~\"$model\"}",
+          "legendFormat": "{{type}} ({{model}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 40 }
+        }
+      }
+    },
+    {
+      "title": "Estimated Cost by Model",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum by (model) (ai_factory_agent_tokens{model=~\"$model\"} * on(model) group_left() (vector(0.000075) and ai_factory_agent_tokens{model=\"opus\"} or vector(0.000015) and ai_factory_agent_tokens{model=\"sonnet\"} or vector(0.000004) and ai_factory_agent_tokens{model=\"haiku\"}))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD" }
+      }
+    },
+    {
+      "title": "Escalation Alert — Sonnet > 15min",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "count(ai_factory_agent_duration_seconds{model=\"sonnet\"} > 900) OR vector(0)",
+          "legendFormat": "Escalation needed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Daily Agent Summary",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum by (type, model) (increase(ai_factory_agent_calls_total[24h]))",
+          "legendFormat": "{{type}} ({{model}})",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "renameByName": { "type": "Agent", "model": "Model", "Value": "Calls (24h)" } } }
+      ]
+    }
+  ]
+}

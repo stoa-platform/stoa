@@ -49,30 +49,30 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
+              memory: '64Mi'
+              cpu: '50m'
             limits:
-              memory: "256Mi"
-              cpu: "200m"
+              memory: '256Mi'
+              cpu: '200m'
           env:
             - name: API_BACKEND_URL
-              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
+              value: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000'
             - name: VITE_BASE_DOMAIN
-              value: "gostoa.dev"
+              value: 'gostoa.dev'
             - name: VITE_KEYCLOAK_URL
-              value: "https://auth.gostoa.dev"
+              value: 'https://auth.gostoa.dev'
             - name: VITE_KEYCLOAK_REALM
-              value: "stoa"
+              value: 'stoa'
             - name: VITE_KEYCLOAK_CLIENT_ID
-              value: "control-plane-ui"
+              value: 'control-plane-ui'
             - name: VITE_API_URL
-              value: "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0"
+              value: 'https://api.gostoa.dev'
             - name: LOGS_BACKEND_URL
-              value: "http://opensearch-dashboards.stoa-system.svc.cluster.local:5601"
+              value: 'http://opensearch-dashboards.stoa-system.svc.cluster.local:5601'
             - name: GRAFANA_BACKEND_URL
-              value: "http://grafana.stoa-system.svc.cluster.local:3000"
+              value: 'http://grafana.stoa-system.svc.cluster.local:3000'
             - name: PROMETHEUS_BACKEND_URL
-              value: "http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
+              value: 'http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090'
           securityContext:
             privileged: false
             runAsNonRoot: true

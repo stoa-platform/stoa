@@ -147,6 +147,7 @@ class ExternalMCPServerResponse(BaseModel):
     auth_type: AuthTypeEnum
     tool_prefix: str | None = None
     enabled: bool = True
+    is_platform: bool = False
     health_status: HealthStatusEnum = HealthStatusEnum.UNKNOWN
     last_health_check: datetime | None = None
     last_sync_at: datetime | None = None
@@ -176,6 +177,7 @@ class TenantMCPServerResponse(BaseModel):
     has_credentials: bool = False
     tool_prefix: str | None = None
     enabled: bool = True
+    is_platform: bool = False
     health_status: HealthStatusEnum = HealthStatusEnum.UNKNOWN
     last_health_check: datetime | None = None
     last_sync_at: datetime | None = None
@@ -302,6 +304,7 @@ class ExternalMCPServerForGateway(BaseModel):
     auth_type: AuthTypeEnum
     credentials: dict | None = None  # Decrypted credentials
     tool_prefix: str | None = None
+    is_platform: bool = False
     tenant_id: str | None = None
     environment: str | None = "dev"
     gateway_instance_id: UUID | None = None

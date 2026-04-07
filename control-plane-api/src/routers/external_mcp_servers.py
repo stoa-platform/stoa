@@ -82,6 +82,7 @@ def _convert_server_to_response(server: ExternalMCPServer) -> ExternalMCPServerR
         auth_type=AuthTypeEnum(server.auth_type.value),
         tool_prefix=server.tool_prefix,
         enabled=server.enabled,
+        is_platform=server.is_platform,
         health_status=HealthStatusEnum(server.health_status.value),
         last_health_check=server.last_health_check,
         last_sync_at=server.last_sync_at,
@@ -109,6 +110,7 @@ def _convert_server_to_detail_response(server: ExternalMCPServer) -> ExternalMCP
         auth_type=AuthTypeEnum(server.auth_type.value),
         tool_prefix=server.tool_prefix,
         enabled=server.enabled,
+        is_platform=server.is_platform,
         health_status=HealthStatusEnum(server.health_status.value),
         last_health_check=server.last_health_check,
         last_sync_at=server.last_sync_at,
@@ -298,6 +300,9 @@ async def update_server(
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
 
+    if server.is_platform:
+        raise HTTPException(status_code=403, detail="Platform server cannot be modified")
+
     if not _has_tenant_access(user, server.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -362,6 +367,9 @@ async def delete_server(
 
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
+
+    if server.is_platform:
+        raise HTTPException(status_code=403, detail="Platform server cannot be deleted")
 
     if not _has_tenant_access(user, server.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
@@ -466,11 +474,12 @@ async def sync_tools(
         except Exception as e:
             logger.warning(f"Vault unavailable — syncing tools without credentials: {e}")
 
-    # Discover tools
+    # Discover tools — platform servers use configured gateway URL instead of sentinel
+    sync_url = settings.MCP_GATEWAY_URL if server.is_platform else server.base_url
     mcp_client = get_mcp_client_service()
     try:
         discovered_tools = await mcp_client.list_tools(
-            base_url=server.base_url,
+            base_url=sync_url,
             transport=server.transport.value,
             auth_type=server.auth_type.value,
             credentials=credentials,

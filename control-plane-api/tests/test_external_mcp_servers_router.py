@@ -50,6 +50,7 @@ def _mock_server(**overrides):
         "auth_type": auth_mock,
         "tool_prefix": "linear",
         "enabled": True,
+        "is_platform": False,
         "health_status": health_mock,
         "last_health_check": None,
         "last_sync_at": None,
@@ -242,6 +243,87 @@ class TestDeleteServer:
                 response = client.delete(f"{BASE}/{uuid4()}")
 
         assert response.status_code == 404
+
+
+class TestPlatformServerGuard:
+    """Platform server (is_platform=True) cannot be updated or deleted — CAB-2003."""
+
+    def test_platform_server_is_platform_in_response(self, app_with_cpi_admin, mock_db_session):
+        """is_platform field appears in list response."""
+        items = [_mock_server(is_platform=True, name="stoa-gateway")]
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=(items, 1))
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["servers"][0]["is_platform"] is True
+
+    def test_platform_server_update_403(self, app_with_cpi_admin, mock_db_session):
+        """PUT on platform server returns 403."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id, is_platform=True, tenant_id=None)
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.put(
+                    f"{BASE}/{server_id}",
+                    json={"display_name": "Hacked"},
+                )
+
+        assert response.status_code == 403
+        assert "cannot be modified" in response.json()["detail"]
+
+    def test_platform_server_delete_403(self, app_with_cpi_admin, mock_db_session):
+        """DELETE on platform server returns 403."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id, is_platform=True, tenant_id=None)
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.delete(f"{BASE}/{server_id}")
+
+        assert response.status_code == 403
+        assert "cannot be deleted" in response.json()["detail"]
+
+    def test_platform_server_sync_uses_gateway_url(self, app_with_cpi_admin, mock_db_session):
+        """sync-tools on platform server uses settings.MCP_GATEWAY_URL instead of base_url."""
+        server_id = uuid4()
+        mock_srv = _mock_server(
+            id=server_id,
+            is_platform=True,
+            tenant_id=None,
+            base_url="internal://stoa-gateway",
+        )
+        mock_srv_refreshed = _mock_server(id=server_id, is_platform=True, tenant_id=None, tools=[_mock_tool()])
+
+        mock_discovered = MagicMock()
+        mock_discovered.name = "list_apis"
+        mock_discovered.description = "List APIs"
+        mock_discovered.input_schema = {"type": "object"}
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(MCP_CLIENT_PATH) as MockMCPClient,
+        ):
+            MockRepo.return_value.get_by_id = AsyncMock(side_effect=[mock_srv, mock_srv_refreshed])
+            MockRepo.return_value.sync_tools = AsyncMock(return_value=(1, 0))
+            MockMCPClient.return_value.list_tools = AsyncMock(return_value=[mock_discovered])
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(f"{BASE}/{server_id}/sync-tools")
+
+        assert response.status_code == 200
+        # Verify list_tools was called with gateway URL, not sentinel
+        call_kwargs = MockMCPClient.return_value.list_tools.call_args
+        assert call_kwargs.kwargs.get("base_url") != "internal://stoa-gateway"
 
 
 class TestTestConnection:

@@ -7,14 +7,14 @@
 - Make api_name and version NOT NULL
 
 Revision ID: 084
-Revises: 083
+Revises: 083_cleanup_phantom_instances
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "084"
-down_revision = "083"
+down_revision = "083_cleanup_phantom_instances"
 branch_labels = None
 depends_on = None
 
@@ -25,7 +25,8 @@ def upgrade() -> None:
     op.execute("UPDATE api_catalog SET version = '1.0.0' WHERE version IS NULL")
 
     # 2. Drop old unique index (tenant_id, api_id) — no partial, blocks soft-delete reuse
-    op.drop_index("ix_api_catalog_tenant_api", table_name="api_catalog")
+    # Use IF EXISTS for fresh DBs where this index was never created
+    op.execute("DROP INDEX IF EXISTS ix_api_catalog_tenant_api")
 
     # 3. Add partial unique index on (tenant_id, api_name, version) for active APIs only
     op.execute(

@@ -63,7 +63,9 @@ Every implementation plan MUST follow this structure:
 (Each step independently testable. Dependencies explicit.)
 
 ## Binary DoD
-→ See `workflow-essentials.md` for Universal + Component + Post-Merge checks.
+Gate 1 (pre-push, local, ~60s): lint + format + compile + axe → enforced by hook on `git push`.
+Gate 2 (CI, remote, ~5min): License + SBOM + Signed Commits + Security scans.
+→ See `workflow-essentials.md` for full Two-Gate Validation Model + Component checks.
 
 ## Ship/Show/Ask
 - **Mode**: Ship | Show | Ask (see `workflow-essentials.md` decision matrix)
@@ -83,15 +85,17 @@ Every implementation plan MUST follow this structure:
 - **P2** (`/parallel-review`): all 3 in parallel → synthesize → Go/Fix/Redo verdict
 
 ### Pattern 3: Feature Development (test-first DEFAULT for feat/fix)
-`[Inline] Plan → Branch → [test-writer] Failing tests → Implement to pass → [security-reviewer] Review → Quality gate → PR → CI → Merge → CD verify → State files`
+`[Inline] Plan → Branch → [test-writer] Failing tests → Implement to pass → [security-reviewer] Review → Push (pre-push gate) → PR → CI → Merge → CD verify → State files`
 
 **Test-first is the default** for all `feat()` and `fix()` tickets. Write failing tests FIRST, then implement to make them pass. This ensures every change has test coverage from the start and prevents regressions. Pattern 5 (code-first) remains available for `refactor()`, `chore()`, `docs()`, `style()`.
+
+**Push = validation gate**: `git push` triggers the pre-push hook which runs lint + format + compile + axe-core automatically. If the push succeeds, checks 1/4/5/6 of the Binary DoD are already proven. Never create a PR from code that hasn't passed the pre-push gate.
 
 ### Pattern 4: Agent Teams (opt-in, experimental)
 Activation: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Prereq: `tmux`. Max 3 teammates (Sonnet), lead (Opus). Only for multi-component independent scopes >= 300 LOC. Must write `.claude/claims/` files (Claim File Bridge). See `phase-ownership.md`.
 
 ### Pattern 5-7: CI-first / Content compliance / Spec-driven
-- **P5** (code-first): Branch → code → pre-commit checklist → tests → security → merge → CD verify. **Only for refactor/chore/docs/style** — never for feat/fix.
+- **P5** (code-first): Branch → code → push (pre-push gate) → tests → security → merge → CD verify. **Only for refactor/chore/docs/style** — never for feat/fix.
 - **P6**: docs-writer → content-reviewer → security-reviewer → corrections → PR
 - **P7** (Osmani): Plan → test-writer (failing tests first) → implement → security → merge. **Merged into Pattern 3 as default behavior.**
 

@@ -126,13 +126,20 @@ async def list_gateway_routes(
 
     deploy_repo = GatewayDeploymentRepository(db)
 
-    # Get all SYNCED + PENDING deployments (PENDING = recently deployed, should be on gateway)
-    deployments = await deploy_repo.list_by_statuses(
-        [
-            DeploymentSyncStatus.SYNCED,
-            DeploymentSyncStatus.PENDING,
-        ]
-    )
+    # Get SYNCED + PENDING deployments, filtered by gateway if specified.
+    # Without filtering, a stoa-connect instance syncs routes from ALL gateways
+    # to its local gateway — causing cross-gateway pollution (CAB-1938).
+    statuses = [DeploymentSyncStatus.SYNCED, DeploymentSyncStatus.PENDING]
+
+    if gateway_name:
+        gw_repo = GatewayInstanceRepository(db)
+        gateway = await gw_repo.get_by_name(gateway_name)
+        if gateway:
+            deployments = await deploy_repo.list_by_statuses_and_gateway(statuses, gateway.id)
+        else:
+            deployments = []
+    else:
+        deployments = await deploy_repo.list_by_statuses(statuses)
 
     routes = []
     for dep in deployments:
@@ -644,6 +651,19 @@ async def route_sync_ack(
             logger.warning(
                 "route-sync-ack: deployment not found id=%s gateway=%s",
                 result.deployment_id,
+                gateway_id,
+            )
+            not_found += 1
+            continue
+
+        # Validate that this gateway owns this deployment (CAB-1938).
+        # Without this check, a stoa-connect instance can ack deployments
+        # belonging to another gateway, marking them SYNCED on the wrong host.
+        if deployment.gateway_instance_id != gateway_id:
+            logger.warning(
+                "route-sync-ack: gateway mismatch deploy=%s owns=%s ack_from=%s — skipping",
+                result.deployment_id,
+                deployment.gateway_instance_id,
                 gateway_id,
             )
             not_found += 1

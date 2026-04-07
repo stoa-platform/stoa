@@ -7,14 +7,14 @@ Also backfills public_url for known gateways that were missed by migration 085
 (name mismatch: 085 used 'stoa-gateway' but instance is 'stoa-gateway-edge-mcp-dev').
 
 Revision ID: 088
-Revises: 087
+Revises: 087_add_deployment_generations
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "088"
-down_revision = "087"
+down_revision = "087_add_deployment_generations"
 branch_labels = None
 depends_on = None
 

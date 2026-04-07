@@ -43,6 +43,15 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-no-k8s-secrets.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-push-quality-gate.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -105,6 +114,10 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-git-cleanup.sh\""
+          },
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-state-lint.sh\""

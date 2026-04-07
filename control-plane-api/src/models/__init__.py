@@ -68,6 +68,7 @@ from .skill import Skill, SkillScope
 from .subscription import Subscription, SubscriptionStatus
 from .tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from .tenant_ca import TenantCA
+from .tenant_tool_permission import TenantToolPermission
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store
 from .usage_summary import UsageSummary
 from .webhook import (

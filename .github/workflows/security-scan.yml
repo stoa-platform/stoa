@@ -52,7 +52,7 @@ jobs:
           components: clippy
 
       - name: Cache Cargo
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: |
             ~/.cargo/bin/
@@ -141,7 +141,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.check.outputs.exists == 'true'
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20'
           cache: 'npm'
@@ -230,7 +230,7 @@ jobs:
 
       # --- JavaScript ---
       - name: Set up Node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20'
 
@@ -308,7 +308,7 @@ jobs:
 
       - name: Cache Trivy DB
         if: steps.check.outputs.exists == 'true'
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cache/trivy
           key: ${{ runner.os }}-trivy-${{ github.run_id }}
@@ -326,7 +326,7 @@ jobs:
 
       - name: Run Trivy (SARIF)
         if: steps.check.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # master
         with:
           image-ref: 'stoa/${{ matrix.image.name }}:scan'
           format: 'sarif'
@@ -345,7 +345,7 @@ jobs:
 
       - name: Run Trivy (fail on HIGH+)
         if: steps.check.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # master
         with:
           image-ref: 'stoa/${{ matrix.image.name }}:scan'
           format: 'table'

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createAuthMock } from '../../test/helpers';
@@ -21,43 +21,18 @@ const { mockGateway, mockDeployments, mockTools } = vi.hoisted(() => ({
     base_url: 'http://stoa-gateway:8080',
     public_url: 'https://mcp.gostoa.dev',
     target_gateway_url: null,
+    ui_url: null,
     auth_config: {},
     status: 'online',
+    enabled: true,
+    visibility: null,
     last_health_check: new Date().toISOString(),
     health_details: {
       uptime_seconds: 7200,
       routes_count: 5,
       policies_count: 2,
       discovered_apis_count: 3,
-      discovered_apis: [
-        {
-          name: 'Weather Service',
-          version: '2.0.0',
-          backend_url: 'https://api.weather.example.com',
-          paths: ['/forecast', '/current'],
-          methods: ['GET'],
-          policies: [],
-          is_active: true,
-        },
-        {
-          name: 'Payment Gateway',
-          version: '1.3.0',
-          backend_url: 'https://pay.example.com',
-          paths: ['/charge', '/refund'],
-          methods: ['POST', 'GET'],
-          policies: ['rate-limit'],
-          is_active: true,
-        },
-        {
-          name: 'Legacy CRM',
-          version: '',
-          backend_url: 'https://crm.internal',
-          paths: ['/contacts'],
-          methods: ['GET', 'PUT', 'DELETE'],
-          policies: [],
-          is_active: false,
-        },
-      ],
+      discovered_apis: [],
       error_rate: 0.01,
     },
     capabilities: ['rest', 'mcp', 'sse'],
@@ -99,6 +74,8 @@ const { mockGateway, mockDeployments, mockTools } = vi.hoisted(() => ({
   ],
 }));
 
+const mockConfirm = vi.fn().mockResolvedValue(true);
+
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 vi.mock('../../services/api', () => ({
@@ -106,11 +83,22 @@ vi.mock('../../services/api', () => ({
     getGatewayInstance: vi.fn().mockResolvedValue(mockGateway),
     getGatewayDeployments: vi.fn().mockResolvedValue(mockDeployments),
     getGatewayTools: vi.fn().mockResolvedValue(mockTools),
+    updateGatewayInstance: vi.fn().mockResolvedValue(mockGateway),
+    checkGatewayHealth: vi.fn().mockResolvedValue({ status: 'ok' }),
+    forceSyncDeployment: vi.fn().mockResolvedValue({}),
   },
 }));
 
 vi.mock('@stoa/shared/components/Skeleton', () => ({
   CardSkeleton: () => <div data-testid="skeleton">Loading...</div>,
+}));
+
+vi.mock('@stoa/shared/components/Toast', () => ({
+  useToastActions: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }),
+}));
+
+vi.mock('@stoa/shared/components/ConfirmDialog', () => ({
+  useConfirm: () => [mockConfirm, () => null],
 }));
 
 // ---------------------------------------------------------------------------
@@ -140,6 +128,9 @@ describe('GatewayDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+    // Reset gateway to enabled state
+    mockGateway.enabled = true;
+    mockGateway.visibility = null;
   });
 
   it('renders gateway display name', async () => {
@@ -254,6 +245,128 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('Payments API')).toBeInTheDocument();
     expect(screen.getByText('APIs Deployed')).toBeInTheDocument();
     expect(screen.getByText('MCP Tools')).toBeInTheDocument();
+  });
+
+  // --- Enabled/Disabled ---
+
+  it('shows Disable button when gateway is enabled', async () => {
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('Disable')).toBeInTheDocument();
+  });
+
+  it('shows Enable button and Disabled badge when gateway is disabled', async () => {
+    mockGateway.enabled = false;
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('Enable')).toBeInTheDocument();
+    expect(screen.getByText('Disabled')).toBeInTheDocument();
+  });
+
+  it('shows disabled banner when gateway is disabled', async () => {
+    mockGateway.enabled = false;
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('Gateway disabled')).toBeInTheDocument();
+  });
+
+  it('confirms before disabling gateway', async () => {
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(screen.getByText('Disable'));
+    await waitFor(() => {
+      expect(mockConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Disable Gateway',
+          variant: 'danger',
+        })
+      );
+    });
+  });
+
+  it('calls updateGatewayInstance with enabled=false on disable confirm', async () => {
+    const { apiService } = await import('../../services/api');
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(screen.getByText('Disable'));
+    await waitFor(() => {
+      expect(apiService.updateGatewayInstance).toHaveBeenCalledWith('gw-1', { enabled: false });
+    });
+  });
+
+  it('enables gateway without confirmation', async () => {
+    mockGateway.enabled = false;
+    const { apiService } = await import('../../services/api');
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(screen.getByText('Enable'));
+    await waitFor(() => {
+      expect(apiService.updateGatewayInstance).toHaveBeenCalledWith('gw-1', { enabled: true });
+    });
+    // Should NOT show confirm dialog for enable
+    expect(mockConfirm).not.toHaveBeenCalled();
+  });
+
+  // --- Visibility ---
+
+  it('shows "All tenants" when visibility is null', async () => {
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('All tenants')).toBeInTheDocument();
+  });
+
+  it('shows tenant IDs when visibility is restricted', async () => {
+    mockGateway.visibility = { tenant_ids: ['tenant-a', 'tenant-b'] } as any;
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('tenant-a')).toBeInTheDocument();
+    expect(screen.getByText('tenant-b')).toBeInTheDocument();
+  });
+
+  // --- Actions ---
+
+  it('renders Health Check button for admin', async () => {
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('Health Check')).toBeInTheDocument();
+  });
+
+  it('calls checkGatewayHealth on Health Check click', async () => {
+    const { apiService } = await import('../../services/api');
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    fireEvent.click(screen.getByText('Health Check'));
+    await waitFor(() => {
+      expect(apiService.checkGatewayHealth).toHaveBeenCalledWith('gw-1');
+    });
+  });
+
+  it('renders force sync buttons for deployments', async () => {
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    const syncButtons = screen.getAllByText('Sync');
+    expect(syncButtons.length).toBe(2); // one per deployment
+  });
+
+  it('calls forceSyncDeployment on sync click', async () => {
+    const { apiService } = await import('../../services/api');
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    const syncButtons = screen.getAllByText('Sync');
+    fireEvent.click(syncButtons[0]);
+    await waitFor(() => {
+      expect(apiService.forceSyncDeployment).toHaveBeenCalledWith('dep-1');
+    });
+  });
+
+  // --- RBAC ---
+
+  it('hides action buttons for viewer role', async () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('viewer'));
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.queryByText('Disable')).not.toBeInTheDocument();
+    expect(screen.queryByText('Health Check')).not.toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

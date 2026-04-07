@@ -20,9 +20,12 @@ from ..schemas.deployment import (
     RollbackCreate,
 )
 from ..services.deployment_service import DeploymentService
-from ..services.git_provider import GitProvider, get_git_provider
+from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
 
 logger = logging.getLogger(__name__)
+
+# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
+git_service = git_provider_factory()
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
 

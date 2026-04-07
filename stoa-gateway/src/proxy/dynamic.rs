@@ -125,8 +125,32 @@ fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Cli
     http.status_code = tracing::field::Empty,
     otel.status_code = tracing::field::Empty,
     otel.status_message = tracing::field::Empty,
+    auth_type = tracing::field::Empty,
 ))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
+    // Record inbound auth type on the span for observability (by_auth_type breakdown).
+    // Detection order: DPoP > Bearer > API key > mTLS > none.
+    // DPoP checked first because DPoP requests also carry Authorization: DPoP <token>.
+    let auth_header = request.headers().get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let has_api_key = request.headers().contains_key("X-API-Key")
+        || request.headers().contains_key("X-Api-Key");
+    let inbound_auth = if request.headers().contains_key("DPoP") {
+        "dpop"
+    } else if auth_header.starts_with("Bearer ") {
+        "bearer"
+    } else if auth_header.starts_with("Basic ") {
+        "basic"
+    } else if has_api_key {
+        "api_key"
+    } else if request.extensions().get::<crate::auth::mtls::ClientCertInfo>().is_some() {
+        "mtls"
+    } else {
+        "none"
+    };
+    tracing::Span::current().record("auth_type", inbound_auth);
+
     let raw_path = request.uri().path();
     let path = urlencoding::decode(raw_path).unwrap_or(std::borrow::Cow::Borrowed(raw_path));
     let method = request.method().clone();

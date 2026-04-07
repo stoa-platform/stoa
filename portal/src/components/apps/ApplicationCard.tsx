@@ -7,7 +7,8 @@
 
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Key, Clock, CheckCircle, XCircle, PauseCircle } from 'lucide-react';
+import { ArrowRight, Key, Clock, CheckCircle, XCircle, PauseCircle, User } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import type { Application } from '../../types';
 
 interface ApplicationCardProps {
@@ -49,9 +50,13 @@ const dateFormatOptions: Intl.DateTimeFormatOptions = {
 export const ApplicationCard = memo(function ApplicationCard({
   application,
 }: ApplicationCardProps) {
+  const { user } = useAuth();
   const status =
     statusConfig[application.status as keyof typeof statusConfig] || statusConfig.active;
   const StatusIcon = status.icon;
+
+  // Show owner badge when admin sees apps owned by someone else
+  const isOwnedByOther = user?.is_admin && application.owner_id && application.owner_id !== user.id;
 
   // Memoize formatted date
   const formattedDate = useMemo(() => {
@@ -76,6 +81,14 @@ export const ApplicationCard = memo(function ApplicationCard({
               {application.client_id}
             </span>
           </div>
+          {isOwnedByOther && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <User className="h-3 w-3 text-blue-400 dark:text-blue-500" />
+              <span className="text-xs text-blue-600 dark:text-blue-400 truncate">
+                {application.owner_id}
+              </span>
+            </div>
+          )}
         </div>
         <span
           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}

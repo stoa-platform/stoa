@@ -252,6 +252,7 @@ export interface Application {
   description?: string;
   client_id: string | null;
   client_secret?: string | null; // Only shown on creation or regeneration
+  owner_id?: string | null;
   tenant_id?: string | null;
   redirect_uris: string[];
   status: string;

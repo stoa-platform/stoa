@@ -133,24 +133,45 @@ async def get_execution_detail(
 )
 async def list_my_executions(
     status: ExecutionStatusEnum | None = None,
+    error_category: ErrorCategoryEnum | None = None,
+    api_name: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List my executions (portal user, consumer-scoped)."""
-    if not user.consumer_id:
+    """List my executions (portal user, consumer-scoped).
+
+    Admins (cpi-admin, tenant-admin) see all executions.
+    """
+    is_admin = bool({"cpi-admin", "tenant-admin"} & set(user.roles))
+    consumer_id = getattr(user, "consumer_id", None)
+
+    if not is_admin and not consumer_id:
         return ExecutionLogListResponse(items=[], total=0, page=page, page_size=page_size)
 
     repo = ExecutionLogRepository(db)
     db_status = ExecutionStatus(status.value) if status else None
+    db_category = ErrorCategory(error_category.value) if error_category else None
 
-    logs, total = await repo.list_by_consumer(
-        consumer_id=user.consumer_id,
-        status=db_status,
-        page=page,
-        page_size=page_size,
-    )
+    if is_admin:
+        tenant_id = user.tenant_id or "default"
+        logs, total = await repo.list_by_tenant(
+            tenant_id=tenant_id,
+            status=db_status,
+            error_category=db_category,
+            page=page,
+            page_size=page_size,
+        )
+    else:
+        logs, total = await repo.list_by_consumer(
+            consumer_id=consumer_id,
+            status=db_status,
+            page=page,
+            page_size=page_size,
+        )
 
     return ExecutionLogListResponse(
         items=[ExecutionLogSummary.model_validate(log) for log in logs],
@@ -168,14 +189,20 @@ async def get_my_execution_taxonomy(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get my error taxonomy (portal user, consumer-scoped)."""
-    if not user.consumer_id:
+    """Get my error taxonomy (portal user, consumer-scoped).
+
+    Admins see all executions taxonomy for their tenant.
+    """
+    is_admin = bool({"cpi-admin", "tenant-admin"} & set(user.roles))
+    consumer_id = getattr(user, "consumer_id", None)
+
+    if not is_admin and not consumer_id:
         return ErrorTaxonomyResponse(items=[], total_errors=0, total_executions=0, error_rate=0)
 
     repo = ExecutionLogRepository(db)
     items, total_errors, total_executions = await repo.get_taxonomy(
-        tenant_id=user.tenant_id,
-        consumer_id=user.consumer_id,
+        tenant_id=user.tenant_id or "default",
+        consumer_id=consumer_id if not is_admin else None,
     )
 
     error_rate = round((total_errors / total_executions) * 100, 1) if total_executions > 0 else 0

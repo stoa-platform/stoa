@@ -16,9 +16,9 @@
 
 ---
 
-**STOA** is an open-source API management platform that bridges enterprise APIs to AI agents. Define your API once, expose it everywhere — REST, GraphQL, MCP.
+**STOA** is an open-source MCP gateway that deploys as a **sidecar** next to your existing API gateway. Your REST traffic keeps flowing through Kong, Gravitee, or Apigee — STOA adds an MCP layer so AI agents can discover and call the same APIs, with authentication, rate limiting, and audit built in.
 
-> **Universal API Contract (UAC):** Define Once, Expose Everywhere.
+> **Keep your gateway. Add AI.** Define your API once, expose it as REST + MCP.
 
 <p align="center">
   <img src="docs/assets/screenshot-call-flow.png" alt="STOA Console — Call Flow Dashboard with live traces and traffic heatmap" width="800">
@@ -37,37 +37,42 @@
 
 | Problem | STOA Solution |
 |---------|--------------|
+| AI agents can't use enterprise APIs | MCP sidecar: expose existing APIs as AI tools without changing your gateway |
 | 5 days to get API access | Self-service portal, instant credentials |
 | API catalog in Excel | Searchable catalog with OpenAPI specs |
-| Gateway = vendor lock-in | Open-source, full observability, Rust performance |
-| AI agents can't use enterprise APIs | MCP bridge: legacy API → AI agent tool |
+| "Rip and replace" to adopt AI | Sidecar deploys next to Kong, Gravitee, Apigee, Azure, AWS, webMethods |
 | Multi-org identity is a nightmare | Keycloak federation across organizations |
-| Locked into one gateway vendor | Multi-gateway adapters: Kong, Gravitee, Apigee, Azure APIM, AWS, webMethods |
+| No governance for AI API calls | OAuth 2.1, per-consumer rate limits, audit trail for every MCP call |
 
 ## Architecture
 
+STOA doesn't replace your existing gateway — it sits alongside it as a **sidecar**, adding MCP/AI capabilities to your current infrastructure.
+
 ```
+                        STOA Control Plane
 ┌──────────────────────────────────────────────────────────────────┐
-│                         STOA Platform                            │
-│                                                                  │
 │  Console ──── Control Plane API ──── Keycloak ──── Portal        │
 │  (React 19)    (Python/FastAPI)      (OIDC)      (React 19)     │
-│                       │                                          │
-│             ┌─────────┴─────────┐                                │
-│             │   Rust Gateway    │ ◄── MCP + JWT + mTLS + Quotas  │
-│             │  (Tokio + axum)   │                                │
-│             └─────────┬─────────┘                                │
-│                       │                                          │
-│   ┌───────────────────┼───────────────────┐                      │
-│   │                   │                   │                      │
-│   ▼                   ▼                   ▼                      │
-│  Kong            Gravitee            webMethods    ◄── Adapters  │
-│  Apigee          Azure APIM         AWS API GW                   │
-│                                                                  │
-│  Prometheus ── Grafana ── Loki ── OpenSearch                     │
-│  (Metrics)   (Dashboards) (Logs) (Error Tracking)                │
-└──────────────────────────────────────────────────────────────────┘
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ sync
+              ┌────────────┴────────────┐
+              │                         │
+              ▼                         ▼
+┌─────────────────────┐   ┌─────────────────────────────────────┐
+│    STOA Gateway      │   │     Your Existing Gateway            │
+│   (Rust · sidecar)   │   │  Kong · Gravitee · Apigee · Azure   │
+│                      │   │  AWS API GW · webMethods             │
+│  MCP Bridge          │   │                                     │
+│  AI Tool Discovery   │   │  ◄── Adapter sync (APIs, policies,  │
+│  OAuth 2.1 + PKCE    │   │      consumers, subscriptions)      │
+│  mTLS · Rate Limits  │   │                                     │
+└──────────┬───────────┘   └──────────────┬──────────────────────┘
+           │                              │
+           ▼                              ▼
+     AI Agents (MCP)              Existing Clients (REST)
 ```
+
+**Key idea:** your REST traffic keeps flowing through your current gateway. STOA adds an MCP sidecar so AI agents can discover and call the same APIs — with authentication, rate limiting, and audit built in.
 
 ## Quick Start
 
@@ -106,22 +111,21 @@ For component-by-component local development (without Docker), see [DEVELOPMENT.
 - **Self-Service Portal** — developers discover, subscribe, and test APIs without tickets
 - **Admin Console** — manage tenants, APIs, consumers, and subscriptions
 - **Multi-Tenant** — full isolation between organizations with RBAC
-- **Multi-Gateway** — 7 adapter integrations (Kong, Gravitee, Apigee, Azure APIM, AWS, webMethods, STOA native)
 
-### Rust Gateway (93K LOC, 2,300+ tests)
-- **Sub-millisecond proxy** — built with Tokio + axum for maximum throughput
-- **JWT validation** — Keycloak OIDC integration with JWKS caching
-- **Per-consumer rate limiting** — plan-based quotas with 429 responses
-- **mTLS support** — RFC 8705 certificate-bound tokens
-- **MCP OAuth 2.1** — RFC 9728 discovery, PKCE, dynamic client registration
-- **4-mode architecture** — edge-mcp (active), sidecar, proxy, shadow
-
-### MCP Bridge (AI-Native)
+### MCP Sidecar Gateway (Rust, 93K LOC, 2,300+ tests)
+- **Sidecar deployment** — deploys next to your existing gateway, no rip-and-replace
 - **Universal API Contract** — define an API once, expose it as REST + MCP tool
 - **Tool discovery** — AI agents discover available tools via MCP protocol
-- **SSE transport** — real-time streaming for agent communication
-- **Governance** — authentication, rate limiting, and audit trail for AI calls
+- **MCP OAuth 2.1** — RFC 9728 discovery, PKCE, dynamic client registration
+- **Per-consumer rate limiting** — plan-based quotas with 429 responses
+- **mTLS support** — RFC 8705 certificate-bound tokens
+- **Sub-millisecond proxy** — built with Tokio + axum for maximum throughput
 - **5 CRDs** — Tools, ToolSets, Skills, Gateways, GatewayBindings (Kubernetes-native)
+
+### Multi-Gateway Adapters
+- **7 adapters** — Kong, Gravitee, Apigee, Azure APIM, AWS API Gateway, webMethods, STOA native
+- **Bidirectional sync** — APIs, policies, consumers, and subscriptions stay in sync
+- **Single control plane** — manage all your gateways from one console
 
 ### Observability
 - **Grafana dashboards** — gateway metrics, tenant analytics, error tracking, arena benchmarks

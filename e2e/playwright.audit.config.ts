@@ -64,6 +64,17 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['audit-security'],
     },
+    {
+      name: 'audit-guardrails',
+      testMatch: /audit-phase5-guardrails\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'audit-deploy',
+      testMatch: /audit-phase6-deploy\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['audit-guardrails'],
+    },
   ],
 
   // Environment variables available in tests

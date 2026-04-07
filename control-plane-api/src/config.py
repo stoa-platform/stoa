@@ -124,6 +124,14 @@ class Settings(BaseSettings):
     LOKI_TIMEOUT_SECONDS: int = 30
     LOKI_ENABLED: bool = True
 
+    # Tempo Internal API (CAB-1984) - for distributed trace queries
+    TEMPO_INTERNAL_URL: str = "http://tempo:3200"
+    TEMPO_TIMEOUT_SECONDS: int = 30
+    TEMPO_ENABLED: bool = True
+
+    # OpenSearch Traces (CAB-1997) - query otel-v1-apm-span-* from Data Prepper
+    OPENSEARCH_TRACES_ENABLED: bool = True
+
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes
@@ -203,7 +211,8 @@ class Settings(BaseSettings):
         f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},"
         f"https://staging-console.{_BASE_DOMAIN},https://staging-portal.{_BASE_DOMAIN},"
         f"https://dev-console.{_BASE_DOMAIN},https://dev-portal.{_BASE_DOMAIN},"
-        "http://localhost:3000,http://localhost:5173"
+        "http://localhost:3000,http://localhost:3002,http://localhost:5173,"
+        "http://console.stoa.local,http://portal.stoa.local,http://api.stoa.local"
     )
 
     # Rate Limiting

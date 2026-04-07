@@ -253,7 +253,7 @@ async def get_sync_status(
 
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get sync status") from e
+        raise HTTPException(status_code=500, detail="Failed to get sync status")
 
 
 # ============================================================================

@@ -83,7 +83,8 @@ test.describe('Audit Phase 3 — Security Chain', () => {
 
   test('3.9 — Ready endpoint accessible without auth', async ({ request }) => {
     const resp = await request.get(`${GATEWAY_URL}/ready`);
-    expect(resp.status()).toBe(200);
+    // 200 = all deps healthy, 503 = dep unreachable (still proves endpoint exists without auth)
+    expect([200, 503]).toContain(resp.status());
   });
 
   test('3.10 — Metrics endpoint accessible without auth', async ({ request }) => {

@@ -68,6 +68,9 @@ import type {
   TenantCAInfo,
   CSRSignResponse,
   IssuedCertificateListResponse,
+  TenantToolPermission,
+  TenantToolPermissionCreate,
+  TenantToolPermissionListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -930,6 +933,13 @@ class ApiService {
     return data;
   }
 
+  async getGuardrailsEvents(limit = 20): Promise<any> {
+    const { data } = await this.client.get(
+      `/v1/admin/gateways/metrics/guardrails/events?limit=${limit}`
+    );
+    return data;
+  }
+
   async getGatewayHealthSummary(): Promise<any> {
     const { data } = await this.client.get('/v1/admin/gateways/health-summary');
     return data;
@@ -1070,6 +1080,29 @@ class ApiService {
   async seedWorkflowTemplates(tenantId: string): Promise<{ message: string }> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/workflows/templates/seed`);
     return data;
+  }
+
+  // Tool Permissions (CAB-1982)
+  async listToolPermissions(
+    tenantId: string,
+    params?: { mcp_server_id?: string; page?: number; page_size?: number }
+  ): Promise<TenantToolPermissionListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/tool-permissions`, {
+      params: { ...params, page_size: params?.page_size ?? 100 },
+    });
+    return data;
+  }
+
+  async upsertToolPermission(
+    tenantId: string,
+    body: TenantToolPermissionCreate
+  ): Promise<TenantToolPermission> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/tool-permissions`, body);
+    return data;
+  }
+
+  async deleteToolPermission(tenantId: string, permissionId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/tool-permissions/${permissionId}`);
   }
 
   // Chat Settings (CAB-1852)
@@ -1428,11 +1461,17 @@ class ApiService {
   async getTransactions(
     limit = 20,
     status?: string,
-    timeRange?: string
+    timeRange?: string,
+    serviceType?: string,
+    statusCode?: number,
+    route?: string
   ): Promise<{ transactions: MonitoringTransaction[] }> {
     const params: Record<string, string | number> = { limit };
     if (status) params.status = status;
     if (timeRange) params.time_range = timeRange;
+    if (serviceType) params.service_type = serviceType;
+    if (statusCode) params.status_code = statusCode;
+    if (route) params.route = route;
     const { data } = await this.client.get('/v1/monitoring/transactions', { params });
     return data;
   }
@@ -1655,6 +1694,14 @@ export interface MonitoringTransaction {
   started_at: string;
   total_duration_ms: number;
   spans_count: number;
+  deployment_mode?: string;
+  spans?: Array<{
+    name: string;
+    service: string;
+    start_offset_ms: number;
+    duration_ms: number;
+    status: string;
+  }>;
 }
 
 export interface MonitoringTransactionDetail extends MonitoringTransaction {

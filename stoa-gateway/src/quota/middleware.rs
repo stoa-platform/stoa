@@ -17,7 +17,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::auth::middleware::AuthenticatedUser;
 use crate::diagnostics::latency::{SharedTracker, Stage};
@@ -41,6 +41,7 @@ struct QuotaExceededResponse {
 ///
 /// On success, adds rate limit headers to the response.
 /// On failure, returns 429 Too Many Requests.
+#[instrument(name = "policy.quota", skip_all, fields(otel.kind = "internal"))]
 pub async fn quota_middleware(
     State(state): State<AppState>,
     request: Request<Body>,

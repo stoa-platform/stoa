@@ -34,6 +34,7 @@ class TestGatewayDeploymentService:
             "gateway_type": MagicMock(value="webmethods"),
             "base_url": "https://gw.example.com",
             "auth_config": {},
+            "enabled": True,
         }
         defaults.update(overrides)
         mock = MagicMock()
@@ -450,3 +451,31 @@ class TestGatewayDeploymentService:
             await svc.undeploy(deployment.id)
 
             mock_kafka.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_deploy_disabled_gateway_raises_permission_error(self):
+        """PermissionError raised when deploying to a disabled gateway (CAB-1979)."""
+        db = AsyncMock()
+        catalog = self._make_catalog()
+        gateway = self._make_gateway(enabled=False)
+
+        with patch("src.services.gateway_deployment_service.GatewayDeploymentRepository") as MockDeployRepo, \
+             patch("src.services.gateway_deployment_service.GatewayInstanceRepository") as MockGwRepo, \
+             patch("src.services.gateway_deployment_service.kafka_service"):
+
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_gw_repo = MockGwRepo.return_value
+            mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
+
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute = AsyncMock(return_value=mock_result)
+
+            from src.services.gateway_deployment_service import GatewayDeploymentService
+
+            svc = GatewayDeploymentService(db)
+            svc.deploy_repo = mock_deploy_repo
+            svc.gw_repo = mock_gw_repo
+
+            with pytest.raises(PermissionError, match="disabled"):
+                await svc.deploy_api(catalog.id, [gateway.id])

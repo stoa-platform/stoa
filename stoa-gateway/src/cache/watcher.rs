@@ -66,4 +66,3 @@ pub fn spawn_cache_file_watcher(watch_dir: String, cache: Arc<PromptCache>) {
         }
     });
 }
-

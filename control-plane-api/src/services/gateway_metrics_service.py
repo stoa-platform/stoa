@@ -15,6 +15,7 @@ from src.adapters.metrics import (
 )
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus
+from src.services.prometheus_client import prometheus_client
 
 logger = logging.getLogger(__name__)
 
@@ -137,10 +138,82 @@ class GatewayMetricsService:
             "recent_errors": recent_errors,
         }
 
+    async def _fetch_guardrails_metrics(self) -> dict:
+        """Fetch guardrails counters + per-tool breakdown from Prometheus."""
+        guardrails: dict = {
+            "pii_detections": 0,
+            "injection_blocks": 0,
+            "content_filters": 0,
+            "prompt_guard_flags": 0,
+            "by_tool": {},
+            "by_category": {},
+        }
+        if not prometheus_client.is_enabled:
+            return guardrails
+
+        # Totals
+        totals = {
+            "pii_detections": 'sum(stoa_guardrails_pii_detected_total) or vector(0)',
+            "injection_blocks": 'sum(stoa_guardrails_injection_blocked_total) or vector(0)',
+            "content_filters": 'sum(stoa_guardrails_content_filtered_total) or vector(0)',
+            "prompt_guard_flags": 'sum(stoa_prompt_guard_detected_total) or vector(0)',
+        }
+        for key, promql in totals.items():
+            try:
+                result = await prometheus_client.query(promql)
+                if result and result.get("result"):
+                    val = result["result"][0].get("value", [None, "0"])
+                    guardrails[key] = int(float(val[1]))
+            except Exception:
+                logger.debug("Failed to fetch guardrails metric %s", key)
+
+        # Breakdown by tool (injection)
+        try:
+            result = await prometheus_client.query(
+                'sum by (tool) (stoa_guardrails_injection_blocked_total)'
+            )
+            if result and result.get("result"):
+                for item in result["result"]:
+                    tool = item.get("metric", {}).get("tool", "unknown")
+                    val = int(float(item["value"][1]))
+                    guardrails["by_tool"][tool] = guardrails["by_tool"].get(tool, 0) + val
+        except Exception:
+            logger.debug("Failed to fetch injection by_tool breakdown")
+
+        # Breakdown by category (content filter)
+        try:
+            result = await prometheus_client.query(
+                'sum by (category) (stoa_guardrails_content_filtered_total)'
+            )
+            if result and result.get("result"):
+                for item in result["result"]:
+                    cat = item.get("metric", {}).get("category", "unknown")
+                    val = int(float(item["value"][1]))
+                    guardrails["by_category"][cat] = val
+        except Exception:
+            logger.debug("Failed to fetch content_filter by_category breakdown")
+
+        # Breakdown by tool (PII — via recent rate to identify which tools leak PII)
+        try:
+            result = await prometheus_client.query(
+                'sum by (tool) (stoa_guardrails_pii_detected_total)'
+            )
+            if result and result.get("result"):
+                for item in result["result"]:
+                    tool = item.get("metric", {}).get("tool", "unknown")
+                    val = int(float(item["value"][1]))
+                    if tool != "unknown":
+                        guardrails["by_tool"][tool] = guardrails["by_tool"].get(tool, 0) + val
+        except Exception:
+            pass
+
+        return guardrails
+
     async def get_aggregated_metrics(self, tenant_id: str | None = None) -> dict:
-        """Combined health + sync summaries + overall_status."""
+        """Combined health + sync summaries + guardrails + overall_status."""
         health = await self.get_health_summary(tenant_id=tenant_id)
         sync = await self.get_sync_status_summary(tenant_id=tenant_id)
+        guardrails = await self._fetch_guardrails_metrics()
 
         # Determine overall status
         total_gateways = health.get("total_gateways", 0)
@@ -160,6 +233,7 @@ class GatewayMetricsService:
         return {
             "health": health,
             "sync": sync,
+            "guardrails": guardrails,
             "overall_status": overall,
         }
 

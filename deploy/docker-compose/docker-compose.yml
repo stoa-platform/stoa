@@ -328,6 +328,12 @@ services:
       STOA_OTEL_ENDPOINT: http://data-prepper:4317
       STOA_OTEL_ENABLED: "true"
       STOA_OTEL_SAMPLE_RATE: "1.0"
+      # Guardrails (CAB-707, CAB-1337, CAB-1761)
+      STOA_GUARDRAILS_PII_ENABLED: "true"
+      STOA_GUARDRAILS_PII_REDACT: "true"
+      STOA_GUARDRAILS_INJECTION_ENABLED: "true"
+      STOA_GUARDRAILS_CONTENT_FILTER_ENABLED: "true"
+      STOA_PROMPT_GUARD_ENABLED: "true"
     depends_on:
       control-plane-api:
         condition: service_healthy

@@ -55,6 +55,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from scripts.traffic.auth_helpers import apply_auth, setup_mtls_session
 from scripts.traffic.scenarios import (
+    GUARDRAILS_PAYLOADS,
     MODE_REQUEST_COUNTS,
     MODE_REQUEST_COUNTS_EDGE_ONLY,
     MODE_WEIGHTS,
@@ -268,6 +269,50 @@ def execute_request(
 # ---------------------------------------------------------------------------
 
 
+def execute_guardrails_probe(
+    session: requests.Session,
+    config: dict,
+    metrics: Metrics,
+    dry_run: bool = False,
+) -> None:
+    """Send MCP tool calls with guardrails-triggering payloads."""
+    payload = random.choice(GUARDRAILS_PAYLOADS)
+    base_url = config["gateway_url"]
+    url = f"{base_url}/mcp/tools/call"
+    tenant = random.choice(config["tenants"])
+    body = {"name": payload["tool"], "arguments": payload.get("args", {})}
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Tenant-ID": tenant,
+        "X-Stoa-Seeder": "guardrails-probe-v1",
+        "Authorization": f"Bearer seed-guardrails-{random.randint(1000, 9999)}",
+    }
+
+    if dry_run:
+        logger.info("[DRY-RUN] POST %s tool=%s", url, payload["tool"])
+        metrics.record("edge-mcp", "bearer", 200, 5.0)
+        return
+
+    try:
+        start = time.monotonic()
+        resp = session.post(url, json=body, headers=headers, timeout=(10, 30))
+        latency_ms = (time.monotonic() - start) * 1000
+        metrics.record("edge-mcp", "bearer", resp.status_code, latency_ms)
+
+        log_fn = logger.info if resp.status_code < 400 else logger.warning
+        log_fn(
+            "MCP %s → %d (%.0fms) tool=%s tenant=%s",
+            payload["tool"], resp.status_code, latency_ms, payload["tool"], tenant,
+        )
+    except requests.exceptions.ConnectionError:
+        metrics.record("edge-mcp", "bearer", 503, 0)
+        logger.warning("CONN_ERROR MCP tool=%s", payload["tool"])
+    except Exception:
+        metrics.record("edge-mcp", "bearer", 500, 0)
+        logger.warning("ERROR MCP tool=%s", payload["tool"], exc_info=True)
+
+
 def _build_mode_request_counts(mode_weights: dict[str, float], args: argparse.Namespace) -> dict[str, tuple[int, int]]:
     """Return per-mode (min, max) request count ranges for the active modes."""
     base = MODE_REQUEST_COUNTS_EDGE_ONLY if args.mode == "edge-only" else MODE_REQUEST_COUNTS
@@ -384,6 +429,19 @@ def run_seeder(args: argparse.Namespace) -> int:
             cycle_num, current_scenario.name, mode_counts, total_cycle,
             current_scenario.requests_per_second,
         )
+
+        # Guardrails scenario: send MCP tool calls instead of proxy requests
+        if current_scenario.name == "guardrails_probe":
+            probe_count = random.randint(5, 15)
+            logger.info("Guardrails probe: %d MCP tool calls", probe_count)
+            for _ in range(probe_count):
+                if (time.monotonic() - start_time) >= duration:
+                    break
+                execute_guardrails_probe(default_session, config, metrics, dry_run=args.dry_run)
+                sleep_time = 1.0 / max(current_scenario.requests_per_second * rate_mult, 0.1)
+                sleep_time *= random.uniform(0.8, 1.2)
+                time.sleep(sleep_time)
+            continue
 
         # Build a shuffled request list: each entry is a mode
         request_queue: list[str] = []

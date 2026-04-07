@@ -933,6 +933,13 @@ class ApiService {
     return data;
   }
 
+  async getGuardrailsEvents(limit = 20): Promise<any> {
+    const { data } = await this.client.get(
+      `/v1/admin/gateways/metrics/guardrails/events?limit=${limit}`
+    );
+    return data;
+  }
+
   async getGatewayHealthSummary(): Promise<any> {
     const { data } = await this.client.get('/v1/admin/gateways/health-summary');
     return data;

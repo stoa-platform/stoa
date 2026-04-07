@@ -36,7 +36,7 @@ describe('TraceDetail', () => {
     );
     expect(screen.getByText('Trace Waterfall')).toBeInTheDocument();
     expect(screen.getByText('Middleware Pipeline')).toBeInTheDocument();
-    expect(screen.getByText(/Kernel Metrics/)).toBeInTheDocument();
+    expect(screen.getByText(/Gateway Metrics/)).toBeInTheDocument();
   });
 
   it('renders request/response header tabs', async () => {

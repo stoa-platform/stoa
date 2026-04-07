@@ -41,6 +41,9 @@ async def test_regression_sync_engine_skips_stoa_pull_model():
     mock_deployment.id = "04e092cb-cdfa-4f56-9ad9-67b90cbf5ae1"
     mock_deployment.gateway_instance_id = "16f562ca-b2c3-46cb-93ed-d01ba6d46e18"
     mock_deployment.sync_status = "pending"
+    mock_deployment.desired_generation = 1
+    mock_deployment.attempted_generation = 0
+    mock_deployment.synced_generation = 0
 
     with (
         patch("src.workers.sync_engine._get_session_factory") as mock_sf,

@@ -89,4 +89,143 @@ describe('AuditLog', () => {
       });
     }
   );
+
+  // Export button visibility per role
+  describe('Export button RBAC', () => {
+    it.each<PersonaRole>(['cpi-admin', 'tenant-admin'])(
+      'shows Export button for %s',
+      async (role) => {
+        vi.useRealTimers();
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<AuditLog />);
+        await waitFor(() => {
+          expect(screen.getByText('Export')).toBeInTheDocument();
+        });
+      }
+    );
+
+    it.each<PersonaRole>(['devops', 'viewer'])('hides Export button for %s', async (role) => {
+      vi.useRealTimers();
+      vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+      render(<AuditLog />);
+      await waitFor(() => {
+        expect(screen.getByText(/Total Events/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Export')).not.toBeInTheDocument();
+    });
+  });
+
+  // Field mapping: API returns user_email/client_ip, verify rendered
+  describe('Field mapping', () => {
+    it('renders user_email in Actor column', async () => {
+      vi.useRealTimers();
+      mockGet.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            entries: [
+              {
+                id: 'evt-1',
+                timestamp: '2026-04-04T10:00:00Z',
+                user_id: 'user-123',
+                user_email: 'alice@acme.com',
+                action: 'create',
+                resource_type: 'api',
+                resource_id: 'api-456',
+                resource_name: 'my-api',
+                status: 'success',
+                details: null,
+                client_ip: '192.168.1.100',
+                user_agent: 'Mozilla/5.0',
+                request_id: 'req-789',
+                tenant_id: 'acme',
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+            has_more: false,
+          },
+        })
+      );
+
+      render(<AuditLog />);
+      await waitFor(() => {
+        expect(screen.getByText('alice@acme.com')).toBeInTheDocument();
+      });
+    });
+
+    it('falls back to user_id when user_email is null', async () => {
+      vi.useRealTimers();
+      mockGet.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            entries: [
+              {
+                id: 'evt-2',
+                timestamp: '2026-04-04T10:00:00Z',
+                user_id: 'svc-agent-001',
+                user_email: null,
+                action: 'update',
+                resource_type: 'tool',
+                resource_id: 'tool-789',
+                resource_name: null,
+                status: 'success',
+                details: null,
+                client_ip: null,
+                user_agent: null,
+                request_id: null,
+                tenant_id: 'acme',
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+            has_more: false,
+          },
+        })
+      );
+
+      render(<AuditLog />);
+      await waitFor(() => {
+        expect(screen.getByText('svc-agent-001')).toBeInTheDocument();
+      });
+    });
+
+    it('shows "system" when both user_email and user_id are null', async () => {
+      vi.useRealTimers();
+      mockGet.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            entries: [
+              {
+                id: 'evt-3',
+                timestamp: '2026-04-04T10:00:00Z',
+                user_id: null,
+                user_email: null,
+                action: 'config_change',
+                resource_type: 'system',
+                resource_id: null,
+                resource_name: null,
+                status: 'success',
+                details: null,
+                client_ip: null,
+                user_agent: null,
+                request_id: null,
+                tenant_id: 'acme',
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+            has_more: false,
+          },
+        })
+      );
+
+      render(<AuditLog />);
+      await waitFor(() => {
+        expect(screen.getByText('system')).toBeInTheDocument();
+      });
+    });
+  });
 });

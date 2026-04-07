@@ -36,6 +36,45 @@ scrape_configs:
     scrape_interval: 10s
 
   # -------------------------------------------------------------------------
+  # STOA Gateway — Link/Sidecar Mode
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-link'
+    static_configs:
+      - targets: ['stoa-gateway-link:8081']
+        labels:
+          service: 'stoa-gateway'
+          mode: 'sidecar'
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # -------------------------------------------------------------------------
+  # STOA Gateway — Connect Mode
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-connect'
+    static_configs:
+      - targets: ['stoa-gateway-connect:8083']
+        labels:
+          service: 'stoa-gateway'
+          mode: 'connect'
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # -------------------------------------------------------------------------
+  # STOA Gateway — K3s Staging (Hetzner)
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-gateway-k3s'
+    scheme: https
+    static_configs:
+      - targets: ['staging-mcp.gostoa.dev:443']
+        labels:
+          service: 'stoa-gateway'
+          environment: 'staging'
+          cluster: 'k3s-hetzner'
+    metrics_path: /metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # -------------------------------------------------------------------------
   # Redpanda (Kafka-compatible event streaming)
   # -------------------------------------------------------------------------
   - job_name: 'redpanda'
@@ -44,6 +83,19 @@ scrape_configs:
         labels:
           service: 'redpanda'
           component: 'event-backbone'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # -------------------------------------------------------------------------
+  # Keycloak (Authentication)
+  # -------------------------------------------------------------------------
+  - job_name: 'keycloak'
+    static_configs:
+      - targets: ['keycloak:8080']
+        labels:
+          service: 'keycloak'
+          component: 'authentication'
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s

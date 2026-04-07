@@ -9,4 +9,5 @@ mod common;
 mod llm_proxy;
 mod mcp;
 mod quota;
+mod sync_boundary;
 mod tool_lifecycle;

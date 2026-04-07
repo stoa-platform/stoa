@@ -1,10 +1,13 @@
-"""APIs router - API lifecycle management via GitOps"""
+"""APIs router - API lifecycle management via database catalog"""
 
+import json
 import logging
-import uuid
+import re
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import (
@@ -16,23 +19,19 @@ from ..auth import (
     require_writable_environment,
 )
 from ..database import get_db
+from ..models.catalog import APICatalog
+from ..repositories.catalog import CatalogRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
-from ..services.git_provider import GitProvider, get_git_provider
+from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
 from ..services.kafka_service import kafka_service
 
 logger = logging.getLogger(__name__)
 
+# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
+git_service = git_provider_factory()
+
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["APIs"])
-
-
-def _require_git_service(git: GitProvider) -> None:
-    """Guard: raise 503 if git provider is not connected."""
-    if not getattr(git, "_project", None):
-        raise HTTPException(
-            status_code=503,
-            detail="Git integration is not configured. API creation via GitOps is unavailable.",
-        )
 
 
 class APICreate(BaseModel):
@@ -78,32 +77,59 @@ class APIVersionEntry(BaseModel):
     date: str
 
 
-def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
-    """Convert GitLab YAML data to API response"""
-    deployments = api_data.get("deployments", {})
-    tags = api_data.get("tags", [])
-    # Check if API is promoted to portal
+def _slugify(value: str) -> str:
+    """Generate URL-safe slug from a name (CAB-1938)."""
+    value = value.lower().strip()
+    value = re.sub(r"[^a-z0-9\s-]", "", value)
+    value = re.sub(r"[\s-]+", "-", value).strip("-")
+    return value or "api"
+
+
+def _validate_openapi_spec(spec_str: str) -> None:
+    """Validate that a string is a parseable OpenAPI 3.x spec (CAB-1917)."""
+    import json
+
+    import yaml
+
+    try:
+        spec = json.loads(spec_str) if spec_str.strip().startswith("{") else yaml.safe_load(spec_str)
+    except (json.JSONDecodeError, yaml.YAMLError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid OpenAPI spec: unable to parse — {e}")
+
+    if not isinstance(spec, dict):
+        raise HTTPException(status_code=400, detail="Invalid OpenAPI spec: must be a JSON/YAML object")
+
+    version = spec.get("openapi", spec.get("swagger", ""))
+    if not version:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OpenAPI spec: missing 'openapi' or 'swagger' version field",
+        )
+    if not str(version).startswith("3") and not str(version).startswith("2"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported OpenAPI version: {version}. Supported: 2.x and 3.x",
+        )
+
+
+def _api_from_catalog(api: APICatalog) -> APIResponse:
+    """Convert APICatalog DB model to APIResponse."""
+    metadata = api.api_metadata or {}
+    tags = api.tags or []
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
     portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
-
-    deployed_dev = deployments.get("dev", False)
-    deployed_staging = deployments.get("staging", False)
-
-    # Derive status from deployment state — if deployed anywhere, it's published
-    raw_status = api_data.get("status", "draft")
-    status = "published" if raw_status == "draft" and (deployed_dev or deployed_staging) else raw_status
-
+    deployments = metadata.get("deployments", {})
     return APIResponse(
-        id=api_data.get("id", api_data.get("name", "")),
-        tenant_id=tenant_id,
-        name=api_data.get("name", ""),
-        display_name=api_data.get("display_name", api_data.get("name", "")),
-        version=api_data.get("version", "1.0.0"),
-        description=api_data.get("description", ""),
-        backend_url=api_data.get("backend_url", ""),
-        status=status,
-        deployed_dev=deployed_dev,
-        deployed_staging=deployed_staging,
+        id=api.api_id,
+        tenant_id=api.tenant_id,
+        name=api.api_id,
+        display_name=metadata.get("display_name") or api.api_name or api.api_id,
+        version=api.version or "1.0.0",
+        description=metadata.get("description", ""),
+        backend_url=metadata.get("backend_url", ""),
+        status=api.status or "draft",
+        deployed_dev=deployments.get("dev", False),
+        deployed_staging=deployments.get("staging", False),
         tags=tags,
         portal_promoted=portal_promoted,
     )
@@ -117,49 +143,56 @@ async def list_apis(
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     environment: str | None = Query(default=None, description="Filter by environment (dev, staging, prod)"),
     user: User = Depends(get_current_user),
-    git: GitProvider = Depends(get_git_provider),
+    db: AsyncSession = Depends(get_db),
 ):
-    """List APIs for a tenant from git provider (paginated).
+    """List APIs for a tenant from database catalog (paginated).
 
     Optionally filter by environment — only returns APIs deployed to that environment.
     """
-    _require_git_service(git)
     try:
-        apis = await git.list_apis(tenant_id)
-        all_items = [_api_from_yaml(tenant_id, api) for api in apis]
-        # Filter by environment if specified
+        repo = CatalogRepository(db)
+        apis, total = await repo.get_portal_apis(
+            tenant_id=tenant_id,
+            include_unpublished=True,
+            page=page,
+            page_size=page_size,
+        )
+        all_items = [_api_from_catalog(api) for api in apis]
+        # Filter by environment if specified (post-filter since catalog doesn't support this natively)
         if environment:
             if environment == "dev":
-                # DEV shows deployed APIs + drafts (not yet deployed anywhere)
                 all_items = [
                     api for api in all_items if api.deployed_dev or (not api.deployed_dev and not api.deployed_staging)
                 ]
             elif environment == "staging":
                 all_items = [api for api in all_items if api.deployed_staging]
             elif environment == "prod":
-                # Prod shows only APIs deployed to both dev AND staging (promotion path)
                 all_items = [api for api in all_items if api.deployed_dev and api.deployed_staging]
-        total = len(all_items)
-        start = (page - 1) * page_size
-        items = all_items[start : start + page_size]
-        return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+            total = len(all_items)
+        return PaginatedResponse(items=all_items, total=total, page=page, page_size=page_size)
     except Exception as e:
         logger.error(f"Failed to list APIs for tenant {tenant_id}: {e}")
-        return PaginatedResponse(items=[], total=0, page=page, page_size=page_size)
+        raise HTTPException(
+            status_code=503,
+            detail="API listing temporarily unavailable. Please try again later.",
+        )
 
 
 @router.get("/{api_id}", response_model=APIResponse)
 @require_tenant_access
 async def get_api(
-    tenant_id: str, api_id: str, user: User = Depends(get_current_user), git: GitProvider = Depends(get_git_provider)
+    tenant_id: str,
+    api_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get API by ID from git provider"""
-    _require_git_service(git)
+    """Get API by ID from database catalog"""
     try:
-        api_data = await git.get_api(tenant_id, api_id)
-        if not api_data:
+        repo = CatalogRepository(db)
+        api = await repo.get_api_by_id(tenant_id, api_id)
+        if not api:
             raise HTTPException(status_code=404, detail="API not found")
-        return _api_from_yaml(tenant_id, api_data)
+        return _api_from_catalog(api)
     except HTTPException:
         raise
     except Exception as e:
@@ -175,57 +208,78 @@ async def create_api(
     api: APICreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    git: GitProvider = Depends(get_git_provider),
 ):
     """
-    Create a new API via git provider and emit event.
-
-    This creates the API definition in the GitOps repository:
-    - tenants/{tenant_id}/apis/{api_name}/api.yaml
-    - tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)
+    Create a new API in the database catalog and emit event.
 
     Trial tenants are subject to limits (CAB-1549):
     - Max 3 APIs (configurable via tenant.settings.max_apis)
     - 402 after 30-day trial expires
     """
-    # Trial limits enforcement (CAB-1549) — checked before git_service guard
-    # so expired/overlimit tenants get proper 402/429 instead of 503
+    # Trial limits enforcement (CAB-1549)
     from ..routers.tenants import get_tenant_limits
     from ..services.trial_service import check_trial_expiry
 
-    repo = TenantRepository(db)
-    tenant = await repo.get_by_id(tenant_id)
+    catalog_repo = CatalogRepository(db)
+    tenant_repo = TenantRepository(db)
+    tenant = await tenant_repo.get_by_id(tenant_id)
     if tenant:
         settings = tenant.settings or {}
         check_trial_expiry(settings)
         max_apis, _ = get_tenant_limits(tenant)
-        current_apis = await git.list_apis(tenant_id)
+        current_apis, _ = await catalog_repo.get_portal_apis(
+            tenant_id=tenant_id, include_unpublished=True
+        )
         if len(current_apis) >= max_apis:
             raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
 
-    _require_git_service(git)
+    # Validate OpenAPI spec if provided (CAB-1917)
+    if api.openapi_spec:
+        _validate_openapi_spec(api.openapi_spec)
 
-    api_id = str(uuid.uuid4())
-
-    # Check if portal:published tag is present for portal_promoted status
     tags = api.tags or []
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
     portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
 
-    api_data = {
-        "id": api_id,
+    # Generate URL-safe slug from name (CAB-1938)
+    api_id = _slugify(api.name)
+
+    api_metadata = {
         "name": api.name,
         "display_name": api.display_name,
         "version": api.version,
         "description": api.description,
         "backend_url": api.backend_url,
-        "openapi_spec": api.openapi_spec,
         "tags": tags,
+        "status": "draft",
+        "deployments": {"dev": False, "staging": False},
     }
 
+    openapi_spec = None
+    if api.openapi_spec:
+        try:
+            openapi_spec = json.loads(api.openapi_spec)
+        except (json.JSONDecodeError, TypeError):
+            openapi_spec = None
+
     try:
-        # Create in git provider
-        await git.create_api(tenant_id, api_data)
+        stmt = (
+            insert(APICatalog)
+            .values(
+                tenant_id=tenant_id,
+                api_id=api_id,
+                api_name=api.name,
+                version=api.version,
+                status="draft",
+                tags=tags,
+                portal_published=portal_promoted,
+                api_metadata=api_metadata,
+                openapi_spec=openapi_spec,
+                synced_at=datetime.now(UTC),
+            )
+        )
+        await db.execute(stmt)
+        await db.commit()
 
         # Emit Kafka event
         await kafka_service.emit_api_created(
@@ -248,12 +302,12 @@ async def create_api(
             details={"name": api.name, "version": api.version},
         )
 
-        logger.info(f"Created API {api.name} for tenant {tenant_id} by {user.username}")
+        logger.info(f"Created API {api_id} ({api.name}) for tenant {tenant_id} by {user.username}")
 
         return APIResponse(
-            id=api.name,
+            id=api_id,
             tenant_id=tenant_id,
-            name=api.name,
+            name=api_id,
             display_name=api.display_name,
             version=api.version,
             description=api.description,
@@ -265,11 +319,14 @@ async def create_api(
             portal_promoted=portal_promoted,
         )
 
-    except ValueError as e:
-        # API already exists or validation error
-        logger.warning(f"API creation conflict for {api.name}: {e}")
-        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
+        await db.rollback()
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            logger.warning(f"API creation conflict for {api.name} v{api.version}: {e}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"API '{api.name}' version '{api.version}' already exists in this tenant",
+            )
         logger.error(f"Failed to create API {api.name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to create API. Please try again or contact support.")
 
@@ -282,13 +339,12 @@ async def update_api(
     api_id: str,
     api: APIUpdate,
     user: User = Depends(get_current_user),
-    git: GitProvider = Depends(get_git_provider),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Update API in git provider"""
-    _require_git_service(git)
+    """Update API in database catalog"""
     try:
-        # Get current API
-        current = await git.get_api(tenant_id, api_id)
+        repo = CatalogRepository(db)
+        current = await repo.get_api_by_id(tenant_id, api_id)
         if not current:
             raise HTTPException(status_code=404, detail="API not found")
 
@@ -296,10 +352,35 @@ async def update_api(
         updates = {k: v for k, v in api.model_dump().items() if v is not None}
 
         if not updates:
-            return _api_from_yaml(tenant_id, current)
+            return _api_from_catalog(current)
 
-        # Update in git provider
-        await git.update_api(tenant_id, api_id, updates)
+        # Apply updates to model fields
+        metadata = dict(current.api_metadata or {})
+        if "display_name" in updates:
+            current.api_name = updates["display_name"]
+            metadata["display_name"] = updates["display_name"]
+        if "version" in updates:
+            current.version = updates["version"]
+            metadata["version"] = updates["version"]
+        if "description" in updates:
+            metadata["description"] = updates["description"]
+        if "backend_url" in updates:
+            metadata["backend_url"] = updates["backend_url"]
+        if "tags" in updates:
+            current.tags = updates["tags"]
+            metadata["tags"] = updates["tags"]
+            promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
+            current.portal_published = any(tag.lower() in promotion_tags for tag in updates["tags"])
+        if "openapi_spec" in updates:
+            try:
+                current.openapi_spec = json.loads(updates["openapi_spec"]) if updates["openapi_spec"] else None
+            except (json.JSONDecodeError, TypeError):
+                current.openapi_spec = None
+
+        current.api_metadata = metadata
+        current.synced_at = datetime.now(UTC)
+        await db.commit()
+        await db.refresh(current)
 
         # Emit Kafka event
         await kafka_service.emit_api_updated(
@@ -320,13 +401,12 @@ async def update_api(
 
         logger.info(f"Updated API {api_id} for tenant {tenant_id} by {user.username}")
 
-        # Fetch updated API
-        updated = await git.get_api(tenant_id, api_id)
-        return _api_from_yaml(tenant_id, updated)
+        return _api_from_catalog(current)
 
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         logger.error(f"Failed to update API {api_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update API. Please try again or contact support.")
 
@@ -335,18 +415,21 @@ async def update_api(
 @require_permission(Permission.APIS_DELETE)
 @require_tenant_access
 async def delete_api(
-    tenant_id: str, api_id: str, user: User = Depends(get_current_user), git: GitProvider = Depends(get_git_provider)
+    tenant_id: str,
+    api_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Delete API from git provider"""
-    _require_git_service(git)
+    """Soft-delete API from database catalog"""
     try:
-        # Verify API exists
-        api_data = await git.get_api(tenant_id, api_id)
-        if not api_data:
+        repo = CatalogRepository(db)
+        api = await repo.get_api_by_id(tenant_id, api_id)
+        if not api:
             raise HTTPException(status_code=404, detail="API not found")
 
-        # Delete from git provider
-        await git.delete_api(tenant_id, api_id)
+        # Soft delete
+        api.deleted_at = datetime.now(UTC)
+        await db.commit()
 
         # Emit Kafka event
         await kafka_service.emit_api_deleted(
@@ -362,7 +445,7 @@ async def delete_api(
             resource_type="api",
             resource_id=api_id,
             user_id=user.id,
-            details={"name": api_data.get("name")},
+            details={"name": api.api_id},
         )
 
         logger.info(f"Deleted API {api_id} for tenant {tenant_id} by {user.username}")
@@ -372,6 +455,7 @@ async def delete_api(
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         logger.error(f"Failed to delete API {api_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete API. Please try again or contact support.")
 
@@ -383,22 +467,14 @@ async def list_api_versions(
     api_id: str,
     limit: int = Query(default=20, ge=1, le=100, description="Max commits to return"),
     user: User = Depends(get_current_user),
-    git: GitProvider = Depends(get_git_provider),
+    db: AsyncSession = Depends(get_db),
 ):
-    """List version history (git commits) for a specific API."""
-    _require_git_service(git)
-    try:
-        # Verify API exists
-        api_data = await git.get_api(tenant_id, api_id)
-        if not api_data:
-            raise HTTPException(status_code=404, detail="API not found")
+    """List version history for a specific API.
 
-        # Get commits for this API's directory in the tenant repo
-        api_path = f"tenants/{tenant_id}/apis/{api_id}"
-        commits = await git.list_commits(path=api_path, limit=limit)
-        return [APIVersionEntry(**c) for c in commits]
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to list versions for API {api_id}: {e}")
-        return []
+    Git history unavailable — returns empty list pending GitHub migration (CAB-1890).
+    """
+    repo = CatalogRepository(db)
+    api = await repo.get_api_by_id(tenant_id, api_id)
+    if not api:
+        raise HTTPException(status_code=404, detail="API not found")
+    return []  # Git history unavailable — GitLab migration pending (CAB-1890)

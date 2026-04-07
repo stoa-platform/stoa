@@ -55,7 +55,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from scripts.traffic.auth_helpers import apply_auth, setup_mtls_session
 from scripts.traffic.scenarios import (
-    ALL_APIS,
+    GUARDRAILS_PAYLOADS,
+    MODE_REQUEST_COUNTS,
+    MODE_REQUEST_COUNTS_EDGE_ONLY,
     MODE_WEIGHTS,
     MODE_WEIGHTS_EDGE_ONLY,
     SCENARIOS,
@@ -130,46 +132,13 @@ def pick_scenario() -> Scenario:
     return random.choices(SCENARIOS, weights=weights, k=1)[0]
 
 
-def pick_api(scenario: Scenario, mode_weights: dict[str, float], include_wm: bool) -> tuple[ApiTarget, str]:
-    """Select an API target based on scenario and mode weights.
-
-    For auth_variety scenario, prefer APIs with diverse auth types.
-    For other scenarios, weight by mode distribution.
-
-    Returns:
-        Tuple of (ApiTarget, resolved_mode)
-    """
-    # Pick mode first
-    modes = list(mode_weights.keys())
-    weights = [mode_weights[m] for m in modes]
-    mode = random.choices(modes, weights=weights, k=1)[0]
-
-    # Get available APIs for this mode
-    apis = get_apis_for_mode(mode)
-    if not apis and mode == "connect-wm" and include_wm:
-        apis = WEBMETHODS_APIS
-    if not apis:
-        # Fallback to edge-mcp
-        mode = "edge-mcp"
-        apis = get_apis_for_mode(mode)
-
-    if scenario.name == "auth_variety":
-        # Spread across different auth types
-        auth_types = list({a.auth_type for a in apis})
-        target_auth = random.choice(auth_types)
-        candidates = [a for a in apis if a.auth_type == target_auth]
-        return random.choice(candidates), mode
-
-    return random.choice(apis), mode
-
-
 # ---------------------------------------------------------------------------
 # Request Execution
 # ---------------------------------------------------------------------------
 
 
 class Metrics:
-    """Simple request metrics tracker."""
+    """Request metrics tracker with mode × auth cross-tabulation."""
 
     def __init__(self) -> None:
         self.total = 0
@@ -177,27 +146,28 @@ class Metrics:
         self.errors = 0
         self.by_mode: dict[str, dict[str, int]] = {}
         self.by_auth: dict[str, dict[str, int]] = {}
+        self.by_mode_auth: dict[str, dict[str, dict[str, int]]] = {}
         self.by_status: dict[int, int] = {}
         self.latencies: list[float] = []
 
     def record(self, mode: str, auth_type: str, status: int, latency_ms: float) -> None:
         self.total += 1
-        if 200 <= status < 400:
+        is_ok = 200 <= status < 400
+        if is_ok:
             self.success += 1
         else:
             self.errors += 1
 
         self.by_mode.setdefault(mode, {"ok": 0, "err": 0})
-        if 200 <= status < 400:
-            self.by_mode[mode]["ok"] += 1
-        else:
-            self.by_mode[mode]["err"] += 1
+        self.by_mode[mode]["ok" if is_ok else "err"] += 1
 
         self.by_auth.setdefault(auth_type, {"ok": 0, "err": 0})
-        if 200 <= status < 400:
-            self.by_auth[auth_type]["ok"] += 1
-        else:
-            self.by_auth[auth_type]["err"] += 1
+        self.by_auth[auth_type]["ok" if is_ok else "err"] += 1
+
+        # Cross-tab: mode × auth_type
+        self.by_mode_auth.setdefault(mode, {})
+        self.by_mode_auth[mode].setdefault(auth_type, {"ok": 0, "err": 0})
+        self.by_mode_auth[mode][auth_type]["ok" if is_ok else "err"] += 1
 
         self.by_status[status] = self.by_status.get(status, 0) + 1
         self.latencies.append(latency_ms)
@@ -212,6 +182,7 @@ class Metrics:
             "p50_ms": round(p50, 1),
             "by_mode": self.by_mode,
             "by_auth": self.by_auth,
+            "by_mode_auth": self.by_mode_auth,
             "by_status": self.by_status,
         }
 
@@ -298,8 +269,108 @@ def execute_request(
 # ---------------------------------------------------------------------------
 
 
+def execute_guardrails_probe(
+    session: requests.Session,
+    config: dict,
+    metrics: Metrics,
+    dry_run: bool = False,
+) -> None:
+    """Send MCP tool calls with guardrails-triggering payloads."""
+    payload = random.choice(GUARDRAILS_PAYLOADS)
+    base_url = config["gateway_url"]
+    url = f"{base_url}/mcp/tools/call"
+    tenant = random.choice(config["tenants"])
+    body = {"name": payload["tool"], "arguments": payload.get("args", {})}
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Tenant-ID": tenant,
+        "X-Stoa-Seeder": "guardrails-probe-v1",
+        "Authorization": f"Bearer seed-guardrails-{random.randint(1000, 9999)}",
+    }
+
+    if dry_run:
+        logger.info("[DRY-RUN] POST %s tool=%s", url, payload["tool"])
+        metrics.record("edge-mcp", "bearer", 200, 5.0)
+        return
+
+    try:
+        start = time.monotonic()
+        resp = session.post(url, json=body, headers=headers, timeout=(10, 30))
+        latency_ms = (time.monotonic() - start) * 1000
+        metrics.record("edge-mcp", "bearer", resp.status_code, latency_ms)
+
+        log_fn = logger.info if resp.status_code < 400 else logger.warning
+        log_fn(
+            "MCP %s → %d (%.0fms) tool=%s tenant=%s",
+            payload["tool"], resp.status_code, latency_ms, payload["tool"], tenant,
+        )
+    except requests.exceptions.ConnectionError:
+        metrics.record("edge-mcp", "bearer", 503, 0)
+        logger.warning("CONN_ERROR MCP tool=%s", payload["tool"])
+    except Exception:
+        metrics.record("edge-mcp", "bearer", 500, 0)
+        logger.warning("ERROR MCP tool=%s", payload["tool"], exc_info=True)
+
+
+def _build_mode_request_counts(mode_weights: dict[str, float], args: argparse.Namespace) -> dict[str, tuple[int, int]]:
+    """Return per-mode (min, max) request count ranges for the active modes."""
+    base = MODE_REQUEST_COUNTS_EDGE_ONLY if args.mode == "edge-only" else MODE_REQUEST_COUNTS
+    counts: dict[str, tuple[int, int]] = {}
+    for mode in mode_weights:
+        counts[mode] = base.get(mode, (5, 20))
+    return counts
+
+
+def _roll_mode_counts(count_ranges: dict[str, tuple[int, int]]) -> dict[str, int]:
+    """Roll a random request count for each mode for this scenario cycle."""
+    return {mode: random.randint(lo, hi) for mode, (lo, hi) in count_ranges.items()}
+
+
+def _print_cross_tab(summary: dict) -> None:
+    """Print a human-readable mode × auth cross-tabulation table."""
+    cross = summary.get("by_mode_auth", {})
+    if not cross:
+        return
+
+    # Collect all auth types across modes
+    all_auth = sorted({auth for auths in cross.values() for auth in auths})
+    modes = sorted(cross.keys())
+
+    # Header
+    col_w = 14
+    header = f"{'mode':<14}" + "".join(f"{a:>{col_w}}" for a in all_auth) + f"{'TOTAL':>{col_w}}"
+    logger.info("── mode × auth ─────────────────────────────────────")
+    logger.info(header)
+    logger.info("─" * len(header))
+
+    for mode in modes:
+        row_total = 0
+        cells = []
+        for auth in all_auth:
+            counts = cross[mode].get(auth, {"ok": 0, "err": 0})
+            total = counts["ok"] + counts["err"]
+            row_total += total
+            cell = f"{counts['ok']}/{total}" if total > 0 else "—"
+            cells.append(f"{cell:>{col_w}}")
+        logger.info(f"{mode:<14}" + "".join(cells) + f"{row_total:>{col_w}}")
+
+    # Footer: totals per auth
+    footer_cells = []
+    grand = 0
+    for auth in all_auth:
+        auth_total = sum(
+            cross[m].get(auth, {"ok": 0, "err": 0})["ok"] + cross[m].get(auth, {"ok": 0, "err": 0})["err"]
+            for m in modes
+        )
+        grand += auth_total
+        footer_cells.append(f"{auth_total:>{col_w}}")
+    logger.info("─" * len(header))
+    logger.info(f"{'TOTAL':<14}" + "".join(footer_cells) + f"{grand:>{col_w}}")
+
+
 def run_seeder(args: argparse.Namespace) -> int:
-    """Main seeder loop — runs for DURATION seconds."""
+    """Main seeder loop — runs for DURATION seconds with random counts per mode."""
     config = get_config()
     metrics = Metrics()
 
@@ -319,6 +390,8 @@ def run_seeder(args: argparse.Namespace) -> int:
             for k in mode_weights:
                 mode_weights[k] += wm_weight / len(mode_weights)
 
+    count_ranges = _build_mode_request_counts(mode_weights, args)
+
     # Setup mTLS session (if certs available)
     mtls_session = setup_mtls_session(
         os.environ.get("MTLS_CLIENT_CERT"),
@@ -337,38 +410,81 @@ def run_seeder(args: argparse.Namespace) -> int:
         "Starting realistic traffic seeder: duration=%ds mode=%s modes=%s include_wm=%s rate_mult=%.1fx",
         duration, args.mode, list(mode_weights.keys()), args.include_webmethods, rate_mult,
     )
+    logger.info(
+        "Request count ranges per mode: %s",
+        {m: f"{lo}-{hi}" for m, (lo, hi) in count_ranges.items()},
+    )
 
-    scenario_start = time.monotonic()
-    current_scenario = pick_scenario()
-    scenario_remaining = current_scenario.duration_seconds
+    cycle_num = 0
 
     while (time.monotonic() - start_time) < duration:
-        # Rotate scenario when its duration expires
-        if (time.monotonic() - scenario_start) >= scenario_remaining:
-            current_scenario = pick_scenario()
-            scenario_start = time.monotonic()
-            scenario_remaining = current_scenario.duration_seconds
-            logger.info("Scenario: %s (%.0f req/s for %ds)", current_scenario.name, current_scenario.requests_per_second, scenario_remaining)
+        # New scenario cycle: pick scenario + roll random counts per mode
+        current_scenario = pick_scenario()
+        mode_counts = _roll_mode_counts(count_ranges)
+        cycle_num += 1
 
-        # Pick target
-        api, mode = pick_api(current_scenario, mode_weights, args.include_webmethods)
+        total_cycle = sum(mode_counts.values())
+        logger.info(
+            "Cycle %d — scenario=%s counts=%s (total=%d, %.0f req/s)",
+            cycle_num, current_scenario.name, mode_counts, total_cycle,
+            current_scenario.requests_per_second,
+        )
 
-        # Choose session (mTLS for fapi_advanced, default for others)
-        session = mtls_session if (api.auth_type == "fapi_advanced" and mtls_session) else default_session
+        # Guardrails scenario: send MCP tool calls instead of proxy requests
+        if current_scenario.name == "guardrails_probe":
+            probe_count = random.randint(5, 15)
+            logger.info("Guardrails probe: %d MCP tool calls", probe_count)
+            for _ in range(probe_count):
+                if (time.monotonic() - start_time) >= duration:
+                    break
+                execute_guardrails_probe(default_session, config, metrics, dry_run=args.dry_run)
+                sleep_time = 1.0 / max(current_scenario.requests_per_second * rate_mult, 0.1)
+                sleep_time *= random.uniform(0.8, 1.2)
+                time.sleep(sleep_time)
+            continue
 
-        # Execute
-        execute_request(session, api, mode, config, current_scenario, metrics, dry_run=args.dry_run)
+        # Build a shuffled request list: each entry is a mode
+        request_queue: list[str] = []
+        for mode, count in mode_counts.items():
+            request_queue.extend([mode] * count)
+        random.shuffle(request_queue)
 
-        # Rate control
-        effective_rps = current_scenario.requests_per_second * rate_mult
-        sleep_time = 1.0 / max(effective_rps, 0.1)
-        # Add jitter (±20%) for realistic traffic pattern
-        sleep_time *= random.uniform(0.8, 1.2)
-        time.sleep(sleep_time)
+        for mode in request_queue:
+            if (time.monotonic() - start_time) >= duration:
+                break
+
+            # Pick API for this mode
+            apis = get_apis_for_mode(mode)
+            if not apis and mode == "connect-wm" and args.include_webmethods:
+                apis = WEBMETHODS_APIS
+            if not apis:
+                mode = "edge-mcp"
+                apis = get_apis_for_mode(mode)
+
+            if current_scenario.name == "auth_variety":
+                auth_types = list({a.auth_type for a in apis})
+                target_auth = random.choice(auth_types)
+                candidates = [a for a in apis if a.auth_type == target_auth]
+                api = random.choice(candidates)
+            else:
+                api = random.choice(apis)
+
+            # Choose session (mTLS for fapi_advanced, default for others)
+            session = mtls_session if (api.auth_type == "fapi_advanced" and mtls_session) else default_session
+
+            # Execute
+            execute_request(session, api, mode, config, current_scenario, metrics, dry_run=args.dry_run)
+
+            # Rate control with jitter
+            effective_rps = current_scenario.requests_per_second * rate_mult
+            sleep_time = 1.0 / max(effective_rps, 0.1)
+            sleep_time *= random.uniform(0.8, 1.2)
+            time.sleep(sleep_time)
 
     # Final report
     summary = metrics.summary()
     logger.info("Seeder complete: %s", json.dumps(summary, indent=2))
+    _print_cross_tab(summary)
 
     # Exit code: 1 if error rate > 50% (alerts operators)
     if summary["success_rate"] < 50:

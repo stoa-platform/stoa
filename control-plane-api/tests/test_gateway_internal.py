@@ -47,7 +47,12 @@ def _make_gateway_instance(**overrides):
         "version": "0.1.0",
         "tags": ["mode:edge-mcp", "auto-registered"],
         "mode": "edge-mcp",
+        "target_gateway_url": None,
+        "public_url": None,
+        "ui_url": None,
         "protected": False,
+        "enabled": True,
+        "visibility": None,
         "deleted_at": None,
         "deleted_by": None,
         "created_at": datetime.now(UTC),
@@ -76,6 +81,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -142,6 +148,7 @@ class TestGatewayRegistration:
             mock_repo = MockRepo.return_value
             # Step 1: no exact name match (hostname changed)
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             # Step 1b: find stale entries with same mode+env
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[stale])
             mock_repo.soft_delete = AsyncMock(return_value=stale)
@@ -180,6 +187,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -239,6 +247,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -270,6 +279,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -303,6 +313,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=None)
             mock_repo.create = AsyncMock(return_value=gw)
@@ -341,6 +352,7 @@ class TestGatewayRegistration:
 
             mock_repo = MockRepo.return_value
             mock_repo.get_by_name = AsyncMock(return_value=None)  # No exact name match
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
             mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
             mock_repo.get_by_source_and_type = AsyncMock(return_value=argocd_gw)
             mock_repo.update = AsyncMock(return_value=argocd_gw)
@@ -835,6 +847,7 @@ def _make_deployment(**overrides):
         "last_sync_attempt": None,
         "last_sync_success": None,
         "sync_error": None,
+        "sync_steps": None,
         "sync_attempts": 0,
         "promotion_id": None,
     }
@@ -852,8 +865,9 @@ class TestRouteSyncAck:
         """Two deployments applied → sync_status=SYNCED + last_sync_success set."""
         from src.models.gateway_deployment import DeploymentSyncStatus
 
-        dep1 = _make_deployment()
-        dep2 = _make_deployment()
+        gw_id = uuid4()
+        dep1 = _make_deployment(gateway_instance_id=gw_id)
+        dep2 = _make_deployment(gateway_instance_id=gw_id)
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -872,7 +886,7 @@ class TestRouteSyncAck:
             mock_deploy_repo.update = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep1.id), "status": "applied"},
@@ -908,7 +922,7 @@ class TestRouteSyncAck:
             mock_deploy_repo.update = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "failed", "error": "connection refused"},
@@ -928,8 +942,9 @@ class TestRouteSyncAck:
         """One applied + one failed → each updated independently."""
         from src.models.gateway_deployment import DeploymentSyncStatus
 
-        dep_ok = _make_deployment()
-        dep_fail = _make_deployment()
+        gw_id = uuid4()
+        dep_ok = _make_deployment(gateway_instance_id=gw_id)
+        dep_fail = _make_deployment(gateway_instance_id=gw_id)
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -948,7 +963,7 @@ class TestRouteSyncAck:
             mock_deploy_repo.update = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep_ok.id), "status": "applied"},
@@ -993,6 +1008,109 @@ class TestRouteSyncAck:
             data = resp.json()
             assert data["processed"] == 0
             assert data["not_found"] == 1
+
+
+    def test_route_sync_ack_with_steps_merges_cp_step(self, client):
+        """Ack with agent steps → sync_steps includes CP event_emitted + agent steps."""
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            agent_steps = [
+                {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
+                {"name": "adapter_connected", "status": "success", "started_at": "2026-04-02T12:00:02Z"},
+                {"name": "api_synced", "status": "success", "started_at": "2026-04-02T12:00:03Z"},
+            ]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied", "steps": agent_steps},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:04Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_steps is not None
+            assert len(dep.sync_steps) == 4  # event_emitted + 3 agent steps
+            assert dep.sync_steps[0]["name"] == "event_emitted"
+            assert dep.sync_steps[0]["status"] == "success"
+            assert dep.sync_steps[1]["name"] == "agent_received"
+            assert dep.sync_steps[2]["name"] == "adapter_connected"
+            assert dep.sync_steps[3]["name"] == "api_synced"
+
+    def test_route_sync_ack_without_steps_backward_compat(self, client):
+        """Ack without steps field → sync_steps stays None (old agent compat)."""
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied"},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:00Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_steps is None
+
+    def test_route_sync_ack_failed_with_steps_derives_error(self, client):
+        """Ack with failed step → sync_error derived from step trace."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            agent_steps = [
+                {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
+                {"name": "adapter_connected", "status": "success", "started_at": "2026-04-02T12:00:02Z"},
+                {"name": "api_synced", "status": "failed", "started_at": "2026-04-02T12:00:03Z", "detail": "connection refused"},
+            ]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "failed", "error": "sync error", "steps": agent_steps},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:04Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert dep.sync_error == "connection refused"
 
 
 class TestHelperFunctions:
@@ -1075,7 +1193,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "applied"},
@@ -1092,8 +1210,9 @@ class TestRouteSyncAckPromotionCompletion:
     def test_route_ack_partial_does_not_complete(self, client):
         """1 promotion, 2 gateways, only 1 ack → promotion NOT completed yet."""
         promo_id = uuid4()
-        dep1 = _make_deployment(promotion_id=promo_id)
-        dep2 = _make_deployment(promotion_id=promo_id)  # Not in the ack payload
+        gw_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)
+        _dep2 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)  # Not in the ack payload
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -1115,7 +1234,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep1.id), "status": "applied"},
@@ -1135,8 +1254,9 @@ class TestRouteSyncAckPromotionCompletion:
         from src.models.gateway_deployment import DeploymentSyncStatus
 
         promo_id = uuid4()
-        dep1 = _make_deployment(promotion_id=promo_id)
-        dep2 = _make_deployment(promotion_id=promo_id)
+        gw_id = uuid4()
+        dep1 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)
+        dep2 = _make_deployment(promotion_id=promo_id, gateway_instance_id=gw_id)
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -1159,7 +1279,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{gw_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep1.id), "status": "applied"},
@@ -1197,7 +1317,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "failed", "error": "timeout"},
@@ -1232,7 +1352,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_promo_svc.check_promotion_completion = AsyncMock()
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep_err.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep_err.id), "status": "failed", "error": "connection refused"},

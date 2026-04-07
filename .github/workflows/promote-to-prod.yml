@@ -1,8 +1,8 @@
 # =============================================================================
 # Promote to Prod — Centralized promotion workflow
 # =============================================================================
-# Validates staging health, gates on GitHub Environment approval (single gate),
-# then deploys to prod using the same dev-tagged image.
+# Gates on GitHub Environment approval, then deploys to prod using the same
+# dev-tagged image.
 #
 # Usage:
 #   gh workflow run promote-to-prod.yml \

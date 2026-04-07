@@ -26,7 +26,7 @@ use axum::{
 };
 use serde::Serialize;
 use std::fmt;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::metrics;
 use crate::state::AppState;
@@ -96,6 +96,7 @@ fn is_mutation(method: &Method) -> bool {
 /// (falls back to `STOA_SUPERVISION_DEFAULT_TIER` config).
 /// Evaluates the tier against the request method and either passes,
 /// fires a webhook (CO-PILOT), or blocks (COMMAND).
+#[instrument(name = "policy.supervision", skip_all, fields(otel.kind = "internal"))]
 pub async fn supervision_middleware(
     State(state): State<AppState>,
     request: Request<Body>,

@@ -18,6 +18,7 @@ postgresql:
     persistence:
       size: 1Gi
 
+# Keycloak replicas — REFERENCE ONLY (managed by stoa-infra charts/keycloak/)
 keycloak:
   replicas: 1
 

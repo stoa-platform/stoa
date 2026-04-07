@@ -98,7 +98,8 @@ async function fetchTransactions(
   limit: number = 20,
   serviceType?: string,
   timeRange?: string,
-  statusFilter?: string
+  statusFilter?: string,
+  routeFilter?: string
 ): Promise<{ traces: TraceEntry[]; isDemo: boolean }> {
   try {
     const rangeMinutes = timeRange ? TIME_RANGE_MINUTES[timeRange] || '60' : undefined;
@@ -108,14 +109,15 @@ async function fetchTransactions(
       undefined,
       rangeMinutes,
       serviceType || undefined,
-      statusCodeNum && !isNaN(statusCodeNum) ? statusCodeNum : undefined
+      statusCodeNum && !isNaN(statusCodeNum) ? statusCodeNum : undefined,
+      routeFilter || undefined
     );
     const transactions = data.transactions || [];
     if (transactions.length > 0) {
       return { traces: transactions.map(mapTransaction), isDemo: false };
     }
     // If a filter is active, return empty (not demo data)
-    const hasFilter = !!(serviceType || statusFilter);
+    const hasFilter = !!(serviceType || statusFilter || routeFilter);
     if (hasFilter) {
       return { traces: [], isDemo: false };
     }
@@ -283,22 +285,26 @@ export function CallFlowDashboard() {
 
   useEffect(() => {
     tracesRef.current = true;
-    fetchTransactions(50, serviceType, timeRange, statusFilter).then(({ traces: t, isDemo }) => {
-      setTraces(t);
-      setTracesDemo(isDemo);
-    });
-  }, [serviceType, timeRange, statusFilter]);
+    fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(
+      ({ traces: t, isDemo }) => {
+        setTraces(t);
+        setTracesDemo(isDemo);
+      }
+    );
+  }, [serviceType, timeRange, statusFilter, routeFilter]);
 
   useEffect(() => {
     if (!refreshMs) return;
     const interval = setInterval(() => {
-      fetchTransactions(50, serviceType, timeRange, statusFilter).then(({ traces: t, isDemo }) => {
-        setTraces(t);
-        setTracesDemo(isDemo);
-      });
+      fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(
+        ({ traces: t, isDemo }) => {
+          setTraces(t);
+          setTracesDemo(isDemo);
+        }
+      );
     }, refreshMs);
     return () => clearInterval(interval);
-  }, [refreshMs, serviceType, timeRange, statusFilter]);
+  }, [refreshMs, serviceType, timeRange, statusFilter, routeFilter]);
 
   // ─── Derived values ───
 

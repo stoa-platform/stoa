@@ -81,6 +81,7 @@ class TransactionDetailWithDemoResponse(APITransaction):
 async def list_transactions(
     limit: int = Query(50, ge=1, le=200),
     api_name: str | None = None,
+    route: str | None = Query(None, description="Filter by route path (e.g. /mcp/tools/call)"),
     status: str | None = None,
     status_code: int | None = Query(None, description="Filter by exact HTTP status code (e.g. 401, 404, 500)"),
     service_type: str | None = Query(None, description="Filter: gateway, link, connect"),
@@ -100,6 +101,7 @@ async def list_transactions(
         result = await svc.list_transactions_from_spans(
             limit=limit,
             api_name=api_name,
+            route=route,
             status=status,
             status_code=status_code,
             time_range_minutes=time_range,

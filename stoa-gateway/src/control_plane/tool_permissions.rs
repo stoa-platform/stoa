@@ -171,11 +171,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let svc = ToolPermissionService::new(
-            Client::new(),
-            &server.uri(),
-            Duration::from_secs(60),
-        );
+        let svc = ToolPermissionService::new(Client::new(), &server.uri(), Duration::from_secs(60));
 
         assert!(svc.is_tool_allowed("tenant1", "any_tool").await);
     }
@@ -197,11 +193,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let svc = ToolPermissionService::new(
-            Client::new(),
-            &server.uri(),
-            Duration::from_secs(60),
-        );
+        let svc = ToolPermissionService::new(Client::new(), &server.uri(), Duration::from_secs(60));
 
         assert!(!svc.is_tool_allowed("tenant1", "blocked_tool").await);
         assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
@@ -237,11 +229,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let svc = ToolPermissionService::new(
-            Client::new(),
-            &server.uri(),
-            Duration::from_secs(60),
-        );
+        let svc = ToolPermissionService::new(Client::new(), &server.uri(), Duration::from_secs(60));
 
         assert!(!svc.is_tool_allowed("tenant1", "cached_tool").await);
         assert!(!svc.is_tool_allowed("tenant1", "cached_tool").await);

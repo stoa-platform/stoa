@@ -240,16 +240,24 @@ def apply_auth(
             key = os.environ.get(env_var, "")
             if key:
                 p[param_name] = key
+        # Fallback: always send X-API-Key header so gateway detects api_key auth type
+        if "Authorization" not in h and not any(k.lower() == "x-api-key" for k in h):
+            h["X-API-Key"] = f"seed-{api_name}-{uuid.uuid4().hex[:8]}"
 
     elif auth_type == "api_key_header":
         key_map = {
             "newsapi": ("NEWSAPI_KEY", "X-Api-Key"),
         }
+        applied = False
         if api_name in key_map:
             env_var, header_name = key_map[api_name]
             key = os.environ.get(env_var, "")
             if key:
                 h[header_name] = key
+                applied = True
+        # Fallback: synthetic API key header for observability
+        if not applied:
+            h["X-API-Key"] = f"seed-{api_name}-{uuid.uuid4().hex[:8]}"
 
     elif auth_type == "oauth2_cc":
         kc_url = os.environ.get("KC_TOKEN_URL", "")
@@ -259,6 +267,9 @@ def apply_auth(
             token = fetch_oauth2_cc_token(kc_url, client_id, client_secret)
             if token:
                 h["Authorization"] = f"Bearer {token}"
+        # Fallback: synthetic Bearer for observability
+        if "Authorization" not in h:
+            h["Authorization"] = f"Bearer seed-oauth2-{uuid.uuid4().hex[:16]}"
 
     elif auth_type == "bearer":
         # Use the same OAuth2 CC token as bearer
@@ -269,6 +280,9 @@ def apply_auth(
             token = fetch_oauth2_cc_token(kc_url, client_id, client_secret, scope="stoa:read")
             if token:
                 h["Authorization"] = f"Bearer {token}"
+        # Fallback: synthetic Bearer for observability
+        if "Authorization" not in h:
+            h["Authorization"] = f"Bearer seed-bearer-{uuid.uuid4().hex[:16]}"
 
     elif auth_type == "fapi_baseline":
         # DPoP-bound token
@@ -283,6 +297,10 @@ def apply_auth(
                 proof = generate_dpop_proof(url, method, dpop_key or None)
                 if proof:
                     h["DPoP"] = proof
+        # Fallback: synthetic DPoP for observability
+        if "Authorization" not in h:
+            h["Authorization"] = f"DPoP seed-fapi-{uuid.uuid4().hex[:16]}"
+            h["DPoP"] = f"seed-dpop-proof-{uuid.uuid4().hex[:16]}"
 
     elif auth_type == "fapi_advanced":
         # DPoP + mTLS — DPoP header applied, mTLS at session level
@@ -297,6 +315,10 @@ def apply_auth(
                 proof = generate_dpop_proof(url, method, dpop_key or None)
                 if proof:
                     h["DPoP"] = proof
+        # Fallback: synthetic DPoP for observability
+        if "Authorization" not in h:
+            h["Authorization"] = f"DPoP seed-fapi-adv-{uuid.uuid4().hex[:16]}"
+            h["DPoP"] = f"seed-dpop-proof-{uuid.uuid4().hex[:16]}"
 
     elif auth_type == "basic":
         # HTTP Basic for webMethods
@@ -306,6 +328,12 @@ def apply_auth(
             import base64
 
             credentials = base64.b64encode(f"{wm_user}:{wm_pass}".encode()).decode()
+            h["Authorization"] = f"Basic {credentials}"
+        # Fallback: synthetic Basic for observability
+        if "Authorization" not in h:
+            import base64
+
+            credentials = base64.b64encode(b"seed-user:seed-pass").decode()
             h["Authorization"] = f"Basic {credentials}"
 
     return h, p

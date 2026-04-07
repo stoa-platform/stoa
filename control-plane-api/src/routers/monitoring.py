@@ -82,7 +82,9 @@ async def list_transactions(
     limit: int = Query(50, ge=1, le=200),
     api_name: str | None = None,
     status: str | None = None,
-    time_range: int = Query(60, ge=1, le=1440),
+    status_code: int | None = Query(None, description="Filter by exact HTTP status code (e.g. 401, 404, 500)"),
+    service_type: str | None = Query(None, description="Filter: gateway, link, connect"),
+    time_range: int = Query(60, ge=1, le=10080),
     cursor: str | None = Query(None, description="Pagination cursor from previous response"),
     user: User = Depends(get_current_user),
 ):
@@ -99,7 +101,9 @@ async def list_transactions(
             limit=limit,
             api_name=api_name,
             status=status,
+            status_code=status_code,
             time_range_minutes=time_range,
+            service_type=service_type,
         )
         if result is not None:
             return TransactionListResponse(
@@ -138,7 +142,7 @@ async def list_transactions(
 
 @router.get("/transactions/stats", response_model=TransactionStatsWithDemoResponse)
 async def get_transaction_stats(
-    time_range: int = Query(60, ge=1, le=1440),
+    time_range: int = Query(60, ge=1, le=10080),
     user: User = Depends(get_current_user),
 ):
     """Get API transaction statistics.

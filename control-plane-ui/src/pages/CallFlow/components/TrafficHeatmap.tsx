@@ -10,6 +10,8 @@ interface HeatmapCell {
 interface TrafficHeatmapProps {
   cells: HeatmapCell[];
   routes: string[];
+  activeRoute?: string;
+  onCellClick?: (route: string) => void;
 }
 
 function intensityClass(value: number, max: number): string {
@@ -31,7 +33,7 @@ interface TooltipState {
   value: number;
 }
 
-export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
+export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: TrafficHeatmapProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   if (cells.length === 0 || routes.length === 0) {
@@ -63,7 +65,14 @@ export function TrafficHeatmap({ cells, routes }: TrafficHeatmapProps) {
 
         {/* Rows */}
         {routes.slice(0, 6).map((route) => (
-          <div key={route} className="flex items-center mb-0.5">
+          <div
+            key={route}
+            className={`flex items-center mb-0.5 transition-opacity ${onCellClick ? 'cursor-pointer' : ''} ${activeRoute && activeRoute !== route ? 'opacity-30' : ''}`}
+            onClick={() => {
+              if (!onCellClick) return;
+              onCellClick(route === activeRoute ? '' : route);
+            }}
+          >
             <div className="w-28 text-xs font-mono text-neutral-500 dark:text-neutral-400 truncate pr-2 text-right">
               {route}
             </div>

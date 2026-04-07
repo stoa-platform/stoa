@@ -54,8 +54,8 @@ EXCHANGE_RATE = ApiTarget(
 
 ECB_FINANCIAL = ApiTarget(
     name="ecb-financial-data",
-    url_path="/EXR/D.USD.EUR.SP00.A?lastNObservations=5&format=jsondata",
-    auth_type="none",
+    url_path="/api/customers",
+    auth_type="bearer",
     mode="sidecar",
     expected_latency_ms=200,
     category="finance",
@@ -98,13 +98,12 @@ NEWSAPI = ApiTarget(
 
 ALPHAVANTAGE = ApiTarget(
     name="alphavantage",
-    url_path="",
-    auth_type="api_key_query",
-    auth_param="apikey",
+    url_path="/api/orders",
+    auth_type="api_key_header",
+    auth_param="X-API-Key",
     auth_key_env="ALPHAVANTAGE_KEY",
     mode="sidecar",
     expected_latency_ms=250,
-    query_params={"function": "GLOBAL_QUOTE", "symbol": "BNPP.PA"},
     category="finance",
 )
 
@@ -302,6 +301,20 @@ MODE_WEIGHTS = {
 
 MODE_WEIGHTS_EDGE_ONLY = {
     "edge-mcp": 1.0,
+}
+
+# Per-mode random request count ranges (min, max) per scenario cycle.
+# Each scenario cycle picks a random count within this range for each mode,
+# so every run produces different traffic volumes per component.
+MODE_REQUEST_COUNTS = {
+    "edge-mcp": (150, 500),
+    "sidecar": (8, 30),
+    "connect": (5, 25),
+    "connect-wm": (3, 15),
+}
+
+MODE_REQUEST_COUNTS_EDGE_ONLY = {
+    "edge-mcp": (200, 600),
 }
 
 # Backend base URLs per mode (configurable via env)

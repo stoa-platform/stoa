@@ -72,10 +72,11 @@ class PIIMaskingMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # 1. Mask query-string
+        # 1. Mask query-string for logging only — do NOT mutate scope["query_string"]
+        # as FastAPI needs the original to parse query parameters correctly.
         query_string = scope.get("query_string", b"")
         if query_string:
-            scope["query_string"] = self._mask_query_string(query_string)
+            scope["_pii_masked_query_string"] = self._mask_query_string(query_string)
 
         # 2. Mask sensitive headers for logging — store in separate scope key
         # IMPORTANT: Do NOT mutate scope["headers"] — FastAPI dependencies

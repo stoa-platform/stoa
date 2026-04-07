@@ -249,12 +249,34 @@ class MonitoringService:
     # OTEL SPAN QUERIES (CAB-1997 — Data Prepper otel-v1-apm-span-*)
     # =========================================================================
 
+    SERVICE_TYPE_FILTERS: dict[str, dict] = {
+        "gateway": {
+            "bool": {
+                "must": [
+                    {"term": {"serviceName": "stoa-gateway"}},
+                    {"term": {"resource.attributes.stoa@deployment_mode": "edge-mcp"}},
+                ]
+            }
+        },
+        "link": {
+            "bool": {
+                "must": [
+                    {"term": {"serviceName": "stoa-gateway"}},
+                    {"term": {"resource.attributes.stoa@deployment_mode": "sidecar"}},
+                ]
+            }
+        },
+        "connect": {"term": {"serviceName": "stoa-connect"}},
+    }
+
     async def list_transactions_from_spans(
         self,
         limit: int = 50,
         api_name: str | None = None,
         status: str | None = None,
+        status_code: int | None = None,
         time_range_minutes: int = 60,
+        service_type: str | None = None,
     ) -> list[APITransactionSummary] | None:
         """List recent transactions from OTel span index (root spans only).
 
@@ -273,6 +295,14 @@ class MonitoringService:
                 "mcp.tools.list",
                 "proxy.dynamic",
                 "http.request",
+                "stoa-connect.routes.fetch",
+                "stoa-connect.routes.sync",
+                "stoa-connect.heartbeat",
+                "stoa-connect.discovery",
+                "stoa-connect.sync",
+                "stoa-connect.register",
+                "HTTP GET",
+                "HTTP POST",
             ]
             filters: list[dict] = [
                 {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
@@ -280,7 +310,11 @@ class MonitoringService:
             ]
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
-            if status == "error":
+            if service_type and service_type in self.SERVICE_TYPE_FILTERS:
+                filters.append(self.SERVICE_TYPE_FILTERS[service_type])
+            if status_code is not None:
+                filters.append({"term": {"span.attributes.http@status_code": status_code}})
+            elif status == "error":
                 filters.append(
                     {
                         "bool": {
@@ -363,6 +397,10 @@ class MonitoringService:
                         started_at=src.get("startTime", ""),
                         total_duration_ms=duration_ms,
                         spans_count=1,
+                        deployment_mode=src.get(
+                            "resource.attributes.stoa@deployment_mode",
+                            src.get("span.attributes.stoa@deployment_mode", "edge-mcp"),
+                        ),
                     )
                 )
             # Fetch child spans for all traces in a single query
@@ -726,6 +764,20 @@ class MonitoringService:
                         },
                     },
                     "by_status_code": {"terms": {"field": "span.attributes.http@status_code", "size": 20}},
+                    "by_auth_type": {
+                        "terms": {"field": "span.attributes.auth_type", "size": 10},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
+                    "by_deployment_mode": {
+                        "terms": {"field": "resource.attributes.stoa@deployment_mode", "size": 10},
+                        "aggs": {
+                            "avg_latency": {"avg": {"field": "durationInNanos"}},
+                            "errors": {"filter": {"range": {"span.attributes.http@status_code": {"gte": 400}}}},
+                        },
+                    },
                 },
             }
 
@@ -769,6 +821,28 @@ class MonitoringService:
             for bucket in aggs["by_status_code"]["buckets"]:
                 by_status_code[bucket["key"]] = bucket["doc_count"]
 
+            # Build by_auth_type dict
+            by_auth_type: dict = {}
+            for bucket in aggs.get("by_auth_type", {}).get("buckets", []):
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_auth_type[bucket["key"]] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+
+            # Build by_deployment_mode dict
+            by_deployment_mode: dict = {}
+            for bucket in aggs.get("by_deployment_mode", {}).get("buckets", []):
+                avg_lat = (bucket["avg_latency"]["value"] or 0) / nanos_to_ms
+                by_deployment_mode[bucket["key"]] = {
+                    "total": bucket["doc_count"],
+                    "errors": bucket["errors"]["doc_count"],
+                    "success": bucket["doc_count"] - bucket["errors"]["doc_count"],
+                    "avg_latency_ms": round(avg_lat, 1),
+                }
+
             return APITransactionStats(
                 total_requests=total,
                 success_count=aggs["success_count"]["doc_count"],
@@ -780,6 +854,8 @@ class MonitoringService:
                 requests_per_minute=round(total / max(time_range_minutes, 1), 2),
                 by_api=by_api,
                 by_status_code=by_status_code,
+                by_auth_type=by_auth_type,
+                by_deployment_mode=by_deployment_mode,
             )
 
         except Exception:

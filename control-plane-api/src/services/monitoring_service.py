@@ -308,6 +308,7 @@ class MonitoringService:
         self,
         limit: int = 50,
         api_name: str | None = None,
+        route: str | None = None,
         status: str | None = None,
         status_code: int | None = None,
         time_range_minutes: int = 60,
@@ -345,6 +346,18 @@ class MonitoringService:
             ]
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
+            if route:
+                filters.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"term": {"span.attributes.http@route": route}},
+                                {"wildcard": {"span.attributes.http@route": f"*{route}*"}},
+                            ],
+                            "minimum_should_match": 1,
+                        }
+                    }
+                )
             if service_type and service_type in self.SERVICE_TYPE_FILTERS:
                 filters.append(self.SERVICE_TYPE_FILTERS[service_type])
             if status_code is not None:

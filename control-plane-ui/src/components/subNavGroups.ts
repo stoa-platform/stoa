@@ -59,5 +59,5 @@ export const observabilityTabs: SubNavTab[] = [
   { label: 'Monitoring', href: '/monitoring', icon: Activity },
   { label: 'Call Flow', href: '/call-flow', icon: Network },
   { label: 'API Traffic', href: '/api-traffic', icon: BarChart3 },
-  { label: 'Logs', href: '/logs', icon: Search },
+  { label: 'Gateway Logs', href: '/logs', icon: Search },
 ];

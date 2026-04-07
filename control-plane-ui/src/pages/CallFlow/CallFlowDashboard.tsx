@@ -227,7 +227,7 @@ export function CallFlowDashboard() {
     refreshMs || 15_000
   );
   const connectTrend = usePrometheusRange(
-    `sum(rate(stoa_connect_admin_api_latency_seconds_count[5m]))`,
+    `sum(rate(stoa_http_requests_total{job="stoa-connect"}[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000

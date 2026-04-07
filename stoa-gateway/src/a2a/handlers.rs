@@ -161,6 +161,7 @@ async fn handle_tool_bridge(
         scopes: vec!["stoa:read".to_string(), "stoa:execute".to_string()],
         raw_token: None,
         consumer_id: "a2a-bridge".to_string(),
+        from_control_plane: false,
         progress_token: None,
         skill_instructions: None,
     };

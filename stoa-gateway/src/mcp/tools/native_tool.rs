@@ -1309,6 +1309,7 @@ mod tests {
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
         }
     }
 

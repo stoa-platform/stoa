@@ -205,6 +205,9 @@ pub struct ToolContext {
     /// OAuth client ID (azp claim) used as consumer identifier for metrics (CAB-1782).
     /// Defaults to "unknown" for unauthenticated requests.
     pub consumer_id: String,
+    /// True when the request originates from CP-API (X-Stoa-Source: control-plane).
+    /// Prevents circular proxy: ProxyTool → CP-API → gateway → ProxyTool (infinite loop).
+    pub from_control_plane: bool,
 }
 
 /// The Tool trait - implement this for each MCP tool

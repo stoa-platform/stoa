@@ -250,6 +250,7 @@ mod tests {
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test-consumer".into(),
+            from_control_plane: false,
         }
     }
 

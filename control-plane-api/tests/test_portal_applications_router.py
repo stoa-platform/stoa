@@ -138,15 +138,28 @@ class TestGetApplication:
         assert resp.status_code == 404
 
     @patch("src.routers.portal_applications.PortalApplicationRepository")
-    def test_get_returns_403_for_non_owner(self, mock_repo_cls, app_with_tenant_admin):
-        """Non-owner gets 403, not the app data."""
-        # App owned by a different user
+    def test_get_returns_app_for_admin_even_if_not_owner(self, mock_repo_cls, app_with_tenant_admin):
+        """Admin can fetch any application regardless of ownership."""
         app = _make_app(owner_id="someone-else-id")
         mock_repo = AsyncMock()
         mock_repo.get_by_id.return_value = app
         mock_repo_cls.return_value = mock_repo
 
         with TestClient(app_with_tenant_admin) as client:
+            resp = client.get(f"/v1/applications/{app.id}")
+
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "my-app"
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_get_returns_403_for_non_owner_viewer(self, mock_repo_cls, app_with_viewer):
+        """Non-admin non-owner gets 403."""
+        app = _make_app(owner_id="someone-else-id")
+        mock_repo = AsyncMock()
+        mock_repo.get_by_id.return_value = app
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_viewer) as client:
             resp = client.get(f"/v1/applications/{app.id}")
 
         assert resp.status_code == 403
@@ -278,14 +291,32 @@ class TestUpdateApplication:
         assert resp.status_code == 404
 
     @patch("src.routers.portal_applications.PortalApplicationRepository")
-    def test_update_returns_403_for_non_owner(self, mock_repo_cls, app_with_tenant_admin):
-        """PATCH by non-owner returns 403."""
+    def test_update_allowed_for_admin_non_owner(self, mock_repo_cls, app_with_tenant_admin):
+        """Admin can update any application regardless of ownership."""
+        app = _make_app(owner_id="someone-else")
+        updated_app = _make_app(owner_id="someone-else", display_name="Updated")
+        mock_repo = AsyncMock()
+        mock_repo.get_by_id.return_value = app
+        mock_repo.update.return_value = updated_app
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_tenant_admin) as client:
+            resp = client.patch(
+                f"/v1/applications/{app.id}",
+                json={"display_name": "Updated"},
+            )
+
+        assert resp.status_code == 200
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_update_returns_403_for_non_owner_viewer(self, mock_repo_cls, app_with_viewer):
+        """Non-admin non-owner gets 403 on PATCH."""
         app = _make_app(owner_id="someone-else")
         mock_repo = AsyncMock()
         mock_repo.get_by_id.return_value = app
         mock_repo_cls.return_value = mock_repo
 
-        with TestClient(app_with_tenant_admin) as client:
+        with TestClient(app_with_viewer) as client:
             resp = client.patch(
                 f"/v1/applications/{app.id}",
                 json={"display_name": "Hijacked"},
@@ -338,15 +369,31 @@ class TestDeleteApplication:
         assert resp.status_code == 200
         mock_repo.delete.assert_awaited_once()
 
+    @patch("src.routers.portal_applications.keycloak_service")
     @patch("src.routers.portal_applications.PortalApplicationRepository")
-    def test_delete_returns_403_for_non_owner(self, mock_repo_cls, app_with_tenant_admin):
-        """Non-owner cannot delete the application."""
+    def test_delete_allowed_for_admin_non_owner(self, mock_repo_cls, mock_kc, app_with_tenant_admin):
+        """Admin can delete any application regardless of ownership."""
+        app = _make_app(owner_id="another-user-id")
+        mock_repo = AsyncMock()
+        mock_repo.get_by_id.return_value = app
+        mock_repo.delete = AsyncMock()
+        mock_repo_cls.return_value = mock_repo
+        mock_kc.delete_client = AsyncMock()
+
+        with TestClient(app_with_tenant_admin) as client:
+            resp = client.delete(f"/v1/applications/{app.id}")
+
+        assert resp.status_code == 200
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_delete_returns_403_for_non_owner_viewer(self, mock_repo_cls, app_with_viewer):
+        """Non-admin non-owner cannot delete the application."""
         app = _make_app(owner_id="another-user-id")
         mock_repo = AsyncMock()
         mock_repo.get_by_id.return_value = app
         mock_repo_cls.return_value = mock_repo
 
-        with TestClient(app_with_tenant_admin) as client:
+        with TestClient(app_with_viewer) as client:
             resp = client.delete(f"/v1/applications/{app.id}")
 
         assert resp.status_code == 403
@@ -690,3 +737,68 @@ class TestSecurityProfile:
         items = resp.json()["items"]
         assert items[0]["security_profile"] == "api_key"
         assert items[1]["security_profile"] == "fapi_baseline"
+
+
+# ---------------------------------------------------------------------------
+# Admin visibility — list all apps regardless of ownership
+# ---------------------------------------------------------------------------
+
+
+class TestAdminListsAllApplications:
+    """GET /v1/applications — admin sees all apps, viewer sees only own."""
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_admin_list_passes_is_admin_true(self, mock_repo_cls, app_with_cpi_admin):
+        """cpi-admin triggers is_admin=True on list_by_owner."""
+        mock_repo = AsyncMock()
+        mock_repo.list_by_owner.return_value = ([], 0)
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/applications")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_repo.list_by_owner.call_args[1]
+        assert call_kwargs["is_admin"] is True
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_tenant_admin_list_passes_is_admin_true(self, mock_repo_cls, app_with_tenant_admin):
+        """tenant-admin triggers is_admin=True on list_by_owner."""
+        mock_repo = AsyncMock()
+        mock_repo.list_by_owner.return_value = ([], 0)
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_tenant_admin) as client:
+            resp = client.get("/v1/applications")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_repo.list_by_owner.call_args[1]
+        assert call_kwargs["is_admin"] is True
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_viewer_list_passes_is_admin_false(self, mock_repo_cls, app_with_viewer):
+        """viewer triggers is_admin=False — only sees own apps."""
+        mock_repo = AsyncMock()
+        mock_repo.list_by_owner.return_value = ([], 0)
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_viewer) as client:
+            resp = client.get("/v1/applications")
+
+        assert resp.status_code == 200
+        call_kwargs = mock_repo.list_by_owner.call_args[1]
+        assert call_kwargs["is_admin"] is False
+
+    @patch("src.routers.portal_applications.PortalApplicationRepository")
+    def test_response_includes_owner_id(self, mock_repo_cls, app_with_cpi_admin):
+        """Response includes owner_id so admin can see who owns each app."""
+        apps = [_make_app(owner_id="user-A", name="app-A")]
+        mock_repo = AsyncMock()
+        mock_repo.list_by_owner.return_value = (apps, 1)
+        mock_repo_cls.return_value = mock_repo
+
+        with TestClient(app_with_cpi_admin) as client:
+            resp = client.get("/v1/applications")
+
+        assert resp.status_code == 200
+        assert resp.json()["items"][0]["owner_id"] == "user-A"

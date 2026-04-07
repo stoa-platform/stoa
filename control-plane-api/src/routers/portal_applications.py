@@ -43,6 +43,7 @@ class ApplicationResponse(BaseModel):
     security_profile: str = "oauth2_public"
     client_id: str | None = None
     client_secret: str | None = None  # Only returned on create
+    owner_id: str | None = None
     api_key: str | None = None  # Only returned on create for api_key profile
     api_key_prefix: str | None = None
     jwks_uri: str | None = None
@@ -119,6 +120,7 @@ def _app_to_response(
         api_key_prefix=app.api_key_prefix,
         jwks_uri=app.jwks_uri,
         jwks_data=app.jwks_data,
+        owner_id=app.owner_id,
         tenant_id=app.tenant_id,
         status=app.status.value if app.status else "active",
         redirect_uris=app.redirect_uris or [],
@@ -128,8 +130,18 @@ def _app_to_response(
     )
 
 
+_ADMIN_ROLES = {"cpi-admin", "tenant-admin"}
+
+
+def _is_admin(user: User) -> bool:
+    """Check if user has an admin role (cpi-admin or tenant-admin)."""
+    return bool(set(user.roles) & _ADMIN_ROLES)
+
+
 def _check_ownership(app: PortalApplication, user: User) -> None:
-    """Raise 403 if user does not own the application."""
+    """Raise 403 if user does not own the application (admins bypass)."""
+    if _is_admin(user):
+        return
     if app.owner_id != user.id and app.owner_id != user.username:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -162,6 +174,7 @@ async def list_applications(
         page=page,
         page_size=page_size,
         environment=environment,
+        is_admin=_is_admin(user),
     )
 
     return ApplicationsListResponse(

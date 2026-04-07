@@ -65,9 +65,15 @@ class SubscriptionRepository:
         page: int = 1,
         page_size: int = 20,
         environment: str | None = None,
+        is_admin: bool = False,
     ) -> tuple[list[Subscription], int]:
-        """List subscriptions for a subscriber with pagination"""
-        query = select(Subscription).where(Subscription.subscriber_id == subscriber_id)
+        """List subscriptions for a subscriber with pagination.
+
+        When is_admin=True, returns all subscriptions regardless of subscriber.
+        """
+        query = select(Subscription)
+        if not is_admin:
+            query = query.where(Subscription.subscriber_id == subscriber_id)
 
         if status:
             query = query.where(Subscription.status == status)

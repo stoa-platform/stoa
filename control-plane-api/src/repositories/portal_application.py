@@ -41,9 +41,15 @@ class PortalApplicationRepository:
         page: int = 1,
         page_size: int = 20,
         environment: str | None = None,
+        is_admin: bool = False,
     ) -> tuple[list[PortalApplication], int]:
-        """List applications by owner with optional status filter and pagination."""
-        conditions = [PortalApplication.owner_id == owner_id]
+        """List applications by owner with optional status filter and pagination.
+
+        When is_admin=True, returns all applications regardless of owner.
+        """
+        conditions: list = []
+        if not is_admin:
+            conditions.append(PortalApplication.owner_id == owner_id)
         if status:
             conditions.append(PortalApplication.status == status)
         if environment is not None:

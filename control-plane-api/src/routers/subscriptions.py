@@ -281,6 +281,7 @@ async def list_my_subscriptions(
     """
     repo = SubscriptionRepository(db)
 
+    is_admin = bool({"cpi-admin", "tenant-admin"} & set(user.roles))
     db_status = SubscriptionStatus(status.value) if status else None
     subscriptions, total = await repo.list_by_subscriber(
         subscriber_id=user.id,
@@ -288,6 +289,7 @@ async def list_my_subscriptions(
         page=page,
         page_size=page_size,
         environment=environment,
+        is_admin=is_admin,
     )
 
     return SubscriptionListResponse(

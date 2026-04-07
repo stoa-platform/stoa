@@ -1463,13 +1463,15 @@ class ApiService {
     status?: string,
     timeRange?: string,
     serviceType?: string,
-    statusCode?: number
+    statusCode?: number,
+    route?: string
   ): Promise<{ transactions: MonitoringTransaction[] }> {
     const params: Record<string, string | number> = { limit };
     if (status) params.status = status;
     if (timeRange) params.time_range = timeRange;
     if (serviceType) params.service_type = serviceType;
     if (statusCode) params.status_code = statusCode;
+    if (route) params.route = route;
     const { data } = await this.client.get('/v1/monitoring/transactions', { params });
     return data;
   }

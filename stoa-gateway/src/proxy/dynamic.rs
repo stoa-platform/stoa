@@ -131,11 +131,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     // Record inbound auth type on the span for observability (by_auth_type breakdown).
     // Detection order: DPoP > Bearer > API key > mTLS > none.
     // DPoP checked first because DPoP requests also carry Authorization: DPoP <token>.
-    let auth_header = request.headers().get(axum::http::header::AUTHORIZATION)
+    let auth_header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    let has_api_key = request.headers().contains_key("X-API-Key")
-        || request.headers().contains_key("X-Api-Key");
+    let has_api_key =
+        request.headers().contains_key("X-API-Key") || request.headers().contains_key("X-Api-Key");
     let inbound_auth = if request.headers().contains_key("DPoP") {
         "dpop"
     } else if auth_header.starts_with("Bearer ") {
@@ -144,7 +146,11 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "basic"
     } else if has_api_key {
         "api_key"
-    } else if request.extensions().get::<crate::auth::mtls::ClientCertInfo>().is_some() {
+    } else if request
+        .extensions()
+        .get::<crate::auth::mtls::ClientCertInfo>()
+        .is_some()
+    {
         "mtls"
     } else {
         "none"

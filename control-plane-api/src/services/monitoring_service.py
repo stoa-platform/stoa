@@ -250,14 +250,22 @@ class MonitoringService:
     # =========================================================================
 
     SERVICE_TYPE_FILTERS: dict[str, dict] = {
-        "gateway": {"bool": {"must": [
-            {"term": {"serviceName": "stoa-gateway"}},
-            {"term": {"resource.attributes.stoa@deployment_mode": "edge-mcp"}},
-        ]}},
-        "link": {"bool": {"must": [
-            {"term": {"serviceName": "stoa-gateway"}},
-            {"term": {"resource.attributes.stoa@deployment_mode": "sidecar"}},
-        ]}},
+        "gateway": {
+            "bool": {
+                "must": [
+                    {"term": {"serviceName": "stoa-gateway"}},
+                    {"term": {"resource.attributes.stoa@deployment_mode": "edge-mcp"}},
+                ]
+            }
+        },
+        "link": {
+            "bool": {
+                "must": [
+                    {"term": {"serviceName": "stoa-gateway"}},
+                    {"term": {"resource.attributes.stoa@deployment_mode": "sidecar"}},
+                ]
+            }
+        },
         "connect": {"term": {"serviceName": "stoa-connect"}},
     }
 

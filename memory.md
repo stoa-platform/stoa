@@ -86,6 +86,12 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — HUMAN ONLY
 - ✅ demo-dry-run.sh: 23/23 PASS
 - [ ] Repetitions + video backup (human-only)
 
+CAB-2005: [MEGA] AI Factory v4 — Hardening Post-Leak + Observability (34 pts) — Council 8.50/10
+- ✅ Phase 1: Hardening post-leak (11 pts) — PR #2239
+  - Hardened `pre-instance-scope.sh` (compound cmd bypass + 50-limit)
+  - Stale memory hook, context monitor hook, npm integrity checker, `/memory-consolidate` skill
+- [ ] Phase 2: Agent Observability (8 pts) + Spec-Driven pilote (5 pts) + OWASP audit (8 pts)
+
 CAB-1696: [MEGA] AI Factory Audit Remediation (34 pts) — Phase 1 in progress
 - [~] CAB-1697: Rules diet Phase 2 (5 pts)
 - [ ] CAB-1699: Rust coverage gate (5 pts) — blocked by P1

@@ -423,13 +423,13 @@
   - **Phase 5** (after Phase 0, nice-to-have) [owner: —]
     - [ ] CAB-1802 [infra] SSH signing + PKI engine (5 pts)
 - [ ] CAB-1602: [INFRA] Provisionner VPS STOA-bench (3 pts, P3)
-- [ ] CAB-2005: [MEGA] AI Factory v4 — Hardening Post-Leak + Observability (34 pts, P1-High) — Council 8.50/10
-  - **Phase 1** (urgent) [owner: —] — Hardening post-leak (11 pts)
-    - [ ] Audit `pre-instance-scope.sh` permission bypass 50+ subcommands (2 pts)
-    - [ ] Hook stale memory check PreToolUse (3 pts)
-    - [ ] Pin Claude Code npm version + SHA verification (1 pt)
-    - [ ] Auto-compact hook PostToolUse à 70% context (2 pts)
-    - [ ] Memory consolidation skill `/loop 30m` (3 pts)
+- [~] CAB-2005: [MEGA] AI Factory v4 — Hardening Post-Leak + Observability (34 pts, P1-High) — Council 8.50/10
+  - **Phase 1** (urgent) — Hardening post-leak (11 pts) — PR #2239 ✅
+    - [x] Audit `pre-instance-scope.sh` permission bypass 50+ subcommands (2 pts)
+    - [x] Hook stale memory check PreToolUse (3 pts)
+    - [x] Pin Claude Code npm version + SHA verification (1 pt)
+    - [x] Auto-compact hook PostToolUse à 70% context (2 pts)
+    - [x] Memory consolidation skill `/loop 30m` (3 pts)
   - **Phase 2** (after Phase 1) [owner: —] — Amélioration (21 pts)
     - [ ] Agent Observability dashboard `agent-metrics.log` + Grafana (8 pts)
     - [ ] Spec-Driven Development pilote sur 1 feature (5 pts)

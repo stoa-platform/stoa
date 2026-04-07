@@ -153,10 +153,10 @@ class GatewayMetricsService:
 
         # Totals
         totals = {
-            "pii_detections": 'sum(stoa_guardrails_pii_detected_total) or vector(0)',
-            "injection_blocks": 'sum(stoa_guardrails_injection_blocked_total) or vector(0)',
-            "content_filters": 'sum(stoa_guardrails_content_filtered_total) or vector(0)',
-            "prompt_guard_flags": 'sum(stoa_prompt_guard_detected_total) or vector(0)',
+            "pii_detections": "sum(stoa_guardrails_pii_detected_total) or vector(0)",
+            "injection_blocks": "sum(stoa_guardrails_injection_blocked_total) or vector(0)",
+            "content_filters": "sum(stoa_guardrails_content_filtered_total) or vector(0)",
+            "prompt_guard_flags": "sum(stoa_prompt_guard_detected_total) or vector(0)",
         }
         for key, promql in totals.items():
             try:
@@ -169,9 +169,7 @@ class GatewayMetricsService:
 
         # Breakdown by tool (injection)
         try:
-            result = await prometheus_client.query(
-                'sum by (tool) (stoa_guardrails_injection_blocked_total)'
-            )
+            result = await prometheus_client.query("sum by (tool) (stoa_guardrails_injection_blocked_total)")
             if result and result.get("result"):
                 for item in result["result"]:
                     tool = item.get("metric", {}).get("tool", "unknown")
@@ -182,9 +180,7 @@ class GatewayMetricsService:
 
         # Breakdown by category (content filter)
         try:
-            result = await prometheus_client.query(
-                'sum by (category) (stoa_guardrails_content_filtered_total)'
-            )
+            result = await prometheus_client.query("sum by (category) (stoa_guardrails_content_filtered_total)")
             if result and result.get("result"):
                 for item in result["result"]:
                     cat = item.get("metric", {}).get("category", "unknown")
@@ -195,9 +191,7 @@ class GatewayMetricsService:
 
         # Breakdown by tool (PII — via recent rate to identify which tools leak PII)
         try:
-            result = await prometheus_client.query(
-                'sum by (tool) (stoa_guardrails_pii_detected_total)'
-            )
+            result = await prometheus_client.query("sum by (tool) (stoa_guardrails_pii_detected_total)")
             if result and result.get("result"):
                 for item in result["result"]:
                     tool = item.get("metric", {}).get("tool", "unknown")

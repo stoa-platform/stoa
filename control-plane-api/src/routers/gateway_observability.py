@@ -91,14 +91,16 @@ async def get_guardrails_events(
         events = []
         for hit in hits:
             src = hit["_source"]
-            events.append({
-                "timestamp": src.get("startTime", ""),
-                "trace_id": src.get("traceId", ""),
-                "span_id": src.get("spanId", ""),
-                "tool": src.get("span.attributes.guardrails@tool", "unknown"),
-                "action": src.get("span.attributes.guardrails@action", "unknown"),
-                "reason": src.get("span.attributes.guardrails@reason", ""),
-            })
+            events.append(
+                {
+                    "timestamp": src.get("startTime", ""),
+                    "trace_id": src.get("traceId", ""),
+                    "span_id": src.get("spanId", ""),
+                    "tool": src.get("span.attributes.guardrails@tool", "unknown"),
+                    "action": src.get("span.attributes.guardrails@action", "unknown"),
+                    "reason": src.get("span.attributes.guardrails@reason", ""),
+                }
+            )
         return {"events": events, "total": len(events)}
     except Exception:
         logger.exception("Failed to fetch guardrails events")

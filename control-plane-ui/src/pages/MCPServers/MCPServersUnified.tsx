@@ -11,6 +11,8 @@ import {
   AlertCircle,
   Clock,
   ArrowUpRight,
+  Shield,
+  Wrench,
 } from 'lucide-react';
 import { mcpConnectorsService } from '../../services/mcpConnectorsApi';
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
@@ -32,7 +34,7 @@ import type {
 
 const ENABLE_MCP_CATALOG = config.features?.enableMcpCatalog ?? false;
 
-type TabId = 'catalog' | 'custom';
+type TabId = 'platform' | 'catalog' | 'custom';
 
 const categoryLabels: Record<string, string> = {
   project_management: 'Project Management',
@@ -97,7 +99,7 @@ const HIGH_RISK_SLUGS = new Set(['stripe', 'cloudflare']);
 
 export function MCPServersUnified() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const defaultTab: TabId = ENABLE_MCP_CATALOG ? 'catalog' : 'custom';
+  const defaultTab: TabId = 'platform';
   const activeTab = (searchParams.get('tab') as TabId) || defaultTab;
   const setActiveTab = useCallback(
     (tab: TabId) => setSearchParams({ tab }, { replace: true }),
@@ -117,6 +119,17 @@ export function MCPServersUnified() {
       {/* Tabs */}
       <div className="border-b border-neutral-200 dark:border-neutral-700">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('platform')}
+            className={`whitespace-nowrap pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'platform'
+                ? 'border-primary-600 text-primary-600 dark:text-primary-400 dark:border-primary-400'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Shield className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+            Platform
+          </button>
           {ENABLE_MCP_CATALOG && (
             <button
               onClick={() => setActiveTab('catalog')}
@@ -145,7 +158,131 @@ export function MCPServersUnified() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'catalog' && ENABLE_MCP_CATALOG ? <CatalogTab /> : <CustomServersTab />}
+      {activeTab === 'platform' && <PlatformTab />}
+      {activeTab === 'catalog' && ENABLE_MCP_CATALOG && <CatalogTab />}
+      {activeTab === 'custom' && <CustomServersTab />}
+    </div>
+  );
+}
+
+// ─── Platform Tab (CAB-2003) ──────────────────────────────────────────────────
+
+function PlatformTab() {
+  const [servers, setServers] = useState<ExternalMCPServer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const toast = useToastActions();
+
+  const loadPlatformServers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await externalMcpServersService.listServers({ page_size: 100 });
+      setServers(result.servers.filter((s) => s.is_platform));
+    } catch {
+      /* empty — no platform servers yet is fine */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPlatformServers();
+  }, [loadPlatformServers]);
+
+  const handleSync = async (serverId: string) => {
+    try {
+      setSyncing(true);
+      await externalMcpServersService.syncTools(serverId);
+      toast.success('Tools synced successfully');
+      await loadPlatformServers();
+    } catch {
+      toast.error('Failed to sync tools');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        <CardSkeleton />
+      </div>
+    );
+  }
+
+  if (servers.length === 0) {
+    return (
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+        <EmptyState variant="tools" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {servers.map((server) => {
+        const health = healthStatusConfig[server.health_status] ?? healthStatusConfig.unknown;
+        const HealthIcon = health.icon;
+        return (
+          <div
+            key={server.id}
+            className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                  <Shield className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                      {server.display_name}
+                    </h3>
+                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400">
+                      Platform
+                    </span>
+                  </div>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    {server.description}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${health.color}`}
+                >
+                  <HealthIcon className="h-3.5 w-3.5" />
+                  {health.label}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-6 text-sm text-neutral-500 dark:text-neutral-400">
+              <span className="flex items-center gap-1.5">
+                <Wrench className="h-4 w-4" />
+                {server.tools_count} tool{server.tools_count !== 1 ? 's' : ''}
+              </span>
+              {server.last_sync_at && (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="h-4 w-4" />
+                  Last synced: {new Date(server.last_sync_at).toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => handleSync(server.id)}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                Sync Tools
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

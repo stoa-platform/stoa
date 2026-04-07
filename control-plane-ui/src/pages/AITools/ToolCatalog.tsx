@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Tag, RefreshCw, AlertCircle } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';
+import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { ToolCard } from '../../components/tools';
 import type { MCPTool } from '../../types';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
@@ -18,6 +19,24 @@ export function ToolCatalog() {
   const [error, setError] = useState<string | null>(null);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [platformToolNames, setPlatformToolNames] = useState<Set<string>>(new Set());
+
+  // Load platform server tool names for source detection
+  useEffect(() => {
+    externalMcpServersService
+      .listServers({ page_size: 100 })
+      .then((res) => {
+        const platformServer = res.servers.find((s) => s.is_platform);
+        if (platformServer) {
+          externalMcpServersService.getServer(platformServer.id).then((detail) => {
+            setPlatformToolNames(new Set(detail.tools.map((t) => t.name)));
+          });
+        }
+      })
+      .catch(() => {
+        /* graceful — no source badges if unavailable */
+      });
+  }, []);
 
   // Filters from URL
   const searchQuery = searchParams.get('search') || '';
@@ -238,7 +257,12 @@ export function ToolCatalog() {
           {tools.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {tools.map((tool) => (
-                <ToolCard key={tool.name} tool={tool} onClick={() => handleToolClick(tool)} />
+                <ToolCard
+                  key={tool.name}
+                  tool={tool}
+                  source={platformToolNames.has(tool.name) ? 'platform' : 'external'}
+                  onClick={() => handleToolClick(tool)}
+                />
               ))}
             </div>
           ) : (

@@ -96,7 +96,7 @@ export function ToolPermissionsMatrix() {
     return map;
   }, [permissionsResponse]);
 
-  // Build server+tools list
+  // Build server+tools list — platform servers first
   const serversWithTools: ServerWithTools[] = useMemo(() => {
     if (!serverDetails) return [];
     return serverDetails
@@ -104,7 +104,8 @@ export function ToolPermissionsMatrix() {
       .map((d) => ({
         server: servers.find((s) => s.id === d.id) ?? d,
         tools: d.tools.map((t) => ({ name: t.name, description: t.description })),
-      }));
+      }))
+      .sort((a, b) => (b.server.is_platform ? 1 : 0) - (a.server.is_platform ? 1 : 0));
   }, [serverDetails, servers]);
 
   // ---- Permission state resolution ----
@@ -343,6 +344,11 @@ export function ToolPermissionsMatrix() {
                   <span className="font-medium text-zinc-200 truncate">
                     {swt.server.display_name || swt.server.name}
                   </span>
+                  {swt.server.is_platform && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-800/40 text-blue-400 flex-shrink-0">
+                      Platform
+                    </span>
+                  )}
                   <span className="text-xs text-zinc-500 flex-shrink-0">
                     {stats.total} tool{stats.total !== 1 ? 's' : ''}
                   </span>

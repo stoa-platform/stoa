@@ -271,13 +271,15 @@ class SecurityAggregationService:
 
         Returns (severity_counts, last_event_timestamp, total_events).
         """
-        # Use .keyword suffix — audit index fields are text, not keyword
+        # Use .keyword suffix — audit index fields are text, not keyword.
+        # Filter outcome=failure only — outcome=error is normal HTTP 4xx/5xx, not security.
         body = {
             "query": {
                 "bool": {
                     "must": [
                         {"term": {"tenant_id.keyword": tenant_id}},
                         {"terms": {"severity.keyword": ["warning", "error", "critical"]}},
+                        {"term": {"outcome.keyword": "failure"}},
                     ]
                 }
             },
@@ -311,13 +313,14 @@ class SecurityAggregationService:
         must: list[dict] = [
             {"term": {"tenant_id.keyword": tenant_id}},
             {"terms": {"severity.keyword": ["warning", "error", "critical"]}},
+            {"term": {"outcome.keyword": "failure"}},
         ]
 
         # Apply severity filter (map back to OS severity)
         if severity:
             reverse_map = {v: k for k, v in _OS_SEVERITY_MAP.items()}
             os_sev = reverse_map.get(severity, severity)
-            must[-1] = {"term": {"severity.keyword": os_sev}}
+            must[1] = {"term": {"severity.keyword": os_sev}}
 
         body = {
             "query": {"bool": {"must": must}},

@@ -278,6 +278,102 @@ func (c *Client) AddToolToServer(serverID string, name string, spec types.ToolSp
 	return nil
 }
 
+// ListMCPServers lists all registered MCP servers
+func (c *Client) ListMCPServers() (*types.MCPServerListResponse, error) {
+	resp, err := c.do("GET", "/v1/admin/mcp/servers", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.MCPServerListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ListTools lists tools for a specific MCP server
+func (c *Client) ListTools(serverID string) (*types.MCPToolListResponse, error) {
+	resp, err := c.do("GET", fmt.Sprintf("/v1/admin/mcp/servers/%s", serverID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	// Server response includes tools inline
+	var serverResp struct {
+		Tools []types.MCPToolSummary `json:"tools"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&serverResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &types.MCPToolListResponse{Tools: serverResp.Tools}, nil
+}
+
+// CallTool invokes an MCP tool on a specific server
+func (c *Client) CallTool(serverID, toolName string, input json.RawMessage) (*types.MCPToolCallResponse, error) {
+	if input == nil {
+		input = json.RawMessage(`{}`)
+	}
+
+	body := map[string]any{
+		"tool_name": toolName,
+		"input":     json.RawMessage(input),
+	}
+
+	resp, err := c.do("POST", fmt.Sprintf("/v1/admin/mcp/servers/%s/tools/invoke", serverID), body)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result types.MCPToolCallResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// MCPHealth checks the health of the MCP subsystem
+func (c *Client) MCPHealth() (*types.MCPHealthResponse, error) {
+	resp, err := c.do("GET", "/v1/admin/mcp/servers/health", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.MCPHealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // ListDeployments lists deployments for the current tenant
 func (c *Client) ListDeployments(apiID, environment, status string, page, pageSize int) (*types.DeploymentListResponse, error) {
 	path := fmt.Sprintf("/v1/tenants/%s/deployments?page=%d&page_size=%d", c.tenant, page, pageSize)

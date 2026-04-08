@@ -1,5 +1,7 @@
 FROM python:3.11-slim AS base
 
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd -g 1000 stoa && useradd -u 1000 -g stoa -s /bin/sh stoa
 
 WORKDIR /app

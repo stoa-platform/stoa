@@ -435,25 +435,22 @@ func callToolOnGateway(gwURL, toolName string, input json.RawMessage) error {
 }
 
 func healthFromGateway(gwURL string) error {
-	resp, err := gatewayClient().Get(gwURL + "/health")
+	// Use /mcp/health for rich JSON response (status, protocolVersion, tools count)
+	// /health is a plain text K8s liveness probe ("OK")
+	resp, err := gatewayClient().Get(gwURL + "/mcp/health")
 	if err != nil {
 		return fmt.Errorf("gateway unreachable: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// Gateway /health may return plain text ("OK") or JSON
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	bodyStr := strings.TrimSpace(string(bodyBytes))
-
-	var result types.MCPHealthResponse
-
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		// Plain text response (e.g., "OK")
-		result = types.MCPHealthResponse{Status: bodyStr}
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("health check failed: HTTP %d — %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("health check failed: HTTP %d — %s", resp.StatusCode, bodyStr)
+	var result types.MCPHealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode health response: %w", err)
 	}
 
 	format := output.ParseFormat(outputFormat)
@@ -465,9 +462,22 @@ func healthFromGateway(gwURL string) error {
 	case output.FormatYAML:
 		return printer.PrintYAML(result)
 	default:
-		headers := []string{"STATUS", "VERSION", "UPTIME"}
-		rows := [][]string{{result.Status, result.Version, result.Uptime}}
-		printer.PrintTable(headers, rows)
+		// Gateway returns protocolVersion/tools/activeSessions,
+		// CP API returns version/uptime — adapt columns
+		if result.ProtocolVersion != "" {
+			headers := []string{"STATUS", "PROTOCOL", "TOOLS", "SESSIONS"}
+			rows := [][]string{{
+				result.Status,
+				result.ProtocolVersion,
+				strconv.Itoa(result.Tools),
+				strconv.Itoa(result.ActiveSessions),
+			}}
+			printer.PrintTable(headers, rows)
+		} else {
+			headers := []string{"STATUS", "VERSION", "UPTIME"}
+			rows := [][]string{{result.Status, result.Version, result.Uptime}}
+			printer.PrintTable(headers, rows)
+		}
 	}
 
 	return nil

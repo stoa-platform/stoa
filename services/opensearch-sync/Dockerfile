@@ -29,8 +29,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Upgrade system packages to fix CVEs + install runtime dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 1000 -g root stoa

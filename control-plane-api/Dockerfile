@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies (snappy for Kafka compression)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Upgrade system packages (fix CVEs in base image) + install dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libsnappy-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*

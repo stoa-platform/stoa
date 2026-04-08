@@ -24,8 +24,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Create non-root user
-RUN useradd -r -u 1000 -g root stoa
+# Upgrade system packages to fix CVEs in base image + create non-root user
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -u 1000 -g root stoa
 
 # Copy virtual environment
 COPY --from=builder /opt/venv /opt/venv

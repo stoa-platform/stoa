@@ -1,4 +1,4 @@
-"""Tests for GitHubService (CAB-1890 Wave 2)."""
+"""Tests for GitHubService (CAB-1890 Wave 2, CAB-2011 write methods)."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -7,6 +7,9 @@ import pytest
 from github import GithubException
 
 from src.services.github_service import GitHubService
+
+# Catalog project ID used by high-level methods
+CATALOG_PROJECT = "stoa-platform/stoa-catalog"
 
 
 @pytest.fixture
@@ -313,3 +316,322 @@ class TestGetRepoInfo:
         svc = GitHubService()
         with pytest.raises(RuntimeError, match="not connected"):
             await svc.get_repo_info("org/repo")
+
+
+# ============================================================
+# Write operations tests (CAB-2011)
+# ============================================================
+
+
+class TestCreateFile:
+    @pytest.mark.asyncio
+    async def test_create_file_success(self, service, mock_repo):
+        mock_commit = MagicMock()
+        mock_commit.sha = "abc123"
+        mock_commit.html_url = "https://github.com/org/repo/commit/abc123"
+        mock_repo.create_file.return_value = {"commit": mock_commit}
+        service._gh.get_repo.return_value = mock_repo
+
+        result = await service.create_file("org/repo", "new.yaml", "content", "add file")
+
+        assert result["sha"] == "abc123"
+        mock_repo.create_file.assert_called_once_with("new.yaml", "add file", "content", branch="main")
+
+    @pytest.mark.asyncio
+    async def test_create_file_already_exists(self, service, mock_repo):
+        mock_repo.create_file.side_effect = GithubException(422, {"message": "sha"}, {})
+        service._gh.get_repo.return_value = mock_repo
+
+        with pytest.raises(ValueError, match="already exists"):
+            await service.create_file("org/repo", "exists.yaml", "content", "add")
+
+
+class TestUpdateFile:
+    @pytest.mark.asyncio
+    async def test_update_file_success(self, service, mock_repo):
+        existing = MagicMock()
+        existing.sha = "old_sha"
+        mock_repo.get_contents.return_value = existing
+        mock_commit = MagicMock()
+        mock_commit.sha = "new_sha"
+        mock_commit.html_url = "https://github.com/org/repo/commit/new_sha"
+        mock_repo.update_file.return_value = {"commit": mock_commit}
+        service._gh.get_repo.return_value = mock_repo
+
+        result = await service.update_file("org/repo", "file.yaml", "new content", "update")
+
+        assert result["sha"] == "new_sha"
+        mock_repo.update_file.assert_called_once_with("file.yaml", "update", "new content", "old_sha", branch="main")
+
+    @pytest.mark.asyncio
+    async def test_update_file_not_found(self, service, mock_repo):
+        mock_repo.get_contents.side_effect = GithubException(404, {"message": "Not Found"}, {})
+        service._gh.get_repo.return_value = mock_repo
+
+        with pytest.raises(FileNotFoundError):
+            await service.update_file("org/repo", "missing.yaml", "content", "update")
+
+
+class TestDeleteFile:
+    @pytest.mark.asyncio
+    async def test_delete_file_success(self, service, mock_repo):
+        existing = MagicMock()
+        existing.sha = "file_sha"
+        mock_repo.get_contents.return_value = existing
+        service._gh.get_repo.return_value = mock_repo
+
+        result = await service.delete_file("org/repo", "old.yaml", "remove file")
+
+        assert result is True
+        mock_repo.delete_file.assert_called_once_with("old.yaml", "remove file", "file_sha", branch="main")
+
+    @pytest.mark.asyncio
+    async def test_delete_file_not_found(self, service, mock_repo):
+        mock_repo.get_contents.side_effect = GithubException(404, {"message": "Not Found"}, {})
+        service._gh.get_repo.return_value = mock_repo
+
+        with pytest.raises(FileNotFoundError):
+            await service.delete_file("org/repo", "missing.yaml", "remove")
+
+
+class TestBatchCommit:
+    @pytest.mark.asyncio
+    async def test_batch_commit_create_and_delete(self, service, mock_repo):
+        # Setup ref chain
+        mock_ref = MagicMock()
+        mock_ref.object.sha = "base_sha"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        mock_base_tree = MagicMock()
+        mock_repo.get_git_tree.return_value = mock_base_tree
+
+        mock_new_tree = MagicMock()
+        mock_repo.create_git_tree.return_value = mock_new_tree
+
+        mock_new_commit = MagicMock()
+        mock_new_commit.sha = "new_commit_sha"
+        mock_new_commit.html_url = "https://github.com/org/repo/commit/new_commit_sha"
+        mock_repo.create_git_commit.return_value = mock_new_commit
+
+        mock_base_commit = MagicMock()
+        mock_repo.get_git_commit.return_value = mock_base_commit
+
+        service._gh.get_repo.return_value = mock_repo
+
+        actions = [
+            {"action": "create", "file_path": "new.txt", "content": "hello"},
+            {"action": "delete", "file_path": "old.txt"},
+        ]
+        result = await service.batch_commit("org/repo", actions, "batch op")
+
+        assert result["sha"] == "new_commit_sha"
+        mock_repo.create_git_tree.assert_called_once()
+        mock_ref.edit.assert_called_once_with("new_commit_sha")
+
+    @pytest.mark.asyncio
+    async def test_batch_commit_empty_actions_raises(self, service, mock_repo):
+        service._gh.get_repo.return_value = mock_repo
+        mock_ref = MagicMock()
+        mock_ref.object.sha = "sha"
+        mock_repo.get_git_ref.return_value = mock_ref
+        mock_repo.get_git_tree.return_value = MagicMock()
+
+        with pytest.raises(ValueError, match="No actions"):
+            await service.batch_commit("org/repo", [], "empty")
+
+    @pytest.mark.asyncio
+    async def test_batch_commit_unknown_action_raises(self, service, mock_repo):
+        service._gh.get_repo.return_value = mock_repo
+        mock_ref = MagicMock()
+        mock_ref.object.sha = "sha"
+        mock_repo.get_git_ref.return_value = mock_ref
+        mock_repo.get_git_tree.return_value = MagicMock()
+
+        with pytest.raises(ValueError, match="Unknown action"):
+            await service.batch_commit("org/repo", [{"action": "rename", "file_path": "f"}], "bad")
+
+
+class TestCreateTenantStructure:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    async def test_create_tenant(self, mock_batch, service):
+        result = await service.create_tenant_structure("acme", {"name": "Acme Corp"})
+
+        assert result is True
+        mock_batch.assert_called_once()
+        args = mock_batch.call_args
+        actions = args[1]["actions"] if "actions" in args[1] else args[0][1]
+        paths = [a["file_path"] for a in actions]
+        assert "tenants/acme/tenant.yaml" in paths
+        assert "tenants/acme/apis/.gitkeep" in paths
+        assert "tenants/acme/applications/.gitkeep" in paths
+
+
+class TestCreateApi:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_ensure_tenant_exists", new_callable=AsyncMock)
+    async def test_create_api_success(self, mock_tenant, mock_exists, mock_batch, service):
+        mock_exists.return_value = False
+        mock_batch.return_value = {"sha": "abc", "url": ""}
+
+        api_data = {
+            "name": "billing-api",
+            "display_name": "Billing API",
+            "version": "1.0.0",
+            "description": "Billing service",
+            "backend_url": "https://billing.internal",
+        }
+        result = await service.create_api("acme", api_data)
+
+        assert result == "billing-api"
+        mock_batch.assert_called_once()
+        actions = mock_batch.call_args[1]["actions"]
+        paths = [a["file_path"] for a in actions]
+        assert "tenants/acme/apis/billing-api/api.yaml" in paths
+        assert "tenants/acme/apis/billing-api/policies/.gitkeep" in paths
+
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_ensure_tenant_exists", new_callable=AsyncMock)
+    async def test_create_api_already_exists(self, mock_tenant, mock_exists, service):
+        mock_exists.return_value = True
+
+        with pytest.raises(ValueError, match="already exists"):
+            await service.create_api("acme", {"name": "billing-api"})
+
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_ensure_tenant_exists", new_callable=AsyncMock)
+    async def test_create_api_with_openapi_spec(self, mock_tenant, mock_exists, mock_batch, service):
+        mock_exists.return_value = False
+        mock_batch.return_value = {"sha": "abc", "url": ""}
+
+        api_data = {"name": "pet-api", "openapi_spec": "openapi: 3.0.0\ninfo:\n  title: Pets"}
+        await service.create_api("demo", api_data)
+
+        actions = mock_batch.call_args[1]["actions"]
+        paths = [a["file_path"] for a in actions]
+        assert "tenants/demo/apis/pet-api/openapi.yaml" in paths
+
+
+class TestUpdateApi:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "update_file", new_callable=AsyncMock)
+    @patch.object(GitHubService, "get_file_content", new_callable=AsyncMock)
+    async def test_update_api_success(self, mock_get, mock_update, service):
+        mock_get.return_value = "name: billing-api\nversion: 1.0.0\n"
+        mock_update.return_value = {"sha": "new", "url": ""}
+
+        result = await service.update_api("acme", "billing-api", {"version": "2.0.0"})
+
+        assert result is True
+        mock_update.assert_called_once()
+        # Verify the YAML content includes merged data
+        call_args = mock_update.call_args[0]
+        assert "2.0.0" in call_args[2]
+
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "get_file_content", new_callable=AsyncMock)
+    async def test_update_api_not_found(self, mock_get, service):
+        mock_get.side_effect = FileNotFoundError("not found")
+
+        with pytest.raises(FileNotFoundError):
+            await service.update_api("acme", "missing-api", {"version": "2.0.0"})
+
+
+class TestDeleteApi:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    async def test_delete_api_success(self, mock_batch, service, mock_repo):
+        # Mock directory listing
+        file1 = MagicMock()
+        file1.type = "file"
+        file1.path = "tenants/acme/apis/billing-api/api.yaml"
+        file2 = MagicMock()
+        file2.type = "file"
+        file2.path = "tenants/acme/apis/billing-api/policies/.gitkeep"
+        mock_repo.get_contents.return_value = [file1, file2]
+        service._gh.get_repo.return_value = mock_repo
+
+        result = await service.delete_api("acme", "billing-api")
+
+        assert result is True
+        actions = mock_batch.call_args[1]["actions"]
+        assert len(actions) == 2
+        assert all(a["action"] == "delete" for a in actions)
+
+    @pytest.mark.asyncio
+    async def test_delete_api_not_found(self, service, mock_repo):
+        mock_repo.get_contents.side_effect = GithubException(404, {"message": "Not Found"}, {})
+        service._gh.get_repo.return_value = mock_repo
+
+        with pytest.raises(FileNotFoundError):
+            await service.delete_api("acme", "missing-api")
+
+
+class TestCreateMcpServer:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
+    async def test_create_mcp_server(self, mock_exists, mock_batch, service):
+        mock_exists.return_value = False
+        mock_batch.return_value = {"sha": "abc", "url": ""}
+
+        result = await service.create_mcp_server("acme", {"name": "weather-server", "description": "Weather data"})
+
+        assert result == "weather-server"
+        actions = mock_batch.call_args[1]["actions"]
+        assert actions[0]["file_path"] == "tenants/acme/mcp-servers/weather-server/server.yaml"
+
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
+    async def test_create_mcp_server_already_exists(self, mock_exists, service):
+        mock_exists.return_value = True
+
+        with pytest.raises(ValueError, match="already exists"):
+            await service.create_mcp_server("acme", {"name": "weather-server"})
+
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
+    async def test_create_platform_mcp_server(self, mock_exists, mock_batch, service):
+        mock_exists.return_value = False
+        mock_batch.return_value = {"sha": "abc", "url": ""}
+
+        await service.create_mcp_server("_platform", {"name": "global-tools"})
+
+        actions = mock_batch.call_args[1]["actions"]
+        assert actions[0]["file_path"] == "platform/mcp-servers/global-tools/server.yaml"
+
+
+class TestUpdateMcpServer:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "update_file", new_callable=AsyncMock)
+    @patch.object(GitHubService, "get_file_content", new_callable=AsyncMock)
+    async def test_update_mcp_server(self, mock_get, mock_update, service):
+        mock_get.return_value = "apiVersion: gostoa.dev/v1\nkind: MCPServer\nspec:\n  description: old\n"
+        mock_update.return_value = {"sha": "new", "url": ""}
+
+        result = await service.update_mcp_server("acme", "weather", {"description": "new desc"})
+
+        assert result is True
+
+
+class TestDeleteMcpServer:
+    @pytest.mark.asyncio
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    async def test_delete_mcp_server(self, mock_batch, service, mock_repo):
+        file1 = MagicMock()
+        file1.type = "file"
+        file1.path = "tenants/acme/mcp-servers/weather/server.yaml"
+        mock_repo.get_contents.return_value = [file1]
+        service._gh.get_repo.return_value = mock_repo
+
+        result = await service.delete_mcp_server("acme", "weather")
+
+        assert result is True
+        actions = mock_batch.call_args[1]["actions"]
+        assert actions[0]["action"] == "delete"

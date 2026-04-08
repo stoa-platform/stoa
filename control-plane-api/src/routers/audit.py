@@ -581,7 +581,7 @@ async def erase_user_pii(
                         }
                     }
                 }
-            os_resp = await service.client.delete_by_query(index="audit-*", body=query_body)
+            os_resp = await service.client.delete_by_query(index="audit*", body=query_body)
             os_deleted = os_resp.get("deleted", 0)
         except Exception as e:
             logger.warning(f"OpenSearch PII erasure failed for user {user_id}: {e}")
@@ -758,7 +758,7 @@ async def _query_opensearch_audit(
         "size": page_size,
     }
 
-    resp = await client.search(index="audit-*", body=body)
+    resp = await client.search(index="audit*", body=body)
     hits = resp.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
     if total == 0 and page == 1:
@@ -818,7 +818,7 @@ async def _query_opensearch_security(
         "size": limit,
     }
 
-    resp = await client.search(index="audit-*", body=body)
+    resp = await client.search(index="audit*", body=body)
     hits = resp.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
     if total == 0:

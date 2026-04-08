@@ -19,7 +19,7 @@ DEV_GATEWAYS: list[dict[str, Any]] = [
         "gateway_type": "stoa_edge_mcp",
         "environment": "development",
         "base_url": "http://localhost:30080",
-        "status": "active",
+        "status": "online",
         "capabilities": ["mcp", "rate_limiting", "auth", "metering"],
     },
     {
@@ -28,7 +28,7 @@ DEV_GATEWAYS: list[dict[str, Any]] = [
         "gateway_type": "kong",
         "environment": "development",
         "base_url": "http://localhost:8001",
-        "status": "active",
+        "status": "online",
         "capabilities": ["rate_limiting", "auth", "cors"],
     },
 ]
@@ -40,7 +40,7 @@ STAGING_GATEWAYS: list[dict[str, Any]] = [
         "gateway_type": "stoa_edge_mcp",
         "environment": "staging",
         "base_url": "https://staging-mcp.gostoa.dev",
-        "status": "active",
+        "status": "online",
         "capabilities": ["mcp", "rate_limiting", "auth", "metering"],
     },
 ]
@@ -52,7 +52,7 @@ PROD_GATEWAYS: list[dict[str, Any]] = [
         "gateway_type": "stoa_edge_mcp",
         "environment": "production",
         "base_url": "https://mcp.gostoa.dev",
-        "status": "active",
+        "status": "online",
         "capabilities": ["mcp", "rate_limiting", "auth", "metering", "guardrails"],
     },
 ]

@@ -581,7 +581,7 @@ async def erase_user_pii(
                         }
                     }
                 }
-            os_resp = await service.client.delete_by_query(index="audit-*", body=query_body)
+            os_resp = await service.client.delete_by_query(index="audit*", body=query_body)
             os_deleted = os_resp.get("deleted", 0)
         except Exception as e:
             logger.warning(f"OpenSearch PII erasure failed for user {user_id}: {e}")
@@ -737,12 +737,12 @@ async def _query_opensearch_audit(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
 ) -> AuditListResponse | None:
-    """Query audit-* index in OpenSearch. Returns None if no index exists."""
-    must = [{"term": {"actor.tenant_id": tenant_id}}]
+    """Query audit* index in OpenSearch. Returns None if no index exists."""
+    must = [{"term": {"tenant_id.keyword": tenant_id}}]
     if action:
         must.append({"match": {"action": action}})
     if status:
-        must.append({"term": {"outcome": status}})
+        must.append({"term": {"outcome.keyword": status}})
     if start_date or end_date:
         ts_range: dict[str, str] = {}
         if start_date:
@@ -758,7 +758,7 @@ async def _query_opensearch_audit(
         "size": page_size,
     }
 
-    resp = await client.search(index="audit-*", body=body)
+    resp = await client.search(index="audit*", body=body)
     hits = resp.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
     if total == 0 and page == 1:
@@ -803,12 +803,13 @@ async def _query_opensearch_security(
     event_type: str | None = None,
 ) -> SecurityEventsResponse | None:
     """Query audit-* for security events (severity >= warning). Returns None if empty."""
+    # Use .keyword suffix — audit index fields are text type
     must: list[dict[str, Any]] = [
-        {"term": {"actor.tenant_id": tenant_id}},
-        {"terms": {"severity": ["warning", "error", "critical"]}},
+        {"term": {"tenant_id.keyword": tenant_id}},
+        {"terms": {"severity.keyword": ["warning", "error", "critical"]}},
     ]
     if severity:
-        must[-1] = {"term": {"severity": severity}}
+        must[-1] = {"term": {"severity.keyword": severity}}
     if event_type:
         must.append({"match": {"event_type": event_type}})
 
@@ -818,7 +819,7 @@ async def _query_opensearch_security(
         "size": limit,
     }
 
-    resp = await client.search(index="audit-*", body=body)
+    resp = await client.search(index="audit*", body=body)
     hits = resp.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
     if total == 0:

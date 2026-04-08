@@ -9,4 +9,5 @@ STEPS: list[StepDefinition] = [
     StepDefinition(name="plans", deps=["tenants"]),
     StepDefinition(name="consumers", deps=["tenants", "plans"]),
     StepDefinition(name="mcp_servers", deps=["tenants"]),
+    StepDefinition(name="security_posture", deps=["tenants"]),
 ]

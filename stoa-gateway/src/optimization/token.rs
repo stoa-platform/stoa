@@ -195,7 +195,7 @@ impl TokenOptimizer {
             input_bytes = stats.input_bytes,
             output_bytes = stats.output_bytes,
             reduction_pct = stats.reduction_pct,
-            level = ?self.settings.level,
+            opt_level = ?self.settings.level,
             "Token optimization applied"
         );
 

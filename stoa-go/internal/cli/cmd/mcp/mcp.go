@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -58,11 +60,13 @@ func newListServersCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := client.New()
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
 			resp, err := c.ListMCPServers()
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
@@ -111,11 +115,16 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --gateway mode: hit gateway directly
 			if gatewayURL != "" {
-				return listToolsFromGateway(gatewayURL)
+				if err := listToolsFromGateway(gatewayURL); err != nil {
+					output.Error("%s", err)
+					return err
+				}
+				return nil
 			}
 
 			c, err := client.New()
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
@@ -125,11 +134,13 @@ Examples:
 				// Resolve server name to ID
 				serverID, srvName, err := resolveServerByName(c, serverName)
 				if err != nil {
+					output.Error("%s", err)
 					return err
 				}
 
 				resp, err := c.ListTools(serverID)
 				if err != nil {
+					output.Error("%s", err)
 					return err
 				}
 
@@ -213,6 +224,7 @@ Examples:
 			var input json.RawMessage
 			if inputStr != "" {
 				if !json.Valid([]byte(inputStr)) {
+					output.Error("invalid JSON in --input: %s", inputStr)
 					return fmt.Errorf("invalid JSON in --input: %s", inputStr)
 				}
 				input = json.RawMessage(inputStr)
@@ -220,29 +232,38 @@ Examples:
 
 			// --gateway mode: hit gateway directly
 			if gatewayURL != "" {
-				return callToolOnGateway(gatewayURL, toolName, input)
+				if err := callToolOnGateway(gatewayURL, toolName, input); err != nil {
+					output.Error("%s", err)
+					return err
+				}
+				return nil
 			}
 
 			if serverName == "" {
+				output.Error("--server is required (specify MCP server name)")
 				return fmt.Errorf("--server is required (specify MCP server name)")
 			}
 
 			c, err := client.New()
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
 			serverID, _, err := resolveServerByName(c, serverName)
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
 			resp, err := c.CallTool(serverID, toolName, input)
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
 			if resp.Error != "" {
+				output.Error("tool error: %s", resp.Error)
 				return fmt.Errorf("tool error: %s", resp.Error)
 			}
 
@@ -277,16 +298,22 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --gateway mode: hit gateway directly
 			if gatewayURL != "" {
-				return healthFromGateway(gatewayURL)
+				if err := healthFromGateway(gatewayURL); err != nil {
+					output.Error("%s", err)
+					return err
+				}
+				return nil
 			}
 
 			c, err := client.New()
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
 			resp, err := c.MCPHealth()
 			if err != nil {
+				output.Error("%s", err)
 				return err
 			}
 
@@ -338,17 +365,19 @@ func listToolsFromGateway(gwURL string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var result struct {
-		Tools []types.MCPToolSummary `json:"tools"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	// Gateway returns a plain array of tools (not wrapped in {"tools": [...]})
+	var tools []types.MCPToolSummary
+	if err := json.NewDecoder(resp.Body).Decode(&tools); err != nil {
 		return fmt.Errorf("failed to decode gateway response: %w", err)
 	}
 
-	if len(result.Tools) == 0 {
+	if len(tools) == 0 {
 		output.Info("No tools found.")
 		return nil
 	}
+
+	// Alias for the rendering block below
+	result := struct{ Tools []types.MCPToolSummary }{Tools: tools}
 
 	format := output.ParseFormat(outputFormat)
 	printer := output.NewPrinter(format)
@@ -412,9 +441,19 @@ func healthFromGateway(gwURL string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Gateway /health may return plain text ("OK") or JSON
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	bodyStr := strings.TrimSpace(string(bodyBytes))
+
 	var result types.MCPHealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode gateway response: %w", err)
+
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		// Plain text response (e.g., "OK")
+		result = types.MCPHealthResponse{Status: bodyStr}
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("health check failed: HTTP %d — %s", resp.StatusCode, bodyStr)
 	}
 
 	format := output.ParseFormat(outputFormat)

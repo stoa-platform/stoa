@@ -125,14 +125,31 @@ function computeSecurityScore(
   driftCount: number
 ): number {
   const openFindings = findings.filter((f) => f.status === 'open');
-  const criticalCount = openFindings.filter((f) => f.severity === 'critical').length;
-  const highCount = openFindings.filter((f) => f.severity === 'high').length;
-  const mediumCount = openFindings.filter((f) => f.severity === 'medium').length;
+
+  // Scanner findings (trivy, kubescape) get full penalty weight
+  const scannerFindings = openFindings.filter(
+    (f) => f.category !== 'audit' && f.category !== 'security_event'
+  );
+  // Audit-derived findings get reduced weight (operational events, not CVEs)
+  const auditFindings = openFindings.filter(
+    (f) => f.category === 'audit' || f.category === 'security_event'
+  );
 
   let score = 100;
-  score -= criticalCount * 15;
-  score -= highCount * 8;
-  score -= mediumCount * 3;
+
+  // Scanner findings: full weight per finding
+  score -= scannerFindings.filter((f) => f.severity === 'critical').length * 15;
+  score -= scannerFindings.filter((f) => f.severity === 'high').length * 8;
+  score -= scannerFindings.filter((f) => f.severity === 'medium').length * 3;
+
+  // Audit findings: capped penalty (many events ≠ many vulns)
+  const auditCritical = auditFindings.filter((f) => f.severity === 'critical').length;
+  const auditHigh = auditFindings.filter((f) => f.severity === 'high').length;
+  const auditMedium = auditFindings.filter((f) => f.severity === 'medium').length;
+  score -= Math.min(auditCritical, 5) * 5;
+  score -= Math.min(auditHigh, 10) * 2;
+  score -= Math.min(auditMedium, 20) * 1;
+
   score -= driftCount * 5;
 
   const authFailures = events.find((e) => e.event_type === 'auth_failure')?.count || 0;

@@ -23,6 +23,7 @@ VALID_STEPS = (
     "consumers",
     "mcp_servers",
     "prospects",
+    "security_posture",
 )
 
 

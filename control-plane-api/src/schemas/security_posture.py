@@ -68,6 +68,21 @@ class SeverityBreakdown(BaseModel):
     info: int = 0
 
 
+class DataFreshnessSource(BaseModel):
+    """Freshness info for a single data source."""
+
+    last_event_at: datetime | None = None
+    count: int = 0
+
+
+class DataFreshness(BaseModel):
+    """Data freshness indicator across all security data sources."""
+
+    last_data_at: datetime | None = None
+    status: str = Field("no_data", description="fresh (<1h), stale (1h-24h), no_data (>24h or empty)")
+    sources: dict[str, DataFreshnessSource] = Field(default_factory=dict)
+
+
 class SecurityScoreResponse(BaseModel):
     """Security score for a tenant."""
 
@@ -79,6 +94,7 @@ class SecurityScoreResponse(BaseModel):
     open_findings: int
     last_scan_at: datetime | None = None
     trend: float | None = Field(None, description="Score change vs previous scan")
+    data_freshness: DataFreshness | None = None
 
 
 class ComplianceControl(BaseModel):

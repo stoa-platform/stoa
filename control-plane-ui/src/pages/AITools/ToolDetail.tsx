@@ -135,23 +135,27 @@ export function ToolDetail() {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{tool.name}</h1>
-                <span
-                  className={`px-2.5 py-0.5 rounded border text-sm font-medium ${
-                    methodColors[tool.method] ||
-                    'bg-neutral-100 text-neutral-800 border-neutral-200'
-                  }`}
-                >
-                  {tool.method}
-                </span>
-                <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                  v{tool.version}
-                </span>
+                {tool.method && (
+                  <span
+                    className={`px-2.5 py-0.5 rounded border text-sm font-medium ${
+                      methodColors[tool.method] ||
+                      'bg-neutral-100 text-neutral-800 border-neutral-200'
+                    }`}
+                  >
+                    {tool.method}
+                  </span>
+                )}
+                {tool.version && (
+                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                    v{tool.version}
+                  </span>
+                )}
               </div>
               <p className="text-neutral-600 dark:text-neutral-400 max-w-2xl">{tool.description}</p>
 
               {/* Metadata */}
               <div className="flex flex-wrap items-center gap-4 mt-4">
-                {tool.tags.length > 0 && (
+                {tool.tags && tool.tags.length > 0 && (
                   <div className="flex items-center gap-2">
                     {tool.tags.map((tag) => (
                       <span

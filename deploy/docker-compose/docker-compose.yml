@@ -225,6 +225,8 @@ services:
       ENABLE_SNAPSHOT_CONSUMER: "false"
       # Gateway registration (ADR-028) — shared key for local dev
       GATEWAY_API_KEYS: "${GATEWAY_API_KEY:-local-dev-key}"
+      # MCP Gateway URL (base URL — used for REST proxy and Streamable HTTP tool sync)
+      MCP_GATEWAY_URL: http://stoa-gateway:8080
       # Chat Assistant (CAB-286)
       CHAT_ENABLED: "true"
       CHAT_PROVIDER_API_KEY: "${CHAT_PROVIDER_API_KEY:-}"

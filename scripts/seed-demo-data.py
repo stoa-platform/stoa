@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+DEPRECATED: Use the unified seeder instead:
+    cd control-plane-api && python -m scripts.seeder --profile dev
+    # Or via Docker: make seed-dev
+
 CAB-1061: Seed demo data for STOA Platform presentation.
 
 Creates:

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Seed demo prospects for Feb 26 demo (CAB-911).
+"""DEPRECATED: Use the unified seeder instead:
+    cd control-plane-api && python -m scripts.seeder --profile dev
+    # Or via Docker: make seed-dev
+
+Seed demo prospects for Feb 26 demo (CAB-911).
 
 Creates 12 demo prospects with various statuses, events, and NPS feedback
 for testing the admin prospects dashboard.

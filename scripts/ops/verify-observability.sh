@@ -173,31 +173,31 @@ echo ""
 echo "--- Phase 3: Data Prepper ---"
 
 # ── AC7: Data Prepper pods ──
-DP_PHASE=$(kubectl get pods -n monitoring -l app.kubernetes.io/name=data-prepper \
+DP_PHASE=$(kubectl get pods -n opensearch -l app.kubernetes.io/name=data-prepper \
   -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
 if [[ -z "$DP_PHASE" ]]; then
-  DP_PHASE=$(kubectl get pods -n monitoring -l app=data-prepper \
+  DP_PHASE=$(kubectl get pods -n opensearch -l app=data-prepper \
     -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
 fi
 
 if [[ "$DP_PHASE" == "Running" ]]; then
-  check_pass "AC7" "Data Prepper pods Running in monitoring namespace"
+  check_pass "AC7" "Data Prepper pods Running in opensearch namespace"
 elif [[ -z "$DP_PHASE" ]]; then
-  check_fail "AC7" "Data Prepper pods" "No Data Prepper pods found in monitoring namespace"
+  check_fail "AC7" "Data Prepper pods" "No Data Prepper pods found in opensearch namespace"
 else
   check_fail "AC7" "Data Prepper pods" "Phase=$DP_PHASE"
 fi
 
 # ── AC8: Data Prepper health ──
-DP_SVC=$(kubectl get svc -n monitoring -l app.kubernetes.io/name=data-prepper \
+DP_SVC=$(kubectl get svc -n opensearch -l app.kubernetes.io/name=data-prepper \
   -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [[ -z "$DP_SVC" ]]; then
-  DP_SVC=$(kubectl get svc -n monitoring -l app=data-prepper \
+  DP_SVC=$(kubectl get svc -n opensearch -l app=data-prepper \
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 fi
 
 if [[ -n "$DP_SVC" ]]; then
-  pf_start monitoring "$DP_SVC" 21890 21890
+  pf_start opensearch "$DP_SVC" 21890 21890
   DP_HEALTH=$(curl -s http://localhost:21890 2>/dev/null || echo "")
   if [[ -n "$DP_HEALTH" ]]; then
     check_pass "AC8" "Data Prepper health endpoint responds on :21890"
@@ -249,7 +249,7 @@ fi
 # ── AC11: Resources managed by ArgoCD ──
 UNMANAGED_OS=$(kubectl get all -n opensearch -o json 2>/dev/null | \
   jq '[.items[] | select(.metadata.labels["argocd.argoproj.io/instance"] == null)] | length' 2>/dev/null || echo "-1")
-UNMANAGED_MON=$(kubectl get pods -n monitoring -l app.kubernetes.io/name=data-prepper -o json 2>/dev/null | \
+UNMANAGED_MON=$(kubectl get pods -n opensearch -l app.kubernetes.io/name=data-prepper -o json 2>/dev/null | \
   jq '[.items[] | select(.metadata.labels["argocd.argoproj.io/instance"] == null)] | length' 2>/dev/null || echo "0")
 
 if [[ "$UNMANAGED_OS" == "0" ]]; then

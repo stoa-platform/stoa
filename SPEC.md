@@ -54,7 +54,7 @@ stoa-gateway (OTEL gRPC)
 - [ ] AC4: OpenSearch security init completed (`.opendistro_security` index exists)
 - [ ] AC5: OpenSearch index templates exist: `stoa-logs`, `gateway-logs`, `audit`
 - [ ] AC6: OpenSearch OIDC configuration present in security config
-- [ ] AC7: Data Prepper pods Running in `monitoring` namespace
+- [ ] AC7: Data Prepper pods Running in `opensearch` namespace (co-located with OpenSearch for secret access)
 - [ ] AC8: Data Prepper health endpoint responds on :21890
 - [ ] AC9: E2E: trace visible in OpenSearch `trace-analytics-raw` index within 60s of gateway call
 - [ ] AC10: ArgoCD Applications for all 3 components show Synced + Healthy

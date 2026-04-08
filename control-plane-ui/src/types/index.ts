@@ -436,9 +436,10 @@ export interface MCPTool {
   apiId?: string;
   tenantId?: string;
   endpoint?: string;
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  tags: string[];
-  version: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  tags?: string[];
+  version?: string;
+  annotations?: Record<string, unknown>;
 }
 
 export interface ListToolsResponse {

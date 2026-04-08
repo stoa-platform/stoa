@@ -14,19 +14,23 @@ Both strategies run on the same interval (GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS)
 
 import asyncio
 import logging
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..adapters.registry import AdapterRegistry
 from ..config import settings
 from ..database import _get_session_factory
+from ..models.external_mcp_server import ExternalMCPServer, ExternalMCPServerTool
 from ..models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
 from ..services.credential_resolver import (
     AgentManagedGatewayError,
     create_adapter_with_credentials,
 )
+from ..services.mcp_client import get_mcp_client_service
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +51,24 @@ _MAX_CONSECUTIVE_FAILURES = 3
 # Per-check timeout in seconds
 _HEALTH_CHECK_TIMEOUT = 10
 
+# Sync platform MCP server tools every N health check cycles
+_PLATFORM_TOOL_SYNC_EVERY_N_CYCLES = 10  # ~5 min at 30s interval
+
 
 class GatewayHealthWorker:
     """
     Worker that periodically checks gateway health via two strategies:
     - Heartbeat timeout for STOA gateways
     - Active polling for external gateways (Kong, Gravitee, etc.)
+
+    Also syncs platform MCP server tools periodically (every ~5 min).
     """
 
     def __init__(self):
         self._running = False
         self._check_interval = settings.GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS
         self._heartbeat_timeout = settings.GATEWAY_HEARTBEAT_TIMEOUT_SECONDS
+        self._cycle_count = 0
 
     async def start(self):
         """Start the health check worker."""
@@ -84,11 +94,17 @@ class GatewayHealthWorker:
 
     async def _check_gateway_health(self):
         """Check all gateways — heartbeat-based for STOA, active polling for external."""
+        self._cycle_count += 1
         session_factory = _get_session_factory()
         async with session_factory() as session:
             await self._mark_stale_gateways_offline(session)
             await self._active_health_check_external_gateways(session)
             await self._purge_stale_gateways(session)
+
+            # Sync platform MCP server tools every N cycles (first cycle + periodic)
+            if self._cycle_count == 1 or self._cycle_count % _PLATFORM_TOOL_SYNC_EVERY_N_CYCLES == 0:
+                await self._sync_platform_mcp_tools(session)
+
             await session.commit()
 
     async def _mark_stale_gateways_offline(self, session: AsyncSession):
@@ -97,9 +113,7 @@ class GatewayHealthWorker:
 
         stmt = select(GatewayInstance).where(
             GatewayInstance.gateway_type.in_(list(_HEARTBEAT_TYPES)),
-            GatewayInstance.status.in_(
-                [GatewayInstanceStatus.ONLINE, GatewayInstanceStatus.DEGRADED]
-            ),
+            GatewayInstance.status.in_([GatewayInstanceStatus.ONLINE, GatewayInstanceStatus.DEGRADED]),
             GatewayInstance.last_health_check < cutoff_time,
             GatewayInstance.deleted_at.is_(None),
         )
@@ -203,8 +217,11 @@ class GatewayHealthWorker:
 
         try:
             adapter = await create_adapter_with_credentials(
-                gw_type, gateway.base_url, gateway.auth_config or {},
-                source=gateway.source, gateway_name=gateway.name,
+                gw_type,
+                gateway.base_url,
+                gateway.auth_config or {},
+                source=gateway.source,
+                gateway_name=gateway.name,
             )
             check_result = await asyncio.wait_for(adapter.health_check(), timeout=_HEALTH_CHECK_TIMEOUT)
 
@@ -240,6 +257,85 @@ class GatewayHealthWorker:
             consecutive_failures += 1
             self._handle_failure(gateway, health_details, consecutive_failures, str(e), now)
             logger.warning("Gateway %s (%s) health check error: %s", gateway.name, gw_type, e)
+
+    async def _sync_platform_mcp_tools(self, session: AsyncSession):
+        """Discover and sync tools from platform MCP servers (is_platform=True).
+
+        Uses standard MCP Streamable HTTP protocol (JSON-RPC to MCP_GATEWAY_URL)
+        to discover tools, then persists them in external_mcp_server_tools
+        so the Console UI shows an accurate count.
+        """
+        stmt = (
+            select(ExternalMCPServer)
+            .options(selectinload(ExternalMCPServer.tools))
+            .where(
+                ExternalMCPServer.is_platform.is_(True),
+                ExternalMCPServer.enabled.is_(True),
+            )
+        )
+        result = await session.execute(stmt)
+        platform_servers = result.scalars().all()
+
+        if not platform_servers:
+            return
+
+        mcp_client = get_mcp_client_service()
+
+        for server in platform_servers:
+            try:
+                sync_url = settings.MCP_GATEWAY_URL.rstrip("/") + "/mcp"
+                discovered = await mcp_client.list_tools(
+                    base_url=sync_url,
+                    transport=server.transport.value if hasattr(server.transport, "value") else str(server.transport),
+                    auth_type=server.auth_type.value if hasattr(server.auth_type, "value") else str(server.auth_type),
+                    credentials=None,
+                )
+
+                tool_prefix = server.tool_prefix or server.name
+                existing_tool_names = {t.name for t in server.tools}
+                incoming_tool_names = {t.name for t in discovered}
+                now = datetime.utcnow()
+
+                # Remove tools no longer present
+                for tool in list(server.tools):
+                    if tool.name not in incoming_tool_names:
+                        await session.delete(tool)
+
+                # Add or update tools
+                for tool_data in discovered:
+                    namespaced = f"{tool_prefix}__{tool_data.name}" if tool_prefix else tool_data.name
+                    if tool_data.name in existing_tool_names:
+                        existing = next(t for t in server.tools if t.name == tool_data.name)
+                        existing.namespaced_name = namespaced
+                        existing.description = tool_data.description
+                        existing.input_schema = tool_data.input_schema
+                        existing.synced_at = now
+                    else:
+                        session.add(
+                            ExternalMCPServerTool(
+                                id=uuid.uuid4(),
+                                server_id=server.id,
+                                name=tool_data.name,
+                                namespaced_name=namespaced,
+                                display_name=tool_data.name.replace("_", " ").title(),
+                                description=tool_data.description,
+                                input_schema=tool_data.input_schema,
+                                enabled=True,
+                                synced_at=now,
+                            )
+                        )
+
+                server.last_sync_at = now
+                server.sync_error = None
+                logger.info(
+                    "Platform MCP tool sync: %s — %d tools discovered",
+                    server.name,
+                    len(discovered),
+                )
+
+            except Exception as e:
+                server.sync_error = str(e)
+                logger.warning("Platform MCP tool sync failed for %s: %s", server.name, e)
 
     def _handle_failure(
         self,

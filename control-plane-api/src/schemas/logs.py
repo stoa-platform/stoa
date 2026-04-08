@@ -84,3 +84,35 @@ class LogExportRequest(BaseModel):
     status: LogStatus = LogStatus.ALL
 
     model_config = ConfigDict(use_enum_values=True)
+
+
+# ===== Admin Logs (CAB-2004) =====
+
+
+class AdminLogEntry(BaseModel):
+    """Single structured log entry for admin viewer."""
+
+    timestamp: datetime
+    service: str
+    level: str
+    message: str
+    trace_id: str | None = None
+    tenant_id: str | None = None
+    request_id: str | None = None
+    duration_ms: float | None = None
+    path: str | None = None
+    method: str | None = None
+    status_code: int | None = None
+    consumer_id: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminLogQueryResponse(BaseModel):
+    """Response for admin log query."""
+
+    logs: list[AdminLogEntry]
+    total: int
+    limit: int
+    has_more: bool
+    query_time_ms: float

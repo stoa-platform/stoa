@@ -1,126 +1,164 @@
-# Spec: CAB-2004 — Replace /logs with Real Gateway Logs via Loki
+# Spec: CAB-2006 — stoactl mcp subcommand + shell completions
 
 ## Problem
 
-The `/logs` page ("Request Explorer") displays only aggregated Prometheus metrics (total requests, success rate, avg latency, top endpoints). This is 100% redundant with the Call Flow dashboard. The name "Logs" is misleading — users expect actual log entries, not metric charts.
+`stoactl` has no dedicated command to interact with MCP servers and tools. The client already has `CreateMCPServer`/`AddToolToServer`, but users cannot **list servers, list tools, call a tool, or check MCP health** from the CLI. Shell completions (bash/zsh/fish) are also missing despite Cobra supporting them natively.
 
 ## Goal
 
-Replace `/logs` with a real log viewer showing structured gateway logs from Loki (access logs, errors, auth failures) with filtering, search, and trace correlation. Reuse existing `LokiClient`, `PIIMasker`, and `ConsumerLogsService` patterns.
+A developer evaluating STOA can run `stoactl mcp list-tools` within 30 seconds of install and see available MCP tools. All 4 MCP subcommands work against both CP API (default) and gateway directly (`--gateway`). Shell completions install with a single command.
 
 ## API Contract
 
-```
-GET /v1/admin/logs
-Auth: cpi-admin (all logs) | tenant-admin (own tenant only) | viewer/devops → 403
-Query params:
-  service:    string  (gateway|api|auth|all)  default: "all"
-  level:      string  (debug|info|warning|error)  optional
-  search:     string  optional, free-text filter
-  start_time: ISO8601 optional, default: now - 1h
-  end_time:   ISO8601 optional, default: now
-  limit:      int     1-200, default: 50
+### CP API endpoints (source of truth — already exist)
 
-Response 200:
-{
-  "logs": [
-    {
-      "timestamp": "2026-04-07T12:00:00Z",
-      "service": "stoa-gateway",
-      "level": "info",
-      "message": "request completed",
-      "trace_id": "abc123",
-      "tenant_id": "oasis",
-      "request_id": "req-456",
-      "duration_ms": 42.5,
-      "path": "/mcp/tools/list",
-      "method": "GET",
-      "status_code": 200,
-      "consumer_id": "consumer-789"
-    }
-  ],
-  "total": 1,
-  "limit": 50,
-  "has_more": false,
-  "query_time_ms": 120
+```
+GET  /v1/admin/mcp/servers                          → MCPServerListResponse { servers[], total_count }
+GET  /v1/admin/mcp/servers/{server_id}               → MCPServerResponse { id, name, ..., tools[] }
+POST /v1/admin/mcp/servers/{server_id}/tools/invoke   → ToolInvokeResponse { result, error }
+GET  /v1/admin/mcp/servers/health                    → { status, version, uptime }
+```
+
+### Gateway direct endpoints (--gateway flag)
+
+```
+GET  /mcp/v1/tools          → { tools[] }
+POST /mcp/v1/tools/invoke   → { result }
+GET  /health                → { status, version }
+```
+
+### Client methods to add
+
+```go
+// pkg/client/client.go
+func (c *Client) ListMCPServers() (*types.MCPServerListResponse, error)
+func (c *Client) ListTools(serverID string) (*types.MCPToolListResponse, error)
+func (c *Client) CallTool(serverID, toolName string, input json.RawMessage) (*types.MCPToolCallResponse, error)
+func (c *Client) MCPHealth() (*types.MCPHealthResponse, error)
+```
+
+### Types to add
+
+```go
+// pkg/types/mcp.go
+type MCPServerSummary struct {
+    ID          string `json:"id"`
+    Name        string `json:"name"`
+    DisplayName string `json:"display_name"`
+    Category    string `json:"category"`
+    Status      string `json:"status"`
+    ToolCount   int    `json:"tool_count"`
 }
 
-Response 403: { "detail": "Insufficient permissions" }
-Response 503: { "detail": "Loki unavailable" }
-```
+type MCPServerListResponse struct {
+    Servers    []MCPServerSummary `json:"servers"`
+    TotalCount int               `json:"total_count"`
+}
 
-LogQL generation:
-- Base: `{job=~"stoa-gateway|control-plane-api|keycloak"}`
-- Service filter: `{job="stoa-gateway"}` when `service=gateway`
-- JSON parse: `| json`
-- Level filter: `| level="error"` when `level=error`
-- Tenant scope: `| tenant_id="oasis"` when requester is tenant-admin
-- Free-text: `|~ "search term"` when `search` provided
+type MCPToolSummary struct {
+    Name        string `json:"name"`
+    DisplayName string `json:"display_name"`
+    Description string `json:"description"`
+    Enabled     bool   `json:"enabled"`
+    ServerName  string `json:"server_name"`
+}
+
+type MCPToolListResponse struct {
+    Tools []MCPToolSummary `json:"tools"`
+}
+
+type MCPToolCallResponse struct {
+    Result json.RawMessage `json:"result"`
+    Error  string          `json:"error,omitempty"`
+}
+
+type MCPHealthResponse struct {
+    Status  string `json:"status"`
+    Version string `json:"version,omitempty"`
+    Uptime  string `json:"uptime,omitempty"`
+}
+```
 
 ## Acceptance Criteria
 
-- [ ] AC1: `GET /v1/admin/logs` returns structured log entries from Loki with correct schema
-- [ ] AC2: `cpi-admin` sees logs from all tenants; `tenant-admin` sees only own tenant logs
-- [ ] AC3: `viewer` and `devops` roles receive 403
-- [ ] AC4: PII masking is applied to all log entries via PIIMasker
-- [ ] AC5: Service filter restricts logs to selected service (gateway/api/auth/all)
-- [ ] AC6: Level filter restricts logs to selected severity
-- [ ] AC7: Search param applies free-text filter across log messages
-- [ ] AC8: Time range defaults to last 1h, max 24h enforced
-- [ ] AC9: Frontend renders log table with timestamp, service badge, level badge, message, duration
-- [ ] AC10: Clicking a log row opens detail panel showing full JSON fields
-- [ ] AC11: Clicking trace_id navigates to `/call-flow/trace/{trace_id}`
-- [ ] AC12: Auto-refresh toggle works (off/5s/15s/30s) with no memory leak on unmount
-- [ ] AC13: Empty state shown when Loki unavailable (503) or 0 results
-- [ ] AC14: Navigation tab renamed from "Logs" to "Gateway Logs"
-- [ ] AC15: `LogsEmbed.tsx` and `/logs/opensearch` route removed (dead code cleanup)
+- [ ] AC1: `stoactl mcp list-servers` returns a table with columns: NAME, DISPLAY NAME, CATEGORY, STATUS, TOOLS when servers exist
+- [ ] AC2: `stoactl mcp list-servers` prints "No MCP servers found" when no servers exist
+- [ ] AC3: `stoactl mcp list-servers -o json` returns JSON array of servers
+- [ ] AC4: `stoactl mcp list-servers -o yaml` returns YAML list of servers
+- [ ] AC5: `stoactl mcp list-tools` returns a table with columns: NAME, DISPLAY NAME, SERVER, ENABLED when tools exist
+- [ ] AC6: `stoactl mcp list-tools --server <name>` filters tools by server
+- [ ] AC7: `stoactl mcp list-tools` prints "No tools found" when no tools exist
+- [ ] AC8: `stoactl mcp call <tool-name> --server <server> --input '{"key":"val"}'` invokes the tool and prints the JSON result
+- [ ] AC9: `stoactl mcp call` without tool name prints usage error with exit code 2
+- [ ] AC10: `stoactl mcp call <tool> --input 'invalid-json'` returns a validation error before making the API call
+- [ ] AC11: `stoactl mcp health` returns status, version, uptime in table format
+- [ ] AC12: `stoactl mcp health` returns exit code 1 when MCP endpoint is unreachable
+- [ ] AC13: `--gateway <url>` flag on `list-tools`, `call`, `health` bypasses CP API and hits gateway directly
+- [ ] AC14: `stoactl completion bash` outputs valid bash completion script to stdout
+- [ ] AC15: `stoactl completion zsh` outputs valid zsh completion script to stdout
+- [ ] AC16: `stoactl completion fish` outputs valid fish completion script to stdout
+- [ ] AC17: `stoactl completion` without shell argument prints usage listing the 3 supported shells
+- [ ] AC18: All 4 new client methods have unit tests with httptest mocks
+- [ ] AC19: `go vet ./...` and `go build ./...` pass with zero errors
 
 ## Edge Cases
 
 | Case | Input | Expected | Priority |
 |------|-------|----------|----------|
-| Loki unreachable | Loki down | API: 503 + `"Loki unavailable"`. UI: banner, no crash | Must |
-| Empty results | Valid query, 0 logs | API: `{"logs":[], "total":0}`. UI: empty state | Must |
-| Time range > 24h | start/end > 24h apart | API: 400 `"Max time range is 24 hours"` | Must |
-| Malformed log line | Loki returns non-JSON | Skip entry, don't crash; log warning | Must |
-| PII in message field | Email in log message | Masked by PIIMasker before response | Must |
-| Tenant-admin cross-tenant | tenant-admin queries other tenant | LogQL scoped to own tenant, other logs invisible | Must |
-| Very large result | limit=200, busy gateway | Return 200 entries, `has_more=true` | Should |
-| Special chars in search | `search=foo"bar` | Escaped in LogQL, no injection | Must |
-| Missing trace_id | Log entry has no trace_id | Detail panel: no trace link, field shows "-" | Should |
-| Auto-refresh + unmount | Navigate away during refresh | Timer cleared, no state-update-on-unmounted | Must |
+| No auth token | Missing `STOA_API_KEY` + no keyring | Error: "not authenticated", exit code 3 | Must |
+| API returns 401 | Expired/invalid token | Error with "authentication failed", exit code 3 | Must |
+| API returns 500 | Server error | Error: "API error (500): \<body\>", exit code 1 | Must |
+| Server not found | `--server nonexistent` | Error: "server 'nonexistent' not found", exit code 4 | Must |
+| Tool not found | `stoactl mcp call ghost --server s1` | Error: "tool 'ghost' not found", exit code 4 | Must |
+| Empty input | `stoactl mcp call tool --server s1` (no `--input`) | Send `{}` as default input | Should |
+| Large JSON result | Tool returns 1MB+ response | Stream to stdout without OOM | Should |
+| Gateway unreachable | `--gateway http://dead:1234` | Error + exit code 1, timeout after 10s | Must |
+| Mixed flags | `-o json --gateway url` | Both flags compose correctly | Must |
 
 ## Out of Scope
 
-- CSV export for admin logs (exists for consumer logs, can be added later)
-- Log alerting / notifications
-- Log retention configuration (Loki 7-day retention is pre-configured)
-- OpenSearch integration (being removed, not replaced)
-- Consumer-scoped logs (already exists at `/v1/logs/calls`)
+- Interactive TUI mode for tool invocation
+- `stoactl diff` command
+- Extended `delete` for MCP resources
+- Plugin system
+- Tool input schema validation against `inputSchema` (future: `--validate` flag)
+- MCP Streamable HTTP transport (gateway uses REST, not JSON-RPC)
 
 ## Security Considerations
 
-- [x] Auth required: `cpi-admin` (all) or `tenant-admin` (own tenant). Others → 403
-- [x] PII handling: PIIMasker applied to every log entry before response
-- [x] Tenant isolation: LogQL stream selector scoped by `tenant_id` for non-admin
-- [x] LogQL injection: search param must be escaped (no raw interpolation into LogQL)
-- [ ] Rate limiting: not needed (admin endpoint, low cardinality)
+- [x] Auth required: Bearer token (`STOA_API_KEY` or keyring). All MCP admin endpoints require `cpi-admin` or `tenant-admin` role
+- [x] No client-side logging of `--input` payloads (tool call input/output may contain PII)
+- [x] Rate limiting: Server-side (100/min list, 30/min calls) — no client-side throttling needed
+- [x] `--gateway` flag bypasses CP API RBAC — document this clearly in `--help` text
 
 ## Dependencies
 
-- Loki operational at `stoa-loki:3100` (already deployed, 7-day retention)
-- Promtail scraping `stoa-*` containers (already configured)
-- Gateway structured access logs (`access_log.rs`) — already shipping JSON to Loki
-- `LokiClient.query_range()` — already production (`loki_client.py:50`)
-- `PIIMasker.for_tenant()` — already production (`core/pii/masker.py:105`)
-- `LogEntryResponse` schema — already defined (`schemas/logs.py:46`), extend for admin fields
+- CP API MCP admin endpoints exist (`/v1/admin/mcp/servers` — `mcp_admin.py:395+`)
+- Gateway health endpoint exists (`/health`)
+- Gateway tools endpoint exists (`/mcp/v1/tools`)
+- Cobra v1.8.0 in go.mod (completion support built-in)
+- `pkg/output` package handles table/json/yaml formatting
+
+## Council Validation — 8.50/10 Go
+
+| Persona | Score | Verdict |
+|---------|-------|---------|
+| Chucky (Devil's Advocate) | 8/10 | Go |
+| OSS Killer (VC Skeptic) | 9/10 | Go |
+| Archi 50x50 (Architect) | 8/10 | Go |
+| Better Call Saul (Legal) | 9/10 | Go |
+
+### Adjustments applied
+
+1. **Name→ID resolution**: `--server <name>` resolves name→ID client-side (list servers → find match → get tools by server ID)
+2. **Default pagination**: CLI defaults to `page=1, page_size=100` for list commands. No `--limit` flag in v1
 
 ## Notes
 
-- Follow `self_service_logs.py` pattern: router → service → LokiClient → PIIMasker
-- Create `AdminLogsService` mirroring `ConsumerLogsService` but with admin-level LogQL
-- Job mapping: `gateway` → `stoa-gateway`, `api` → `control-plane-api`, `auth` → `keycloak`
-- Frontend: full rewrite of `RequestExplorer/` — no salvageable code from Prometheus dashboard
-- `LogsEmbed.tsx` (129 LOC) is dead code (OpenSearch iframe, unused) — delete
-- Schema `LogEntryResponse` already has most fields; add `service`, `consumer_id` for admin view
-- Gateway logs fields from `access_log.rs:108-121`: method, path, status, duration_ms, tenant_id, consumer_id, user_agent, trace_id
+- Follow existing patterns: `NewXxxCmd()` factory → `rootCmd.AddCommand()` in `root.go`
+- Client `do()` method handles auth headers, tenant, JSON marshaling — reuse for all 4 methods
+- Output: use `output.Printer` with `--output/-o` flag (table default, json, yaml)
+- Exit codes: follow convention in `root.go:85-93` (0=OK, 1=Error, 2=Misuse, 3=AuthFailed, 4=NotFound)
+- `--gateway` flag: create a secondary `http.Client` targeting the gateway URL instead of CP API
+- `--server <name>` on `list-tools` and `call`: client lists all servers, matches by name, uses the server ID for the API call
+- Tool invoke endpoint on CP API may need to be created if it doesn't exist yet — verify during Phase 2

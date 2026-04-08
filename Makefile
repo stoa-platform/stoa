@@ -5,6 +5,7 @@
 	test-api test-ui test-portal test-gateway test-cli \
 	lint-api lint-ui lint-portal lint-gateway lint-cli \
 	check-docs \
+	seed-dev seed-staging seed-prod seed-check seed-local \
 	seed-demo test-demo demo-federation-setup demo-federation-test \
 	demo-federation-live demo-federation-cleanup demo-opensearch-seed \
 	demo-opensearch-test demo-opensearch-live \
@@ -107,7 +108,22 @@ check-docs: ## Validate README Quick Start commands are consistent
 
 # ── Demo Data ──────────────────────────────────────────────────────────────
 
-seed-demo: ## Seed demo data (APIs, apps, metrics) — requires ANORAK_PASSWORD
+seed-dev: ## Seed dev data (full demo dataset) via Docker
+	SEED_PROFILE=dev docker compose -f deploy/docker-compose/docker-compose.yml --profile seed up stoa-seeder --build
+
+seed-staging: ## Seed staging data (reduced realistic dataset) via Docker
+	SEED_PROFILE=staging docker compose -f deploy/docker-compose/docker-compose.yml --profile seed up stoa-seeder --build
+
+seed-prod: ## Seed prod bootstrap (admin tenant + gateway) via Docker
+	SEED_PROFILE=prod docker compose -f deploy/docker-compose/docker-compose.yml --profile seed up stoa-seeder --build
+
+seed-check: ## Verify seed data exists for dev profile
+	SEED_PROFILE=dev docker compose -f deploy/docker-compose/docker-compose.yml --profile seed run --rm stoa-seeder --profile dev --check
+
+seed-local: ## Seed dev data locally (no Docker, requires DATABASE_URL)
+	cd control-plane-api && python3 -m scripts.seeder --profile ${SEED_PROFILE:-dev}
+
+seed-demo: ## Seed demo data (legacy — use seed-dev instead)
 	@echo "==> Seeding demo data..."
 	python3 scripts/seed-demo-data.py
 

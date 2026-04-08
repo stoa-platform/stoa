@@ -203,6 +203,7 @@ services:
       # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100
+      LOKI_SERVICE_LABEL: service
       TEMPO_INTERNAL_URL: http://tempo:3200
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
@@ -224,6 +225,8 @@ services:
       ENABLE_SNAPSHOT_CONSUMER: "false"
       # Gateway registration (ADR-028) — shared key for local dev
       GATEWAY_API_KEYS: "${GATEWAY_API_KEY:-local-dev-key}"
+      # MCP Gateway URL (base URL — used for REST proxy and Streamable HTTP tool sync)
+      MCP_GATEWAY_URL: http://stoa-gateway:8080
       # Chat Assistant (CAB-286)
       CHAT_ENABLED: "true"
       CHAT_PROVIDER_API_KEY: "${CHAT_PROVIDER_API_KEY:-}"

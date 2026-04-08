@@ -212,10 +212,12 @@ pub async fn handle_sse_post(
     }
 
     // === OAuth 2.1 Auth Challenge (RFC 9728) ===
-    // Public methods that don't require authentication
+    // Public methods that don't require authentication.
+    // tools/list is public to allow unauthenticated discovery (matches /mcp/tools/list behavior).
     let public_methods = [
         "initialize",
         "ping",
+        "tools/list",
         "notifications/initialized",
         "notifications/cancelled",
     ];
@@ -381,6 +383,27 @@ pub async fn handle_sse_post(
         resp.headers_mut().insert("Mcp-Session-Id", header_value);
     }
     resp
+}
+
+/// POST /mcp — MCP Streamable HTTP Transport (spec 2025-11-25)
+///
+/// Single endpoint for all JSON-RPC communication. Session ID is passed
+/// via the `Mcp-Session-Id` header (not query params like SSE legacy).
+/// Delegates to the same JSON-RPC routing as `/mcp/sse` POST.
+pub async fn handle_streamable_http_post(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    // Extract session ID from Mcp-Session-Id header (Streamable HTTP spec)
+    let session_id = headers
+        .get("Mcp-Session-Id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let params = SseQueryParams { session_id };
+
+    handle_sse_post(State(state), headers, Query(params), body).await
 }
 
 /// GET /mcp/sse - Establish SSE connection (legacy/streaming)
@@ -581,6 +604,7 @@ pub async fn process_single_request(
     let public_methods = [
         "initialize",
         "ping",
+        "tools/list",
         "notifications/initialized",
         "notifications/cancelled",
     ];

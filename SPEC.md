@@ -1,126 +1,91 @@
-# Spec: CAB-2008 — Unify Security Posture Data Sources
+# Spec: CAB-2009 — Deploy Observability Stack on OVH Prod
+
+> Council: 8.25/10 Go (ticket), 8.5/10 Go (spec).
 
 ## Problem
 
-The Security Posture dashboard shows all zeros because it reads exclusively from the `security_findings` table, which is only populated via a manual `POST /findings/ingest` endpoint (no scanner exists). Meanwhile, real security data lives in 3 disconnected silos: OpenSearch `audit-*` indices (auth failures, rate limits, policy violations), PostgreSQL `security_events` table (Kafka-fed DORA alerts), and the empty `security_findings` table (scanner push model).
+The observability stack is partially deployed on OVH prod. Tempo runs via ArgoCD but OpenSearch was manually helm-installed (no ArgoCD app, no ISM policies, missing index templates). Data Prepper does not exist. Gateway traces reach Tempo but are not indexed in OpenSearch.
 
 ## Goal
 
-The `/v1/security/{tenant}/score` and `/v1/security/{tenant}/findings` endpoints return real security data by aggregating all 3 sources. The security score reflects actual security posture — not 100 when no scanner data exists. A data freshness indicator warns when no recent data is available.
+All three components fully managed by ArgoCD, with end-to-end trace flow: gateway OTEL -> Tempo -> Data Prepper -> OpenSearch, verified within 60s.
 
-## API Contract
+## Infrastructure Contract
 
-### GET /v1/security/{tenant_id}/score
+No API changes. Pure infra. All configs in git (stoa-infra for Helm/ArgoCD, stoa for verification).
 
-Response adds 1 new field `data_freshness` (backward-compatible):
+### Current Cluster State (verified 2026-04-08)
 
-```json
-{
-  "tenant_id": "string",
-  "score": 72.5,
-  "grade": "C",
-  "findings_summary": { "critical": 0, "high": 2, "medium": 5, "low": 3, "info": 1 },
-  "total_findings": 11,
-  "open_findings": 10,
-  "last_scan_at": "2026-04-08T12:00:00Z",
-  "trend": -2.5,
-  "data_freshness": {
-    "last_data_at": "2026-04-08T11:55:00Z",
-    "status": "fresh",
-    "sources": {
-      "opensearch_audit": { "last_event_at": "2026-04-08T11:55:00Z", "count": 42 },
-      "pg_security_events": { "last_event_at": "2026-04-08T10:30:00Z", "count": 7 },
-      "pg_security_findings": { "last_event_at": null, "count": 0 }
-    }
-  }
-}
+| Component | Pods | ArgoCD App | Health | Missing |
+|-----------|------|------------|--------|---------|
+| Tempo | `stoa-tempo-0` Running 23d | `stoa-tempo` Synced+Healthy | OK | Nothing |
+| OpenSearch | `opensearch-cluster-master-0` Running 21d | **NONE** (manual helm install) | Yellow (expected, single-node) | ArgoCD app, 2 index templates, ISM policies |
+| OpenSearch Dashboards | `opensearch-dashboards-*` Running 21d | **NONE** | OK | ArgoCD app |
+| Data Prepper | Not deployed | **NONE** | N/A | Everything |
+
+**OpenSearch has data**: 600K+ security audit events, `stoa-logs` template exists, OIDC configured, security init completed 54d ago.
+
+### What Needs to Be Done
+
+| Phase | Work | Repo | LOC |
+|-------|------|------|-----|
+| 1 | Tempo — verify only (already done) | N/A | 0 |
+| 2a | OpenSearch ArgoCD Application | stoa-infra | ~40 |
+| 2b | Apply missing index templates (gateway-logs, audit) | stoa-infra | ~20 |
+| 2c | Apply ISM retention policies | stoa-infra | ~30 |
+| 3a | Create Data Prepper Helm chart | stoa-infra | ~150 |
+| 3b | Data Prepper ArgoCD Application | stoa-infra | ~30 |
+| 4 | E2E verification script | stoa | ~250 |
+
+### Data Flow
+
 ```
-
-`data_freshness.status` values: `"fresh"` (data < 1h), `"stale"` (1h-24h), `"no_data"` (> 24h or empty).
-
-### GET /v1/security/{tenant_id}/findings
-
-Response shape unchanged. `findings` list now includes derived findings from audit events and security_events, with `scanner` field set to `"audit"` or `"security_event"` respectively.
-
-```json
-{
-  "findings": [
-    {
-      "id": "derived-audit-abc123",
-      "tenant_id": "oasis",
-      "scan_id": "aggregated",
-      "scanner": "audit",
-      "severity": "high",
-      "rule_id": "AUTH_FAILURE_SPIKE",
-      "rule_name": "Authentication failure spike",
-      "resource_type": "auth",
-      "resource_name": "/v1/auth/token",
-      "description": "12 auth failures in last hour from 3 IPs",
-      "status": "open",
-      "created_at": "2026-04-08T11:55:00Z"
-    }
-  ],
-  "total": 15,
-  "page": 1,
-  "page_size": 50,
-  "has_more": false
-}
+stoa-gateway (OTEL gRPC)
+    -> Tempo (monitoring:4317)
+    -> Data Prepper (monitoring:21890, OTLP -> OpenSearch sink)
+    -> OpenSearch (opensearch:9200, index: trace-analytics-raw)
 ```
-
-### POST /v1/security/{tenant_id}/findings/ingest — UNCHANGED
-
-Push model preserved for future Trivy/Kubescape integration.
 
 ## Acceptance Criteria
 
-- [ ] AC1: When OpenSearch has audit events with severity >= warning for a tenant, `GET /score` includes them in the penalty calculation
-- [ ] AC2: When `security_events` table has events for a tenant, `GET /score` includes them in the penalty calculation
-- [ ] AC3: When all 3 sources are empty for a tenant, score is 0 (not 100) and `data_freshness.status` is `"no_data"`
-- [ ] AC4: `GET /findings` returns derived findings from OpenSearch audit events alongside scanner findings, with `scanner="audit"`
-- [ ] AC5: `GET /findings` returns derived findings from PG `security_events`, with `scanner="security_event"`
-- [ ] AC6: `data_freshness` object is present in score response with per-source breakdown
-- [ ] AC7: `data_freshness.status` is `"fresh"` when most recent event < 1 hour old
-- [ ] AC8: `data_freshness.status` is `"stale"` when most recent event is 1h-24h old
-- [ ] AC9: `POST /findings/ingest` still works — existing push model unbroken
-- [ ] AC10: Pagination and severity/status filters work across all sources in `GET /findings`
+- [ ] AC1: Tempo pods Running + Ready in `monitoring` namespace
+- [ ] AC2: Tempo OTLP gRPC port 4317 exposed on service
+- [ ] AC3: OpenSearch cluster health is Green or Yellow (single-node) in `opensearch` namespace
+- [ ] AC4: OpenSearch security init completed (`.opendistro_security` index exists)
+- [ ] AC5: OpenSearch index templates exist: `stoa-logs`, `gateway-logs`, `audit`
+- [ ] AC6: OpenSearch OIDC configuration present in security config
+- [ ] AC7: Data Prepper pods Running in `monitoring` namespace
+- [ ] AC8: Data Prepper health endpoint responds on :21890
+- [ ] AC9: E2E: trace visible in OpenSearch `trace-analytics-raw` index within 60s of gateway call
+- [ ] AC10: ArgoCD Applications for all 3 components show Synced + Healthy
+- [ ] AC11: All observability resources managed by ArgoCD (zero manual kubectl apply)
+- [ ] AC12: ISM retention policies active (free=7d, pro=90d, enterprise=365d)
 
 ## Edge Cases
 
-| Case | Input | Expected | Priority |
-|------|-------|----------|----------|
-| OpenSearch unavailable | Connection timeout | Graceful degradation: score from PG sources only, `opensearch_audit.count = -1` | Must |
-| No audit events, only scanner findings | Empty OS, populated `security_findings` | Score uses scanner findings only (current behavior preserved) | Must |
-| Severity mapping mismatch | OS `"warning"` vs PG `"medium"` | Normalize: OS `warning` -> `medium`, OS `error` -> `high`, OS `critical` -> `critical` | Must |
-| Duplicate events across sources | Same event in OS + PG `security_events` | Deduplicate by `correlation_id` / `event_id` | Should |
-| Very large audit-* result set | 10K+ events in OS | Cap aggregation query to last 1000 events, use `aggs` for counts | Must |
-| Tenant with no data in any source | New tenant, zero events | Score = 0, grade = "F", `data_freshness.status = "no_data"` | Must |
-| Mixed freshness across sources | OS: 5min ago, PG events: 3 days ago, findings: never | `status = "fresh"` (uses most recent across all sources) | Must |
+| Case | Scenario | Expected | Priority |
+|------|----------|----------|----------|
+| B2-15 memory pressure | 3x15GB nodes, OS 2GB heap | Stay within 4GB total for observability | Must |
+| DP before OS ready | Data Prepper starts, OS not responding | Retry with backoff, no CrashLoop | Must |
+| Kyverno blocks pod | Missing `privileged: false` | Explicit securityContext on all pods | Must |
+| ArgoCD adopts manual install | Existing helm release conflicts | `selfHeal: true` + `prune: true` | Must |
+| Single-node Yellow | No replica shards assignable | Accept Yellow for AC3 (expected) | Must |
 
 ## Out of Scope
 
-- Trivy/Kubescape scanner integration (future ticket)
-- Frontend UI changes (current UI consumes the same response shape)
-- OpenSearch infrastructure changes (indices, mappings, retention)
-- Kafka topic schema changes
-- Real-time streaming aggregation (this is request-time aggregation)
+- Kafka OpenSearch connector, Fluent Bit, custom dashboards, alerting rules
+- Monitoring the observability stack itself
+- Console UI integration with live trace data
 
 ## Security Considerations
 
-- [x] Auth required: `@require_tenant_access` decorator (existing)
-- [x] Tenant isolation: OpenSearch queries MUST include `tenant_id` filter (already the case in `_query_opensearch_security`)
-- [ ] No PII in derived findings: audit events may contain `actor.email` — strip from finding `description`
-- [ ] Rate limiting: aggregation queries are heavier than pure PG — consider caching score for 60s
+- [ ] OpenSearch creds via Vault External Secrets
+- [ ] OIDC via Keycloak realm `stoa`
+- [ ] Data Prepper non-root, `privileged: false`
+- [ ] No public ingress for OpenSearch API
 
 ## Dependencies
 
-- OpenSearch `audit-*` indices populated by `AuditMiddleware` (already running)
-- PostgreSQL `security_events` table populated by Kafka consumer (already running)
-- `_query_opensearch_security()` helper in `routers/audit.py` (reusable query pattern)
-
-## Notes
-
-- New class `SecurityAggregationService` in `services/` composes existing `SecurityScannerService` + OpenSearch client + direct PG queries on `security_events`
-- Severity normalization: OpenSearch uses `info/warning/error/critical`, PG `security_events` uses same. Map to 5-level: `warning` -> `medium`, `error` -> `high`. `critical/info` stay as-is, `low` only from scanner findings.
-- Score formula stays `max(0, 100 - weighted_penalty)` but sums penalties across all 3 sources
-- Key behavioral change: "no data = score 0". Current code returns 100 when `security_findings` is empty. With aggregation, empty across ALL sources yields 0 ("unknown posture" is worse than "clean posture")
-- OpenSearch query pattern: reuse `_query_opensearch_security()` from `routers/audit.py:797` — queries `audit-*` with `tenant_id` + severity filter + sort by `@timestamp`
+- **stoa-infra**: Helm charts, ArgoCD apps (primary work)
+- **Vault**: `stoa/k8s/opensearch` credentials
+- **ESO, Keycloak, ArgoCD**: already deployed on cluster

@@ -287,7 +287,7 @@ class SecurityAggregationService:
             },
         }
 
-        resp = await os_client.search(index="audit-*", body=body)
+        resp = await os_client.search(index="audit*", body=body)
         hits_total = resp.get("hits", {}).get("total", {}).get("value", 0)
         aggs = resp.get("aggregations", {})
 
@@ -324,7 +324,7 @@ class SecurityAggregationService:
             "size": min(_OS_MAX_FINDINGS, 200),
         }
 
-        resp = await os_client.search(index="audit-*", body=body)
+        resp = await os_client.search(index="audit*", body=body)
         findings: list[SecurityFindingResponse] = []
 
         for hit in resp.get("hits", {}).get("hits", []):

@@ -271,18 +271,19 @@ class SecurityAggregationService:
 
         Returns (severity_counts, last_event_timestamp, total_events).
         """
+        # Use .keyword suffix — audit index fields are text, not keyword
         body = {
             "query": {
                 "bool": {
                     "must": [
-                        {"term": {"actor.tenant_id": tenant_id}},
-                        {"terms": {"severity": ["warning", "error", "critical"]}},
+                        {"term": {"tenant_id.keyword": tenant_id}},
+                        {"terms": {"severity.keyword": ["warning", "error", "critical"]}},
                     ]
                 }
             },
             "size": 0,
             "aggs": {
-                "severity_counts": {"terms": {"field": "severity", "size": 10}},
+                "severity_counts": {"terms": {"field": "severity.keyword", "size": 10}},
                 "last_event": {"max": {"field": "@timestamp"}},
             },
         }
@@ -308,15 +309,15 @@ class SecurityAggregationService:
     ) -> list[SecurityFindingResponse]:
         """Query OpenSearch audit-* and convert events to SecurityFindingResponse."""
         must: list[dict] = [
-            {"term": {"actor.tenant_id": tenant_id}},
-            {"terms": {"severity": ["warning", "error", "critical"]}},
+            {"term": {"tenant_id.keyword": tenant_id}},
+            {"terms": {"severity.keyword": ["warning", "error", "critical"]}},
         ]
 
         # Apply severity filter (map back to OS severity)
         if severity:
             reverse_map = {v: k for k, v in _OS_SEVERITY_MAP.items()}
             os_sev = reverse_map.get(severity, severity)
-            must[-1] = {"term": {"severity": os_sev}}
+            must[-1] = {"term": {"severity.keyword": os_sev}}
 
         body = {
             "query": {"bool": {"must": must}},

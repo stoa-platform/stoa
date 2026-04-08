@@ -4,10 +4,14 @@ import type { MCPTool } from '../../types';
 
 interface ToolCardProps {
   tool: MCPTool;
+  source?: 'platform' | 'external';
   onClick?: () => void;
   onSubscribe?: () => void;
   isSubscribed?: boolean;
 }
+
+const sanitizeDescription = (desc: string) =>
+  desc.replace(/https?:\/\/[^\s]*\.svc\.cluster\.local[^\s]*/g, '[internal endpoint]');
 
 // Move static objects outside component to prevent recreation on each render
 const methodColors: Record<string, string> = {
@@ -20,6 +24,7 @@ const methodColors: Record<string, string> = {
 
 export const ToolCard = memo(function ToolCard({
   tool,
+  source,
   onClick,
   onSubscribe,
   isSubscribed,
@@ -43,25 +48,41 @@ export const ToolCard = memo(function ToolCard({
               <h3 className="font-semibold text-neutral-900 dark:text-white text-sm">
                 {tool.name}
               </h3>
-              <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                v{tool.version}
-              </span>
+              {tool.version && (
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                  v{tool.version}
+                </span>
+              )}
             </div>
           </div>
-          <span
-            className={`px-2 py-0.5 rounded text-xs font-medium ${methodColors[tool.method] || 'bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-300'}`}
-          >
-            {tool.method}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {source === 'platform' && (
+              <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 font-medium">
+                Platform
+              </span>
+            )}
+            {source === 'external' && (
+              <span className="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 font-medium">
+                External
+              </span>
+            )}
+            {tool.method && (
+              <span
+                className={`px-2 py-0.5 rounded text-xs font-medium ${methodColors[tool.method] || 'bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-300'}`}
+              >
+                {tool.method}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Description */}
         <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4 line-clamp-2">
-          {tool.description}
+          {sanitizeDescription(tool.description)}
         </p>
 
         {/* Tags */}
-        {tool.tags.length > 0 && (
+        {tool.tags && tool.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4">
             {tool.tags.slice(0, 3).map((tag) => (
               <span

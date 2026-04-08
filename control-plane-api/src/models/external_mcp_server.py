@@ -88,6 +88,7 @@ class ExternalMCPServer(Base):
 
     # Status
     enabled = Column(Boolean, nullable=False, default=True)
+    is_platform = Column(Boolean, nullable=False, default=False, server_default="false")
     health_status = Column(
         SQLEnum(ExternalMCPHealthStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,

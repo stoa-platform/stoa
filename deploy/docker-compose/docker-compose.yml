@@ -23,6 +23,7 @@
 # Optional profiles:
 #   --profile federation:      + openldap (1389) + federation-gateway (9000)
 #   --profile monitoring-oidc: + oauth2-proxy (4180) — requires OIDC setup
+#   --profile seed:            + stoa-seeder (one-shot, SEED_PROFILE=dev|staging|prod)
 #
 # Total RAM: ~3.3GB base (+ ~256MB with federation profile)
 # =============================================================================
@@ -203,6 +204,7 @@ services:
       # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100
+      LOKI_SERVICE_LABEL: service
       TEMPO_INTERNAL_URL: http://tempo:3200
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
@@ -224,6 +226,8 @@ services:
       ENABLE_SNAPSHOT_CONSUMER: "false"
       # Gateway registration (ADR-028) — shared key for local dev
       GATEWAY_API_KEYS: "${GATEWAY_API_KEY:-local-dev-key}"
+      # MCP Gateway URL (base URL — used for REST proxy and Streamable HTTP tool sync)
+      MCP_GATEWAY_URL: http://stoa-gateway:8080
       # Chat Assistant (CAB-286)
       CHAT_ENABLED: "true"
       CHAT_PROVIDER_API_KEY: "${CHAT_PROVIDER_API_KEY:-}"
@@ -1031,6 +1035,37 @@ services:
       retries: 3
       start_period: 5s
     restart: unless-stopped
+
+  # ==========================================================================
+  # Database Seeder (one-shot, profile-gated)
+  # ==========================================================================
+  # Usage:
+  #   SEED_PROFILE=dev docker compose --profile seed up stoa-seeder
+  #   SEED_PROFILE=staging docker compose --profile seed up stoa-seeder
+  #   SEED_PROFILE=prod docker compose --profile seed up stoa-seeder
+  #
+  # Or via Makefile:
+  #   make seed-dev | seed-staging | seed-prod | seed-check
+  # ==========================================================================
+  stoa-seeder:
+    build:
+      context: ../../control-plane-api
+      dockerfile: Dockerfile
+    image: stoa-quickstart-control-plane-api
+    container_name: stoa-seeder
+    entrypoint: ["python", "-m", "scripts.seeder"]
+    command: ["--profile", "${SEED_PROFILE:-dev}"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:-stoa-quickstart-2045}@postgres:5432/${POSTGRES_DB:-stoa_platform}
+      SEED_PROFILE: ${SEED_PROFILE:-dev}
+    depends_on:
+      control-plane-api:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    profiles:
+      - seed
+    restart: "no"
 
 # =============================================================================
 # Networks

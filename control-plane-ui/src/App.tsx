@@ -124,11 +124,10 @@ const PlatformMetrics = lazy(() =>
 // CAB-1108: Embedded iframe pages for unified STOA experience (retained for deep-link fallback)
 const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
 const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
-const RequestExplorer = lazy(() =>
-  import('./pages/RequestExplorer').then((m) => ({ default: m.RequestExplorerDashboard }))
+// CAB-2004: LogExplorer replaces RequestExplorerDashboard for /logs
+const LogExplorerPage = lazy(() =>
+  import('./pages/RequestExplorer').then((m) => ({ default: m.LogExplorer }))
 );
-// CAB-1114: OpenSearch Dashboards for API trace logs (retained for deep-link fallback)
-const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
 // CAB-1764: Skeleton pages (ShadowDiscovery, TokenOptimizer, Policies, Workflows) removed from nav
 // Routes redirect to home. Pages retained in codebase for reintroduction when implemented.
@@ -356,9 +355,8 @@ function ProtectedRoutes() {
                 <Route path="/observability/grafana" element={<GrafanaEmbed />} />
                 <Route path="/observability/benchmarks" element={<GrafanaEmbed />} />
                 <Route path="/identity" element={<IdentityEmbed />} />
-                {/* Native request explorer (replace OpenSearch iframe) */}
-                <Route path="/logs" element={<RequestExplorer />} />
-                <Route path="/logs/opensearch" element={<LogsEmbed />} />
+                {/* CAB-2004: Gateway Logs (Loki-backed, replaces Prometheus metrics) */}
+                <Route path="/logs" element={<LogExplorerPage />} />
                 {/* CAB-1764: Skeleton pages removed from nav, redirected */}
                 <Route path="/shadow-discovery" element={<Navigate to="/" replace />} />
                 <Route path="/token-optimizer" element={<Navigate to="/" replace />} />

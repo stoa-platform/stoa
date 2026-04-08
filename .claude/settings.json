@@ -89,6 +89,33 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-instance-capture.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-recommend-stale-check.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-agent-metrics.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Bash|Read|Grep|Glob|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-context-monitor.sh\""
+          }
+        ]
       }
     ],
     "PermissionRequest": [

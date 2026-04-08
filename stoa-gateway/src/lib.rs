@@ -68,7 +68,7 @@ use mcp::{
         mcp_completion_complete, mcp_prompts_get, mcp_prompts_list, mcp_resources_list,
         mcp_resources_read, mcp_resources_templates_list,
     },
-    sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
+    sse::{handle_sse_delete, handle_sse_get, handle_sse_post, handle_streamable_http_post},
     ws::handle_ws_upgrade,
 };
 use proxy::{api_proxy_handler, dynamic_proxy, list_api_proxy_backends, llm_proxy_handler};
@@ -319,7 +319,7 @@ pub fn build_router(state: AppState) -> Router {
                         .delete(oauth::proxy::register_delete_proxy),
                 )
                 // MCP Discovery
-                .route("/mcp", get(mcp_discovery))
+                .route("/mcp", get(mcp_discovery).post(handle_streamable_http_post))
                 .route("/mcp/capabilities", get(mcp_capabilities))
                 .route("/mcp/health", get(mcp_health))
                 // MCP Tools (JSON-RPC style)

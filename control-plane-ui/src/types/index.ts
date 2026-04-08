@@ -436,9 +436,10 @@ export interface MCPTool {
   apiId?: string;
   tenantId?: string;
   endpoint?: string;
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  tags: string[];
-  version: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  tags?: string[];
+  version?: string;
+  annotations?: Record<string, unknown>;
 }
 
 export interface ListToolsResponse {
@@ -777,6 +778,7 @@ export interface ExternalMCPServer {
   auth_type: ExternalMCPAuthType;
   tool_prefix?: string;
   enabled: boolean;
+  is_platform?: boolean;
   health_status: ExternalMCPHealthStatus;
   last_health_check?: string;
   last_sync_at?: string;

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Seed a demo tenant with sample APIs, MCP servers, tools, consumers, and subscriptions.
+"""DEPRECATED: Use the unified seeder instead:
+    cd control-plane-api && python -m scripts.seeder --profile dev
+    # Or via Docker: make seed-dev
+
+Seed a demo tenant with sample APIs, MCP servers, tools, consumers, and subscriptions.
 
 Creates a fully-functional demo environment for prospects and community members.
 Supports both fresh seeding and idempotent re-runs (skips existing data).

@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir
 # Copy source code
 COPY src/ ./src/
 
+# Copy seeder scripts
+COPY scripts/ ./scripts/
+
 # Copy alembic configuration and migrations
 COPY alembic.ini ./
 COPY alembic/ ./alembic/

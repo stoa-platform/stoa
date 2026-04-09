@@ -7,6 +7,7 @@
 #   04-Security/      Security events, audit trails
 #   05-Tenant/        Multi-tenant views, analytics
 #   06-Business/      Business metrics, adoption
+#   07-APIM/          API Management overview, adapters, quotas
 #
 # Dashboard → Folder Mapping:
 #   incident-response.json       → 02-Operations
@@ -16,6 +17,7 @@
 #   tenant-analytics.json        → 05-Tenant
 #   business-analytics.json      → 06-Business
 #   demo-overview.json           → 01-Overview
+#   apim-overview.json           → 07-APIM
 #
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -87,6 +89,18 @@ configMapGenerator:
         grafana_folder: "06-Business"
     files:
       - business-analytics.json
+
+  # 07-APIM folder
+  - name: grafana-dashboard-apim-overview
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "07-APIM"
+    files:
+      - apim-overview.json
 
   # 01-Overview folder
   - name: grafana-dashboard-demo-overview

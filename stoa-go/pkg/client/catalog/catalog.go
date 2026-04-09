@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/stoa-platform/stoa-go/pkg/types"
 )
@@ -106,6 +108,102 @@ func (s *Service) Delete(name string) error {
 	}
 
 	return nil
+}
+
+// TriggerSync triggers a catalog sync. If tenantID is non-empty, scopes to that tenant.
+func (s *Service) TriggerSync(tenantID string) (*types.SyncTriggerResponse, error) {
+	path := "/v1/admin/catalog/sync"
+	if tenantID != "" {
+		path = fmt.Sprintf("/v1/admin/catalog/sync/tenant/%s", url.PathEscape(tenantID))
+	}
+
+	resp, err := s.doer.Do("POST", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.SyncTriggerResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &result, nil
+}
+
+// SyncStatus returns the status of the last sync operation.
+func (s *Service) SyncStatus() (*types.SyncStatusResponse, error) {
+	resp, err := s.doer.Do("GET", "/v1/admin/catalog/sync/status", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil // no sync ever run
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.SyncStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &result, nil
+}
+
+// Stats returns catalog statistics.
+func (s *Service) Stats() (*types.CatalogStatsResponse, error) {
+	resp, err := s.doer.Do("GET", "/v1/admin/catalog/stats", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.CatalogStatsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &result, nil
+}
+
+// ListAllAPIs returns all APIs across tenants (admin view).
+func (s *Service) ListAllAPIs(tenantID string, page, pageSize int) (*types.AdminAPIPaginatedResponse, error) {
+	params := url.Values{}
+	params.Set("page", strconv.Itoa(page))
+	params.Set("page_size", strconv.Itoa(pageSize))
+	if tenantID != "" {
+		params.Set("tenant_id", tenantID)
+	}
+
+	resp, err := s.doer.Do("GET", "/v1/admin/catalog/apis?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.AdminAPIPaginatedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &result, nil
 }
 
 // Validate performs a dry-run validation of an API resource.

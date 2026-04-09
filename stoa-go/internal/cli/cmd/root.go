@@ -8,7 +8,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/apply"
+	auditcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/audit"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/auth"
+	catalogcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/catalog"
 	bridgecmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/bridge"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/completion"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/config"
@@ -65,6 +67,8 @@ func Execute() error {
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&AdminMode, "admin", false, "Use service account token instead of user OIDC token")
 
+	rootCmd.AddCommand(catalogcmd.NewCatalogCmd())
+	rootCmd.AddCommand(auditcmd.NewAuditCmd())
 	rootCmd.AddCommand(config.NewConfigCmd())
 	rootCmd.AddCommand(auth.NewAuthCmd())
 	rootCmd.AddCommand(get.NewGetCmd())

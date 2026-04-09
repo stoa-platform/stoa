@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AlertTriangle, BarChart3 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface GrafanaDashboardProps {
   url: string;
@@ -14,6 +15,23 @@ export function GrafanaDashboard({
 }: GrafanaDashboardProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const { accessToken, user } = useAuth();
+
+  // CAB-2032: Inject auth token + tenant scope into Grafana URL
+  const iframeUrl = useMemo(() => {
+    if (!url) return '';
+    const params = new URLSearchParams();
+    if (accessToken) {
+      params.set('auth_token', accessToken);
+    }
+    if (user?.tenant_id) {
+      params.set('var-tenant_id', user.tenant_id);
+    }
+    const paramStr = params.toString();
+    if (!paramStr) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${paramStr}`;
+  }, [url, accessToken, user?.tenant_id]);
 
   if (!url) {
     return (
@@ -50,7 +68,7 @@ export function GrafanaDashboard({
         <div className="h-96 rounded-lg bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
       )}
       <iframe
-        src={url}
+        src={iframeUrl}
         title={title}
         className={`w-full h-96 rounded-lg border border-neutral-200 dark:border-neutral-700 ${isLoading ? 'hidden' : ''}`}
         sandbox="allow-scripts allow-same-origin"

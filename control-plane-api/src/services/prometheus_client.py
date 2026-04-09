@@ -159,7 +159,9 @@ class PrometheusClient:
         labels = self._build_labels(subscription_id, user_id, tenant_id)
         if labels:
             labels += ","
-        query = f'sum(increase(stoa_mcp_tools_calls_total{{{labels}status=~"error|timeout"}}[{time_range}])) or vector(0)'
+        query = (
+            f'sum(increase(stoa_mcp_tools_calls_total{{{labels}status=~"error|timeout"}}[{time_range}])) or vector(0)'
+        )
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -372,7 +374,7 @@ class PrometheusClient:
         if subscription_id:
             labels.append(f'subscription_id="{subscription_id}"')
         if tenant_id:
-            labels.append(f'tenant=~"{tenant_id}|default"')
+            labels.append(f'tenant="{tenant_id}"')
         return ",".join(labels)
 
     def _extract_scalar(self, result: dict | None, default: int = 0) -> int:

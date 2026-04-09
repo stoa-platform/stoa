@@ -19,7 +19,7 @@ export function GrafanaEmbed() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [key, setKey] = useState(0);
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
 
   const targetUrl = searchParams.get('url');
   const baseIframeUrl =
@@ -29,11 +29,19 @@ export function GrafanaEmbed() {
   const serviceLabel = isPrometheus ? 'Prometheus' : 'Grafana';
 
   // Append Keycloak JWT for Grafana [auth.jwt] url_login (not for Prometheus)
+  // CAB-2032: Inject tenant_id as Grafana variable to scope dashboards
   const iframeUrl = useMemo(() => {
     if (!accessToken || isPrometheus) return baseIframeUrl;
+    const params = new URLSearchParams();
+    params.set('auth_token', accessToken);
+    // Scope dashboards by tenant (cpi-admin sees all — no filter)
+    const isCpiAdmin = user?.roles?.includes('cpi-admin');
+    if (user?.tenant_id && !isCpiAdmin) {
+      params.set('var-tenant_id', user.tenant_id);
+    }
     const separator = baseIframeUrl.includes('?') ? '&' : '?';
-    return `${baseIframeUrl}${separator}auth_token=${encodeURIComponent(accessToken)}`;
-  }, [baseIframeUrl, accessToken, isPrometheus]);
+    return `${baseIframeUrl}${separator}${params.toString()}`;
+  }, [baseIframeUrl, accessToken, isPrometheus, user]);
 
   const { status: serviceStatus, retry: retryHealth } = useServiceHealth(baseIframeUrl);
 

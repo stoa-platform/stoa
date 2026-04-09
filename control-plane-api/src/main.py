@@ -75,6 +75,7 @@ from .routers import (
     mcp_gitops,
     mcp_policy_proxy,
     mcp_proxy,
+    metrics_proxy,
     monitoring,
     onboarding,
     onboarding_admin,
@@ -742,6 +743,7 @@ app.include_router(mcp_policy_proxy.router)
 
 # API Monitoring
 app.include_router(monitoring.router)
+app.include_router(metrics_proxy.router)
 
 # Onboarding (Zero-Touch Trial - CAB-1325)
 app.include_router(onboarding.router)

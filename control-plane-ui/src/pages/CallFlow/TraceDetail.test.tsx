@@ -139,11 +139,12 @@ describe('TraceDetail', () => {
       mockGetTransactionDetail.mockRejectedValue(new Error('network error'));
     });
 
-    it('shows trace not found', async () => {
+    it('shows trace not found with guidance', async () => {
       renderWithRoute('test-trace-001');
       await waitFor(() => {
-        expect(screen.getByText('Trace not found')).toBeInTheDocument();
+        expect(screen.getByText(/trace not found/i)).toBeInTheDocument();
       });
+      expect(screen.getByRole('button', { name: /back to call flow/i })).toBeInTheDocument();
     });
   });
 });

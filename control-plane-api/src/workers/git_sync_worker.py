@@ -13,16 +13,40 @@ import asyncio
 import json
 import logging
 import threading
+import time
 from typing import Any
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
+from prometheus_client import Counter, Histogram
 
 from ..config import settings
 from ..services.git_provider import get_git_provider
 from ..services.kafka_service import Topics
 
 logger = logging.getLogger(__name__)
+
+# ── Prometheus metrics (CAB-2026) ─────────────────────────────────────
+
+CATALOG_PREFIX = "catalog"
+
+GIT_SYNC_TOTAL = Counter(
+    f"{CATALOG_PREFIX}_git_sync_total",
+    "Git sync operations (commits to stoa-catalog)",
+    ["status", "operation"],
+)
+
+GIT_SYNC_DURATION_SECONDS = Histogram(
+    f"{CATALOG_PREFIX}_git_sync_duration_seconds",
+    "Time between Kafka event received and Git commit confirmed",
+    ["operation"],
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+)
+
+GIT_SYNC_RETRIES_TOTAL = Counter(
+    f"{CATALOG_PREFIX}_git_sync_retries_total",
+    "Number of Git sync retry attempts (backoff)",
+)
 
 CONSUMER_GROUP = "git-sync-worker"
 DEFAULT_RETRY_DELAYS = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s
@@ -184,9 +208,13 @@ class GitSyncWorker:
             logger.debug("Ignoring unknown event type: %s", event_type)
             return
 
+        # Map event_type to operation label
+        operation = event_type.removeprefix("api-")  # create, update, delete
+
         # Retry loop with exponential backoff
         last_error = None
         max_attempts = 1 + len(self._retry_delays)
+        start_time = time.monotonic()
 
         for attempt in range(max_attempts):
             try:
@@ -197,16 +225,23 @@ class GitSyncWorker:
                 elif event_type == "api-deleted":
                     await self._handle_delete(tenant_id, api_name)
 
+                # Record success metrics
+                duration = time.monotonic() - start_time
+                GIT_SYNC_TOTAL.labels(status="success", operation=operation).inc()
+                GIT_SYNC_DURATION_SECONDS.labels(operation=operation).observe(duration)
+
                 logger.info(
-                    "Git sync %s: tenant=%s api=%s",
+                    "Git sync %s: tenant=%s api=%s duration=%.2fs",
                     event_type,
                     tenant_id,
                     api_name,
+                    duration,
                 )
                 return  # Success
 
             except ValueError as e:
                 # Idempotency: "already exists" or "not found" — not retriable
+                GIT_SYNC_TOTAL.labels(status="success", operation=operation).inc()
                 logger.info("Git sync %s skipped (idempotent): %s", event_type, e)
                 return
 
@@ -214,6 +249,7 @@ class GitSyncWorker:
                 last_error = e
                 if attempt < len(self._retry_delays):
                     delay = self._retry_delays[attempt]
+                    GIT_SYNC_RETRIES_TOTAL.inc()
                     logger.warning(
                         "Git sync %s failed (attempt %d/%d), retrying in %ds: %s",
                         event_type,
@@ -223,6 +259,11 @@ class GitSyncWorker:
                         e,
                     )
                     await asyncio.sleep(delay)
+
+        # All retries exhausted — record error
+        duration = time.monotonic() - start_time
+        GIT_SYNC_TOTAL.labels(status="error", operation=operation).inc()
+        GIT_SYNC_DURATION_SECONDS.labels(operation=operation).observe(duration)
 
         logger.error(
             "Git sync %s failed after %d attempts: tenant=%s api=%s error=%s",

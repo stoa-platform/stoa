@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/stoa-platform/stoa-go/pkg/client/audit"
 	"github.com/stoa-platform/stoa-go/pkg/client/catalog"
 	"github.com/stoa-platform/stoa-go/pkg/config"
 	"github.com/stoa-platform/stoa-go/pkg/keyring"
@@ -161,6 +162,11 @@ func (c *Client) Do(method, path string, body any) (*http.Response, error) {
 // Catalog returns a catalog sub-client for API operations.
 func (c *Client) Catalog() *catalog.Service {
 	return catalog.New(c)
+}
+
+// Audit returns an audit sub-client for audit log operations.
+func (c *Client) Audit() *audit.Service {
+	return audit.New(c)
 }
 
 // ListAPIs fetches all APIs. Delegates to catalog.Service.

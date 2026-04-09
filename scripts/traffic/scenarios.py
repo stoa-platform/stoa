@@ -36,7 +36,7 @@ class ApiTarget:
 
 ECHO_FALLBACK = ApiTarget(
     name="echo-fallback",
-    url_path="/apis/echo-fallback/",
+    url_path="/apis/demo/echo-fallback/",
     auth_type="none",
     mode="edge-mcp",
     expected_latency_ms=2,
@@ -45,7 +45,7 @@ ECHO_FALLBACK = ApiTarget(
 
 EXCHANGE_RATE = ApiTarget(
     name="exchange-rate",
-    url_path="/apis/exchange-rate/v4/latest/EUR",
+    url_path="/apis/demo/exchange-rate/v4/latest/EUR",
     auth_type="none",
     mode="edge-mcp",
     expected_latency_ms=100,
@@ -54,7 +54,7 @@ EXCHANGE_RATE = ApiTarget(
 
 ECB_FINANCIAL = ApiTarget(
     name="ecb-financial-data",
-    url_path="/apis/ecb-financial-data/api/customers",
+    url_path="/apis/demo/ecb-financial-data/api/customers",
     auth_type="bearer",
     mode="sidecar",
     expected_latency_ms=200,
@@ -63,7 +63,7 @@ ECB_FINANCIAL = ApiTarget(
 
 EUROSTAT = ApiTarget(
     name="eurostat",
-    url_path="/apis/eurostat/nama_10_gdp?geo=FR&geo=DE&unit=CLV10_MEUR&na_item=B1GQ&time=2024&format=JSON&lang=en",
+    url_path="/apis/demo/eurostat/nama_10_gdp?geo=FR&geo=DE&unit=CLV10_MEUR&na_item=B1GQ&time=2024&format=JSON&lang=en",
     auth_type="none",
     mode="connect",
     expected_latency_ms=300,
@@ -74,7 +74,7 @@ EUROSTAT = ApiTarget(
 
 OPENWEATHERMAP = ApiTarget(
     name="openweathermap",
-    url_path="/apis/openweathermap/weather",
+    url_path="/apis/demo/openweathermap/weather",
     auth_type="api_key_query",
     auth_param="appid",
     auth_key_env="OPENWEATHERMAP_API_KEY",
@@ -86,7 +86,7 @@ OPENWEATHERMAP = ApiTarget(
 
 NEWSAPI = ApiTarget(
     name="newsapi",
-    url_path="/apis/newsapi/top-headlines",
+    url_path="/apis/demo/newsapi/top-headlines",
     auth_type="api_key_header",
     auth_param="X-Api-Key",
     auth_key_env="NEWSAPI_KEY",
@@ -98,7 +98,7 @@ NEWSAPI = ApiTarget(
 
 ALPHAVANTAGE = ApiTarget(
     name="alphavantage",
-    url_path="/apis/alphavantage/api/orders",
+    url_path="/apis/demo/alphavantage/api/orders",
     auth_type="api_key_header",
     auth_param="X-API-Key",
     auth_key_env="ALPHAVANTAGE_KEY",
@@ -111,7 +111,7 @@ ALPHAVANTAGE = ApiTarget(
 
 ECHO_OAUTH2 = ApiTarget(
     name="echo-oauth2",
-    url_path="/apis/echo-oauth2/",
+    url_path="/apis/demo/echo-oauth2/",
     auth_type="oauth2_cc",
     mode="edge-mcp",
     expected_latency_ms=15,
@@ -121,7 +121,7 @@ ECHO_OAUTH2 = ApiTarget(
 
 ECHO_BEARER = ApiTarget(
     name="echo-bearer",
-    url_path="/apis/echo-bearer/api/v1/accounts",
+    url_path="/apis/demo/echo-bearer/api/v1/accounts",
     auth_type="bearer",
     mode="connect",
     expected_latency_ms=10,
@@ -133,7 +133,7 @@ ECHO_BEARER = ApiTarget(
 
 FAPI_ACCOUNTS = ApiTarget(
     name="fapi-accounts",
-    url_path="/apis/fapi-accounts/api/v1/accounts",
+    url_path="/apis/demo/fapi-accounts/api/v1/accounts",
     auth_type="fapi_baseline",
     mode="edge-mcp",
     expected_latency_ms=20,
@@ -143,7 +143,7 @@ FAPI_ACCOUNTS = ApiTarget(
 
 FAPI_TRANSFERS = ApiTarget(
     name="fapi-transfers",
-    url_path="/apis/fapi-transfers/api/v1/transfers",
+    url_path="/apis/demo/fapi-transfers/api/v1/transfers",
     auth_type="fapi_advanced",
     mode="edge-mcp",
     expected_latency_ms=25,

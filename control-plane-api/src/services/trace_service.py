@@ -154,7 +154,8 @@ class TraceService:
 
         # Total count
         total_result = await self.session.execute(
-            select(func.count(PipelineTraceDB.id)).where(*base_filters) if base_filters
+            select(func.count(PipelineTraceDB.id)).where(*base_filters)
+            if base_filters
             else select(func.count(PipelineTraceDB.id))
         )
         total = total_result.scalar() or 0
@@ -171,17 +172,13 @@ class TraceService:
         by_status = {}
         for status in TraceStatusDB:
             count_result = await self.session.execute(
-                select(func.count(PipelineTraceDB.id)).where(
-                    PipelineTraceDB.status == status, *base_filters
-                )
+                select(func.count(PipelineTraceDB.id)).where(PipelineTraceDB.status == status, *base_filters)
             )
             by_status[status.value] = count_result.scalar() or 0
 
         # Average duration
         avg_filters = [PipelineTraceDB.total_duration_ms.isnot(None), *base_filters]
-        avg_result = await self.session.execute(
-            select(func.avg(PipelineTraceDB.total_duration_ms)).where(*avg_filters)
-        )
+        avg_result = await self.session.execute(select(func.avg(PipelineTraceDB.total_duration_ms)).where(*avg_filters))
         avg_duration = avg_result.scalar() or 0
 
         # Success rate

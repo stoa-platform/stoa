@@ -37,18 +37,18 @@ def _inject_tenant_filter(promql: str, tenant_id: str) -> str:
         name = match.group(1)
         existing = match.group(2).strip()
         if existing:
-            return f'{name}{{{existing}, {tenant_filter}}}'
-        return f'{name}{{{tenant_filter}}}'
+            return f"{name}{{{existing}, {tenant_filter}}}"
+        return f"{name}{{{tenant_filter}}}"
 
     # Match metric_name{existing_labels} or metric_name{}
-    result = re.sub(r'(\b[a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}', _add_to_selector, promql)
+    result = re.sub(r"(\b[a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}", _add_to_selector, promql)
 
     # If no braces were found, try to add to bare metric names in common positions
-    if result == promql and '{' not in promql:
+    if result == promql and "{" not in promql:
         # Simple case: bare metric like "up" or "stoa_mcp_tools_calls_total"
         result = re.sub(
-            r'(\b[a-zA-Z_:][a-zA-Z0-9_:]*\b)(?!\s*\()',
-            rf'\1{{{tenant_filter}}}',
+            r"(\b[a-zA-Z_:][a-zA-Z0-9_:]*\b)(?!\s*\()",
+            rf"\1{{{tenant_filter}}}",
             promql,
             count=1,
         )

@@ -595,6 +595,68 @@ settings:
             logger.error(f"Failed to delete API: {e}")
             raise
 
+    # ============================================================
+    # GitProvider ABC write methods (CAB-2011)
+    # ============================================================
+
+    async def create_file(
+        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> dict[str, Any]:
+        """Create a new file in GitLab."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id) if project_id else self._project
+        try:
+            project.files.create(
+                {"file_path": file_path, "branch": branch, "content": content, "commit_message": commit_message}
+            )
+            return {"sha": "", "url": ""}
+        except gitlab.exceptions.GitlabCreateError as e:
+            if "already exists" in str(e).lower():
+                raise ValueError(f"File already exists: {file_path}") from e
+            raise
+
+    async def update_file(
+        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> dict[str, Any]:
+        """Update an existing file in GitLab."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id) if project_id else self._project
+        try:
+            f = project.files.get(file_path, ref=branch)
+            f.content = content
+            f.save(branch=branch, commit_message=commit_message)
+            return {"sha": "", "url": ""}
+        except gitlab.exceptions.GitlabGetError as e:
+            raise FileNotFoundError(f"{file_path} not found") from e
+
+    async def delete_file(self, project_id: str, file_path: str, commit_message: str, branch: str = "main") -> bool:
+        """Delete a file from GitLab."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id) if project_id else self._project
+        try:
+            f = project.files.get(file_path, ref=branch)
+            f.delete(branch=branch, commit_message=commit_message)
+            return True
+        except gitlab.exceptions.GitlabGetError as e:
+            raise FileNotFoundError(f"{file_path} not found") from e
+
+    async def batch_commit(
+        self,
+        project_id: str,
+        actions: list[dict[str, str]],
+        commit_message: str,
+        branch: str = "main",
+    ) -> dict[str, Any]:
+        """Atomic multi-file commit via GitLab commits API."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        project = self._gl.projects.get(project_id) if project_id else self._project
+        project.commits.create({"branch": branch, "commit_message": commit_message, "actions": actions})
+        return {"sha": "", "url": ""}
+
     # Git operations
     async def get_file(self, path: str, ref: str = "main") -> str | None:
         """Get file content from GitLab"""

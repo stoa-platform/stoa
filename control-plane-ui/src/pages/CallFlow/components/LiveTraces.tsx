@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 
 export interface TraceSpan {
   name: string;
@@ -123,8 +123,11 @@ export function LiveTraces({
 
   if (traces.length === 0) {
     return (
-      <div className="h-[200px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-        {emptyMessage || 'No recent traces'}
+      <div className="h-[200px] flex flex-col items-center justify-center gap-3 text-center">
+        <Inbox className="h-8 w-8 text-neutral-300 dark:text-neutral-600" />
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-md">
+          {emptyMessage || 'No recent traces'}
+        </p>
       </div>
     );
   }

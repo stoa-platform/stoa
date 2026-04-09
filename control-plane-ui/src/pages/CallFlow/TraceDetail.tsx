@@ -465,8 +465,18 @@ export function TraceDetail() {
 
   if (!detail) {
     return (
-      <div className="text-center py-20 text-neutral-400 dark:text-neutral-500">
-        Trace not found
+      <div className="text-center py-20">
+        <AlertTriangle className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          Trace not found — it may have expired or the trace ID is invalid
+        </p>
+        <button
+          onClick={() => navigate('/call-flow')}
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Call Flow
+        </button>
       </div>
     );
   }

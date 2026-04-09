@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 // =============================================================================
 // Errors
@@ -278,14 +278,17 @@ impl OidcProvider {
     }
 
     /// Fetch OIDC configuration (with caching).
+    #[instrument(name = "auth.oidc.discovery", skip_all, fields(otel.kind = "client", cache_hit))]
     pub async fn get_config(&self) -> Result<Arc<OidcConfig>, OidcError> {
         let cache_key = self.config.issuer_url.clone();
 
         // Try cache first
         if let Some(config) = self.oidc_config_cache.get(&cache_key).await {
+            tracing::Span::current().record("cache_hit", true);
             debug!("OIDC config cache hit");
             return Ok(config);
         }
+        tracing::Span::current().record("cache_hit", false);
 
         // Fetch from discovery endpoint.
         // Use internal URL when configured (hairpin NAT bypass on OVH MKS).
@@ -343,6 +346,7 @@ impl OidcProvider {
     }
 
     /// Fetch JWKS (with caching).
+    #[instrument(name = "auth.oidc.jwks_fetch", skip_all, fields(otel.kind = "client", cache_hit))]
     pub async fn get_jwks(&self) -> Result<Arc<Jwks>, OidcError> {
         // First, get the OIDC config to find JWKS URI
         let oidc_config = self.get_config().await?;
@@ -356,9 +360,11 @@ impl OidcProvider {
 
         // Try cache first
         if let Some(jwks) = self.jwks_cache.get(&jwks_uri).await {
+            tracing::Span::current().record("cache_hit", true);
             debug!("JWKS cache hit");
             return Ok(jwks);
         }
+        tracing::Span::current().record("cache_hit", false);
 
         info!(url = %jwks_uri, "Fetching JWKS");
 

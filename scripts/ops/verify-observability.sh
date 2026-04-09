@@ -212,14 +212,15 @@ echo ""
 echo "--- Phase 4: End-to-End ---"
 
 # ── AC9: E2E trace flow ──
-TRACE_COUNT=$(os_curl "https://localhost:19200/trace-analytics-raw*/_count" | jq -r '.count' 2>/dev/null || echo "")
+# Data Prepper creates otel-v1-apm-span-* indices (default trace analytics template)
+TRACE_COUNT=$(os_curl "https://localhost:19200/otel-v1-apm-span*/_count" | jq -r '.count' 2>/dev/null || echo "")
 
 if [[ -z "$TRACE_COUNT" || "$TRACE_COUNT" == "null" ]]; then
-  check_fail "AC9" "E2E trace flow" "trace-analytics-raw index not found"
+  check_fail "AC9" "E2E trace flow" "No trace index found (otel-v1-apm-span*)"
 elif [[ "$TRACE_COUNT" -gt 0 ]] 2>/dev/null; then
-  check_pass "AC9" "E2E trace flow ($TRACE_COUNT traces in trace-analytics-raw)"
+  check_pass "AC9" "E2E trace flow ($TRACE_COUNT spans in otel-v1-apm-span)"
 else
-  check_fail "AC9" "E2E trace flow" "trace-analytics-raw exists but has 0 documents"
+  check_fail "AC9" "E2E trace flow" "Trace index exists but has 0 documents"
 fi
 
 # ─��� AC10: ArgoCD Applications ──

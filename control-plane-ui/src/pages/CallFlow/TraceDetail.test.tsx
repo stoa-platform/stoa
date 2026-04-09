@@ -144,7 +144,7 @@ describe('TraceDetail', () => {
       await waitFor(() => {
         expect(screen.getByText(/trace not found/i)).toBeInTheDocument();
       });
-      expect(screen.getByText(/back to call flow/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to call flow/i })).toBeInTheDocument();
     });
   });
 });

@@ -35,11 +35,13 @@ describe('regression/CAB-2034', () => {
     vi.clearAllMocks();
   });
 
-  it('shows "Trace not found" instead of demo data when API fails', async () => {
+  it('shows "Trace not found" with guidance instead of demo data when API fails', async () => {
     renderTraceDetail('test-trace-001');
     await waitFor(() => {
-      expect(screen.getByText('Trace not found')).toBeInTheDocument();
+      expect(screen.getByText(/trace not found/i)).toBeInTheDocument();
     });
+    // Must show navigation back to dashboard
+    expect(screen.getByRole('button', { name: /back to call flow/i })).toBeInTheDocument();
     // Must NOT contain any demo data markers
     expect(screen.queryByText('customer-api')).not.toBeInTheDocument();
     expect(screen.queryByText('tenant-acme')).not.toBeInTheDocument();

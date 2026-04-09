@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::auth::oidc::{Jwk, Jwks};
 
@@ -152,11 +152,14 @@ impl ClientJwksCache {
     }
 
     /// Fetch a client's JWKS from their registered URI (with caching).
+    #[instrument(name = "auth.client.jwks_fetch", skip_all, fields(otel.kind = "client", jwks_uri = %jwks_uri, cache_hit))]
     pub async fn get_jwks(&self, jwks_uri: &str) -> Result<Arc<Jwks>, ClientAuthError> {
         if let Some(jwks) = self.cache.get(jwks_uri).await {
+            tracing::Span::current().record("cache_hit", true);
             debug!(uri = %jwks_uri, "Client JWKS cache hit");
             return Ok(jwks);
         }
+        tracing::Span::current().record("cache_hit", false);
 
         info!(uri = %jwks_uri, "Fetching client JWKS");
 

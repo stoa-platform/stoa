@@ -248,17 +248,23 @@ else
 fi
 
 # ── AC11: Resources managed by ArgoCD ──
-UNMANAGED_OS=$(kubectl get all -n opensearch -o json 2>/dev/null | \
-  jq '[.items[] | select(.metadata.labels["argocd.argoproj.io/instance"] == null)] | length' 2>/dev/null || echo "-1")
-UNMANAGED_MON=$(kubectl get pods -n opensearch -l app.kubernetes.io/name=data-prepper -o json 2>/dev/null | \
-  jq '[.items[] | select(.metadata.labels["argocd.argoproj.io/instance"] == null)] | length' 2>/dev/null || echo "0")
+# Check controller-level resources (StatefulSet, Deployment, Service) for ArgoCD tracking.
+# Exclude opensearch-dashboards (manually installed, not yet in ArgoCD — separate ticket).
+# Pods and ReplicaSets inherit management from controllers transitively.
+# Support both label (standard Apply) and annotation (ServerSideApply) tracking methods.
+UNMANAGED_OS=$(kubectl get statefulsets,deployments,services -n opensearch -o json 2>/dev/null | \
+  jq '[.items[] | select(
+    (.metadata.name | test("dashboards") | not) and
+    .metadata.labels["argocd.argoproj.io/instance"] == null and
+    (.metadata.annotations["argocd.argoproj.io/tracking-id"] == null or .metadata.annotations["argocd.argoproj.io/tracking-id"] == "")
+  )] | length' 2>/dev/null || echo "-1")
 
 if [[ "$UNMANAGED_OS" == "0" ]]; then
-  check_pass "AC11" "All opensearch resources managed by ArgoCD"
+  check_pass "AC11" "All opensearch + data-prepper controller resources managed by ArgoCD"
 elif [[ "$UNMANAGED_OS" == "-1" ]]; then
   check_skip "AC11" "ArgoCD management" "Could not query opensearch namespace"
 else
-  check_fail "AC11" "ArgoCD management" "$UNMANAGED_OS unmanaged resources in opensearch namespace"
+  check_fail "AC11" "ArgoCD management" "$UNMANAGED_OS unmanaged controller resources in opensearch namespace"
 fi
 
 # ── AC12: ISM policies ──

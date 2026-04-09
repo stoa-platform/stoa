@@ -171,6 +171,25 @@ class GitProvider(ABC):
             FileNotFoundError: If the file does not exist.
         """
 
+    async def get_api_override(self, tenant_id: str, api_id: str, environment: str) -> dict | None:
+        """Read per-environment override for an API (CAB-2015).
+
+        Looks for ``tenants/{tenant}/apis/{api}/overrides/{environment}.yaml``.
+        Returns parsed dict if file exists, ``None`` otherwise.
+        Default implementation uses :meth:`get_file_content`; subclasses may override.
+        """
+        import yaml
+
+        project_id = getattr(settings, "GITLAB_PROJECT_ID", None) or (
+            f"{getattr(settings, 'GITHUB_ORG', '')}/{getattr(settings, 'GITHUB_CATALOG_REPO', '')}"
+        )
+        file_path = f"tenants/{tenant_id}/apis/{api_id}/overrides/{environment}.yaml"
+        try:
+            content = await self.get_file_content(str(project_id), file_path)
+            return yaml.safe_load(content)
+        except FileNotFoundError:
+            return None
+
     @abstractmethod
     async def batch_commit(
         self,

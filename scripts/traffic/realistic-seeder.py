@@ -87,7 +87,7 @@ def get_config() -> dict:
         "connect_url": os.environ.get("CONNECT_URL", "http://stoa-connect:8090"),
         "connect_wm_url": os.environ.get("CONNECT_WM_URL", "http://stoa-connect-wm:8090"),
         "duration": int(os.environ.get("DURATION", "480")),
-        "tenants": os.environ.get("TENANTS", "high-five,oasis,ioi").split(","),
+        "tenants": os.environ.get("TENANTS", "demo,high-five,oasis,ioi").split(","),
         "business_hours_mult": float(os.environ.get("BUSINESS_HOURS_MULT", "3.0")),
     }
 

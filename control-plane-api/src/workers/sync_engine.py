@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 import yaml
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
+from prometheus_client import Counter
 
 from ..config import settings
 from ..database import _get_session_factory
@@ -36,6 +37,22 @@ from ..services.kafka_service import Topics, kafka_service
 from ..services.sync_step_tracker import SyncStepTracker
 
 logger = logging.getLogger(__name__)
+
+# ── Prometheus drift metrics (CAB-2026) ───────────────────────────────
+
+CATALOG_PREFIX = "catalog"
+
+DRIFT_DETECTED_TOTAL = Counter(
+    f"{CATALOG_PREFIX}_drift_detected_total",
+    "Total drift events detected between desired and actual gateway state",
+    ["tenant_id", "repair_mode"],
+)
+
+DRIFT_REPAIRED_TOTAL = Counter(
+    f"{CATALOG_PREFIX}_drift_repaired_total",
+    "Total drift events auto-repaired via commit or PR",
+    ["mode"],
+)
 
 CONSUMER_GROUP = "sync-engine"
 
@@ -515,6 +532,7 @@ class SyncEngine:
                         if not dep.gateway_resource_id:
                             continue
 
+                        tenant_id = (dep.desired_state or {}).get("tenant_id", "")
                         gw_api = gw_api_map.get(dep.gateway_resource_id)
                         if gw_api is None:
                             # Skip freshly synced deployments — gateway may not have indexed yet
@@ -529,6 +547,9 @@ class SyncEngine:
                             dep.sync_error = "API not found on gateway (external deletion)"
                             await repo.update(dep)
                             await self._emit_drift_event(dep, "api_missing")
+                            DRIFT_DETECTED_TOTAL.labels(
+                                tenant_id=tenant_id, repair_mode=settings.DRIFT_AUTO_REPAIR
+                            ).inc()
                             logger.warning(
                                 "Drift detected: deployment %s API missing from gateway",
                                 dep.id,
@@ -544,6 +565,9 @@ class SyncEngine:
                                 )
                                 await repo.update(dep)
                                 await self._emit_drift_event(dep, "spec_hash_mismatch")
+                                DRIFT_DETECTED_TOTAL.labels(
+                                    tenant_id=tenant_id, repair_mode=settings.DRIFT_AUTO_REPAIR
+                                ).inc()
                                 await self._repair_drift(dep, gw_api, "spec_hash_mismatch")
                                 logger.warning(
                                     "Drift detected: deployment %s spec hash mismatch",
@@ -624,6 +648,7 @@ class SyncEngine:
 
             if repair_mode == "commit":
                 await gh.batch_commit(project_id, actions, commit_msg)
+                DRIFT_REPAIRED_TOTAL.labels(mode="commit").inc()
                 logger.info("Drift auto-repaired via commit for %s (deployment %s)", api_name, deployment.id)
             elif repair_mode == "pr":
                 branch = f"drift/{api_name}-{uuid4().hex[:8]}"
@@ -634,6 +659,7 @@ class SyncEngine:
                     body=f"Auto-generated drift repair.\n\nDeployment: `{deployment.id}`\nDrift type: `{drift_type}`",
                     actions=actions,
                 )
+                DRIFT_REPAIRED_TOTAL.labels(mode="pr").inc()
                 logger.info("Drift auto-repaired via PR for %s (deployment %s)", api_name, deployment.id)
 
             await gh.disconnect()

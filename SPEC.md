@@ -1,91 +1,52 @@
-# Spec: CAB-2009 — Deploy Observability Stack on OVH Prod
+# Spec: CAB-2012 — Console Commit-on-Write: Async Git Sync on API CRUD
 
-> Council: 8.25/10 Go (ticket), 8.5/10 Go (spec).
+> Council: 8.25/10 Go (spec). Phase 1b of MEGA CAB-2010. Depends on CAB-2011.
 
 ## Problem
 
-The observability stack is partially deployed on OVH prod. Tempo runs via ArgoCD but OpenSearch was manually helm-installed (no ArgoCD app, no ISM policies, missing index templates). Data Prepper does not exist. Gateway traces reach Tempo but are not indexed in OpenSearch.
+The Console writes API definitions to the database only. The Git catalog (`stoa-catalog`) diverges silently — there is no mechanism to propagate CRUD operations to Git after a DB write.
 
 ## Goal
 
-All three components fully managed by ArgoCD, with end-to-end trace flow: gateway OTEL -> Tempo -> Data Prepper -> OpenSearch, verified within 60s.
+Every API create/update/delete in the Console produces a corresponding Git commit in `stoa-catalog` within 30 seconds, without ever blocking the HTTP response.
 
-## Infrastructure Contract
-
-No API changes. Pure infra. All configs in git (stoa-infra for Helm/ArgoCD, stoa for verification).
-
-### Current Cluster State (verified 2026-04-08)
-
-| Component | Pods | ArgoCD App | Health | Missing |
-|-----------|------|------------|--------|---------|
-| Tempo | `stoa-tempo-0` Running 23d | `stoa-tempo` Synced+Healthy | OK | Nothing |
-| OpenSearch | `opensearch-cluster-master-0` Running 21d | **NONE** (manual helm install) | Yellow (expected, single-node) | ArgoCD app, 2 index templates, ISM policies |
-| OpenSearch Dashboards | `opensearch-dashboards-*` Running 21d | **NONE** | OK | ArgoCD app |
-| Data Prepper | Not deployed | **NONE** | N/A | Everything |
-
-**OpenSearch has data**: 600K+ security audit events, `stoa-logs` template exists, OIDC configured, security init completed 54d ago.
-
-### What Needs to Be Done
-
-| Phase | Work | Repo | LOC |
-|-------|------|------|-----|
-| 1 | Tempo — verify only (already done) | N/A | 0 |
-| 2a | OpenSearch ArgoCD Application | stoa-infra | ~40 |
-| 2b | Apply missing index templates (gateway-logs, audit) | stoa-infra | ~20 |
-| 2c | Apply ISM retention policies | stoa-infra | ~30 |
-| 3a | Create Data Prepper Helm chart | stoa-infra | ~150 |
-| 3b | Data Prepper ArgoCD Application | stoa-infra | ~30 |
-| 4 | E2E verification script | stoa | ~250 |
-
-### Data Flow
+## Architecture
 
 ```
-stoa-gateway (OTEL gRPC)
-    -> Tempo (monitoring:4317)
-    -> Data Prepper (monitoring:21890, OTLP -> OpenSearch sink)
-    -> OpenSearch (opensearch:9200, index: trace-analytics-raw)
+Console -> POST /apis -> DB write (sync) -> Kafka emit (fire-and-forget)
+                                                 |
+                                        Topic: stoa.api.lifecycle
+                                        Events: api-created, api-updated, api-deleted
+                                                 |
+                                        GitSyncWorker (consumer)
+                                                 |
+                                        GitHubService.create_api / update_api / delete_api
+                                                 |
+                                        stoa-catalog repo (Git commit)
 ```
 
 ## Acceptance Criteria
 
-- [ ] AC1: Tempo pods Running + Ready in `monitoring` namespace
-- [ ] AC2: Tempo OTLP gRPC port 4317 exposed on service
-- [ ] AC3: OpenSearch cluster health is Green or Yellow (single-node) in `opensearch` namespace
-- [ ] AC4: OpenSearch security init completed (`.opendistro_security` index exists)
-- [ ] AC5: OpenSearch index templates exist: `stoa-logs`, `gateway-logs`, `audit`
-- [ ] AC6: OpenSearch OIDC configuration present in security config
-- [ ] AC7: Data Prepper pods Running in `opensearch` namespace (co-located with OpenSearch for secret access)
-- [ ] AC8: Data Prepper health endpoint responds on :21890
-- [ ] AC9: E2E: trace visible in OpenSearch `trace-analytics-raw` index within 60s of gateway call
-- [ ] AC10: ArgoCD Applications for all 3 components show Synced + Healthy
-- [ ] AC11: All observability resources managed by ArgoCD (zero manual kubectl apply)
-- [ ] AC12: ISM retention policies active (free=7d, pro=90d, enterprise=365d)
+- [x] AC1: api-created -> Git commit in stoa-catalog
+- [x] AC2: api-updated -> Git commit updates api.yaml
+- [x] AC3: api-deleted -> API directory removed from stoa-catalog
+- [x] AC4: GIT_SYNC_ON_WRITE=false disables Git operations
+- [x] AC5: Retry 3x with exponential backoff (2s, 4s, 8s)
+- [x] AC6: Idempotent (no commit if content identical)
+- [x] AC7: Kafka failure doesn't block HTTP response
 
 ## Edge Cases
 
-| Case | Scenario | Expected | Priority |
-|------|----------|----------|----------|
-| B2-15 memory pressure | 3x15GB nodes, OS 2GB heap | Stay within 4GB total for observability | Must |
-| DP before OS ready | Data Prepper starts, OS not responding | Retry with backoff, no CrashLoop | Must |
-| Kyverno blocks pod | Missing `privileged: false` | Explicit securityContext on all pods | Must |
-| ArgoCD adopts manual install | Existing helm release conflicts | `selfHeal: true` + `prune: true` | Must |
-| Single-node Yellow | No replica shards assignable | Accept Yellow for AC3 (expected) | Must |
+| # | Case | Expected | Priority |
+|---|------|----------|----------|
+| E1 | GitHub rate limit (403) | Retry with backoff | Must |
+| E2 | Duplicate event | No-op (idempotent) | Must |
+| E3 | Tenant missing in Git | Auto-create via _ensure_tenant_exists() | Must |
+| E5 | Worker crash mid-retry | Kafka re-delivers (uncommitted offset) | Must |
+| E7 | GitHubService not initialized | Skip gracefully | Must |
 
 ## Out of Scope
 
-- Kafka OpenSearch connector, Fluent Bit, custom dashboards, alerting rules
-- Monitoring the observability stack itself
-- Console UI integration with live trace data
-
-## Security Considerations
-
-- [ ] OpenSearch creds via Vault External Secrets
-- [ ] OIDC via Keycloak realm `stoa`
-- [ ] Data Prepper non-root, `privileged: false`
-- [ ] No public ingress for OpenSearch API
-
-## Dependencies
-
-- **stoa-infra**: Helm charts, ArgoCD apps (primary work)
-- **Vault**: `stoa/k8s/opensearch` credentials
-- **ESO, Keycloak, ArgoCD**: already deployed on cluster
+- Reverse sync (Git -> DB) — CAB-2016
+- UI feedback showing Git sync status
+- Tenant CRUD sync, Policy sync to Git

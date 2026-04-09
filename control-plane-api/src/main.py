@@ -138,6 +138,7 @@ from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
 from .workers.gateway_reconciler import gateway_reconciler
+from .workers.git_sync_worker import git_sync_worker
 from .workers.sync_engine import sync_engine
 from .workers.telemetry_worker import telemetry_worker
 
@@ -160,6 +161,7 @@ ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true
 ENABLE_BILLING_METERING_CONSUMER = os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"
+ENABLE_GIT_SYNC_WORKER = os.getenv("ENABLE_GIT_SYNC_WORKER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -291,6 +293,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start billing metering consumer", error=str(e))
 
+    # Start Git sync worker (CAB-2012 — async Git commits on API CRUD)
+    git_sync_task = None
+    if ENABLE_GIT_SYNC_WORKER and settings.GIT_SYNC_ON_WRITE:
+        try:
+            git_sync_task = asyncio.create_task(git_sync_worker.start())
+            logger.info("Git sync worker started")
+        except Exception as e:
+            logger.warning("Failed to start git sync worker", error=str(e))
+
     # Start telemetry worker (CAB-1682 — gateway observability)
     telemetry_worker_task = None
     if ENABLE_TELEMETRY_WORKER:
@@ -361,6 +372,13 @@ async def lifespan(app: FastAPI):
         billing_metering_task.cancel()
         with suppress(asyncio.CancelledError):
             await billing_metering_task
+
+    # Stop git sync worker (CAB-2012)
+    if ENABLE_GIT_SYNC_WORKER and git_sync_task:
+        await git_sync_worker.stop()
+        git_sync_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await git_sync_task
 
     # Stop telemetry worker (CAB-1682)
     if ENABLE_TELEMETRY_WORKER and telemetry_worker_task:

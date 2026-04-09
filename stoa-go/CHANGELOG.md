@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.3...stoa-go-v0.3.4) (2026-04-09)
+
+
+### Features
+
+* **gateway:** stoactl catalog sync + audit export (CAB-2021, CAB-2022) ([#2268](https://github.com/stoa-platform/stoa/issues/2268)) ([e48a365](https://github.com/stoa-platform/stoa/commit/e48a3650fdfc27c5778a6bb49679b4ba14c0597d))
+
 ## [0.3.3](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.2...stoa-go-v0.3.3) (2026-04-08)
 
 

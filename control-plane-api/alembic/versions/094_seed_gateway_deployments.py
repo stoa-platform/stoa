@@ -72,6 +72,7 @@ def upgrade() -> None:
 
             desired_state = json.dumps(
                 {
+                    "api_catalog_id": api_id_uuid,
                     "api_id": api_id,
                     "api_name": api_name,
                     "version": version,

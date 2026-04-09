@@ -142,10 +142,21 @@ class TraceService:
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def get_stats(self) -> dict:
-        """Get aggregated statistics about traces."""
+    async def get_stats(self, tenant_id: str | None = None) -> dict:
+        """Get aggregated statistics about traces.
+
+        Args:
+            tenant_id: If set, filter to this tenant only. None = all tenants (cpi-admin).
+        """
+        base_filters = []
+        if tenant_id:
+            base_filters.append(PipelineTraceDB.tenant_id == tenant_id)
+
         # Total count
-        total_result = await self.session.execute(select(func.count(PipelineTraceDB.id)))
+        total_result = await self.session.execute(
+            select(func.count(PipelineTraceDB.id)).where(*base_filters) if base_filters
+            else select(func.count(PipelineTraceDB.id))
+        )
         total = total_result.scalar() or 0
 
         if total == 0:
@@ -160,13 +171,16 @@ class TraceService:
         by_status = {}
         for status in TraceStatusDB:
             count_result = await self.session.execute(
-                select(func.count(PipelineTraceDB.id)).where(PipelineTraceDB.status == status)
+                select(func.count(PipelineTraceDB.id)).where(
+                    PipelineTraceDB.status == status, *base_filters
+                )
             )
             by_status[status.value] = count_result.scalar() or 0
 
         # Average duration
+        avg_filters = [PipelineTraceDB.total_duration_ms.isnot(None), *base_filters]
         avg_result = await self.session.execute(
-            select(func.avg(PipelineTraceDB.total_duration_ms)).where(PipelineTraceDB.total_duration_ms.isnot(None))
+            select(func.avg(PipelineTraceDB.total_duration_ms)).where(*avg_filters)
         )
         avg_duration = avg_result.scalar() or 0
 
@@ -189,8 +203,14 @@ class TraceService:
                 return step["details"]
         return None
 
-    async def get_ai_session_stats(self, days: int = 7, worker: str | None = None) -> dict:
-        """Get aggregated statistics for AI session traces."""
+    async def get_ai_session_stats(
+        self, days: int = 7, worker: str | None = None, tenant_id: str | None = None
+    ) -> dict:
+        """Get aggregated statistics for AI session traces.
+
+        Args:
+            tenant_id: If set, filter to this tenant only. None = all tenants (cpi-admin).
+        """
         since = datetime.now(UTC) - timedelta(days=days)
 
         base_filter = [
@@ -199,6 +219,8 @@ class TraceService:
         ]
         if worker:
             base_filter.append(PipelineTraceDB.trigger_source == worker)
+        if tenant_id:
+            base_filter.append(PipelineTraceDB.tenant_id == tenant_id)
 
         # Total sessions
         total_result = await self.session.execute(select(func.count(PipelineTraceDB.id)).where(*base_filter))
@@ -310,6 +332,8 @@ class TraceService:
         ]
         if worker:
             prev_filter.append(PipelineTraceDB.trigger_source == worker)
+        if tenant_id:
+            prev_filter.append(PipelineTraceDB.tenant_id == tenant_id)
 
         prev_traces_result = await self.session.execute(select(PipelineTraceDB).where(*prev_filter))
         prev_traces = list(prev_traces_result.scalars().all())
@@ -410,8 +434,14 @@ class TraceService:
             "daily": daily,
         }
 
-    async def export_ai_sessions_csv(self, days: int = 7, worker: str | None = None) -> str:
-        """Export AI session traces as CSV string."""
+    async def export_ai_sessions_csv(
+        self, days: int = 7, worker: str | None = None, tenant_id: str | None = None
+    ) -> str:
+        """Export AI session traces as CSV string.
+
+        Args:
+            tenant_id: If set, filter to this tenant only. None = all tenants (cpi-admin).
+        """
         since = datetime.now(UTC) - timedelta(days=days)
         base_filter = [
             PipelineTraceDB.trigger_type == "ai-session",
@@ -419,6 +449,8 @@ class TraceService:
         ]
         if worker:
             base_filter.append(PipelineTraceDB.trigger_source == worker)
+        if tenant_id:
+            base_filter.append(PipelineTraceDB.tenant_id == tenant_id)
 
         result = await self.session.execute(
             select(PipelineTraceDB).where(*base_filter).order_by(desc(PipelineTraceDB.created_at))

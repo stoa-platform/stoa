@@ -3,7 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TraceDetail } from './TraceDetail';
 
-// Mock apiService — first test group rejects, second resolves
 const mockGetTransactionDetail = vi.fn();
 
 vi.mock('../../services/api', () => ({

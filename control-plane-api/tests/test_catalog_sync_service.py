@@ -50,6 +50,7 @@ def _make_git() -> MagicMock:
     git.get_all_openapi_specs_parallel = AsyncMock(return_value={})
     git.list_apis = AsyncMock(return_value=[])
     git.get_api_openapi_spec = AsyncMock(return_value=None)
+    git.get_api_override = AsyncMock(return_value=None)  # CAB-2015: no override by default
     git.list_mcp_servers = AsyncMock(return_value=[])
     return git
 

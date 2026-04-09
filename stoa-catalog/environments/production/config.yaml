@@ -1,0 +1,6 @@
+# Production environment configuration
+environment: production
+gateway_url: https://mcp.gostoa.dev
+api_url: https://api.gostoa.dev
+keycloak_url: https://auth.gostoa.dev
+rate_limit_factor: 0.8

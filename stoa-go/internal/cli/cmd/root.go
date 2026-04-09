@@ -33,6 +33,9 @@ var (
 	Commit = "none"
 )
 
+// AdminMode indicates whether --admin was passed (service account context).
+var AdminMode bool
+
 var rootCmd = &cobra.Command{
 	Use:   "stoactl",
 	Short: "STOA Platform CLI",
@@ -46,7 +49,10 @@ Example usage:
   stoactl config use-context prod
   stoactl auth login
   stoactl get apis
-  stoactl apply -f api.yaml`,
+  stoactl apply -f api.yaml
+
+Admin mode:
+  stoactl --admin get apis         # Uses service account token instead of user OIDC`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -57,6 +63,8 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVar(&AdminMode, "admin", false, "Use service account token instead of user OIDC token")
+
 	rootCmd.AddCommand(config.NewConfigCmd())
 	rootCmd.AddCommand(auth.NewAuthCmd())
 	rootCmd.AddCommand(get.NewGetCmd())

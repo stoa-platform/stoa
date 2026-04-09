@@ -427,6 +427,69 @@ spec:
 	}
 }
 
+// --- Regression tests for CAB-2006: gateway response format mismatch ---
+
+// TestRegression_CAB2006_GatewayToolsBareArray verifies that a bare JSON array
+// (as returned by GET /mcp/v1/tools on the gateway) deserializes into
+// []MCPToolSummary. Before this fix, the code expected {"tools": [...]}.
+func TestRegression_CAB2006_GatewayToolsBareArray(t *testing.T) {
+	bareArray := `[
+		{"name":"get-weather","display_name":"Get Weather","description":"Fetch weather","enabled":true,"server_name":"weather-srv"},
+		{"name":"translate","display_name":"Translate","description":"Translate text","enabled":false,"server_name":"lang-srv"}
+	]`
+
+	var tools []MCPToolSummary
+	if err := json.Unmarshal([]byte(bareArray), &tools); err != nil {
+		t.Fatalf("bare array decode failed: %v", err)
+	}
+	if len(tools) != 2 {
+		t.Fatalf("got %d tools, want 2", len(tools))
+	}
+	if tools[0].Name != "get-weather" {
+		t.Errorf("tools[0].Name = %q, want %q", tools[0].Name, "get-weather")
+	}
+	if tools[1].Enabled {
+		t.Error("tools[1].Enabled = true, want false")
+	}
+}
+
+// TestRegression_CAB2006_GatewayHealthFields verifies that MCPHealthResponse
+// deserializes both CP API format (version/uptime) and gateway /mcp/health
+// format (protocolVersion/tools/activeSessions).
+func TestRegression_CAB2006_GatewayHealthFields(t *testing.T) {
+	// Gateway format
+	gwJSON := `{"status":"healthy","protocolVersion":"2025-11-25","tools":36,"activeSessions":2}`
+	var gw MCPHealthResponse
+	if err := json.Unmarshal([]byte(gwJSON), &gw); err != nil {
+		t.Fatalf("gateway health decode failed: %v", err)
+	}
+	if gw.ProtocolVersion != "2025-11-25" {
+		t.Errorf("ProtocolVersion = %q, want %q", gw.ProtocolVersion, "2025-11-25")
+	}
+	if gw.Tools != 36 {
+		t.Errorf("Tools = %d, want 36", gw.Tools)
+	}
+	if gw.ActiveSessions != 2 {
+		t.Errorf("ActiveSessions = %d, want 2", gw.ActiveSessions)
+	}
+
+	// CP API format (should still work)
+	cpJSON := `{"status":"healthy","version":"1.3.0","uptime":"48h"}`
+	var cp MCPHealthResponse
+	if err := json.Unmarshal([]byte(cpJSON), &cp); err != nil {
+		t.Fatalf("cp-api health decode failed: %v", err)
+	}
+	if cp.Version != "1.3.0" {
+		t.Errorf("Version = %q, want %q", cp.Version, "1.3.0")
+	}
+	if cp.Uptime != "48h" {
+		t.Errorf("Uptime = %q, want %q", cp.Uptime, "48h")
+	}
+	if cp.ProtocolVersion != "" {
+		t.Errorf("ProtocolVersion should be empty for CP API, got %q", cp.ProtocolVersion)
+	}
+}
+
 // TestEmptyAPIListResponse tests empty list response
 func TestEmptyAPIListResponse(t *testing.T) {
 	jsonData := `{"items": [], "totalCount": 0}`

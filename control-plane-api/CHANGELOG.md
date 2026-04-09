@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.3.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.2.0...control-plane-api-v1.3.0) (2026-04-09)
+
+
+### Features
+
+* **api:** add GitOps observability metrics (CAB-2026) ([#2266](https://github.com/stoa-platform/stoa/issues/2266)) ([23c22d7](https://github.com/stoa-platform/stoa/commit/23c22d77ca70d57bdeae8301102dcbc216a06679))
+* **api:** add GitSyncWorker for async Git commits on API CRUD (CAB-2012) ([#2261](https://github.com/stoa-platform/stoa/issues/2261)) ([f1f9056](https://github.com/stoa-platform/stoa/commit/f1f9056e80aaa829b77f1025bb951405b134d7fc))
+* **api:** add write methods to GitHubService (CAB-2011) ([#2258](https://github.com/stoa-platform/stoa/issues/2258)) ([0dec963](https://github.com/stoa-platform/stoa/commit/0dec963e57f1e8ccfc0f93f47ac5b7ed769c99cd))
+* **api:** multi-environment support with per-API overrides (CAB-2015) ([#2265](https://github.com/stoa-platform/stoa/issues/2265)) ([a57bcf8](https://github.com/stoa-platform/stoa/commit/a57bcf8116252e273ae9a8fbbdfb3c04afff5b46))
+* **api:** reverse-sync drift detection + auto-repair Git↔Gateway (CAB-2016) ([#2264](https://github.com/stoa-platform/stoa/issues/2264)) ([a7ab6bc](https://github.com/stoa-platform/stoa/commit/a7ab6bc30d52cd551fbabd1577a2d2377c9645ca))
+* **api:** seed gateway_deployments for catalog APIs (CAB-2034) ([#2278](https://github.com/stoa-platform/stoa/issues/2278)) ([81bfee7](https://github.com/stoa-platform/stoa/commit/81bfee76dc07d5ebad841c2cdd456526fc994e0b))
+
+
+### Bug Fixes
+
+* **api:** add api_catalog_id to migration 094 desired_state (CAB-2034) ([#2279](https://github.com/stoa-platform/stoa/issues/2279)) ([7446f74](https://github.com/stoa-platform/stoa/commit/7446f74f8bd8b953138db8ad438c130f544fb446))
+* **api:** align seeder url_path with gateway route prefix (CAB-2034) ([#2280](https://github.com/stoa-platform/stoa/issues/2280)) ([bcf2ffb](https://github.com/stoa-platform/stoa/commit/bcf2ffb2fa58c2fb03cbe70e6d90cf7e02eed41e))
+* **api:** Observability RBAC — tenant isolation Phase 1 (CAB-2027) ([#2272](https://github.com/stoa-platform/stoa/issues/2272)) ([2e71af6](https://github.com/stoa-platform/stoa/commit/2e71af6ffa7042db4a5ededae75e409dff0ec1f3))
+* **api:** observability RBAC phase 2 (CAB-2031, CAB-2032) ([#2274](https://github.com/stoa-platform/stoa/issues/2274)) ([407438b](https://github.com/stoa-platform/stoa/commit/407438ba3ad1761e3d53f31219389164ee15afba))
+* **api:** use 'online' enum value for gateway status (CAB-2007) ([#2254](https://github.com/stoa-platform/stoa/issues/2254)) ([f2d4753](https://github.com/stoa-platform/stoa/commit/f2d47533e4966db825b2b93cb344dcdf4fd5a5f8))
+* **api:** use JSON object for gateway visibility column (CAB-2007) ([#2252](https://github.com/stoa-platform/stoa/issues/2252)) ([c3a4676](https://github.com/stoa-platform/stoa/commit/c3a4676e1a1909fd7f75aa73c10a1016d2b2c973))
+* **security:** upgrade base image packages to fix OpenSSL CVEs ([#2256](https://github.com/stoa-platform/stoa/issues/2256)) ([c451415](https://github.com/stoa-platform/stoa/commit/c45141526e567c3357e61b24d4f14ea8abd645fc))
+
 ## [1.2.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.1.0...control-plane-api-v1.2.0) (2026-04-08)
 
 

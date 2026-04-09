@@ -56,14 +56,35 @@ class OpenSearchProvisioner:
         results: dict = {"tenant_id": tenant_id, "roles_created": [], "errors": []}
 
         # DLS filter: tenant's own docs + shared "platform" docs (anonymous/system requests)
-        tenant_dls = json.dumps({
-            "bool": {
-                "should": [
-                    {"term": {"tenant_id": tenant_id}},
-                    {"term": {"tenant_id": "platform"}},
-                ]
+        tenant_dls = json.dumps(
+            {
+                "bool": {
+                    "should": [
+                        {"term": {"tenant_id": tenant_id}},
+                        {"term": {"tenant_id": "platform"}},
+                    ]
+                }
             }
-        })
+        )
+
+        # CAB-2031: DLS filter for OTel indices (different tenant field)
+        otel_tenant_dls = json.dumps(
+            {
+                "bool": {
+                    "should": [
+                        {"term": {"resource.attributes.tenant@id": tenant_id}},
+                        {"term": {"resource.attributes.tenant@id": "platform"}},
+                    ]
+                }
+            }
+        )
+
+        # CAB-2031: OTel index permissions with tenant-scoped DLS
+        otel_index_perm: dict = {
+            "index_patterns": ["otel-v1-apm-span-*", "otel-v1-apm-*"],
+            "dls": otel_tenant_dls,
+            "allowed_actions": ["read", "search"],
+        }
 
         # 1. Create tenant-scoped reader role (DLS, no FLS)
         reader_role = f"stoa_gw_tenant_{safe_id}"
@@ -74,6 +95,7 @@ class OpenSearchProvisioner:
                 dls=tenant_dls,
                 fls=None,
                 allowed_actions=["read", "search"],
+                extra_index_permissions=[otel_index_perm],
             )
             results["roles_created"].append(reader_role)
         except Exception as e:
@@ -81,6 +103,7 @@ class OpenSearchProvisioner:
             results["errors"].append({"role": reader_role, "error": str(e)})
 
         # 2. Create viewer role (DLS + FLS, excludes PII)
+        # OTel viewer perm: same DLS as reader (no PII in OTel spans)
         viewer_role = f"stoa_gw_viewer_{safe_id}"
         try:
             await self._create_role(
@@ -89,6 +112,7 @@ class OpenSearchProvisioner:
                 dls=tenant_dls,
                 fls=[f"~{field}" for field in PII_FIELDS],
                 allowed_actions=["read", "search"],
+                extra_index_permissions=[otel_index_perm],
             )
             results["roles_created"].append(viewer_role)
         except Exception as e:
@@ -201,6 +225,7 @@ class OpenSearchProvisioner:
         dls: str | None,
         fls: list[str] | None,
         allowed_actions: list[str],
+        extra_index_permissions: list[dict] | None = None,
     ) -> None:
         """Create or update an OpenSearch security role via REST API."""
         index_perm: dict = {
@@ -212,15 +237,19 @@ class OpenSearchProvisioner:
         if fls:
             index_perm["fls"] = fls
 
+        index_permissions = [
+            index_perm,
+            {
+                "index_patterns": [".kibana*", ".opensearch_dashboards*"],
+                "allowed_actions": ["read", "write", "create_index"],
+            },
+        ]
+        if extra_index_permissions:
+            index_permissions.extend(extra_index_permissions)
+
         body = {
             "cluster_permissions": ["cluster_composite_ops_ro"],
-            "index_permissions": [
-                index_perm,
-                {
-                    "index_patterns": [".kibana*", ".opensearch_dashboards*"],
-                    "allowed_actions": ["read", "write", "create_index"],
-                },
-            ],
+            "index_permissions": index_permissions,
         }
 
         await self._client.transport.perform_request(

@@ -11,11 +11,12 @@ def map_api_spec_to_stoa(api_spec: dict, tenant_id: str) -> dict:
      openapi_spec (optional), activated}
     """
     api_name = api_spec.get("api_name", api_spec.get("apiName", "unknown"))
+    api_id = api_spec.get("api_id", api_name)
     result: dict = {
         "id": api_spec.get("api_catalog_id", ""),
         "name": api_name,
         "tenant_id": tenant_id,
-        "path_prefix": f"/apis/{tenant_id}/{api_name}",
+        "path_prefix": f"/apis/{api_id}",
         "backend_url": api_spec.get("backend_url", api_spec.get("url", "")),
         "methods": api_spec.get("methods", ["GET", "POST", "PUT", "DELETE"]),
         "spec_hash": api_spec.get("spec_hash", ""),

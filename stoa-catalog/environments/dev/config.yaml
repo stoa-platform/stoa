@@ -1,0 +1,6 @@
+# Dev environment configuration
+environment: dev
+gateway_url: https://dev-mcp.gostoa.dev
+api_url: https://dev-api.gostoa.dev
+keycloak_url: https://dev-auth.gostoa.dev
+rate_limit_factor: 1.0

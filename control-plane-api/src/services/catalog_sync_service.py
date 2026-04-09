@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.models.catalog import APICatalog, CatalogSyncStatus, SyncStatus, SyncType
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.mcp_subscription import (
@@ -25,6 +26,16 @@ from src.services.gateway_deployment_service import GatewayDeploymentService
 from src.services.git_provider import GitProvider
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_api_config(base: dict, override: dict | None) -> dict:
+    """Shallow merge: override keys replace base keys (CAB-2015).
+
+    If *override* is ``None`` or empty, returns a copy of *base*.
+    """
+    if not override:
+        return {**base}
+    return {**base, **override}
 
 
 class CatalogSyncService:
@@ -264,6 +275,10 @@ class CatalogSyncService:
         commit_sha: str | None,
     ) -> None:
         """Upsert a single API into the catalog."""
+        # CAB-2015: merge per-environment override if present
+        override = await self.git.get_api_override(tenant_id, api_id, settings.ENVIRONMENT)
+        api = resolve_api_config(api, override)
+
         git_path = f"tenants/{tenant_id}/apis/{api_id}"
         tags = api.get("tags", [])
         promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}

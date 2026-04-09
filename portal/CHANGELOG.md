@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/stoa-platform/stoa/compare/portal-v1.1.0...portal-v1.1.1) (2026-04-09)
+
+
+### Bug Fixes
+
+* **api:** observability RBAC phase 2 (CAB-2031, CAB-2032) ([#2274](https://github.com/stoa-platform/stoa/issues/2274)) ([407438b](https://github.com/stoa-platform/stoa/commit/407438ba3ad1761e3d53f31219389164ee15afba))
+
 ## [1.1.0](https://github.com/stoa-platform/stoa/compare/portal-v1.0.0...portal-v1.1.0) (2026-04-08)
 
 

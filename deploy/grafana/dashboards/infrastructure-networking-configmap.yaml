@@ -1,11 +1,11 @@
 # STOA Infrastructure Networking Dashboard ConfigMap
 # Deploy to monitoring namespace for Grafana sidecar to pick up
-# kubectl apply -f infrastructure-networking-configmap.yaml -n stoa-monitoring
+# kubectl apply -f infrastructure-networking-configmap.yaml -n monitoring
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: stoa-infrastructure-networking-dashboard
-  namespace: stoa-monitoring
+  namespace: monitoring
   labels:
     grafana_dashboard: "1"
     app.kubernetes.io/part-of: stoa-platform

@@ -20,7 +20,7 @@ use axum::{
     Json,
 };
 use serde_json::{json, Value};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use super::client_auth;
 use crate::proxy::hardening::{build_via_value, with_keycloak_resilience};
@@ -34,6 +34,7 @@ use crate::state::AppState;
 /// When the request contains `client_assertion` + `client_assertion_type` (RFC 7523),
 /// the gateway validates the assertion format and claims before forwarding to Keycloak.
 /// Keycloak performs the actual signature verification using the client's registered JWKS.
+#[instrument(name = "oauth.token_proxy", skip_all, fields(otel.kind = "client"))]
 pub async fn token_proxy(
     State(state): State<AppState>,
     headers: HeaderMap,

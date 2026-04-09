@@ -1,0 +1,6 @@
+# Staging environment configuration
+environment: staging
+gateway_url: https://staging-mcp.gostoa.dev
+api_url: https://staging-api.gostoa.dev
+keycloak_url: https://staging-auth.gostoa.dev
+rate_limit_factor: 1.0

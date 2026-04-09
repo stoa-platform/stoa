@@ -123,6 +123,24 @@ describe('GrafanaEmbed', () => {
     expect(src).toContain('auth_token=mock-jwt-token-for-grafana');
   });
 
+  // CAB-2032: tenant-admin iframe URL includes var-tenant_id
+  it('tenant-admin iframe includes var-tenant_id', () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('tenant-admin'));
+    render(<GrafanaEmbed />);
+    const iframe = screen.getByTitle('STOA Observability - Grafana');
+    const src = iframe.getAttribute('src')!;
+    expect(src).toContain('var-tenant_id=oasis-gunters');
+  });
+
+  // CAB-2032: cpi-admin iframe does NOT include var-tenant_id (sees all)
+  it('cpi-admin iframe does not include var-tenant_id', () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+    render(<GrafanaEmbed />);
+    const iframe = screen.getByTitle('STOA Observability - Grafana');
+    const src = iframe.getAttribute('src')!;
+    expect(src).not.toContain('var-tenant_id');
+  });
+
   // 4-persona coverage
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',

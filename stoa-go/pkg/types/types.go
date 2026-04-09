@@ -217,3 +217,89 @@ type GatewayHealthResponse struct {
 	Version string `json:"version,omitempty"`
 	Uptime  string `json:"uptime,omitempty"`
 }
+
+// ---- Catalog Sync Types (CAB-2021) ----
+
+// SyncTriggerResponse is the response from POST /v1/admin/catalog/sync
+type SyncTriggerResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	SyncID  string `json:"sync_id,omitempty"`
+}
+
+// SyncStatusResponse is the response from GET /v1/admin/catalog/sync/status
+type SyncStatusResponse struct {
+	ID           string `json:"id"`
+	SyncType     string `json:"sync_type"`
+	Status       string `json:"status"` // running, success, failed
+	ItemsSynced  int    `json:"items_synced"`
+	ItemsFailed  int    `json:"items_failed"`
+	Duration     string `json:"duration,omitempty"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	StartedAt    string `json:"started_at,omitempty"`
+	CompletedAt  string `json:"completed_at,omitempty"`
+}
+
+// CatalogStatsResponse is the response from GET /v1/admin/catalog/stats
+type CatalogStatsResponse struct {
+	TotalAPIs       int                `json:"total_apis"`
+	PublishedAPIs   int                `json:"published_apis"`
+	UnpublishedAPIs int                `json:"unpublished_apis"`
+	ByTenant        map[string]int     `json:"by_tenant"`
+	ByCategory      map[string]int     `json:"by_category"`
+	LastSync        *SyncStatusResponse `json:"last_sync,omitempty"`
+}
+
+// AdminAPI is a single API in the cross-tenant admin listing
+type AdminAPI struct {
+	ID          string   `json:"id"`
+	TenantID    string   `json:"tenant_id"`
+	Name        string   `json:"name"`
+	DisplayName string   `json:"display_name"`
+	Version     string   `json:"version"`
+	Description string   `json:"description"`
+	Status      string   `json:"status"`
+	Tags        []string `json:"tags"`
+}
+
+// AdminAPIPaginatedResponse is the response from GET /v1/admin/catalog/apis
+type AdminAPIPaginatedResponse struct {
+	Items    []AdminAPI `json:"items"`
+	Total    int        `json:"total"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"page_size"`
+}
+
+// SyncHistoryResponse is the response from GET /v1/admin/catalog/sync/history
+type SyncHistoryResponse struct {
+	Syncs []SyncStatusResponse `json:"syncs"`
+	Total int                  `json:"total"`
+}
+
+// ---- Audit Types (CAB-2022) ----
+
+// AuditEntry represents a single audit log entry
+type AuditEntry struct {
+	ID           string         `json:"id"`
+	Timestamp    string         `json:"timestamp"`
+	TenantID     string         `json:"tenant_id"`
+	UserID       string         `json:"user_id,omitempty"`
+	UserEmail    string         `json:"user_email,omitempty"`
+	Action       string         `json:"action"`
+	ResourceType string         `json:"resource_type"`
+	ResourceID   string         `json:"resource_id,omitempty"`
+	Status       string         `json:"status"`
+	ClientIP     string         `json:"client_ip,omitempty"`
+	UserAgent    string         `json:"user_agent,omitempty"`
+	Details      map[string]any `json:"details,omitempty"`
+	RequestID    string         `json:"request_id,omitempty"`
+}
+
+// AuditListResponse is the response from GET /v1/audit/{tenant_id}
+type AuditListResponse struct {
+	Entries  []AuditEntry `json:"entries"`
+	Total    int          `json:"total"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"page_size"`
+	HasMore  bool         `json:"has_more"`
+}

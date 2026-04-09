@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -338,14 +340,13 @@ func listToolsFromGateway(gwURL string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var result struct {
-		Tools []types.MCPToolSummary `json:"tools"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	// Gateway returns a bare JSON array (not wrapped in {"tools": [...]})
+	var tools []types.MCPToolSummary
+	if err := json.NewDecoder(resp.Body).Decode(&tools); err != nil {
 		return fmt.Errorf("failed to decode gateway response: %w", err)
 	}
 
-	if len(result.Tools) == 0 {
+	if len(tools) == 0 {
 		output.Info("No tools found.")
 		return nil
 	}
@@ -355,13 +356,13 @@ func listToolsFromGateway(gwURL string) error {
 
 	switch printer.Format {
 	case output.FormatJSON:
-		return printer.PrintJSON(result.Tools)
+		return printer.PrintJSON(tools)
 	case output.FormatYAML:
-		return printer.PrintYAML(result.Tools)
+		return printer.PrintYAML(tools)
 	default:
 		headers := []string{"NAME", "DISPLAY NAME", "SERVER", "ENABLED"}
 		var rows [][]string
-		for _, t := range result.Tools {
+		for _, t := range tools {
 			enabled := "yes"
 			if !t.Enabled {
 				enabled = "no"
@@ -406,15 +407,22 @@ func callToolOnGateway(gwURL, toolName string, input json.RawMessage) error {
 }
 
 func healthFromGateway(gwURL string) error {
-	resp, err := gatewayClient().Get(gwURL + "/health")
+	// Use /mcp/health for rich JSON (status, protocolVersion, tools, activeSessions).
+	// /health is a plain text K8s liveness probe ("OK").
+	resp, err := gatewayClient().Get(gwURL + "/mcp/health")
 	if err != nil {
 		return fmt.Errorf("gateway unreachable: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("health check failed: HTTP %d — %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+	}
+
 	var result types.MCPHealthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode gateway response: %w", err)
+		return fmt.Errorf("failed to decode health response: %w", err)
 	}
 
 	format := output.ParseFormat(outputFormat)
@@ -426,9 +434,22 @@ func healthFromGateway(gwURL string) error {
 	case output.FormatYAML:
 		return printer.PrintYAML(result)
 	default:
-		headers := []string{"STATUS", "VERSION", "UPTIME"}
-		rows := [][]string{{result.Status, result.Version, result.Uptime}}
-		printer.PrintTable(headers, rows)
+		// Gateway returns protocolVersion/tools/activeSessions,
+		// CP API returns version/uptime — adapt columns
+		if result.ProtocolVersion != "" {
+			headers := []string{"STATUS", "PROTOCOL", "TOOLS", "SESSIONS"}
+			rows := [][]string{{
+				result.Status,
+				result.ProtocolVersion,
+				strconv.Itoa(result.Tools),
+				strconv.Itoa(result.ActiveSessions),
+			}}
+			printer.PrintTable(headers, rows)
+		} else {
+			headers := []string{"STATUS", "VERSION", "UPTIME"}
+			rows := [][]string{{result.Status, result.Version, result.Uptime}}
+			printer.PrintTable(headers, rows)
+		}
 	}
 
 	return nil

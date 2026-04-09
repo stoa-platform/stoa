@@ -14,7 +14,7 @@
 #
 # Layout (7 panes in 1 window — tiled grid, all visible):
 #   Pane 0: ORCHESTRE  — Lead orchestrator (always Max, full repo access)
-#   Pane 1: MONITOR    — htop + memory watchdog
+#   Pane 1: MONITOR    — watchdog + GC + memory-consolidate (Haiku loop)
 #   Pane 2: BACKEND    — Claude (control-plane-api, infra, docs)
 #   Pane 3: FRONTEND   — Claude (portal, control-plane-ui, shared)
 #   Pane 4: AUTH       — Claude (keycloak, IAM, OAuth)
@@ -568,13 +568,15 @@ done
 # Wait for all 7 shells to process the PATH export
 sleep 2
 
-# ── Launch MONITOR (pane 1): watchdog + GC ──
-# Watchdog runs in background, GC runs in foreground (both infinite loops)
+# ── Launch MONITOR (pane 1): watchdog + GC (background) + memory-consolidate (foreground) ──
+# Watchdog and GC run in background. Claude Haiku runs /memory-consolidate every 30m in foreground.
 tmux send-keys -t "$SESSION:workspace.1" "claude-watchdog --threshold-gb 15 --system-gb 90 &" Enter
 sleep 0.5
 tmux send-keys -t "$SESSION:workspace.1" "stoa-exit-watchdog $SESSION &" Enter
 sleep 0.5
-tmux send-keys -t "$SESSION:workspace.1" "stoa-gc" Enter
+tmux send-keys -t "$SESSION:workspace.1" "stoa-gc &" Enter
+sleep 0.5
+tmux send-keys -t "$SESSION:workspace.1" "claude --model haiku --allowedTools 'Read,Write,Edit,Glob,Grep' -p '/loop 30m /memory-consolidate'" Enter
 
 if [[ "$LAUNCH_CLAUDE" == "true" ]]; then
   # ── Auto-start local gateway for LLM proxy metering ──

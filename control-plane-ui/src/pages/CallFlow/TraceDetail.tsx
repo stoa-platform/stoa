@@ -46,7 +46,6 @@ interface TransactionDetail {
   request_headers: Record<string, string> | null;
   response_headers: Record<string, string> | null;
   error_message: string | null;
-  demo_mode: boolean;
 }
 
 // ─── Helpers ───
@@ -123,86 +122,16 @@ function statusConfig(code: number): {
   };
 }
 
-// ─── Demo Data ───
-
-function generateDemoDetail(traceId: string): TransactionDetail {
-  const isError = traceId.includes('err') || Math.random() > 0.7;
-  const statusCode = isError ? (Math.random() > 0.5 ? 502 : 500) : 200;
-  const duration = isError
-    ? 800 + Math.round(Math.random() * 2000)
-    : 20 + Math.round(Math.random() * 200);
-
-  const spanDefs = [
-    { name: 'tls_termination', service: 'stoa-gateway', fraction: 0.05 },
-    { name: 'request_validation', service: 'stoa-gateway', fraction: 0.03 },
-    { name: 'auth_validation', service: 'keycloak', fraction: 0.15 },
-    { name: 'token_exchange', service: 'keycloak', fraction: 0.1 },
-    { name: 'rate_limiting', service: 'stoa-gateway', fraction: 0.02 },
-    { name: 'backend_call', service: 'upstream-api', fraction: 0.55 },
-    { name: 'response_transform', service: 'stoa-gateway', fraction: 0.1 },
-  ];
-
-  let offset = 0;
-  const spans: TransactionSpan[] = spanDefs.map((def) => {
-    const d = Math.round(duration * def.fraction * (0.8 + Math.random() * 0.4));
-    const span: TransactionSpan = {
-      name: def.name,
-      service: def.service,
-      start_offset_ms: offset,
-      duration_ms: d,
-      status: isError && def.name === 'backend_call' ? 'error' : 'success',
-      metadata: {},
-    };
-    offset += d;
-    return span;
-  });
-
-  return {
-    id: traceId,
-    trace_id: `trace-${traceId.slice(0, 8)}`,
-    api_name: 'customer-api',
-    tenant_id: 'tenant-acme',
-    method: 'GET',
-    path: '/api/v1/customers',
-    status_code: statusCode,
-    status: isError ? 'error' : 'success',
-    status_text: isError ? 'Internal Server Error' : 'OK',
-    error_source: isError ? 'backend' : null,
-    client_ip: '10.0.1.42',
-    user_id: 'user-demo',
-    started_at: new Date(Date.now() - Math.random() * 3600_000).toISOString(),
-    total_duration_ms: duration,
-    spans,
-    request_headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer eyJ...demo',
-      'X-STOA-Tenant': 'tenant-acme',
-      'X-STOA-Consumer': 'consumer-001',
-      'X-STOA-Trace-ID': `trace-${traceId.slice(0, 8)}`,
-      'User-Agent': 'Claude/1.0',
-    },
-    response_headers: {
-      'Content-Type': 'application/json',
-      'X-STOA-Duration-Ms': String(duration),
-      'X-STOA-Gateway': 'stoa-gw-01',
-      'X-STOA-Error-Code': isError ? 'UPSTREAM_TIMEOUT' : '',
-      traceparent: `00-${traceId.slice(0, 8).padEnd(32, '0')}-${traceId.slice(0, 16).padEnd(16, '0')}-01`,
-    },
-    error_message: isError ? 'Upstream service returned 502 after 2000ms timeout' : null,
-    demo_mode: true,
-  };
-}
-
 // ─── Fetch (authenticated via apiService) ───
 
 import { apiService } from '../../services/api';
 
-async function fetchTraceDetail(traceId: string): Promise<TransactionDetail> {
+async function fetchTraceDetail(traceId: string): Promise<TransactionDetail | null> {
   try {
     const data = await apiService.getTransactionDetail(traceId);
     return data as unknown as TransactionDetail;
   } catch {
-    return generateDemoDetail(traceId);
+    return null;
   }
 }
 
@@ -377,8 +306,8 @@ function MetricValue({ value }: { value: string | undefined }) {
   );
 }
 
-function KernelMetricsGrid({ spans, demoMode }: { spans: TransactionSpan[]; demoMode: boolean }) {
-  const m = demoMode ? {} : extractKernelMetrics(spans);
+function KernelMetricsGrid({ spans }: { spans: TransactionSpan[] }) {
+  const m = extractKernelMetrics(spans);
   const hasAnyReal = Object.keys(m).some(
     (k) => k.startsWith('upstream.') || k.startsWith('process.')
   );
@@ -478,7 +407,7 @@ function KernelMetricsGrid({ spans, demoMode }: { spans: TransactionSpan[]; demo
           </div>
         </div>
       ))}
-      {!hasAnyReal && !demoMode && (
+      {!hasAnyReal && (
         <p className="col-span-2 text-xs text-neutral-400 italic text-center">
           No gateway metrics available for this trace.
         </p>
@@ -687,13 +616,8 @@ export function TraceDetail() {
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
             Gateway Metrics
           </h2>
-          {detail.demo_mode && (
-            <span className="text-[10px] px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full font-medium">
-              Demo data
-            </span>
-          )}
         </div>
-        <KernelMetricsGrid spans={detail.spans} demoMode={detail.demo_mode} />
+        <KernelMetricsGrid spans={detail.spans} />
       </div>
 
       {/* ─── Middleware Pipeline ─── */}

@@ -7,6 +7,7 @@
 #   04-Security/      Security events, audit trails
 #   05-Tenant/        Multi-tenant views, analytics
 #   06-Business/      Business metrics, adoption
+#   07-APIM/          API Management overview, adapters, quotas
 #
 # Dashboard → Folder Mapping:
 #   incident-response.json       → 02-Operations
@@ -16,11 +17,12 @@
 #   tenant-analytics.json        → 05-Tenant
 #   business-analytics.json      → 06-Business
 #   demo-overview.json           → 01-Overview
+#   apim-overview.json           → 07-APIM
 #
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: stoa-monitoring
+namespace: monitoring
 
 resources:
   # Existing ConfigMaps
@@ -31,7 +33,7 @@ resources:
 configMapGenerator:
   # 02-Operations folder
   - name: grafana-dashboard-incident-response
-    namespace: stoa-monitoring
+    namespace: monitoring
     options:
       labels:
         grafana_dashboard: "1"
@@ -43,7 +45,7 @@ configMapGenerator:
 
   # 04-Security folder
   - name: grafana-dashboard-security-events
-    namespace: stoa-monitoring
+    namespace: monitoring
     options:
       labels:
         grafana_dashboard: "1"
@@ -55,7 +57,7 @@ configMapGenerator:
 
   # 05-Tenant folder
   - name: grafana-dashboard-multi-tenant
-    namespace: stoa-monitoring
+    namespace: monitoring
     options:
       labels:
         grafana_dashboard: "1"
@@ -66,7 +68,7 @@ configMapGenerator:
       - multi-tenant-overview.json
 
   - name: grafana-dashboard-tenant-analytics
-    namespace: stoa-monitoring
+    namespace: monitoring
     options:
       labels:
         grafana_dashboard: "1"
@@ -78,7 +80,7 @@ configMapGenerator:
 
   # 06-Business folder
   - name: grafana-dashboard-business-analytics
-    namespace: stoa-monitoring
+    namespace: monitoring
     options:
       labels:
         grafana_dashboard: "1"
@@ -88,9 +90,21 @@ configMapGenerator:
     files:
       - business-analytics.json
 
+  # 07-APIM folder
+  - name: grafana-dashboard-apim-overview
+    namespace: monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "07-APIM"
+    files:
+      - apim-overview.json
+
   # 01-Overview folder
   - name: grafana-dashboard-demo-overview
-    namespace: stoa-monitoring
+    namespace: monitoring
     options:
       labels:
         grafana_dashboard: "1"

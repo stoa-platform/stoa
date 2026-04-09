@@ -43,8 +43,61 @@ jobs:
         continue-on-error: true
         id: graph
 
+      - name: Compare DB vs Git API count (CAB-2026)
+        id: parity
+        continue-on-error: true
+        env:
+          STOA_API_URL: ${{ secrets.STOA_API_URL }}
+          STOA_API_TOKEN: ${{ secrets.STOA_API_TOKEN }}
+          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+
+          # Count APIs in DB via Control Plane API
+          DB_COUNT=$(curl -sf -H "Authorization: Bearer ${STOA_API_TOKEN}" \
+            "${STOA_API_URL}/v1/catalog/apis?page_size=1" \
+            | jq '.total // 0')
+
+          # Count API directories in stoa-catalog Git repo
+          GIT_COUNT=$(find . -path '*/tenants/*/apis/*/api.yaml' 2>/dev/null | wc -l | tr -d ' ')
+
+          echo "db_count=${DB_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "git_count=${GIT_COUNT}" >> "$GITHUB_OUTPUT"
+
+          PARITY=1
+          if [ "$DB_COUNT" != "$GIT_COUNT" ]; then
+            PARITY=0
+            echo "::warning::DB↔Git parity mismatch: DB=${DB_COUNT} Git=${GIT_COUNT}"
+          fi
+          echo "parity=${PARITY}" >> "$GITHUB_OUTPUT"
+
+          # Push parity metric to Pushgateway
+          if [ -n "${PUSHGATEWAY_URL:-}" ]; then
+            cat <<PROM | curl -sf --data-binary @- "${PUSHGATEWAY_URL}/metrics/job/catalog-drift/instance/ci"
+          # HELP catalog_db_git_parity Whether DB and Git API counts match (1=ok, 0=drift)
+          # TYPE catalog_db_git_parity gauge
+          catalog_db_git_parity{resource="apis"} ${PARITY}
+          # HELP catalog_db_api_count Number of APIs in the database
+          # TYPE catalog_db_api_count gauge
+          catalog_db_api_count ${DB_COUNT}
+          # HELP catalog_git_api_count Number of APIs in the Git catalog
+          # TYPE catalog_git_api_count gauge
+          catalog_git_api_count ${GIT_COUNT}
+          PROM
+          fi
+
+          # Slack alert on mismatch
+          if [ "$PARITY" = "0" ] && [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+              -H 'Content-Type: application/json' \
+              -d "{\"text\":\"⚠️ *Catalog Drift*: DB has ${DB_COUNT} APIs but Git has ${GIT_COUNT}. Run \`catalog-sync.sh\` to investigate.\"}"
+          fi
+
+          [ "$PARITY" = "1" ] || exit 1
+
       - name: Create issue on drift
-        if: steps.drift.outcome == 'failure' || steps.graph.outcome == 'failure'
+        if: steps.drift.outcome == 'failure' || steps.graph.outcome == 'failure' || steps.parity.outcome == 'failure'
         uses: actions/github-script@v8
         with:
           script: |

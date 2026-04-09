@@ -16,8 +16,9 @@ import json
 import logging
 import threading
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import yaml
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
@@ -543,6 +544,7 @@ class SyncEngine:
                                 )
                                 await repo.update(dep)
                                 await self._emit_drift_event(dep, "spec_hash_mismatch")
+                                await self._repair_drift(dep, gw_api, "spec_hash_mismatch")
                                 logger.warning(
                                     "Drift detected: deployment %s spec hash mismatch",
                                     dep.id,
@@ -582,6 +584,74 @@ class SyncEngine:
             )
         except Exception as e:
             logger.warning("Failed to emit drift event: %s", e)
+
+    async def _repair_drift(self, deployment, gw_api: dict, drift_type: str) -> None:
+        """Auto-repair drift by committing or creating a PR with the actual gateway state.
+
+        Modes (DRIFT_AUTO_REPAIR setting):
+        - none: no repair (default)
+        - commit: commit actual state directly to main
+        - pr: create a PR with the drift changes
+        """
+        repair_mode = settings.DRIFT_AUTO_REPAIR
+        if repair_mode == "none":
+            return
+
+        tenant_id = (deployment.desired_state or {}).get("tenant_id", "")
+        api_name = (deployment.desired_state or {}).get("api_name", str(deployment.id))
+
+        # Serialize gateway actual state as api.yaml
+        api_content = {
+            "id": gw_api.get("id") or gw_api.get("apiId") or str(deployment.id),
+            "name": api_name,
+            "spec_hash": gw_api.get("spec_hash", ""),
+            "drift_source": "gateway",
+            "drift_type": drift_type,
+            "synced_at": datetime.now(UTC).isoformat(),
+        }
+        api_yaml = yaml.dump(api_content, default_flow_style=False, allow_unicode=True)
+        file_path = f"tenants/{tenant_id}/apis/{api_name}/api.yaml"
+
+        try:
+            from ..services.github_service import GitHubService
+
+            gh = GitHubService()
+            await gh.connect()
+            project_id = gh._catalog_project_id()
+
+            actions = [{"action": "update", "file_path": file_path, "content": api_yaml}]
+            commit_msg = f"drift: update {api_name} to match gateway state ({drift_type})"
+
+            if repair_mode == "commit":
+                await gh.batch_commit(project_id, actions, commit_msg)
+                logger.info("Drift auto-repaired via commit for %s (deployment %s)", api_name, deployment.id)
+            elif repair_mode == "pr":
+                branch = f"drift/{api_name}-{uuid4().hex[:8]}"
+                await gh.create_pull_request(
+                    project_id,
+                    branch=branch,
+                    title=commit_msg,
+                    body=f"Auto-generated drift repair.\n\nDeployment: `{deployment.id}`\nDrift type: `{drift_type}`",
+                    actions=actions,
+                )
+                logger.info("Drift auto-repaired via PR for %s (deployment %s)", api_name, deployment.id)
+
+            await gh.disconnect()
+
+            # Emit repair event
+            await kafka_service.publish(
+                topic=Topics.GATEWAY_EVENTS,
+                event_type="drift-repaired",
+                tenant_id=tenant_id,
+                payload={
+                    "deployment_id": str(deployment.id),
+                    "drift_type": drift_type,
+                    "repair_mode": repair_mode,
+                    "api_name": api_name,
+                },
+            )
+        except Exception as e:
+            logger.error("Drift auto-repair failed for deployment %s: %s", deployment.id, e, exc_info=True)
 
 
 # Singleton instance

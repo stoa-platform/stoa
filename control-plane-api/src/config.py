@@ -141,6 +141,12 @@ class Settings(BaseSettings):
     SYNC_ENGINE_MAX_CONCURRENT: int = 5
     SYNC_ENGINE_RETRY_MAX: int = 3
 
+    # Drift auto-repair mode (CAB-2016)
+    # none: log + Kafka event only (default)
+    # commit: auto-commit actual state to Git
+    # pr: create a PR with the drift changes
+    DRIFT_AUTO_REPAIR: str = "none"
+
     # ADR-059: Deployment mode — controls how CP notifies gateways of pending deploys
     # sse_only: SSE push only (no SyncEngine, no inline sync)
     # dual: SSE + SyncEngine for drift detection (no push, no inline sync)
@@ -369,6 +375,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

@@ -1,0 +1,244 @@
+# CAB-2026: STOA APIM Business Alerting Rules
+# Prometheus alerting rules for API Management business metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-alerts-apim
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+  annotations:
+    gostoa.dev/created-by: cab-2026
+spec:
+  groups:
+    # ============================================
+    # APIM Business Alerts
+    # ============================================
+    - name: stoa.apim.business.rules
+      rules:
+        - alert: APIMNoTraffic
+          expr: |
+            sum(rate(stoa_mcp_tools_calls_total[30m])) == 0
+          for: 30m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "No API traffic detected"
+            description: "No MCP tool calls have been recorded for 30 minutes"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-no-traffic"
+
+        - alert: APIMHighErrorRate
+          expr: |
+            (
+              sum(rate(stoa_mcp_tools_calls_total{status="error"}[5m]))
+              / sum(rate(stoa_mcp_tools_calls_total[5m]))
+            ) > 0.10
+          for: 5m
+          labels:
+            severity: critical
+            component: apim
+          annotations:
+            summary: "APIM high error rate"
+            description: "API error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-high-error-rate"
+
+        - alert: APIMLatencySpike
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(stoa_mcp_tool_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "APIM latency spike"
+            description: "API P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-latency-spike"
+
+        - alert: APIMQuotaNearlyExhausted
+          expr: |
+            stoa_quota_remaining < 10
+          for: 5m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "Consumer quota nearly exhausted"
+            description: "Consumer {{ $labels.consumer }} has only {{ $value }} quota remaining (period: {{ $labels.period }})"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-quota-exhausted"
+
+        - alert: APIMTokenBudgetExceeded
+          expr: |
+            rate(stoa_token_budget_exceeded_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: apim
+          annotations:
+            summary: "Token budget exceeded"
+            description: "Token budget exceeded events detected for tenant {{ $labels.tenant }}"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-token-budget-exceeded"
+
+        - alert: APIMRateLimitStorm
+          expr: |
+            sum(rate(stoa_rate_limit_hits_total[5m])) by (tenant) > 10
+          for: 5m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "Sustained rate limiting for tenant"
+            description: "Tenant {{ $labels.tenant }} is hitting rate limits at {{ $value | humanize }} hits/s"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-rate-limit-storm"
+
+    # ============================================
+    # APIM Adapter & Sync Alerts
+    # ============================================
+    - name: stoa.apim.adapter.rules
+      rules:
+        - alert: APIMAdapterSyncFailure
+          expr: |
+            sum(rate(stoa_adapter_operations_total{status="error"}[10m])) by (gateway_type, operation) > 0
+          for: 10m
+          labels:
+            severity: critical
+            component: apim
+          annotations:
+            summary: "Adapter sync failure"
+            description: "{{ $labels.gateway_type }} adapter operation {{ $labels.operation }} is failing"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-adapter-sync-failure"
+
+        - alert: APIMAdapterHealthDegraded
+          expr: |
+            (
+              sum(rate(stoa_adapter_health_checks_total{status="success"}[10m])) by (gateway_type)
+              / sum(rate(stoa_adapter_health_checks_total[10m])) by (gateway_type)
+            ) < 0.9
+          for: 10m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "Adapter health degraded"
+            description: "{{ $labels.gateway_type }} health check success rate is {{ $value | humanizePercentage }} (threshold: 90%)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-adapter-health-degraded"
+
+        - alert: APIMAdapterHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(stoa_adapter_operation_duration_seconds_bucket[5m])) by (le, gateway_type)
+            ) > 5
+          for: 5m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "Adapter high latency"
+            description: "{{ $labels.gateway_type }} adapter P95 latency is {{ $value | humanizeDuration }} (threshold: 5s)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-adapter-high-latency"
+
+        - alert: APIMCircuitBreakerOpen
+          expr: |
+            stoa_circuit_breaker_state > 0
+          for: 2m
+          labels:
+            severity: critical
+            component: apim
+          annotations:
+            summary: "Circuit breaker open"
+            description: "Circuit breaker for upstream {{ $labels.upstream }} is {{ if eq $value 1.0 }}OPEN{{ else }}HALF-OPEN{{ end }}"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-circuit-breaker-open"
+
+    # ============================================
+    # APIM GitOps Alerts
+    # ============================================
+    - name: stoa.apim.gitops.rules
+      rules:
+        - alert: APIMGitSyncFailing
+          expr: |
+            sum(rate(catalog_git_sync_total{status="error"}[15m])) > 0
+          for: 15m
+          labels:
+            severity: critical
+            component: apim
+          annotations:
+            summary: "GitOps sync failing"
+            description: "Git sync operations are failing persistently"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-git-sync-failing"
+
+        - alert: APIMDriftDetected
+          expr: |
+            sum(increase(catalog_drift_detected_total[1h])) > 3
+          for: 5m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "Multiple drift events detected"
+            description: "{{ $value }} drift events detected in the last hour (threshold: 3)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-drift-detected"
+
+        - alert: APIMGitSyncRetryStorm
+          expr: |
+            sum(rate(catalog_git_sync_retries_total[10m])) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "Git sync retry storm"
+            description: "Git sync retries sustained at {{ $value | humanize }}/s (threshold: 0.5/s)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-git-sync-retry-storm"
+
+    # ============================================
+    # APIM Security Alerts
+    # ============================================
+    - name: stoa.apim.security.rules
+      rules:
+        - alert: APIMPIIDetectionSpike
+          expr: |
+            sum(rate(stoa_guardrails_pii_detected_total[10m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+            component: apim
+          annotations:
+            summary: "PII detection spike"
+            description: "PII detection rate is {{ $value | humanize }}/s (threshold: 1/s)"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-pii-spike"
+
+        - alert: APIMInjectionAttempts
+          expr: |
+            sum(increase(stoa_guardrails_injection_blocked_total[5m])) > 5
+          for: 5m
+          labels:
+            severity: critical
+            component: apim
+          annotations:
+            summary: "Prompt injection attempts detected"
+            description: "{{ $value }} injection attempts blocked in the last 5 minutes"
+            runbook_url: "https://docs.gostoa.dev/runbooks/apim-injection-attempts"
+
+    # ============================================
+    # APIM Recording Rules
+    # ============================================
+    - name: stoa.apim.recording.rules
+      interval: 30s
+      rules:
+        - record: apim:api_calls:rate5m
+          expr: |
+            sum(rate(stoa_mcp_tools_calls_total[5m]))
+
+        - record: apim:error_rate:ratio5m
+          expr: |
+            sum(rate(stoa_mcp_tools_calls_total{status="error"}[5m]))
+            / sum(rate(stoa_mcp_tools_calls_total[5m]))
+
+        - record: apim:adapter_success_rate:ratio5m
+          expr: |
+            sum(rate(stoa_adapter_operations_total{status="success"}[5m])) by (gateway_type)
+            / sum(rate(stoa_adapter_operations_total[5m])) by (gateway_type)

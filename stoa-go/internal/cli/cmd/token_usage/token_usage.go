@@ -108,7 +108,7 @@ func runCompare(c *client.Client) error {
 func getTokenUsage(c *client.Client, timeRange string) (*TokenUsageResponse, error) {
 	path := fmt.Sprintf("/v1/usage/tokens?time_range=%s", timeRange)
 
-	resp, err := c.DoRaw("GET", path, nil)
+	resp, err := c.Do("GET", path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch token usage: %w", err)
 	}
@@ -134,7 +134,7 @@ func getTokenUsage(c *client.Client, timeRange string) (*TokenUsageResponse, err
 func getTokenCompare(c *client.Client, timeRange string) (*TokenCompareResponse, error) {
 	path := fmt.Sprintf("/v1/usage/tokens/compare?time_range=%s", timeRange)
 
-	resp, err := c.DoRaw("GET", path, nil)
+	resp, err := c.Do("GET", path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch comparison: %w", err)
 	}

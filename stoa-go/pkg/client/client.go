@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/stoa-platform/stoa-go/pkg/client/catalog"
 	"github.com/stoa-platform/stoa-go/pkg/config"
 	"github.com/stoa-platform/stoa-go/pkg/keyring"
 	"github.com/stoa-platform/stoa-go/pkg/types"
@@ -22,6 +23,42 @@ type Client struct {
 	tenant     string
 	token      string
 	httpClient *http.Client
+}
+
+// NewAdmin creates a client using the admin service account token.
+// Resolution: STOA_ADMIN_KEY env > keychain "stoactl-admin" context.
+func NewAdmin() (*Client, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	ctx, err := cfg.GetCurrentContext()
+	if err != nil {
+		return nil, err
+	}
+
+	c := &Client{
+		baseURL: ctx.Context.Server,
+		tenant:  ctx.Context.Tenant,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+
+	if envToken := os.Getenv("STOA_ADMIN_KEY"); envToken != "" {
+		c.token = envToken
+		return c, nil
+	}
+
+	store := keyring.NewOSKeyring()
+	tokenData, err := store.Get(ctx.Name + "-admin")
+	if err == nil && tokenData != nil && tokenData.ExpiresAt > time.Now().Unix() {
+		c.token = tokenData.AccessToken
+		return c, nil
+	}
+
+	return nil, fmt.Errorf("no admin token found. Set STOA_ADMIN_KEY or run 'stoactl auth login --admin'")
 }
 
 // New creates a new STOA API client with token resolution hierarchy:
@@ -115,107 +152,40 @@ func (c *Client) do(method, path string, body any) (*http.Response, error) {
 	return c.httpClient.Do(req)
 }
 
-// DoRaw performs a raw HTTP request and returns the response (caller must close body)
-func (c *Client) DoRaw(method, path string, body any) (*http.Response, error) {
+// Do performs an HTTP request and returns the response (caller must close body).
+// Sub-packages (catalog, audit, trace, quota) use this via the Doer interface.
+func (c *Client) Do(method, path string, body any) (*http.Response, error) {
 	return c.do(method, path, body)
 }
 
-// ListAPIs fetches all APIs
+// Catalog returns a catalog sub-client for API operations.
+func (c *Client) Catalog() *catalog.Service {
+	return catalog.New(c)
+}
+
+// ListAPIs fetches all APIs. Delegates to catalog.Service.
 func (c *Client) ListAPIs() (*types.APIListResponse, error) {
-	resp, err := c.do("GET", "/v1/portal/apis", nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var result types.APIListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
+	return c.Catalog().List()
 }
 
-// GetAPI fetches a single API by name
+// GetAPI fetches a single API by name. Delegates to catalog.Service.
 func (c *Client) GetAPI(name string) (*types.API, error) {
-	resp, err := c.do("GET", fmt.Sprintf("/v1/portal/apis/%s", name), nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("api %q not found", name)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var result types.API
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
+	return c.Catalog().Get(name)
 }
 
-// CreateOrUpdateAPI creates or updates an API from a resource definition
+// CreateOrUpdateAPI creates or updates an API. Delegates to catalog.Service.
 func (c *Client) CreateOrUpdateAPI(resource *types.Resource) error {
-	resp, err := c.do("POST", "/v1/apis", resource)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return c.Catalog().CreateOrUpdate(resource)
 }
 
-// DeleteAPI deletes an API by name
+// DeleteAPI deletes an API by name. Delegates to catalog.Service.
 func (c *Client) DeleteAPI(name string) error {
-	resp, err := c.do("DELETE", fmt.Sprintf("/v1/apis/%s", name), nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("api %q not found", name)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return c.Catalog().Delete(name)
 }
 
-// ValidateResource performs a dry-run validation
+// ValidateResource performs a dry-run validation. Delegates to catalog.Service.
 func (c *Client) ValidateResource(resource *types.Resource) error {
-	resp, err := c.do("POST", "/v1/apis?dryRun=true", resource)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("validation error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return c.Catalog().Validate(resource)
 }
 
 // CreateMCPServer creates an MCP server and returns the server ID

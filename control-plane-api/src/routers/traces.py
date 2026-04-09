@@ -1,4 +1,11 @@
-"""Pipeline traces API endpoints for end-to-end monitoring (PostgreSQL)"""
+"""Pipeline traces API endpoints for end-to-end monitoring (PostgreSQL).
+
+CAB-2028: All read endpoints require JWT auth with tenant isolation.
+- cpi-admin: sees all traces (no tenant filter)
+- tenant-admin/devops/viewer: sees only own tenant's traces
+- POST /ingest: machine-to-machine auth via X-STOA-API-KEY (unchanged)
+- POST /demo*: restricted to cpi-admin
+"""
 
 import logging
 import os
@@ -9,11 +16,23 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.dependencies import User
+from ..auth.rbac import require_role
 from ..database import get_db
 from ..models.traces_db import TraceStatusDB
 from ..services.trace_service import TraceService
 
 HEGEMON_INGEST_KEY = os.environ.get("HEGEMON_INGEST_KEY", "")
+
+# All read roles — any authenticated user can view traces for their tenant
+_READ_ROLES = ["cpi-admin", "tenant-admin", "devops", "viewer"]
+
+
+def _tenant_filter(user: User) -> str | None:
+    """Extract tenant_id for filtering. cpi-admin sees all (None)."""
+    if "cpi-admin" in user.roles:
+        return None
+    return user.tenant_id
 
 
 # ============ Ingest Schemas ============
@@ -184,15 +203,16 @@ async def get_service(db: AsyncSession = Depends(get_db)) -> TraceService:
 @router.get("", response_model=TraceListResponse)
 async def list_traces(
     limit: int = Query(50, ge=1, le=200),
-    tenant_id: str | None = None,
     status: str | None = None,
     environment: str | None = Query(None, description="Filter by environment"),
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
     List recent pipeline traces with optional filtering.
 
     Returns summaries for efficient list display.
+    Tenant isolation: non-admin users see only their tenant's traces.
     """
     trace_status = None
     if status:
@@ -201,6 +221,7 @@ async def list_traces(
         except ValueError:
             raise HTTPException(400, f"Invalid status: {status}")
 
+    tenant_id = _tenant_filter(user)
     traces = await service.list_recent(limit, tenant_id, trace_status, environment)
 
     return {
@@ -211,26 +232,31 @@ async def list_traces(
 
 @router.get("/stats", response_model=TraceStatsResponse)
 async def get_trace_stats(
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
     Get pipeline trace statistics.
 
     Returns aggregated metrics about pipeline executions.
+    Tenant isolation: non-admin users see only their tenant's stats.
     """
-    return await service.get_stats()
+    return await service.get_stats(tenant_id=_tenant_filter(user))
 
 
 @router.get("/live", response_model=TraceLiveResponse)
 async def get_live_traces(
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
     Get currently running traces (in_progress status).
 
     Useful for real-time monitoring dashboards.
+    Tenant isolation: non-admin users see only their tenant's traces.
     """
-    traces = await service.list_recent(20, status=TraceStatusDB.IN_PROGRESS)
+    tenant_id = _tenant_filter(user)
+    traces = await service.list_recent(20, tenant_id=tenant_id, status=TraceStatusDB.IN_PROGRESS)
     return {
         "traces": [t.to_dict() for t in traces],
         "count": len(traces),
@@ -240,15 +266,22 @@ async def get_live_traces(
 @router.get("/{trace_id}", response_model=TraceDetailResponse)
 async def get_trace(
     trace_id: str,
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
     Get detailed information about a specific trace.
 
     Includes all steps with timing and error details.
+    Tenant isolation: non-admin users can only view their own tenant's traces.
     """
     trace = await service.get(trace_id)
     if not trace:
+        raise HTTPException(404, f"Trace not found: {trace_id}")
+
+    # Tenant isolation check
+    tenant_id = _tenant_filter(user)
+    if tenant_id and trace.tenant_id != tenant_id:
         raise HTTPException(404, f"Trace not found: {trace_id}")
 
     return trace.to_dict()
@@ -257,6 +290,7 @@ async def get_trace(
 @router.get("/{trace_id}/timeline", response_model=TraceTimelineResponse)
 async def get_trace_timeline(
     trace_id: str,
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
@@ -266,6 +300,11 @@ async def get_trace_timeline(
     """
     trace = await service.get(trace_id)
     if not trace:
+        raise HTTPException(404, f"Trace not found: {trace_id}")
+
+    # Tenant isolation check
+    tenant_id = _tenant_filter(user)
+    if tenant_id and trace.tenant_id != tenant_id:
         raise HTTPException(404, f"Trace not found: {trace_id}")
 
     timeline = []
@@ -408,28 +447,32 @@ async def ingest_ai_session(
 async def get_ai_session_stats(
     days: int = Query(7, ge=1, le=90),
     worker: str | None = Query(None, description="Filter by worker (trigger_source)"),
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
     Get AI session-specific aggregated statistics.
 
     Returns per-worker stats, daily time series, totals, model breakdown, and WoW cost delta.
+    Tenant isolation: non-admin users see only their tenant's sessions.
     """
-    return await service.get_ai_session_stats(days, worker)
+    return await service.get_ai_session_stats(days, worker, tenant_id=_tenant_filter(user))
 
 
 @router.get("/export/ai-sessions")
 async def export_ai_sessions_csv(
     days: int = Query(7, ge=1, le=90),
     worker: str | None = Query(None, description="Filter by worker (trigger_source)"),
+    user: User = Depends(require_role(_READ_ROLES)),
     service: TraceService = Depends(get_service),
 ):
     """
     Export AI session traces as CSV.
 
     Returns a downloadable CSV with session details including cost, tokens, and model.
+    Tenant isolation: non-admin users see only their tenant's sessions.
     """
-    csv_content = await service.export_ai_sessions_csv(days, worker)
+    csv_content = await service.export_ai_sessions_csv(days, worker, tenant_id=_tenant_filter(user))
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
@@ -442,6 +485,7 @@ async def export_ai_sessions_csv(
 
 @router.post("/demo", include_in_schema=False)
 async def create_demo_trace(
+    _user: User = Depends(require_role(["cpi-admin"])),
     service: TraceService = Depends(get_service),
 ):
     """Create a demo trace for testing the monitoring UI."""
@@ -537,6 +581,7 @@ async def create_demo_trace(
 @router.post("/demo/batch", include_in_schema=False)
 async def create_demo_traces_batch(
     count: int = Query(10, ge=1, le=50),
+    _user: User = Depends(require_role(["cpi-admin"])),
     service: TraceService = Depends(get_service),
 ):
     """Create multiple demo traces for a realistic monitoring view."""
@@ -554,6 +599,7 @@ async def create_demo_traces_batch(
 @router.post("/demo/ai-sessions", include_in_schema=False)
 async def create_demo_ai_sessions(
     count: int = Query(8, ge=1, le=30),
+    _user: User = Depends(require_role(["cpi-admin"])),
     service: TraceService = Depends(get_service),
 ):
     """Create demo AI session traces for the Hegemon dashboard."""

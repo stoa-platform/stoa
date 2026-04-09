@@ -313,6 +313,7 @@ class MonitoringService:
         status_code: int | None = None,
         time_range_minutes: int = 60,
         service_type: str | None = None,
+        tenant_id: str | None = None,
     ) -> list[APITransactionSummary] | None:
         """List recent transactions from OTel span index (root spans only).
 
@@ -344,6 +345,9 @@ class MonitoringService:
                 {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
                 {"terms": {"name": request_span_names}},
             ]
+            # CAB-2030: Tenant isolation — non-admin users only see their tenant's spans
+            if tenant_id:
+                filters.append({"term": {"resource.attributes.tenant@id": tenant_id}})
             if api_name:
                 filters.append({"term": {"serviceName": api_name}})
             if route:
@@ -534,6 +538,7 @@ class MonitoringService:
     async def get_transaction_from_spans(
         self,
         trace_id: str,
+        tenant_id: str | None = None,
     ) -> APITransaction | None:
         """Get detailed transaction with waterfall from OTel span index.
 
@@ -544,8 +549,12 @@ class MonitoringService:
         """
         try:
             # Try as traceId first
+            trace_filters: list[dict] = [{"term": {"traceId": trace_id}}]
+            # CAB-2030: Tenant isolation
+            if tenant_id:
+                trace_filters.append({"term": {"resource.attributes.tenant@id": tenant_id}})
             body = {
-                "query": {"bool": {"filter": [{"term": {"traceId": trace_id}}]}},
+                "query": {"bool": {"filter": trace_filters}},
                 "sort": [{"startTime": {"order": "asc"}}],
                 "size": 200,
             }
@@ -770,26 +779,36 @@ class MonitoringService:
     async def get_transaction_stats_from_spans(
         self,
         time_range_minutes: int = 60,
+        tenant_id: str | None = None,
     ) -> APITransactionStats | None:
-        """Get aggregated transaction statistics from OTel span index."""
+        """Get aggregated transaction statistics from OTel span index.
+
+        Args:
+            tenant_id: If set, filter to this tenant only. None = all tenants (cpi-admin).
+        """
         try:
+            span_filters: list[dict] = [
+                {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+                {
+                    "terms": {
+                        "name": [
+                            "mcp.tools.call",
+                            "mcp.tools.list",
+                            "proxy.dynamic",
+                            "http.request",
+                        ]
+                    }
+                },
+            ]
+            # CAB-2030: Tenant isolation
+            if tenant_id:
+                span_filters.append({"term": {"resource.attributes.tenant@id": tenant_id}})
+
             body = {
                 "size": 0,
                 "query": {
                     "bool": {
-                        "filter": [
-                            {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
-                            {
-                                "terms": {
-                                    "name": [
-                                        "mcp.tools.call",
-                                        "mcp.tools.list",
-                                        "proxy.dynamic",
-                                        "http.request",
-                                    ]
-                                }
-                            },
-                        ]
+                        "filter": span_filters,
                     }
                 },
                 "aggs": {

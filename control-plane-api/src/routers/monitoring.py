@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/monitoring", tags=["Monitoring"])
 
 
+def _tenant_filter(user: User) -> str | None:
+    """Extract tenant_id for filtering. cpi-admin sees all (None)."""
+    if "cpi-admin" in user.roles:
+        return None
+    return user.tenant_id
+
+
 # =============================================================================
 # OPENSEARCH SERVICE DEPENDENCY
 # =============================================================================
@@ -95,6 +102,7 @@ async def list_transactions(
     Falls back to empty list when no data source is available.
     """
     svc = _get_monitoring_service()
+    tenant_id = _tenant_filter(user)
 
     # Source 1: OpenSearch otel-v1-apm-span-* (Data Prepper OTLP — CAB-1997)
     if svc and settings.OPENSEARCH_TRACES_ENABLED:
@@ -106,6 +114,7 @@ async def list_transactions(
             status_code=status_code,
             time_range_minutes=time_range,
             service_type=service_type,
+            tenant_id=tenant_id,
         )
         if result is not None:
             return TransactionListResponse(
@@ -122,6 +131,7 @@ async def list_transactions(
         status=status,
         time_range_minutes=time_range,
         cursor=cursor,
+        tenant_id=tenant_id,
     )
     if tempo_result is not None:
         traces, next_cursor = tempo_result
@@ -152,12 +162,15 @@ async def get_transaction_stats(
     Returns aggregated metrics from OpenSearch.
     Tempo does not support aggregation — returns zeroed stats with source indicator.
     """
-    tenant_id = user.tenant_id
+    tenant_id = _tenant_filter(user)
     svc = _get_monitoring_service()
 
     # Source 1: OpenSearch otel-v1-apm-span-* (CAB-1997)
     if svc and settings.OPENSEARCH_TRACES_ENABLED:
-        result = await svc.get_transaction_stats_from_spans(time_range_minutes=time_range)
+        result = await svc.get_transaction_stats_from_spans(
+            time_range_minutes=time_range,
+            tenant_id=tenant_id,
+        )
         if result is not None:
             return TransactionStatsWithDemoResponse(
                 **result.model_dump(),
@@ -203,10 +216,11 @@ async def get_transaction(
     Checks OpenSearch first, then Tempo for trace detail.
     """
     svc = _get_monitoring_service()
+    tenant_id = _tenant_filter(user)
 
     # Source 1: OpenSearch otel-v1-apm-span-* (Data Prepper OTLP — CAB-1997)
     if svc and settings.OPENSEARCH_TRACES_ENABLED:
-        result = await svc.get_transaction_from_spans(trace_id=transaction_id)
+        result = await svc.get_transaction_from_spans(trace_id=transaction_id, tenant_id=tenant_id)
         if result is not None:
             return TransactionDetailWithDemoResponse(
                 **result.model_dump(),

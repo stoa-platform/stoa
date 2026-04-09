@@ -217,6 +217,7 @@ async def search_traces(
     status: str | None = None,
     time_range_minutes: int = 60,
     cursor: str | None = None,
+    tenant_id: str | None = None,
 ) -> tuple[list[APITransactionSummary], str | None] | None:
     """Search Tempo for recent traces. Returns (traces, next_cursor) or None on failure.
 
@@ -240,6 +241,9 @@ async def search_traces(
             tags.append(f'name="{api_name}"')
         if status == "error":
             tags.append("status=error")
+        # CAB-2030: Tenant isolation — filter by tenant.id span attribute
+        if tenant_id:
+            tags.append(f'resource.tenant.id="{tenant_id}"')
 
         if tags:
             params["tags"] = " && ".join(tags)

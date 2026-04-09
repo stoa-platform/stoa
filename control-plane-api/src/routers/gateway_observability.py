@@ -61,15 +61,22 @@ async def get_guardrails_events(
     if not client:
         return {"events": [], "total": 0}
 
+    tenant_id = _tenant_filter(user)
+
     try:
+        filters: list[dict] = [
+            {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+            {"term": {"name": "policy.guardrails"}},
+            {"exists": {"field": "span.attributes.guardrails@action"}},
+        ]
+        # CAB-2031: tenant-admin sees only own tenant's guardrails events
+        if tenant_id:
+            filters.append({"term": {"resource.attributes.tenant@id": tenant_id}})
+
         body = {
             "query": {
                 "bool": {
-                    "filter": [
-                        {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
-                        {"term": {"name": "policy.guardrails"}},
-                        {"exists": {"field": "span.attributes.guardrails@action"}},
-                    ],
+                    "filter": filters,
                     "must_not": [
                         {"term": {"span.attributes.guardrails@action": "pass"}},
                     ],

@@ -8,6 +8,8 @@ Note: The audit router is not registered in the main app (it's a standalone modu
 We create a standalone test app that includes it.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,6 +23,12 @@ def _clear_audit_data():
     audit_mod._demo_security_events.clear()
 
 
+# Mock OpenSearchService at module level so the audit router's fallback to
+# demo data works without needing real OpenSearch/PostgreSQL connections.
+_mock_os_instance = MagicMock()
+_mock_os_instance.client = None  # No OpenSearch client → skip to demo data
+
+
 def _make_app(user_roles=None, user_tenant_id=None):
     """Create a minimal FastAPI app with the audit router and auth override."""
     from tests.conftest import User
@@ -29,6 +37,7 @@ def _make_app(user_roles=None, user_tenant_id=None):
     test_app.include_router(audit_router)
 
     from src.auth.dependencies import get_current_user
+    from src.database import get_db
 
     user = User(
         id="test-user",
@@ -41,12 +50,31 @@ def _make_app(user_roles=None, user_tenant_id=None):
     async def override_user():
         return user
 
+    async def override_db():
+        yield AsyncMock()
+
     test_app.dependency_overrides[get_current_user] = override_user
+    test_app.dependency_overrides[get_db] = override_db
     return test_app
 
 
 class TestAuditRouter:
     """Test suite for Audit Router endpoints."""
+
+    _os_patch = None
+
+    @classmethod
+    def setup_class(cls):
+        cls._os_patch = patch(
+            "src.routers.audit.OpenSearchService.get_instance",
+            return_value=_mock_os_instance,
+        )
+        cls._os_patch.start()
+
+    @classmethod
+    def teardown_class(cls):
+        if cls._os_patch:
+            cls._os_patch.stop()
 
     # ============== List Audit Entries ==============
 

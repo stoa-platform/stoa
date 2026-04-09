@@ -204,13 +204,10 @@ class TestPortalApplicationsRouter:
 
     @patch("src.routers.portal_applications.keycloak_service")
     @patch("src.routers.portal_applications.PortalApplicationRepository")
-    def test_create_application_kc_failure_graceful(self, mock_repo_cls, mock_kc, app_with_tenant_admin):
-        """Create application succeeds even when Keycloak fails."""
+    def test_create_application_kc_failure_returns_503(self, mock_repo_cls, mock_kc, app_with_tenant_admin):
+        """Create application returns 503 when Keycloak is unavailable."""
         mock_repo = AsyncMock()
         mock_repo.get_by_owner_and_name.return_value = None
-
-        created_app = _make_app(keycloak_client_id=None, keycloak_client_uuid=None)
-        mock_repo.create.return_value = created_app
         mock_repo_cls.return_value = mock_repo
 
         mock_kc.create_client = AsyncMock(side_effect=Exception("KC unavailable"))
@@ -221,10 +218,8 @@ class TestPortalApplicationsRouter:
                 json={"name": "new-app", "display_name": "New App"},
             )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["client_secret"] is None  # No KC secret
-        assert data["client_id"] is None  # No KC client
+        assert response.status_code == 503
+        assert "Authentication service unavailable" in response.json()["detail"]
 
     @patch("src.routers.portal_applications.PortalApplicationRepository")
     def test_create_application_duplicate_name_409(self, mock_repo_cls, app_with_tenant_admin):

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const PROMETHEUS_BASE = '/prometheus/api/v1';
+import { useAuth } from '../contexts/AuthContext';
+
+// CAB-2029: Route through authenticated API proxy instead of unauthenticated nginx pass-through
+const PROMETHEUS_BASE = '/api/v1/metrics';
 
 interface PrometheusResult {
   metric: Record<string, string>;
@@ -30,11 +33,16 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const { accessToken } = useAuth();
 
   const fetchQuery = useCallback(async () => {
+    if (!accessToken) return;
     try {
       const url = `${PROMETHEUS_BASE}/query?query=${encodeURIComponent(query)}`;
-      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       if (!response.ok) throw new Error(`Prometheus returned ${response.status}`);
       const json: PrometheusResponse = await response.json();
       if (mountedRef.current) {
@@ -49,11 +57,11 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [query]);
+  }, [query, accessToken]);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (query) fetchQuery();
+    if (query && accessToken) fetchQuery();
     if (refreshInterval > 0) {
       const interval = setInterval(fetchQuery, refreshInterval);
       return () => {
@@ -64,7 +72,7 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchQuery, refreshInterval, query]);
+  }, [fetchQuery, refreshInterval, query, accessToken]);
 
   return { data, loading, error, refetch: fetchQuery };
 }
@@ -82,13 +90,18 @@ export function usePrometheusRange(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const { accessToken } = useAuth();
 
   const fetchRange = useCallback(async () => {
+    if (!accessToken) return;
     try {
       const end = Math.floor(Date.now() / 1000);
       const start = end - durationSeconds;
       const url = `${PROMETHEUS_BASE}/query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&step=${step}`;
-      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       if (!response.ok) throw new Error(`Prometheus returned ${response.status}`);
       const json: PrometheusResponse = await response.json();
       if (mountedRef.current) {
@@ -108,11 +121,11 @@ export function usePrometheusRange(
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [query, durationSeconds, step]);
+  }, [query, durationSeconds, step, accessToken]);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (query) fetchRange();
+    if (query && accessToken) fetchRange();
     if (refreshInterval > 0) {
       const interval = setInterval(fetchRange, refreshInterval);
       return () => {
@@ -123,7 +136,7 @@ export function usePrometheusRange(
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchRange, refreshInterval, query]);
+  }, [fetchRange, refreshInterval, query, accessToken]);
 
   return { data, loading, error, refetch: fetchRange };
 }

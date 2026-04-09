@@ -20,7 +20,7 @@ import { ErrorBreakdown } from './components/ErrorBreakdown';
 import { TopRoutes } from './components/TopRoutes';
 import { TrafficHeatmap } from './components/TrafficHeatmap';
 import { LiveTraces } from './components/LiveTraces';
-import type { TraceEntry, TraceSpan } from './components/LiveTraces';
+import type { TraceEntry } from './components/LiveTraces';
 import { AutoRefreshToggle } from './components/AutoRefreshToggle';
 
 const DEFAULT_REFRESH = 15;
@@ -100,7 +100,7 @@ async function fetchTransactions(
   timeRange?: string,
   statusFilter?: string,
   routeFilter?: string
-): Promise<{ traces: TraceEntry[]; isDemo: boolean }> {
+): Promise<TraceEntry[]> {
   try {
     const rangeMinutes = timeRange ? TIME_RANGE_MINUTES[timeRange] || '60' : undefined;
     const statusCodeNum = statusFilter ? parseInt(statusFilter, 10) : undefined;
@@ -113,64 +113,10 @@ async function fetchTransactions(
       routeFilter || undefined
     );
     const transactions = data.transactions || [];
-    if (transactions.length > 0) {
-      return { traces: transactions.map(mapTransaction), isDemo: false };
-    }
-    // If a filter is active, return empty (not demo data)
-    const hasFilter = !!(serviceType || statusFilter || routeFilter);
-    if (hasFilter) {
-      return { traces: [], isDemo: false };
-    }
-    return { traces: generateDemoTraces(limit), isDemo: true };
+    return transactions.map(mapTransaction);
   } catch {
-    return { traces: generateDemoTraces(limit), isDemo: true };
+    return [];
   }
-}
-
-function generateDemoTraces(count: number): TraceEntry[] {
-  const routes = ['/customers', '/orders', '/products', '/payments', '/search', '/artifacts/{id}'];
-  const methods = ['GET', 'POST', 'PUT', 'DELETE'];
-  const statuses = [200, 200, 200, 200, 200, 201, 400, 404, 500, 502];
-  const modes = ['edge-mcp', 'sidecar', 'connect'];
-
-  return Array.from({ length: count }, (_, i) => {
-    const statusCode = statuses[Math.floor(Math.random() * statuses.length)];
-    const baseDuration = statusCode >= 500 ? 800 + Math.random() * 2000 : 20 + Math.random() * 300;
-    const duration = Math.round(baseDuration);
-    const now = Date.now() - Math.random() * 3600_000;
-
-    const spanNames = [
-      'gateway_ingress',
-      'auth_validation',
-      'rate_limiting',
-      'backend_call',
-      'response_transform',
-    ];
-    let offset = 0;
-    const spans: TraceSpan[] = spanNames.map((name) => {
-      const d = Math.round((duration / spanNames.length) * (0.5 + Math.random()));
-      const span: TraceSpan = {
-        name,
-        service: 'stoa-gateway',
-        startOffsetMs: offset,
-        durationMs: d,
-        status: statusCode >= 500 && name === 'backend_call' ? 'error' : 'success',
-      };
-      offset += d;
-      return span;
-    });
-
-    return {
-      id: `trace-${i}-${Math.random().toString(36).slice(2, 8)}`,
-      route: routes[Math.floor(Math.random() * routes.length)],
-      method: methods[Math.floor(Math.random() * methods.length)],
-      mode: modes[Math.floor(Math.random() * modes.length)],
-      statusCode,
-      durationMs: duration,
-      timestamp: new Date(now).toISOString(),
-      spans,
-    };
-  }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 // ─── Dashboard Component ───
@@ -181,7 +127,6 @@ export function CallFlowDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const [autoRefresh, setAutoRefresh] = useState(DEFAULT_REFRESH);
   const [traces, setTraces] = useState<TraceEntry[]>([]);
-  const [tracesDemo, setTracesDemo] = useState(false);
   const [serviceType, setServiceType] = useState<string>(searchParams.get('serviceType') || '');
   const [routeFilter, setRouteFilter] = useState<string>(searchParams.get('route') || '');
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || '');
@@ -285,23 +230,13 @@ export function CallFlowDashboard() {
 
   useEffect(() => {
     tracesRef.current = true;
-    fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(
-      ({ traces: t, isDemo }) => {
-        setTraces(t);
-        setTracesDemo(isDemo);
-      }
-    );
+    fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(setTraces);
   }, [serviceType, timeRange, statusFilter, routeFilter]);
 
   useEffect(() => {
     if (!refreshMs) return;
     const interval = setInterval(() => {
-      fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(
-        ({ traces: t, isDemo }) => {
-          setTraces(t);
-          setTracesDemo(isDemo);
-        }
-      );
+      fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(setTraces);
     }, refreshMs);
     return () => clearInterval(interval);
   }, [refreshMs, serviceType, timeRange, statusFilter, routeFilter]);
@@ -473,10 +408,7 @@ export function CallFlowDashboard() {
     fallbackErrors.refetch();
     fallbackTrend.refetch();
     requestsTrend.refetch();
-    fetchTransactions(50, serviceType, timeRange, statusFilter).then(({ traces: t, isDemo }) => {
-      setTraces(t);
-      setTracesDemo(isDemo);
-    });
+    fetchTransactions(50, serviceType, timeRange, statusFilter).then(setTraces);
   }, [
     totalRequests,
     totalErrors,
@@ -740,11 +672,6 @@ export function CallFlowDashboard() {
                     {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} — clear
                   </button>
                 )}
-                {tracesDemo && (
-                  <span className="text-[10px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full font-medium">
-                    Demo data
-                  </span>
-                )}
                 <span className="text-xs text-neutral-400 dark:text-neutral-500">
                   {filteredTraces.length}/{traces.length} traces
                 </span>
@@ -757,7 +684,7 @@ export function CallFlowDashboard() {
               emptyMessage={
                 activeFilterCount > 0
                   ? 'No trace spans found for this filter — metrics (Prometheus) and traces (OpenSearch) may not cover the same time window'
-                  : undefined
+                  : 'No traces yet — ensure gateway routes are configured and the observability pipeline (Alloy, Tempo, OpenSearch) is active'
               }
             />
           </ChartCard>

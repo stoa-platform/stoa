@@ -110,6 +110,109 @@ class GitProvider(ABC):
             Dictionary with keys: name, default_branch, url, visibility.
         """
 
+    # ============================================================
+    # Write operations (CAB-2011: GitOps source of truth)
+    # ============================================================
+
+    @abstractmethod
+    async def create_file(
+        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> dict[str, Any]:
+        """Create a new file in the repository.
+
+        Args:
+            project_id: Provider-specific project identifier.
+            file_path: Path for the new file.
+            content: File content.
+            commit_message: Git commit message.
+            branch: Target branch. Defaults to "main".
+
+        Returns:
+            Commit metadata (sha, url).
+
+        Raises:
+            ValueError: If the file already exists.
+        """
+
+    @abstractmethod
+    async def update_file(
+        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> dict[str, Any]:
+        """Update an existing file in the repository.
+
+        Args:
+            project_id: Provider-specific project identifier.
+            file_path: Path to the existing file.
+            content: New file content.
+            commit_message: Git commit message.
+            branch: Target branch. Defaults to "main".
+
+        Returns:
+            Commit metadata (sha, url).
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+
+    @abstractmethod
+    async def delete_file(self, project_id: str, file_path: str, commit_message: str, branch: str = "main") -> bool:
+        """Delete a file from the repository.
+
+        Args:
+            project_id: Provider-specific project identifier.
+            file_path: Path to the file to delete.
+            commit_message: Git commit message.
+            branch: Target branch. Defaults to "main".
+
+        Returns:
+            True if deleted.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+
+    async def get_api_override(self, tenant_id: str, api_id: str, environment: str) -> dict | None:
+        """Read per-environment override for an API (CAB-2015).
+
+        Looks for ``tenants/{tenant}/apis/{api}/overrides/{environment}.yaml``.
+        Returns parsed dict if file exists, ``None`` otherwise.
+        Default implementation uses :meth:`get_file_content`; subclasses may override.
+        """
+        import yaml
+
+        project_id = getattr(settings, "GITLAB_PROJECT_ID", None) or (
+            f"{getattr(settings, 'GITHUB_ORG', '')}/{getattr(settings, 'GITHUB_CATALOG_REPO', '')}"
+        )
+        file_path = f"tenants/{tenant_id}/apis/{api_id}/overrides/{environment}.yaml"
+        try:
+            content = await self.get_file_content(str(project_id), file_path)
+            return yaml.safe_load(content)
+        except FileNotFoundError:
+            return None
+
+    @abstractmethod
+    async def batch_commit(
+        self,
+        project_id: str,
+        actions: list[dict[str, str]],
+        commit_message: str,
+        branch: str = "main",
+    ) -> dict[str, Any]:
+        """Create an atomic commit with multiple file operations.
+
+        Args:
+            project_id: Provider-specific project identifier.
+            actions: List of file actions. Each action is a dict with keys:
+                - action: "create", "update", or "delete"
+                - file_path: Path within the repository
+                - content: File content (required for create/update)
+            commit_message: Git commit message.
+            branch: Target branch. Defaults to "main".
+
+        Returns:
+            Commit metadata (sha, url).
+        """
+
 
 def git_provider_factory() -> GitProvider:
     """Create a GitProvider instance based on GIT_PROVIDER setting.

@@ -729,7 +729,7 @@ async fn handle_initialize(
                 )
                 .await;
             debug!(
-                level = ?opt_settings.level,
+                opt_level = ?opt_settings.level,
                 max_tokens = ?opt_settings.max_response_tokens,
                 "Token optimization negotiated"
             );
@@ -884,7 +884,7 @@ async fn handle_tools_call(
 
                 debug!(
                     tool = %tool_name,
-                    level = ?opt_settings.level,
+                    opt_level = ?opt_settings.level,
                     input_bytes = stats.input_bytes,
                     output_bytes = stats.output_bytes,
                     reduction_pct = stats.reduction_pct,
@@ -1057,7 +1057,7 @@ async fn handle_logging_set_level(
         .update_metadata(session_id, "logging_level".to_string(), level.to_string())
         .await;
 
-    debug!(session_id = %session_id, level = %level, "Client set logging level");
+    debug!(session_id = %session_id, log_level = %level, "Client set logging level");
 
     JsonRpcResponse::success(request.id.clone(), json!({}))
 }

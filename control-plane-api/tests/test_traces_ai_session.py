@@ -369,10 +369,10 @@ class TestAISessionStats:
             resp = client.get("/v1/traces/stats/ai-sessions?worker=hegemon-mcp&days=14")
 
         assert resp.status_code == 200
-        mock_svc.get_ai_session_stats.assert_called_once_with(14, "hegemon-mcp")
+        mock_svc.get_ai_session_stats.assert_called_once_with(14, "hegemon-mcp", tenant_id=None)
 
     def test_stats_default_params(self, app_with_cpi_admin, mock_db_session):
-        """Default params: days=7, worker=None."""
+        """Default params: days=7, worker=None, tenant_id=None (cpi-admin)."""
         mock_svc = MagicMock()
         mock_svc.get_ai_session_stats = AsyncMock(
             return_value={
@@ -393,7 +393,7 @@ class TestAISessionStats:
             resp = client.get("/v1/traces/stats/ai-sessions")
 
         assert resp.status_code == 200
-        mock_svc.get_ai_session_stats.assert_called_once_with(7, None)
+        mock_svc.get_ai_session_stats.assert_called_once_with(7, None, tenant_id=None)
 
     def test_stats_invalid_days(self, app_with_cpi_admin, mock_db_session):
         """days=0 returns 422 (ge=1)."""

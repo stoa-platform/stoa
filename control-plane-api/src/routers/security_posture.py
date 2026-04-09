@@ -18,11 +18,13 @@ from ..auth.dependencies import User, get_current_user
 from ..auth.rbac import require_tenant_access
 from ..config import settings
 from ..database import get_db
+from ..opensearch.opensearch_integration import OpenSearchService
 from ..schemas.security_posture import (
     FindingSeverity,
     IngestFindingsRequest,
     SetBaselineRequest,
 )
+from ..services.security_aggregation_service import security_aggregation_service
 from ..services.security_scanner_service import security_scanner_service
 
 
@@ -78,8 +80,15 @@ async def get_security_score(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get current security score for a tenant."""
-    return await security_scanner_service.calculate_score(tenant_id, db)
+    """Get current security score for a tenant (aggregated from all sources)."""
+    os_client = None
+    try:
+        service = OpenSearchService.get_instance()
+        if service.client:
+            os_client = service.client
+    except Exception:
+        pass
+    return await security_aggregation_service.calculate_aggregated_score(tenant_id, db, os_client)
 
 
 # --- Findings ---
@@ -97,10 +106,18 @@ async def list_findings(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List security findings with optional filters."""
-    return await security_scanner_service.list_findings(
+    """List security findings from all sources (aggregated)."""
+    os_client = None
+    try:
+        service = OpenSearchService.get_instance()
+        if service.client:
+            os_client = service.client
+    except Exception:
+        pass
+    return await security_aggregation_service.list_aggregated_findings(
         tenant_id,
         db,
+        os_client,
         page=page,
         page_size=page_size,
         severity=severity.value if severity else None,

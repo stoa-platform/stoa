@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     # OpenSearch Traces (CAB-1997) - query otel-v1-apm-span-* from Data Prepper
     OPENSEARCH_TRACES_ENABLED: bool = True
 
+    # Git Sync Worker (CAB-2012) — async Git commits on API CRUD
+    GIT_SYNC_ON_WRITE: bool = True  # Kill-switch: set False to disable Git sync
+
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes

@@ -23,7 +23,7 @@ from ..models.catalog import APICatalog
 from ..repositories.catalog import CatalogRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
-from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
+from ..services.git_provider import git_provider_factory
 from ..services.kafka_service import kafka_service
 
 logger = logging.getLogger(__name__)

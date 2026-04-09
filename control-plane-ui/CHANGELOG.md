@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.0...control-plane-ui-v1.2.1) (2026-04-09)
+
+
+### Bug Fixes
+
+* **ui:** revert ESLint 10→8 + pin TypeScript 5.7 (CAB-2034) ([#2286](https://github.com/stoa-platform/stoa/issues/2286)) ([cac86c3](https://github.com/stoa-platform/stoa/commit/cac86c3c000f1aac25d8c8e7430b0ee909dfcded))
+
 ## [1.2.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.1.0...control-plane-ui-v1.2.0) (2026-04-09)
 
 

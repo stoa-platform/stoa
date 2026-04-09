@@ -50,7 +50,7 @@ spec:
                 - name: DURATION
                   value: "480"
                 - name: TENANTS
-                  value: "high-five,oasis,ioi"
+                  value: "demo,high-five,oasis,ioi"
                 - name: BUSINESS_HOURS_MULT
                   value: "3.0"
                 # API keys from Vault via ExternalSecret

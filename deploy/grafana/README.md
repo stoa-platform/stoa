@@ -38,12 +38,12 @@
 
 ### Using Kustomize (Recommended)
 ```bash
-kubectl apply -k deploy/grafana/dashboards/ -n stoa-monitoring
+kubectl apply -k deploy/grafana/dashboards/ -n monitoring
 ```
 
 ### Manual ConfigMap deployment
 ```bash
-kubectl apply -f deploy/grafana/dashboards/mcp-gateway-configmap.yaml -n stoa-monitoring
+kubectl apply -f deploy/grafana/dashboards/mcp-gateway-configmap.yaml -n monitoring
 ```
 
 ## Grafana Sidecar

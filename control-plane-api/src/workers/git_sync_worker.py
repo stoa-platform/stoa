@@ -18,7 +18,7 @@ from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
 from ..config import settings
-from ..services.git_provider import get_git_provider
+from ..services.git_provider import GitProvider, get_git_provider
 from ..services.kafka_service import Topics
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class GitSyncWorker:
         self._consumer: KafkaConsumer | None = None
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._github_service = None
+        self._github_service: GitProvider | None = None
         self._git_sync_enabled: bool = settings.GIT_SYNC_ON_WRITE
         self._retry_delays: list[int] = list(DEFAULT_RETRY_DELAYS)
 
@@ -234,10 +234,12 @@ class GitSyncWorker:
 
     async def _handle_create(self, tenant_id: str, payload: dict) -> None:
         """Handle api-created event."""
+        assert self._github_service is not None
         await self._github_service.create_api(tenant_id, payload)
 
     async def _handle_update(self, tenant_id: str, api_name: str, payload: dict) -> None:
         """Handle api-updated event with idempotency check."""
+        assert self._github_service is not None
         if hasattr(self._github_service, "is_api_up_to_date") and await self._github_service.is_api_up_to_date(
             tenant_id, api_name, payload
         ):
@@ -248,6 +250,7 @@ class GitSyncWorker:
 
     async def _handle_delete(self, tenant_id: str, api_name: str) -> None:
         """Handle api-deleted event."""
+        assert self._github_service is not None
         await self._github_service.delete_api(tenant_id, api_name)
 
 

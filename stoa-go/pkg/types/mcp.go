@@ -40,9 +40,14 @@ type MCPToolCallResponse struct {
 	Error  string          `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
-// MCPHealthResponse is the response from the MCP health endpoint
+// MCPHealthResponse is the response from the MCP health endpoint.
+// CP API returns status/version/uptime; gateway /mcp/health returns
+// status/protocolVersion/tools/activeSessions.
 type MCPHealthResponse struct {
-	Status  string `json:"status" yaml:"status"`
-	Version string `json:"version,omitempty" yaml:"version,omitempty"`
-	Uptime  string `json:"uptime,omitempty" yaml:"uptime,omitempty"`
+	Status          string `json:"status" yaml:"status"`
+	Version         string `json:"version,omitempty" yaml:"version,omitempty"`
+	Uptime          string `json:"uptime,omitempty" yaml:"uptime,omitempty"`
+	ProtocolVersion string `json:"protocolVersion,omitempty" yaml:"protocolVersion,omitempty"`
+	Tools           int    `json:"tools,omitempty" yaml:"tools,omitempty"`
+	ActiveSessions  int    `json:"activeSessions,omitempty" yaml:"activeSessions,omitempty"`
 }

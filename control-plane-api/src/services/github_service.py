@@ -238,6 +238,35 @@ class GitHubService(GitProvider):
         logger.info("Batch commit %s on %s/%s (%d actions)", new_commit.sha[:8], project_id, branch, len(actions))
         return {"sha": new_commit.sha, "url": new_commit.html_url}
 
+    async def create_pull_request(
+        self,
+        project_id: str,
+        branch: str,
+        title: str,
+        body: str,
+        actions: list[dict[str, str]],
+        base: str = "main",
+    ) -> dict[str, Any]:
+        """Create a branch with changes and open a pull request.
+
+        1. Creates a new branch from base
+        2. Commits all actions to that branch via batch_commit
+        3. Opens a PR from branch → base
+        """
+        repo = self._get_repo(project_id)
+
+        # Create branch from base HEAD
+        base_ref = repo.get_git_ref(f"heads/{base}")
+        repo.create_git_ref(f"refs/heads/{branch}", base_ref.object.sha)
+
+        # Commit changes to the new branch
+        await self.batch_commit(project_id, actions, title, branch=branch)
+
+        # Open PR
+        pr = repo.create_pull(title=title, body=body, head=branch, base=base)
+        logger.info("Created PR #%d on %s: %s", pr.number, project_id, title)
+        return {"pr_number": pr.number, "url": pr.html_url}
+
     # ============================================================
     # High-level catalog operations (CAB-2011)
     # ============================================================
@@ -331,6 +360,7 @@ class GitHubService(GitProvider):
         tenants/{tenant_id}/apis/{api_name}/
         ├── api.yaml
         ├── openapi.yaml (if provided)
+        ├── overrides/{env}.yaml (if provided, CAB-2015)
         └── policies/.gitkeep
         """
         project_id = self._catalog_project_id()
@@ -366,6 +396,14 @@ class GitHubService(GitProvider):
                 {"action": "create", "file_path": f"{api_path}/openapi.yaml", "content": api_data["openapi_spec"]}
             )
 
+        # CAB-2015: write per-environment overrides if provided
+        overrides: dict[str, dict] = api_data.get("overrides", {})
+        for env_name, env_config in overrides.items():
+            override_yaml = yaml.dump(env_config, default_flow_style=False, allow_unicode=True)
+            actions.append(
+                {"action": "create", "file_path": f"{api_path}/overrides/{env_name}.yaml", "content": override_yaml}
+            )
+
         await self.batch_commit(
             project_id,
             actions=actions,
@@ -386,11 +424,24 @@ class GitHubService(GitProvider):
         except FileNotFoundError:
             raise FileNotFoundError(f"API '{api_name}' not found for tenant '{tenant_id}'")
 
+        # Separate overrides from base api_data
+        overrides: dict[str, dict] = api_data.pop("overrides", {})
+
         current = yaml.safe_load(current_content)
         current.update(api_data)
         updated_yaml = yaml.dump(current, default_flow_style=False, allow_unicode=True)
 
-        await self.update_file(project_id, file_path, updated_yaml, f"Update API {api_name}")
+        # CAB-2015: batch base + override updates in one commit
+        if overrides:
+            actions = [{"action": "update", "file_path": file_path, "content": updated_yaml}]
+            for env_name, env_config in overrides.items():
+                override_path = f"{api_path}/overrides/{env_name}.yaml"
+                override_yaml = yaml.dump(env_config, default_flow_style=False, allow_unicode=True)
+                action = "update" if await self._file_exists(project_id, override_path) else "create"
+                actions.append({"action": action, "file_path": override_path, "content": override_yaml})
+            await self.batch_commit(project_id, actions=actions, commit_message=f"Update API {api_name}")
+        else:
+            await self.update_file(project_id, file_path, updated_yaml, f"Update API {api_name}")
 
         logger.info("Updated API %s for tenant %s", api_name, tenant_id)
         return True

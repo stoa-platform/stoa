@@ -6,8 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#059669" />
     <title>STOA Control Plane</title>
-    <!-- Runtime config injected by container entrypoint (overrides Vite build-time defaults) -->
-    <script src="/runtime-config.js"></script>
+    <!-- Runtime config injected by container entrypoint (overrides Vite build-time defaults).
+         ?v= is rewritten on container startup by 19-envsubst-custom.sh to invalidate any
+         stale browser cache of /runtime-config.js (previously served with immutable). -->
+    <script src="/runtime-config.js?v=__RUNTIME_CFG_V__"></script>
     <!-- Prevent flash of wrong theme — runs before first paint -->
     <script>
       (function(){var t=localStorage.getItem('stoa-theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()

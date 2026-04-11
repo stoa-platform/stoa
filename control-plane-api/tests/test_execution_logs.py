@@ -283,7 +283,7 @@ async def test_list_executions_cpi_admin_access():
 async def test_list_my_executions():
     """Portal user can list their own executions."""
     logs = [_make_execution(consumer_id="consumer-1")]
-    user = _make_user(consumer_id="consumer-1")
+    user = _make_user(consumer_id="consumer-1", roles=["viewer"])
     app.dependency_overrides[get_current_user] = _override_auth(user)
     app.dependency_overrides[get_db] = _override_db
 
@@ -300,8 +300,8 @@ async def test_list_my_executions():
 
 @pytest.mark.asyncio
 async def test_list_my_executions_no_consumer():
-    """Portal user without consumer_id gets empty response."""
-    user = _make_user(consumer_id=None)
+    """Non-admin portal user without consumer_id gets empty response."""
+    user = _make_user(consumer_id=None, roles=["viewer"])
     app.dependency_overrides[get_current_user] = _override_auth(user)
     app.dependency_overrides[get_db] = _override_db
 
@@ -342,8 +342,8 @@ async def test_my_taxonomy():
 
 @pytest.mark.asyncio
 async def test_my_taxonomy_no_consumer():
-    """Portal user without consumer_id gets empty taxonomy."""
-    user = _make_user(consumer_id=None)
+    """Non-admin portal user without consumer_id gets empty taxonomy."""
+    user = _make_user(consumer_id=None, roles=["viewer"])
     app.dependency_overrides[get_current_user] = _override_auth(user)
     app.dependency_overrides[get_db] = _override_db
 

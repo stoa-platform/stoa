@@ -1,0 +1,5 @@
+{
+  "score": 9,
+  "feedback": "Lint clean, naming conventions respected (snake_case Python, kebab-case files), commit format type(scope): subject. No TODO without ticket reference. No dead code.",
+  "blockers": []
+}

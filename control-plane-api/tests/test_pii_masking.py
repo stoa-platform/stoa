@@ -366,7 +366,8 @@ class TestPIIMaskingMiddleware:
         scope = self._make_scope(query_string=b"token=secret123&page=1")
         await mw(scope, None, None)
 
-        qs = captured_scope["query_string"].decode()
+        # Masked QS is stored in _pii_masked_query_string (original preserved for FastAPI)
+        qs = captured_scope["_pii_masked_query_string"].decode()
         assert "secret123" not in qs
         assert "token=[REDACTED]" in qs
         assert "page=1" in qs
@@ -384,7 +385,8 @@ class TestPIIMaskingMiddleware:
         scope = self._make_scope(query_string=b"search=john@example.com&page=1")
         await mw(scope, None, None)
 
-        qs = captured_scope["query_string"].decode()
+        # Masked QS is stored in _pii_masked_query_string (original preserved for FastAPI)
+        qs = captured_scope["_pii_masked_query_string"].decode()
         assert "john@example.com" not in qs
         assert "page=1" in qs
 

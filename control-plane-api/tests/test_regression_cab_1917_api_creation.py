@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # 1. Legacy deploy endpoint — deprecation headers
 # ---------------------------------------------------------------------------
+
 
 class TestRegression_LegacyDeployDeprecation:
     """CAB-1917: deploy_to_environment must return Deprecation headers."""
@@ -39,6 +39,7 @@ class TestRegression_LegacyDeployDeprecation:
 # ---------------------------------------------------------------------------
 # 2. auto_deploy_on_promotion wired to approval flow
 # ---------------------------------------------------------------------------
+
 
 class TestRegression_AutoDeployOnPromotion:
     """CAB-1917: approve_promotion() must trigger auto_deploy_on_promotion()."""
@@ -105,20 +106,25 @@ class TestRegression_AutoDeployOnPromotion:
 # 3. list_apis error handling
 # ---------------------------------------------------------------------------
 
+
 class TestRegression_ListApisErrorHandling:
     """CAB-1917: list_apis must return 503 when backend fails, not empty list."""
 
-    def test_git_error_returns_503(self, client_as_tenant_admin):
-        with patch("src.routers.apis.git_service") as mock_git:
-            mock_git.list_apis = AsyncMock(side_effect=ConnectionError("GitLab unreachable"))
+    def test_catalog_error_returns_503(self, client_as_tenant_admin):
+        with patch("src.routers.apis.CatalogRepository") as mock_repo_cls:
+            mock_repo = AsyncMock()
+            mock_repo.get_portal_apis = AsyncMock(side_effect=ConnectionError("DB unreachable"))
+            mock_repo_cls.return_value = mock_repo
             resp = client_as_tenant_admin.get("/v1/tenants/acme/apis")
 
         assert resp.status_code == 503
         assert "temporarily unavailable" in resp.json()["detail"]
 
-    def test_git_error_does_not_return_200_empty(self, client_as_tenant_admin):
-        with patch("src.routers.apis.git_service") as mock_git:
-            mock_git.list_apis = AsyncMock(side_effect=RuntimeError("timeout"))
+    def test_catalog_error_does_not_return_200_empty(self, client_as_tenant_admin):
+        with patch("src.routers.apis.CatalogRepository") as mock_repo_cls:
+            mock_repo = AsyncMock()
+            mock_repo.get_portal_apis = AsyncMock(side_effect=RuntimeError("timeout"))
+            mock_repo_cls.return_value = mock_repo
             resp = client_as_tenant_admin.get("/v1/tenants/acme/apis")
 
         assert resp.status_code != 200
@@ -127,6 +133,7 @@ class TestRegression_ListApisErrorHandling:
 # ---------------------------------------------------------------------------
 # 4. OpenAPI spec validation
 # ---------------------------------------------------------------------------
+
 
 class TestRegression_OpenAPISpecValidation:
     """CAB-1917: create_api must validate OpenAPI spec syntax."""

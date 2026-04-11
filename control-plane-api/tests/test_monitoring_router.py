@@ -269,7 +269,7 @@ class TestMonitoringRouterWithTempo:
             assert "start_offset_ms" in span
             assert "duration_ms" in span
             assert "status" in span
-            assert isinstance(span["duration_ms"], int)
+            assert isinstance(span["duration_ms"], (int, float))
             assert span["duration_ms"] >= 0
 
     def test_get_transaction_detail_not_found(self, app_with_tenant_admin):

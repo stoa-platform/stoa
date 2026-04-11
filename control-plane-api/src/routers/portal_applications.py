@@ -139,8 +139,10 @@ def _is_admin(user: User) -> bool:
 
 
 def _check_ownership(app: PortalApplication, user: User) -> None:
-    """Raise 403 if user does not own the application (admins bypass)."""
-    if _is_admin(user):
+    """Raise 403 if user does not own the application (same-tenant admins bypass)."""
+    if "cpi-admin" in (user.roles or []):
+        return
+    if "tenant-admin" in (user.roles or []) and getattr(user, "tenant_id", None) == app.tenant_id:
         return
     if app.owner_id != user.id and app.owner_id != user.username:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -287,7 +289,11 @@ async def create_application(
             app.keycloak_client_uuid = kc_result.get("id")
             client_secret = kc_result.get("client_secret")
         except Exception as e:
-            logger.warning(f"Keycloak client creation failed (app will be created without KC): {e}")
+            logger.error(f"Keycloak client creation failed: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication service unavailable. Cannot create application credentials.",
+            )
 
     app = await repo.create(app)
     await db.commit()

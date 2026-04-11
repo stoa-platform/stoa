@@ -16,7 +16,7 @@ class TestGitProviderABC:
             GitProvider()
 
     def test_abc_defines_required_methods(self):
-        """All 6 abstract methods must be declared on the ABC."""
+        """All abstract methods must be declared on the ABC."""
         abstract_methods = GitProvider.__abstractmethods__
         expected = {
             "connect",
@@ -27,6 +27,10 @@ class TestGitProviderABC:
             "create_webhook",
             "delete_webhook",
             "get_repo_info",
+            "create_file",
+            "update_file",
+            "delete_file",
+            "batch_commit",
         }
         assert abstract_methods == expected
 

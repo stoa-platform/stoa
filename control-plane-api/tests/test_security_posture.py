@@ -38,7 +38,8 @@ from src.schemas.security_posture import (
 )
 from src.services.security_scanner_service import SecurityScannerService
 
-SERVICE_PATH = "src.routers.security_posture.security_scanner_service"
+SERVICE_PATH = "src.routers.security_posture.security_aggregation_service"
+SCANNER_SERVICE_PATH = "src.routers.security_posture.security_scanner_service"
 
 
 # ────────────────────────────────────────────────
@@ -877,7 +878,7 @@ class TestGetSecurityScoreRouter:
     @pytest.mark.asyncio
     async def test_cpi_admin_can_access(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
-            mock_svc.calculate_score = AsyncMock(return_value=_make_score_response())
+            mock_svc.calculate_aggregated_score = AsyncMock(return_value=_make_score_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/score")
             assert resp.status_code == 200
@@ -886,7 +887,7 @@ class TestGetSecurityScoreRouter:
     @pytest.mark.asyncio
     async def test_tenant_admin_own_tenant(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
-            mock_svc.calculate_score = AsyncMock(return_value=_make_score_response())
+            mock_svc.calculate_aggregated_score = AsyncMock(return_value=_make_score_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/score")
             assert resp.status_code == 200
@@ -910,7 +911,7 @@ class TestListFindingsRouter:
     @pytest.mark.asyncio
     async def test_list_findings_default(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
-            mock_svc.list_findings = AsyncMock(return_value=_make_findings_response())
+            mock_svc.list_aggregated_findings = AsyncMock(return_value=_make_findings_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/findings")
             assert resp.status_code == 200
@@ -919,7 +920,7 @@ class TestListFindingsRouter:
     @pytest.mark.asyncio
     async def test_list_findings_with_filters(self, app_with_cpi_admin):
         with patch(SERVICE_PATH) as mock_svc:
-            mock_svc.list_findings = AsyncMock(return_value=_make_findings_response())
+            mock_svc.list_aggregated_findings = AsyncMock(return_value=_make_findings_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/findings?severity=high&status=open&scanner=trivy")
             assert resp.status_code == 200
@@ -927,7 +928,7 @@ class TestListFindingsRouter:
     @pytest.mark.asyncio
     async def test_tenant_admin_own_tenant(self, app_with_tenant_admin):
         with patch(SERVICE_PATH) as mock_svc:
-            mock_svc.list_findings = AsyncMock(return_value=_make_findings_response())
+            mock_svc.list_aggregated_findings = AsyncMock(return_value=_make_findings_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/findings")
             assert resp.status_code == 200
@@ -944,7 +945,7 @@ class TestIngestFindingsRouter:
 
     @pytest.mark.asyncio
     async def test_ingest_findings(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.ingest_findings = AsyncMock(return_value=2)
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post(
@@ -973,7 +974,7 @@ class TestIngestFindingsRouter:
 
     @pytest.mark.asyncio
     async def test_tenant_admin_can_ingest(self, app_with_tenant_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.ingest_findings = AsyncMock(return_value=1)
             async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.post(
@@ -1001,7 +1002,7 @@ class TestResolveFindingRouter:
 
     @pytest.mark.asyncio
     async def test_resolve_finding(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.resolve_finding = AsyncMock(return_value=True)
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post(f"/v1/security/acme/findings/{uuid.uuid4()}/resolve")
@@ -1009,7 +1010,7 @@ class TestResolveFindingRouter:
 
     @pytest.mark.asyncio
     async def test_resolve_not_found(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.resolve_finding = AsyncMock(return_value=False)
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post(f"/v1/security/acme/findings/{uuid.uuid4()}/resolve")
@@ -1027,7 +1028,7 @@ class TestGetScanHistoryRouter:
 
     @pytest.mark.asyncio
     async def test_get_scan_history(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_scan_history = AsyncMock(return_value=_make_scan_history_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/scans")
@@ -1036,7 +1037,7 @@ class TestGetScanHistoryRouter:
 
     @pytest.mark.asyncio
     async def test_scan_history_with_limit(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_scan_history = AsyncMock(return_value=_make_scan_history_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/scans?limit=5")
@@ -1054,7 +1055,7 @@ class TestCreateScanRouter:
 
     @pytest.mark.asyncio
     async def test_create_scan(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.create_scan = AsyncMock(return_value=str(uuid.uuid4()))
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.post("/v1/security/acme/scans?scanner=trivy")
@@ -1079,7 +1080,7 @@ class TestGetDriftReport:
 
     @pytest.mark.asyncio
     async def test_get_drift_report(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.detect_drift = AsyncMock(return_value=_make_drift_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/drift")
@@ -1098,7 +1099,7 @@ class TestSetBaselineRouter:
 
     @pytest.mark.asyncio
     async def test_set_baseline(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.set_baseline = AsyncMock()
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.put(
@@ -1110,7 +1111,7 @@ class TestSetBaselineRouter:
 
     @pytest.mark.asyncio
     async def test_tenant_admin_can_set(self, app_with_tenant_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.set_baseline = AsyncMock()
             async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.put(
@@ -1143,7 +1144,7 @@ class TestGetComplianceScoreRouter:
 
     @pytest.mark.asyncio
     async def test_dora_compliance(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_compliance_score = AsyncMock(return_value=_make_compliance_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/compliance/DORA")
@@ -1152,7 +1153,7 @@ class TestGetComplianceScoreRouter:
 
     @pytest.mark.asyncio
     async def test_nis2_compliance(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_compliance_score = AsyncMock(return_value=_make_compliance_response(framework="NIS2"))
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/compliance/NIS2")
@@ -1166,7 +1167,7 @@ class TestGetComplianceScoreRouter:
 
     @pytest.mark.asyncio
     async def test_case_insensitive_framework(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_compliance_score = AsyncMock(return_value=_make_compliance_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/compliance/dora")
@@ -1184,7 +1185,7 @@ class TestGetSecretsHealthRouter:
 
     @pytest.mark.asyncio
     async def test_get_secrets_health(self, app_with_cpi_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_secrets_health = AsyncMock(return_value=_make_secrets_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/secrets/health")
@@ -1193,7 +1194,7 @@ class TestGetSecretsHealthRouter:
 
     @pytest.mark.asyncio
     async def test_tenant_admin_own_tenant(self, app_with_tenant_admin):
-        with patch(SERVICE_PATH) as mock_svc:
+        with patch(SCANNER_SERVICE_PATH) as mock_svc:
             mock_svc.get_secrets_health = AsyncMock(return_value=_make_secrets_response())
             async with AsyncClient(transport=ASGITransport(app=app_with_tenant_admin), base_url="http://test") as ac:
                 resp = await ac.get("/v1/security/acme/secrets/health")

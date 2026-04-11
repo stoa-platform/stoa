@@ -1030,7 +1030,7 @@ class TestRouteSyncAck:
             ]
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "applied", "steps": agent_steps},
@@ -1098,7 +1098,7 @@ class TestRouteSyncAck:
             ]
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "failed", "error": "sync error", "steps": agent_steps},

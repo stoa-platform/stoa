@@ -63,6 +63,16 @@ def _build_chat_app(current_user: Any, db_session: Any) -> FastAPI:
 UTC = UTC
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Reset chat rate limiter between tests to avoid cross-test 429s."""
+    from src.services.chat_rate_limiter import reset_all
+
+    reset_all()
+    yield
+    reset_all()
+
+
 @pytest.fixture
 def mock_db():
     """Minimal SQLAlchemy async session mock."""
@@ -516,13 +526,19 @@ class TestPurgeConversations:
 
 class TestSendMessage:
     def test_send_requires_api_key_header(self, tenant_client):
-        """Missing X-Provider-Api-Key returns 400."""
-        resp = tenant_client.post(
-            f"/v1/tenants/acme/chat/conversations/{uuid4()}/messages",
-            json={"content": "Hello"},
-        )
+        """Missing X-Provider-Api-Key returns 400 when no fallback key configured."""
+        with patch("src.routers.chat.settings") as mock_settings:
+            mock_settings.CHAT_GATEWAY_URL = ""
+            mock_settings.CHAT_GATEWAY_API_KEY = ""
+            mock_settings.CHAT_PROVIDER_API_KEY = ""
+            mock_settings.CHAT_KILL_SWITCH = False
+            mock_settings.CHAT_TOKEN_BUDGET_DAILY = 100000
+            resp = tenant_client.post(
+                f"/v1/tenants/acme/chat/conversations/{uuid4()}/messages",
+                json={"content": "Hello"},
+            )
         assert resp.status_code == 400
-        assert "X-Provider-Api-Key" in resp.json()["detail"]
+        assert "API key" in resp.json()["detail"]
 
     def test_send_empty_content_rejected(self, tenant_client):
         resp = tenant_client.post(

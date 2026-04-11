@@ -316,15 +316,8 @@ class KeycloakService:
                 "directAccessGrantsEnabled": True,
             })
 
-        # Create client
-        self._admin.create_client(client_data)
-
-        # Get the created client to retrieve the ID
-        client = await self.get_client(client_id)
-        if not client:
-            raise RuntimeError("Failed to create client")
-
-        client_uuid = client["id"]
+        # Create client — returns the Keycloak internal UUID
+        client_uuid = self._admin.create_client(client_data)
 
         # Get client secret (only for confidential clients)
         client_secret = None

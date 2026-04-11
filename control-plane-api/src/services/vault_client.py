@@ -10,7 +10,7 @@ return None/False instead of crashing. The MCP server feature works without Vaul
 
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 import hvac
 from hvac.exceptions import InvalidPath, VaultError
@@ -175,7 +175,7 @@ class VaultClient:
                     "Retrieved credentials from Vault",
                     extra={"server_id": server_id},
                 )
-                return response["data"]["data"]
+                return cast(dict[str, Any], response["data"]["data"])
 
             return None
 
@@ -214,7 +214,7 @@ class VaultClient:
 
             if response and "data" in response and "data" in response["data"]:
                 logger.info("Read secret from Vault", extra={"path": path})
-                return response["data"]["data"]
+                return cast(dict[str, Any], response["data"]["data"])
 
             return None
 

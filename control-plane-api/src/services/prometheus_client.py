@@ -6,7 +6,7 @@ Uses httpx.AsyncClient with context managers following existing patterns.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -69,7 +69,7 @@ class PrometheusClient:
                 response.raise_for_status()
                 data = response.json()
                 if data.get("status") == "success":
-                    return data.get("data", {})
+                    return cast(dict[str, Any], data.get("data", {}))
                 logger.warning(f"Prometheus query failed: {data}")
                 return None
         except httpx.TimeoutException:
@@ -112,7 +112,7 @@ class PrometheusClient:
                 response.raise_for_status()
                 data = response.json()
                 if data.get("status") == "success":
-                    return data.get("data", {})
+                    return cast(dict[str, Any], data.get("data", {}))
                 return None
         except Exception as e:
             logger.warning(f"Prometheus range query error: {e}")

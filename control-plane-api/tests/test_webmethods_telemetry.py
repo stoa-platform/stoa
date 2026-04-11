@@ -10,7 +10,7 @@ from src.adapters.webmethods.telemetry import WebMethodsTelemetryAdapter, _norma
 class TestWebMethodsTelemetryAdapter:
     @pytest.mark.asyncio
     async def test_get_access_logs_success(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(
             json={
                 "transactionalEvents": [
@@ -35,21 +35,21 @@ class TestWebMethodsTelemetryAdapter:
 
     @pytest.mark.asyncio
     async def test_get_access_logs_empty(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(json={"transactionalEvents": []})
         logs = await adapter.get_access_logs(since=datetime.now(UTC) - timedelta(minutes=5))
         assert logs == []
 
     @pytest.mark.asyncio
     async def test_get_access_logs_http_error(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(status_code=401)
         logs = await adapter.get_access_logs(since=datetime.now(UTC) - timedelta(minutes=5))
         assert logs == []
 
     @pytest.mark.asyncio
     async def test_get_metrics_snapshot_success(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(
             json={"status": "ok", "uptime": 3600},
         )
@@ -58,14 +58,14 @@ class TestWebMethodsTelemetryAdapter:
 
     @pytest.mark.asyncio
     async def test_get_metrics_snapshot_error(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(status_code=500)
         metrics = await adapter.get_metrics_snapshot()
         assert "error" in metrics
 
     @pytest.mark.asyncio
     async def test_setup_push_subscription_success(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(
             json={"id": "sub-123"},
             status_code=201,
@@ -77,17 +77,18 @@ class TestWebMethodsTelemetryAdapter:
 
     @pytest.mark.asyncio
     async def test_setup_push_subscription_failure(self, httpx_mock):
-        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
+        adapter = WebMethodsTelemetryAdapter({"base_url": "http://wm:5555", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(status_code=403)
         result = await adapter.setup_push_subscription("https://api.example.com/ingest")
         assert result.success is False
         assert "403" in result.error
 
     @pytest.mark.asyncio
-    async def test_default_auth(self):
-        adapter = WebMethodsTelemetryAdapter()
-        assert adapter._username == "Administrator"
-        assert adapter._password == "manage"
+    async def test_missing_auth_raises(self):
+        with pytest.raises(ValueError, match="auth_config"):
+            WebMethodsTelemetryAdapter()
+        with pytest.raises(ValueError, match="auth_config"):
+            WebMethodsTelemetryAdapter({"base_url": "http://wm:5555"})
 
     @pytest.mark.asyncio
     async def test_custom_auth(self):

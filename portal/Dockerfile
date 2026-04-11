@@ -14,7 +14,7 @@ COPY portal/package*.json ./portal/
 
 # Install dependencies
 WORKDIR /app/portal
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy source files (tsconfig.base.json needed by tsconfig.json extends)
 WORKDIR /app

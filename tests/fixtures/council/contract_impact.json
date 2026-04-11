@@ -1,0 +1,5 @@
+{
+  "score": 8,
+  "feedback": "Pure addition to scripts/council-review.sh + scripts/council-prompts/*, no consumer of the shell API outside CAB-2048 pre-push hook. No DB schema change, no cross-component contract break. council-history.jsonl format is append-only additive.",
+  "blockers": []
+}

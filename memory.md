@@ -107,6 +107,19 @@
 
 ## 🔴 IN PROGRESS
 
+### CAB-2054: [MEGA] feat(council): align S1/S2 to 8 personas per HEG-PAT-003 (13 pts) — Council 8.5/10 Go (S1) + 8.0/10 Go (S2)
+
+**Created 2026-04-11 — 3/4 phases merged the same day.**
+
+Closes the drift identified in 2026-04-11 audit between HEG-PAT-003 canonical (7 personas + Gekk0 informal) and Council implementation (4 personas).
+
+- **Phase 1** ✅ DONE — HEG-PAT-003 canonical update in `hegemon` (PR #1) — added Gekk0, formalized 8-persona mandatory jury, removed "Quick Council" subset
+- **Phase 2** 🔄 PR OPEN — ADR-061 amendment in `stoa-docs` (PR #151, CI green, awaiting human review per branch protection)
+- **Phase 3** ✅ DONE — `.claude/skills/council/SKILL.md` 8-persona rewrite (PR #2327, merged) — frontmatter, Step 2 S1, output template, Linear template, Step 4b S2 — all 8 personas with Questions/Red flags/Focus
+- **Phase 4** ✅ DONE — Calibration on 5 historic tickets, 1 tuning iteration applied (Domain N/A → 8 baseline rule, PR #2328, merged). Round 2: 4/5 within ±0.3 ✓
+- **Cost**: ~+€0.30-0.60/day on S1+S2 (linear 4→8 jury), within €5/day cap
+- **Next MEGA** (separate ticket): Council S3 5th axis `supply_chain` for Gh0st + `attack_surface` enrichment for Pr1nc3ss trust boundaries (deferred per Option B split)
+
 ### 🚨 CAB-2053: [MEGA] Feature freeze + CLI-first stabilization (21 pts, P1-High) — Council 8.0/10 Go
 
 **Started 2026-04-11 — Phase 0 feature freeze declared.**

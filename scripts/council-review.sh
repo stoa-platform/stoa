@@ -23,6 +23,7 @@
 # CAB-2047 Step 2a: cost guardrails (disable + daily cap + SHA dedup).
 # CAB-2047 Step 2b: anthropic_call + evaluate_axis(conformance) + MOCK_API.
 # CAB-2047 Step 3a: externalize prompts to scripts/council-prompts/*.md.
+# CAB-2047 Step 3b: fetch_linear_ticket + fetch_db_context + evaluate_axis context injection.
 
 set -euo pipefail
 
@@ -30,7 +31,7 @@ set -euo pipefail
 # Script metadata
 # =============================================================================
 
-VERSION="0.4.0-step3a-prompts-externalized"
+VERSION="0.5.0-step3b-context-fetchers"
 SCRIPT_NAME="council-review.sh"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -56,6 +57,14 @@ ANTHROPIC_TIMEOUT_S="${ANTHROPIC_TIMEOUT_S:-30}"
 # Cost-safety guardrails
 COUNCIL_HISTORY_FILE="${COUNCIL_HISTORY_FILE:-${REPO_ROOT}/council-history.jsonl}"
 DIFF_SHA=""
+
+# Step 3b: context fetchers (populated by fetch_linear_ticket / fetch_db_context)
+TICKET_CONTEXT=""
+DB_CONTEXT=""
+LINEAR_API_URL="${LINEAR_API_URL:-https://api.linear.app/graphql}"
+LINEAR_TIMEOUT_S="${LINEAR_TIMEOUT_S:-10}"
+DB_CONTEXT_MAX_COMPONENTS=20
+DB_CONTEXT_MAX_CONTRACTS_PER_COMP=5
 
 # =============================================================================
 # Logging
@@ -86,7 +95,9 @@ OPTIONS:
 
 ENVIRONMENT:
   ANTHROPIC_API_KEY     Required for API calls (set in GitHub secrets or .env)
-  LINEAR_API_KEY        Optional — enables --ticket context fetching
+  LINEAR_API_KEY        Optional — enables --ticket context fetching (read-only
+                        token from Vault: stoa/shared/linear_token)
+  LINEAR_TIMEOUT_S      Linear API timeout in seconds (default: 10)
   MOCK_API              If set to "1", uses fixture responses instead of real API calls
   TMPDIR                Override the temp directory (default: /tmp)
 
@@ -515,7 +526,219 @@ load_prompt() {
 }
 
 # =============================================================================
+# Step 3b: fetch_linear_ticket — populates TICKET_CONTEXT from Linear GraphQL.
+#
+# Reads the ticket identifier passed via --ticket, resolves it via issueSearch
+# (same pattern as scripts/ai-ops/ai-factory-notify.sh), and injects title +
+# description into the conformance axis user message.
+#
+# Graceful degradation: any failure (no --ticket, no LINEAR_API_KEY, malformed
+# ID, network error, 4xx, ticket not found) logs a warning and returns 0 so
+# the review proceeds on the diff alone. Linear context is "nice to have",
+# not a gate.
+#
+# Security: LINEAR_API_KEY expected to be scoped read-only. Token is never
+# logged, only used as Authorization header. Timeout capped at LINEAR_TIMEOUT_S.
+# =============================================================================
+
+fetch_linear_ticket() {
+    if [ -z "$TICKET" ]; then
+        return 0
+    fi
+
+    if [ -z "${LINEAR_API_KEY:-}" ]; then
+        log_warn "fetch_linear_ticket: LINEAR_API_KEY not set — ticket context unavailable"
+        return 0
+    fi
+
+    if [[ ! "$TICKET" =~ ^[A-Z]+-[0-9]+$ ]]; then
+        log_warn "fetch_linear_ticket: invalid ticket format '${TICKET}' (expected e.g. CAB-2047)"
+        return 0
+    fi
+
+    # jq-built payload ensures proper JSON escaping of the identifier.
+    local query
+    query=$(jq -n --arg id "$TICKET" '{
+        query: "query($id: String!) { issueSearch(filter: {identifier: {eq: $id}}) { nodes { identifier title description priority estimate state { name } } } }",
+        variables: {id: $id}
+    }')
+
+    local resp="${COUNCIL_TMPDIR}/linear.json"
+    local http_status
+    http_status=$("$TIMEOUT_CMD" "$LINEAR_TIMEOUT_S" curl -sS \
+        -o "$resp" \
+        -w "%{http_code}" \
+        -X POST "$LINEAR_API_URL" \
+        -H "Authorization: ${LINEAR_API_KEY}" \
+        -H "Content-Type: application/json" \
+        --data-binary "$query" 2>/dev/null) || http_status="000"
+
+    if [ "$http_status" != "200" ]; then
+        log_warn "fetch_linear_ticket: HTTP ${http_status} from Linear — ticket context unavailable"
+        return 0
+    fi
+
+    local title description priority estimate state
+    title=$(jq -r '.data.issueSearch.nodes[0].title // empty' "$resp" 2>/dev/null)
+    description=$(jq -r '.data.issueSearch.nodes[0].description // empty' "$resp" 2>/dev/null)
+    priority=$(jq -r '.data.issueSearch.nodes[0].priority // empty' "$resp" 2>/dev/null)
+    estimate=$(jq -r '.data.issueSearch.nodes[0].estimate // empty' "$resp" 2>/dev/null)
+    state=$(jq -r '.data.issueSearch.nodes[0].state.name // empty' "$resp" 2>/dev/null)
+
+    if [ -z "$title" ]; then
+        log_warn "fetch_linear_ticket: ticket ${TICKET} not found (or no access via token)"
+        return 0
+    fi
+
+    # Truncate description to ~2k chars to keep prompt small.
+    local desc_truncated="$description"
+    if [ "${#description}" -gt 2000 ]; then
+        desc_truncated="${description:0:2000}
+
+[... truncated, full description is ${#description} chars ...]"
+    fi
+
+    TICKET_CONTEXT="Ticket: ${TICKET}
+Title: ${title}
+State: ${state:-unknown}  Priority: ${priority:-none}  Estimate: ${estimate:-none}
+
+Description:
+${desc_truncated}"
+
+    log_ok "fetch_linear_ticket: ${TICKET} loaded (title=${#title}ch description=${#description}ch)"
+}
+
+# =============================================================================
+# Step 3b: fetch_db_context — populates DB_CONTEXT from stoa-impact.db.
+#
+# Matches changed-file paths against components.repo_path, then lists contracts
+# that touch the affected components (inbound + outbound). Used by the
+# contract_impact axis (wired in Step 3c — current Step 3b only gates on
+# conformance, so DB_CONTEXT is computed but not yet passed to the axis).
+#
+# Caller guarantees:
+#   - DB_PATH already validated by compute_db_age_days (we skip if file missing
+#     or db_age indicates "stale", which is communicated via the db_age arg).
+#   - COUNCIL_TMPDIR exists.
+#
+# Security: all comp_ids that flow into interpolated SQL are validated against
+# ^[a-zA-Z0-9_-]+$ before the query. sqlite3 is invoked with -readonly so
+# even a malicious component row cannot mutate the DB.
+#
+# Graceful degradation: missing sqlite3, empty diff, no matches, or any SQL
+# error → log a warning and return 0. DB_CONTEXT stays empty, contract_impact
+# axis will still run on the raw diff.
+#
+# Arguments:
+#   $1 — db_age_days (from compute_db_age_days; -1 means file missing,
+#        >DB_STALE_DAYS means stale and already skipped by caller)
+# =============================================================================
+
+fetch_db_context() {
+    local db_age="$1"
+
+    if [ "$db_age" -eq -1 ] || [ "$db_age" -gt "$DB_STALE_DAYS" ]; then
+        return 0
+    fi
+
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        log_warn "fetch_db_context: sqlite3 not installed — contract_impact context unavailable"
+        return 0
+    fi
+
+    local changed_files
+    changed_files=$(git diff --name-only "$DIFF_RANGE" 2>/dev/null)
+    if [ -z "$changed_files" ]; then
+        return 0
+    fi
+
+    # Load all components with a non-empty repo_path into a TSV.
+    local components_tsv
+    components_tsv=$(sqlite3 -readonly -separator $'\t' "$DB_PATH" \
+        "SELECT id, COALESCE(repo_path, '') FROM components WHERE repo_path IS NOT NULL AND repo_path != '';" \
+        2>/dev/null) || {
+        log_warn "fetch_db_context: sqlite3 query failed — contract_impact context unavailable"
+        return 0
+    }
+
+    if [ -z "$components_tsv" ]; then
+        log_info "fetch_db_context: no components with repo_path in DB"
+        return 0
+    fi
+
+    # Match changed files against each component's repo_path prefix. grep -F
+    # avoids regex interpretation of the path.
+    local affected_file="${COUNCIL_TMPDIR}/affected-components.txt"
+    : > "$affected_file"
+
+    while IFS=$'\t' read -r comp_id comp_path; do
+        [ -z "$comp_path" ] && continue
+        if echo "$changed_files" | grep -qF -- "$comp_path"; then
+            # Only keep if at least one changed file starts with the path.
+            if echo "$changed_files" | awk -v p="$comp_path" 'index($0, p) == 1 {found=1; exit} END {exit !found}'; then
+                echo "$comp_id" >> "$affected_file"
+            fi
+        fi
+    done <<< "$components_tsv"
+
+    # awk NF>0 instead of grep -v '^$' — grep returns 1 on empty input, which
+    # would kill this function under `set -o pipefail`.
+    local affected_count
+    affected_count=$(sort -u "$affected_file" | awk 'NF>0' | wc -l | awk '{print $1}')
+
+    if [ "$affected_count" -eq 0 ]; then
+        log_info "fetch_db_context: no components matched changed files"
+        return 0
+    fi
+
+    # Cap the component list to avoid prompt bloat.
+    local affected_list
+    affected_list=$(sort -u "$affected_file" | awk 'NF>0' | head -n "$DB_CONTEXT_MAX_COMPONENTS")
+
+    local header="Affected components (${affected_count}):"
+    local comp_line
+    comp_line=$(echo "$affected_list" | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+
+    DB_CONTEXT="${header}
+${comp_line}
+
+Cross-component contracts:"
+
+    # Query contracts per affected component. comp_id is DB-sourced AND
+    # re-validated here to keep interpolation strictly alphanumeric.
+    local line
+    while IFS= read -r comp_id; do
+        [ -z "$comp_id" ] && continue
+        if [[ ! "$comp_id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            log_warn "fetch_db_context: skipping non-alphanumeric component id '${comp_id}'"
+            continue
+        fi
+
+        local rows
+        rows=$(sqlite3 -readonly -separator ' | ' "$DB_PATH" \
+            "SELECT type, contract_ref, source_component || ' -> ' || target_component
+             FROM contracts
+             WHERE source_component = '${comp_id}' OR target_component = '${comp_id}'
+             LIMIT ${DB_CONTEXT_MAX_CONTRACTS_PER_COMP};" 2>/dev/null) || continue
+
+        if [ -n "$rows" ]; then
+            DB_CONTEXT="${DB_CONTEXT}
+[${comp_id}]"
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                DB_CONTEXT="${DB_CONTEXT}
+  - ${line}"
+            done <<< "$rows"
+        fi
+    done <<< "$affected_list"
+
+    log_ok "fetch_db_context: ${affected_count} components matched (context=${#DB_CONTEXT}ch)"
+}
+
+# =============================================================================
 # Step 3a: evaluate_axis now loads prompts from disk via load_prompt().
+# Step 3b: accepts optional extra_context (Linear ticket, stoa-impact.db extract)
+# that gets wrapped alongside the diff in tagged blocks inside the user message.
 # Step 2b still gates on conformance in main() — the other axes won't actually
 # be invoked until Step 3c (parallel orchestration), but the loader supports
 # them today so Step 3c is a pure bash-logic change, not a prompt rewrite.
@@ -525,13 +748,17 @@ load_prompt() {
 # Arguments:
 #   $1 — axis name (conformance | debt | attack_surface | contract_impact)
 #   $2 — output file path
-#   $3 — diff content (the user message)
+#   $3 — diff content (the user message body)
+#   $4 — extra_context (optional — Linear ticket for conformance, DB context
+#        for contract_impact, Trivy report for attack_surface). Wrapped in
+#        <context>…</context> before the <diff>…</diff> block.
 # =============================================================================
 
 evaluate_axis() {
     local axis="$1"
     local out="$2"
     local diff_content="$3"
+    local extra_context="${4:-}"
 
     case "$axis" in
         conformance|debt|attack_surface|contract_impact) ;;
@@ -552,7 +779,11 @@ evaluate_axis() {
             return 1
         fi
         cp "$fixture" "$out"
-        log_info "MOCK_API: loaded fixture for axis=${axis} from ${fixture}"
+        if [ -n "$extra_context" ]; then
+            log_info "MOCK_API: axis=${axis} fixture=${fixture} (context=${#extra_context}ch — ignored in mock mode)"
+        else
+            log_info "MOCK_API: loaded fixture for axis=${axis} from ${fixture}"
+        fi
         return 0
     fi
 
@@ -562,7 +793,24 @@ evaluate_axis() {
         return 1
     fi
 
-    anthropic_call "$system_prompt" "$diff_content" "$out"
+    # Wrap diff (and optional context) in tagged blocks so the model can
+    # unambiguously distinguish context from the diff under review.
+    local user_content
+    if [ -n "$extra_context" ]; then
+        user_content="<context>
+${extra_context}
+</context>
+
+<diff>
+${diff_content}
+</diff>"
+    else
+        user_content="<diff>
+${diff_content}
+</diff>"
+    fi
+
+    anthropic_call "$system_prompt" "$user_content" "$out"
 }
 
 # =============================================================================
@@ -639,6 +887,12 @@ main() {
         log_warn "Trivy report not found at ${TRIVY_REPORT} — attack_surface runs without Trivy context"
     fi
 
+    # --- 7b. Step 3b: context fetchers (Linear ticket + stoa-impact.db) ----
+    # Both are best-effort: any failure logs a warning and leaves the context
+    # variable empty. The axes still run on the raw diff.
+    fetch_linear_ticket
+    fetch_db_context "$db_age"
+
     # --- 8. Step 2b: conformance axis evaluation ---------------------------
     log_info "------------------------------------------------------------"
     log_info "Pre-check summary:"
@@ -650,13 +904,15 @@ main() {
     log_info "  skip_axis=${skip_axis:-none}"
     log_info "  db_age_days=${db_age}"
     log_info "  trivy_loaded=${trivy_loaded}"
+    log_info "  ticket_context_bytes=${#TICKET_CONTEXT}"
+    log_info "  db_context_bytes=${#DB_CONTEXT}"
     log_info "  daily_cap=€${COUNCIL_DAILY_CAP_EUR:-5}"
     log_info "  mock_api=${MOCK_API:-0}"
     log_info "------------------------------------------------------------"
 
-    log_info "Evaluating axis=conformance (Step 3a — prompts externalized, conformance-only gate)"
+    log_info "Evaluating axis=conformance (Step 3b — context-aware, conformance-only gate)"
     local conformance_out="${COUNCIL_TMPDIR}/conformance.json"
-    if ! evaluate_axis conformance "$conformance_out" "$diff_content"; then
+    if ! evaluate_axis conformance "$conformance_out" "$diff_content" "$TICKET_CONTEXT"; then
         log_error "conformance axis evaluation failed"
         exit 2
     fi

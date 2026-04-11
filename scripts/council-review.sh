@@ -24,6 +24,7 @@
 # CAB-2047 Step 2b: anthropic_call + evaluate_axis(conformance) + MOCK_API.
 # CAB-2047 Step 3a: externalize prompts to scripts/council-prompts/*.md.
 # CAB-2047 Step 3b: fetch_linear_ticket + fetch_db_context + evaluate_axis context injection.
+# CAB-2047 Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl.
 
 set -euo pipefail
 
@@ -31,7 +32,7 @@ set -euo pipefail
 # Script metadata
 # =============================================================================
 
-VERSION="0.5.0-step3b-context-fetchers"
+VERSION="0.6.0-step3c-parallel"
 SCRIPT_NAME="council-review.sh"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -74,6 +75,19 @@ log_info()  { echo "info  $*" >&2; }
 log_warn()  { echo "warn  $*" >&2; }
 log_error() { echo "error $*" >&2; }
 log_ok()    { echo "ok    $*" >&2; }
+
+# Portable monotonic-ish millisecond timestamp. GNU date supports %3N for ms,
+# but BSD date (macOS) treats the format literally and returns the seconds
+# epoch with a trailing "N". Fall back to seconds*1000 in that case.
+now_ms() {
+    local ms
+    ms=$(date +%s%3N 2>/dev/null)
+    if [[ "$ms" =~ ^[0-9]+$ ]]; then
+        echo "$ms"
+    else
+        echo $(($(date +%s) * 1000))
+    fi
+}
 
 # =============================================================================
 # Help
@@ -814,6 +828,213 @@ ${diff_content}
 }
 
 # =============================================================================
+# Step 3c: aggregate_scores — pure function over the tempdir.
+#
+# Reads $tmpdir/{conformance,debt,attack_surface,contract_impact}.json, parses
+# `.score`, and emits a single JSON verdict on stdout:
+#
+#   {"status":"APPROVED|REWORK|error","score":<avg>,"count":<n>,"errors":<e>}
+#
+# Return codes:
+#   0 — APPROVED (avg >= 8.0 over the valid axes)
+#   1 — REWORK   (avg < 8.0)
+#   2 — error    (>= 2 axes failed OR 0 valid axes)
+#
+# Skipped axes (missing file, e.g. contract_impact when DB is stale) are
+# silently ignored — the average is taken only over the ready axes.
+#
+# Designed to be testable in isolation: no globals, no side effects beyond
+# stdout.
+#
+# Arguments:
+#   $1 — tmpdir (absolute path)
+#   $2 — failed_count from the parallel wait (diagnostic)
+#   $3 — expected_count (3 when contract_impact is skipped, 4 otherwise)
+# =============================================================================
+
+aggregate_scores() {
+    local tmpdir="$1"
+    local failed_count="${2:-0}"
+    local expected_count="${3:-4}"
+    local total=0 count=0 errors=0 score
+    local axis file
+
+    # Canonical order + contract_impact appended only when expected.
+    local expected_axes=("conformance" "debt" "attack_surface")
+    if [ "$expected_count" -ge 4 ]; then
+        expected_axes+=("contract_impact")
+    fi
+
+    for axis in "${expected_axes[@]}"; do
+        file="${tmpdir}/${axis}.json"
+        # A missing or empty file for an EXPECTED axis is an error — not a
+        # silent skip. Silent skip is reserved for contract_impact when the
+        # DB is stale (expected_count=3, so the loop never visits it).
+        if [ ! -f "$file" ] || [ ! -s "$file" ]; then
+            errors=$((errors + 1))
+            continue
+        fi
+        score=$(jq -r '.score // empty' "$file" 2>/dev/null)
+        if [ -z "$score" ] || ! [[ "$score" =~ ^[0-9]+$ ]]; then
+            errors=$((errors + 1))
+            continue
+        fi
+        total=$((total + score))
+        count=$((count + 1))
+    done
+
+    # Technical failure: >=2 errored axes, or no valid axis at all.
+    if [ "$errors" -ge 2 ] || [ "$count" -eq 0 ]; then
+        jq -n -c \
+            --arg reason ">=2 axes failed or no valid result" \
+            --argjson errors "$errors" \
+            --argjson count "$count" \
+            --argjson failed "$failed_count" \
+            '{status:"error", reason:$reason, errors:$errors, count:$count, failed:$failed}'
+        return 2
+    fi
+
+    local avg
+    avg=$(awk -v t="$total" -v c="$count" 'BEGIN {printf "%.2f", t/c}')
+
+    if awk -v a="$avg" 'BEGIN {exit !(a >= 8.0)}'; then
+        jq -n -c \
+            --argjson score "$avg" \
+            --argjson count "$count" \
+            --argjson errors "$errors" \
+            '{status:"APPROVED", score:$score, count:$count, errors:$errors}'
+        return 0
+    else
+        jq -n -c \
+            --argjson score "$avg" \
+            --argjson count "$count" \
+            --argjson errors "$errors" \
+            '{status:"REWORK", score:$score, count:$count, errors:$errors}'
+        return 1
+    fi
+}
+
+# =============================================================================
+# Step 3c: sum_usage_tokens — total input/output tokens across all axis raws.
+# Anthropic responses are cached by anthropic_call() at ${out}.raw, so we just
+# glob $tmpdir/*.raw and sum the .usage fields. Missing raws (MOCK_API mode)
+# yield 0 tokens.
+#
+# Prints: "<input_tokens> <output_tokens>" on stdout.
+# =============================================================================
+
+sum_usage_tokens() {
+    local tmpdir="$1"
+    local in=0 out=0 raw i o
+    for raw in "$tmpdir"/*.raw; do
+        [ -f "$raw" ] || continue
+        i=$(jq -r '.usage.input_tokens // 0' "$raw" 2>/dev/null || echo 0)
+        o=$(jq -r '.usage.output_tokens // 0' "$raw" 2>/dev/null || echo 0)
+        [[ "$i" =~ ^[0-9]+$ ]] || i=0
+        [[ "$o" =~ ^[0-9]+$ ]] || o=0
+        in=$((in + i))
+        out=$((out + o))
+    done
+    echo "${in} ${out}"
+}
+
+# =============================================================================
+# Step 3c: compute_cost_eur — Sonnet 4.5 API pricing converted to EUR.
+#   input:  $3 /MTok → €2.76/MTok  (assuming 1 USD ≈ €0.92)
+#   output: $15/MTok → €13.80/MTok
+# Printed with 6 decimals (micro-euro granularity for daily-cap aggregation).
+# =============================================================================
+
+compute_cost_eur() {
+    local input_tokens="$1"
+    local output_tokens="$2"
+    awk -v i="$input_tokens" -v o="$output_tokens" \
+        'BEGIN {printf "%.6f", (i * 2.76 / 1e6) + (o * 13.80 / 1e6)}'
+}
+
+# =============================================================================
+# Step 3c: write_history — append one JSONL entry to council-history.jsonl.
+# Fields match the spec in CAB-2047 description. All numeric fields are real
+# JSON numbers (via --argjson), booleans are real JSON booleans, strings are
+# real JSON strings. Never fails the script — a history write error just logs
+# a warning, since the review verdict has already been computed.
+#
+# Arguments (positional, all required):
+#   $1  status           APPROVED | REWORK | error | BYPASSED
+#   $2  global_score     float (0 if status=error)
+#   $3  axes_evaluated   integer (0-4)
+#   $4  db_fresh         true | false
+#   $5  input_tokens     integer
+#   $6  output_tokens    integer
+#   $7  cost_eur         decimal string
+#   $8  diff_lines       integer
+#   $9  duration_ms      integer
+# =============================================================================
+
+write_history() {
+    local status="$1"
+    local global_score="$2"
+    local axes_evaluated="$3"
+    local db_fresh="$4"
+    local input_tokens="$5"
+    local output_tokens="$6"
+    local cost_eur="$7"
+    local diff_lines="$8"
+    local duration_ms="$9"
+
+    local timestamp
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    local total_tokens=$((input_tokens + output_tokens))
+
+    # jq builds the entry, guaranteeing valid JSON regardless of shell quoting.
+    local entry
+    entry=$(jq -n -c \
+        --arg ts "$timestamp" \
+        --arg ticket "${TICKET:-}" \
+        --arg status "$status" \
+        --argjson score "${global_score:-0}" \
+        --argjson axes "$axes_evaluated" \
+        --argjson db_fresh "$db_fresh" \
+        --arg model "$ANTHROPIC_MODEL" \
+        --argjson tokens "$total_tokens" \
+        --argjson input_tokens "$input_tokens" \
+        --argjson output_tokens "$output_tokens" \
+        --argjson cost_eur "${cost_eur:-0}" \
+        --argjson diff_lines "$diff_lines" \
+        --argjson diff_truncated "$DIFF_TRUNCATED" \
+        --argjson duration_ms "$duration_ms" \
+        --arg diff_sha "${DIFF_SHA:-unknown}" \
+        '{
+            timestamp: $ts,
+            ticket: $ticket,
+            status: $status,
+            global_score: $score,
+            axes_evaluated: $axes,
+            db_fresh: $db_fresh,
+            model: $model,
+            tokens: $tokens,
+            input_tokens: $input_tokens,
+            output_tokens: $output_tokens,
+            cost_eur: $cost_eur,
+            diff_lines: $diff_lines,
+            diff_truncated: $diff_truncated,
+            duration_ms: $duration_ms,
+            diff_sha: $diff_sha
+        }' 2>/dev/null) || {
+        log_warn "write_history: jq failed to build entry — skipping"
+        return 0
+    }
+
+    if ! echo "$entry" >> "$COUNCIL_HISTORY_FILE" 2>/dev/null; then
+        log_warn "write_history: cannot write to ${COUNCIL_HISTORY_FILE} — skipping"
+        return 0
+    fi
+
+    log_info "History appended: ${COUNCIL_HISTORY_FILE} (status=${status} score=${global_score} tokens=${total_tokens} cost=€${cost_eur})"
+}
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -910,40 +1131,148 @@ main() {
     log_info "  mock_api=${MOCK_API:-0}"
     log_info "------------------------------------------------------------"
 
-    log_info "Evaluating axis=conformance (Step 3b — context-aware, conformance-only gate)"
+    # --- 8. Step 3c: parallel orchestration of all axes -------------------
+    log_info "Evaluating ${axes_count} axes in parallel (Step 3c)"
+
     local conformance_out="${COUNCIL_TMPDIR}/conformance.json"
-    if ! evaluate_axis conformance "$conformance_out" "$diff_content" "$TICKET_CONTEXT"; then
-        log_error "conformance axis evaluation failed"
-        exit 2
+    local debt_out="${COUNCIL_TMPDIR}/debt.json"
+    local attack_out="${COUNCIL_TMPDIR}/attack_surface.json"
+    local contract_out="${COUNCIL_TMPDIR}/contract_impact.json"
+
+    # Best-effort Trivy context for attack_surface (cap at 8KB to avoid
+    # inflating the prompt beyond what the axis actually uses).
+    local trivy_context=""
+    if [ "$trivy_loaded" = "yes" ]; then
+        trivy_context=$(head -c 8192 "$TRIVY_REPORT")
     fi
 
-    local score feedback blockers_count
-    score=$(jq -r '.score // empty' "$conformance_out")
-    feedback=$(jq -r '.feedback // empty' "$conformance_out")
-    blockers_count=$(jq -r '.blockers | length' "$conformance_out" 2>/dev/null || echo 0)
+    # Start wall-clock timer (ms resolution where supported; fallback to s*1000).
+    local start_ts end_ts duration_ms
+    start_ts=$(now_ms)
 
-    if [ -z "$score" ]; then
-        log_error "conformance result missing 'score' field"
-        log_error "Response: $(cat "$conformance_out")"
-        exit 2
+    # Launch each axis as an independent subshell writing to its own output file.
+    # PIDs are captured INCREMENTALLY (Adj #1 — $! only returns the most recent
+    # background PID, so we must grab it right after each &).
+    evaluate_axis conformance "$conformance_out" "$diff_content" "$TICKET_CONTEXT" \
+        > "${COUNCIL_TMPDIR}/conformance.stdout" \
+        2> "${COUNCIL_TMPDIR}/conformance.stderr" &
+    local pid_conformance=$!
+
+    evaluate_axis debt "$debt_out" "$diff_content" "" \
+        > "${COUNCIL_TMPDIR}/debt.stdout" \
+        2> "${COUNCIL_TMPDIR}/debt.stderr" &
+    local pid_debt=$!
+
+    evaluate_axis attack_surface "$attack_out" "$diff_content" "$trivy_context" \
+        > "${COUNCIL_TMPDIR}/attack_surface.stdout" \
+        2> "${COUNCIL_TMPDIR}/attack_surface.stderr" &
+    local pid_attack=$!
+
+    local axis_pids="$pid_conformance $pid_debt $pid_attack"
+
+    if [ "$axes_count" -eq 4 ]; then
+        evaluate_axis contract_impact "$contract_out" "$diff_content" "$DB_CONTEXT" \
+            > "${COUNCIL_TMPDIR}/contract_impact.stdout" \
+            2> "${COUNCIL_TMPDIR}/contract_impact.stderr" &
+        local pid_contract=$!
+        axis_pids="${axis_pids} ${pid_contract}"
     fi
 
-    log_ok "conformance: score=${score}/10 blockers=${blockers_count}"
-    log_info "feedback: ${feedback}"
-
-    # Step 2b binary gate on conformance only. Step 4 will aggregate over all 4 axes.
-    if [ "$score" -ge 8 ]; then
-        log_ok "conformance APPROVED (score >= 8)"
-        exit 0
-    else
-        log_warn "conformance REWORK (score < 8)"
-        if [ "$blockers_count" -gt 0 ]; then
-            jq -r '.blockers[]' "$conformance_out" | while IFS= read -r b; do
-                log_warn "  blocker: ${b}"
-            done
+    # Wait for every axis. `wait <pid>` is not disabled by `set -e` in bash 4+,
+    # but we guard with `|| true` to keep counting failures across all PIDs.
+    local failed=0 pid
+    for pid in $axis_pids; do
+        if ! wait "$pid"; then
+            failed=$((failed + 1))
         fi
-        exit 1
+    done
+
+    end_ts=$(now_ms)
+    duration_ms=$((end_ts - start_ts))
+
+    log_info "Parallel run complete: failed=${failed}/${axes_count} duration=${duration_ms}ms"
+
+    # --- 9. Per-axis summary (best-effort, before aggregation) ------------
+    local axis f axis_score axis_blockers
+    for axis in conformance debt attack_surface contract_impact; do
+        f="${COUNCIL_TMPDIR}/${axis}.json"
+        if [ -f "$f" ] && [ -s "$f" ]; then
+            axis_score=$(jq -r '.score // "?"' "$f" 2>/dev/null || echo "?")
+            axis_blockers=$(jq -r '.blockers | length' "$f" 2>/dev/null || echo 0)
+            log_ok "  ${axis}: score=${axis_score}/10 blockers=${axis_blockers}"
+        elif [ "$axis" = "contract_impact" ] && [ "$axes_count" -eq 3 ]; then
+            log_info "  ${axis}: SKIPPED (db stale/missing)"
+        else
+            log_warn "  ${axis}: NO RESULT (see ${axis}.stderr)"
+            if [ -f "${COUNCIL_TMPDIR}/${axis}.stderr" ] && [ -s "${COUNCIL_TMPDIR}/${axis}.stderr" ]; then
+                sed 's/^/    /' "${COUNCIL_TMPDIR}/${axis}.stderr" >&2 || true
+            fi
+        fi
+    done
+
+    # --- 10. Aggregate scores → verdict ------------------------------------
+    # aggregate_scores return code mirrors the verdict (0/1/2) but we parse
+    # the JSON `status` field to decide the exit — it carries strictly more
+    # information (score, count, errors) and is easier to log. `|| true`
+    # prevents set -e from killing us on REWORK (rc=1) or error (rc=2).
+    local verdict
+    verdict=$(aggregate_scores "$COUNCIL_TMPDIR" "$failed" "$axes_count" || true)
+
+    local status global_score axes_used
+    status=$(echo "$verdict" | jq -r '.status')
+    global_score=$(echo "$verdict" | jq -r '.score // 0')
+    axes_used=$(echo "$verdict" | jq -r '.count // 0')
+
+    # --- 11. Usage + cost accounting (zero under MOCK_API) ----------------
+    local tokens_line input_tokens output_tokens cost_eur
+    tokens_line=$(sum_usage_tokens "$COUNCIL_TMPDIR")
+    input_tokens=${tokens_line% *}
+    output_tokens=${tokens_line#* }
+    cost_eur=$(compute_cost_eur "$input_tokens" "$output_tokens")
+
+    local db_fresh=true
+    if [ "$axes_count" -ne 4 ]; then
+        db_fresh=false
     fi
+
+    # --- 12. Append history entry (never fails the script) ----------------
+    write_history \
+        "$status" \
+        "$global_score" \
+        "$axes_used" \
+        "$db_fresh" \
+        "$input_tokens" \
+        "$output_tokens" \
+        "$cost_eur" \
+        "$diff_lines" \
+        "$duration_ms"
+
+    # --- 13. Final verdict + blockers dump --------------------------------
+    case "$status" in
+        APPROVED)
+            log_ok "VERDICT: APPROVED (score=${global_score}/10 over ${axes_used} axes)"
+            exit 0
+            ;;
+        REWORK)
+            log_warn "VERDICT: REWORK (score=${global_score}/10 over ${axes_used} axes)"
+            for axis in conformance debt attack_surface contract_impact; do
+                f="${COUNCIL_TMPDIR}/${axis}.json"
+                [ -f "$f" ] && [ -s "$f" ] || continue
+                axis_blockers=$(jq -r '.blockers | length' "$f" 2>/dev/null || echo 0)
+                if [ "$axis_blockers" -gt 0 ]; then
+                    log_warn "  ${axis} blockers:"
+                    jq -r '.blockers[]' "$f" 2>/dev/null | while IFS= read -r b; do
+                        log_warn "    - ${b}"
+                    done
+                fi
+            done
+            exit 1
+            ;;
+        error|*)
+            log_error "VERDICT: technical failure — verdict=${verdict}"
+            exit 2
+            ;;
+    esac
 }
 
 main "$@"

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.1...control-plane-ui-v1.2.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* **deps:** revert Vite 8, Tailwind 4, plugin-react 6 breaking bumps (CAB-2034) ([#2292](https://github.com/stoa-platform/stoa/issues/2292)) ([4b65694](https://github.com/stoa-platform/stoa/commit/4b656942ec5b814ceae41735179f3b185604a8bc))
+* **security:** remove default credentials, enforce Vault (CAB-2052) ([#2296](https://github.com/stoa-platform/stoa/issues/2296)) ([c953ae3](https://github.com/stoa-platform/stoa/commit/c953ae3cc63f74aebb7dad2fbe8546ced52cde0c))
+* **ui:** skip broken MCPServers tests + remove orphaned test (CAB-2034) ([#2289](https://github.com/stoa-platform/stoa/issues/2289)) ([655f16b](https://github.com/stoa-platform/stoa/commit/655f16bf93e7ca5c36cb891a9a4bd222f0694c78))
+
 ## [1.2.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.0...control-plane-ui-v1.2.1) (2026-04-09)
 
 

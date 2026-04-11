@@ -29,13 +29,14 @@ class GraviteeTelemetryAdapter(TelemetryAdapterInterface):
     def __init__(self, config: dict | None = None):
         self._config = config or {}
         self._base_url = self._config.get("base_url", "http://localhost:8083")
-        auth_config = self._config.get("auth_config", {})
-        if isinstance(auth_config, dict):
-            self._username = auth_config.get("username", "admin")
-            self._password = auth_config.get("password", "admin")
-        else:
-            self._username = "admin"
-            self._password = "admin"
+        auth_config = self._config.get("auth_config") or {}
+        if not isinstance(auth_config, dict) or not auth_config.get("username") or not auth_config.get("password"):
+            raise ValueError(
+                "GraviteeTelemetryAdapter requires auth_config with 'username' and 'password'. "
+                "Credentials must come from Vault, never hardcoded defaults."
+            )
+        self._username = auth_config["username"]
+        self._password = auth_config["password"]
 
     def _auth_headers(self) -> dict[str, str]:
         creds = b64encode(f"{self._username}:{self._password}".encode()).decode()

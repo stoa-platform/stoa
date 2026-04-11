@@ -10,7 +10,7 @@ from src.adapters.gravitee.telemetry import GraviteeTelemetryAdapter, _normalize
 class TestGraviteeTelemetryAdapter:
     @pytest.mark.asyncio
     async def test_get_access_logs_success(self, httpx_mock):
-        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083"})
+        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(
             json={
                 "logs": [
@@ -34,35 +34,35 @@ class TestGraviteeTelemetryAdapter:
 
     @pytest.mark.asyncio
     async def test_get_access_logs_empty(self, httpx_mock):
-        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083"})
+        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(json={"logs": []})
         logs = await adapter.get_access_logs(since=datetime.now(UTC) - timedelta(minutes=5))
         assert logs == []
 
     @pytest.mark.asyncio
     async def test_get_access_logs_http_error(self, httpx_mock):
-        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083"})
+        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(status_code=500)
         logs = await adapter.get_access_logs(since=datetime.now(UTC) - timedelta(minutes=5))
         assert logs == []
 
     @pytest.mark.asyncio
     async def test_get_metrics_snapshot_success(self, httpx_mock):
-        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083"})
+        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(json={"count": 42, "hits": {"total": 100}})
         metrics = await adapter.get_metrics_snapshot()
         assert metrics["count"] == 42
 
     @pytest.mark.asyncio
     async def test_get_metrics_snapshot_error(self, httpx_mock):
-        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083"})
+        adapter = GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083", "auth_config": {"username": "u", "password": "p"}})
         httpx_mock.add_response(status_code=403)
         metrics = await adapter.get_metrics_snapshot()
         assert "error" in metrics
 
     @pytest.mark.asyncio
     async def test_setup_push_not_supported(self):
-        adapter = GraviteeTelemetryAdapter()
+        adapter = GraviteeTelemetryAdapter({"auth_config": {"username": "u", "password": "p"}})
         result = await adapter.setup_push_subscription("https://example.com/ingest")
         assert result.success is False
         assert "TCP Reporter" in result.error
@@ -74,14 +74,11 @@ class TestGraviteeTelemetryAdapter:
         assert headers["Authorization"].startswith("Basic ")
 
     @pytest.mark.asyncio
-    async def test_default_auth(self):
-        adapter = GraviteeTelemetryAdapter()
-        headers = adapter._auth_headers()
-        # Default admin:admin
-        import base64
-
-        decoded = base64.b64decode(headers["Authorization"].split(" ")[1]).decode()
-        assert decoded == "admin:admin"
+    async def test_missing_auth_raises(self):
+        with pytest.raises(ValueError, match="auth_config"):
+            GraviteeTelemetryAdapter()
+        with pytest.raises(ValueError, match="auth_config"):
+            GraviteeTelemetryAdapter({"base_url": "http://gravitee:8083"})
 
 
 class TestNormalizeGraviteeLog:

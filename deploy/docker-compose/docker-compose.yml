@@ -39,7 +39,7 @@ services:
       - "${PORT_DB:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-stoa}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stoa-quickstart-2045}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set in .env or Vault)}
       POSTGRES_DB: ${POSTGRES_DB:-stoa_platform}
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -117,7 +117,7 @@ services:
       - "${PORT_KEYCLOAK:-8080}:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required (set in .env or Vault)}
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_HTTP_ENABLED: "true"
@@ -128,7 +128,7 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/${KC_DB_NAME:-keycloak}
       KC_DB_USERNAME: ${POSTGRES_USER:-stoa}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-stoa-quickstart-2045}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set in .env or Vault)}
       # Phase 2: Allow iframe embedding in Console (CAB-1108)
       KC_SPI_X_FRAME_OPTIONS: ""
       KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
@@ -173,7 +173,7 @@ services:
     container_name: stoa-db-migrate
     entrypoint: ["alembic", "upgrade", "head"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:-stoa-quickstart-2045}@postgres:5432/${POSTGRES_DB:-stoa_platform}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set in .env or Vault)}@postgres:5432/${POSTGRES_DB:-stoa_platform}
     depends_on:
       postgres:
         condition: service_healthy
@@ -194,13 +194,13 @@ services:
       - "${PORT_API:-8000}:8000"
     environment:
       # Database
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:-stoa-quickstart-2045}@postgres:5432/${POSTGRES_DB:-stoa_platform}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set in .env or Vault)}@postgres:5432/${POSTGRES_DB:-stoa_platform}
       # Keycloak
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: stoa
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required (set in .env or Vault)}
       # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100
@@ -587,9 +587,9 @@ services:
     user: "0:0"
     entrypoint: ["sh", "/init/generate-opensearch-hashes.sh"]
     environment:
-      - OPENSEARCH_ADMIN_PASSWORD=StOa_Admin_2026!
-      - OPENSEARCH_DASHBOARDS_PASSWORD=kibanaserver
-      - OPENSEARCH_LOGWRITER_PASSWORD=logwriter
+      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:?OPENSEARCH_ADMIN_PASSWORD is required (set in .env or Vault)}
+      - OPENSEARCH_DASHBOARDS_PASSWORD=${OPENSEARCH_DASHBOARDS_PASSWORD:?OPENSEARCH_DASHBOARDS_PASSWORD is required}
+      - OPENSEARCH_LOGWRITER_PASSWORD=${OPENSEARCH_LOGWRITER_PASSWORD:?OPENSEARCH_LOGWRITER_PASSWORD is required}
     volumes:
       - ./init/generate-opensearch-hashes.sh:/init/generate-opensearch-hashes.sh:ro
       - ./config/opensearch/security:/input/security:ro
@@ -605,9 +605,6 @@ services:
     container_name: stoa-opensearch
     ports:
       - "${PORT_OPENSEARCH:-9200}:9200"
-    environment:
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
-      - DISABLE_INSTALL_DEMO_CONFIG=true
     extra_hosts:
       - "localhost:host-gateway"
     ulimits:
@@ -632,11 +629,15 @@ services:
     networks:
       - stoa-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sfk https://localhost:9200/_cluster/health -u admin:StOa_Admin_2026! || exit 1"]
+      test: ["CMD-SHELL", "curl -sfk https://localhost:9200/_cluster/health -u admin:$${OPENSEARCH_ADMIN_PASSWORD} || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 20
       start_period: 45s
+    environment:
+      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:?OPENSEARCH_ADMIN_PASSWORD is required}
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
     restart: unless-stopped
 
   # ==========================================================================
@@ -650,6 +651,9 @@ services:
       - "${PORT_OPENSEARCH_DASHBOARDS:-5601}:5601"
     environment:
       - OPENSEARCH_HOSTS=["https://opensearch:9200"]
+      # Secrets injected here (NOT in opensearch_dashboards.yml) — sourced from .env / Vault
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_DASHBOARDS_PASSWORD:?OPENSEARCH_DASHBOARDS_PASSWORD is required}
+      - OPENSEARCH_SECURITY_OPENID_CLIENT_SECRET=${OPENSEARCH_OIDC_CLIENT_SECRET:?OPENSEARCH_OIDC_CLIENT_SECRET is required}
     extra_hosts:
       - "localhost:host-gateway"
     volumes:
@@ -681,7 +685,7 @@ services:
     entrypoint: ["sh", "/init/init-opensearch.sh"]
     environment:
       - OPENSEARCH_ADMIN_USER=admin
-      - OPENSEARCH_ADMIN_PASSWORD=StOa_Admin_2026!
+      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:?OPENSEARCH_ADMIN_PASSWORD is required}
     volumes:
       - ./init/init-opensearch.sh:/init/init-opensearch.sh:ro
       - ../opensearch/pipelines/stoa-rgpd-redaction.json:/init/stoa-rgpd-redaction.json:ro
@@ -1056,7 +1060,7 @@ services:
     entrypoint: ["python", "-m", "scripts.seeder"]
     command: ["--profile", "${SEED_PROFILE:-dev}"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:-stoa-quickstart-2045}@postgres:5432/${POSTGRES_DB:-stoa_platform}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set in .env or Vault)}@postgres:5432/${POSTGRES_DB:-stoa_platform}
       SEED_PROFILE: ${SEED_PROFILE:-dev}
     depends_on:
       control-plane-api:

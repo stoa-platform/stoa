@@ -31,13 +31,14 @@ class WebMethodsTelemetryAdapter(TelemetryAdapterInterface):
     def __init__(self, config: dict | None = None):
         self._config = config or {}
         self._base_url = self._config.get("base_url", "http://localhost:5555")
-        auth_config = self._config.get("auth_config", {})
-        if isinstance(auth_config, dict):
-            self._username = auth_config.get("username", "Administrator")
-            self._password = auth_config.get("password", "manage")
-        else:
-            self._username = "Administrator"
-            self._password = "manage"
+        auth_config = self._config.get("auth_config") or {}
+        if not isinstance(auth_config, dict) or not auth_config.get("username") or not auth_config.get("password"):
+            raise ValueError(
+                "WebMethodsTelemetryAdapter requires auth_config with 'username' and 'password'. "
+                "Credentials must come from Vault, never hardcoded defaults."
+            )
+        self._username = auth_config["username"]
+        self._password = auth_config["password"]
 
     async def get_access_logs(self, since: datetime, limit: int = 1000) -> list[dict]:
         """Pull transactionalEvents from webMethods."""

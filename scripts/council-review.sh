@@ -25,6 +25,7 @@
 # CAB-2047 Step 3a: externalize prompts to scripts/council-prompts/*.md.
 # CAB-2047 Step 3b: fetch_linear_ticket + fetch_db_context + evaluate_axis context injection.
 # CAB-2047 Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl.
+# CAB-2047 Step 4: source guard for bats test suite + .claude/rules/council-s3.md + skill update.
 
 set -euo pipefail
 
@@ -32,7 +33,7 @@ set -euo pipefail
 # Script metadata
 # =============================================================================
 
-VERSION="0.6.0-step3c-parallel"
+VERSION="0.7.0-step4-tests-doc"
 SCRIPT_NAME="council-review.sh"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -1275,4 +1276,8 @@ main() {
     esac
 }
 
-main "$@"
+# Only run main when executed directly. When sourced (e.g. from bats tests),
+# function definitions load without side effects.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

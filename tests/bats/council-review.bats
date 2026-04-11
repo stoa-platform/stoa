@@ -257,3 +257,62 @@ EOF
     [ "$status" -eq 0 ]
     [ "$output" = "0.000000" ]
 }
+
+# =============================================================================
+# resolve_api_key — regression tests for CAB-2046 Infisical fallback
+# =============================================================================
+#
+# These tests cover the no-op branches of resolve_api_key() without hitting
+# the real Infisical API. The happy-path (actual Infisical fetch) is covered
+# empirically by the self-review pre-push hook in this PR — see
+# council-history.jsonl for the APPROVED 8.00/10 run on commit e74b1dfa.
+
+@test "resolve_api_key: regression CAB-2046 — env already set is no-op, value preserved" {
+    export ANTHROPIC_API_KEY="sk-ant-sentinel-value-do-not-touch"
+    resolve_api_key
+    [ "$ANTHROPIC_API_KEY" = "sk-ant-sentinel-value-do-not-touch" ]
+}
+
+@test "resolve_api_key: regression CAB-2046 — MOCK_API=1 skips fallback, env left empty" {
+    unset ANTHROPIC_API_KEY
+    export MOCK_API=1
+    resolve_api_key
+    [ -z "${ANTHROPIC_API_KEY:-}" ]
+}
+
+@test "resolve_api_key: regression CAB-2046 — COUNCIL_NO_INFISICAL=1 kill-switch skips fallback" {
+    unset ANTHROPIC_API_KEY
+    unset MOCK_API
+    export COUNCIL_NO_INFISICAL=1
+    resolve_api_key
+    [ -z "${ANTHROPIC_API_KEY:-}" ]
+}
+
+@test "resolve_api_key: regression CAB-2046 — infisical CLI missing → silent no-op" {
+    unset ANTHROPIC_API_KEY
+    unset MOCK_API
+    unset COUNCIL_NO_INFISICAL
+    # Empty PATH guarantees `command -v infisical` fails
+    local saved_path="$PATH"
+    PATH=""
+    resolve_api_key
+    PATH="$saved_path"
+    [ -z "${ANTHROPIC_API_KEY:-}" ]
+}
+
+@test "resolve_api_key: regression CAB-2046 — infisical-token helper missing → silent no-op" {
+    unset ANTHROPIC_API_KEY
+    unset MOCK_API
+    unset COUNCIL_NO_INFISICAL
+    # Sandbox PATH so `infisical` resolves but `infisical-token` does not.
+    local sandbox
+    sandbox=$(mktemp -d)
+    : > "$sandbox/infisical"
+    chmod +x "$sandbox/infisical"
+    local saved_path="$PATH"
+    PATH="$sandbox"
+    resolve_api_key
+    PATH="$saved_path"
+    [ -z "${ANTHROPIC_API_KEY:-}" ]
+    rm -rf "$sandbox"
+}

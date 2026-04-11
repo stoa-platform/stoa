@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-11 (CAB-2047 Step 5 DONE — real API validation 2 runs, all guardrails proven)
+> Derniere MAJ: 2026-04-11 (CAB-2048 DONE — Council S3 pre-push hook extension merged)
 
 ## ✅ DONE
 
@@ -95,10 +95,23 @@ CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council 
     - **Cost ledger verified**: daily cap tracker cumulative €0.304 / €5 after 3 runs — accurate.
     - **Total Step 5 spend**: €0.3037 (3 runs, well under €5 cap).
     - Handoff artifacts: `council-history.jsonl` has 3 entries (all APPROVED, schemas pass `jq .` cleanly). Preserved tempdir output lives in `/tmp/council.*` — safe to discard.
-- CAB-2048 (2 pts): pre-push hook extension — **UNBLOCKED** (CAB-2047 done)
-- CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — **UNBLOCKED**
-- CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — **UNBLOCKED**
-- CAB-2051 (2 pts): Shadow mode observation 2-3 weeks — blocked by 2048+2049+2050
+- ✅ CAB-2048 (2 pts): pre-push hook extension — **DONE** 2026-04-11, PR #2315 (merge `81aaeda3`), +29 LOC
+  - `.claude/hooks/pre-push-quality-gate.sh` extended with Council S3 block after existing lint/format/tsc/axe checks
+  - Threshold: `COUNCIL_MIN_DIFF_LINES` (default 20) — small diffs go through CI-only (council-gate.yml CAB-2049)
+  - Kill-switch: `DISABLE_COUNCIL_GATE=1` → BYPASSED, logs JSONL entry `{"status":"BYPASSED","reason":"local_kill_switch","diff_lines":N}`
+  - Graceful fallback: missing/non-executable `scripts/council-review.sh` → SKIPPED (exit 0), hook stays resilient to partial checkouts
+  - Reuses existing `MERGE_BASE` + `REPO_ROOT` + `COUNCIL_HISTORY_FILE` env convention (matches `council-review.sh` default `${REPO_ROOT}/council-history.jsonl`)
+  - **Manual test plan (all 4 branches verified with a 30-line probe commit at `scripts/_probe.txt`)**:
+    1. BYPASSED: `DISABLE_COUNCIL_GATE=1` → exit 0, JSONL entry written
+    2. Threshold SKIPPED: `COUNCIL_MIN_DIFF_LINES=9999` → exit 0, no API call
+    3. Missing-script fallback: `mv scripts/council-review.sh ...bak` → exit 0, clear SKIPPED log
+    4. Council invoked: diff ≥ 20 → `council-review.sh --diff MERGE_BASE..HEAD` runs, exits 2 on REWORK/error and prints `DISABLE_COUNCIL_GATE=1` bypass hint
+  - **Probe trick for future hook testing**: create file outside all component dirs (e.g. `scripts/_probe.txt`) so the `ONLY_DOCS=false` + no-`HAS_*-flags` path runs Council without triggering the ruff/ESLint/clippy checks that use the whole-dir globs
+  - No regression on existing checks (classification + run_check blocks untouched). shellcheck clean on new code (pre-existing SC2294 on `eval` unchanged)
+  - CI: 3 required checks ✅ (License, SBOM, Signed Commits) + Regression Test Guard ✅. Non-required `SAST JS ESLint (control-plane-ui)` pre-existing failure on `src/test/i18n-keys.test.ts:35` (`security/detect-unsafe-regex`) — unrelated to this PR, needs its own fix ticket
+- CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — **UNBLOCKED** (parallel with CAB-2048)
+- CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — **UNBLOCKED** (parallel with CAB-2048)
+- CAB-2051 (2 pts): Shadow mode observation 2-3 weeks — now blocked only by 2049 + 2050
 - Claim file: `.claude/claims/CAB-2046.json` — Phase 1 released for handoff (owner=null)
 - Cost guardrails active on main: €5/day hard cap, SHA dedup, COUNCIL_DISABLE kill-switch
 - Audit base: `audit-results.md` (root) — pre-implementation audit of existing Council infra

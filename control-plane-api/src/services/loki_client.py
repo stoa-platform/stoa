@@ -6,7 +6,7 @@ Uses httpx.AsyncClient with context managers following existing patterns.
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -245,7 +245,7 @@ class LokiClient:
     def _parse_log_line(self, log_line: str) -> dict[str, Any] | None:
         """Parse a log line as JSON."""
         try:
-            return json.loads(log_line)
+            return cast(dict[str, Any], json.loads(log_line))
         except json.JSONDecodeError:
             return None
 

@@ -22,6 +22,7 @@
 # CAB-2047 Step 1: skeleton + args parsing + Étape 0 pre-checks.
 # CAB-2047 Step 2a: cost guardrails (disable + daily cap + SHA dedup).
 # CAB-2047 Step 2b: anthropic_call + evaluate_axis(conformance) + MOCK_API.
+# CAB-2047 Step 3a: externalize prompts to scripts/council-prompts/*.md.
 
 set -euo pipefail
 
@@ -29,7 +30,7 @@ set -euo pipefail
 # Script metadata
 # =============================================================================
 
-VERSION="0.3.0-step2b-anthropic-call"
+VERSION="0.4.0-step3a-prompts-externalized"
 SCRIPT_NAME="council-review.sh"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -493,42 +494,36 @@ anthropic_call() {
 }
 
 # =============================================================================
-# Step 2b: conformance system prompt (inline for Step 2b only)
-# Will be replaced in Step 3a by: cat "${REPO_ROOT}/scripts/council-prompts/conformance.md"
+# Step 3a: prompt loader — loads axis system prompts from scripts/council-prompts/
+# One file per axis: conformance.md, debt.md, attack_surface.md, contract_impact.md.
+# Keeping prompts as standalone markdown makes them reviewable and independently
+# calibratable without touching bash logic (Council S2 Adjustment #2).
+#
+# Arguments:
+#   $1 — axis name (conformance | debt | attack_surface | contract_impact)
+# Prints the prompt content on stdout. Exits 2 if the file is missing.
 # =============================================================================
 
-conformance_prompt_inline() {
-    cat <<'PROMPT'
-You are a senior code reviewer evaluating ONLY the "conformance" axis of a git diff.
-
-Score 1-10 based strictly on adherence to the project's coding standards:
-- Lint/format cleanliness (eslint/ruff/clippy — no new warnings)
-- Naming conventions (snake_case Python, camelCase TS, kebab-case files)
-- Commit message format (type(scope): subject, see .claude/rules/git-conventions.md)
-- No TODO/FIXME without ticket reference (CAB-XXXX)
-- No dead code, no commented-out blocks
-- Type hints on Python functions, TS strict mode respected
-
-Do NOT consider: technical debt, security, contract impact, or testing coverage.
-Those are evaluated by separate axes and must not bleed into your verdict.
-
-You MUST respond by calling the record_review tool with:
-- score: integer 1-10 (>=8 = APPROVED on this axis, <8 = REWORK)
-- feedback: string max 500 chars, actionable, specific
-- blockers: array of short strings (empty if score >= 8)
-
-Be strict but fair. A clean 3-line diff with proper naming deserves 9-10.
-A diff with 1 TODO without ticket reference is a 6-7, not a 10.
-PROMPT
+load_prompt() {
+    local axis="$1"
+    local prompt_file="${REPO_ROOT}/scripts/council-prompts/${axis}.md"
+    if [ ! -f "$prompt_file" ]; then
+        log_error "load_prompt: missing prompt file for axis='${axis}' at ${prompt_file}"
+        return 2
+    fi
+    cat "$prompt_file"
 }
 
 # =============================================================================
-# Step 2b: evaluate_axis (conformance only — other axes added in Step 3c)
-# Isolates the prompt + call + output file per axis. Respects MOCK_API=1 for
-# deterministic testing without real API calls (Adj #10).
+# Step 3a: evaluate_axis now loads prompts from disk via load_prompt().
+# Step 2b still gates on conformance in main() — the other axes won't actually
+# be invoked until Step 3c (parallel orchestration), but the loader supports
+# them today so Step 3c is a pure bash-logic change, not a prompt rewrite.
+#
+# Respects MOCK_API=1 for deterministic testing without real API calls (Adj #10).
 #
 # Arguments:
-#   $1 — axis name (currently only "conformance" supported)
+#   $1 — axis name (conformance | debt | attack_surface | contract_impact)
 #   $2 — output file path
 #   $3 — diff content (the user message)
 # =============================================================================
@@ -537,6 +532,14 @@ evaluate_axis() {
     local axis="$1"
     local out="$2"
     local diff_content="$3"
+
+    case "$axis" in
+        conformance|debt|attack_surface|contract_impact) ;;
+        *)
+            log_error "evaluate_axis: unsupported axis='${axis}'"
+            return 1
+            ;;
+    esac
 
     # MOCK_API path — deterministic tests, zero API cost.
     if [ "${MOCK_API:-0}" = "1" ]; then
@@ -553,17 +556,11 @@ evaluate_axis() {
         return 0
     fi
 
-    # Real API path.
+    # Real API path — load prompt from scripts/council-prompts/${axis}.md.
     local system_prompt
-    case "$axis" in
-        conformance)
-            system_prompt=$(conformance_prompt_inline)
-            ;;
-        *)
-            log_error "evaluate_axis: unsupported axis='${axis}' (Step 2b only ships conformance)"
-            return 1
-            ;;
-    esac
+    if ! system_prompt=$(load_prompt "$axis"); then
+        return 1
+    fi
 
     anthropic_call "$system_prompt" "$diff_content" "$out"
 }
@@ -657,7 +654,7 @@ main() {
     log_info "  mock_api=${MOCK_API:-0}"
     log_info "------------------------------------------------------------"
 
-    log_info "Evaluating axis=conformance (Step 2b — conformance only)"
+    log_info "Evaluating axis=conformance (Step 3a — prompts externalized, conformance-only gate)"
     local conformance_out="${COUNCIL_TMPDIR}/conformance.json"
     if ! evaluate_axis conformance "$conformance_out" "$diff_content"; then
         log_error "conformance axis evaluation failed"

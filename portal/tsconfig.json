@@ -5,13 +5,12 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
+      "@/*": ["./src/*"],
       "@stoa/shared/*": ["../shared/*"],
-      "@tanstack/react-query": ["node_modules/@tanstack/react-query"],
-      "react-i18next": ["node_modules/react-i18next"],
-      "react-markdown": ["node_modules/react-markdown"]
+      "@tanstack/react-query": ["./node_modules/@tanstack/react-query"],
+      "react-i18next": ["./node_modules/react-i18next"],
+      "react-markdown": ["./node_modules/react-markdown"]
     }
   },
   "include": ["src", "../shared"],

@@ -27,7 +27,7 @@ set -euo pipefail
 # Script metadata
 # =============================================================================
 
-VERSION="0.1.0-step1-skeleton"
+VERSION="0.2.0-step2a-cost-guardrails"
 SCRIPT_NAME="council-review.sh"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -44,6 +44,10 @@ DB_STALE_DAYS=7
 DIFF_TRUNCATED=false
 COUNCIL_TMPDIR=""
 TIMEOUT_CMD=""
+
+# Cost-safety guardrails
+COUNCIL_HISTORY_FILE="${COUNCIL_HISTORY_FILE:-${REPO_ROOT}/council-history.jsonl}"
+DIFF_SHA=""
 
 # =============================================================================
 # Logging
@@ -77,6 +81,14 @@ ENVIRONMENT:
   LINEAR_API_KEY        Optional — enables --ticket context fetching
   MOCK_API              If set to "1", uses fixture responses instead of real API calls
   TMPDIR                Override the temp directory (default: /tmp)
+
+COST SAFETY (HARD GUARDRAILS — enforced before any API call):
+  COUNCIL_DISABLE=1     Kill-switch — exit 0 immediately, no review
+  COUNCIL_DAILY_CAP_EUR Daily spend cap in EUR (default: 5). Script reads
+                        council-history.jsonl, sums today's cost_eur, exits 0
+                        if >= cap. Override via: COUNCIL_DAILY_CAP_EUR=50
+  COUNCIL_FORCE_DEDUP   Set to "0" to disable SHA dedup and re-evaluate
+                        identical diffs (default: 1, dedup enabled)
 
 EXIT CODES:
   0   APPROVED (score >= 8.0, or empty diff — nothing to review)
@@ -169,6 +181,114 @@ check_dependencies() {
 }
 
 # =============================================================================
+# Cost guardrail 1: COUNCIL_DISABLE kill-switch (Step 2a)
+# Fast-path exit before anything else runs. Redundant with CAB-2048's
+# DISABLE_COUNCIL_GATE=1 from the pre-push hook, but also covers CI and
+# manual invocation scenarios.
+# =============================================================================
+
+check_disable_flag() {
+    if [ "${COUNCIL_DISABLE:-0}" = "1" ]; then
+        log_warn "COUNCIL_DISABLE=1 — Council S3 skipped (kill-switch)"
+        exit 0
+    fi
+}
+
+# =============================================================================
+# Cost guardrail 2: Daily spend cap (Step 2a)
+# Reads council-history.jsonl, sums today's cost_eur across all entries,
+# exits 0 (not 2) if the total is at or above COUNCIL_DAILY_CAP_EUR.
+# Rationale: the cap is a soft guardrail, not a review verdict — we don't
+# want to fail the developer's PR, we just don't review it until tomorrow.
+# =============================================================================
+
+check_daily_cap() {
+    local cap="${COUNCIL_DAILY_CAP_EUR:-5}"
+    local today
+    today=$(date -u +%Y-%m-%d)
+
+    if [ ! -f "$COUNCIL_HISTORY_FILE" ]; then
+        log_info "Daily cap: €0.00 / €${cap} (no history yet)"
+        return 0
+    fi
+
+    local today_spend
+    today_spend=$(jq -r --arg d "$today" \
+        'select(.timestamp | startswith($d)) | .cost_eur // 0' \
+        "$COUNCIL_HISTORY_FILE" 2>/dev/null \
+        | awk '{sum += $1} END {printf "%.4f", sum + 0}')
+
+    if [ -z "$today_spend" ]; then
+        today_spend="0"
+    fi
+
+    # awk handles float comparison (bash cannot)
+    if awk -v spent="$today_spend" -v cap="$cap" \
+        'BEGIN {exit !(spent + 0 >= cap + 0)}'; then
+        log_warn "Daily cap €${cap} reached (spent €${today_spend} today) — SKIP review"
+        log_warn "Bypass: COUNCIL_DAILY_CAP_EUR=50 ${SCRIPT_NAME} ..."
+        exit 0
+    fi
+
+    log_info "Daily cap: €${today_spend} / €${cap}"
+}
+
+# =============================================================================
+# Cost guardrail 3: Diff SHA dedup (Step 2a)
+# Computes SHA1 of the full diff content. If an entry with the same SHA
+# exists in today's council-history.jsonl, skip the review — this happens
+# on CI reruns, successive pushes with no new changes, or identical
+# cherry-picks. Saves one full 4-axis round-trip (~€0.036).
+# Sets DIFF_SHA global for later use by the JSONL writer (Step 4).
+# =============================================================================
+
+check_sha_dedup() {
+    local sha_tool=""
+    if command -v sha1sum >/dev/null 2>&1; then
+        sha_tool=sha1sum
+    elif command -v shasum >/dev/null 2>&1; then
+        sha_tool=shasum
+    else
+        log_warn "No sha1sum/shasum available — SHA dedup disabled"
+        DIFF_SHA="unknown"
+        return 0
+    fi
+
+    DIFF_SHA=$(git diff "$DIFF_RANGE" 2>/dev/null | "$sha_tool" | awk '{print $1}')
+
+    if [ -z "$DIFF_SHA" ]; then
+        log_warn "Failed to compute diff SHA — dedup disabled"
+        DIFF_SHA="unknown"
+        return 0
+    fi
+
+    if [ ! -f "$COUNCIL_HISTORY_FILE" ]; then
+        log_info "Diff SHA ${DIFF_SHA:0:8} — first evaluation (no history)"
+        return 0
+    fi
+
+    local today
+    today=$(date -u +%Y-%m-%d)
+
+    local hit
+    hit=$(jq -r --arg sha "$DIFF_SHA" --arg d "$today" \
+        'select(.timestamp | startswith($d)) | select(.diff_sha == $sha) | .timestamp' \
+        "$COUNCIL_HISTORY_FILE" 2>/dev/null | head -1)
+
+    if [ -n "$hit" ]; then
+        if [ "${COUNCIL_FORCE_DEDUP:-1}" = "0" ]; then
+            log_warn "Diff SHA ${DIFF_SHA:0:8} already evaluated at ${hit} — COUNCIL_FORCE_DEDUP=0, re-evaluating"
+            return 0
+        fi
+        log_info "Diff SHA ${DIFF_SHA:0:8} already evaluated today at ${hit} — SKIP"
+        log_info "Bypass: COUNCIL_FORCE_DEDUP=0 ${SCRIPT_NAME} ..."
+        exit 0
+    fi
+
+    log_info "Diff SHA ${DIFF_SHA:0:8} — first evaluation today"
+}
+
+# =============================================================================
 # Pre-check 2: Diff lines count (Adj #5)
 # Use --numstat for insertions + deletions; --stat $4 only gives insertions.
 # =============================================================================
@@ -256,6 +376,9 @@ main() {
     log_info "Diff range: ${DIFF_RANGE}"
     [ -n "$TICKET" ] && log_info "Ticket: ${TICKET}"
 
+    # --- 0. Kill-switch (fastest possible exit) -----------------------------
+    check_disable_flag
+
     # --- 1. Dependencies ----------------------------------------------------
     check_dependencies
     log_ok "Dependencies: jq curl git awk sed gitleaks ${TIMEOUT_CMD}"
@@ -268,6 +391,10 @@ main() {
         exit 0
     fi
     log_info "Diff lines: ${diff_lines} (insertions + deletions)"
+
+    # --- 2b. Cost guardrails (BEFORE any expensive op, esp. API calls) ----
+    check_daily_cap
+    check_sha_dedup
 
     # --- 3. Tempdir setup (needed by gitleaks preflight and future axes) ---
     COUNCIL_TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/council.XXXXXX")
@@ -312,20 +439,22 @@ main() {
         log_warn "Trivy report not found at ${TRIVY_REPORT} — attack_surface runs without Trivy context"
     fi
 
-    # --- Step 1 complete — stub for Step 2+ --------------------------------
+    # --- Step 2a complete — stub for Step 2b+ ------------------------------
     log_info "------------------------------------------------------------"
-    log_info "[STEP 1 SKELETON] All Étape 0 pre-checks passed."
-    log_info "[STEP 1 SKELETON] API evaluation (evaluate_axis × ${axes_count}) not yet implemented."
-    log_info "[STEP 1 SKELETON] See CAB-2047 for Step 2 (anthropic_call + single-axis test)."
+    log_info "[STEP 2a SKELETON] All pre-checks + cost guardrails passed."
+    log_info "[STEP 2a SKELETON] API evaluation (evaluate_axis × ${axes_count}) not yet implemented."
+    log_info "[STEP 2a SKELETON] See CAB-2047 for Step 2b (anthropic_call + single-axis test)."
     log_info "------------------------------------------------------------"
     log_info "Summary:"
     log_info "  diff_lines=${diff_lines}"
     log_info "  diff_truncated=${DIFF_TRUNCATED}"
     log_info "  diff_bytes=${diff_bytes}"
+    log_info "  diff_sha=${DIFF_SHA:0:12}"
     log_info "  axes_count=${axes_count}"
     log_info "  skip_axis=${skip_axis:-none}"
     log_info "  db_age_days=${db_age}"
     log_info "  trivy_loaded=${trivy_loaded}"
+    log_info "  daily_cap=€${COUNCIL_DAILY_CAP_EUR:-5}"
 
     exit 0
 }

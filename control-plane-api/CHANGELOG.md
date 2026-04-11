@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.3.0...control-plane-api-v1.3.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* **api:** resolve 24 failing tests on main (CI P0) ([#2293](https://github.com/stoa-platform/stoa/issues/2293)) ([5e35661](https://github.com/stoa-platform/stoa/commit/5e35661421f3030d7c73751eebd72981cbba1a5f))
+* **security:** follow-up to CAB-2052 — 3 remaining leaks + ArgoCD spam ([#2302](https://github.com/stoa-platform/stoa/issues/2302)) ([e6a4b38](https://github.com/stoa-platform/stoa/commit/e6a4b38d92ff209a2c51de33489ef3cdbeaa3c3a))
+* **security:** remove default credentials, enforce Vault (CAB-2052) ([#2296](https://github.com/stoa-platform/stoa/issues/2296)) ([c953ae3](https://github.com/stoa-platform/stoa/commit/c953ae3cc63f74aebb7dad2fbe8546ced52cde0c))
+
 ## [1.3.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.2.0...control-plane-api-v1.3.0) (2026-04-09)
 
 

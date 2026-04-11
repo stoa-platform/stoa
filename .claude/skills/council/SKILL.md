@@ -6,6 +6,16 @@ argument-hint: "<description of what to build>"
 
 # Council Validation — $ARGUMENTS
 
+## Three-Stage Council
+
+This skill drives **Stage 1 (ticket pertinence)** and **Stage 2 (plan validation)** — both prose-based, 4-persona scoring.
+
+**Stage 3 (code review)** runs **after implementation** on the actual diff, via `scripts/council-review.sh` (4-axis: conformance, debt, attack_surface, contract_impact). It is **not** invoked by this skill — it is wired to the pre-push hook (CAB-2048) and `council-gate.yml` CI workflow (CAB-2049). See `.claude/rules/council-s3.md` for full docs.
+
+```
+S1 (this skill, prose)  →  S2 (this skill, plan)  →  implementation  →  S3 (council-review.sh, diff)  →  merge
+```
+
 ## Step 1: Gather Context
 
 Read and understand the feature/ADR/change description. Gather context from:
@@ -271,6 +281,29 @@ Linear: <URL>
 plan.md: updated
 Next: say "go" to start implementation, or "adjust <feedback>" to revise
 ```
+
+## Step 4c: Stage 3 — Automated Code Review (post-implementation)
+
+Stage 3 is **not run by this skill**. It runs automatically against the diff once implementation is complete, via `scripts/council-review.sh`. Shape:
+
+| Axis | Role |
+|------|------|
+| `conformance` | Repo conventions, style, naming, structure |
+| `debt` | Shortcuts, TODOs, test gaps, premature abstractions |
+| `attack_surface` | Input validation, authn/z, secrets, SSRF, PII, CORS, deps |
+| `contract_impact` | Cross-component contracts (skipped when `docs/stoa-impact.db` is stale) |
+
+Exit codes: `0` APPROVED (avg >= 8.0), `1` REWORK, `2` technical failure.
+
+Trigger points (when wired):
+
+| Level | Trigger | How |
+|-------|---------|-----|
+| Local pre-push | `git push` | Pre-push hook extension (CAB-2048) |
+| CI | PR opened | `.github/workflows/council-gate.yml` feature-flagged via `vars.COUNCIL_S3_ENABLED` (CAB-2049) |
+| Manual | Any diff | `scripts/council-review.sh --ticket CAB-XXXX --diff <range>` |
+
+When S3 returns REWORK, address the per-axis blockers/warnings and re-run. Full documentation: `.claude/rules/council-s3.md`.
 
 ## Rules
 

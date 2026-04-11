@@ -25,7 +25,9 @@ async fn test_mcp_capabilities_shape() {
     assert_eq!(status, axum::http::StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     assert_json_snapshot!("mcp-capabilities", json, {
-        ".server.version" => "[version]",
+        ".serverInfo.version" => "[version]",
+        ".serverInfo.protocolVersion" => "[protocol_version]",
+        ".protocolVersion" => "[protocol_version]",
     });
 }
 

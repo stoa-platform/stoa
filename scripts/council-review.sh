@@ -20,6 +20,8 @@
 #
 # See .claude/rules/council-s3.md for full documentation.
 # CAB-2047 Step 1: skeleton + args parsing + Étape 0 pre-checks.
+# CAB-2047 Step 2a: cost guardrails (disable + daily cap + SHA dedup).
+# CAB-2047 Step 2b: anthropic_call + evaluate_axis(conformance) + MOCK_API.
 
 set -euo pipefail
 
@@ -27,7 +29,7 @@ set -euo pipefail
 # Script metadata
 # =============================================================================
 
-VERSION="0.2.0-step2a-cost-guardrails"
+VERSION="0.3.0-step2b-anthropic-call"
 SCRIPT_NAME="council-review.sh"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
@@ -44,6 +46,11 @@ DB_STALE_DAYS=7
 DIFF_TRUNCATED=false
 COUNCIL_TMPDIR=""
 TIMEOUT_CMD=""
+
+# Step 2b: API configuration
+ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-sonnet-4-5}"
+ANTHROPIC_MAX_TOKENS="${ANTHROPIC_MAX_TOKENS:-1024}"
+ANTHROPIC_TIMEOUT_S="${ANTHROPIC_TIMEOUT_S:-30}"
 
 # Cost-safety guardrails
 COUNCIL_HISTORY_FILE="${COUNCIL_HISTORY_FILE:-${REPO_ROOT}/council-history.jsonl}"
@@ -366,6 +373,202 @@ extract_diff_content() {
 }
 
 # =============================================================================
+# Step 2b: anthropic_call (Adj #4 — typed retry, 429/5xx only)
+# Sends a tool_use request to Anthropic API and extracts the tool input into
+# the output file. Returns:
+#   0 — success (output_file contains JSON matching record_review schema)
+#   1 — failure (network, permanent HTTP error, or malformed response)
+#
+# Retry policy:
+#   - 200 → success, stop
+#   - 429 | 5xx → retry with backoff (up to max_attempts)
+#   - anything else (401, 400, 000, etc.) → permanent failure, NO retry
+#
+# Arguments:
+#   $1 — system prompt (string)
+#   $2 — user content (string, typically the diff)
+#   $3 — output file path (absolute)
+# =============================================================================
+
+anthropic_call() {
+    local system_prompt="$1"
+    local user_content="$2"
+    local out="$3"
+    local attempt=1
+    local max_attempts=2
+    local http_status=""
+
+    if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+        log_error "ANTHROPIC_API_KEY not set — cannot call Anthropic API"
+        return 1
+    fi
+
+    local payload
+    payload=$(jq -n \
+        --arg model "$ANTHROPIC_MODEL" \
+        --argjson max_tokens "$ANTHROPIC_MAX_TOKENS" \
+        --arg sys "$system_prompt" \
+        --arg usr "$user_content" \
+        '{
+            model: $model,
+            max_tokens: $max_tokens,
+            system: $sys,
+            messages: [{role: "user", content: $usr}],
+            tools: [{
+                name: "record_review",
+                description: "Record the review verdict for one axis",
+                input_schema: {
+                    type: "object",
+                    properties: {
+                        score: {
+                            type: "integer",
+                            minimum: 1,
+                            maximum: 10,
+                            description: "Quality score, 1-10. >=8 means APPROVED for this axis."
+                        },
+                        feedback: {
+                            type: "string",
+                            maxLength: 500,
+                            description: "Actionable feedback, max 500 chars"
+                        },
+                        blockers: {
+                            type: "array",
+                            items: {type: "string"},
+                            description: "Array of blocker descriptions (empty if none)"
+                        }
+                    },
+                    required: ["score", "feedback", "blockers"]
+                }
+            }],
+            tool_choice: {type: "tool", name: "record_review"}
+        }')
+
+    local raw="${out}.raw"
+
+    while [ "$attempt" -le "$max_attempts" ]; do
+        http_status=$("$TIMEOUT_CMD" "$ANTHROPIC_TIMEOUT_S" curl -sS \
+            -o "$raw" \
+            -w "%{http_code}" \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -X POST https://api.anthropic.com/v1/messages \
+            --data-binary "$payload" 2>/dev/null) || http_status="000"
+
+        case "$http_status" in
+            200)
+                # Extract the tool_use input block as the axis result JSON.
+                if jq -e '.content[] | select(.type=="tool_use") | .input' "$raw" \
+                    > "$out" 2>/dev/null; then
+                    if [ -s "$out" ]; then
+                        return 0
+                    fi
+                fi
+                log_error "anthropic_call: 200 OK but tool_use extraction failed"
+                log_error "Raw response saved to: ${raw}"
+                return 1
+                ;;
+            429|5*)
+                if [ "$attempt" -lt "$max_attempts" ]; then
+                    local backoff=$((attempt * 2))
+                    log_warn "anthropic_call: transient status=${http_status}, retrying in ${backoff}s (attempt ${attempt}/${max_attempts})"
+                    sleep "$backoff"
+                    attempt=$((attempt + 1))
+                    continue
+                fi
+                log_error "anthropic_call: transient status=${http_status}, max attempts reached"
+                return 1
+                ;;
+            *)
+                log_error "anthropic_call: permanent failure status=${http_status} — NO retry"
+                if [ -s "$raw" ]; then
+                    log_error "Response body: $(head -c 200 "$raw")"
+                fi
+                return 1
+                ;;
+        esac
+    done
+
+    return 1
+}
+
+# =============================================================================
+# Step 2b: conformance system prompt (inline for Step 2b only)
+# Will be replaced in Step 3a by: cat "${REPO_ROOT}/scripts/council-prompts/conformance.md"
+# =============================================================================
+
+conformance_prompt_inline() {
+    cat <<'PROMPT'
+You are a senior code reviewer evaluating ONLY the "conformance" axis of a git diff.
+
+Score 1-10 based strictly on adherence to the project's coding standards:
+- Lint/format cleanliness (eslint/ruff/clippy — no new warnings)
+- Naming conventions (snake_case Python, camelCase TS, kebab-case files)
+- Commit message format (type(scope): subject, see .claude/rules/git-conventions.md)
+- No TODO/FIXME without ticket reference (CAB-XXXX)
+- No dead code, no commented-out blocks
+- Type hints on Python functions, TS strict mode respected
+
+Do NOT consider: technical debt, security, contract impact, or testing coverage.
+Those are evaluated by separate axes and must not bleed into your verdict.
+
+You MUST respond by calling the record_review tool with:
+- score: integer 1-10 (>=8 = APPROVED on this axis, <8 = REWORK)
+- feedback: string max 500 chars, actionable, specific
+- blockers: array of short strings (empty if score >= 8)
+
+Be strict but fair. A clean 3-line diff with proper naming deserves 9-10.
+A diff with 1 TODO without ticket reference is a 6-7, not a 10.
+PROMPT
+}
+
+# =============================================================================
+# Step 2b: evaluate_axis (conformance only — other axes added in Step 3c)
+# Isolates the prompt + call + output file per axis. Respects MOCK_API=1 for
+# deterministic testing without real API calls (Adj #10).
+#
+# Arguments:
+#   $1 — axis name (currently only "conformance" supported)
+#   $2 — output file path
+#   $3 — diff content (the user message)
+# =============================================================================
+
+evaluate_axis() {
+    local axis="$1"
+    local out="$2"
+    local diff_content="$3"
+
+    # MOCK_API path — deterministic tests, zero API cost.
+    if [ "${MOCK_API:-0}" = "1" ]; then
+        local fixture="${REPO_ROOT}/tests/fixtures/council/${axis}.json"
+        if [ -n "${MOCK_API_FIXTURE:-}" ]; then
+            fixture="$MOCK_API_FIXTURE"
+        fi
+        if [ ! -f "$fixture" ]; then
+            log_error "MOCK_API: fixture not found at ${fixture}"
+            return 1
+        fi
+        cp "$fixture" "$out"
+        log_info "MOCK_API: loaded fixture for axis=${axis} from ${fixture}"
+        return 0
+    fi
+
+    # Real API path.
+    local system_prompt
+    case "$axis" in
+        conformance)
+            system_prompt=$(conformance_prompt_inline)
+            ;;
+        *)
+            log_error "evaluate_axis: unsupported axis='${axis}' (Step 2b only ships conformance)"
+            return 1
+            ;;
+    esac
+
+    anthropic_call "$system_prompt" "$diff_content" "$out"
+}
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -439,13 +642,9 @@ main() {
         log_warn "Trivy report not found at ${TRIVY_REPORT} — attack_surface runs without Trivy context"
     fi
 
-    # --- Step 2a complete — stub for Step 2b+ ------------------------------
+    # --- 8. Step 2b: conformance axis evaluation ---------------------------
     log_info "------------------------------------------------------------"
-    log_info "[STEP 2a SKELETON] All pre-checks + cost guardrails passed."
-    log_info "[STEP 2a SKELETON] API evaluation (evaluate_axis × ${axes_count}) not yet implemented."
-    log_info "[STEP 2a SKELETON] See CAB-2047 for Step 2b (anthropic_call + single-axis test)."
-    log_info "------------------------------------------------------------"
-    log_info "Summary:"
+    log_info "Pre-check summary:"
     log_info "  diff_lines=${diff_lines}"
     log_info "  diff_truncated=${DIFF_TRUNCATED}"
     log_info "  diff_bytes=${diff_bytes}"
@@ -455,8 +654,43 @@ main() {
     log_info "  db_age_days=${db_age}"
     log_info "  trivy_loaded=${trivy_loaded}"
     log_info "  daily_cap=€${COUNCIL_DAILY_CAP_EUR:-5}"
+    log_info "  mock_api=${MOCK_API:-0}"
+    log_info "------------------------------------------------------------"
 
-    exit 0
+    log_info "Evaluating axis=conformance (Step 2b — conformance only)"
+    local conformance_out="${COUNCIL_TMPDIR}/conformance.json"
+    if ! evaluate_axis conformance "$conformance_out" "$diff_content"; then
+        log_error "conformance axis evaluation failed"
+        exit 2
+    fi
+
+    local score feedback blockers_count
+    score=$(jq -r '.score // empty' "$conformance_out")
+    feedback=$(jq -r '.feedback // empty' "$conformance_out")
+    blockers_count=$(jq -r '.blockers | length' "$conformance_out" 2>/dev/null || echo 0)
+
+    if [ -z "$score" ]; then
+        log_error "conformance result missing 'score' field"
+        log_error "Response: $(cat "$conformance_out")"
+        exit 2
+    fi
+
+    log_ok "conformance: score=${score}/10 blockers=${blockers_count}"
+    log_info "feedback: ${feedback}"
+
+    # Step 2b binary gate on conformance only. Step 4 will aggregate over all 4 axes.
+    if [ "$score" -ge 8 ]; then
+        log_ok "conformance APPROVED (score >= 8)"
+        exit 0
+    else
+        log_warn "conformance REWORK (score < 8)"
+        if [ "$blockers_count" -gt 0 ]; then
+            jq -r '.blockers[]' "$conformance_out" | while IFS= read -r b; do
+                log_warn "  blocker: ${b}"
+            done
+        fi
+        exit 1
+    fi
 }
 
 main "$@"

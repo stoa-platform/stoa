@@ -190,8 +190,7 @@ class TestGetClient:
 
 class TestCreateClient:
     async def test_creates(self, svc):
-        svc._admin.create_client.return_value = None
-        svc._admin.get_clients.return_value = [{"clientId": "acme-myapp", "id": "uuid-1"}]
+        svc._admin.create_client.return_value = "uuid-1"
         svc._admin.get_client_secrets.return_value = {"value": "secret-123"}
         result = await svc.create_client(
             "acme", "myapp", "My App", ["http://localhost"],
@@ -199,12 +198,17 @@ class TestCreateClient:
         )
         assert result["client_id"] == "acme-myapp"
         assert result["client_secret"] == "secret-123"
+        assert result["id"] == "uuid-1"
 
-    async def test_create_fails(self, svc):
-        svc._admin.create_client.return_value = None
-        svc._admin.get_clients.return_value = []  # client not found after create
-        with pytest.raises(RuntimeError, match="Failed to create client"):
-            await svc.create_client("acme", "myapp", "My App", [])
+    async def test_create_public_skips_secret(self, svc):
+        svc._admin.create_client.return_value = "uuid-2"
+        result = await svc.create_client(
+            "acme", "myapp", "My App", ["http://localhost"],
+            security_profile="oauth2_public",
+        )
+        assert result["client_id"] == "acme-myapp"
+        assert result["client_secret"] is None
+        svc._admin.get_client_secrets.assert_not_called()
 
 
 class TestUpdateClient:

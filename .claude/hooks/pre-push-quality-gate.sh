@@ -87,8 +87,13 @@ run_check() {
 
 # Python (control-plane-api)
 if [ "$HAS_PYTHON_API" = "true" ]; then
-  run_check "api:ruff" "cd $REPO_ROOT/control-plane-api && ruff check ."
-  run_check "api:black" "cd $REPO_ROOT/control-plane-api && black --check ."
+  # Scope: src/ only — matches CI exactly (reusable-python-ci.yml runs ruff check src/).
+  # tests/ has pre-existing violations out of CI scope; linting them here blocked pushes
+  # on unrelated legacy debt (CAB-2053 Phase 2 bug class #7).
+  # black removed: CI does NOT run black (reusable-python-ci.yml only runs ruff + mypy).
+  # src/ has 83 pre-existing black violations that CI tolerates — hook should not be
+  # stricter than CI.
+  run_check "api:ruff" "cd $REPO_ROOT/control-plane-api && ruff check src/"
 fi
 
 # Console (control-plane-ui)

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/stoa-platform/stoa/compare/portal-v1.1.1...portal-v1.1.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* **portal:** restore local dev build (TS6, peer deps, react-is) ([#2295](https://github.com/stoa-platform/stoa/issues/2295)) ([92be112](https://github.com/stoa-platform/stoa/commit/92be11222e4b6d93f13a321e1acedac607cba9e7))
+* **security:** remove default credentials, enforce Vault (CAB-2052) ([#2296](https://github.com/stoa-platform/stoa/issues/2296)) ([c953ae3](https://github.com/stoa-platform/stoa/commit/c953ae3cc63f74aebb7dad2fbe8546ced52cde0c))
+
 ## [1.1.1](https://github.com/stoa-platform/stoa/compare/portal-v1.1.0...portal-v1.1.1) (2026-04-09)
 
 

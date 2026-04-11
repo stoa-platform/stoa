@@ -1,0 +1,5 @@
+{
+  "score": 9,
+  "feedback": "No new network endpoints. No new secret reads. curl calls are already bounded by TIMEOUT_CMD. Gitleaks pre-flight remains the strongest guardrail. sqlite3 is invoked with -readonly and comp_id interpolation is whitelisted to [a-zA-Z0-9_-].",
+  "blockers": []
+}

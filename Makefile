@@ -29,8 +29,8 @@ setup: ## Install dependencies for all components
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 
-run-api: ## Start Control Plane API (port 8000)
-	cd control-plane-api && uvicorn src.main:app --reload --port 8000
+run-api: ## Start Control Plane API (port 8000) — secrets resolved from Vault
+	./scripts/dev/run-api-local.sh
 
 run-ui: ## Start Console UI dev server (port 5173)
 	cd control-plane-ui && npm start

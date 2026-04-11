@@ -34,14 +34,17 @@ cd deploy/docker-compose
 cp .env .env.local   # optional: customize ports if needed
 ```
 
-Default configuration (no changes required):
+Default configuration — **you must set strong passwords in `.env`** before running:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_USER` | `stoa` | Database user |
-| `POSTGRES_PASSWORD` | `stoa-quickstart-2045` | Database password |
-| `KEYCLOAK_ADMIN` | `admin` | Keycloak admin user |
-| `KEYCLOAK_ADMIN_PASSWORD` | `admin` | Keycloak admin password |
+| Variable | Description |
+|----------|-------------|
+| `POSTGRES_USER` | Database user (default `stoa`) |
+| `POSTGRES_PASSWORD` | **Required** — set a strong password |
+| `KEYCLOAK_ADMIN` | Keycloak admin user (default `admin`) |
+| `KEYCLOAK_ADMIN_PASSWORD` | **Required** — set a strong password |
+| `OPENSEARCH_ADMIN_PASSWORD` | **Required** — OpenSearch cluster admin |
+| `OPENSEARCH_DASHBOARDS_PASSWORD` | **Required** — Dashboards service account |
+| `OPENSEARCH_OIDC_CLIENT_SECRET` | **Required** — OIDC client secret for Dashboards |
 | `PORT_KEYCLOAK` | `8280` | Keycloak external port |
 | `PORT_API` | `8000` | Control Plane API port |
 | `PORT_CONSOLE` | `3000` | Console UI port |

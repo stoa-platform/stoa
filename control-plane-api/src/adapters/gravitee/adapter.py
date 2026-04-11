@@ -37,13 +37,14 @@ class GraviteeGatewayAdapter(GatewayAdapterInterface):
     def __init__(self, config: dict | None = None):
         super().__init__(config=config)
         self._base_url = (config or {}).get("base_url", "http://localhost:8083")
-        auth_config = (config or {}).get("auth_config", {})
-        if isinstance(auth_config, dict):
-            self._username = auth_config.get("username", "admin")
-            self._password = auth_config.get("password", "admin")
-        else:
-            self._username = "admin"
-            self._password = "admin"
+        auth_config = (config or {}).get("auth_config") or {}
+        if not isinstance(auth_config, dict) or not auth_config.get("username") or not auth_config.get("password"):
+            raise ValueError(
+                "GraviteeGatewayAdapter requires auth_config with 'username' and 'password'. "
+                "Credentials must come from Vault, never hardcoded defaults."
+            )
+        self._username = auth_config["username"]
+        self._password = auth_config["password"]
         self._client: httpx.AsyncClient | None = None
 
     # --- Lifecycle ---

@@ -175,3 +175,11 @@ backups/
 kubeconfig*
 .kube/
 .env.keycloak
+
+# Ephemeral agent/tool state
+.playwright-mcp/
+.claude/scheduled_tasks.lock
+
+# Council S3 (CAB-2047) — history + metrics, never commit
+council-history.jsonl
+council-history-*.jsonl

@@ -1,10 +1,37 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-11 (CAB-2053 Phase 0 — 🚨 FEATURE FREEZE ACTIVE)
+> Derniere MAJ: 2026-04-12 (CAB-2053 Phase 1 done — In Review queue drained 43→0)
 >
 > **🚨 FREEZE ACTIVE depuis 2026-04-11** — voir CAB-2053 dans 🔴 IN PROGRESS.
 > Seul travail autorisé : CAB-2053 (stabilisation) + CAB-2046 remaining sub-tickets (CAB-2049/2050/2051 — closure infra Council S3 qui sert de thermomètre à CAB-2053) + hotfixes P0.
 > Tous les autres MEGA/tickets P1-P3 sont suspendus jusqu'à CAB-2053 Phase 6 close gate.
+
+## 📌 Session 2026-04-11/12 — PR merge sweep (handoff)
+
+**9 PRs mergées** dans une seule session de nettoyage/stabilisation :
+- #2316 chore(docs): cab-2048 handoff snapshot
+- #2293 fix(api): resolve 24 failing tests (CI P0)
+- #2290 release control-plane-ui 1.2.2
+- #2291 release stoa-gateway 0.9.3
+- #2299 release portal 1.1.2 — **branche recréée via Git API** (conflit manifest release-please)
+- #2300 release control-plane-api 1.3.1 — **branche recréée via Git API**
+- #2294 fix(ui): runtime-config.js cache — `skip-regression` label
+- #2322 fix(gateway): insta redaction path `.serverInfo.version` — `skip-regression` label
+- portal msw devDep : embarqué par la session parallèle dans #2321
+
+**État CD post-session** :
+- stoa-gateway : `dev-96b1202b` (0.9.3) ✅ déployé
+- stoa-portal : `dev-b3a020f1` (1.1.2) ✅ déployé
+- control-plane-ui : `dev-3a6521094` ✅ déployé
+- **control-plane-api : `sha-4759aa7` (Apr 9) ❌ toujours bloqué** — mypy pré-existant (`src/database.py:58`, `vault_client.py:178,217`, `prometheus_client.py:72,115`, `loki_client.py:248`) empêche docker build → pas de dispatch GitOps → pas de tag 1.3.1 live. **Ticket à créer** : `fix(api): resolve pre-existing mypy no-any-return errors`.
+
+**2 vraies régressions corrigées** (surfacées par les bumps Release Please) :
+- stoa-gateway : redaction insta `.server.version` ne matchait pas `serverInfo`, version 0.9.1 gravée dans le snap → drift sur 0.9.3. Fix dans `tests/contract/discovery.rs:28`.
+- portal : `msw` importé par `src/__tests__/integration/api-catalog-msw.test.tsx` + `src/test/mocks/server.ts,handlers.ts` mais jamais déclaré dans `package.json`. Probable regression de CAB-1951 (boundary integrity refactor).
+
+**PR #2297 DRAFT restante** : `feat(api): drop execution_logs table (CAB-1977) [MIGRATION ONLY]` — migration Alembic destructive volontairement en draft, **ne pas merger sans validation humaine**.
+
+**Incident durant la session** : une autre session Claude Code tournait sur le même workdir et a fait switcher mes branches git 2× (commits atterrissant sur `fix/cab-2046-council-review-infisical-fallback` au lieu de mes branches dédiées). Récupéré proprement via reflog + cherry-pick, aucune perte. La session parallèle a finalement embarqué mon fix portal/msw dans son propre PR #2321 par contamination du staging area. → voir `feedback_parallel_session_contamination.md`.
 
 ## ✅ DONE
 
@@ -86,8 +113,14 @@
 
 Objectif : briser la boucle de 3 semaines sur les bugs récurrents de state-drift en faisant de `stoactl` la surface d'entrée unique pour Claude (remplace le scan codebase qui coûte ~80% du contexte par session). `stoactl --help` + schemas JSON deviennent le context pack primaire → context usage cible < 40% au démarrage.
 
-- **Phase 0** ✅ IN PROGRESS — feature freeze policy declared in memory.md + plan.md
-- **Phase 1** [owner: —] — Drain In Review queue (39 tickets C15 → Done ou fermés)
+- **Phase 0** ✅ DONE — feature freeze policy declared in memory.md + plan.md (PR #2318)
+- **Phase 1** ✅ DONE (2026-04-12) — In Review queue drained 43→0 tickets
+  - **Bucket A** (25 tickets, ~228 pts) — state drift closed to Done: CAB-1874, CAB-1898, CAB-1900, CAB-1916, CAB-1936, CAB-1937, CAB-1945, CAB-1946, CAB-1947, CAB-1948, CAB-1949, CAB-1951, CAB-1962, CAB-1869, CAB-1990, CAB-1991, CAB-1992, CAB-1993, CAB-1994, CAB-1995, CAB-1997, CAB-2003, CAB-2006, CAB-2007, CAB-2008
+  - **Bucket B1** (3 tickets, 16 pts) — Canceled superseded by CAB-2053 Phase 3: CAB-2023, CAB-2024, CAB-2025
+  - **Bucket B2+B3** (8 tickets) — Todo (legitimate WIP zombies): CAB-2035/36/37/38 (CAB-2034 subs), CAB-1985/86/87/88 (CAB-1977 subs)
+  - **Bucket B4** (7 tickets) — Todo (re-evaluation post-freeze): CAB-1814 (no impl), CAB-1775 (PR #1657 closed), CAB-1903, CAB-1998, CAB-1876, CAB-1858, CAB-1942
+  - Notable: CAB-1916 Phase 4 (`health_contract.py`) descoped — race condition already fixed without it
+- **Phase 2** [owner: —] — Bug recurrence root cause (formaliser classes de bugs, 1 fix par classe)
 - **Phase 2** [owner: —] — Bug recurrence root cause (formaliser classes de bugs, 1 fix par classe)
 - **Phase 3** [owner: —] — `stoactl` completeness : `apply -f` pour tous les kinds déclarés + `get`/`delete`/`list` manquants. Critère binaire 100%.
 - **Phase 4** [owner: —] — Schema registry unifié `gostoa.dev/v1beta1` via conversion webhook + JSON Schema registry publié dans `charts/stoa-platform/schemas/`

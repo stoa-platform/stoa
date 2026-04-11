@@ -24,13 +24,16 @@ echo "[seeder] Gateway healthy"
 # --- Bootstrap routes ---
 echo "[seeder] Registering API routes..."
 
+SEED_TENANT="${SEED_TENANT:-demo}"
+
 register_route() {
   local id="$1" name="$2" path="$3" backend="$4" methods="${5:-[]}"
+  local full_prefix="/apis/${SEED_TENANT}/${name}${path}"
   curl -sf -X POST "$GATEWAY_URL/admin/apis" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"id\":\"$id\",\"name\":\"$name\",\"tenant_id\":\"default\",\"path_prefix\":\"$path\",\"backend_url\":\"$backend\",\"methods\":$methods,\"spec_hash\":\"seed-local\",\"activated\":true}" \
-    > /dev/null 2>&1 && echo "  + $name -> $path" || echo "  ! $name FAILED (may exist)"
+    -d "{\"id\":\"$id\",\"name\":\"$name\",\"tenant_id\":\"${SEED_TENANT}\",\"path_prefix\":\"$full_prefix\",\"backend_url\":\"$backend\",\"methods\":$methods,\"spec_hash\":\"seed-local\",\"activated\":true}" \
+    > /dev/null 2>&1 && echo "  + $name -> $full_prefix" || echo "  ! $name FAILED (may exist)"
 }
 
 # Tier 1: No auth
@@ -60,11 +63,12 @@ if [ -n "$CONNECT_GW" ]; then
   # Reuse register_route but target connect gateway
   register_connect() {
     local id="$1" name="$2" path="$3" backend="$4" methods="${5:-[]}"
+    local full_prefix="/apis/${SEED_TENANT}/${name}${path}"
     curl -sf -X POST "$CONNECT_GW/admin/apis" \
       -H "Authorization: Bearer $ADMIN_TOKEN" \
       -H "Content-Type: application/json" \
-      -d "{\"id\":\"$id\",\"name\":\"$name\",\"tenant_id\":\"default\",\"path_prefix\":\"$path\",\"backend_url\":\"$backend\",\"methods\":$methods,\"spec_hash\":\"seed-local\",\"activated\":true}" \
-      > /dev/null 2>&1 && echo "  + [connect] $name -> $path" || echo "  ! [connect] $name FAILED (may exist)"
+      -d "{\"id\":\"$id\",\"name\":\"$name\",\"tenant_id\":\"${SEED_TENANT}\",\"path_prefix\":\"$full_prefix\",\"backend_url\":\"$backend\",\"methods\":$methods,\"spec_hash\":\"seed-local\",\"activated\":true}" \
+      > /dev/null 2>&1 && echo "  + [connect] $name -> $full_prefix" || echo "  ! [connect] $name FAILED (may exist)"
   }
   register_connect "connect-eurostat"  "eurostat"     "/nama_10_gdp"       "$ECHO_BACKEND"
   register_connect "connect-accounts"  "echo-bearer"  "/api/v1/accounts"   "$ECHO_BACKEND/api/v1/accounts"  '["GET"]'

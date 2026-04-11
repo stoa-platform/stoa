@@ -23,9 +23,22 @@
 
 set -euo pipefail
 
+# ⚠️ LOCAL DEV ONLY — this script wires a dev-mode Vault with a well-known
+# root token. Never run against a non-local kube context.
+CURRENT_CONTEXT="$(kubectl config current-context 2>/dev/null || echo '')"
+case "$CURRENT_CONTEXT" in
+  k3d-*|kind-*|docker-desktop|minikube|rancher-desktop|'')
+    ;;
+  *)
+    echo "refusing to run against kube context '$CURRENT_CONTEXT' — this script is for local dev clusters only" >&2
+    exit 1
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_NAMESPACE="vault"
 VAULT_RELEASE="vault"
+# Dev root token, hardcoded intentionally — Vault runs in -dev mode locally.
 VAULT_TOKEN="stoa-dev-root-token"
 
 # Colors

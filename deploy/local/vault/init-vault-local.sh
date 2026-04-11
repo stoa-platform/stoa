@@ -10,16 +10,20 @@
 
 set -eu
 
+# ⚠️ LOCAL DEV ONLY. This script expects a dev-mode Vault running on a local
+# K3d/kind cluster. All required secrets must be provided via the Job env —
+# there are intentionally no hardcoded defaults except for non-sensitive fields.
+
 VAULT_ADDR="${VAULT_ADDR:-http://vault.vault.svc.cluster.local:8200}"
-VAULT_TOKEN="${VAULT_TOKEN:-stoa-dev-root-token}"
+: "${VAULT_TOKEN:?VAULT_TOKEN is required (set in vault-init-job.yaml)}"
 export VAULT_ADDR VAULT_TOKEN
 
 # Secrets from environment (set by Job manifest)
 POSTGRES_USER="${POSTGRES_USER:-stoa}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-stoa-quickstart-2045}"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 POSTGRES_DB="${POSTGRES_DB:-stoa_platform}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
-KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+: "${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}"
 
 log() { echo "[vault-init] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
 

@@ -9,8 +9,8 @@ before M1.
 Task: Generate docstrings for control-plane-api/src/core/pii/patterns.py
 
 Usage:
-    export ANTHROPIC_API_KEY=sk-ant-...
-    export MISTRAL_API_KEY=...
+    export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"
+    export MISTRAL_API_KEY="${MISTRAL_API_KEY}"
     python3 scripts/ai-ops/coprocessor-bench-t1.py
 
     # Run specific provider only

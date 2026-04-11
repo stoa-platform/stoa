@@ -41,7 +41,7 @@ Is it user-facing (customers, developers, partners)?
 
 | Category | Path | Count | Examples |
 |----------|------|-------|---------|
-| ADRs | `docs/architecture/adr/` | 39 | ADR-001 through ADR-039 |
+| ADRs | `docs/architecture/adr/` | 60 | ADR-001 through ADR-060 |
 | Architecture | `docs/architecture/` | 3 | Overview, mTLS flow |
 | Guides | `docs/guides/` | 10 | Quick start, auth, subscriptions, portal, console |
 | Migration guides | `docs/guides/migration/` | 5 | webMethods, Kong, Apigee, Oracle OAM |
@@ -76,7 +76,7 @@ Is it user-facing (customers, developers, partners)?
 ## ADR Numbering Rules
 
 - **stoa-docs owns ADR numbers** — never create an ADR number in stoa repo
-- Current range: ADR-001 through ADR-047. **Next available: ADR-048**
+- Current range: ADR-001 through ADR-060. **Next available: ADR-061**
 - Filename format: `adr-NNN-short-description.md`
 - Draft ADRs can live temporarily in stoa repo but MUST be renumbered when moved to stoa-docs
 - Always check `stoa-docs/docs/architecture/adr/` for the latest number before creating

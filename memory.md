@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-11 (CAB-2047 Step 3b merged, handoff for Step 3c)
+> Derniere MAJ: 2026-04-11 (CAB-2047 Step 3c merged, handoff for Step 4 — tests + doc)
 
 ## ✅ DONE
 
@@ -78,13 +78,15 @@
 
 CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council S1 8.125/10, S2 8.5/10 Go
 - Decomposed into 5 sub-issues (CAB-2047 through CAB-2051), 3-phase DAG
-- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b merged, **Step 3c next**
+- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b+3c merged, **Step 4 next (tests + doc)**
   - ✅ Step 1: skeleton + Étape 0 pre-checks (deps, gitleaks pre-flight, portable stat, numstat, truncation 10k) — PR #2303, commit `e98e88c0`, 333 LOC
   - ✅ Step 2a: cost guardrails (COUNCIL_DISABLE kill-switch, COUNCIL_DAILY_CAP_EUR default €5, SHA dedup) — PR #2304, commit `fd8c7d66`, +134/-5 → 462 LOC
   - ✅ Step 2b: anthropic_call() + evaluate_axis(conformance) + MOCK_API fixtures — PR #2306, commit `9fb4a235`
   - ✅ Step 3a: prompts externalisés → `scripts/council-prompts/{conformance,debt,attack_surface,contract_impact}.md`, `load_prompt(axis)` loader, v0.4.0 — PR #2307, merge `c7108607`, +152/-41. Only conformance invoked in main() — other 3 axes are content-only until Step 3c.
-  - ✅ Step 3b: `fetch_linear_ticket` (GraphQL issueSearch → TICKET_CONTEXT) + `fetch_db_context` (sqlite3 -readonly, match repo_path, cross-component contracts → DB_CONTEXT) + `evaluate_axis` 4th arg `extra_context` wrapped in `<context>…</context>`/`<diff>…</diff>`. TICKET_CONTEXT passed to conformance; DB_CONTEXT computed but wired in 3c. v0.5.0 — PR #2308, merge `423641f7`, +263/-7 → 949 LOC.
-  - ⏳ Steps 3c/4/5 pending (parallel 4-axis orchestration with incremental PID capture Adj #1, aggregate_scores + JSONL + bats, docs + skill integration)
+  - ✅ Step 3b: `fetch_linear_ticket` (GraphQL issueSearch → TICKET_CONTEXT) + `fetch_db_context` (sqlite3 -readonly, match repo_path, cross-component contracts → DB_CONTEXT) + `evaluate_axis` 4th arg `extra_context` wrapped in `<context>…</context>`/`<diff>…</diff>`. v0.5.0 — PR #2308, merge `423641f7`, +263/-7 → 949 LOC.
+  - ✅ Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl. Incremental PID capture (Adj #1), `aggregate_scores <tmpdir> <failed> <expected_count>` pure function (exit 0/1/2), missing-file-for-expected-axis counts as error (closes silent-skip gap), `sum_usage_tokens`/`compute_cost_eur`/`write_history`, `now_ms()` portable ms timer (BSD date %3N fallback), 3 missing MOCK_API fixtures (debt, attack_surface, contract_impact), `.gitignore` entries. v0.6.0 — PR #2310, merge `ed56cf82`, +375/-27 → 1278 LOC. Tested 4 scenarios with MOCK_API=1: APPROVED rc=0, REWORK rc=1, ERROR rc=2, 3-axis rc=0. Shellcheck clean.
+  - ⏳ Step 4 pending: bats-core test suite on `aggregate_scores` (5 scenarios per DoD Adj #9), `.claude/rules/council-s3.md` documentation, `.claude/skills/council/SKILL.md` integration with S3 (after S1/S2)
+  - ⏳ Step 5 pending: real-run validation against a live diff + Anthropic API (requires ANTHROPIC_API_KEY + budget), end-to-end tuning of per-axis scores/feedback
 - CAB-2048 (2 pts): pre-push hook extension — blocked by CAB-2047
 - CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — blocked by CAB-2047
 - CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — blocked by CAB-2047
@@ -92,25 +94,25 @@ CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council 
 - Claim file: `.claude/claims/CAB-2046.json` — Phase 1 released for handoff (owner=null)
 - Cost guardrails active on main: €5/day hard cap, SHA dedup, COUNCIL_DISABLE kill-switch
 - Audit base: `audit-results.md` (root) — pre-implementation audit of existing Council infra
-- **Next session handoff (Step 3c — parallel 4-axis orchestration)**:
-  - Read CAB-2047 Linear comments for Council S1/S2 history + 13 adjustments v2
-  - Start from `scripts/council-review.sh` v0.5.0 on main (`423641f7`)
-  - Wire `DB_CONTEXT` into `contract_impact` axis call (pattern: `evaluate_axis contract_impact "$out" "$diff_content" "$DB_CONTEXT"`)
-  - Wire Trivy report into `attack_surface` (load JSON from `$TRIVY_REPORT`, pass as extra_context if present)
-  - `debt` axis: diff-only (no extra context per ticket spec)
-  - Launch 4 axes in parallel subshells with **incremental PID capture** (Adj #1 — `$!` only returns LAST PID):
-    ```
-    evaluate_axis conformance "$TMPDIR/conformance.json" "$diff" "$TICKET_CONTEXT" & PID_CONF=$!
-    evaluate_axis debt        "$TMPDIR/debt.json"        "$diff" &                   PID_DEBT=$!
-    evaluate_axis attack_surface "$TMPDIR/attack_surface.json" "$diff" "$TRIVY_CTX" & PID_ATTK=$!
-    [ "$axes_count" -eq 4 ] && { evaluate_axis contract_impact "$TMPDIR/contract_impact.json" "$diff" "$DB_CONTEXT" & PID_CTR=$!; }
-    ```
-  - Use `wait $PID` per pid with exit-code capture → increment FAILED counter on non-zero
-  - Route result files to Step 4's `aggregate_scores` function (not yet implemented)
-  - Keep conformance-only gate as fallback (e.g., via `COUNCIL_AXES_ONLY=conformance` env) until aggregate_scores lands in Step 4
-  - MOCK_API must still work: parallel subshells cp fixtures in parallel (race-free via distinct output paths)
-  - Target PR size: <300 LOC (Stripe micro-PR standard), shellcheck clean, bump version to `0.6.0-step3c-parallel-orchestration`
-- **Session log**: Step 3b completed 2026-04-11, PR #2308 merged `423641f7`, +263/-7. `council-review.sh` now 949 LOC. Context fetchers verified against HEAD~50..HEAD~40 (4 components matched, 1681-byte DB_CONTEXT).
+- **Next session handoff (Step 4 — bats tests + documentation)**:
+  - Start from `scripts/council-review.sh` v0.6.0 on main (`ed56cf82`, 1278 LOC)
+  - Implement `tests/bats/council-review.bats` with 5 scenarios on `aggregate_scores` (per CAB-2047 DoD Adj #9):
+    1. 4 axes all ok, avg >= 8.0 → APPROVED exit 0
+    2. 4 axes all ok, avg < 8.0 → REWORK exit 1
+    3. 3 axes ok + 1 error → averaged over 3, status consistent
+    4. 2 axes error → exit 2 technical failure
+    5. contract_impact skipped (db stale, expected_count=3) → avg over 3 axes, db_fresh=false
+  - Bats approach: `source scripts/council-review.sh` is problematic (runs main). Instead, extract testable helpers or use a guard: add `[[ "${BASH_SOURCE[0]}" == "${0}" ]] && main "$@"` at bottom so `source` doesn't execute main. Then bats can directly call `aggregate_scores`, `sum_usage_tokens`, `compute_cost_eur` against fabricated fixtures in per-test tmpdirs.
+  - Install bats via `brew install bats-core` (local) or add to CI via apt/npm. Add a `tests/bats/` README pointing to `bats tests/bats/council-review.bats`.
+  - Write `.claude/rules/council-s3.md`: overview, 3 exit codes, env vars (COUNCIL_DISABLE, COUNCIL_DAILY_CAP_EUR, COUNCIL_FORCE_DEDUP, MOCK_API, ANTHROPIC_API_KEY, LINEAR_API_KEY), how the 4 axes score, JSONL schema, troubleshooting (gitleaks block, daily cap reached, SHA dedup hit), FAQ (cost, privacy).
+  - Update `.claude/skills/council/SKILL.md` to reference S3 as the post-code-change gate (S1=ticket pertinence, S2=plan validation, S3=code review via `scripts/council-review.sh`).
+  - Target PR size: <250 LOC (tests + doc only, no script logic changes)
+- **Step 5 (after Step 4)**: real API validation
+  - Requires `ANTHROPIC_API_KEY` in env and a small real-diff target (pick a recent docs-only PR for low cost)
+  - Expected first-run cost: €0.04-0.06 for a ~100-line diff across 4 axes
+  - Observations to capture: per-axis latency, usage.input_tokens/output_tokens realism, prompt quality (any hallucinated blockers?), daily cap accuracy
+  - If any axis drifts (score consistently off), tune `scripts/council-prompts/<axis>.md` iteratively — prompts are externalized per Step 3a
+- **Session log**: Step 3c completed 2026-04-11, PR #2310 merged `ed56cf82`, +375/-27. `council-review.sh` now 1278 LOC. 4 MOCK_API scenarios green (APPROVED/REWORK/ERROR/3-axis). CI required checks all green (License, SBOM, Signed Commits, Regression Guard). Shellcheck clean.
 
 CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
 - PRs #2106, #2109, #2111 merged

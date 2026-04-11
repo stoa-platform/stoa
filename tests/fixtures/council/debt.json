@@ -1,0 +1,5 @@
+{
+  "score": 8,
+  "feedback": "Low tech debt: no new TODO comments, no dead code, no duplicated blocks >20 LOC. One borderline: the aggregate_scores function is reaching 40 LOC, consider extracting score parsing if a 5th axis is added later.",
+  "blockers": []
+}

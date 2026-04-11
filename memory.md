@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-11 (CAB-2047 Step 3c merged, handoff for Step 4 — tests + doc)
+> Derniere MAJ: 2026-04-11 (CAB-2047 Step 4 merged — bats tests + council-s3.md + skill update)
 
 ## ✅ DONE
 
@@ -78,14 +78,14 @@
 
 CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council S1 8.125/10, S2 8.5/10 Go
 - Decomposed into 5 sub-issues (CAB-2047 through CAB-2051), 3-phase DAG
-- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b+3c merged, **Step 4 next (tests + doc)**
+- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b+3c+4 merged, **Step 5 next (real API validation)**
   - ✅ Step 1: skeleton + Étape 0 pre-checks (deps, gitleaks pre-flight, portable stat, numstat, truncation 10k) — PR #2303, commit `e98e88c0`, 333 LOC
   - ✅ Step 2a: cost guardrails (COUNCIL_DISABLE kill-switch, COUNCIL_DAILY_CAP_EUR default €5, SHA dedup) — PR #2304, commit `fd8c7d66`, +134/-5 → 462 LOC
   - ✅ Step 2b: anthropic_call() + evaluate_axis(conformance) + MOCK_API fixtures — PR #2306, commit `9fb4a235`
   - ✅ Step 3a: prompts externalisés → `scripts/council-prompts/{conformance,debt,attack_surface,contract_impact}.md`, `load_prompt(axis)` loader, v0.4.0 — PR #2307, merge `c7108607`, +152/-41. Only conformance invoked in main() — other 3 axes are content-only until Step 3c.
   - ✅ Step 3b: `fetch_linear_ticket` (GraphQL issueSearch → TICKET_CONTEXT) + `fetch_db_context` (sqlite3 -readonly, match repo_path, cross-component contracts → DB_CONTEXT) + `evaluate_axis` 4th arg `extra_context` wrapped in `<context>…</context>`/`<diff>…</diff>`. v0.5.0 — PR #2308, merge `423641f7`, +263/-7 → 949 LOC.
   - ✅ Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl. Incremental PID capture (Adj #1), `aggregate_scores <tmpdir> <failed> <expected_count>` pure function (exit 0/1/2), missing-file-for-expected-axis counts as error (closes silent-skip gap), `sum_usage_tokens`/`compute_cost_eur`/`write_history`, `now_ms()` portable ms timer (BSD date %3N fallback), 3 missing MOCK_API fixtures (debt, attack_surface, contract_impact), `.gitignore` entries. v0.6.0 — PR #2310, merge `ed56cf82`, +375/-27 → 1278 LOC. Tested 4 scenarios with MOCK_API=1: APPROVED rc=0, REWORK rc=1, ERROR rc=2, 3-axis rc=0. Shellcheck clean.
-  - ⏳ Step 4 pending: bats-core test suite on `aggregate_scores` (5 scenarios per DoD Adj #9), `.claude/rules/council-s3.md` documentation, `.claude/skills/council/SKILL.md` integration with S3 (after S1/S2)
+  - ✅ Step 4: bats test suite (15 tests, 5 DoD scenarios + 3 edge + 3 token + 4 cost) + `.claude/rules/council-s3.md` (scoped, ~11.6K) + SKILL.md S3 cross-ref + source guard on `main "$@"`. v0.7.0 — PR #2312, merge `ad168f48`, +553/-2. bats-core 1.13.0 local, shellcheck clean, all 4 required CI checks green (non-required SAST JS ESLint failure pre-existing in control-plane-ui unrelated).
   - ⏳ Step 5 pending: real-run validation against a live diff + Anthropic API (requires ANTHROPIC_API_KEY + budget), end-to-end tuning of per-axis scores/feedback
 - CAB-2048 (2 pts): pre-push hook extension — blocked by CAB-2047
 - CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — blocked by CAB-2047

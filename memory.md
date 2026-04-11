@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-11 (CAB-2048 DONE — Council S3 pre-push hook extension merged)
+> Derniere MAJ: 2026-04-11 (CAB-2053 Phase 0 — 🚨 FEATURE FREEZE ACTIVE)
+>
+> **🚨 FREEZE ACTIVE depuis 2026-04-11** — voir CAB-2053 dans 🔴 IN PROGRESS.
+> Seul travail autorisé : CAB-2053 (stabilisation) + CAB-2046 remaining sub-tickets (CAB-2049/2050/2051 — closure infra Council S3 qui sert de thermomètre à CAB-2053) + hotfixes P0.
+> Tous les autres MEGA/tickets P1-P3 sont suspendus jusqu'à CAB-2053 Phase 6 close gate.
 
 ## ✅ DONE
 
@@ -75,6 +79,29 @@
 - **C7**: 505 pts, 44 issues, 72 pts/day
 
 ## 🔴 IN PROGRESS
+
+### 🚨 CAB-2053: [MEGA] Feature freeze + CLI-first stabilization (21 pts, P1-High) — Council 8.0/10 Go
+
+**Started 2026-04-11 — Phase 0 feature freeze declared.**
+
+Objectif : briser la boucle de 3 semaines sur les bugs récurrents de state-drift en faisant de `stoactl` la surface d'entrée unique pour Claude (remplace le scan codebase qui coûte ~80% du contexte par session). `stoactl --help` + schemas JSON deviennent le context pack primaire → context usage cible < 40% au démarrage.
+
+- **Phase 0** ✅ IN PROGRESS — feature freeze policy declared in memory.md + plan.md
+- **Phase 1** [owner: —] — Drain In Review queue (39 tickets C15 → Done ou fermés)
+- **Phase 2** [owner: —] — Bug recurrence root cause (formaliser classes de bugs, 1 fix par classe)
+- **Phase 3** [owner: —] — `stoactl` completeness : `apply -f` pour tous les kinds déclarés + `get`/`delete`/`list` manquants. Critère binaire 100%.
+- **Phase 4** [owner: —] — Schema registry unifié `gostoa.dev/v1beta1` via conversion webhook + JSON Schema registry publié dans `charts/stoa-platform/schemas/`
+- **Phase 5** [owner: —] — Claude context pack CLI-first : charge `stoactl --help` + schemas au lieu de `src/`. Mesure binaire : context usage < 40%.
+- **Phase 6** [owner: —] — Green CI baseline 7 jours + close gate : feature codée sans lire `src/` + **shadow metric via CAB-2051 `council-history.jsonl`** (REWORK rate post-freeze < 50% du baseline pré-freeze)
+- **Phase 7** [owner: —] — ADR-061 controller framework decision (kopf / ad-hoc / Go via stoa-connect)
+
+**Exceptions au freeze** (seules choses autorisées hors CAB-2053) :
+- CAB-2046 remaining subs (CAB-2049 CI workflow, CAB-2050 rotation) — ~2h, closure de work-in-flight, *indispensables* car déploient CAB-2051 shadow mode qui mesure l'efficacité de CAB-2053
+- Hotfixes P0 production
+
+**Close gate binaire** : nouvelle feature codée en session Claude SANS lire un seul fichier sous `src/` — uniquement `stoactl` + schemas. Si OK → unfreeze. Si KO → MEGA rouvert.
+
+---
 
 CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council S1 8.125/10, S2 8.5/10 Go
 - Decomposed into 5 sub-issues (CAB-2047 through CAB-2051), 3-phase DAG

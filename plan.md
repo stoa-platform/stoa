@@ -477,7 +477,20 @@ _(none — all active items either Done or In Review)_
 
 ### Todo
 
-**P1/P2 — Code**:
+**🚨 FREEZE ACTIVE — Council-validated 2026-04-11 8.0/10 Go**:
+- [~] CAB-2053: [MEGA] Feature freeze + CLI-first stabilization — break the 3-week loop (21 pts, P1-High) — Phase 0 started 2026-04-11
+  - **Phase 0** [~] — Feature freeze policy declared in memory.md + plan.md
+  - **Phase 1** [owner: —] — Drain In Review queue (39 tickets C15)
+  - **Phase 2** [owner: —] — Bug recurrence root cause (1 fix par classe, pas par symptôme)
+  - **Phase 3** [owner: —] — stoactl completeness 100% (apply -f tous les kinds + get/delete/list manquants) — **coeur du MEGA**
+  - **Phase 4** [owner: —] — Schema registry unifié gostoa.dev/v1beta1 (conversion webhook)
+  - **Phase 5** [owner: —] — Context pack CLI-first (context usage <40% au démarrage) — **payoff**
+  - **Phase 6** [owner: —] — Green CI baseline 7j + close gate binaire (feature sans lire src/)
+  - **Phase 7** [owner: —] — ADR-061 controller framework decision
+  - **Close gate shadow metric** : CAB-2051 `council-history.jsonl` REWORK rate post-freeze < 50% du baseline pré-freeze
+  - **Exceptions freeze** : CAB-2049/2050 (closure CAB-2046 in-flight, déploie shadow mode) + hotfixes P0
+
+**P1/P2 — Code** (suspendus pendant freeze, reprise après close gate CAB-2053):
 - [ ] CAB-1887: fix(ui): [MEGA] Gateway Dashboard Inconsistencies (21 pts, P1-Urgent)
 - [ ] CAB-1917: [MEGA] fix(api): Fix API creation and deployment pipeline (21 pts, P2)
 - [ ] CAB-1930: feat(api): [MEGA] Deploy Single Path — SSE replaces SyncEngine (21 pts, P2)

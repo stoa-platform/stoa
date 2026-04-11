@@ -15,7 +15,7 @@ server.rewriteBasePath: true
 opensearch.hosts: ["https://opensearch:9200"]
 opensearch.ssl.verificationMode: none
 opensearch.username: "kibanaserver"
-opensearch.password: "kibanaserver"
+# opensearch.password injected at runtime via OPENSEARCH_PASSWORD env var (set in docker-compose.yml)
 opensearch.requestHeadersAllowlist: ["Authorization", "securitytenant"]
 
 # ---------------------------------------------------------------------------
@@ -25,7 +25,8 @@ opensearch_security.auth.type: ["basicauth", "openid"]
 opensearch_security.auth.multiple_auth_enabled: true
 opensearch_security.openid.connect_url: "http://keycloak:8080/realms/stoa/.well-known/openid-configuration"
 opensearch_security.openid.client_id: "opensearch-dashboards"
-opensearch_security.openid.client_secret: "opensearch-dashboards-dev-secret"
+# opensearch_security.openid.client_secret injected at runtime via
+# OPENSEARCH_SECURITY_OPENID_CLIENT_SECRET env var (set in docker-compose.yml)
 opensearch_security.openid.scope: "openid"
 opensearch_security.openid.base_redirect_url: "http://keycloak:5601/logs"
 opensearch_security.openid.logout_url: "http://keycloak:8080/realms/stoa/protocol/openid-connect/logout?redirect_uri=http://keycloak:5601/logs"

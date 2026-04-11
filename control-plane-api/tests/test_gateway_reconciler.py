@@ -206,6 +206,11 @@ class TestPruneStaleEntries:
 class TestReconcileEndToEnd:
     """Test the full reconcile cycle."""
 
+    @pytest.fixture(autouse=True)
+    def _stub_argocd_token(self, monkeypatch):
+        # Reconciler short-circuits when no token; tests need it configured.
+        monkeypatch.setattr("src.workers.gateway_reconciler.settings.ARGOCD_TOKEN", "test-token")
+
     @pytest.mark.asyncio
     @patch("src.workers.gateway_reconciler.argocd_service")
     @patch("src.workers.gateway_reconciler._get_session_factory")
@@ -250,6 +255,18 @@ class TestReconcileEndToEnd:
 
         # Should not raise — logs warning and returns
         await reconciler._reconcile()
+
+    @pytest.mark.asyncio
+    @patch("src.workers.gateway_reconciler.argocd_service")
+    async def test_reconcile_skips_when_no_token(self, mock_argocd, monkeypatch):
+        monkeypatch.setattr("src.workers.gateway_reconciler.settings.ARGOCD_TOKEN", "")
+        reconciler = GatewayReconciler()
+        mock_argocd.get_applications = AsyncMock(return_value=[])
+
+        await reconciler._reconcile()
+
+        # ArgoCD should NOT be queried when token is absent
+        mock_argocd.get_applications.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("src.workers.gateway_reconciler.argocd_service")

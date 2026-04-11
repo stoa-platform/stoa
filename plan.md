@@ -540,7 +540,7 @@ _(none — all active items either Done or In Review)_
 - [ ] CAB-2041: Dossier technique — Réponses instances d'archi post-démo (P2)
 - [ ] CAB-2042: Présentation — Comité d'architecture STOA (P2)
 - [ ] CAB-2043: Benchmark gateway — STOA vs concurrents, backend co-localisé VPS (P2)
-- [ ] CAB-2054: [MEGA] feat(council): align S1/S2 to 8 personas per HEG-PAT-003 (13 pts) — Council 8.5/10 Go
+- [~] CAB-2054: [MEGA] feat(council): align S1/S2 to 8 personas per HEG-PAT-003 (13 pts) — 3/4 phases merged (P1 hegemon, P3 SKILL.md, P4 tuning); P2 ADR-061 stoa-docs PR #151 awaiting review
 
 ---
 

@@ -1,0 +1,9 @@
+{
+  "score": 5,
+  "feedback": "Found 2 TODO comments without CAB-XXXX reference (line 42, 89). Missing type hints on new Python function `process_payload`. Commit message 'wip: stuff' does not match type(scope): subject format.",
+  "blockers": [
+    "TODO without ticket ref: line 42",
+    "TODO without ticket ref: line 89",
+    "Missing type hints on process_payload"
+  ]
+}

@@ -1,0 +1,185 @@
+# Council Stage 3 — Automated 4-axis Code Review (CAB-2046 / CAB-2049)
+# Runs scripts/council-review.sh on every PR in SHADOW MODE.
+# - Does NOT block merges (continue-on-error: true on the job)
+# - Posts review results as a PR comment (scores + 4 axes + blockers)
+# - Feature flag: set vars.COUNCIL_S3_ENABLED=false in repo variables to disable
+# - Kill-switch: secrets.ANTHROPIC_API_KEY missing → script exits 0 (no-op)
+#
+# Shadow mode window: 2-3 weeks (CAB-2051). After metrics validation,
+# remove `continue-on-error: true` to promote to required check.
+
+name: Council Gate S3
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: council-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  council-review:
+    # Skip Dependabot/bot PRs (no signal, just noise) and fork PRs (secret protection).
+    # Feature flag: set vars.COUNCIL_S3_ENABLED=false to disable entirely.
+    if: |
+      vars.COUNCIL_S3_ENABLED != 'false' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]' &&
+      github.actor != 'claude[bot]' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true  # SHADOW MODE — never blocks the PR
+
+    steps:
+      - name: Checkout (full history for diff)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install dependencies (jq, gitleaks, sqlite3, timeout)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq sqlite3 coreutils
+          # gitleaks: use prebuilt binary from official releases
+          GITLEAKS_VERSION="8.18.4"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Download Trivy report (best-effort)
+        id: trivy-download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy-report
+          path: .
+
+      - name: Compute diff range
+        id: range
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          echo "base=${BASE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "head=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "range=${BASE_SHA}..${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract ticket ID from branch/title
+        id: ticket
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Try branch first (e.g. feat/cab-2049-description), then title
+          TICKET=$(echo "${PR_BRANCH}" | grep -oiE 'cab-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          if [ -z "$TICKET" ]; then
+            TICKET=$(echo "${PR_TITLE}" | grep -oiE 'cab-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          fi
+          echo "id=${TICKET}" >> "$GITHUB_OUTPUT"
+          echo "Detected ticket: ${TICKET:-<none>}"
+
+      - name: Run Council S3 Review
+        id: council
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          COUNCIL_HISTORY_FILE: ${{ github.workspace }}/council-history.jsonl
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::warning::ANTHROPIC_API_KEY not set — skipping Council S3 (no-op)"
+            echo '{"status":"SKIPPED","reason":"no_api_key"}' > council-summary.json
+            exit 0
+          fi
+
+          TICKET_FLAG=""
+          [ -n "${{ steps.ticket.outputs.id }}" ] && TICKET_FLAG="--ticket ${{ steps.ticket.outputs.id }}"
+
+          TRIVY_FLAG=""
+          [ -f trivy-report.json ] && TRIVY_FLAG="--trivy-report trivy-report.json"
+
+          set +e
+          ./scripts/council-review.sh \
+            --diff "${{ steps.range.outputs.range }}" \
+            $TICKET_FLAG \
+            $TRIVY_FLAG
+          SCRIPT_EXIT=$?
+          set -e
+
+          echo "script_exit=${SCRIPT_EXIT}" >> "$GITHUB_OUTPUT"
+
+          # Extract the last entry from council-history.jsonl for PR comment
+          if [ -f council-history.jsonl ]; then
+            tail -1 council-history.jsonl > council-summary.json
+          else
+            echo '{"status":"ERROR","reason":"no_history_file"}' > council-summary.json
+          fi
+
+          cat council-summary.json
+
+      - name: Post results to PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('council-summary.json')) {
+              core.info('No summary file — skipping PR comment');
+              return;
+            }
+            const summary = JSON.parse(fs.readFileSync('council-summary.json', 'utf8'));
+            const status = summary.status || 'UNKNOWN';
+            const score = summary.global_score ?? summary.score ?? 'n/a';
+            const diffLines = summary.diff_lines ?? 'n/a';
+            const dbFresh = summary.db_fresh ?? true;
+            const cost = summary.cost_eur ?? 'n/a';
+            const duration = summary.duration_ms ?? 'n/a';
+            const axes = summary.axes || {};
+            const axisScore = (name) => (axes[name] && axes[name].score != null) ? axes[name].score : '—';
+            const emoji = {
+              APPROVED: '✅', REWORK: '⚠️', SKIPPED: '⏭️',
+              BYPASSED: '🔕', ERROR: '🚨',
+            }[status] || '❓';
+            const dbWarning = dbFresh === false
+              ? '\n\n> ⚠️ **DB stale** — `docs/stoa-impact.db` > 7 days old, `contract_impact` axis skipped. Score computed over 3 axes only.'
+              : '';
+            const body = [
+              `## ${emoji} Council Stage 3 — ${status}`,
+              '',
+              `**Global score**: \`${score}\`  ·  **Diff**: ${diffLines} lines  ·  **Cost**: €${cost}  ·  **Duration**: ${duration}ms`,
+              '',
+              '| Axis | Score |',
+              '|------|-------|',
+              `| Conformance (plan↔code) | \`${axisScore('conformance')}\` |`,
+              `| Dette technique | \`${axisScore('debt')}\` |`,
+              `| Surface d'attaque | \`${axisScore('attack_surface')}\` |`,
+              `| Impact contracts | \`${axisScore('contract_impact')}\` |`,
+              dbWarning,
+              '',
+              `<sub>🌑 **Shadow mode** — non-blocking. Kill-switch: \`vars.COUNCIL_S3_ENABLED=false\` in repo variables.`,
+              `Refs CAB-2046 · [workflow source](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/.github/workflows/council-gate.yml)</sub>`,
+            ].join('\n');
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            } catch (err) {
+              core.warning(`Failed to post PR comment: ${err.message}`);
+            }
+
+      - name: Upload council-history.jsonl artifact
+        if: always() && hashFiles('council-history.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: council-history-pr-${{ github.event.pull_request.number }}
+          path: council-history.jsonl
+          retention-days: 30

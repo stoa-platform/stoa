@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-03 (CAB-1953 gateway ui_url)
+> Derniere MAJ: 2026-04-11 (CAB-2047 Step 3b merged, handoff for Step 3c)
 
 ## ✅ DONE
 
@@ -78,11 +78,13 @@
 
 CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council S1 8.125/10, S2 8.5/10 Go
 - Decomposed into 5 sub-issues (CAB-2047 through CAB-2051), 3-phase DAG
-- CAB-2047 (13 pts): council-review.sh — Steps 1 + 2a merged, **Step 2b next**
+- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b merged, **Step 3c next**
   - ✅ Step 1: skeleton + Étape 0 pre-checks (deps, gitleaks pre-flight, portable stat, numstat, truncation 10k) — PR #2303, commit `e98e88c0`, 333 LOC
   - ✅ Step 2a: cost guardrails (COUNCIL_DISABLE kill-switch, COUNCIL_DAILY_CAP_EUR default €5, SHA dedup) — PR #2304, commit `fd8c7d66`, +134/-5 → 462 LOC
-  - ⏳ Step 2b: anthropic_call() + evaluate_axis(conformance) + MOCK_API fixtures — next session
-  - ⏳ Steps 3a/3b/3c/4/5 pending (prompts externalisés, fetchers, parallel orchestration, aggregate_scores + bats, docs)
+  - ✅ Step 2b: anthropic_call() + evaluate_axis(conformance) + MOCK_API fixtures — PR #2306, commit `9fb4a235`
+  - ✅ Step 3a: prompts externalisés → `scripts/council-prompts/{conformance,debt,attack_surface,contract_impact}.md`, `load_prompt(axis)` loader, v0.4.0 — PR #2307, merge `c7108607`, +152/-41. Only conformance invoked in main() — other 3 axes are content-only until Step 3c.
+  - ✅ Step 3b: `fetch_linear_ticket` (GraphQL issueSearch → TICKET_CONTEXT) + `fetch_db_context` (sqlite3 -readonly, match repo_path, cross-component contracts → DB_CONTEXT) + `evaluate_axis` 4th arg `extra_context` wrapped in `<context>…</context>`/`<diff>…</diff>`. TICKET_CONTEXT passed to conformance; DB_CONTEXT computed but wired in 3c. v0.5.0 — PR #2308, merge `423641f7`, +263/-7 → 949 LOC.
+  - ⏳ Steps 3c/4/5 pending (parallel 4-axis orchestration with incremental PID capture Adj #1, aggregate_scores + JSONL + bats, docs + skill integration)
 - CAB-2048 (2 pts): pre-push hook extension — blocked by CAB-2047
 - CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — blocked by CAB-2047
 - CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — blocked by CAB-2047
@@ -90,7 +92,25 @@ CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council 
 - Claim file: `.claude/claims/CAB-2046.json` — Phase 1 released for handoff (owner=null)
 - Cost guardrails active on main: €5/day hard cap, SHA dedup, COUNCIL_DISABLE kill-switch
 - Audit base: `audit-results.md` (root) — pre-implementation audit of existing Council infra
-- **Next session handoff**: read CAB-2047 Linear comments for full Council S1/S2 history + 13 adjustments v2
+- **Next session handoff (Step 3c — parallel 4-axis orchestration)**:
+  - Read CAB-2047 Linear comments for Council S1/S2 history + 13 adjustments v2
+  - Start from `scripts/council-review.sh` v0.5.0 on main (`423641f7`)
+  - Wire `DB_CONTEXT` into `contract_impact` axis call (pattern: `evaluate_axis contract_impact "$out" "$diff_content" "$DB_CONTEXT"`)
+  - Wire Trivy report into `attack_surface` (load JSON from `$TRIVY_REPORT`, pass as extra_context if present)
+  - `debt` axis: diff-only (no extra context per ticket spec)
+  - Launch 4 axes in parallel subshells with **incremental PID capture** (Adj #1 — `$!` only returns LAST PID):
+    ```
+    evaluate_axis conformance "$TMPDIR/conformance.json" "$diff" "$TICKET_CONTEXT" & PID_CONF=$!
+    evaluate_axis debt        "$TMPDIR/debt.json"        "$diff" &                   PID_DEBT=$!
+    evaluate_axis attack_surface "$TMPDIR/attack_surface.json" "$diff" "$TRIVY_CTX" & PID_ATTK=$!
+    [ "$axes_count" -eq 4 ] && { evaluate_axis contract_impact "$TMPDIR/contract_impact.json" "$diff" "$DB_CONTEXT" & PID_CTR=$!; }
+    ```
+  - Use `wait $PID` per pid with exit-code capture → increment FAILED counter on non-zero
+  - Route result files to Step 4's `aggregate_scores` function (not yet implemented)
+  - Keep conformance-only gate as fallback (e.g., via `COUNCIL_AXES_ONLY=conformance` env) until aggregate_scores lands in Step 4
+  - MOCK_API must still work: parallel subshells cp fixtures in parallel (race-free via distinct output paths)
+  - Target PR size: <300 LOC (Stripe micro-PR standard), shellcheck clean, bump version to `0.6.0-step3c-parallel-orchestration`
+- **Session log**: Step 3b completed 2026-04-11, PR #2308 merged `423641f7`, +263/-7. `council-review.sh` now 949 LOC. Context fetchers verified against HEAD~50..HEAD~40 (4 components matched, 1681-byte DB_CONTEXT).
 
 CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
 - PRs #2106, #2109, #2111 merged

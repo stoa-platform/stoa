@@ -49,6 +49,8 @@ If `build-context.sh` or `stoa-impact.db` is not available, skip this step with 
 
 Evaluate $ARGUMENTS through each of the 8 canonical personas. **All 8 are mandatory** — no subset selection, no quick mode. The canonical roster is defined in `hegemon/patterns/validation/HEG-PAT-003-team-coca-adversarial-validation.md`.
 
+**Domain N/A baseline (calibration rule from CAB-2054 Phase 4)**: when a ticket does not touch a persona's domain (e.g., a backend infra ticket has no webapp surface for N3m0), score the persona at **8/10** (neutral-positive: "no concern detected"), not 6-7. Lower scores must be backed by an actual identified concern. This rule keeps the 8-persona average stable vs the historical 4-persona baseline (calibration drift < ±0.3 on 4/5 historic tickets).
+
 ### 1. Chucky (Devil's Advocate) — Score /10
 - Challenges assumptions and finds weaknesses
 - Questions: Is this really needed? What could go wrong? What's the hidden complexity? How would I break this?

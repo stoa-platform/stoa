@@ -1,6 +1,18 @@
 # =============================================================================
 # K8s Job: Vault Init — Bootstrap all engines and secrets
 # =============================================================================
+# ⚠️  LOCAL DEV ONLY — NEVER APPLY TO PROD/STAGING CLUSTERS  ⚠️
+#
+# This manifest embeds dev-only credentials ("stoa-dev-root-token", default
+# POSTGRES / KEYCLOAK passwords). It is intended for K3d quickstart clusters
+# that run on a developer laptop, NOT for any cluster reachable from the
+# internet.
+#
+# The embedded values match the defaults of `deploy/docker-compose/docker-compose.yml`
+# when no `.env` is provided — they exist so `make quickstart` works out of
+# the box. Prod clusters MUST use ExternalSecrets pointing at the real Vault
+# (hcvault.gostoa.dev) — see `deploy/external-secrets/`.
+#
 # Runs after Vault is ready. Idempotent — safe to re-run.
 # Depends on: vault pod ready, policies ConfigMap (optional).
 #
@@ -33,21 +45,23 @@ spec:
         - name: vault-init
           image: hashicorp/vault:1.21.2
           command: ["/bin/sh", "/vault/init/init-vault-local.sh"]
+          # Credentials come from a K8s Secret populated BEFORE applying this Job.
+          # Create it locally with:
+          #   kubectl create secret generic vault-init-bootstrap -n vault \
+          #     --from-literal=VAULT_TOKEN=stoa-dev-root-token \
+          #     --from-literal=POSTGRES_PASSWORD=<local-pg-password> \
+          #     --from-literal=KEYCLOAK_ADMIN_PASSWORD=<local-kc-password>
+          envFrom:
+            - secretRef:
+                name: vault-init-bootstrap
           env:
             - name: VAULT_ADDR
               value: "http://vault.vault.svc.cluster.local:8200"
-            - name: VAULT_TOKEN
-              value: "stoa-dev-root-token"
-            # PostgreSQL credentials (from docker-compose .env defaults)
             - name: POSTGRES_USER
               value: "stoa"
-            - name: POSTGRES_PASSWORD
-              value: "stoa-quickstart-2045"
             - name: POSTGRES_DB
               value: "stoa_platform"
             - name: KEYCLOAK_ADMIN
-              value: "admin"
-            - name: KEYCLOAK_ADMIN_PASSWORD
               value: "admin"
             # PostgreSQL host — Docker Desktop resolves host.docker.internal
             # to IPv6 from K3s pods, but PostgreSQL may only listen on IPv4.

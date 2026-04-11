@@ -36,9 +36,9 @@ All services are accessible through the nginx reverse proxy on port 80:
 | **Console** | http://localhost | halliday / readyplayerone |
 | **Portal** | http://localhost/portal | (self-registration) |
 | **API Docs** | http://localhost/api/docs | - |
-| **Keycloak** | http://localhost/auth | admin / admin |
-| **Grafana** | http://localhost/grafana | admin / admin |
-| **STOA Logs** | http://localhost/logs | admin / StOa_Admin_2026! |
+| **Keycloak** | http://localhost/auth | see `.env` (`KEYCLOAK_ADMIN_PASSWORD`) |
+| **Grafana** | http://localhost/grafana | see `.env` (`GRAFANA_PASSWORD`) |
+| **STOA Logs** | http://localhost/logs | see `.env` (`OPENSEARCH_ADMIN_PASSWORD`) |
 | **Prometheus** | http://localhost:9090 | - |
 | **AlertManager** | http://localhost:9093 | - |
 | **Rust Gateway** | http://localhost/gateway/health | - |

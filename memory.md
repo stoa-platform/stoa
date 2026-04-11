@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Derniere MAJ: 2026-04-11 (CAB-2047 Step 4 merged — bats tests + council-s3.md + skill update)
+> Derniere MAJ: 2026-04-11 (CAB-2047 Step 5 DONE — real API validation 2 runs, all guardrails proven)
 
 ## ✅ DONE
 
@@ -78,7 +78,7 @@
 
 CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council S1 8.125/10, S2 8.5/10 Go
 - Decomposed into 5 sub-issues (CAB-2047 through CAB-2051), 3-phase DAG
-- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b+3c+4 merged, **Step 5 next (real API validation)**
+- CAB-2047 (13 pts): council-review.sh — Steps 1+2a+2b+3a+3b+3c+4+5 ALL DONE. **Ready to unblock CAB-2048/49/50/51.**
   - ✅ Step 1: skeleton + Étape 0 pre-checks (deps, gitleaks pre-flight, portable stat, numstat, truncation 10k) — PR #2303, commit `e98e88c0`, 333 LOC
   - ✅ Step 2a: cost guardrails (COUNCIL_DISABLE kill-switch, COUNCIL_DAILY_CAP_EUR default €5, SHA dedup) — PR #2304, commit `fd8c7d66`, +134/-5 → 462 LOC
   - ✅ Step 2b: anthropic_call() + evaluate_axis(conformance) + MOCK_API fixtures — PR #2306, commit `9fb4a235`
@@ -86,10 +86,18 @@ CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council 
   - ✅ Step 3b: `fetch_linear_ticket` (GraphQL issueSearch → TICKET_CONTEXT) + `fetch_db_context` (sqlite3 -readonly, match repo_path, cross-component contracts → DB_CONTEXT) + `evaluate_axis` 4th arg `extra_context` wrapped in `<context>…</context>`/`<diff>…</diff>`. v0.5.0 — PR #2308, merge `423641f7`, +263/-7 → 949 LOC.
   - ✅ Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl. Incremental PID capture (Adj #1), `aggregate_scores <tmpdir> <failed> <expected_count>` pure function (exit 0/1/2), missing-file-for-expected-axis counts as error (closes silent-skip gap), `sum_usage_tokens`/`compute_cost_eur`/`write_history`, `now_ms()` portable ms timer (BSD date %3N fallback), 3 missing MOCK_API fixtures (debt, attack_surface, contract_impact), `.gitignore` entries. v0.6.0 — PR #2310, merge `ed56cf82`, +375/-27 → 1278 LOC. Tested 4 scenarios with MOCK_API=1: APPROVED rc=0, REWORK rc=1, ERROR rc=2, 3-axis rc=0. Shellcheck clean.
   - ✅ Step 4: bats test suite (15 tests, 5 DoD scenarios + 3 edge + 3 token + 4 cost) + `.claude/rules/council-s3.md` (scoped, ~11.6K) + SKILL.md S3 cross-ref + source guard on `main "$@"`. v0.7.0 — PR #2312, merge `ad168f48`, +553/-2. bats-core 1.13.0 local, shellcheck clean, all 4 required CI checks green (non-required SAST JS ESLint failure pre-existing in control-plane-ui unrelated).
-  - ⏳ Step 5 pending: real-run validation against a live diff + Anthropic API (requires ANTHROPIC_API_KEY + budget), end-to-end tuning of per-axis scores/feedback
-- CAB-2048 (2 pts): pre-push hook extension — blocked by CAB-2047
-- CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — blocked by CAB-2047
-- CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — blocked by CAB-2047
+  - ✅ Step 5: real API validation against 2 live diffs, 2026-04-11. Key='stoa/shared/anthropic' (Vault). No prompt tuning needed — feedback quality was accurate and non-hallucinated on first try.
+    - **Run 1** (sanity, docs-only): 02c4ff63 memory.md 48 LOC → APPROVED 10.00/10, 5000ms parallel, 17456 in / 561 out = 18017 tokens, **€0.0559**. All 4 axes 10/10. `diff_sha=8a0156481d9a`.
+    - **Run 2** (real code+tests): ad168f48 Step 4 bats+doc 555 LOC → APPROVED 9.50/10, 7000ms, ~41986 tokens, **€0.1241**. Scores: conformance 10, debt 9, attack_surface 9, contract_impact 10. `diff_sha=5e4d2901433a`.
+    - **Run 2 (re-run FORCE_DEDUP=0)**: APPROVED 9.25/10, 7000ms, €0.1236. Scores stable ±0.25 across runs (conformance 9 vs 10 drift only).
+    - **Per-axis feedback quality**: all 4 axes produced accurate, technically grounded feedback (noted kebab-case / snake_case / source guard / test counts 9+3+4 / pure helpers <50 lines / zero contract impact). Zero hallucinated blockers across both runs.
+    - **SHA dedup verified**: 3rd ad168f48 invocation without FORCE_DEDUP exited 0 with "Diff SHA 5e4d2901 already evaluated today ... SKIP" — no API call, correct replay.
+    - **Cost ledger verified**: daily cap tracker cumulative €0.304 / €5 after 3 runs — accurate.
+    - **Total Step 5 spend**: €0.3037 (3 runs, well under €5 cap).
+    - Handoff artifacts: `council-history.jsonl` has 3 entries (all APPROVED, schemas pass `jq .` cleanly). Preserved tempdir output lives in `/tmp/council.*` — safe to discard.
+- CAB-2048 (2 pts): pre-push hook extension — **UNBLOCKED** (CAB-2047 done)
+- CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — **UNBLOCKED**
+- CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — **UNBLOCKED**
 - CAB-2051 (2 pts): Shadow mode observation 2-3 weeks — blocked by 2048+2049+2050
 - Claim file: `.claude/claims/CAB-2046.json` — Phase 1 released for handoff (owner=null)
 - Cost guardrails active on main: €5/day hard cap, SHA dedup, COUNCIL_DISABLE kill-switch
@@ -112,7 +120,7 @@ CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council 
   - Expected first-run cost: €0.04-0.06 for a ~100-line diff across 4 axes
   - Observations to capture: per-axis latency, usage.input_tokens/output_tokens realism, prompt quality (any hallucinated blockers?), daily cap accuracy
   - If any axis drifts (score consistently off), tune `scripts/council-prompts/<axis>.md` iteratively — prompts are externalized per Step 3a
-- **Session log**: Step 3c completed 2026-04-11, PR #2310 merged `ed56cf82`, +375/-27. `council-review.sh` now 1278 LOC. 4 MOCK_API scenarios green (APPROVED/REWORK/ERROR/3-axis). CI required checks all green (License, SBOM, Signed Commits, Regression Guard). Shellcheck clean.
+- **Session log**: Step 5 completed 2026-04-11. Real API validation against 2 live diffs (48 LOC + 555 LOC), 3 total runs, €0.304 spend. Per-axis feedback accurate, no hallucinated blockers, no prompt tuning needed. SHA dedup + daily cap confirmed. CAB-2047 fully green — Phase 2 (CAB-2048/49/50) unblocked.
 
 CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
 - PRs #2106, #2109, #2111 merged

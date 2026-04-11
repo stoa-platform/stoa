@@ -43,6 +43,8 @@ paths = [
   '''portal/src/components/onboarding/steps/FirstCall\.tsx''',
   # E2E smoke mock fixtures with fake JWT tokens (not real secrets)
   '''e2e/smoke-mock/.*''',
+  # E2E visual regression fixtures with mock JWT tokens (not real secrets)
+  '''e2e/visual/.*''',
   # Gateway Rust inline test fixtures (#[cfg(test)] blocks) — test RSA keys and fake JWTs
   '''stoa-gateway/src/oauth/client_auth\.rs''',
   '''stoa-gateway/src/oauth/proxy\.rs''',

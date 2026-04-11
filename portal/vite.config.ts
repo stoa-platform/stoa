@@ -20,6 +20,7 @@ export default defineConfig({
   },
   server: {
     port: 3001, // Different port from Console (3000)
+    allowedHosts: ['portal.stoa.local'],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

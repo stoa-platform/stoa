@@ -54,6 +54,8 @@ async function setupPortalMocks(page: import('@playwright/test').Page): Promise<
 }
 
 async function injectPortalAuth(page: import('@playwright/test').Page): Promise<void> {
+  // MOCK JWT FOR TESTS ONLY — signature is 'mock-signature', not a real Keycloak token.
+  // gitleaks:allow
   const mockToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJlbWFpbCI6InBhcnppdmFsQGhpZ2gtZml2ZS5pbyIsIm5hbWUiOiJQYXJ6aXZhbCIsInByZWZlcnJlZF91c2VybmFtZSI6InBhcnppdmFsIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbInRlbmFudC1hZG1pbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7InN0b2EtcG9ydGFsIjp7InJvbGVzIjpbInRlbmFudC1hZG1pbiJdfX0sImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNzAwMDAwMDAwLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjQxNzQvYXV0aC9yZWFsbXMvc3RvYSJ9.mock-signature';
 
   const oidcKey = `oidc.user:http://localhost:4174/auth/realms/stoa:stoa-portal`;

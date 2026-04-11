@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-03-30
+> Last sync: 2026-04-11
 
 ## Cycle 8 (Feb 16–22) — CLOSED
 
@@ -366,103 +366,167 @@
 
 ---
 
-## Cycle 14 (Mar 30 – Apr 5) — CURRENT
+## Cycle 14 (Mar 30 – Apr 5) — CLOSED
 
-**Scope**: ~371 pts | **Done**: 57 pts | **In Review**: 128 pts | **In Progress**: 53 pts
+**Scope**: ~371 pts | **Done**: ~88 pts | **Rolled to C15**: remainder
 **Theme**: STOA Connect + Dashboard UX + Health Checks + Real Data
 
 ### Done
 
 - [x] fix(api): duplicate personal tenant cleanup (2026-04-02) — DB-only (no PR)
-  - Archived 8 duplicate tenants, fixed `owner_user_id` email→UUID on 8 originals
 - [x] CAB-1938: fix(api): slug api_id + name-version uniqueness — PRs #2106, #2109, #2111
-- [x] CAB-1936: [MEGA] STC + Security Plugins (21 pts, P3)
-  - Phase 1: ADR-058 + federation benchmark — PR #2107
-  - Phase 2+3: STC plugin + PII filter + secrets detection — PR #2108
+- [x] CAB-1936: [MEGA] STC + Security Plugins (21 pts, P3) — PRs #2107, #2108
 - [x] CAB-1935: chore(ci): cross-repo service port drift detection (5 pts, P2) — PR #2079
-- [x] CAB-1953: feat(api,ui): add ui_url to GatewayInstance for admin UI links (5 pts, P3) — PR #2149
-
-### In Review
-
-- [~] CAB-1869: [MEGA] Call Flow Dashboard — Vue globale + Detail trace temps reel (21 pts, P2)
-- [~] CAB-1916: [MEGA] Normaliser les health checks — Connect, Gateway, Adapters (21 pts, P2)
-- [~] CAB-1775: feat(ui): Console Dashboard — Platform Health KPIs & Gauges (21 pts, P3)
-- [~] CAB-1903: feat(portal): [MEGA] Core UX Upgrades — intent homepage, CmdK (21 pts, P3)
-- [~] CAB-1814: feat(gateway,ui): [MEGA] MCP Tool Lifecycle Management (13 pts, P3)
-- [~] CAB-1874: feat(infra): deploy Portainer CE for VPS fleet observability (8 pts, P3)
-- [~] CAB-1876: docs(reference): platform tooling map — full stack inventory (2 pts, P4)
-- [~] CAB-1858: chore(infra): dedicated VPS traffic generator (5 pts, P2) — sub of CAB-1855
-- [~] CAB-1900: [stoa-go] Credential relay — Vault consumer secret injection (8 pts, P3) — sub of CAB-1896
-- [~] CAB-1898: [stoa-go] Route sync loop — fetch CP routes, push to local gw (8 pts, P3) — sub of CAB-1896
-
-### In Progress
-
-- [~] CAB-1817: [MEGA] STOA Connect — Go agent for third-party gateway control plane (21 pts, P2)
-- [~] CAB-1791: feat(api,ui): MCP Servers page operational — multi-env + credentials (21 pts, P2)
-- [~] CAB-1880: feat(api): Python SDK generator pipeline (8 pts, P3) — sub of CAB-1449
-- [~] CAB-1859: feat(auth): Keycloak service account + OPA policy for demo traffic (3 pts, P2) — sub of CAB-1855
-
-### Todo
-
-**Code**:
-- [ ] CAB-1887: fix(ui): [MEGA] Gateway Dashboard Inconsistencies (21 pts, P1-Urgent)
-- [ ] CAB-1917: [MEGA] fix(api): Fix API creation and deployment pipeline (21 pts, P2)
-- [ ] CAB-1867: chore(ops): Bus Factor Mitigation — Break Glass + Bootstrap (13 pts, P2)
-- [ ] CAB-1855: [MEGA] feat(gateway): constant real data in prod — 5 APIs + traffic (21 pts, P2) — subs 1858 (In Review), 1859 (In Progress)
-- [ ] CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (21 pts, P2) — Council 8.25/10
-  - **Phase 0** [owner: —]
-    - [ ] CAB-1796 [infra] Setup Vault on spare-gra-vps (8 pts)
-  - **Phase 1** (after Phase 0) [owner: —]
-    - [ ] CAB-1797 [infra] Migrate secrets Infisical → Vault (5 pts)
-  - **Phase 2** (after Phase 1) [owner: —]
-    - [ ] CAB-1798 [infra] ESO ClusterSecretStore → Vault (8 pts)
-  - **Phase 3** (after Phase 1, parallel with Phase 2) [owner: —]
-    - [ ] CAB-1799 [infra] Vault Agent on VPS services (13 pts)
-  - **Phase 4** (after Phase 2+3) [owner: —]
-    - [ ] CAB-1801 [infra] Extended rotation VPS (5 pts)
-  - **Phase 5** (after Phase 0, nice-to-have) [owner: —]
-    - [ ] CAB-1802 [infra] SSH signing + PKI engine (5 pts)
-- [ ] CAB-1602: [INFRA] Provisionner VPS STOA-bench (3 pts, P3)
-- [~] CAB-2005: [MEGA] AI Factory v4 — Hardening Post-Leak + Observability (34 pts, P1-High) — Council 8.50/10
-  - **Phase 1** (urgent) — Hardening post-leak (11 pts) — PR #2239 ✅
-    - [x] Audit `pre-instance-scope.sh` permission bypass 50+ subcommands (2 pts)
-    - [x] Hook stale memory check PreToolUse (3 pts)
-    - [x] Pin Claude Code npm version + SHA verification (1 pt)
-    - [x] Auto-compact hook PostToolUse à 70% context (2 pts)
-    - [x] Memory consolidation skill `/loop 30m` (3 pts)
-  - **Phase 2** (after Phase 1) [owner: —] — Amélioration (21 pts)
-    - [ ] Agent Observability dashboard `agent-metrics.log` + Grafana (8 pts)
-    - [ ] Spec-Driven Development pilote sur 1 feature (5 pts)
-    - [ ] OWASP Agentic Top 10 conformité audit (8 pts)
-
-**Strategy/Comm — HUMAN ONLY**:
-- [ ] CAB-1132: Business Model Validation — Post Demo 17 Mars (8 pts, P1-Urgent)
-- [ ] CAB-1576: [GTM-01] Restructurer le pitch en 3 couches narratives (5 pts, P1-Urgent)
-- [ ] CAB-1577: [GTM-02] Definir les packages forfaitaires (2 pts, P1-Urgent)
-- [ ] CAB-1126: Demo Video Courte STOA (8 pts, P2) — sub of CAB-1442
-- [ ] CAB-1125: Video Punchline AI Factory (8 pts, P2) — sub of CAB-1442
-- [ ] CAB-1127: Dual-Track Content (5 pts, P2) — sub of CAB-1442
-- [ ] CAB-1128: Design Partner Communication — Client A (3 pts, P2)
-- [ ] CAB-1124: Modele ESN Partner (5 pts, P2)
-
-### Done (4 issues, 31 pts)
-
+- [x] CAB-1953: feat(api,ui): add ui_url to GatewayInstance (5 pts, P3) — PR #2149
 - [x] CAB-1931: feat(api): SSE endpoint + DEPLOY_MODE (13 pts) — PR #2072 (sub of CAB-1930)
 - [x] CAB-1932: feat(go): stoa-connect SSE client (8 pts) — PR #2073 (sub of CAB-1930)
 - [x] CAB-1933: chore(api): cleanup phantom gateway instances (5 pts) — PR #2074 (sub of CAB-1930)
 - [x] CAB-1934: test(e2e): deploy single path E2E script (5 pts) — PR #2075 (sub of CAB-1930)
 
+---
+
+## Cycle 15 (Apr 6–12) — CURRENT
+
+**Scope**: 894 pts | **Done**: 196 pts (22%) | **In Review**: 392 pts | **Todo**: 192 pts | **Backlog**: 113 pts | **Issues**: 94 total
+**Theme**: True GitOps + Observability RBAC + Call-Flow Pipeline + stoactl CLI
+
+### Done
+
+**MEGAs**:
+- [x] CAB-2010: [MEGA] True GitOps — Git as single source of truth (21 pts, P2)
+  - [x] CAB-2011: GitHubService write methods (5 pts) — sub
+  - [x] CAB-2012: Console commit-on-write (8 pts) — sub
+  - [x] CAB-2013: Catalog cleanup — reconcile DB↔Git (3 pts) — sub
+  - [x] CAB-2014: CI + JSON schemas + branch protection (5 pts) — sub
+  - [x] CAB-2015: Multi-environment support (8 pts) — sub
+  - [x] CAB-2016: Reverse-sync — drift detection + auto-repair (5 pts) — sub
+- [x] CAB-2005: [MEGA] AI Factory v4 — Hardening Post-Leak + Observability (21 pts, P2)
+  - Phase 1 done — PR #2239
+  - Phase 2 [owner: —] — Agent Observability, Spec-Driven, OWASP audit
+- [x] CAB-2009: chore(infra): deploy observability stack on OVH prod (21 pts, P2)
+
+**Standalone**:
+- [x] CAB-2027: [MEGA] Observability RBAC — Tenant Isolation (21 pts, P1) — all 5 subs done
+  - [x] CAB-2028: Auth + tenant isolation sur /v1/traces/* (5 pts) — Phase 1
+  - [x] CAB-2029: Sécuriser le proxy Prometheus (3 pts) — Phase 1
+  - [x] CAB-2030: Tenant filter sur spans OpenSearch + Tempo (5 pts) — Phase 1
+  - [x] CAB-2031: Guardrails events tenant filter + DLS (3 pts) — Phase 2
+  - [x] CAB-2032: Cleanup métriques |default + tenant injection Grafana (5 pts) — Phase 2
+- [x] CAB-2017: chore(infra): adopt OpenSearch into ArgoCD (5 pts, P3)
+- [x] CAB-2018: chore(ops): add memory-consolidate to MONITOR pane (3 pts, P3)
+- [x] CAB-2026: feat(api): GitOps observability — Prometheus metrics (5 pts, P3)
+
+**Call-Flow (CAB-2034 — MEGA done)**:
+- [x] CAB-2034: [MEGA] Fix Call-Flow pipeline — Alloy OTLP + Data Prepper + UI (21 pts, P2)
+- [x] CAB-2039: fix(ui): CallFlow empty state + remove dead demo_mode (3 pts, P3) — sub of CAB-2034 P5
+
+**stoactl CLI (CAB-2019 subs)**:
+- [x] CAB-2020: refactor(cli): Phase 0 — pkg/client sub-packages (8 pts) — PR #2267
+- [x] CAB-2021: feat(cli): Phase 1a — stoactl catalog sync (5 pts) — PR #2268
+- [x] CAB-2022: feat(cli): Phase 1b — stoactl audit export (5 pts) — PR #2268
+
+### In Progress
+
+_(none — all active items either Done or In Review)_
+
+### In Review
+
+- [~] CAB-2035: fix(infra): Alloy OTLP receiver + Tempo exporter (5 pts, P2) — sub of CAB-2034
+- [~] CAB-2036: fix(infra): Alloy → Data Prepper fan-out (3 pts, P2) — sub of CAB-2034
+- [~] CAB-2037: fix(gateway): diagnose + fix 0 routes (5 pts, P2) — sub of CAB-2034
+- [~] CAB-2038: fix(infra): restart seeder + validate trace pipeline (3 pts, P2) — sub of CAB-2034
+- [~] CAB-1997: feat(api): OpenSearch unified observability — Data Prepper (21 pts, P2)
+- [~] CAB-1998: refactor(infra): simplify observability stack — remove Tempo (21 pts, P3)
+- [~] CAB-1951: chore(test): audit test quality — kill mechanical tests (21 pts, P2)
+- [~] CAB-1949: fix(gateway,ui): align discovered APIs with deployed APIs (13 pts, P2)
+- [~] CAB-2008: refactor(api): unify Security Posture data sources (13 pts, P2)
+- [~] CAB-2006: feat(cli): stoactl mcp subcommand + shell completions (13 pts, P2)
+- [~] CAB-2003: feat(ui,api): STOA Gateway as first-class MCP Server (13 pts, P3)
+- [~] CAB-1869: [MEGA] Call Flow Dashboard (21 pts, P2)
+- [~] CAB-1916: [MEGA] Normaliser les health checks (21 pts, P2)
+- [~] CAB-1775: feat(ui): Console Dashboard — Platform Health KPIs (21 pts, P3)
+- [~] CAB-1903: feat(portal): [MEGA] Core UX Upgrades (21 pts, P3)
+- [~] CAB-1936: feat(gateway): STC + Security Plugins (21 pts, P3)
+- [~] CAB-1814: feat(gateway,ui): [MEGA] MCP Tool Lifecycle (13 pts, P3)
+- [~] CAB-1962: feat(api,ui): CP API proxy for gateway MCP tools (8 pts, P2)
+- [~] CAB-1874: feat(infra): deploy Portainer CE (8 pts, P3)
+- [~] CAB-1858: chore(infra): dedicated VPS traffic generator (5 pts, P2)
+- [~] CAB-1942: fix(go): retry on transient gateway errors (5 pts, P2)
+- [~] CAB-1937: fix(api): gateway registration 409 on soft-deleted (3 pts, P2)
+- [~] CAB-2007: chore(api): K8s Job manifests for unified seeder (3 pts, P3)
+- [~] CAB-1876: docs(reference): platform tooling map (2 pts, P4)
+- [~] CAB-1898: [stoa-go] Route sync loop (8 pts, P3) — sub of CAB-1896
+- [~] CAB-1900: [stoa-go] Credential relay (8 pts, P3) — sub of CAB-1896
+- [~] CAB-1985: [cp-ui] Console Live Traces from Tempo (5 pts, P2) — sub of CAB-1977
+- [~] CAB-1986: [cp-api+cp-ui] eBPF aggregation endpoint (5 pts, P2) — sub of CAB-1977
+- [~] CAB-1987: [infra] reconnect OpenSearch + error drill-down (3 pts, P3) — sub of CAB-1977
+- [~] CAB-1988: [e2e] observability Playwright tests (3 pts, P3) — sub of CAB-1977
+- [~] CAB-1990: [e2e] Data Seeder + ARIA assertion helpers (8 pts, P3) — sub of CAB-1989
+- [~] CAB-1991: [frontend] Semantic audit + data-testid convention (8 pts, P3) — sub of CAB-1989
+- [~] CAB-1992: [docs] ADR + WCAG documentation (3 pts, P3) — sub of CAB-1989
+- [~] CAB-1993: [e2e] Cross-validation tests (8 pts, P3) — sub of CAB-1989
+- [~] CAB-1994: [e2e] Visual Regression — golden baselines (8 pts, P3) — sub of CAB-1989
+- [~] CAB-1995: [e2e] axe-core a11y gate CI workflow (5 pts, P3) — sub of CAB-1989
+- [~] CAB-1945: [cp-api] Model + Migration + SyncStepTracker (3 pts, P2) — sub of CAB-1943
+- [~] CAB-1946: [cp-api] SyncEngine step instrumentation (5 pts, P2) — sub of CAB-1943
+- [~] CAB-1947: [stoa-connect] Agent-side sync step tracking (8 pts, P2) — sub of CAB-1943
+- [~] CAB-1948: [cp-ui] Deployment pipeline step view (5 pts, P2) — sub of CAB-1943
+- [~] CAB-2023: feat(cli): Phase 2 — trace query, usage report (8 pts, P3) — sub of CAB-2019
+- [~] CAB-2024: feat(cli): Phase 3 — bridge enrichment, env diff (5 pts, P3) — sub of CAB-2019
+- [~] CAB-2025: feat(cli): Phase 4 — stoactl ai cost + arena (3 pts, P4) — sub of CAB-2019
+
+### Todo
+
+**P1/P2 — Code**:
+- [ ] CAB-1887: fix(ui): [MEGA] Gateway Dashboard Inconsistencies (21 pts, P1-Urgent)
+- [ ] CAB-1917: [MEGA] fix(api): Fix API creation and deployment pipeline (21 pts, P2)
+- [ ] CAB-1930: feat(api): [MEGA] Deploy Single Path — SSE replaces SyncEngine (21 pts, P2)
+- [ ] CAB-1867: chore(ops): Bus Factor Mitigation — Break Glass + Bootstrap (13 pts, P2)
+- [ ] CAB-1855: [MEGA] feat(gateway): constant real data in prod (21 pts, P2)
+- [ ] CAB-1795: [MEGA] Unified Secrets Management — HashiCorp Vault (21 pts, P2) — Council 8.25/10
+  - **Phase 0** [owner: —] — CAB-1796 Setup Vault (8 pts)
+  - **Phase 1** (after Phase 0) [owner: —] — CAB-1797 Migrate secrets (5 pts)
+  - **Phase 2** (after Phase 1) [owner: —] — CAB-1798 ESO → Vault (8 pts)
+  - **Phase 3** (parallel Phase 2) [owner: —] — CAB-1799 Vault Agent VPS (13 pts)
+  - **Phase 4** (after Phase 2+3) [owner: —] — CAB-1801 Extended rotation (5 pts)
+  - **Phase 5** (nice-to-have) [owner: —] — CAB-1802 SSH signing + PKI (5 pts)
+
+**P2/P3 — Code**:
+- [ ] CAB-1977: feat(api): [MEGA] unified observability (21 pts, P2) — 4 subs In Review
+- [ ] CAB-1989: feat(e2e): [MEGA] AI-Verified UI Testing Framework (21 pts, P3) — 6 subs In Review
+- [ ] CAB-2019: feat(cli): [MEGA] stoactl CLI-First Operations (21 pts, P3) — 3/6 subs Done, 3 In Review
+- [ ] CAB-2033: chore(cli): CAB-2019 adoption gate (1 pt, P3)
+
 ### Backlog (in cycle, not committed)
 
-- CAB-1478: [MEGA] eBPF Gateway — Kernel-Level API Governance (P2)
-- CAB-1544: [MEGA] Community: SEO Content Pipeline — 10 Blog Posts (P3)
-- CAB-1591: [AI-Factory] STOA-bench v1 — Framework eval LLM (P3)
-- CAB-1442: [MEGA] Comm: Demo Video & Marketing Content Package (P2)
-- CAB-1751: chore(infra): Decommission Hetzner K3s staging (P3)
-- CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (P1-Urgent)
-- CAB-1600: [CIR] Preparer dossier CIR 2025 (P3)
-- CAB-1599: [GTM] Kit contractuel (P3)
-- CAB-1604: [GTM] Contacter Anthropic (P3)
+- CAB-1478: [MEGA] eBPF Gateway — Kernel-Level API Governance (21 pts, P2)
+- CAB-1544: [MEGA] Community: SEO Content Pipeline — 10 Blog Posts (21 pts, P3)
+- CAB-1591: [AI-Factory] STOA-bench v1 — Framework eval LLM (13 pts, P3)
+- CAB-1442: [MEGA] Comm: Demo Video & Marketing Content Package (21 pts, P2)
+- CAB-1751: chore(infra): Decommission Hetzner K3s staging (3 pts, P3)
+- CAB-173: [JALON] v1.0 GA — Mi-Mai 2026 (2 pts, P1-Urgent)
+- CAB-1600: [CIR] Preparer dossier CIR 2025 (8 pts, P3)
+- CAB-1599: [GTM] Kit contractuel (5 pts, P3)
+- CAB-1604: [GTM] Contacter Anthropic (2 pts, P3)
+- CAB-1645: feat(gateway): Error Snapshot Capture (13 pts, P3) — sub of CAB-1462
+- CAB-1677: [infra] stoa-parallel worktree lifecycle (8 pts, P2) — sub of CAB-1676
+- CAB-1678: [infra] Hooks & rules for worktree paths (3 pts, P2) — sub of CAB-1676
+- CAB-1679: [docs] ADR-054 + validation worktree isolation (2 pts, P3) — sub of CAB-1676
+- CAB-1613: [demo] Script chorégraphié "IA pour tous" (2 pts, P2) — sub of CAB-1609
+- CAB-1638: [api][ui] Discovery by URL (5 pts, P2) — sub of CAB-1637
+- CAB-1640: [api][ui] Smart Search (5 pts, P3) — sub of CAB-1637
+
+---
+
+## Cycle 16 (Apr 13–19) — NEXT
+
+**Theme**: Post-démo — Comité d'architecture + Benchmark gateway
+
+### Todo
+
+- [ ] CAB-2041: Dossier technique — Réponses instances d'archi post-démo (P2)
+- [ ] CAB-2042: Présentation — Comité d'architecture STOA (P2)
+- [ ] CAB-2043: Benchmark gateway — STOA vs concurrents, backend co-localisé VPS (P2)
 
 ---
 

@@ -175,3 +175,7 @@ backups/
 kubeconfig*
 .kube/
 .env.keycloak
+
+# Ephemeral agent/tool state
+.playwright-mcp/
+.claude/scheduled_tasks.lock

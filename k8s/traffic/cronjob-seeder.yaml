@@ -3,6 +3,7 @@
 #
 # Runs every 10 minutes, 8-minute duration, concurrencyPolicy: Forbid.
 # Uses traffic-seeder-credentials Secret for API keys + OAuth2 creds.
+# Scripts loaded from ConfigMap (overrides baked-in image scripts).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -34,9 +35,12 @@ spec:
             runAsUser: 65534
             seccompProfile:
               type: RuntimeDefault
+          imagePullSecrets:
+            - name: ghcr-pull-secret
           containers:
             - name: seeder
               image: ghcr.io/stoa-platform/traffic-seeder:latest
+              imagePullPolicy: Always
               args: ["--mode", "k8s"]
               env:
                 - name: GATEWAY_URL
@@ -46,7 +50,7 @@ spec:
                 - name: CONNECT_URL
                   value: "http://stoa-connect.stoa-system.svc:8090"
                 - name: KC_TOKEN_URL
-                  value: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
+                  value: "http://keycloak.stoa-system.svc.cluster.local/realms/stoa/protocol/openid-connect/token"
                 - name: DURATION
                   value: "480"
                 - name: TENANTS
@@ -89,8 +93,8 @@ spec:
                   cpu: 20m
                   memory: 64Mi
                 limits:
-                  cpu: 100m
-                  memory: 128Mi
+                  cpu: 200m
+                  memory: 256Mi
               securityContext:
                 privileged: false
                 allowPrivilegeEscalation: false

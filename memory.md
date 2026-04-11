@@ -76,6 +76,22 @@
 
 ## 🔴 IN PROGRESS
 
+CAB-2046: [MEGA] Council Stage 3 — Automated Code Review (21 pts) — Council S1 8.125/10, S2 8.5/10 Go
+- Decomposed into 5 sub-issues (CAB-2047 through CAB-2051), 3-phase DAG
+- CAB-2047 (13 pts): council-review.sh — Steps 1 + 2a merged, **Step 2b next**
+  - ✅ Step 1: skeleton + Étape 0 pre-checks (deps, gitleaks pre-flight, portable stat, numstat, truncation 10k) — PR #2303, commit `e98e88c0`, 333 LOC
+  - ✅ Step 2a: cost guardrails (COUNCIL_DISABLE kill-switch, COUNCIL_DAILY_CAP_EUR default €5, SHA dedup) — PR #2304, commit `fd8c7d66`, +134/-5 → 462 LOC
+  - ⏳ Step 2b: anthropic_call() + evaluate_axis(conformance) + MOCK_API fixtures — next session
+  - ⏳ Steps 3a/3b/3c/4/5 pending (prompts externalisés, fetchers, parallel orchestration, aggregate_scores + bats, docs)
+- CAB-2048 (2 pts): pre-push hook extension — blocked by CAB-2047
+- CAB-2049 (3 pts): council-gate.yml CI workflow + feature flag vars.COUNCIL_S3_ENABLED — blocked by CAB-2047
+- CAB-2050 (1 pt): council-history.jsonl rotation + gitignore — blocked by CAB-2047
+- CAB-2051 (2 pts): Shadow mode observation 2-3 weeks — blocked by 2048+2049+2050
+- Claim file: `.claude/claims/CAB-2046.json` — Phase 1 released for handoff (owner=null)
+- Cost guardrails active on main: €5/day hard cap, SHA dedup, COUNCIL_DISABLE kill-switch
+- Audit base: `audit-results.md` (root) — pre-implementation audit of existing Council infra
+- **Next session handoff**: read CAB-2047 Linear comments for full Council S1/S2 history + 13 adjustments v2
+
 CAB-1938: fix(api) upsert conflict clauses with partial indexes — branch `fix/cab-1938-upsert-partial-index`
 - PRs #2106, #2109, #2111 merged
 - Pending: PR for align upsert conflict clauses (commit 9a7a6eb8 on branch)

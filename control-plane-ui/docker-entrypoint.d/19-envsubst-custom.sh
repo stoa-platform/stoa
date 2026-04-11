@@ -26,3 +26,11 @@ window.__STOA_RUNTIME__ = {
   VITE_ARGOCD_URL: "${VITE_ARGOCD_URL:-}",
 };
 EOF
+
+# 3. Cache-bust runtime-config.js URL in index.html
+#    index.html is served with Cache-Control: no-cache so browsers revalidate on every load.
+#    Replacing __RUNTIME_CFG_V__ with a fresh value on each pod boot forces any browser
+#    holding a stale /runtime-config.js (previously cached with immutable) to fetch the
+#    new URL and get the current config. Uses pod start time so the value changes on rollout.
+RUNTIME_CFG_V="$(date -u +%Y%m%d%H%M%S)"
+sed -i "s|__RUNTIME_CFG_V__|${RUNTIME_CFG_V}|g" /usr/share/nginx/html/index.html

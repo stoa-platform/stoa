@@ -92,7 +92,17 @@ server {
         add_header Content-Type text/plain;
     }
 
-    # Cache static assets
+    # Runtime config MUST NOT be cached — it's rewritten at container startup
+    # by 19-envsubst-custom.sh and must reflect the current deployment's env vars.
+    # Exact-match (location =) takes precedence over the regex block below,
+    # so this rule wins for /runtime-config.js despite the .js suffix.
+    location = /runtime-config.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        expires -1;
+    }
+
+    # Cache static assets (hashed by Vite — safe to cache forever)
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";

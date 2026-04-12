@@ -171,29 +171,44 @@ ROLE_TOOLING_R=$(create_or_get "/dcim/device-roles/" "Tooling" \
 ROLE_INFRA=$(create_or_get "/dcim/device-roles/" "Infrastructure" \
   '{"name":"Infrastructure","slug":"infrastructure","color":"607d8f","vm_role":true,"description":"Core infrastructure services"}')
 
+# ─── VPS IPs (sourced from env vars — see stoa-infra/docs/carto/dns-inventory.md) ─
+# Set all *_IP variables before running this script (e.g. from Infisical/Vault).
+HEGEMON_W1_IP="${HEGEMON_W1_IP:?Set HEGEMON_W1_IP}"
+HEGEMON_W2_IP="${HEGEMON_W2_IP:?Set HEGEMON_W2_IP}"
+HEGEMON_W3_IP="${HEGEMON_W3_IP:?Set HEGEMON_W3_IP}"
+HEGEMON_W4_IP="${HEGEMON_W4_IP:?Set HEGEMON_W4_IP}"
+HEGEMON_W5_IP="${HEGEMON_W5_IP:?Set HEGEMON_W5_IP}"
+VPS_KONG_IP="${VPS_KONG_IP:?Set VPS_KONG_IP}"
+VPS_GRAVITEE_IP="${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}"
+VPS_WEBMETHODS_IP="${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}"
+VPS_N8N_IP="${VPS_N8N_IP:?Set VPS_N8N_IP}"
+VPS_INFISICAL_IP="${VPS_INFISICAL_IP:?Set VPS_INFISICAL_IP}"
+VPS_SPARE_GRA_IP="${VPS_SPARE_GRA_IP:?Set VPS_SPARE_GRA_IP}"
+VPS_PUSH_GRA_IP="${VPS_PUSH_GRA_IP:?Set VPS_PUSH_GRA_IP}"
+
 # ─── Virtual Machines ────────────────────────────────────────────────────────
 echo ""
 echo "[5/6] Creating virtual machines..."
 
 # HEGEMON workers (5x Contabo VPS L — 8 vCPU, 24 GB, 200 GB NVMe)
-create_vm "hegemon-w1" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "62.171.178.49"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: backend | SSH key: id_ed25519_stoa"
-create_vm "hegemon-w2" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "161.97.93.225"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: frontend | SSH key: id_ed25519_stoa"
-create_vm "hegemon-w3" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "167.86.75.214"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: mcp | SSH key: id_ed25519_stoa"
-create_vm "hegemon-w4" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "5.189.152.183"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: auth | SSH key: id_ed25519_stoa"
-create_vm "hegemon-w5" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "144.91.82.96"   "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: qa | SSH key: id_ed25519_stoa"
+create_vm "hegemon-w1" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "${HEGEMON_W1_IP}"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: backend | SSH key: id_ed25519_stoa"
+create_vm "hegemon-w2" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "${HEGEMON_W2_IP}"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: frontend | SSH key: id_ed25519_stoa"
+create_vm "hegemon-w3" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "${HEGEMON_W3_IP}"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: mcp | SSH key: id_ed25519_stoa"
+create_vm "hegemon-w4" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "${HEGEMON_W4_IP}"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: auth | SSH key: id_ed25519_stoa"
+create_vm "hegemon-w5" "${CLUSTER_HEGEMON}" "${ROLE_WORKER}" 8 24576 200 "${HEGEMON_W5_IP}"  "[{\"id\":${TAG_HEGEMON}},{\"id\":${TAG_PROD}}]" "Role: qa | SSH key: id_ed25519_stoa"
 
 # Gateway VPS (OVH)
-create_vm "kong-vps"       "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 2 4096  40 "51.83.45.13"    "[{\"id\":${TAG_GATEWAY}}]" "Kong DB-less | Admin :8001 | Proxy :8000"
-create_vm "gravitee-vps"   "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 2 4096  40 "54.36.209.237"  "[{\"id\":${TAG_GATEWAY}}]" "Gravitee APIM v4 | Mgmt :8083 | GW :8082"
-create_vm "webmethods-vps" "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 4 8192  80 "51.255.201.17"  "[{\"id\":${TAG_GATEWAY}}]" "webMethods API GW 10.15 | Admin :9072 | HTTP :5555"
+create_vm "kong-vps"       "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 2 4096  40 "${VPS_KONG_IP}"       "[{\"id\":${TAG_GATEWAY}}]" "Kong DB-less | Admin :8001 | Proxy :8000"
+create_vm "gravitee-vps"   "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 2 4096  40 "${VPS_GRAVITEE_IP}"   "[{\"id\":${TAG_GATEWAY}}]" "Gravitee APIM v4 | Mgmt :8083 | GW :8082"
+create_vm "webmethods-vps" "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 4 8192  80 "${VPS_WEBMETHODS_IP}" "[{\"id\":${TAG_GATEWAY}}]" "webMethods API GW 10.15 | Admin :9072 | HTTP :5555"
 
 # Tooling VPS (shared n8n host)
-create_vm "n8n-tooling-vps" "${CLUSTER_TOOLING}" "${ROLE_TOOLING_R}" 4 8192 80 "51.254.139.205" "[{\"id\":${TAG_TOOLING}},{\"id\":${TAG_PROD}}]" "n8n + Netbox + PocketBase + Healthchecks + Uptime Kuma | Traefik reverse proxy"
+create_vm "n8n-tooling-vps" "${CLUSTER_TOOLING}" "${ROLE_TOOLING_R}" 4 8192 80 "${VPS_N8N_IP}" "[{\"id\":${TAG_TOOLING}},{\"id\":${TAG_PROD}}]" "n8n + Netbox + PocketBase + Healthchecks + Uptime Kuma | Traefik reverse proxy"
 
 # Infrastructure VPS
-create_vm "infisical-vps" "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "213.199.45.108" "[{\"id\":${TAG_PROD}}]" "Infisical vault.gostoa.dev | Caddy TLS"
-create_vm "spare-gra-vps" "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "51.255.193.129" "[{\"id\":${TAG_PROD}}]" "HashiCorp Vault hcvault.gostoa.dev | OVH GRA6"
-create_vm "push-gra-vps"  "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "51.83.110.210"  "[{\"id\":${TAG_PROD}}]" "Pushgateway push.gostoa.dev | Prometheus metrics relay"
+create_vm "infisical-vps" "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "${VPS_INFISICAL_IP}" "[{\"id\":${TAG_PROD}}]" "Infisical vault.gostoa.dev | Caddy TLS"
+create_vm "spare-gra-vps" "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "${VPS_SPARE_GRA_IP}" "[{\"id\":${TAG_PROD}}]" "HashiCorp Vault hcvault.gostoa.dev | OVH GRA6"
+create_vm "push-gra-vps"  "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "${VPS_PUSH_GRA_IP}"  "[{\"id\":${TAG_PROD}}]" "Pushgateway push.gostoa.dev | Prometheus metrics relay"
 
 # ─── Cleanup obsolete entries ────────────────────────────────────────────────
 echo ""

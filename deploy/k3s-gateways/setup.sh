@@ -5,8 +5,8 @@
 set -euo pipefail
 
 # --- Configuration ---
-CP_IP="144.91.73.37"
-WORKER_IP="164.68.121.123"
+CP_IP="${K3S_CP_IP:?Set K3S_CP_IP}"
+WORKER_IP="${K3S_WORKER_IP:?Set K3S_WORKER_IP}"
 SSH_KEY="$HOME/.ssh/id_ed25519_stoa"
 SSH_USER="hegemon"
 SSH="ssh -i $SSH_KEY $SSH_USER"

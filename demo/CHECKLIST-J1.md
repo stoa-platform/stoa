@@ -34,7 +34,7 @@ done
 ```bash
 # Obtenir un token (necessaire pour les endpoints portal)
 TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=control-plane-ui&username=anorak&password=demo" \
+  -d "grant_type=password&client_id=control-plane-ui&username=anorak&password=<ANORAK_PASSWORD>" \
   | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
 
 # Verifier les APIs demo

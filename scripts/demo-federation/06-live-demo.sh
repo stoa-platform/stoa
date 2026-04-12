@@ -36,9 +36,9 @@ login_silent() {
   local REALM_NAME="demo-org-${REALM}"
   local CLIENT_SECRET
   case "${REALM}" in
-    alpha) CLIENT_SECRET="alpha-demo-secret" ;;
-    beta)  CLIENT_SECRET="beta-demo-secret" ;;
-    gamma) CLIENT_SECRET="gamma-demo-secret" ;;
+    alpha) CLIENT_SECRET="${FEDERATION_SECRET_ALPHA:?Set FEDERATION_SECRET_ALPHA}" ;;
+    beta)  CLIENT_SECRET="${FEDERATION_SECRET_BETA:?Set FEDERATION_SECRET_BETA}" ;;
+    gamma) CLIENT_SECRET="${FEDERATION_SECRET_GAMMA:?Set FEDERATION_SECRET_GAMMA}" ;;
   esac
   RESPONSE=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${REALM_NAME}/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \

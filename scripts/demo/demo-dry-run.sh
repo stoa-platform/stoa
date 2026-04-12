@@ -462,7 +462,7 @@ act_header "6" "Federation Cross-Realm"
 # Token from demo-org-alpha
 ALPHA_START=$(date +%s%N)
 ALPHA_RESP=$(curl -s -X POST "${AUTH_URL}/realms/demo-org-alpha/protocol/openid-connect/token" \
-    -d "grant_type=password&client_id=federation-demo&client_secret=alpha-demo-secret&username=demo-alpha&password=demo" \
+    -d "grant_type=password&client_id=federation-demo&client_secret=${FEDERATION_SECRET_ALPHA:?Set FEDERATION_SECRET_ALPHA}&username=demo-alpha&password=${DEMO_PASSWORD:?Set DEMO_PASSWORD}" \
     --max-time 10 2>/dev/null || echo '{}')
 ALPHA_END=$(date +%s%N)
 ALPHA_MS=$(( (ALPHA_END - ALPHA_START) / 1000000 ))

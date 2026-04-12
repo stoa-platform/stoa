@@ -2,6 +2,28 @@
 // Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 package types
 
+// CanonicalAPIVersion is the target version for all STOA resources.
+const CanonicalAPIVersion = "gostoa.dev/v1beta1"
+
+// AcceptedAPIVersions lists all apiVersions that stoactl will accept.
+// Older versions are transparently upgraded to CanonicalAPIVersion.
+var AcceptedAPIVersions = []string{
+	"gostoa.dev/v1beta1", // canonical (Phase 4)
+	"gostoa.dev/v1",       // MCPServer legacy
+	"gostoa.dev/v1alpha1", // CRD legacy (Tool, ToolSet, Skill)
+	"stoa.io/v1",          // early prototype — deprecated
+}
+
+// IsAcceptedAPIVersion returns true if the given apiVersion is recognized.
+func IsAcceptedAPIVersion(v string) bool {
+	for _, accepted := range AcceptedAPIVersions {
+		if v == accepted {
+			return true
+		}
+	}
+	return false
+}
+
 // Resource represents a STOA resource (API, Subscription, etc.)
 type Resource struct {
 	APIVersion string   `yaml:"apiVersion" json:"apiVersion"`

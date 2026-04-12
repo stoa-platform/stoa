@@ -133,8 +133,14 @@ Objectif : briser la boucle de 3 semaines sur les bugs récurrents de state-drif
   - **Bucket B2+B3** (8 tickets) — Todo (legitimate WIP zombies): CAB-2035/36/37/38 (CAB-2034 subs), CAB-1985/86/87/88 (CAB-1977 subs)
   - **Bucket B4** (7 tickets) — Todo (re-evaluation post-freeze): CAB-1814 (no impl), CAB-1775 (PR #1657 closed), CAB-1903, CAB-1998, CAB-1876, CAB-1858, CAB-1942
   - Notable: CAB-1916 Phase 4 (`health_contract.py`) descoped — race condition already fixed without it
-- **Phase 2** [owner: —] — Bug recurrence root cause (formaliser classes de bugs, 1 fix par classe)
-- **Phase 2** [owner: —] — Bug recurrence root cause (formaliser classes de bugs, 1 fix par classe)
+- **Phase 2** ✅ DONE (2026-04-12) — Bug recurrence root cause: 11 classes cataloguées, 7 fixes structurels
+  - Fix #1: mypy no-any-return (PR #2329) + OpenAPI snapshot skip unblocking CD (PR #2333, CAB-2055 follow-up)
+  - Fix #2: linear-close-on-merge multi-CAB extraction (PR #2335) — élimine 58% state drift
+  - Fix #3: dependabot block major npm bumps (PR #2334)
+  - Fix #4: MEGA G0 flat fallback rule (PR #2339)
+  - Fix #5: zombie In Review detector workflow (PR #2336)
+  - Fix #7: pre-push hook scope src/ only (PR #2330)
+  - Bonus: CAB-2055 créé pour OpenAPI ghost drift root cause
 - **Phase 3** [owner: —] — `stoactl` completeness : `apply -f` pour tous les kinds déclarés + `get`/`delete`/`list` manquants. Critère binaire 100%.
 - **Phase 4** [owner: —] — Schema registry unifié `gostoa.dev/v1beta1` via conversion webhook + JSON Schema registry publié dans `charts/stoa-platform/schemas/`
 - **Phase 5** [owner: —] — Claude context pack CLI-first : charge `stoactl --help` + schemas au lieu de `src/`. Mesure binaire : context usage < 40%.

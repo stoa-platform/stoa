@@ -37,6 +37,14 @@ spec:
               value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
             - name: DNS_RESOLVER
               value: "10.3.0.10"
+            # Runtime SPA config — overrides Vite build-time defaults
+            # These are injected into runtime-config.js at container startup
+            - name: VITE_KEYCLOAK_URL
+              value: "https://auth.gostoa.dev"
+            - name: VITE_KEYCLOAK_REALM
+              value: "stoa"
+            - name: VITE_KEYCLOAK_CLIENT_ID
+              value: "stoa-portal"
           ports:
             - name: http
               containerPort: 8080
@@ -66,7 +74,7 @@ spec:
             runAsNonRoot: true
             runAsUser: 101  # nginx user
             runAsGroup: 101
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             allowPrivilegeEscalation: false
             capabilities:
               drop:

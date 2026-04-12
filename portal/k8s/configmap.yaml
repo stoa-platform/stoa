@@ -6,9 +6,9 @@ metadata:
   labels:
     app: stoa-portal
 data:
-  # These values are baked into the Docker image at build time
-  # This ConfigMap is for documentation/reference purposes
-  # To change values, rebuild the image with different build args
+  # Runtime-overridable values (injected via deployment.yaml env vars)
+  # The entrypoint generates runtime-config.js from these at container startup
+  # No image rebuild needed — just update the deployment env vars
 
   BASE_DOMAIN: "gostoa.dev"
   ENVIRONMENT: "production"

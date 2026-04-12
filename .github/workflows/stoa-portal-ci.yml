@@ -122,10 +122,7 @@ jobs:
   # === Promote to Prod: requires manual approval via GitHub Environment ===
   promote-to-prod:
     needs: [docker, smoke-test]
-    if: |
-      always() &&
-      needs.smoke-test.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: needs.smoke-test.result == 'success'
     uses: ./.github/workflows/reusable-promote.yml
     with:
       component: stoa-portal
@@ -140,8 +137,8 @@ jobs:
     uses: ./.github/workflows/reusable-notify.yml
     with:
       component: STOA Portal
-      environment: ${{ needs.promote-to-prod.result == 'success' && 'prod' || 'dev' }}
+      environment: dev
       ci-result: ${{ needs.ci.outputs.test-result }}
-      deploy-result: ${{ needs.promote-to-prod.result }}
+      deploy-result: ${{ needs.deploy.result }}
       smoke-result: ${{ needs.smoke-test.result }}
     secrets: inherit

@@ -96,6 +96,19 @@ USER nginx
 # Default API backend (overridden by K8s env var)
 ENV API_BACKEND_URL=http://control-plane-api:8000
 
+# Runtime SPA config — injected into runtime-config.js at container startup.
+# Override via K8s deployment.yaml or docker-compose env vars.
+# Empty = app falls back to Vite build-time defaults.
+ENV VITE_KEYCLOAK_URL="" \
+    VITE_KEYCLOAK_REALM="" \
+    VITE_KEYCLOAK_CLIENT_ID="" \
+    VITE_API_URL="" \
+    VITE_MCP_URL="" \
+    VITE_BASE_DOMAIN="" \
+    VITE_ENVIRONMENT="" \
+    VITE_CONSOLE_URL="" \
+    VITE_DOCS_URL=""
+
 # Copy entrypoint scripts (DNS resolver extraction + envsubst with explicit var filter)
 COPY portal/docker-entrypoint.d/15-extract-dns-resolver.envsh /docker-entrypoint.d/15-extract-dns-resolver.envsh
 COPY portal/docker-entrypoint.d/19-envsubst-custom.sh /docker-entrypoint.d/19-envsubst-custom.sh
@@ -105,6 +118,14 @@ COPY portal/nginx.conf.template /etc/nginx/custom-templates/default.conf.templat
 
 # Copy built app
 COPY --from=builder /app/portal/dist /usr/share/nginx/html
+
+# Allow nginx user to write runtime-config.js and index.html at startup
+# (entrypoint generates runtime-config.js and cache-busts index.html via sed -i)
+# sed -i creates a temp file in the same directory, so the directory must be writable too.
+USER root
+RUN touch /usr/share/nginx/html/runtime-config.js && \
+    chown -R nginx:nginx /usr/share/nginx/html
+USER nginx
 
 # nginx-unprivileged listens on 8080
 EXPOSE 8080

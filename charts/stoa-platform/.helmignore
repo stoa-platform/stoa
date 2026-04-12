@@ -17,8 +17,6 @@
 .claude/
 
 # Development
-*.md
-!README.md
 CLAUDE.md
 
 # Build artifacts

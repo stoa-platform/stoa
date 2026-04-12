@@ -32,7 +32,7 @@ function loadLocaleKeys(locale: string): string[] {
 /** Recursively scan .ts/.tsx source files for nav.* i18n keys in string literals */
 function scanNavKeysInSource(dir: string): Set<string> {
   const keys = new Set<string>();
-  const keyPattern = /['"]([\w]+(?:\.[\w]+){1,10})['"]/g;
+  const keyPattern = /['"](\w[\w.]*\w)['"]/g;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory() && entry.name !== 'node_modules') {

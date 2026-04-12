@@ -119,6 +119,14 @@ func applyFile(c *client.Client, path string) error {
 		return fmt.Errorf("invalid resource in %s: missing metadata.name", path)
 	}
 
+	// Validate apiVersion — accept legacy versions with a deprecation warning
+	if !types.IsAcceptedAPIVersion(resource.APIVersion) {
+		return fmt.Errorf("unsupported apiVersion %q in %s (expected %s)", resource.APIVersion, path, types.CanonicalAPIVersion)
+	}
+	if resource.APIVersion != types.CanonicalAPIVersion {
+		output.Warn("apiVersion %q is deprecated, use %q instead", resource.APIVersion, types.CanonicalAPIVersion)
+	}
+
 	// Dry run
 	if dryRun {
 		if err := c.ValidateResource(&resource); err != nil {

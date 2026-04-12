@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/tenant.schema.json",
+  "title": "STOA Tenant Resource",
+  "description": "Schema for stoactl apply -f with kind: Tenant",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Tenant",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "owner_email": {
+          "title": "Owner Email",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "display_name",
+        "owner_email"
+      ],
+      "title": "TenantCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

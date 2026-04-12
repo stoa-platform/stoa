@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/consumer.schema.json",
+  "title": "STOA Consumer Resource",
+  "description": "Schema for stoactl apply -f with kind: Consumer",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Consumer",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "description": "Schema for creating a new consumer.",
+      "example": {
+        "company": "ACME Corporation",
+        "description": "Strategic API partner",
+        "email": "api@acme.com",
+        "external_id": "partner-acme-001",
+        "name": "ACME Corp"
+      },
+      "properties": {
+        "external_id": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "External Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "email": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Email",
+          "type": "string"
+        },
+        "company": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Company"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "keycloak_user_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keycloak User Id"
+        },
+        "consumer_metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consumer Metadata"
+        }
+      },
+      "required": [
+        "external_id",
+        "name",
+        "email"
+      ],
+      "title": "ConsumerCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

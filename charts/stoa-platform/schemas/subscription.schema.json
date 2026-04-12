@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/subscription.schema.json",
+  "title": "STOA Subscription Resource",
+  "description": "Schema for stoactl apply -f with kind: Subscription",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Subscription",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "description": "Schema for creating a new subscription request",
+      "example": {
+        "api_id": "api-456",
+        "api_name": "Weather API",
+        "api_version": "1.0",
+        "application_id": "app-123",
+        "application_name": "My App",
+        "plan_id": "basic",
+        "plan_name": "Basic Plan",
+        "tenant_id": "acme"
+      },
+      "properties": {
+        "application_id": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Application Id",
+          "type": "string"
+        },
+        "application_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Application Name",
+          "type": "string"
+        },
+        "api_id": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Api Id",
+          "type": "string"
+        },
+        "api_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Api Name",
+          "type": "string"
+        },
+        "api_version": {
+          "maxLength": 50,
+          "minLength": 1,
+          "title": "Api Version",
+          "type": "string"
+        },
+        "tenant_id": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Id"
+        },
+        "plan_name": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "default",
+          "title": "Plan Name"
+        }
+      },
+      "required": [
+        "application_id",
+        "application_name",
+        "api_id",
+        "api_name",
+        "api_version",
+        "tenant_id"
+      ],
+      "title": "SubscriptionCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

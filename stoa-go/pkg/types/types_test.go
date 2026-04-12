@@ -490,6 +490,41 @@ func TestRegression_CAB2006_GatewayHealthFields(t *testing.T) {
 	}
 }
 
+// TestIsAcceptedAPIVersion validates the apiVersion acceptance logic
+func TestIsAcceptedAPIVersion(t *testing.T) {
+	tests := []struct {
+		version string
+		want    bool
+	}{
+		{"gostoa.dev/v1beta1", true},   // canonical
+		{"gostoa.dev/v1", true},         // MCPServer legacy
+		{"gostoa.dev/v1alpha1", true},   // CRD legacy
+		{"stoa.io/v1", true},            // deprecated prototype
+		{"gostoa.dev/v2", false},        // unknown
+		{"", false},                     // empty
+		{"kubernetes/v1", false},        // unrelated
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			got := IsAcceptedAPIVersion(tt.version)
+			if got != tt.want {
+				t.Errorf("IsAcceptedAPIVersion(%q) = %v, want %v", tt.version, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCanonicalAPIVersion ensures the constant is set correctly
+func TestCanonicalAPIVersion(t *testing.T) {
+	if CanonicalAPIVersion != "gostoa.dev/v1beta1" {
+		t.Errorf("CanonicalAPIVersion = %q, want %q", CanonicalAPIVersion, "gostoa.dev/v1beta1")
+	}
+	if !IsAcceptedAPIVersion(CanonicalAPIVersion) {
+		t.Error("CanonicalAPIVersion should be accepted")
+	}
+}
+
 // TestEmptyAPIListResponse tests empty list response
 func TestEmptyAPIListResponse(t *testing.T) {
 	jsonData := `{"items": [], "totalCount": 0}`

@@ -14,11 +14,25 @@ This rule is enforced at every pipeline exit point: manual sessions, `linear-clo
 
 | # | Gate | Verification | Fail Action |
 |---|------|-------------|-------------|
-| 0 | **Decomposition Invariant** | `linear.get_issue(id)` → `children.nodes.length > 0` | BLOCK dispatch, run `/decompose` first |
+| 0 | **Decomposition Invariant** | `children.nodes.length > 0` OR flat MEGA fallback (see below) | BLOCK if neither path satisfied |
 | 1 | **Per-Phase PR Evidence** | Every Done sub-ticket has a Linear comment containing `PR #` | List missing PRs, keep parent In Progress |
 | 2 | **All Sub-Tickets Done** | ALL `children.nodes` have `state.name == "Done"` | List incomplete children, keep parent In Progress |
 | 3 | **Live Verification** | Target endpoint/site confirmed working (curl, build, or screenshot) | Prompt for manual verification |
 | 4 | **Sub-tickets closed on Linear** | No child in "In Progress", "Todo", or "Blocked" state | List stale children |
+
+### Gate 0 Flat MEGA Fallback
+
+When `children.nodes.length == 0` (MEGA was not decomposed via `/decompose`), Gate 0 can still pass if ALL of these are true:
+
+1. **>= 2 merged PRs** reference the ticket: `gh pr list --search "CAB-XXXX" --state merged` returns >= 2 results
+2. **Completion comment** exists on the Linear ticket listing the PRs and their scope
+3. **DoD items** are verifiable from the PR descriptions/titles (not just "misc changes")
+
+**When to use**: Small MEGAs (13-21 pts) with clear, single-component scope that don't benefit from sub-ticket decomposition. Example: CAB-1869 (Call Flow Dashboard, 21 pts, 2 PRs, 13 DoD items all delivered).
+
+**When NOT to use**: MEGAs > 21 pts or multi-component scope (gateway + API + UI) — always `/decompose`. The decomposition overhead pays for itself in parallel execution and progress tracking.
+
+**Verification**: `gh pr list --search "CAB-XXXX" --state merged --json number,title | jq length` — must return >= 2.
 
 ## Detection: Is This a MEGA?
 
@@ -65,6 +79,7 @@ ORCHESTRE runs `/verify-mega --all-done-7d` every Monday:
 | Closing MEGA without `/verify-mega` | Skips gate checks | Always use `/verify-mega` |
 | Auto-closing MEGA in CI workflow | CI sees merged PR, closes parent | CI must detect MEGA and skip |
 | Marking MEGA Done with blocked children | Incomplete scope | Unblock or descope children first |
+| Failing G0 when 2+ merged PRs prove delivery | Flat MEGAs are valid — not all MEGAs need `/decompose` | Use the flat MEGA fallback (see Gate 0 section above) |
 
 ## Integration
 

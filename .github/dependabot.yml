@@ -18,6 +18,10 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
+    # Block major bumps — too many breaking incidents (Vite 8, Tailwind 4, ESLint 10). Major upgrades via dedicated tickets.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-portal:
         patterns: ["*"]
@@ -41,6 +45,10 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
+    # Block major bumps — too many breaking incidents (Vite 8, Tailwind 4, ESLint 10). Major upgrades via dedicated tickets.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-ui:
         patterns: ["*"]

@@ -18,18 +18,19 @@ SSH_KEY=~/.ssh/id_ed25519_stoa
 # VPS configs: name, IP, GATEWAYS JSON
 # Each gateway is isolated on its own VPS for reliable benchmarking (no noisy neighbor)
 # Gravitee removed: scores near-zero on AI dimensions, 50% availability issues
+# Required env vars: VPS_STOA_IP, VPS_KONG_IP, VPS_AGENTGATEWAY_IP, VPS_BENCH_IP
 declare -A VPS_IPS=(
-  ["stoa-vps"]="51.83.45.13"
-  ["kong-vps"]="51.195.43.130"
-  ["agentgateway-vps"]="135.125.204.169"
-  ["bench-vps"]="94.23.107.106"
+  ["stoa-vps"]="${VPS_STOA_IP:?Set VPS_STOA_IP}"
+  ["kong-vps"]="${VPS_KONG_IP:?Set VPS_KONG_IP}"
+  ["agentgateway-vps"]="${VPS_AGENTGATEWAY_IP:?Set VPS_AGENTGATEWAY_IP}"
+  ["bench-vps"]="${VPS_BENCH_IP:?Set VPS_BENCH_IP}"
 )
 
 declare -A VPS_GATEWAYS=(
   ["stoa-vps"]='[{"name":"stoa-vps","health":"http://localhost:8080/health","proxy":"http://localhost:8080/echo/get"}]'
   ["kong-vps"]='[{"name":"kong-vps","health":"http://localhost:8001/status","proxy":"http://localhost:8000/echo/get"}]'
   ["agentgateway-vps"]='[{"name":"agentgateway-vps","health":"http://localhost:3000/health","proxy":"http://localhost:3000/echo/get"}]'
-  ["bench-vps"]='[{"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},{"name":"kong-vps","health":"http://51.195.43.130:8001/status","proxy":"http://51.195.43.130:8000/echo/get"},{"name":"agentgateway-vps","health":"http://135.125.204.169:3000/health","proxy":"http://135.125.204.169:3000/echo/get"}]'
+  ["bench-vps"]='[{"name":"stoa-vps","health":"http://'"${VPS_STOA_IP}"':8080/health","proxy":"http://'"${VPS_STOA_IP}"':8080/echo/get"},{"name":"kong-vps","health":"http://'"${VPS_KONG_IP}"':8001/status","proxy":"http://'"${VPS_KONG_IP}"':8000/echo/get"},{"name":"agentgateway-vps","health":"http://'"${VPS_AGENTGATEWAY_IP}"':3000/health","proxy":"http://'"${VPS_AGENTGATEWAY_IP}"':3000/echo/get"}]'
 )
 
 # Enterprise GATEWAYS JSON (L1 — with mcp_base, admin_base, features)
@@ -38,31 +39,31 @@ declare -A VPS_GATEWAYS_ENTERPRISE=(
   ["stoa-vps"]='[{"name":"stoa-vps","target":"http://localhost:8080","mcp_base":"http://localhost:8080/mcp","mcp_protocol":"stoa","admin_base":"http://localhost:8080","health":"http://localhost:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]}]'
   ["kong-vps"]='[{"name":"kong-vps","target":"http://localhost:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://localhost:8001/status","features":[]}]'
   ["agentgateway-vps"]='[{"name":"agentgateway-vps","target":"http://localhost:3000","mcp_base":"http://localhost:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://localhost:15000","health":"http://localhost:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]}]'
-  ["bench-vps"]='[{"name":"stoa-vps","target":"http://51.83.45.13:8080","mcp_base":"http://51.83.45.13:8080/mcp","mcp_protocol":"stoa","admin_base":"http://51.83.45.13:8080","health":"http://51.83.45.13:8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://51.195.43.130:8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://51.195.43.130:8001/status","features":[]},{"name":"agentgateway-vps","target":"http://135.125.204.169:3000","mcp_base":"http://135.125.204.169:3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://135.125.204.169:15000","health":"http://135.125.204.169:3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]}]'
+  ["bench-vps"]='[{"name":"stoa-vps","target":"http://'"${VPS_STOA_IP}"':8080","mcp_base":"http://'"${VPS_STOA_IP}"':8080/mcp","mcp_protocol":"stoa","admin_base":"http://'"${VPS_STOA_IP}"':8080","health":"http://'"${VPS_STOA_IP}"':8080/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","uac_binding","pii_detection","distributed_tracing","prompt_cache","skills_lifecycle","federation","diagnostic"]},{"name":"kong-vps","target":"http://'"${VPS_KONG_IP}"':8000","mcp_base":null,"mcp_protocol":null,"admin_base":null,"health":"http://'"${VPS_KONG_IP}"':8001/status","features":[]},{"name":"agentgateway-vps","target":"http://'"${VPS_AGENTGATEWAY_IP}"':3000","mcp_base":"http://'"${VPS_AGENTGATEWAY_IP}"':3000/mcp","mcp_protocol":"streamable-http","admin_base":"http://'"${VPS_AGENTGATEWAY_IP}"':15000","health":"http://'"${VPS_AGENTGATEWAY_IP}"':3000/health","features":["llm_routing","llm_cost","llm_circuit_breaker","native_tools_crud","api_bridge","pii_detection","distributed_tracing","federation"]}]'
 )
 
 # Unique VPS IPs (each gateway isolated on its own VPS)
 declare -A UNIQUE_VPS=(
-  ["51.83.45.13"]="stoa-vps"
-  ["51.195.43.130"]="kong-vps"
-  ["135.125.204.169"]="agentgateway-vps"
-  ["94.23.107.106"]="bench-vps"
+  ["${VPS_STOA_IP}"]="stoa-vps"
+  ["${VPS_KONG_IP}"]="kong-vps"
+  ["${VPS_AGENTGATEWAY_IP}"]="agentgateway-vps"
+  ["${VPS_BENCH_IP}"]="bench-vps"
 )
 
 # SSH users per VPS IP (OVH gateway VPS = debian, OVH dev VPS = stoa)
 declare -A VPS_SSH_USER=(
-  ["51.83.45.13"]="debian"
-  ["51.195.43.130"]="stoa"
-  ["135.125.204.169"]="stoa"
-  ["94.23.107.106"]="debian"
+  ["${VPS_STOA_IP}"]="debian"
+  ["${VPS_KONG_IP}"]="stoa"
+  ["${VPS_AGENTGATEWAY_IP}"]="stoa"
+  ["${VPS_BENCH_IP}"]="debian"
 )
 
 # Instance labels per VPS IP (prevent Pushgateway push overwrites between clusters)
 declare -A VPS_INSTANCE=(
-  ["51.83.45.13"]="vps-stoa"
-  ["51.195.43.130"]="vps-kong"
-  ["135.125.204.169"]="vps-agentgateway"
-  ["94.23.107.106"]="vps-bench"
+  ["${VPS_STOA_IP}"]="vps-stoa"
+  ["${VPS_KONG_IP}"]="vps-kong"
+  ["${VPS_AGENTGATEWAY_IP}"]="vps-agentgateway"
+  ["${VPS_BENCH_IP}"]="vps-bench"
 )
 
 REMOTE_DIR="/opt/arena"
@@ -245,8 +246,8 @@ echo "Timers: L0 every 30 min + L1 enterprise hourly on each VPS"
 echo "Pushgateway: ${PUSHGATEWAY_URL}"
 echo ""
 echo "Verify (manual run):"
-echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'        # STOA"
-echo "  ssh -i $SSH_KEY stoa@51.195.43.130 'cd /opt/arena && docker compose run --rm arena'         # Kong"
-echo "  ssh -i $SSH_KEY stoa@135.125.204.169 'cd /opt/arena && docker compose run --rm arena'       # agentgateway"
-echo "  ssh -i $SSH_KEY debian@94.23.107.106 'cd /opt/arena && docker compose run --rm arena'       # bench (all 3 remote)"
+echo "  ssh -i $SSH_KEY \${user}@\${VPS_STOA_IP} 'cd /opt/arena && docker compose run --rm arena'     # STOA"
+echo "  ssh -i $SSH_KEY \${user}@\${VPS_KONG_IP} 'cd /opt/arena && docker compose run --rm arena'     # Kong"
+echo "  ssh -i $SSH_KEY \${user}@\${VPS_AGENTGATEWAY_IP} 'cd /opt/arena && docker compose run --rm arena' # agentgateway"
+echo "  ssh -i $SSH_KEY \${user}@\${VPS_BENCH_IP} 'cd /opt/arena && docker compose run --rm arena'    # bench (all 3 remote)"
 echo "  curl -sf -u arena:arena-push-2026 https://pushgateway.gostoa.dev/metrics | grep enterprise_dimension"

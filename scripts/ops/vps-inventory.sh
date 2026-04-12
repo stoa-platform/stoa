@@ -15,14 +15,16 @@
 STOA_SSH_KEY="${STOA_SSH_KEY:-$HOME/.ssh/id_ed25519_stoa}"
 
 # --- VPS Fleet ---
+# IPs sourced from env vars — see stoa-infra/docs/carto/dns-inventory.md for values.
+# Set all VPS_*_IP variables before sourcing this file (e.g. from Infisical/Vault).
 # Format: NAME|IP|USER|PURPOSE
 VPS_FLEET=(
-  "kong-vps|51.83.45.13|debian|Kong + STOA gateway (Arena benchmark)"
-  "gravitee-vps|54.36.209.237|debian|Gravitee APIM v4 (Arena benchmark)"
-  "n8n-vps|51.254.139.205|debian|n8n + PocketBase + Healthchecks"
-  "webmethods-vps|51.255.201.17|debian|webMethods API Gateway trial (vps-wm.gostoa.dev)"
-  "infisical-vps|213.199.45.108|debian|Infisical vault (vault.gostoa.dev) + Caddy TLS"
-  "bench-vps|94.23.107.106|debian|OpenSearch bench + Arena runner (STOA-bench)"
+  "kong-vps|${VPS_KONG_IP:?Set VPS_KONG_IP}|debian|Kong + STOA gateway (Arena benchmark)"
+  "gravitee-vps|${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}|debian|Gravitee APIM v4 (Arena benchmark)"
+  "n8n-vps|${VPS_N8N_IP:?Set VPS_N8N_IP}|debian|n8n + PocketBase + Healthchecks"
+  "webmethods-vps|${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}|debian|webMethods API Gateway trial (vps-wm.gostoa.dev)"
+  "infisical-vps|${VPS_INFISICAL_IP:?Set VPS_INFISICAL_IP}|debian|Infisical vault (vault.gostoa.dev) + Caddy TLS"
+  "bench-vps|${VPS_BENCH_IP:?Set VPS_BENCH_IP}|debian|OpenSearch bench + Arena runner (STOA-bench)"
   # HEGEMON workers are dynamic — use hegemon/workers.txt
 )
 
@@ -40,7 +42,7 @@ INFISICAL_PROJECT_ID="${INFISICAL_PROJECT_ID:-97972ffc-990b-4d28-9c4d-0664d217f0
 # Helper functions
 # =============================================================================
 
-# Get VPS field by name: vps_get kong-vps ip → 51.83.45.13
+# Get VPS field by name: vps_get kong-vps ip → returns VPS_KONG_IP value
 vps_get() {
   local name="$1" field="$2"
   for entry in "${VPS_FLEET[@]}"; do

@@ -1,5 +1,5 @@
 # webMethods API Gateway — Dev
-# VPS: 164.68.121.123 (Contabo worker-3)
+# VPS: <WORKER_3_IP> (Contabo worker-3, i.e. HEGEMON_W3_IP — see stoa-infra/docs/carto/dns-inventory.md)
 # Canonical copy at /opt/webmethods-dev/docker-compose.yml on VPS
 
 services:

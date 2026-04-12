@@ -36,7 +36,7 @@ log_step() { echo -e "\n${BLUE}==>${NC} $1"; }
 # Configuration
 GATEWAY_URL="${GATEWAY_URL:-http://apigateway.stoa-system.svc.cluster.local:5555}"
 GATEWAY_USER="${GATEWAY_USER:-Administrator}"
-GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+GATEWAY_PASSWORD="${GATEWAY_PASSWORD:?Set GATEWAY_PASSWORD}"
 APP_NAME="${APP_NAME:-control-plane-ui}"
 APP_CLIENT_ID="${APP_CLIENT_ID:-control-plane-ui}"
 APP_DESCRIPTION="${APP_DESCRIPTION:-STOA Console UI - API Consumer application}"

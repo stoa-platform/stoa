@@ -29,21 +29,29 @@ jobs:
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-          TEAM_ID: 624a9948-a160-4e47-aba5-7f9404d23506
         run: |
-          if [ -z "$LINEAR_API_KEY" ]; then
-            echo "LINEAR_API_KEY not set — skipping"
+          set -euo pipefail
+
+          if [ -z "${LINEAR_API_KEY:-}" ]; then
+            echo "::warning::LINEAR_API_KEY not set — skipping drift detection"
             exit 0
           fi
 
+          # Team ID configurable via repo variable; fallback to CAB-ING default
+          TEAM_ID="${REVIEW_DRIFT_TEAM_ID:-624a9948-a160-4e47-aba5-7f9404d23506}"
+
           # Query Linear for all "In Review" tickets in team CAB-ING
-          QUERY='{ issues(filter: { team: { id: { eq: "'"$TEAM_ID"'" } }, state: { name: { eq: "In Review" } } }, first: 100) { nodes { id identifier title createdAt updatedAt } } }'
-          ISSUES=$(curl -s -X POST https://api.linear.app/graphql \
+          # Using jq --arg for parameterized query (no shell interpolation in GraphQL)
+          QUERY=$(jq -n --arg tid "$TEAM_ID" '{
+            query: "{ issues(filter: { team: { id: { eq: \"\($tid)\" } }, state: { name: { eq: \"In Review\" } } }, first: 100) { nodes { id identifier title } } }"
+          }')
+
+          ISSUES=$(curl -sf --max-time 15 -X POST https://api.linear.app/graphql \
             -H "Authorization: $LINEAR_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"query\": \"$QUERY\"}")
+            -d "$QUERY" 2>/dev/null) || { echo "::warning::Linear API call failed — skipping drift detection"; exit 0; }
 
-          COUNT=$(echo "$ISSUES" | jq '.data.issues.nodes | length')
+          COUNT=$(echo "$ISSUES" | jq '.data.issues.nodes | length // 0')
           echo "Found $COUNT tickets in 'In Review' state"
 
           if [ "$COUNT" -eq 0 ]; then
@@ -51,37 +59,51 @@ jobs:
             exit 0
           fi
 
-          # For each ticket, check if a PR exists on GitHub
-          ZOMBIES=""
+          # Write ticket list to temp file (avoid subshell pipe issue with while-read)
+          TMPFILE=$(mktemp)
+          echo "$ISSUES" | jq -r '.data.issues.nodes[] | "\(.id)\t\(.identifier)\t\(.title)"' > "$TMPFILE"
           ZOMBIE_COUNT=0
 
-          echo "$ISSUES" | jq -r '.data.issues.nodes[] | "\(.identifier)|\(.title)"' | while IFS='|' read -r TICKET_ID TITLE; do
+          while IFS=$'\t' read -r ISSUE_UUID TICKET_ID TITLE; do
+            [ -z "$TICKET_ID" ] && continue
+
             # Search GitHub for PRs referencing this ticket (open or merged)
             PR_COUNT=$(gh pr list --state all --limit 5 --search "$TICKET_ID in:title" --json number 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
 
             if [ "$PR_COUNT" -eq 0 ]; then
-              echo "🚨 ZOMBIE: $TICKET_ID — $TITLE (no PR found)"
+              echo "ZOMBIE: $TICKET_ID — $TITLE (no PR found)"
               ZOMBIE_COUNT=$((ZOMBIE_COUNT + 1))
 
-              # Post warning comment on the Linear ticket
-              COMMENT_BODY="🚨 **Review drift detected** — this ticket is in 'In Review' but no GitHub PR references \`${TICKET_ID}\` in its title.\n\nPer \`feedback_linear_in_review.md\`: 'In Review' requires an open PR. Either:\n1. Create a PR and reference \`${TICKET_ID}\` in the title\n2. Move back to 'Todo' if work hasn't started\n3. Move to 'Done' if the work was completed via another ticket's PR\n\n*Auto-detected by review-drift-detector workflow*"
+              # Post warning comment via Linear GraphQL (use jq for safe JSON encoding)
+              COMMENT_TEXT="Review drift detected — this ticket is in 'In Review' but no GitHub PR references ${TICKET_ID} in its title.
 
-              ISSUE_UUID=$(echo "$ISSUES" | jq -r --arg id "$TICKET_ID" '.data.issues.nodes[] | select(.identifier == $id) | .id')
+Per feedback_linear_in_review.md: 'In Review' requires an open PR. Either:
+1. Create a PR and reference ${TICKET_ID} in the title
+2. Move back to 'Todo' if work hasn't started
+3. Move to 'Done' if the work was completed via another ticket's PR
 
-              if [ -n "$ISSUE_UUID" ]; then
-                COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_UUID"'", body: "'"$COMMENT_BODY"'" }) { success } }'
-                curl -s -X POST https://api.linear.app/graphql \
-                  -H "Authorization: $LINEAR_API_KEY" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
-                echo "  → Warning comment posted on $TICKET_ID"
-              fi
+Auto-detected by review-drift-detector workflow"
+
+              MUTATION=$(jq -n --arg iid "$ISSUE_UUID" --arg body "$COMMENT_TEXT" '{
+                query: "mutation($iid: String!, $body: String!) { commentCreate(input: { issueId: $iid, body: $body }) { success } }",
+                variables: { iid: $iid, body: $body }
+              }')
+
+              curl -sf --max-time 10 -X POST https://api.linear.app/graphql \
+                -H "Authorization: $LINEAR_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "$MUTATION" > /dev/null 2>/dev/null || echo "::warning::Failed to post comment on $TICKET_ID"
+
+              echo "  Warning comment posted on $TICKET_ID"
             else
-              echo "✅ $TICKET_ID — $PR_COUNT PR(s) found"
+              echo "OK: $TICKET_ID — $PR_COUNT PR(s) found"
             fi
-          done
+          done < "$TMPFILE"
+
+          rm -f "$TMPFILE"
 
           echo ""
           echo "=== Summary ==="
           echo "Total In Review: $COUNT"
+          echo "Zombies (no PR): $ZOMBIE_COUNT"
           echo "Check complete."

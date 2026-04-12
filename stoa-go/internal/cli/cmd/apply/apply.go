@@ -4,6 +4,8 @@ package apply
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -30,9 +32,15 @@ func NewApplyCmd() *cobra.Command {
 The resource will be created if it doesn't exist, or updated if it does.
 This command is idempotent and safe to run multiple times.
 
+Supported kinds: API, Tenant, Gateway, Subscription, Consumer, Contract,
+MCPServer, ServiceAccount, Plan, Webhook.
+
 Examples:
   # Apply an API definition
   stoactl apply -f api.yaml
+
+  # Apply a consumer
+  stoactl apply -f consumer.yaml
 
   # Apply multiple resources from a directory
   stoactl apply -f ./manifests/
@@ -127,10 +135,98 @@ func applyFile(c *client.Client, path string) error {
 		if err := c.CreateOrUpdateAPI(&resource); err != nil {
 			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
 		}
+	case "Tenant":
+		if err := applyGeneric(c, "/v1/tenants", resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "Gateway":
+		if err := applyGeneric(c, "/v1/admin/gateways", resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "Subscription":
+		if err := applyGeneric(c, "/v1/subscriptions", resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "Consumer":
+		tenant := tenantFromResource(c, resource)
+		if err := applyGeneric(c, fmt.Sprintf("/v1/consumers/%s", tenant), resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "Contract":
+		tenant := tenantFromResource(c, resource)
+		if err := applyGeneric(c, fmt.Sprintf("/v1/tenants/%s/contracts", tenant), resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "MCPServer":
+		spec, _ := resource.Spec.(map[string]any)
+		displayName, _ := spec["displayName"].(string)
+		description, _ := spec["description"].(string)
+		if _, err := c.CreateMCPServer(resource.Metadata.Name, displayName, description); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "ServiceAccount":
+		if err := applyGeneric(c, "/v1/service-accounts", resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "Plan":
+		tenant := tenantFromResource(c, resource)
+		if err := applyGeneric(c, fmt.Sprintf("/v1/plans/%s", tenant), resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
+	case "Webhook":
+		tenant := tenantFromResource(c, resource)
+		if err := applyGeneric(c, fmt.Sprintf("/v1/tenants/%s/webhooks", tenant), resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
 	default:
 		return fmt.Errorf("unsupported resource kind: %s", resource.Kind)
 	}
 
 	output.Success("%s/%s configured", resource.Kind, resource.Metadata.Name)
 	return nil
+}
+
+// applyGeneric sends a POST to the given path with the resource spec merged with metadata.
+// The API endpoint is expected to handle create-or-update semantics.
+func applyGeneric(c *client.Client, path string, resource types.Resource) error {
+	body := buildApplyBody(resource)
+
+	resp, err := c.Do("POST", path, body)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+
+	respBody, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+}
+
+// buildApplyBody merges resource metadata.name into the spec map for the API payload.
+func buildApplyBody(resource types.Resource) map[string]any {
+	body := make(map[string]any)
+	body["name"] = resource.Metadata.Name
+
+	if specMap, ok := resource.Spec.(map[string]any); ok {
+		for k, v := range specMap {
+			body[k] = v
+		}
+	}
+
+	if len(resource.Metadata.Labels) > 0 {
+		body["labels"] = resource.Metadata.Labels
+	}
+
+	return body
+}
+
+// tenantFromResource returns the tenant from metadata.namespace or falls back to the client's configured tenant.
+func tenantFromResource(c *client.Client, resource types.Resource) string {
+	if resource.Metadata.Namespace != "" {
+		return resource.Metadata.Namespace
+	}
+	return c.TenantID()
 }

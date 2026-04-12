@@ -303,3 +303,112 @@ type AuditListResponse struct {
 	PageSize int          `json:"page_size"`
 	HasMore  bool         `json:"has_more"`
 }
+
+// ---- Consumer Types (CAB-2053) ----
+
+// Consumer represents a consumer from the STOA API
+type Consumer struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	TenantID    string `json:"tenant_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
+// ConsumerListResponse represents the response from listing consumers
+type ConsumerListResponse struct {
+	Items []Consumer `json:"items"`
+	Total int        `json:"total"`
+}
+
+// ---- Contract Types (CAB-2053) ----
+
+// Contract represents a Universal API Contract from the STOA API
+type Contract struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Version     string `json:"version,omitempty"`
+	Status      string `json:"status,omitempty"`
+	TenantID    string `json:"tenant_id,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
+// ContractListResponse represents the response from listing contracts
+type ContractListResponse struct {
+	Items []Contract `json:"items"`
+	Total int        `json:"total"`
+}
+
+// ---- Service Account Types (CAB-2053) ----
+
+// ServiceAccount represents a service account from the STOA API
+type ServiceAccount struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	ClientID  string `json:"client_id,omitempty"`
+	Status    string `json:"status,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// ---- Environment Types (CAB-2053) ----
+
+// Environment represents an environment from the STOA API
+type Environment struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Type        string `json:"type,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Status      string `json:"status,omitempty"`
+}
+
+// EnvironmentListResponse represents the response from listing environments
+type EnvironmentListResponse struct {
+	Items []Environment `json:"items"`
+}
+
+// ---- Plan Types (CAB-2053) ----
+
+// Plan represents a subscription plan from the STOA API
+type Plan struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	Description string `json:"description,omitempty"`
+	TenantID    string `json:"tenant_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
+// PlanListResponse represents the response from listing plans
+type PlanListResponse struct {
+	Items []Plan `json:"items"`
+	Total int    `json:"total"`
+}
+
+// ---- Webhook Types (CAB-2053) ----
+
+// Webhook represents a webhook configuration from the STOA API
+type Webhook struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	URL       string   `json:"url"`
+	Events    []string `json:"events,omitempty"`
+	TenantID  string   `json:"tenant_id,omitempty"`
+	Enabled   bool     `json:"enabled"`
+	CreatedAt string   `json:"created_at,omitempty"`
+}
+
+// WebhookListResponse represents the response from listing webhooks
+type WebhookListResponse struct {
+	Items []Webhook `json:"items"`
+	Total int       `json:"total"`
+}

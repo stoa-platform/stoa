@@ -95,7 +95,7 @@ jobs:
       attestations: write
     secrets: inherit
 
-  # === GitOps Deploy: dispatch to stoa-infra → ArgoCD syncs ===
+  # === GitOps Deploy to Dev: dispatch to stoa-infra → ArgoCD syncs ===
   deploy:
     needs: docker
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -103,31 +103,41 @@ jobs:
     with:
       component: stoa-portal
       image-tag: ${{ needs.docker.outputs.image-tag }}
-      environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://portal.gostoa.dev
-      verify-endpoint: https://portal.gostoa.dev
+      environment: dev
+      environment-url: https://dev-portal.gostoa.dev
+      verify-endpoint: https://dev-portal.gostoa.dev
     secrets: inherit
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
-  # Full E2E with personas runs nightly (e2e-nightly.yml)
   smoke-test:
     needs: deploy
     if: needs.deploy.result == 'success'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: stoa-portal
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: dev
     permissions:
       contents: read
 
+  # === Promote to Prod: requires manual approval via GitHub Environment ===
+  promote-to-prod:
+    needs: [docker, smoke-test]
+    if: needs.smoke-test.result == 'success'
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      component: stoa-portal
+      image-name: portal
+      sha: ${{ github.sha }}
+    secrets: inherit
+
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test]
+    needs: [ci, docker, deploy, smoke-test, promote-to-prod]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:
       component: STOA Portal
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: dev
       ci-result: ${{ needs.ci.outputs.test-result }}
       deploy-result: ${{ needs.deploy.result }}
       smoke-result: ${{ needs.smoke-test.result }}

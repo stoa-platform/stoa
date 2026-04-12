@@ -46,7 +46,7 @@ func TestNewGetCmd_HasOutputFlag(t *testing.T) {
 	cmd := NewGetCmd()
 	flag := cmd.PersistentFlags().Lookup("output")
 	if flag == nil {
-		t.Error("get command missing --output persistent flag")
+		t.Fatal("get command missing --output persistent flag")
 	}
 	if flag.DefValue != "table" {
 		t.Errorf("--output default = %q, want %q", flag.DefValue, "table")

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/contract.schema.json",
+  "title": "STOA Contract Resource",
+  "description": "Schema for stoactl apply -f with kind: Contract",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Contract",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "description": "Request to create a new contract.",
+      "example": {
+        "description": "API for processing payments",
+        "display_name": "Payment Service API",
+        "name": "payment-service",
+        "openapi_spec_url": "https://specs.example.com/payment-service/openapi.yaml",
+        "version": "2.0.0"
+      },
+      "properties": {
+        "name": {
+          "description": "Unique contract name",
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human-friendly name",
+          "title": "Display Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Contract description",
+          "title": "Description"
+        },
+        "version": {
+          "default": "1.0.0",
+          "description": "Contract version",
+          "maxLength": 50,
+          "title": "Version",
+          "type": "string"
+        },
+        "openapi_spec_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "URL to OpenAPI spec",
+          "title": "Openapi Spec Url"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ContractCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

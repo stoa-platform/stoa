@@ -149,6 +149,62 @@ metadata:
 	}
 }
 
+func TestApplyFile_UnsupportedAPIVersion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad-version.yaml")
+	content := `apiVersion: unknown.io/v99
+kind: Tenant
+metadata:
+  name: test
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := applyFile(nil, path)
+	if err == nil {
+		t.Error("applyFile() with unsupported apiVersion should return error")
+	}
+	if err != nil && !contains(err.Error(), "unsupported apiVersion") {
+		t.Errorf("error = %q, want it to contain 'unsupported apiVersion'", err.Error())
+	}
+}
+
+func TestApplyFile_CanonicalAPIVersion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "v1beta1.yaml")
+	content := `apiVersion: gostoa.dev/v1beta1
+kind: UnknownThing
+metadata:
+  name: test
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should pass apiVersion validation but fail on unsupported kind
+	err := applyFile(nil, path)
+	if err == nil {
+		t.Error("applyFile() should fail on unsupported kind")
+	}
+	if err != nil && contains(err.Error(), "unsupported apiVersion") {
+		t.Error("canonical v1beta1 should not trigger apiVersion error")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchSubstr(s, substr)
+}
+
+func searchSubstr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRunApply_MissingFile(t *testing.T) {
 	filePath = "/nonexistent/path/file.yaml"
 	dryRun = false

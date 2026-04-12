@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/mcpserver.schema.json",
+  "title": "STOA MCPServer Resource",
+  "description": "Schema for stoactl apply -f with kind: MCPServer",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "MCPServer",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "$defs": {
+        "MCPServerCategoryEnum": {
+          "description": "MCP Server category for API responses.",
+          "enum": [
+            "platform",
+            "tenant",
+            "public"
+          ],
+          "title": "MCPServerCategoryEnum",
+          "type": "string"
+        },
+        "MCPServerVisibility": {
+          "description": "Visibility configuration for MCP Servers.",
+          "properties": {
+            "roles": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Required roles to see this server",
+              "title": "Roles"
+            },
+            "exclude_roles": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Roles that cannot see this server",
+              "title": "Exclude Roles"
+            },
+            "public": {
+              "default": true,
+              "description": "If true, visible to all authenticated users",
+              "title": "Public",
+              "type": "boolean"
+            }
+          },
+          "title": "MCPServerVisibility",
+          "type": "object"
+        }
+      },
+      "description": "Schema for creating a new MCP Server (admin only).",
+      "example": {
+        "category": "public",
+        "description": "Get weather data from various sources",
+        "display_name": "Weather API",
+        "name": "weather-api",
+        "requires_approval": false,
+        "visibility": {
+          "public": true
+        }
+      },
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "display_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon"
+        },
+        "category": {
+          "$ref": "#/$defs/MCPServerCategoryEnum",
+          "default": "public"
+        },
+        "tenant_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tenant Id"
+        },
+        "visibility": {
+          "$ref": "#/$defs/MCPServerVisibility",
+          "default": {
+            "roles": null,
+            "exclude_roles": null,
+            "public": true
+          }
+        },
+        "requires_approval": {
+          "default": false,
+          "title": "Requires Approval",
+          "type": "boolean"
+        },
+        "auto_approve_roles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Approve Roles"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "maxLength": 50,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        },
+        "documentation_url": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Documentation Url"
+        }
+      },
+      "required": [
+        "name",
+        "display_name",
+        "description"
+      ],
+      "title": "MCPServerCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

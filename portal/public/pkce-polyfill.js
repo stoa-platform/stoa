@@ -24,7 +24,8 @@
 
   // Defense-in-depth: re-check guards even though index.html already checked
   if (window.isSecureContext) return;
-  if (!/\.(local|localhost)(:\d+)?$/.test(location.hostname)) return;
+  var h = location.hostname;
+  if (!(h.endsWith('.local') || h.endsWith('.localhost') || h === 'localhost')) return;
 
   // SHA-256 constants (first 32 bits of fractional parts of cube roots of first 64 primes)
   var K = [

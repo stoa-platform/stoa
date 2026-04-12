@@ -19,8 +19,11 @@
     </script>
     <!-- PKCE polyfill: loaded only on non-secure local dev origins (see public/pkce-polyfill.js) -->
     <script>
-      if(!window.isSecureContext && /\.(local|localhost)(:\d+)?$/.test(location.hostname)){
-        var s=document.createElement('script');s.src='/pkce-polyfill.js';document.head.appendChild(s);
+      if(!window.isSecureContext){
+        var h=location.hostname;
+        if(h.endsWith('.local')||h.endsWith('.localhost')||h==='localhost'){
+          var s=document.createElement('script');s.src='/pkce-polyfill.js';document.head.appendChild(s);
+        }
       }
     </script>
     <style>

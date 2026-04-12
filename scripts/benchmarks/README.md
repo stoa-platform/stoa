@@ -17,7 +17,7 @@ docker compose up -d
 ./scripts/benchmarks/load-test.sh --target http://localhost:8080
 
 # Against VPS deployment
-./scripts/benchmarks/load-test.sh --target http://51.83.45.13:8080 --duration 60
+./scripts/benchmarks/load-test.sh --target http://<VPS_IP>:8080 --duration 60
 ```
 
 ## What It Tests

@@ -86,7 +86,7 @@ CADDYEOF
 sudo systemctl restart caddy"
 
 echo "=== Phase 12: Open K3s API for ArgoCD (OVH nodes) ==="
-for ovh_ip in 91.134.108.238 91.134.108.168 91.134.108.210; do
+for ovh_ip in ${OVH_NODE_IPS:?Set OVH_NODE_IPS (space-separated)}; do
   $SSH@$CP_IP "sudo ufw allow from $ovh_ip to any port 6443 comment 'ArgoCD OVH'"
 done
 

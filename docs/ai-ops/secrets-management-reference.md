@@ -121,7 +121,7 @@ See `docs/runbooks/multi-device-access.md` for the full runbook.
 
 | Component | Detail |
 |-----------|--------|
-| Host | OVH infisical-vps (`213.199.45.108`) |
+| Host | OVH infisical-vps (`<INFISICAL_VPS_IP>`) |
 | Path | `/opt/infisical/` |
 | Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
 | Ingress | Caddy (auto-TLS via Let's Encrypt) |

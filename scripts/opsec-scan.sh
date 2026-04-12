@@ -52,6 +52,13 @@ case "$DIFF_MODE" in
     ;;
 esac
 
+# Filter out self-referencing files (config files that contain the patterns as rules)
+EXCLUDED_PATHS='.gitleaks.toml|scripts/opsec-scan.sh|\.claude/rules/|\.claude/hooks/'
+DIFF_CONTENT=$(echo "$DIFF_CONTENT" | awk -v excl="$EXCLUDED_PATHS" '
+  /^diff --git/ { skip=0; if (match($0, excl)) skip=1 }
+  !skip { print }
+')
+
 # Only scan added lines (lines starting with +, not ++)
 ADDED_LINES=$(echo "$DIFF_CONTENT" | grep '^+[^+]' | sed 's/^+//' || true)
 

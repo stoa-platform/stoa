@@ -48,6 +48,11 @@ paths = [
   # Alembic historical migrations (IPs documented with warnings, cannot rewrite)
   '''control-plane-api/alembic/versions/057_.*''',
   '''control-plane-api/alembic/versions/079_.*''',
+  # OpSec scanner itself (contains detection patterns as regex literals)
+  '''scripts/opsec-scan\.sh''',
+  # State files (contain IP references in text, not actual secrets)
+  '''memory\.md''',
+  '''plan\.md''',
 ]
 
 regexes = [

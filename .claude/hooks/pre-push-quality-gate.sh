@@ -63,7 +63,19 @@ while IFS= read -r f; do
   esac
 done <<< "$CHANGED_FILES"
 
-# Docs-only changes skip quality gates
+# --- OpSec scan (ALWAYS runs, even docs-only — sensitive content can be in .md) ---
+if [ -x "$REPO_ROOT/scripts/opsec-scan.sh" ] && [ "${DISABLE_OPSEC_SCAN:-}" != "1" ]; then
+  echo "⏳ [opsec] scanning for sensitive content..." >&2
+  if ! "$REPO_ROOT/scripts/opsec-scan.sh" 2>&1 >&2; then
+    echo "" >&2
+    echo "🚫 OpSec scan BLOCKED push — fix findings above" >&2
+    echo "Kill switch: DISABLE_OPSEC_SCAN=1" >&2
+    exit 2
+  fi
+  echo "✅ [opsec] clean" >&2
+fi
+
+# Docs-only changes skip quality gates (but NOT opsec — already ran above)
 if [ "$ONLY_DOCS" = "true" ]; then
   exit 0
 fi

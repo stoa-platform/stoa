@@ -51,11 +51,11 @@ VAULT_TOKEN="${VAULT_TOKEN:-}"
 VPS_SSH_KEY="${VPS_SSH_KEY:-$HOME/.ssh/id_ed25519_stoa}"
 VPS_SSH_USER="${VPS_SSH_USER:-debian}"
 
-# VPS hosts
-VPS_N8N="51.254.139.205"
-VPS_KONG="51.83.45.13"
-VPS_GRAVITEE="54.36.209.237"
-VPS_WEBMETHODS="51.255.201.17"
+# VPS hosts — sourced from env vars (see stoa-infra/docs/carto/dns-inventory.md)
+VPS_N8N="${VPS_N8N_IP:?Set VPS_N8N_IP}"
+VPS_KONG="${VPS_KONG_IP:?Set VPS_KONG_IP}"
+VPS_GRAVITEE="${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}"
+VPS_WEBMETHODS="${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}"
 
 # Cloudflare Access headers (empty = no CF Access, backward compatible)
 CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
@@ -603,8 +603,8 @@ rotate_arena_token() {
 
   echo ""
   echo -e "  ${YELLOW}Manual steps required:${NC}"
-  echo "  1. SSH to VPS (51.83.45.13):"
-  echo "     ssh -i ~/.ssh/id_ed25519_stoa debian@51.83.45.13"
+  echo "  1. SSH to VPS (\${VPS_KONG_IP}):"
+  echo "     ssh -i ~/.ssh/id_ed25519_stoa debian@\${VPS_KONG_IP}"
   echo "  2. Update ~/stoa/docker-compose.yml:"
   echo "     STOA_ADMIN_API_TOKEN: \"${new_token}\""
   echo "  3. Restart: cd ~/stoa && docker compose up -d"

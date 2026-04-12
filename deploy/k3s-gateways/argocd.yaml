@@ -7,7 +7,7 @@
 #   2. Cluster secret created:
 #      kubectl create secret generic k3s-gateways-cluster -n argocd \
 #        --from-literal=name=k3s-gateways \
-#        --from-literal=server=https://144.91.73.37:6443 \
+#        --from-literal=server=https://<K3S_CP_IP>:6443 \
 #        --from-literal=config='<JSON with tlsClientConfig>' \
 #        --dry-run=client -o yaml | \
 #        kubectl label --local -f - argocd.argoproj.io/secret-type=cluster -o yaml | \
@@ -25,7 +25,7 @@ spec:
     targetRevision: main
     path: k8s/gateways/overlays/dev
   destination:
-    server: https://144.91.73.37:6443
+    server: https://<K3S_CP_IP>:6443
     namespace: gateway-dev
   syncPolicy:
     automated:
@@ -46,7 +46,7 @@ spec:
     targetRevision: main
     path: k8s/gateways/overlays/staging
   destination:
-    server: https://144.91.73.37:6443
+    server: https://<K3S_CP_IP>:6443
     namespace: gateway-staging
   syncPolicy:
     automated:

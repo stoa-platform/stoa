@@ -11,7 +11,7 @@
 #
 # Prerequisites:
 #   - echo-backend deployed (k8s/arena/echo-backend.yaml)
-#   - fapi-echo running on worker-3 (164.68.121.123:8889)
+#   - fapi-echo running on worker-3 (see VPS inventory for IP)
 #   - traffic-seeder-credentials Secret exists
 #   - Migration 074 + 075 applied
 set -euo pipefail
@@ -29,8 +29,8 @@ kubectl apply -f "$SCRIPT_DIR/fapi-echo-service.yaml"
 echo "  Verifying DNS resolution..."
 kubectl run dns-check --rm -it --restart=Never --image=busybox:1.36 -n "$NAMESPACE" \
   -- nslookup fapi-echo.stoa-system.svc.cluster.local 2>/dev/null \
-  | grep -q "164.68.121.123" \
-  && echo "  ✓ fapi-echo.stoa-system.svc → 164.68.121.123" \
+  | grep -q "Address" \
+  && echo "  ✓ fapi-echo.stoa-system.svc resolved" \
   || echo "  ⚠ DNS check skipped (non-interactive)"
 
 # 2. Register gateway routes

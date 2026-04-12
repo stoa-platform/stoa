@@ -270,7 +270,33 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
 
       - name: Run Gitleaks
-        run: gitleaks detect --source . --config .gitleaks.toml --verbose --redact
+        run: |
+          # Scan only the PR diff (new commits), not full history.
+          # Full-history scan triggers false positives on old commits
+          # that contained IPs/passwords before the OpSec cleanup (CAB-2057).
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            gitleaks detect --source . --config .gitleaks.toml --verbose --redact \
+              --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            gitleaks detect --source . --config .gitleaks.toml --verbose --redact
+          fi
+
+  # ==========================================================================
+  # 6b. OpSec Scan (infrastructure IPs, financial data, client refs)
+  # ==========================================================================
+  opsec-scan:
+    name: OpSec Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Run OpSec scanner
+        run: |
+          chmod +x scripts/opsec-scan.sh
+          scripts/opsec-scan.sh --diff origin/main...HEAD
 
   # ==========================================================================
   # 7. Container Scan (Trivy image)

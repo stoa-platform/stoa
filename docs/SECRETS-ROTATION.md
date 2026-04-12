@@ -33,7 +33,7 @@ Infisical remains as dual-write target during transition. ESO syncs from Vault, 
 | Component | Detail |
 |-----------|--------|
 | URL | `https://hcvault.gostoa.dev` |
-| Host | OVH spare-gra-vps (`51.255.193.129`) |
+| Host | OVH spare-gra-vps (`<VAULT_VPS_IP>`) |
 | Path | `/opt/vault/` |
 | Stack | HashiCorp Vault 1.18+ (binary) + Caddy (TLS) |
 | Storage | File backend (`/opt/vault/data/`) |
@@ -45,7 +45,7 @@ Infisical remains as dual-write target during transition. ESO syncs from Vault, 
 | Component | Detail |
 |-----------|--------|
 | URL | `https://vault.gostoa.dev` |
-| Host | OVH infisical-vps (`213.199.45.108`) |
+| Host | OVH infisical-vps (`<INFISICAL_VPS_IP>`) |
 | Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
 | Project | `stoa-infra` (`97972ffc-990b-4d28-9c4d-0664d217f03b`) |
 | Status | **Dual-write target** — to be decommissioned after 30-day transition |
@@ -71,11 +71,11 @@ Infisical remains as dual-write target during transition. ESO syncs from Vault, 
 
 | Vault Path | Secret | VPS | Rotation | Script |
 |------------|--------|-----|----------|--------|
-| `vps/webmethods` | `ADMIN_PASSWORD` | 51.255.201.17 | 90 days | `rotate-secrets.sh webmethods-admin` |
-| `vps/kong` | `KONG_ADMIN_TOKEN` | 51.83.45.13 | 90 days | `rotate-secrets.sh kong-admin` |
-| `vps/gravitee` | `ADMIN_PASSWORD` | 54.36.209.237 | 90 days | `rotate-secrets.sh gravitee-admin` |
-| `vps/n8n` | `POSTGRES_PASSWORD` | 51.254.139.205 | 90 days | `rotate-secrets.sh n8n-db` |
-| `vps/arena` | `ADMIN_API_TOKEN` | 51.83.45.13 | 90 days | `rotate-secrets.sh arena-token` |
+| `vps/webmethods` | `ADMIN_PASSWORD` | <WEBMETHODS_VPS_IP> | 90 days | `rotate-secrets.sh webmethods-admin` |
+| `vps/kong` | `KONG_ADMIN_TOKEN` | <KONG_VPS_IP> | 90 days | `rotate-secrets.sh kong-admin` |
+| `vps/gravitee` | `ADMIN_PASSWORD` | <GRAVITEE_VPS_IP> | 90 days | `rotate-secrets.sh gravitee-admin` |
+| `vps/n8n` | `POSTGRES_PASSWORD` | <N8N_VPS_IP> | 90 days | `rotate-secrets.sh n8n-db` |
+| `vps/arena` | `ADMIN_API_TOKEN` | <KONG_VPS_IP> | 90 days | `rotate-secrets.sh arena-token` |
 
 ### Tier 2 — E2E Personas (Test Users)
 

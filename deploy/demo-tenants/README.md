@@ -63,7 +63,7 @@ python scripts/seed-demo-data.py
 CONTROL_PLANE_URL=https://api.gostoa.dev \
 KEYCLOAK_URL=https://auth.gostoa.dev \
 ADMIN_USERNAME=e2e-admin \
-ADMIN_PASSWORD=Admin123! \
+ADMIN_PASSWORD=<PASSWORD> \
 python scripts/seed-demo-data.py
 ```
 
@@ -110,7 +110,7 @@ TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-con
   -d "grant_type=password" \
   -d "client_id=stoa-portal" \
   -d "username=e2e-tenant-admin" \
-  -d "password=Admin123!" | jq -r '.access_token')
+  -d "password=<PASSWORD>" | jq -r '.access_token')
 
 # List tools (should only see team-alpha tools)
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mcp/v1/tools | jq '.tools[].name'

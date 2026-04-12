@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./verify-hegemon-ssh.sh              # Test all workers
-#   ./verify-hegemon-ssh.sh 164.68.121.83  # Test specific worker
+#   ./verify-hegemon-ssh.sh "$HEGEMON_W1_IP"  # Test specific worker
 #   ./verify-hegemon-ssh.sh --fix        # Attempt auto-fix (requires worker-3 access)
 #
 # Exit codes:
@@ -15,13 +15,14 @@
 
 set -e
 
-# Worker inventory
+# Worker inventory — IPs sourced from env vars (see stoa-infra/docs/carto/dns-inventory.md)
+# Override any individual IP via env: HEGEMON_W1_IP=x.x.x.x ./verify-hegemon-ssh.sh
 declare -A WORKERS=(
-  [worker-1]="164.68.121.83"
-  [worker-2]="164.68.121.124"
-  [worker-3]="164.68.121.123"
-  [worker-4]="164.68.121.68"
-  [worker-5]="164.68.121.105"
+  [worker-1]="${HEGEMON_W1_IP:?Set HEGEMON_W1_IP}"
+  [worker-2]="${HEGEMON_W2_IP:?Set HEGEMON_W2_IP}"
+  [worker-3]="${HEGEMON_W3_IP:?Set HEGEMON_W3_IP}"
+  [worker-4]="${HEGEMON_W4_IP:?Set HEGEMON_W4_IP}"
+  [worker-5]="${HEGEMON_W5_IP:?Set HEGEMON_W5_IP}"
 )
 
 SSH_KEY="${STOA_SSH_KEY:=$HOME/.ssh/id_ed25519_stoa}"
@@ -74,7 +75,7 @@ Examples:
   $(basename "$0")
 
   # Test specific worker
-  $(basename "$0") 164.68.121.83
+  $(basename "$0") "\$HEGEMON_W1_IP"
 
   # Verbose output
   $(basename "$0") --verbose

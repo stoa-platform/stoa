@@ -10,15 +10,15 @@
 
 ## 1. Problem Statement
 
-4 of 5 Contabo HEGEMON workers lost SSH access due to missing or stale SSH public keys in `~/.ssh/authorized_keys`. Only worker-3 (164.68.121.123) is reachable via the deployment key.
+4 of 5 Contabo HEGEMON workers lost SSH access due to missing or stale SSH public keys in `~/.ssh/authorized_keys`. Only worker-3 (<WORKER_3_IP>) is reachable via the deployment key.
 
 | Worker | IP | SSH Status | Root Cause |
 |--------|----|----|-----------|
-| worker-1 | 164.68.121.83 | ❌ pubkey + password rejected | Key not deployed / re-imaged |
-| worker-2 | 164.68.121.124 | ❌ timeout / too many auth failures | Key not deployed / re-imaged |
-| worker-3 | 164.68.121.123 | ✅ reachable | Key deployed correctly |
-| worker-4 | 164.68.121.68 | ❌ pubkey rejected, refused | Key not deployed / re-imaged |
-| worker-5 | 164.68.121.105 | ❌ pubkey + password rejected | Key not deployed / re-imaged |
+| worker-1 | <WORKER_1_IP> | ❌ pubkey + password rejected | Key not deployed / re-imaged |
+| worker-2 | <WORKER_2_IP> | ❌ timeout / too many auth failures | Key not deployed / re-imaged |
+| worker-3 | <WORKER_3_IP> | ✅ reachable | Key deployed correctly |
+| worker-4 | <WORKER_4_IP> | ❌ pubkey rejected, refused | Key not deployed / re-imaged |
+| worker-5 | <WORKER_5_IP> | ❌ pubkey + password rejected | Key not deployed / re-imaged |
 
 ### Business Impact
 
@@ -42,7 +42,7 @@
 
 ```bash
 # Test SSH connectivity to all workers
-for ip in 164.68.121.83 164.68.121.124 164.68.121.123 164.68.121.68 164.68.121.105; do
+for ip in <WORKER_1_IP> <WORKER_2_IP> <WORKER_3_IP> <WORKER_4_IP> <WORKER_5_IP>; do
   echo "=== Testing $ip ==="
   ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
     -i ~/.ssh/id_ed25519_stoa \
@@ -82,7 +82,7 @@ SSH public key recovery on workers without existing SSH access **requires manual
 
 1. Go to [https://my.contabo.com](https://my.contabo.com)
 2. Log in with admin credentials
-3. Navigate to **VPS** → **Manage** → Select the first unreachable worker (164.68.121.83)
+3. Navigate to **VPS** → **Manage** → Select the first unreachable worker (<WORKER_1_IP>)
 4. Click **VNC Console** or **Remote Console**
 
 ### Step 2: Authenticate via VNC Console
@@ -143,10 +143,10 @@ cat /home/hegemon/.ssh/authorized_keys | wc -l  # Should show 2 lines
 ### Repeat for All 4 Workers
 
 Execute Steps 1-5 for each unreachable worker:
-- worker-1 (164.68.121.83)
-- worker-2 (164.68.121.124)
-- worker-4 (164.68.121.68)
-- worker-5 (164.68.121.105)
+- worker-1 (<WORKER_1_IP>)
+- worker-2 (<WORKER_2_IP>)
+- worker-4 (<WORKER_4_IP>)
+- worker-5 (<WORKER_5_IP>)
 
 ---
 
@@ -156,7 +156,7 @@ Execute Steps 1-5 for each unreachable worker:
 
 ```bash
 # Verify all workers are now reachable
-for ip in 164.68.121.83 164.68.121.124 164.68.121.123 164.68.121.68 164.68.121.105; do
+for ip in <WORKER_1_IP> <WORKER_2_IP> <WORKER_3_IP> <WORKER_4_IP> <WORKER_5_IP>; do
   echo "=== Testing $ip ==="
   ssh -i ~/.ssh/id_ed25519_stoa hegemon@$ip "whoami && uptime" || echo "FAILED"
 done
@@ -170,7 +170,7 @@ For each worker, verify `hegemon-agent.service` is **disabled**:
 
 ```bash
 # Check on each worker
-ssh -i ~/.ssh/id_ed25519_stoa hegemon@164.68.121.83 \
+ssh -i ~/.ssh/id_ed25519_stoa hegemon@<WORKER_1_IP> \
   "systemctl is-enabled hegemon-agent.service"
 ```
 
@@ -178,7 +178,7 @@ ssh -i ~/.ssh/id_ed25519_stoa hegemon@164.68.121.83 \
 
 **If it shows `enabled`**:
 ```bash
-ssh -i ~/.ssh/id_ed25519_stoa hegemon@164.68.121.83 \
+ssh -i ~/.ssh/id_ed25519_stoa hegemon@<WORKER_1_IP> \
   "sudo systemctl disable hegemon-agent.service"
 ```
 
@@ -186,7 +186,7 @@ ssh -i ~/.ssh/id_ed25519_stoa hegemon@164.68.121.83 \
 
 ```bash
 # Verify authorized_keys file is correct
-ssh -i ~/.ssh/id_ed25519_stoa hegemon@164.68.121.83 \
+ssh -i ~/.ssh/id_ed25519_stoa hegemon@<WORKER_1_IP> \
   "cat ~/.ssh/authorized_keys"
 ```
 

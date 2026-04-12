@@ -28,7 +28,7 @@
 set -euo pipefail
 
 CF_API_TOKEN="${CF_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
-ZONE_ID="748bf095e4882ca8e46f21837067ced8"
+ZONE_ID="${CF_ZONE_ID:-748bf095e4882ca8e46f21837067ced8}"
 CF_API="https://api.cloudflare.com/client/v4"
 DRY_RUN=false
 STATUS_ONLY=false
@@ -39,22 +39,27 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# --- Gateway IPs (sourced from env vars — see stoa-infra/docs/carto/dns-inventory.md) ---
+VPS_KONG_IP="${VPS_KONG_IP:?Set VPS_KONG_IP}"
+VPS_GRAVITEE_IP="${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}"
+VPS_WEBMETHODS_IP="${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}"
+
 # --- Gateway inventory ---
 # Format: "subdomain|ip|comment"
 RECORDS=(
   # Gateway admin APIs (raw IP → proper DNS)
-  "kong|51.83.45.13|Kong DB-less admin API (:8001 admin, :8000 proxy)"
-  "gravitee|54.36.209.237|Gravitee APIM v4 mgmt API (:8083 mgmt, :8082 proxy)"
+  "kong|${VPS_KONG_IP}|Kong DB-less admin API (:8001 admin, :8000 proxy)"
+  "gravitee|${VPS_GRAVITEE_IP}|Gravitee APIM v4 mgmt API (:8083 mgmt, :8082 proxy)"
 
   # stoa-connect agents (MCP bridge, port :9100)
-  "connect-kong|51.83.45.13|stoa-connect on Kong VPS (:9100)"
-  "connect-gravitee|54.36.209.237|stoa-connect on Gravitee VPS (:9100)"
-  "connect-webmethods|51.255.201.17|stoa-connect on webMethods VPS (:9100)"
+  "connect-kong|${VPS_KONG_IP}|stoa-connect on Kong VPS (:9100)"
+  "connect-gravitee|${VPS_GRAVITEE_IP}|stoa-connect on Gravitee VPS (:9100)"
+  "connect-webmethods|${VPS_WEBMETHODS_IP}|stoa-connect on webMethods VPS (:9100)"
 
   # stoa-link sidecars (MCP proxy, port :9200)
-  "link-kong|51.83.45.13|stoa-link sidecar Kong VPS (:9200)"
-  "link-gravitee|54.36.209.237|stoa-link sidecar Gravitee VPS (:9200)"
-  "link-webmethods|51.255.201.17|stoa-link sidecar webMethods VPS (:9200)"
+  "link-kong|${VPS_KONG_IP}|stoa-link sidecar Kong VPS (:9200)"
+  "link-gravitee|${VPS_GRAVITEE_IP}|stoa-link sidecar Gravitee VPS (:9200)"
+  "link-webmethods|${VPS_WEBMETHODS_IP}|stoa-link sidecar webMethods VPS (:9200)"
 )
 
 usage() {

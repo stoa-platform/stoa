@@ -36,9 +36,9 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
 REALM_NAME="demo-org-${REALM}"
 
 case "${REALM}" in
-  alpha) CLIENT_SECRET="alpha-demo-secret" ;;
-  beta)  CLIENT_SECRET="beta-demo-secret" ;;
-  gamma) CLIENT_SECRET="gamma-demo-secret" ;;
+  alpha) CLIENT_SECRET="${FEDERATION_SECRET_ALPHA:?Set FEDERATION_SECRET_ALPHA}" ;;
+  beta)  CLIENT_SECRET="${FEDERATION_SECRET_BETA:?Set FEDERATION_SECRET_BETA}" ;;
+  gamma) CLIENT_SECRET="${FEDERATION_SECRET_GAMMA:?Set FEDERATION_SECRET_GAMMA}" ;;
 esac
 
 echo -e "${CYAN}Token Exchange (RFC 8693)${NC}"

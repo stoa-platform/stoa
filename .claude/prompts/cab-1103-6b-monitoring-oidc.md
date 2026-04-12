@@ -20,7 +20,7 @@ Via l'Admin REST API de Keycloak:
 ```bash
 # 1. Obtenir un token admin
 TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/master/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=admin-cli&username=admin&password=demo" | jq -r '.access_token')
+  -d "grant_type=password&client_id=admin-cli&username=admin&password=<KEYCLOAK_ADMIN_PASSWORD>" | jq -r '.access_token')
 
 # 2. Creer le client
 curl -s -X POST "https://auth.gostoa.dev/admin/realms/stoa/clients" \

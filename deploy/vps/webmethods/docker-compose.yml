@@ -1,5 +1,5 @@
 # webMethods API Gateway — Production
-# VPS: 51.255.201.17 (OVH webmethods-vps)
+# VPS: ${WEBMETHODS_VPS_IP} (OVH webmethods-vps)
 # Managed by Ansible — canonical copy at /opt/webmethods/docker-compose.yml on VPS
 
 services:

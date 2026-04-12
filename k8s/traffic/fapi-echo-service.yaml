@@ -2,7 +2,7 @@
 # Uses headless Service + manual Endpoints since ExternalName doesn't
 # support port remapping and the VPS has a static IP.
 #
-# fapi-echo runs on 164.68.121.123:8889 (worker-3, CAB-1869).
+# fapi-echo runs on worker-3 VPS (port 8889). See stoa-infra inventory for IP.
 # This makes it reachable as fapi-echo.stoa-system.svc:8889 from within K8s.
 apiVersion: v1
 kind: Service
@@ -30,7 +30,7 @@ metadata:
     app: fapi-echo
 subsets:
   - addresses:
-      - ip: 164.68.121.123  # Contabo worker-3
+      - ip: "REPLACE_WITH_VPS_IP"  # Set to fapi-echo VPS IP (see stoa-infra inventory)
     ports:
       - port: 8889
         protocol: TCP

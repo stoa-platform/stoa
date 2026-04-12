@@ -1008,7 +1008,7 @@ TOKEN=$(curl -s -X POST \
   "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
   -d "client_id=control-plane-ui" \
   -d "username=admin@stoa.local" \
-  -d "password=demo" \
+  -d "password=<DEMO_PASSWORD>" \
   -d "grant_type=password" | jq -r '.access_token')
 
 # Call API via Gateway

@@ -33,7 +33,7 @@ KEYCLOAK_CLIENT="${KEYCLOAK_CLIENT:-stoa-portal}"
 
 # Test user credentials (from CAB-238 E2E users)
 TEST_USER="${TEST_USER:-e2e-tenant-admin}"
-TEST_PASSWORD="${TEST_PASSWORD:-Admin123!}"
+TEST_PASSWORD="${TEST_PASSWORD:?Set TEST_PASSWORD}"
 
 # Script options
 VERBOSE=false

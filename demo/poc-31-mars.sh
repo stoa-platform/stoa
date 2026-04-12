@@ -3,8 +3,8 @@
 #
 # Demonstrates STOA Connect bridging webMethods APIs to the STOA Control Plane.
 # Runs against live infrastructure:
-#   - webMethods Gateway: 51.255.201.17:5555
-#   - STOA Connect Agent: 51.255.201.17:8090
+#   - webMethods Gateway: ${VPS_WEBMETHODS_IP}:5555
+#   - STOA Connect Agent: ${VPS_WEBMETHODS_IP}:8090
 #   - Control Plane API:  api.gostoa.dev
 #
 # Usage:

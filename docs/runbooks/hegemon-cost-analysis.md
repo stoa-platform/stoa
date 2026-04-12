@@ -140,10 +140,10 @@ Mac Studio disadvantages: single point of failure, no geographic distribution, h
 
 | VPS | IP | Purpose | Cost/mo |
 |-----|-----|---------|---------|
-| kong-standalone-gra | 51.83.45.13 | Kong DB-less + arena | EUR 4.49 |
-| gravitee-standalone-gra | 54.36.209.237 | Gravitee APIM | EUR 4.49 |
-| webmethods-standalone | 51.255.201.17 | webMethods trial | EUR 4.49 |
-| n8n-healthchecks | 51.254.139.205 | n8n + Healthchecks | EUR 4.49 |
+| kong-standalone-gra | <KONG_VPS_IP> | Kong DB-less + arena | EUR 4.49 |
+| gravitee-standalone-gra | <GRAVITEE_VPS_IP> | Gravitee APIM | EUR 4.49 |
+| webmethods-standalone | <WEBMETHODS_VPS_IP> | webMethods trial | EUR 4.49 |
+| n8n-healthchecks | <N8N_VPS_IP> | n8n + Healthchecks | EUR 4.49 |
 | **hegemon-worker-1** | TBD | **HEGEMON worker** | **EUR 4.49** |
 | **Total fleet** | | | **EUR 22.45** |
 

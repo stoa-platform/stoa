@@ -9,35 +9,35 @@ linear:
 
 workers:
   - name: worker-1
-    host: "207.180.246.92"
+    host: "<HEGEMON_W1_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [backend]
     infisical_secret_path: "/hegemon/worker-1"  # Per-worker API key (fallback: /anthropic)
 
   - name: worker-2
-    host: "207.180.255.223"
+    host: "<HEGEMON_W2_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [frontend]
     infisical_secret_path: "/hegemon/worker-2"
 
   - name: worker-3
-    host: "164.68.121.123"
+    host: "<HEGEMON_W3_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [mcp]
     infisical_secret_path: "/hegemon/worker-3"
 
   - name: worker-4
-    host: "167.86.115.51"
+    host: "<HEGEMON_W4_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [auth]
     infisical_secret_path: "/hegemon/worker-4"
 
   - name: worker-5
-    host: "144.91.73.37"
+    host: "<HEGEMON_W5_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [qa]

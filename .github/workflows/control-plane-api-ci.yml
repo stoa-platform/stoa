@@ -129,7 +129,7 @@ jobs:
       attestations: write
     secrets: inherit
 
-  # === GitOps Deploy: dispatch to stoa-infra → ArgoCD syncs ===
+  # === GitOps Deploy to Dev: dispatch to stoa-infra → ArgoCD syncs ===
   deploy:
     needs: docker
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -137,32 +137,45 @@ jobs:
     with:
       component: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
-      environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://api.gostoa.dev
-      verify-endpoint: https://api.gostoa.dev/health
+      environment: dev
+      environment-url: https://dev-api.gostoa.dev
+      verify-endpoint: https://dev-api.gostoa.dev/health
     secrets: inherit
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
-  # Full E2E with personas runs nightly (e2e-nightly.yml)
   smoke-test:
     needs: deploy
     if: needs.deploy.result == 'success'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: control-plane-api
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: dev
     permissions:
       contents: read
 
+  # === Promote to Prod: requires manual approval via GitHub Environment ===
+  promote-to-prod:
+    needs: [docker, smoke-test]
+    if: |
+      always() &&
+      needs.smoke-test.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/reusable-promote.yml
+    with:
+      component: control-plane-api
+      image-name: control-plane-api
+      sha: ${{ github.sha }}
+    secrets: inherit
+
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test]
+    needs: [ci, docker, deploy, smoke-test, promote-to-prod]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:
       component: Control Plane API
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ needs.promote-to-prod.result == 'success' && 'prod' || 'dev' }}
       ci-result: ${{ needs.ci.outputs.test-result }}
-      deploy-result: ${{ needs.deploy.result }}
+      deploy-result: ${{ needs.promote-to-prod.result }}
       smoke-result: ${{ needs.smoke-test.result }}
     secrets: inherit

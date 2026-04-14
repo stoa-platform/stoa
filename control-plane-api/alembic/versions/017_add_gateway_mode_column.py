@@ -29,7 +29,8 @@ def upgrade() -> None:
     op.create_index('ix_gw_instances_mode', 'gateway_instances', ['mode'])
 
     # Add new enum values for STOA modes (ADR-024)
-    # Using raw SQL since Alembic doesn't have direct enum value addition
+    # Must commit before ADD VALUE — Postgres requires it outside a transaction block
+    op.execute("COMMIT")
     op.execute("ALTER TYPE gateway_type_enum ADD VALUE IF NOT EXISTS 'stoa_edge_mcp'")
     op.execute("ALTER TYPE gateway_type_enum ADD VALUE IF NOT EXISTS 'stoa_sidecar'")
     op.execute("ALTER TYPE gateway_type_enum ADD VALUE IF NOT EXISTS 'stoa_proxy'")

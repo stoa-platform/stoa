@@ -12,6 +12,9 @@
  */
 
 import { apiClient } from './api';
+
+/** Maximum page_size accepted by the portal/apis endpoint */
+const API_MAX_PAGE_SIZE = 100;
 import type {
   GovernanceStats,
   GovernanceApproval,
@@ -92,17 +95,31 @@ export const governanceService = {
    * Aggregates data from multiple endpoints
    */
   getStats: async (tenantId: string): Promise<GovernanceStats> => {
-    const [pendingResponse, apisResponse] = await Promise.all([
-      apiSubscriptionsService.listPendingForTenant(tenantId, { page_size: 1 }),
-      apiClient
-        .get<{ items: { status: string }[] }>('/v1/portal/apis', {
-          params: { page_size: 200 },
-        })
-        .then((r) => r.data),
-    ]);
+    const pendingResponse = await apiSubscriptionsService.listPendingForTenant(tenantId, {
+      page_size: 1,
+    });
+
+    // Fetch all APIs with pagination (API max page_size is 100)
+    const maxPages = 50; // safeguard against infinite loop
+    const allApis: { status: string }[] = [];
+    let page = 1;
+    let total = Infinity;
+    while (allApis.length < total && page <= maxPages) {
+      const response = await apiClient.get<{
+        apis: { status: string }[];
+        total: number;
+        page: number;
+        page_size: number;
+      }>('/v1/portal/apis', {
+        params: { page, page_size: API_MAX_PAGE_SIZE },
+      });
+      allApis.push(...response.data.apis);
+      total = response.data.total;
+      page++;
+    }
 
     const apisByStatus: Record<string, number> = {};
-    for (const api of apisResponse.items) {
+    for (const api of allApis) {
       apisByStatus[api.status] = (apisByStatus[api.status] || 0) + 1;
     }
 

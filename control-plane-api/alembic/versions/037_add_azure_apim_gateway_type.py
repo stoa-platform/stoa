@@ -20,6 +20,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Add azure_apim to gateway_type_enum."""
+    op.execute("COMMIT")
     op.execute("ALTER TYPE gateway_type_enum ADD VALUE IF NOT EXISTS 'azure_apim'")
 
 

@@ -19,6 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.execute("COMMIT")
     op.execute("ALTER TYPE errorcategory ADD VALUE IF NOT EXISTS 'network'")
     op.execute("ALTER TYPE errorcategory ADD VALUE IF NOT EXISTS 'certificate'")
     op.execute("ALTER TYPE errorcategory ADD VALUE IF NOT EXISTS 'policy'")

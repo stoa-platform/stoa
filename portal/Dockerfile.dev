@@ -1,0 +1,30 @@
+# Dev Dockerfile — Vite dev server with HMR (no nginx)
+# Build context: repo root
+# Usage: docker build -f portal/Dockerfile.dev -t stoa-platform/portal:local .
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install shared deps
+COPY shared/package*.json ./shared/
+RUN cd shared && npm ci --ignore-scripts --legacy-peer-deps
+
+# Install main deps
+COPY portal/package*.json ./portal/
+WORKDIR /app/portal
+RUN npm ci --legacy-peer-deps
+
+# Copy source
+WORKDIR /app
+COPY tsconfig.base.json ./
+COPY shared/ ./shared/
+COPY portal/ ./portal/
+
+WORKDIR /app/portal
+
+# Ensure node_modules writable by any UID (K8s securityContext may override user)
+RUN chmod -R 777 /app/portal/node_modules /app/shared/node_modules
+
+EXPOSE 5174
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5174"]

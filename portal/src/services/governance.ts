@@ -100,10 +100,11 @@ export const governanceService = {
     });
 
     // Fetch all APIs with pagination (API max page_size is 100)
+    const maxPages = 50; // safeguard against infinite loop
     const allApis: { status: string }[] = [];
     let page = 1;
     let total = Infinity;
-    while (allApis.length < total) {
+    while (allApis.length < total && page <= maxPages) {
       const response = await apiClient.get<{
         apis: { status: string }[];
         total: number;

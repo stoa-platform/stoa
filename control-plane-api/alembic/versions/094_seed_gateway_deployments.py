@@ -22,8 +22,8 @@ import json
 import sqlalchemy as sa
 from alembic import op
 
-revision = "094"
-down_revision = "093"
+revision = "094_seed_gateway_deployments"
+down_revision = "093_add_security_posture_tables"
 branch_labels = None
 depends_on = None
 

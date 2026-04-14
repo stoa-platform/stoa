@@ -20,8 +20,8 @@
 #
 # =============================================================================
 
-INFRA_REPO = '../stoa-infra'
-K3D_CLUSTER = 'stoa-dev'
+infra_repo = '../stoa-infra'
+k3d_cluster = 'stoa-dev'
 
 allow_k8s_contexts('k3d-stoa-dev')
 default_registry('localhost:5111')
@@ -70,25 +70,25 @@ docker_build(
 # ── Helm Charts ──────────────────────────────────────────────────────────────
 
 k8s_yaml(helm(
-    INFRA_REPO + '/charts/control-plane-api',
-    values=[INFRA_REPO + '/deploy/tilt/values-local/control-plane-api.yaml'],
+    infra_repo + '/charts/control-plane-api',
+    values=[infra_repo + '/deploy/tilt/values-local/control-plane-api.yaml'],
 ))
 k8s_resource('stoa-control-plane-api', port_forwards=['8000:8000'], labels=['workloads'])
 
 k8s_yaml(helm(
-    INFRA_REPO + '/charts/control-plane-ui',
-    values=[INFRA_REPO + '/deploy/tilt/values-local/control-plane-ui.yaml'],
+    infra_repo + '/charts/control-plane-ui',
+    values=[infra_repo + '/deploy/tilt/values-local/control-plane-ui.yaml'],
 ))
 k8s_resource('control-plane-ui', port_forwards=['5173:5173'], labels=['workloads'])
 
 k8s_yaml(helm(
-    INFRA_REPO + '/charts/stoa-portal',
-    values=[INFRA_REPO + '/deploy/tilt/values-local/stoa-portal.yaml'],
+    infra_repo + '/charts/stoa-portal',
+    values=[infra_repo + '/deploy/tilt/values-local/stoa-portal.yaml'],
 ))
 k8s_resource('stoa-portal', port_forwards=['5174:5174'], labels=['workloads'])
 
 k8s_yaml(helm(
-    INFRA_REPO + '/charts/stoa-gateway',
-    values=[INFRA_REPO + '/deploy/tilt/values-local/stoa-gateway.yaml'],
+    infra_repo + '/charts/stoa-gateway',
+    values=[infra_repo + '/deploy/tilt/values-local/stoa-gateway.yaml'],
 ))
 k8s_resource('stoa-gateway', port_forwards=['8081:8080'], labels=['workloads'])

@@ -12,6 +12,9 @@
  */
 
 import { apiClient } from './api';
+
+/** Maximum page_size accepted by the portal/apis endpoint */
+const API_MAX_PAGE_SIZE = 100;
 import type {
   GovernanceStats,
   GovernanceApproval,
@@ -107,7 +110,7 @@ export const governanceService = {
         page: number;
         page_size: number;
       }>('/v1/portal/apis', {
-        params: { page, page_size: 100 },
+        params: { page, page_size: API_MAX_PAGE_SIZE },
       });
       allApis.push(...response.data.apis);
       total = response.data.total;

@@ -79,6 +79,11 @@ commits = [
   "4e9b396296cc68dbff36a3f90b95014d4365bdd1",  # Historical ansible playbook db_password comment
   "ef2e357f4fab1ec2011cb0583d8d1f78604546fa",  # Historical ansible playbook db_password comment (dup)
   "64b5c3c76c34e746d43ff76ba6ba97ab9245b849",  # E2E deploy script curl-auth-header false positive (test key "not-a-real-key")
+  # Historical files deleted in OpSec purge (CAB-2057) — commits remain in git history
+  "7ece421e32d821291575e7068e848f66b73cc218",  # ansible/roles/webmethods/README.md default password (file deleted)
+  "b7d4d189d0c6e30cadea16eab28cf207ced38045",  # docs/ibm/webmethods-gateway-api.md curl-auth-user examples (file deleted)
+  "24565ac9cf1d3c8e704dd4c21ca69deb2482d194",  # README.md historical example URL with auth header
+  "502e1488",                                     # deploy/vps/webmethods/README.md infrastructure IPs (file deleted)
 ]
 
 # Rules to modify or disable
@@ -161,6 +166,8 @@ regex = '''(?:51\.83\.45\.\d+|51\.195\.43\.\d+|51\.255\.201\.\d+|51\.255\.193\.\
 allowlist = { paths = [
   '''\.claude/rules/.*\.md''',
   '''control-plane-api/alembic/versions/.*''',
+  # VPS deployment documentation (IPs are in deploy README files, not secrets)
+  '''deploy/vps/.*README\.md''',
 ]}
 
 # Password defaults in shell scripts (:-Default pattern)
@@ -171,6 +178,10 @@ regex = '''(?i)(?:PASSWORD|SECRET|TOKEN).*:-[A-Za-z0-9!@#$%^&*_\-]{6,}'''
 allowlist = { paths = [
   '''tests/.*''',
   '''\.claude/rules/.*\.md''',
+  # Local dev scripts — default values for local Keycloak/gateway (not real secrets)
+  '''scripts/traffic/.*''',
+  '''scripts/demo/.*''',
+  '''deploy/local/.*''',
 ]}
 
 # Hardcoded client secrets in scripts
@@ -182,6 +193,9 @@ allowlist = { paths = [
   '''tests/.*''',
   '''\.claude/rules/.*\.md''',
   '''deploy/demo-federation/keycloak/.*\.json''',
+  # Local dev scripts — dev-only client secrets for local Keycloak
+  '''scripts/traffic/.*''',
+  '''scripts/demo/.*''',
 ]}
 
 # Financial data (EUR amounts, rates)
@@ -191,6 +205,8 @@ description = "Financial data (EUR amounts, pricing)"
 regex = '''(?:\d+\s*€/[hj]|\d{1,3}[\s.]?\d{3}\s*€|€\s*\d{1,3}[\s.]?\d{3}|tarif.*\d+€|facturation|chiffre\s*d.affaires)'''
 allowlist = { paths = [
   '''\.claude/rules/.*\.md''',
+  # Council review script has inline cost comments (~€0.036 per round-trip)
+  '''scripts/council-review\.sh''',
 ]}
 
 # Client type disclosure (bank, insurance, etc.)

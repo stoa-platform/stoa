@@ -65,7 +65,7 @@ jobs:
         env:
           STOA_DB_USER: postgres
           STOA_DB_PASSWORD: postgres
-          STOA_DB_NAME: stoa
+          STOA_DB_NAME: stoa_test
           STOA_DB_HOST: localhost
           STOA_DB_PORT: '5432'
         run: |

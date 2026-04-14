@@ -17,8 +17,17 @@ paths = [
   # Docker compose main files (env var defaults for local dev only)
   '''deploy/docker-compose/docker-compose\.yml''',
   '''deploy/docker-compose/docker-compose\..*\.yml''',
+  '''deploy/docker-compose/init/.*''',
+  '''deploy/docker-compose/test/.*''',
+  '''deploy/docker-compose/sidecar/.*''',
   # External Secrets manifests (references, not actual secrets)
   '''deploy/external-secrets/.*''',
+  # VPS deployment configs and docs (IPs, default creds for local dev gateways)
+  '''deploy/vps/.*''',
+  # Demo federation configs (dev-only Keycloak client secrets)
+  '''deploy/demo-federation/.*''',
+  # Platform bootstrap configs (Helm templates with variable refs)
+  '''deploy/platform-bootstrap/.*''',
   # Jenkins pipeline files with variable references
   '''jenkins/.*''',
   # UI quickstart guide with curl examples
@@ -36,6 +45,8 @@ paths = [
   # Gateway Rust inline test fixtures (#[cfg(test)] blocks) — test RSA keys and fake JWTs
   '''stoa-gateway/src/oauth/client_auth\.rs''',
   '''stoa-gateway/src/oauth/proxy\.rs''',
+  # Gateway proxy module — SSRF blocklist uses IPs in test assertions
+  '''stoa-gateway/src/proxy/dynamic\.rs''',
   # UI crypto test fixtures — forge-generated test keys (not real secrets)
   '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
   # UI component test fixtures — mock PEM keys for certificate wizard tests
@@ -50,9 +61,31 @@ paths = [
   '''control-plane-api/alembic/versions/079_.*''',
   # OpSec scanner itself (contains detection patterns as regex literals)
   '''scripts/opsec-scan\.sh''',
+  # Ops scripts (vault credential verification, infra fixes, VPS inventory)
+  '''scripts/ops/.*''',
+  '''scripts/verify-vault-db-credentials\.sh''',
+  '''scripts/cab-964-infra-fix\.sh''',
+  # Demo scripts (smoke tests, live demos with dev credentials)
+  '''scripts/demo/.*''',
+  # Traffic scripts (arena benchmarks with VPS IPs)
+  '''scripts/traffic/.*''',
+  # Helm chart templates (use {{ .Values }} not real secrets)
+  '''charts/.*''',
+  # Internal documentation (curl examples with default creds, IPs, JWT examples)
+  '''docs/ibm/.*''',
+  '''docs/runbooks/.*''',
+  '''docs/guides/.*''',
+  '''docs/MCP-CLAUDEAI-INTEGRATION\.md''',
+  '''docs/PORTAL\.md''',
+  # Audit HTML reports (contain shell password patterns in Playwright traces)
+  '''docs/audits/.*''',
+  # Demo POC scripts (one-off demo with dev creds)
+  '''demo/.*''',
   # State files (contain IP references in text, not actual secrets)
   '''memory\.md''',
   '''plan\.md''',
+  # Root README (historical example URLs)
+  '''README\.md''',
 ]
 
 regexes = [
@@ -196,6 +229,9 @@ allowlist = { paths = [
   # Local dev scripts — dev-only client secrets for local Keycloak
   '''scripts/traffic/.*''',
   '''scripts/demo/.*''',
+  # API source — client_secret field references in routers/services (not hardcoded values)
+  '''control-plane-api/src/routers/.*''',
+  '''control-plane-api/src/services/.*''',
 ]}
 
 # Financial data (EUR amounts, rates)

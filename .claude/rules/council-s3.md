@@ -172,6 +172,12 @@ bats tests/bats/council-review.bats
 
 See `tests/bats/README.md` for the bats convention.
 
+## Known Calibration Decisions
+
+### Dev-only code (calibrated 2026-04-12)
+
+The `attack_surface` axis does not block on theoretical security issues in code that only runs in local development (`*.local`, `localhost`, HTTP polyfills). First observed on PR #2347 (PKCE polyfill scored 7.75 due to non-actionable blockers like "XSS on .local" and "SRI on HTTP"). The guard must be solid (conditional loading, env check) — if the dev code could leak to production, it IS flagged.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

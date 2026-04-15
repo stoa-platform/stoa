@@ -43,3 +43,20 @@ npm run test:demo      # @demo only
 ## Dependencies
 - **Depends on**: All running services (Portal, Console, API, Gateway, Keycloak)
 - See `.claude/skills/e2e-test.md` for detailed patterns and step definitions
+
+## Règles
+
+Détail on-demand: `.claude/docs/e2e-audit.md`, `testing-standards.md`.
+
+- Audits → `docs/audits/YYYY-MM-DD-<topic>/` avec README.md + report/index.html + results.json.
+- Pas de skips. Si blocage → fix le blocker, pas le test.
+- Pas de fake data. Toute valeur affichée dans un dashboard vient d'une action phase précédente.
+- Screenshots = assertions. `fullPage: true`, naming `trace-<app>-<page>.png`.
+- Cross-validation obligatoire: Phase D query l'API et assert counts == actions phases précédentes.
+- Idempotent: tests runnable N fois sans cleanup. Timestamps dans names, handle 409.
+- `@regression` tag sur scénarios bloquant des fixes (regression-guard.yml).
+- Feature/fix ticket MUST update Playwright scenarios dans la MÊME PR. Pas de "test later".
+- Evidence archive après CHAQUE run: `docs/audits/<date>-<topic>/`. Pas d'archive = session incomplète.
+- `data-testid` convention: `<section>-<element>[-<variant>]`. Suffixes `-count`/`-timestamp`/`-duration` auto-masked.
+- axe-core threshold: `critical` (WCAG 2.1 AA). Nouvelle page Console → ajouter à `CONSOLE_PAGES`.
+- Visual regression: golden baselines dans `e2e/golden/`. Regen via Docker (voir docs).

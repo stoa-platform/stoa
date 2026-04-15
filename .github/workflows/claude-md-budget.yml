@@ -1,0 +1,23 @@
+name: CLAUDE.md Budget Lint
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - '**/CLAUDE.md'
+      - 'scripts/ai-ops/claude-md-budget-lint.sh'
+      - '.github/workflows/claude-md-budget.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/CLAUDE.md'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run budget lint
+        run: bash scripts/ai-ops/claude-md-budget-lint.sh

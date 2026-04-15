@@ -35,3 +35,13 @@ ruff check .             # Lint
 ## Dependencies
 - **Depends on**: control-plane-api (REST API), Keycloak (auth)
 - **Depended on by**: nothing (end-user tool)
+
+## Règles
+
+Détail on-demand: `.claude/docs/stoactl-usage.md`, `cli-first.md`, `code-style-python.md`.
+
+- stoactl > curl/bash pour toute opération supportée. Lire `.claude/context/cli-reference.md` avant de scanner src/.
+- Ligne 100. Python 3.11. Ruff + black.
+- `--output json|yaml|table|csv` supporté sur toutes les commandes.
+- `--redact-pii` default true sur `audit export`.
+- Après ajout de commande/schema: `scripts/generate-cli-context.sh`.

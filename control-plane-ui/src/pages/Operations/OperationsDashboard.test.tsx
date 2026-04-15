@@ -116,7 +116,7 @@ describe('OperationsDashboard', () => {
   it('renders the subtitle', async () => {
     renderComponent();
     expect(
-      await screen.findByText('SLO metrics, ArgoCD status, and deployment overview')
+      await screen.findByText('SLO metrics, Infrastructure Sync, and deployment overview')
     ).toBeInTheDocument();
   });
 
@@ -146,10 +146,10 @@ describe('OperationsDashboard', () => {
     expect(screen.queryByTestId('grafana-panel')).not.toBeInTheDocument();
   });
 
-  it('renders ArgoCD Components section', async () => {
+  it('renders Infrastructure Sync section (CAB-1887 G4)', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('ArgoCD Components')).toBeInTheDocument();
+      expect(screen.getAllByText('Infrastructure Sync').length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.getByText('control-plane-api')).toBeInTheDocument();
     expect(screen.getAllByText('stoa-gateway').length).toBeGreaterThanOrEqual(1);

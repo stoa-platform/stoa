@@ -92,3 +92,14 @@ k8s_yaml(helm(
     values=[infra_repo + '/deploy/tilt/values-local/stoa-gateway.yaml'],
 ))
 k8s_resource('stoa-gateway', port_forwards=['8081:8080'], labels=['workloads'])
+
+# ── Local reverse proxy (*.stoa.local → host ports) ──────────────────────────
+local_resource(
+    'stoa-proxy',
+    cmd=infra_repo + '/deploy/tilt/proxy.sh',
+    deps=[
+        infra_repo + '/deploy/tilt/nginx-proxy.conf',
+        infra_repo + '/deploy/tilt/proxy.sh',
+    ],
+    labels=['infra'],
+)

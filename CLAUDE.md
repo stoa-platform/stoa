@@ -92,6 +92,18 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 
 Full reference on-demand: `.claude/docs/mcp-integrations.md`
 
+### Quand lire `.claude/docs/`
+
+`CLAUDE.md` (racine + par service) = décisions GO/NOGO auto-chargées. `.claude/docs/<topic>.md` = protocoles détaillés, exemples, tables de gotchas — **jamais auto-chargés**.
+
+Lire `docs/<topic>.md` quand:
+- Tu touches un domaine spécifique (ex: modifier le gateway → lire `code-style-rust.md` + `mcp-oauth.md`)
+- Un CLAUDE.md référence explicitement un fichier docs/
+- Tu écris un skill/command qui automatise un protocole (crash-recovery, council-s3, phase-ownership)
+- Une règle CLAUDE.md mentionne un seuil sans le détailler
+
+**Règle**: décisions binaires → CLAUDE.md. Protocoles, exemples, tables → `.claude/docs/`. Jamais dupliquer.
+
 ### Skills (`.claude/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)

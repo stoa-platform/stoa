@@ -19,6 +19,9 @@ on:
       - 'e2e/visual/**'
       - 'e2e/golden/**'
       - '.github/workflows/e2e-visual-regression.yml'
+      - '!control-plane-ui/**/*.md'
+      - '!portal/**/*.md'
+      - '!shared/**/*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

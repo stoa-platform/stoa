@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGatewayPlatformInfo } from '../hooks/useGatewayStatus';
 import { useGatewayHealthSummary, useGatewayInstances } from '../hooks/usePlatformMetrics';
+import { usePrometheusQuery, scalarValue } from '../hooks/usePrometheus';
 import { config } from '../config';
 import { observabilityPath, logsPath } from '../utils/navigation';
 import { SubNav } from '../components/SubNav';
@@ -18,6 +19,7 @@ import {
   BarChart3,
   Search,
   ShieldAlert,
+  Info,
   Loader2,
   Target,
   Gauge,
@@ -91,6 +93,55 @@ const StatsCard = memo(function StatsCard({
           <p className="text-2xl font-semibold text-neutral-900 dark:text-white">{value}</p>
         </div>
       </div>
+    </div>
+  );
+});
+
+// PromQL queries for the STOA gateway SLO row (aligned with PlatformMetricsDashboard)
+const SLO_QUERIES = {
+  availability:
+    '(1 - (sum(rate(stoa_http_requests_total{status=~"5.."}[1h])) or vector(0)) / (sum(rate(stoa_http_requests_total[1h])) or vector(1))) * 100',
+  p95Latency:
+    'histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le)) * 1000',
+  errorRate:
+    'sum(rate(stoa_http_requests_total{status=~"5.."}[5m])) / sum(rate(stoa_http_requests_total[5m])) * 100',
+} as const;
+
+/** Inline metric tile: renders loading skeleton / error / formatted value from a Prometheus query. */
+const SloMetricTile = memo(function SloMetricTile({
+  label,
+  query,
+  unit,
+  digits = 2,
+  testId,
+}: {
+  label: string;
+  query: string;
+  unit: string;
+  digits?: number;
+  testId: string;
+}) {
+  const { data, loading, error } = usePrometheusQuery(query);
+  const value = scalarValue(data);
+  return (
+    <div className="flex-1 min-w-0" data-testid={testId}>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
+      {loading ? (
+        <div className="animate-pulse mt-1 h-7 w-20 rounded bg-neutral-100 dark:bg-neutral-700" />
+      ) : error ? (
+        <p className="mt-1 text-sm text-red-600 dark:text-red-400" title={error}>
+          Unavailable
+        </p>
+      ) : value === null ? (
+        <p className="mt-1 text-sm text-neutral-400 dark:text-neutral-500">—</p>
+      ) : (
+        <p className="mt-1 text-xl font-semibold text-neutral-900 dark:text-white">
+          {value.toFixed(digits)}
+          <span className="text-sm font-normal text-neutral-500 dark:text-neutral-400 ml-1">
+            {unit}
+          </span>
+        </p>
+      )}
     </div>
   );
 });
@@ -333,40 +384,59 @@ export default function GatewayStatus() {
         </div>
       )}
 
-      {/* SLO Compliance Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
-          <div className="flex items-center mb-4">
-            <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
-              <Target className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
-            </div>
-            <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
-              SLO Compliance
-            </h3>
+      {/* SLO Compliance Row — live Prometheus metrics for STOA fleet, fallback for 3rd-party */}
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
+        <div className="flex items-center mb-4">
+          <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+            <Target className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
           </div>
-          <div className="text-center py-4">
+          <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
+            STOA Gateway SLOs
+          </h3>
+          {stats.thirdPartyCount > 0 && (
+            <span
+              className="ml-2 inline-flex items-center text-xs text-neutral-400 dark:text-neutral-500"
+              title="3rd-party gateway metrics require a separate exporter — tracked as a follow-up ticket."
+              data-testid="slo-third-party-tooltip"
+            >
+              <Info className="w-3.5 h-3.5 mr-1" />
+              {stats.thirdPartyCount} 3rd-party excluded
+            </span>
+          )}
+        </div>
+        {stats.stoaCount > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="slo-metrics-stoa">
+            <SloMetricTile
+              label="Availability (1h)"
+              query={SLO_QUERIES.availability}
+              unit="%"
+              digits={3}
+              testId="slo-availability"
+            />
+            <SloMetricTile
+              label="Latency p95 (5m)"
+              query={SLO_QUERIES.p95Latency}
+              unit="ms"
+              digits={0}
+              testId="slo-latency-p95"
+            />
+            <SloMetricTile
+              label="Error rate (5m)"
+              query={SLO_QUERIES.errorRate}
+              unit="%"
+              digits={2}
+              testId="slo-error-rate"
+            />
+          </div>
+        ) : (
+          <div className="text-center py-4" data-testid="slo-metrics-fallback">
+            <Gauge className="w-5 h-5 mx-auto text-neutral-400 dark:text-neutral-500 mb-2" />
             <p className="text-sm text-neutral-500 dark:text-neutral-400">No metrics available</p>
             <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-              Connect Prometheus to enable SLO tracking
+              3rd-party gateway metrics require a separate exporter — follow-up ticket.
             </p>
           </div>
-        </div>
-        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-5">
-          <div className="flex items-center mb-4">
-            <div className="p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
-              <Gauge className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
-            </div>
-            <h3 className="ml-3 text-sm font-semibold text-neutral-900 dark:text-white">
-              Error Budget
-            </h3>
-          </div>
-          <div className="text-center py-4">
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">No metrics available</p>
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-              Connect Prometheus to enable error budget tracking
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Extension Cards (CAB-1023) */}

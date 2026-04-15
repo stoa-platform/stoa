@@ -120,3 +120,8 @@ func Error(format string, args ...any) {
 func Info(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 }
+
+// Warn prints a warning message to stderr
+func Warn(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+}

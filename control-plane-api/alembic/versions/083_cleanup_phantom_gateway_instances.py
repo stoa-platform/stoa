@@ -29,6 +29,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Add DELETING enum value if missing (needed for WHERE clause below)
+    op.execute("COMMIT")
+    op.execute("ALTER TYPE deployment_sync_status_enum ADD VALUE IF NOT EXISTS 'DELETING'")
+
     # Soft-delete gateway instances where:
     # 1. source is NOT 'self_register' (manually created or imported)
     # 2. already not soft-deleted (deleted_at IS NULL)

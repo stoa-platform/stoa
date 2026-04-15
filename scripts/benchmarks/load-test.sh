@@ -5,7 +5,7 @@
 #
 # Usage:
 #   ./load-test.sh --target http://localhost:8080 --admin http://localhost:8080
-#   ./load-test.sh --target http://51.83.45.13:8080 --admin http://51.83.45.13:8080 --duration 60
+#   ./load-test.sh --target "http://${VPS_KONG_IP}:8080" --admin "http://${VPS_KONG_IP}:8080" --duration 60
 #
 # Prerequisites: hey (brew install hey)
 
@@ -48,7 +48,7 @@ Examples:
   $0 --target http://localhost:8080
 
   # VPS deployment
-  $0 --target http://51.83.45.13:8080 --duration 60
+  $0 --target "http://\${VPS_KONG_IP}:8080" --duration 60
 EOF
     exit 0
 }

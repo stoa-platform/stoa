@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/gateway.schema.json",
+  "title": "STOA Gateway Resource",
+  "description": "Schema for stoactl apply -f with kind: Gateway",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Gateway",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "description": "Schema for creating a new gateway instance.",
+      "properties": {
+        "name": {
+          "description": "Unique identifier (e.g. 'webmethods-prod')",
+          "maxLength": 255,
+          "title": "Name",
+          "type": "string"
+        },
+        "display_name": {
+          "maxLength": 255,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "gateway_type": {
+          "description": "webmethods, kong, apigee, aws_apigateway, stoa",
+          "title": "Gateway Type",
+          "type": "string"
+        },
+        "environment": {
+          "description": "dev, staging, prod",
+          "maxLength": 50,
+          "title": "Environment",
+          "type": "string"
+        },
+        "tenant_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "null = platform-wide",
+          "title": "Tenant Id"
+        },
+        "base_url": {
+          "description": "Admin API URL",
+          "maxLength": 500,
+          "title": "Base Url",
+          "type": "string"
+        },
+        "auth_config": {
+          "additionalProperties": true,
+          "description": "Auth config: {type, vault_path, ...}",
+          "title": "Auth Config",
+          "type": "object"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "display_name",
+        "gateway_type",
+        "environment",
+        "base_url"
+      ],
+      "title": "GatewayInstanceCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

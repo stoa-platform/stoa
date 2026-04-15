@@ -34,9 +34,9 @@ REALM_NAME="demo-org-${REALM}"
 
 # Client secrets per realm
 case "${REALM}" in
-  alpha) CLIENT_SECRET="alpha-demo-secret" ;;
-  beta)  CLIENT_SECRET="beta-demo-secret" ;;
-  gamma) CLIENT_SECRET="gamma-demo-secret" ;;
+  alpha) CLIENT_SECRET="${FEDERATION_SECRET_ALPHA:?Set FEDERATION_SECRET_ALPHA}" ;;
+  beta)  CLIENT_SECRET="${FEDERATION_SECRET_BETA:?Set FEDERATION_SECRET_BETA}" ;;
+  gamma) CLIENT_SECRET="${FEDERATION_SECRET_GAMMA:?Set FEDERATION_SECRET_GAMMA}" ;;
   *)
     echo -e "${RED}Unknown realm: ${REALM}${NC}"
     exit 1

@@ -68,6 +68,13 @@ globs: "stoa-go/**,scripts/ops/**,control-plane-api/src/routers/**"
 - `--dry-run` — preview changes without applying (catalog sync)
 - `--tenant` — scope to a specific tenant
 
+## CLI-First Context Reference
+
+For complete API surface (all commands, resource schemas, endpoint map):
+→ Read `.claude/context/cli-reference.md` (auto-generated from stoactl + JSON Schemas)
+
+Regenerate after changes: `scripts/generate-cli-context.sh`
+
 ## Phase 2+ (coming after adoption gate — CAB-2033, due 2026-04-23)
 
 Reserved commands (not yet available):

@@ -17,6 +17,8 @@ on:
       - 'shared/**'
       - 'e2e/smoke-mock/**'
       - 'e2e/fixtures/axe-helper*'
+      - 'e2e/fixtures/a11y.ts'
+      - 'e2e/tests/a11y/**'
       - '.github/workflows/e2e-a11y-gate.yml'
       - '!control-plane-ui/**/*.md'
       - '!shared/**/*.md'
@@ -61,14 +63,22 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
-      - name: Run axe-core a11y scan
+      - name: Run axe-core a11y scan (smoke-mock)
         working-directory: e2e/smoke-mock
         run: npx playwright test --config=playwright.config.ts a11y-axe
+
+      - name: Run axe-core a11y scan (tests/a11y project)
+        working-directory: e2e
+        run: npx playwright test --project=a11y
+        env:
+          STOA_CONSOLE_URL_MOCK: http://localhost:4173
 
       - name: Upload violation reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: a11y-violations-${{ github.run_id }}
-          path: e2e/test-results/smoke-mock/
+          path: |
+            e2e/test-results/smoke-mock/
+            e2e/reports/
           retention-days: 14

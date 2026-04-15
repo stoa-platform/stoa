@@ -150,6 +150,20 @@ export default defineConfig({
       },
       dependencies: ['auth-setup'],
     },
+
+    // Accessibility gate — axe-core WCAG 2.1 AA (CAB-1989 P4)
+    // Runs against built Console with mocked backend (no live infra required).
+    // Gate: critical+serious = fail, moderate+minor = warn annotation.
+    {
+      name: 'a11y',
+      testDir: './tests/a11y',
+      testMatch: /.*-a11y\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: process.env.STOA_CONSOLE_URL_MOCK || 'http://localhost:4173',
+        headless: true,
+      },
+    },
   ],
 
   // Global setup/teardown if needed

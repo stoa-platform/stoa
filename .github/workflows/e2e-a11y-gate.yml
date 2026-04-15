@@ -18,6 +18,8 @@ on:
       - 'e2e/smoke-mock/**'
       - 'e2e/fixtures/axe-helper*'
       - '.github/workflows/e2e-a11y-gate.yml'
+      - '!control-plane-ui/**/*.md'
+      - '!shared/**/*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

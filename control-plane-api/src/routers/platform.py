@@ -132,7 +132,13 @@ async def get_platform_status(
         # Check if ArgoCD service is configured
         if not argocd_service.is_connected:
             logger.warning("ArgoCD service not configured")
-            return _get_mock_status()
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "deployments_unavailable",
+                    "detail": "ArgoCD service not configured",
+                },
+            )
 
         # CAB-687: Check in-memory cache first (Council obligation #3)
         cached = await _platform_status_cache.get("platform:status")
@@ -150,12 +156,24 @@ async def get_platform_status(
         # Handle health check failure
         if isinstance(health_result, Exception) or not health_result:
             logger.warning("ArgoCD health check failed")
-            return _get_mock_status(error="ArgoCD not reachable")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "deployments_unavailable",
+                    "detail": "ArgoCD not reachable",
+                },
+            )
 
         # Handle status fetch failure
         if isinstance(status_data, Exception):
             logger.error(f"Failed to get platform status: {status_data}")
-            return _get_mock_status(error=str(status_data))
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "deployments_unavailable",
+                    "detail": str(status_data),
+                },
+            )
 
         # Build events from already-fetched app data (no extra API calls)
         events = []
@@ -200,10 +218,17 @@ async def get_platform_status(
 
         return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get platform status: {e}")
-        # Return degraded status on error
-        return _get_mock_status(error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "deployments_unavailable",
+                "detail": str(e),
+            },
+        ) from e
 
 
 @router.get("/components", response_model=list[ComponentStatus])
@@ -390,69 +415,5 @@ async def get_component_diff(
 # ============================================================================
 # Helper Functions
 # ============================================================================
-
-
-def _get_mock_status(error: str | None = None) -> PlatformStatusResponse:
-    """
-    Return mock status when ArgoCD is not available.
-
-    Used for development/testing or when ArgoCD connection fails.
-    """
-    now = datetime.utcnow().isoformat() + "Z"
-
-    # Default components for mock status
-    components = [
-        ComponentStatus(
-            name="stoa-control-plane",
-            display_name="Control Plane API",
-            sync_status="Unknown" if error else "Synced",
-            health_status="Unknown" if error else "Healthy",
-            revision="HEAD",
-            last_sync=now,
-            message=error if error else None,
-        ),
-        ComponentStatus(
-            name="stoa-console",
-            display_name="Console UI",
-            sync_status="Unknown" if error else "Synced",
-            health_status="Unknown" if error else "Healthy",
-            revision="HEAD",
-            last_sync=now,
-            message=None,
-        ),
-        ComponentStatus(
-            name="stoa-portal",
-            display_name="Developer Portal",
-            sync_status="Unknown" if error else "Synced",
-            health_status="Unknown" if error else "Healthy",
-            revision="HEAD",
-            last_sync=now,
-            message=None,
-        ),
-        ComponentStatus(
-            name="stoa-gateway",
-            display_name="STOA Gateway",
-            sync_status="Unknown" if error else "Synced",
-            health_status="Unknown" if error else "Healthy",
-            revision="HEAD",
-            last_sync=now,
-            message=None,
-        ),
-    ]
-
-    return PlatformStatusResponse(
-        gitops=GitOpsStatus(
-            status="unknown" if error else "healthy",
-            components=components,
-            checked_at=now,
-        ),
-        events=[],
-        external_links=ExternalLinks(
-            argocd=settings.ARGOCD_EXTERNAL_URL,
-            grafana=settings.GRAFANA_URL,
-            prometheus=settings.PROMETHEUS_URL,
-            logs=settings.LOGS_URL,
-        ),
-        timestamp=now,
-        demo_mode=True,
-    )
+# Mock fallback removed (CAB-1887 G7): on failure, endpoints now return
+# 503 with structured error body {error, detail} instead of fake data.

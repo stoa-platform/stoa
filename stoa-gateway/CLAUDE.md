@@ -79,3 +79,17 @@ Note: `cargo test --all-features` requires cmake (for rdkafka). Use `cargo test`
 ## Dependencies
 - **Depends on**: control-plane-api (config/tool sync), Keycloak (JWT verification)
 - **Depended on by**: nothing yet (will replace mcp-gateway)
+
+## Règles
+
+Détail on-demand: `.claude/docs/code-style-rust.md`, `gateway-arena.md`, `gateway-adapters.md`, `mcp-oauth.md`.
+
+- Zero tolerance clippy: tout warning = CI fail. Pas de `#[allow(...)]` sans justification.
+- CI exact: `RUSTFLAGS=-Dwarnings cargo clippy --all-targets --all-features -- -D warnings` + `cargo fmt --check`.
+- SAST strict: `-D clippy::todo`, `-D clippy::unimplemented`, `-D clippy::dbg_macro`.
+- Toolchain: pinned via `rust-toolchain.toml`. Jamais `cargo fmt` avec une autre version.
+- Erreurs: `anyhow` pour app, `thiserror` pour lib. `?` préféré au match.
+- Tests inline `#[cfg(test)] mod tests`. `#[tokio::test]` pour async.
+- `cargo test --all-features` requiert `librdkafka` (brew/apt). Local: `cargo test` suffit.
+- OAuth: `authorization_servers` pointe sur gateway (pas Keycloak). DCR strip `scope` field. mTLS bypass `/.well-known/*`, `/oauth/*`, `/mcp/*`.
+- Arena benchmarks: L0 (k6 30min), L1 (AI readiness), L2 (CUJs 15min). Echo backend local pour fairness.

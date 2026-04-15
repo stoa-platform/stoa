@@ -10,6 +10,9 @@ on:
       - 'portal/**'
       - 'control-plane-ui/**'
       - '.github/workflows/e2e-tests.yml'
+      - '!e2e/**/*.md'
+      - '!portal/**/*.md'
+      - '!control-plane-ui/**/*.md'
 
   pull_request:
     branches:
@@ -19,6 +22,9 @@ on:
       - 'e2e/**'
       - 'portal/**'
       - 'control-plane-ui/**'
+      - '!e2e/**/*.md'
+      - '!portal/**/*.md'
+      - '!control-plane-ui/**/*.md'
 
   # Run daily at 6 AM UTC
   schedule:

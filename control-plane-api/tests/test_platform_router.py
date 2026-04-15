@@ -51,8 +51,8 @@ def _mock_status_data():
 class TestPlatformStatus:
     """Tests for GET /v1/platform/status."""
 
-    def test_status_mock_when_argocd_not_connected(self, client_as_cpi_admin: TestClient):
-        """Returns mock status when ArgoCD is not configured."""
+    def test_status_503_when_argocd_not_connected(self, client_as_cpi_admin: TestClient):
+        """Returns 503 with structured error when ArgoCD is not configured (CAB-1887 G7)."""
         mock_argocd = MagicMock()
         mock_argocd.is_connected = False
 
@@ -65,10 +65,10 @@ class TestPlatformStatus:
                 headers={"Authorization": "Bearer test-token"},
             )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 503
         data = resp.json()
-        assert "gitops" in data
-        assert "events" in data
+        assert data["detail"]["error"] == "deployments_unavailable"
+        assert "detail" in data["detail"]
 
     def test_status_success_with_argocd(self, client_as_cpi_admin: TestClient):
         """Returns real status when ArgoCD is connected."""

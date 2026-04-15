@@ -118,20 +118,9 @@ jobs:
     permissions:
       contents: read
 
-  # === Promote to Prod: requires manual approval via GitHub Environment ===
-  promote-to-prod:
-    needs: [docker, smoke-test]
-    if: needs.smoke-test.result == 'success'
-    uses: ./.github/workflows/reusable-promote.yml
-    with:
-      component: control-plane-ui
-      image-name: control-plane-ui
-      sha: ${{ github.sha }}
-    secrets: inherit
-
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy, smoke-test, promote-to-prod]
+    needs: [ci, docker, deploy, smoke-test]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:

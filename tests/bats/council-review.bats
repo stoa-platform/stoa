@@ -195,6 +195,20 @@ EOF
     [[ "$output" == *'"count":3'* ]]
 }
 
+@test "aggregate_scores: dev-only polyfill scores high — no false block (calibration PR #2347)" {
+    write_axis_result conformance 9
+    write_axis_result debt 9
+    write_axis_result attack_surface 9
+    write_axis_result contract_impact 9
+
+    run aggregate_scores "$TEST_TMPDIR" 0 4
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"status":"APPROVED"'* ]]
+    # Average 9.0 — dev-only code with solid guard should not drag score below 8
+    [[ "$output" == *'"score":9'* ]]
+}
+
 # =============================================================================
 # sum_usage_tokens — token aggregation across axis .raw files
 # =============================================================================

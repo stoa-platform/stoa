@@ -150,6 +150,7 @@ export default defineConfig({
       },
       dependencies: ['auth-setup'],
     },
+
   ],
 
   // Global setup/teardown if needed

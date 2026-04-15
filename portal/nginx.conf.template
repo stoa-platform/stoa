@@ -35,6 +35,13 @@ server {
         proxy_set_header Content-Type $http_content_type;
     }
 
+    # Runtime config generated at container startup (written to /tmp for readOnlyRootFilesystem)
+    location = /runtime-config.js {
+        alias /tmp/runtime-config.js;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Type "application/javascript" always;
+    }
+
     # SPA routing - always serve index.html for client-side routes
     # no-cache ensures browser revalidates index.html on every load
     # (hashed JS/CSS assets still cached 1y via location block below)

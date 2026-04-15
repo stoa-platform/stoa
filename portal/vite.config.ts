@@ -1,6 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import fs from 'fs'
 import path from 'path'
+
+const certPath = path.resolve(__dirname, 'certs/local.pem')
+const keyPath = path.resolve(__dirname, 'certs/local-key.pem')
+let hasLocalCerts = false
+try { hasLocalCerts = fs.existsSync(certPath) && fs.existsSync(keyPath) } catch { /* certs dir missing — HTTP fallback */ }
 
 export default defineConfig({
   plugins: [react()],
@@ -20,6 +26,8 @@ export default defineConfig({
   },
   server: {
     port: 3001, // Different port from Console (3000)
+    // HTTPS available via mkcert: set VITE_HTTPS=1 to enable (e.g. VITE_HTTPS=1 npm run dev)
+    ...(process.env.VITE_HTTPS && hasLocalCerts ? { https: { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) } } : {}),
     allowedHosts: ['portal.stoa.local'],
     proxy: {
       '/api': {

@@ -21,7 +21,7 @@ class PrometheusClient:
     def __init__(self):
         self._base_url: str = settings.PROMETHEUS_INTERNAL_URL.rstrip("/")
         self._timeout: float = float(settings.PROMETHEUS_TIMEOUT_SECONDS)
-        self._enabled: bool = settings.PROMETHEUS_ENABLED
+        self._enabled: bool = settings.PROMETHEUS_ENABLED and bool(self._base_url)
 
     @property
     def is_enabled(self) -> bool:

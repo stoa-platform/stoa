@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/stoa-platform/stoa/compare/portal-v1.1.2...portal-v1.2.0) (2026-04-15)
+
+
+### Features
+
+* **local:** Tilt + k3d local environment + Alembic migration fixes ([#2359](https://github.com/stoa-platform/stoa/issues/2359)) ([86392f8](https://github.com/stoa-platform/stoa/commit/86392f891154071cc2201a26a85967fd91065c62))
+
+
+### Bug Fixes
+
+* **ci:** resolve ANTHROPIC_API_KEY from Infisical when env is empty ([#2321](https://github.com/stoa-platform/stoa/issues/2321)) ([b3a020f](https://github.com/stoa-platform/stoa/commit/b3a020f14d8a7706ec8b775810cd8557757a1518))
+* **portal:** PKCE polyfill for non-secure HTTP local dev ([#2347](https://github.com/stoa-platform/stoa/issues/2347)) ([0f8c80d](https://github.com/stoa-platform/stoa/commit/0f8c80d5adc12feb4a894689d45d9d879103e639))
+
 ## [1.1.2](https://github.com/stoa-platform/stoa/compare/portal-v1.1.1...portal-v1.1.2) (2026-04-11)
 
 

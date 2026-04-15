@@ -33,10 +33,30 @@ spec:
           image: ghcr.io/stoa-platform/stoa-portal:latest
           imagePullPolicy: Always
           env:
+            # Nginx proxy backend (internal K8s DNS)
             - name: API_BACKEND_URL
               value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
             - name: DNS_RESOLVER
               value: "10.3.0.10"
+            # Runtime config for SPA (injected into runtime-config.js at startup)
+            - name: VITE_ENVIRONMENT
+              value: "production"
+            - name: VITE_BASE_DOMAIN
+              value: "gostoa.dev"
+            - name: VITE_API_URL
+              value: "https://api.gostoa.dev"
+            - name: VITE_MCP_URL
+              value: "https://mcp.gostoa.dev"
+            - name: VITE_KEYCLOAK_URL
+              value: "https://auth.gostoa.dev"
+            - name: VITE_KEYCLOAK_REALM
+              value: "stoa"
+            - name: VITE_KEYCLOAK_CLIENT_ID
+              value: "stoa-portal"
+            - name: VITE_CONSOLE_URL
+              value: "https://console.gostoa.dev"
+            - name: VITE_DOCS_URL
+              value: "https://docs.gostoa.dev"
           ports:
             - name: http
               containerPort: 8080

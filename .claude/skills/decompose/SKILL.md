@@ -51,7 +51,7 @@ Analyze the feature and map to STOA components:
 ### Instance Dispatch Mapping
 
 Each sub-issue is tagged with an `instance:*` label for automatic dispatch to parallel tmux windows.
-See `.claude/rules/instance-dispatch.md` for the full mapping and cross-component rules.
+See `.claude/docs/instance-dispatch.md` for the full mapping and cross-component rules.
 
 | Instance Label | Components | tmux Window | Scope |
 |---|---|---|---|

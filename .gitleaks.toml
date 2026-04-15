@@ -117,6 +117,8 @@ commits = [
   "b7d4d189d0c6e30cadea16eab28cf207ced38045",  # docs/ibm/webmethods-gateway-api.md curl-auth-user examples (file deleted)
   "24565ac9cf1d3c8e704dd4c21ca69deb2482d194",  # README.md historical example URL with auth header
   "502e1488",                                     # deploy/vps/webmethods/README.md infrastructure IPs (file deleted)
+  # memory-archive.md introduced then deleted in same branch (CLAUDE.md refacto) — financial-data = internal API cost logs (€0.05-0.12 Council S3 runs), not secrets
+  "a2c47bd775d96300db43459abcf4f0869dc1d04e",     # refactor: nuke .claude/rules/ (memory-archive.md added here)
 ]
 
 # Rules to modify or disable

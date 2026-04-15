@@ -18,7 +18,7 @@ See ADR-061 (stoa-docs) for the architectural decision record.
 
 This skill drives **Stage 1 (ticket pertinence)** and **Stage 2 (plan validation)** — both prose-based, **8-persona scoring** per the canonical Team Coca jury (HEG-PAT-003).
 
-**Stage 3 (code review)** runs **after implementation** on the actual diff, via `scripts/council-review.sh` (4-axis: conformance, debt, attack_surface, contract_impact). It is **not** invoked by this skill — it is wired to the pre-push hook (CAB-2048) and `council-gate.yml` CI workflow (CAB-2049). See `.claude/rules/council-s3.md` for full docs.
+**Stage 3 (code review)** runs **after implementation** on the actual diff, via `scripts/council-review.sh` (4-axis: conformance, debt, attack_surface, contract_impact). It is **not** invoked by this skill — it is wired to the pre-push hook (CAB-2048) and `council-gate.yml` CI workflow (CAB-2049). See `.claude/docs/council-s3.md` for full docs.
 
 ```
 S1 (this skill, prose)  →  S2 (this skill, plan)  →  implementation  →  S3 (council-review.sh, diff)  →  merge
@@ -387,7 +387,7 @@ Trigger points (when wired):
 | CI | PR opened | `.github/workflows/council-gate.yml` feature-flagged via `vars.COUNCIL_S3_ENABLED` (CAB-2049) |
 | Manual | Any diff | `scripts/council-review.sh --ticket CAB-XXXX --diff <range>` |
 
-When S3 returns REWORK, address the per-axis blockers/warnings and re-run. Full documentation: `.claude/rules/council-s3.md`.
+When S3 returns REWORK, address the per-axis blockers/warnings and re-run. Full documentation: `.claude/docs/council-s3.md`.
 
 ## Rules
 

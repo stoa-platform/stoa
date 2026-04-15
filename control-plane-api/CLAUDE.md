@@ -64,3 +64,16 @@ alembic upgrade head
 ## Code Style
 - Line length: 120
 - ruff + black + isort + mypy
+
+## Règles
+
+Détail on-demand: `.claude/docs/code-style-python.md`, `testing-standards.md`, `gateway-adapters.md`.
+
+- Ligne 120. Ruff E,W,F,I,B,C4,UP,ARG,SIM,S,DTZ,LOG,RUF. Black + isort (profile=black).
+- mypy strict: `disallow_untyped_defs = true`. Type hints obligatoires.
+- Async par défaut. Pydantic v2. Python 3.11.
+- Coverage ≥ 70%: `pytest --cov=src --cov-fail-under=70 --ignore=tests/test_opensearch.py -q`.
+- Test-first pour feat/fix. `test_regression_cab_XXXX_*` pour fix (regression-guard bloquant).
+- Boundary Integrity: jamais mocker la boundary sous test. `httpx.MockTransport` > `AsyncMock`. FastAPI TestClient + DB in-memory > patch repo.
+- Adapters gateway: implémenter les 16 méthodes de `GatewayAdapterInterface`. `AdapterResult(success=False)` pour unsupported, jamais raise. `httpx.AsyncClient` obligatoire. Tests ≥ 30.
+- Alembic: `alembic revision --autogenerate -m "..."` puis `upgrade head`. COMMIT avant `ADD VALUE` sur enum.

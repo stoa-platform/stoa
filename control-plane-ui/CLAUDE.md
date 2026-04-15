@@ -48,3 +48,19 @@ npm run build           # Production build
 ## OIDC Client
 - Client ID: `control-plane-ui`
 - Session storage: `sessionStorage` (not localStorage)
+
+## Règles
+
+Détail on-demand: `.claude/docs/code-style-typescript.md`, `testing-standards.md`.
+
+- Prettier: line 100, single quotes, semi, trailing es5, LF.
+- ESLint max-warnings: 100 (ratchet, jamais augmenter).
+- Components fonctionnels + hooks. Pas de classes. React 18 strict. Node 20.
+- vitest (PAS Jest). Path alias `@/*` → `src/*`.
+- `tsconfig.app.json` exclut `**/*.test.ts(x)`. Build: `tsc -p tsconfig.app.json`.
+- Persona Rule: composants RBAC-conditional testés pour les 4 personas (cpi-admin, tenant-admin, devops, viewer).
+- Helpers-First: utiliser `src/test/helpers.tsx` (`createAuthMock`, `renderWithProviders`). Jamais inline `vi.mock('AuthContext')`.
+- `vi.clearAllMocks()` ne reset PAS les implementations. Re-init dans `beforeEach`.
+- Boundary Integrity: MSW pour intercept fetch, pas 8 `vi.mock()` + `getByText('Dashboard')`.
+- `data-testid` obligatoire sur nouveaux components. Convention `<section>-<element>[-<variant>]`.
+- Changement visuel UI → update golden baselines dans la MÊME PR.

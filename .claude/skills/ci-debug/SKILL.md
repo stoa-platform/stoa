@@ -56,7 +56,7 @@ Causes frequentes dans STOA CI:
 | Docker | `buildx` fail | Cache layer miss ou multi-arch | Verifier `--platform linux/amd64,linux/arm64` |
 | Helm | `helm lint` fail | Values manquantes, indentation | Verifier `values.yaml` |
 | Security | `dependency-review` | GitHub Advanced Security non active | Connu, non-bloquant |
-| K8s deploy | `kubectl apply` fail | Selector immutable, Kyverno block | Voir `.claude/rules/k8s-deploy.md` |
+| K8s deploy | `kubectl apply` fail | Selector immutable, Kyverno block | Voir `.claude/docs/k8s-deploy.md` |
 | K8s deploy | `rollout timeout` | maxSurge/maxUnavailable deadlock | `maxUnavailable: 1, maxSurge: 0` |
 
 ### Step 4: Proposer le fix

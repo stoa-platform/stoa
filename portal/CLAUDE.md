@@ -50,3 +50,17 @@ npm run build           # Production build
 ## OIDC Client
 - Client ID: `stoa-portal`
 - Session storage: `sessionStorage`
+
+## Règles
+
+Détail on-demand: `.claude/docs/code-style-typescript.md`, `testing-standards.md`.
+
+- Prettier: line 100, single quotes, semi, trailing es5, LF.
+- ESLint max-warnings: **0**. jsx-a11y plugin actif.
+- Components fonctionnels + hooks. React 18 strict. Node 20.
+- vitest (PAS Jest). Path alias `@/*` → `src/*`. Build: `tsc -p tsconfig.app.json`.
+- Test-Adjacency: nouveau component = tests dans la MÊME PR.
+- Helpers-First: `src/test/helpers.tsx` (`createAuthMock`, `renderWithProviders`). Jamais inline mocks.
+- `vi.clearAllMocks()` ne reset PAS les implementations. Re-init dans `beforeEach`.
+- Boundary Integrity: MSW pour intercept fetch. Jamais mocker la boundary sous test.
+- `data-testid` obligatoire. Changement visuel → update goldens MÊME PR.

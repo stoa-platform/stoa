@@ -5,7 +5,7 @@
 
 [package]
 name = "stoa-gateway"
-version = "0.9.3"
+version = "0.9.4"
 edition = "2021"
 authors = ["STOA Platform <contact@gostoa.dev>"]
 description = "STOA MCP Gateway - Legacy-to-AI Bridge"

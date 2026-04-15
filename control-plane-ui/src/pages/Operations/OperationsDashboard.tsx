@@ -153,17 +153,23 @@ export function OperationsDashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const status = await apiService
-        .get<PlatformStatusResponse>('/v1/platform/status')
-        .then((r) => r.data)
-        .catch(() => null);
-
-      setPlatformStatus(status);
+      const { data } = await apiService.get<PlatformStatusResponse>('/v1/platform/status');
+      setPlatformStatus(data);
       setError(null);
       setLastRefresh(new Date());
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setError(axiosErr.response?.data?.detail || 'Failed to load operations data');
+      // CAB-1887 G7: 503 from API → surface as error, no silent mock fallback
+      const axiosErr = err as {
+        response?: { status?: number; data?: { detail?: { error?: string; detail?: string } } };
+      };
+      const status = axiosErr.response?.status;
+      const payload = axiosErr.response?.data?.detail;
+      if (status === 503 && payload?.error === 'deployments_unavailable') {
+        setError(`Infrastructure Sync unavailable: ${payload.detail || 'unknown reason'}`);
+      } else {
+        setError('Failed to load operations data');
+      }
+      setPlatformStatus(null);
     } finally {
       setLoading(false);
     }
@@ -216,7 +222,7 @@ export function OperationsDashboard() {
             Operations Dashboard
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            SLO metrics, ArgoCD status, and deployment overview
+            SLO metrics, Infrastructure Sync, and deployment overview
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -322,11 +328,11 @@ export function OperationsDashboard() {
             </div>
           </section>
 
-          {/* Platform Health — ArgoCD status */}
+          {/* Platform Health — Infrastructure Sync (ArgoCD) */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
-                ArgoCD Components
+                Infrastructure Sync
               </h2>
               <button
                 onClick={() => navigate(observabilityPath(dashboards.platformHealth))}
@@ -340,7 +346,7 @@ export function OperationsDashboard() {
               <div className="flex items-center gap-2 mb-4">
                 <Shield className="h-4 w-4 text-neutral-500" />
                 <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                  ArgoCD Components — {platformHealth}% Healthy
+                  Infrastructure Sync — {platformHealth}% Healthy
                 </h3>
               </div>
               {platformStatus?.gitops?.components ? (
@@ -375,7 +381,7 @@ export function OperationsDashboard() {
                 </div>
               ) : (
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
-                  ArgoCD status unavailable
+                  Infrastructure Sync unavailable
                 </p>
               )}
             </div>

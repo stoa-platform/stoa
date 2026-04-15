@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.4.0...control-plane-api-v1.4.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **ui:** Gateway Dashboard Inconsistencies — unified status, remove mocks, aggregated multi-gateway overview (CAB-1887) ([#2365](https://github.com/stoa-platform/stoa/issues/2365)) ([db2c4af](https://github.com/stoa-platform/stoa/commit/db2c4aff42b583251a02570368b92c6b3f6fadb6))
+
 ## [1.4.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.3.1...control-plane-api-v1.4.0) (2026-04-15)
 
 

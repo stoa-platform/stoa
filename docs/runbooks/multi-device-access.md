@@ -44,19 +44,19 @@ Add to `~/.ssh/config` on the new device:
 ```
 # --- STOA VPS Fleet ---
 Host kong-vps
-  HostName 51.83.45.13
+  HostName <KONG_VPS_IP>
   User debian
   IdentityFile ~/.ssh/id_ed25519_stoa_laptop
   IdentitiesOnly yes
 
 Host gravitee-vps
-  HostName 54.36.209.237
+  HostName <GRAVITEE_VPS_IP>
   User debian
   IdentityFile ~/.ssh/id_ed25519_stoa_laptop
   IdentitiesOnly yes
 
 Host n8n-vps
-  HostName 51.254.139.205
+  HostName <N8N_VPS_IP>
   User debian
   IdentityFile ~/.ssh/id_ed25519_stoa_laptop
   IdentitiesOnly yes

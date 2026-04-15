@@ -74,9 +74,9 @@ Phase 0 ✅ baseline (PR #2362). Phase 1 pending: Agent Teams flag + canary MEGA
 
 - **OVH Prod MKS GRA9** 3x B2-15, LB `5.196.236.53`, ArgoCD + KC SSO
 - **Contabo HEGEMON** 5x VPS L Nuremberg (w1-w5 backend/frontend/mcp/auth/qa)
-- **VPS 3rd-party**: Kong `51.83.45.13`, Gravitee `54.36.209.237`, webMethods `51.255.201.17`
-- **Tooling VPS** `51.254.139.205`: n8n, Netbox, Uptime Kuma, Healthchecks
-- **Vault** `hcvault.gostoa.dev` (`51.255.193.129`). Infisical legacy `vault.gostoa.dev`
+- **VPS 3rd-party**: Kong, Gravitee, webMethods (IPs → Infisical `infra/vps/*`)
+- **Tooling VPS**: n8n, Netbox, Uptime Kuma, Healthchecks (IP → Infisical)
+- **Vault** `hcvault.gostoa.dev` (spare-gra-vps). Infisical legacy `vault.gostoa.dev`
 - **Hetzner** ready to decommission. AWS fully decommissioned (Feb 2026)
 - Coût: ~€225/mois
 

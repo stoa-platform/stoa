@@ -194,3 +194,4 @@ CIR-*.md
 # Internal competitive benchmarks (scoring methodology)
 *-benchmark-*.md
 !docs/benchmarks/README.md
+memory-archive.md

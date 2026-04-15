@@ -72,6 +72,7 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     // Handle specific error cases
     if (error.response) {
+      const url = error.config?.url || '';
       switch (error.response.status) {
         case 401:
           // Token expired or invalid - could trigger re-auth
@@ -81,7 +82,10 @@ apiClient.interceptors.response.use(
           console.warn('API: Forbidden - insufficient permissions');
           break;
         case 404:
-          console.warn('API: Resource not found');
+          // Silence 404 for optional endpoints (not yet implemented in CP API)
+          if (!url.includes('/portal/notifications') && !url.includes('/portal/favorites')) {
+            console.warn('API: Resource not found');
+          }
           break;
         case 500:
           console.error('API: Server error');

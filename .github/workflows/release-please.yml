@@ -125,3 +125,21 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.stoa_go_tag_name }}
       version: ${{ needs.release-please.outputs.stoa_go_version }}
+
+  trigger-docs-changelog-sync:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.any_release_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch release-published event to stoa-docs
+        env:
+          GH_TOKEN: ${{ secrets.STOA_DOCS_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "STOA_DOCS_DISPATCH_TOKEN not set — skipping docs changelog sync. Daily cron will catch up."
+            exit 0
+          fi
+          gh api repos/stoa-platform/stoa-docs/dispatches \
+            -X POST \
+            -f event_type=release-published \
+            -F 'client_payload[services]=${{ needs.release-please.outputs.released_services }}'

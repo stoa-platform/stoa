@@ -1,0 +1,5 @@
+{
+  "score": 9,
+  "feedback": "Dev-only PKCE polyfill with solid guard (*.local conditional). No production exposure. Native crypto.subtle used in production.",
+  "blockers": []
+}

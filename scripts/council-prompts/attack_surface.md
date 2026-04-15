@@ -22,6 +22,21 @@ If a Trivy report is provided in the user message, weight new CRITICAL/HIGH find
 Do NOT consider: lint/format, code style, or business logic correctness.
 Those are evaluated by separate axes.
 
+## Development-only code exception
+
+Files and code paths that execute ONLY in local development contexts should be scored leniently on security criteria. Indicators of dev-only code:
+
+- Loaded conditionally on `*.local`, `*.localhost`, `127.0.0.1`, or `localhost`
+- Guarded by `NODE_ENV !== 'production'`, `DEBUG=true`, `VITE_HTTPS`, or equivalent env vars
+- Located in directories named `dev/`, `fixtures/`, `test/`, `__tests__/`, `mocks/`
+- Polyfills for browser APIs unavailable in HTTP (e.g., crypto.subtle) with production fallback to native API
+
+For dev-only code:
+- Do NOT flag theoretical attacks that require production deployment (XSS on localhost, SRI on HTTP, CORS on local dev server)
+- DO flag if the dev-only guard is weak or could leak to production (e.g., no env check, no conditional loading)
+- DO flag if the dev code disables security features globally (not just for local)
+- Score dev-only files 8-9 if the guard is solid, even if the code itself would be insecure in production
+
 You MUST respond by calling the record_review tool with:
 - score: integer 1-10 (>=8 = APPROVED on this axis, <8 = REWORK)
 - feedback: string max 500 chars, actionable, specific

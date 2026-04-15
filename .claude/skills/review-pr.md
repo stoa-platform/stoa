@@ -26,7 +26,7 @@ gh pr checks {number}
 - [ ] Couverture >= 70% (Python), adequate (TS, Rust)
 
 #### Qualite
-- [ ] Respecte les conventions de code (voir .claude/rules/)
+- [ ] Respecte les conventions de code (voir .claude/docs/)
 - [ ] Pas de code mort, imports inutilises
 - [ ] Noms de variables/fonctions clairs
 - [ ] Gestion d'erreurs adequate

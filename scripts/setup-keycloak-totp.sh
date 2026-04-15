@@ -62,7 +62,7 @@ KEYCLOAK_ADMIN_PASSWORD=$(kubectl get secret keycloak-admin -n "${KEYCLOAK_NAMES
 if [[ -z "${KEYCLOAK_ADMIN_PASSWORD}" ]]; then
     echo -e "${YELLOW}Warning: Could not retrieve Keycloak admin password from secret${NC}"
     echo -e "Using environment variable KEYCLOAK_ADMIN_PASSWORD if set..."
-    KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-Admin123!}"
+    KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}"
 fi
 
 # Get Keycloak URL

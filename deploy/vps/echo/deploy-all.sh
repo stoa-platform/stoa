@@ -13,8 +13,8 @@ set -euo pipefail
 SSH_KEY=~/.ssh/id_ed25519_stoa
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-VPS_KONG_STOA="51.83.45.13"   # Kong + STOA share this VPS
-VPS_GRAVITEE="54.36.209.237"   # Gravitee on its own VPS
+VPS_KONG_STOA="${VPS_STOA_IP:?Set VPS_STOA_IP}"
+VPS_GRAVITEE="${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}"
 
 # --- Step 1: Deploy echo server on both VPS ---
 for VPS in "$VPS_KONG_STOA" "$VPS_GRAVITEE"; do

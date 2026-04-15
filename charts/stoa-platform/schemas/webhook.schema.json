@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/webhook.schema.json",
+  "title": "STOA Webhook Resource",
+  "description": "Schema for stoactl apply -f with kind: Webhook",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Webhook",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "description": "Schema for creating a new webhook",
+      "example": {
+        "events": [
+          "subscription.created",
+          "subscription.approved"
+        ],
+        "headers": {
+          "X-Custom-Header": "custom-value"
+        },
+        "name": "Slack Notifications",
+        "secret": "my-super-secret-key-min16chars",
+        "url": "https://hooks.slack.com/services/xxx/yyy/zzz"
+      },
+      "properties": {
+        "name": {
+          "description": "Human-readable name for this webhook",
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "description": "URL to send webhook events to",
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "events": {
+          "description": "List of events to subscribe to, or ['*'] for all events",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        },
+        "secret": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Secret for HMAC signature verification (min 16 chars)",
+          "title": "Secret"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custom headers to include in webhook requests",
+          "title": "Headers"
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "events"
+      ],
+      "title": "WebhookCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

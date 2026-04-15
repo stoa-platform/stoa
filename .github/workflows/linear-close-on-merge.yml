@@ -21,26 +21,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Extract ticket ID from PR title
+      - name: Extract ticket IDs from PR title + body
         id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
-          # Match CAB-NNN or CAB-NNNN in PR title
-          TICKET_ID=$(echo "$TITLE" | grep -oP 'CAB-\d{2,4}' | head -1)
-          if [ -z "$TICKET_ID" ]; then
-            echo "No CAB-XXXX found in PR title: $TITLE"
+          # Extract ALL unique CAB-XXXX references from title + body.
+          # Previous version only read the first CAB from the title, causing 58% state drift
+          # (25/43 tickets stuck "In Review" in CAB-2053 Phase 1 audit).
+          ALL_TEXT="${PR_TITLE} ${PR_BODY}"
+          TICKET_IDS=$(echo "$ALL_TEXT" | grep -oE 'CAB-[0-9]{2,5}' | sort -u)
+          if [ -z "$TICKET_IDS" ]; then
+            echo "No CAB-XXXX found in PR title or body"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "ticket_id=$TICKET_ID" >> "$GITHUB_OUTPUT"
+          # Output as newline-separated list
           echo "skip=false" >> "$GITHUB_OUTPUT"
-          echo "Found ticket: $TICKET_ID"
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "ticket_ids<<$EOF" >> "$GITHUB_OUTPUT"
+          echo "$TICKET_IDS" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
+          COUNT=$(echo "$TICKET_IDS" | wc -l | tr -d ' ')
+          echo "Found $COUNT ticket(s): $(echo "$TICKET_IDS" | tr '\n' ' ')"
 
-      - name: Update Linear ticket to Done
+      - name: Update Linear tickets to Done
         if: steps.extract.outputs.skip != 'true'
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
+          TICKET_IDS: ${{ steps.extract.outputs.ticket_ids }}
           PR_NUM: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -50,94 +60,98 @@ jobs:
             exit 0
           fi
 
-          # Find the issue by identifier, including children to detect MEGAs
-          ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier title state { name type } children { nodes { id identifier state { name } } } } } }\"}")
+          # Process each ticket independently — one failure doesn't block others
+          echo "$TICKET_IDS" | while IFS= read -r TICKET_ID; do
+            [ -z "$TICKET_ID" ] && continue
+            echo "--- Processing $TICKET_ID ---"
 
-          ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].id // empty')
-          CURRENT_STATE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].state.type // empty')
-          ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].title // empty')
-          CHILDREN_COUNT=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].children.nodes | length')
+            # Find the issue by identifier, including children to detect MEGAs
+            ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier title state { name type } children { nodes { id identifier state { name } } } } } }\"}")
 
-          if [ -z "$ISSUE_ID" ]; then
-            echo "Issue $TICKET_ID not found in Linear — skipping"
-            exit 0
-          fi
+            ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].id // empty')
+            CURRENT_STATE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].state.type // empty')
+            ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].title // empty')
+            CHILDREN_COUNT=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].children.nodes | length')
 
-          # Skip if already completed or cancelled
-          if [ "$CURRENT_STATE" = "completed" ] || [ "$CURRENT_STATE" = "canceled" ]; then
-            echo "$TICKET_ID already in terminal state ($CURRENT_STATE) — skipping"
-            exit 0
-          fi
+            if [ -z "$ISSUE_ID" ]; then
+              echo "Issue $TICKET_ID not found in Linear — skipping"
+              continue
+            fi
 
-          # MEGA detection: has children or title contains [MEGA]
-          IS_MEGA=false
-          if [ "$CHILDREN_COUNT" -gt 0 ] || echo "$ISSUE_TITLE" | grep -q '\[MEGA\]'; then
-            IS_MEGA=true
-          fi
+            # Skip if already completed or cancelled
+            if [ "$CURRENT_STATE" = "completed" ] || [ "$CURRENT_STATE" = "canceled" ]; then
+              echo "$TICKET_ID already in terminal state ($CURRENT_STATE) — skipping"
+              continue
+            fi
 
-          if [ "$IS_MEGA" = "true" ]; then
-            echo "MEGA ticket detected ($TICKET_ID, $CHILDREN_COUNT children) — skipping auto-close"
-            # Post progress comment instead of closing
-            COMMENT_BODY="Sub-ticket work merged in PR #${PR_NUM} ([${PR_TITLE}](${PR_URL})).\n\nParent MEGA stays In Progress until all sub-tickets complete. Use \`/verify-mega ${TICKET_ID}\` to check gate status.\n\n*Auto-detected as MEGA by merge workflow*"
+            # MEGA detection: has children or title contains [MEGA]
+            IS_MEGA=false
+            if [ "$CHILDREN_COUNT" -gt 0 ] || echo "$ISSUE_TITLE" | grep -q '\[MEGA\]'; then
+              IS_MEGA=true
+            fi
+
+            if [ "$IS_MEGA" = "true" ]; then
+              echo "MEGA ticket detected ($TICKET_ID, $CHILDREN_COUNT children) — skipping auto-close"
+              COMMENT_BODY="Sub-ticket work merged in PR #${PR_NUM} ([${PR_TITLE}](${PR_URL})).\n\nParent MEGA stays In Progress until all sub-tickets complete. Use \`/verify-mega ${TICKET_ID}\` to check gate status.\n\n*Auto-detected as MEGA by merge workflow*"
+              COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT_BODY"'" }) { success } }'
+              curl -s -X POST https://api.linear.app/graphql \
+                -H "Authorization: $LINEAR_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
+              echo "Progress comment added to MEGA $TICKET_ID (not closed)"
+              continue
+            fi
+
+            # Standalone ticket — proceed with Done mutation
+            DONE_STATE_QUERY='{ workflowStates(filter: { type: { eq: "completed" }, team: { issues: { identifier: { eq: "'"$TICKET_ID"'" } } } }) { nodes { id name } } }'
+            DONE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"$DONE_STATE_QUERY\"}")
+
+            DONE_STATE_ID=$(echo "$DONE_DATA" | jq -r '.data.workflowStates.nodes[0].id // empty')
+
+            if [ -z "$DONE_STATE_ID" ]; then
+              echo "Could not find Done state for $TICKET_ID team — skipping"
+              continue
+            fi
+
+            # Move to Done
+            MUTATION='mutation { issueUpdate(id: "'"$ISSUE_ID"'", input: { stateId: "'"$DONE_STATE_ID"'" }) { success issue { identifier state { name } } } }'
+            RESULT=$(curl -s -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"$MUTATION\"}")
+
+            SUCCESS=$(echo "$RESULT" | jq -r '.data.issueUpdate.success // false')
+            NEW_STATE=$(echo "$RESULT" | jq -r '.data.issueUpdate.issue.state.name // "unknown"')
+
+            if [ "$SUCCESS" = "true" ]; then
+              echo "✅ $TICKET_ID → $NEW_STATE"
+            else
+              echo "Failed to update $TICKET_ID:"
+              echo "$RESULT" | jq .
+              continue  # Non-blocking — don't fail the workflow
+            fi
+
+            # Add comment with PR reference
+            COMMENT_BODY="Completed in PR #${PR_NUM} ([${PR_TITLE}](${PR_URL}))\n\n*Auto-closed by merge workflow*"
             COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT_BODY"'" }) { success } }'
             curl -s -X POST https://api.linear.app/graphql \
               -H "Authorization: $LINEAR_API_KEY" \
               -H "Content-Type: application/json" \
               -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
-            echo "Progress comment added to MEGA $TICKET_ID (not closed)"
-            exit 0
-          fi
 
-          # Standalone ticket — proceed with Done mutation
-          # Get the "Done" state ID for the team
-          DONE_STATE_QUERY='{ workflowStates(filter: { type: { eq: "completed" }, team: { issues: { identifier: { eq: "'"$TICKET_ID"'" } } } }) { nodes { id name } } }'
-          DONE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"$DONE_STATE_QUERY\"}")
-
-          DONE_STATE_ID=$(echo "$DONE_DATA" | jq -r '.data.workflowStates.nodes[0].id // empty')
-
-          if [ -z "$DONE_STATE_ID" ]; then
-            echo "Could not find Done state for $TICKET_ID team — skipping"
-            exit 0
-          fi
-
-          # Move to Done
-          MUTATION='mutation { issueUpdate(id: "'"$ISSUE_ID"'", input: { stateId: "'"$DONE_STATE_ID"'" }) { success issue { identifier state { name } } } }'
-          RESULT=$(curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"$MUTATION\"}")
-
-          SUCCESS=$(echo "$RESULT" | jq -r '.data.issueUpdate.success // false')
-          NEW_STATE=$(echo "$RESULT" | jq -r '.data.issueUpdate.issue.state.name // "unknown"')
-
-          if [ "$SUCCESS" = "true" ]; then
-            echo "✅ $TICKET_ID → $NEW_STATE"
-          else
-            echo "Failed to update $TICKET_ID:"
-            echo "$RESULT" | jq .
-            exit 0  # Non-blocking — don't fail the workflow
-          fi
-
-          # Add comment with PR reference
-          COMMENT_BODY="Completed in PR #${PR_NUM} ([${PR_TITLE}](${PR_URL}))\n\n*Auto-closed by merge workflow*"
-          COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT_BODY"'" }) { success } }'
-          curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
-
-          echo "Comment added to $TICKET_ID"
+            echo "Comment added to $TICKET_ID"
+          done
 
       - name: Write PR-MERGED step summary
         if: steps.extract.outputs.skip != 'true'
         env:
-          TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
+          TICKET_IDS: ${{ steps.extract.outputs.ticket_ids }}
           PR_NUM: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -147,8 +161,9 @@ jobs:
           DELETIONS: ${{ github.event.pull_request.deletions }}
           CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         run: |
+          TICKETS_LIST=$(echo "$TICKET_IDS" | tr '\n' ', ' | sed 's/,$//')
           cat >> "$GITHUB_STEP_SUMMARY" << EOF
-          ## PR Merged — ${TICKET_ID}
+          ## PR Merged — ${TICKETS_LIST}
 
           | Field | Value |
           |-------|-------|
@@ -157,23 +172,23 @@ jobs:
           | Author | @${PR_AUTHOR} |
           | Merged | ${MERGED_AT} |
           | Changes | +${ADDITIONS} -${DELETIONS} (${CHANGED_FILES} files) |
-          | Linear | [${TICKET_ID}](https://linear.app/cab-ing/issue/${TICKET_ID}) |
+          | Linear | ${TICKETS_LIST} |
           EOF
 
-      # Close GitHub Council issue (L3/L3.5 create issues labeled with CAB-XXXX)
-      - name: Close GitHub Council issue
+      # Close GitHub Council issues (L3/L3.5 create issues labeled with CAB-XXXX)
+      - name: Close GitHub Council issues
         if: steps.extract.outputs.skip != 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
+          TICKET_IDS: ${{ steps.extract.outputs.ticket_ids }}
           PR_NUM: ${{ github.event.pull_request.number }}
         run: |
-          # Find open issues labeled with the ticket ID (Council issues from L3/L3.5)
-          ISSUE_NUM=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-          if [ -n "$ISSUE_NUM" ] && [ "$ISSUE_NUM" != "null" ]; then
-            gh issue close "$ISSUE_NUM" --comment "Completed via PR #${PR_NUM}. Auto-closed on merge." || true
-            echo "Closed GitHub issue #${ISSUE_NUM} (Council issue for ${TICKET_ID})"
-          else
-            echo "No open GitHub Council issue found for ${TICKET_ID} — skipping"
-          fi
+          echo "$TICKET_IDS" | while IFS= read -r TICKET_ID; do
+            [ -z "$TICKET_ID" ] && continue
+            ISSUE_NUM=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -n "$ISSUE_NUM" ] && [ "$ISSUE_NUM" != "null" ]; then
+              gh issue close "$ISSUE_NUM" --comment "Completed via PR #${PR_NUM}. Auto-closed on merge." || true
+              echo "Closed GitHub issue #${ISSUE_NUM} (Council issue for ${TICKET_ID})"
+            fi
+          done

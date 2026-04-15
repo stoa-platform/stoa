@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.3.1...control-plane-api-v1.4.0) (2026-04-15)
+
+
+### Features
+
+* **local:** Tilt + k3d local environment + Alembic migration fixes ([#2359](https://github.com/stoa-platform/stoa/issues/2359)) ([86392f8](https://github.com/stoa-platform/stoa/commit/86392f891154071cc2201a26a85967fd91065c62))
+
+
+### Bug Fixes
+
+* **api:** resolve mypy no-any-return in clients (CAB-2053 phase 2) ([#2329](https://github.com/stoa-platform/stoa/issues/2329)) ([75bc669](https://github.com/stoa-platform/stoa/commit/75bc669ec2220c1167359bf1705c67dd00c1ed8f))
+* **api:** skip flaky openapi snapshot tests blocking CD (CAB-2055) ([#2333](https://github.com/stoa-platform/stoa/issues/2333)) ([e9e4239](https://github.com/stoa-platform/stoa/commit/e9e4239c5b4c7b3f17c142ba30ef4e2af6bb71ef))
+
 ## [1.3.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.3.0...control-plane-api-v1.3.1) (2026-04-11)
 
 

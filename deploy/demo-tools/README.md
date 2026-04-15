@@ -133,7 +133,7 @@ TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-con
   -d "grant_type=password" \
   -d "client_id=stoa-portal" \
   -d "username=alpha-user" \
-  -d "password=demo" | jq -r .access_token)
+  -d "password=<DEMO_PASSWORD>" | jq -r .access_token)
 
 # List available tools (should see only team-alpha tools)
 curl -H "Authorization: Bearer $TOKEN" \
@@ -161,7 +161,7 @@ TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-con
   -d "grant_type=password" \
   -d "client_id=stoa-portal" \
   -d "username=beta-user" \
-  -d "password=demo" | jq -r .access_token)
+  -d "password=<DEMO_PASSWORD>" | jq -r .access_token)
 
 # Invoke inventory-lookup (should work)
 curl -X POST -H "Authorization: Bearer $TOKEN" \

@@ -16,6 +16,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Add 'rejected' value to the subscriptionstatus enum
+    op.execute("COMMIT")
     op.execute("ALTER TYPE subscriptionstatus ADD VALUE IF NOT EXISTS 'rejected'")
 
     # Add rejected_by and rejected_at columns

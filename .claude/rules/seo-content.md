@@ -50,9 +50,29 @@ Rules: every spoke links to hub, every hub links to all spokes, cross-pillar enc
 
 10 checks: build clean, front-matter complete, word count met, min 3 internal links, hub link present, content compliance (no P0/P1), last-verified tag on comparisons, valid tags, no broken links, answer-first format. Pre-commit: `cd stoa-docs && npm run build 2>&1 | grep -E "broken|error|warning"` → must be empty.
 
+## Blog Validation Process (MANDATORY)
+
+Every blog article MUST pass these gates before merge:
+
+```
+1. Write article (docs-writer or manual)
+2. npm run build (link validation)
+3. content-reviewer audit (ALWAYS — not just when competitors mentioned)
+4. scripts/audit-content-compliance.sh (automated P0/P1 scan)
+5. CI: docs-audit.yml runs both client-names + content-compliance jobs
+```
+
+**Gate enforcement**:
+- `audit-content-compliance.sh` runs in CI on every PR touching `blog/**`
+- P0 = merge blocked (competitor pricing, certification claims, client names)
+- P1 = warning in PR comment (unsourced claims, missing disclaimers, negative characterizations)
+- Local pre-check: `cd stoa-docs && ./scripts/audit-content-compliance.sh`
+
+**content-reviewer subagent is ALWAYS required** — not just when competitors are mentioned. Cost claims, regulatory language, and positioning can violate P1 even without naming competitors.
+
 ## Subagent Pattern
 
-Blog post flow: choose topic → research → prepare context for `docs-writer` (front-matter, valid link list, hub, word count, compliance rules) → generate → `npm run build` (ALWAYS — subagents guess wrong links) → `content-reviewer` if competitors mentioned → fix → commit.
+Blog post flow: choose topic → research → prepare context for `docs-writer` (front-matter, valid link list, hub, word count, compliance rules) → generate → `npm run build` (ALWAYS — subagents guess wrong links) → **`content-reviewer` (ALWAYS)** → `audit-content-compliance.sh` → fix → commit.
 
 ## Search Optimization
 

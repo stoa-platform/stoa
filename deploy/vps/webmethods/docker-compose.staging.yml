@@ -1,5 +1,5 @@
 # webMethods API Gateway — Staging
-# VPS: 54.36.209.237 (OVH gravitee-vps repurposed)
+# VPS: ${STAGING_VPS_IP} (OVH gravitee-vps repurposed)
 # Canonical copy at /opt/webmethods/docker-compose.yml on VPS
 
 services:

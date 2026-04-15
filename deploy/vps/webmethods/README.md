@@ -18,7 +18,7 @@ No DNS needed for the agent itself; only for the webMethods admin UI (Caddy TLS)
     ┌─────────┴──────┐  ┌─────┴────────┐  ┌────┴───────────┐
     │   PRODUCTION   │  │     DEV      │  │   (future)     │
     │  OVH VPS       │  │ Contabo w3   │  │   STAGING      │
-    │ 51.255.201.17  │  │164.68.121.123│  │                │
+    │<WEBMETHODS_VPS_IP>│  │<WORKER_3_IP> │  │                │
     └────────────────┘  └──────────────┘  └────────────────┘
 ```
 
@@ -26,8 +26,8 @@ No DNS needed for the agent itself; only for the webMethods admin UI (Caddy TLS)
 
 | Env | VPS | IP | wM Admin | stoa-connect | Caddy subdomain |
 |-----|-----|----|----------|-------------|-----------------|
-| **prod** | OVH webmethods-vps | `51.255.201.17` | `:5555` | `:8090` (systemd) | `webmethods.gostoa.dev` |
-| **dev** | Contabo worker-3 | `164.68.121.123` | `:5555` (localhost) | `:8090` (systemd) | `dev-wm.gostoa.dev` |
+| **prod** | OVH webmethods-vps | `<WEBMETHODS_VPS_IP>` | `:5555` | `:8090` (systemd) | `webmethods.gostoa.dev` |
+| **dev** | Contabo worker-3 | `<WORKER_3_IP>` | `:5555` (localhost) | `:8090` (systemd) | `dev-wm.gostoa.dev` |
 
 ## How stoa-connect works
 
@@ -48,14 +48,14 @@ Convention: `vps-{gw}[-service].gostoa.dev` — see `stoa-infra/docs/carto/dns-i
 
 | Subdomain | IP | Purpose |
 |-----------|-----|---------|
-| `vps-wm.gostoa.dev` | `51.255.201.17` | Prod wM admin (5555) |
-| `vps-wm-ui.gostoa.dev` | `51.255.201.17` | Prod wM UI (9072) |
-| `vps-wm-link.gostoa.dev` | `51.255.201.17` | Prod stoa-gateway sidecar (9200) |
-| `dev-wm.gostoa.dev` | `164.68.121.123` | Dev wM admin |
+| `vps-wm.gostoa.dev` | `<WEBMETHODS_VPS_IP>` | Prod wM admin (5555) |
+| `vps-wm-ui.gostoa.dev` | `<WEBMETHODS_VPS_IP>` | Prod wM UI (9072) |
+| `vps-wm-link.gostoa.dev` | `<WEBMETHODS_VPS_IP>` | Prod stoa-gateway sidecar (9200) |
+| `dev-wm.gostoa.dev` | `<WORKER_3_IP>` | Dev wM admin |
 
 ## Services per VPS
 
-### Production — OVH (`51.255.201.17`)
+### Production — OVH (`<WEBMETHODS_VPS_IP>`)
 
 | Service | Container/Unit | Port |
 |---------|---------------|------|
@@ -65,7 +65,7 @@ Convention: `vps-{gw}[-service].gostoa.dev` — see `stoa-infra/docs/carto/dns-i
 | stoa-link | `stoa-link` (Docker) | `9200` |
 | Caddy | `caddy.service` | `80/443` |
 
-### Dev — Contabo worker-3 (`164.68.121.123`)
+### Dev — Contabo worker-3 (`<WORKER_3_IP>`)
 
 | Service | Container/Unit | Port |
 |---------|---------------|------|
@@ -96,8 +96,8 @@ curl -sf -u Administrator:manage https://webmethods.gostoa.dev/rest/apigateway/h
 curl -sf -u Administrator:manage https://dev-wm.gostoa.dev/rest/apigateway/health      # dev
 
 # SSH
-ssh -i ~/.ssh/id_ed25519_stoa debian@51.255.201.17      # prod (OVH)
-ssh -i ~/.ssh/id_ed25519_stoa hegemon@164.68.121.123    # dev (Contabo)
+ssh -i ~/.ssh/id_ed25519_stoa debian@<WEBMETHODS_VPS_IP>      # prod (OVH)
+ssh -i ~/.ssh/id_ed25519_stoa hegemon@<WORKER_3_IP>          # dev (Contabo)
 
 # Restart
 # Prod: cd /opt/webmethods && sudo docker compose restart apigateway

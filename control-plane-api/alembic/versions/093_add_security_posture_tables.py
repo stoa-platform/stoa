@@ -1,7 +1,7 @@
 """add security_findings, security_scans, security_baselines tables
 
 Revision ID: 093
-Revises: 092
+Revises: 091_add_is_platform_and_seed_gateway
 Create Date: 2026-04-08
 
 CAB-2008: tables for Security Posture dashboard — scanner findings,
@@ -13,8 +13,8 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 
-revision = "093"
-down_revision = "092"
+revision = "093_add_security_posture_tables"
+down_revision = "091_add_is_platform_and_seed_gateway"
 branch_labels = None
 depends_on = None
 

@@ -1,5 +1,5 @@
 # STOA Gateway — Staging
-# VPS: 54.36.209.237 (OVH staging-vps)
+# VPS: ${STAGING_VPS_IP} (OVH staging-vps)
 # Canonical copy at /opt/stoa-gateway/docker-compose.yml on VPS
 
 services:

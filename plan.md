@@ -478,10 +478,10 @@ _(none — all active items either Done or In Review)_
 ### Todo
 
 **🚨 FREEZE ACTIVE — Council-validated 2026-04-11 8.0/10 Go**:
-- [~] CAB-2053: [MEGA] Feature freeze + CLI-first stabilization — break the 3-week loop (21 pts, P1-High) — **Phase 1 done 2026-04-12**
-  - **Phase 0** [x] — Feature freeze policy declared in memory.md + plan.md (PR #2318)
+- [~] CAB-2053: [MEGA] Feature freeze + CLI-first stabilization — break the 3-week loop (21 pts, P1-High) — **Phase 2 done 2026-04-12**
+  - **Phase 0** [x] — Feature freeze policy declared (PR #2318)
   - **Phase 1** [x] — In Review queue drained 43→0 (25 Done, 3 Canceled, 15 Todo)
-  - **Phase 2** [owner: —] — Bug recurrence root cause (1 fix par classe, pas par symptôme)
+  - **Phase 2** [x] — Bug recurrence root cause: 7 fixes (PRs #2329/2330/2333/2334/2335/2336/2339)
   - **Phase 3** [owner: —] — stoactl completeness 100% (apply -f tous les kinds + get/delete/list manquants) — **coeur du MEGA**
   - **Phase 4** [owner: —] — Schema registry unifié gostoa.dev/v1beta1 (conversion webhook)
   - **Phase 5** [owner: —] — Context pack CLI-first (context usage <40% au démarrage) — **payoff**

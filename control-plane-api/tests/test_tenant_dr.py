@@ -1034,12 +1034,12 @@ class TestImportEndpoint:
         response = client_as_other_tenant.post("/v1/tenants/acme/import", json=payload)
         assert response.status_code == 403
 
-    @pytest.mark.integration
     def test_import_endpoint_exists(self, client_as_cpi_admin):
         """Import endpoint should be reachable (not 404/405).
 
-        Requires real DB — mock session returns None for tenant lookup,
-        causing 404 from import_tenant's tenant validation.
+        Uses client_as_cpi_admin fixture which overrides get_db with
+        mock_db_session (returns None for tenant lookup), causing 404
+        from import_tenant's tenant validation. No real DB required.
         """
         payload = {
             "archive": {

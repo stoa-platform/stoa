@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.4...stoa-gateway-v0.9.5) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ci:** restore Gateway CI + Performance Gate on main ([#2388](https://github.com/stoa-platform/stoa/issues/2388)) ([fd0d1ff](https://github.com/stoa-platform/stoa/commit/fd0d1ff38e05f7137d9585b880942652fe949b75))
+
 ## [0.9.4](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.3...stoa-gateway-v0.9.4) (2026-04-15)
 
 

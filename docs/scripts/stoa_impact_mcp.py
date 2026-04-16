@@ -33,16 +33,48 @@ SEVERITY_ENUM = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 RISK_STATUS_ENUM = ["open", "mitigated", "accepted", "resolved"]
 DIRECTION_ENUM = ["in", "out", "both"]
 
+# JSON-RPC 2.0 error codes (https://www.jsonrpc.org/specification#error_object).
+RPC_PARSE_ERROR = -32700
+RPC_INVALID_REQUEST = -32600
+RPC_METHOD_NOT_FOUND = -32601
+RPC_INVALID_PARAMS = -32602
+RPC_INTERNAL_ERROR = -32603
+# Server-defined range (-32000 to -32099).
+RPC_DB_ERROR = -32000
+
+# Characters that would turn a user-supplied id into a LIKE wildcard. Belt-and-
+# suspenders: the existence check already rejects unknown ids, but we reject
+# wildcards explicitly so the intent is obvious to future readers.
+LIKE_WILDCARDS = frozenset("%_\\")
+
+# Trusted root that `--db` paths must resolve inside. Prevents symlink traversal
+# to arbitrary SQLite files on the host.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 class ToolError(Exception):
     """Raised when a tool call fails with a user-visible message."""
 
 
+def resolve_db_path(path: Path) -> Path:
+    """Canonicalize a DB path and refuse anything outside the repo tree."""
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ToolError(f"Database not found at {path}") from exc
+    try:
+        resolved.relative_to(REPO_ROOT)
+    except ValueError as exc:
+        raise ToolError(f"Database path must live inside {REPO_ROOT}, got {resolved}") from exc
+    if not resolved.is_file():
+        raise ToolError(f"Database path is not a regular file: {resolved}")
+    return resolved
+
+
 def open_db(path: Path) -> sqlite3.Connection:
     """Open the impact DB read-only. Fails fast if the file is missing."""
-    if not path.exists():
-        raise ToolError(f"Database not found at {path}")
-    uri = f"file:{path}?mode=ro"
+    resolved = resolve_db_path(path)
+    uri = f"file:{resolved}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
@@ -126,7 +158,11 @@ def q_get_risks(conn: sqlite3.Connection, args: dict[str, Any]) -> Any:
     where: list[str] = []
     params: list[Any] = []
     if component_id:
-        # Validate component exists to avoid leaking via LIKE wildcards.
+        # Reject LIKE wildcards explicitly; the existence check below covers this
+        # in practice (no component has `%` or `_` in its id), but failing fast
+        # here makes the intent obvious and protects future schema changes.
+        if any(ch in LIKE_WILDCARDS for ch in component_id):
+            raise ToolError("component_id must not contain LIKE wildcards")
         exists = conn.execute("SELECT 1 FROM components WHERE id = ?", (component_id,)).fetchone()
         if not exists:
             raise ToolError(f"Unknown component_id: {component_id}")
@@ -338,7 +374,7 @@ def handle_request(conn: sqlite3.Connection, request: dict[str, Any]) -> dict[st
     params = request.get("params") or {}
 
     if method is None:
-        return error_response(req_id, -32600, "Invalid request: missing method")
+        return error_response(req_id, RPC_INVALID_REQUEST, "Invalid request: missing method")
 
     # Notifications (no id) — no response required by JSON-RPC spec.
     if req_id is None:
@@ -372,7 +408,7 @@ def handle_request(conn: sqlite3.Connection, request: dict[str, Any]) -> dict[st
             )
         if method in ("ping",):
             return ok_response(req_id, {})
-        return error_response(req_id, -32601, f"Method not found: {method}")
+        return error_response(req_id, RPC_METHOD_NOT_FOUND, f"Method not found: {method}")
     except ToolError as exc:
         if method == "tools/call":
             return ok_response(
@@ -382,15 +418,15 @@ def handle_request(conn: sqlite3.Connection, request: dict[str, Any]) -> dict[st
                     "isError": True,
                 },
             )
-        return error_response(req_id, -32602, str(exc))
+        return error_response(req_id, RPC_INVALID_PARAMS, str(exc))
     except sqlite3.Error as exc:
         # Log details to stderr; return a generic message so schema/column names
         # from constraint errors do not leak to the MCP client.
         print(f"[stoa-impact-mcp] sqlite error: {exc}", file=sys.stderr)
-        return error_response(req_id, -32000, "Database error (see server stderr)")
+        return error_response(req_id, RPC_DB_ERROR, "Database error (see server stderr)")
     except Exception as exc:  # noqa: BLE001 - keep server alive, surface generic
         print(f"[stoa-impact-mcp] internal error: {exc!r}", file=sys.stderr)
-        return error_response(req_id, -32603, "Internal server error")
+        return error_response(req_id, RPC_INTERNAL_ERROR, "Internal server error")
 
 
 def ok_response(req_id: Any, result: Any) -> dict[str, Any]:
@@ -410,7 +446,9 @@ def serve_stdio(conn: sqlite3.Connection) -> None:
         try:
             request = json.loads(line)
         except json.JSONDecodeError as exc:
-            sys.stdout.write(json.dumps(error_response(None, -32700, f"Parse error: {exc}")) + "\n")
+            sys.stdout.write(
+                json.dumps(error_response(None, RPC_PARSE_ERROR, f"Parse error: {exc}")) + "\n"
+            )
             sys.stdout.flush()
             continue
         response = handle_request(conn, request)

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/stoa-platform/stoa/compare/portal-v1.2.0...portal-v1.3.0) (2026-04-16)
+
+
+### Features
+
+* **e2e:** axe-core a11y gate (CAB-1989 P4) ([#2367](https://github.com/stoa-platform/stoa/issues/2367)) ([baec2f5](https://github.com/stoa-platform/stoa/commit/baec2f5893bfe65a74e1a977f92d093bebb29730))
+
 ## [1.2.0](https://github.com/stoa-platform/stoa/compare/portal-v1.1.2...portal-v1.2.0) (2026-04-15)
 
 

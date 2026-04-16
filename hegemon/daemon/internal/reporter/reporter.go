@@ -185,10 +185,17 @@ func (r *Reporter) LinearUpdateInProgress(issueID string) error {
 	return r.linear.UpdateIssueState(issueID, "In Progress")
 }
 
-// LinearUpdateDone moves a ticket to Done on Linear with a comment.
+// LinearUpdateDone moves a ticket to In Review on Linear with a comment.
+// No-op guard: workers that exit without producing a PR or file change
+// (early-exit Claude runs, API key-only output, silent dispatch races)
+// reset the ticket to Todo instead of polluting Linear with ghost
+// "In Review" status + `PR: #0` comments.
 func (r *Reporter) LinearUpdateDone(issueID string, result *worker.Result, duration time.Duration) error {
 	if r.linear == nil {
 		return nil
+	}
+	if result.PRNumber == 0 && result.FilesChanged == 0 {
+		return r.linear.UpdateIssueState(issueID, "Todo")
 	}
 	comment := fmt.Sprintf(
 		"Completed by HEGEMON worker\n\n**PR**: #%d\n**Branch**: %s\n**Files**: %d\n**Duration**: %s\n**Summary**: %s",

@@ -17,7 +17,11 @@ const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'http://console.stoa.local';
 
 // Personas
 const TENANT_ADMIN_USER = process.env.PARZIVAL_USER || 'parzival';
-const TENANT_ADMIN_PASSWORD = process.env.PARZIVAL_PASSWORD || 'Parzival@2026!';
+const TENANT_ADMIN_PASSWORD = (() => {
+  const v = process.env.PARZIVAL_PASSWORD;
+  if (!v) throw new Error('PARZIVAL_PASSWORD env var is required');
+  return v;
+})();
 const VIEWER_USER = process.env.AECH_USER || 'aech';
 const VIEWER_PASSWORD = process.env.AECH_PASSWORD || 'Aech@2026!';
 const TENANT_ID = 'high-five';

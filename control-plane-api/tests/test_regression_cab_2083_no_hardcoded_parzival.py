@@ -28,8 +28,19 @@ def test_parzival_password_is_never_hardcoded() -> None:
     # `git ls-files | xargs grep` is faster than a Python walk and honors
     # .gitignore automatically, so vendored copies in node_modules, venv,
     # target, etc. don't leak into the scan.
+    # CHANGELOG files are release-please-generated history of commit titles.
+    # A past commit message that legitimately quoted the literal (e.g. the
+    # very fix that removed it) is not a regression.
     result = subprocess.run(  # noqa: S603 — fixed args, no user input
-        ["git", "grep", "-n", "--fixed-strings", FORBIDDEN_LITERAL],  # noqa: S607
+        [  # noqa: S607
+            "git",
+            "grep",
+            "-n",
+            "--fixed-strings",
+            FORBIDDEN_LITERAL,
+            "--",
+            ":!**/CHANGELOG.md",
+        ],
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,

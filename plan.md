@@ -50,6 +50,8 @@ Voir Linear (queue typiquement ~40 tickets mais drainée à 0 en Phase 1 CAB-205
 - [ ] CAB-2043 Benchmark gateway STOA vs concurrents (P2)
 - [~] CAB-2054 Council 8 personas (13 pts) — 3/4 phases merged, P2 ADR-061 stoa-docs PR #151 awaiting review
 - [~] CAB-2065 Baseline + Agent Teams canary — Phase 0 done (PR #2362)
+- [ ] CAB-2069 Fix TCO fabriqué build-vs-buy article + extend audit script (5 pts, P1) — Council 7.88/10 Fix
+- [ ] CAB-2070 Audit SaaS Playbook + migration guides TCO fabrication (13 pts, P2) — Council 7.88/10 Fix, blocked by CAB-2069
 
 ## Milestones
 

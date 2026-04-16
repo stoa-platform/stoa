@@ -73,7 +73,7 @@ pub async fn diagnostic_handler(State(state): State<AppState>) -> Json<Diagnosti
             count,
         })
         .collect();
-    error_summary.sort_by(|a, b| b.count.cmp(&a.count));
+    error_summary.sort_by_key(|s| std::cmp::Reverse(s.count));
 
     let recent_errors = state.diagnostic_engine.recent_reports(1).len();
 

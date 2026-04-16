@@ -17,7 +17,12 @@ const API_URL = process.env.STOA_API_URL || 'http://api.stoa.local';
 const KC_URL = process.env.KEYCLOAK_URL || 'http://auth.stoa.local';
 const TS = Date.now();
 
-const ADMIN = { user: 'parzival', pass: '***TENANT_ADMIN_PASSWORD_REMOVED***' };
+const PARZIVAL_PASSWORD = (() => {
+  const v = process.env.PARZIVAL_PASSWORD;
+  if (!v) throw new Error('PARZIVAL_PASSWORD env var is required');
+  return v;
+})();
+const ADMIN = { user: 'parzival', pass: PARZIVAL_PASSWORD };
 const ATTACKER = { user: 'sorrento', pass: 'SorrentoE2E@99z!' };
 const TENANT = 'high-five';
 

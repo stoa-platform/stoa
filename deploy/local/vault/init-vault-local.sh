@@ -93,8 +93,9 @@ seed_secrets() {
   log "Seeded secret/external-mcp-servers/test-server"
 
   # E2E test personas (prod: stoa/dev/e2e-personas)
+  # Passwords must be provided via env; no hardcoded fallbacks (CAB-2083).
   vault kv put stoa/dev/e2e-personas \
-    parzival_password="***TENANT_ADMIN_PASSWORD_REMOVED***" \
+    parzival_password="${PARZIVAL_PASSWORD:?PARZIVAL_PASSWORD env var is required}" \
     art3mis_password="***LOCAL_PASSWORD_REMOVED***" \
     aech_password="***LOCAL_PASSWORD_REMOVED***" \
     sorrento_password="***LOCAL_PASSWORD_REMOVED***" \

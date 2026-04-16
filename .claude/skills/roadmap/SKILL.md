@@ -67,7 +67,7 @@ For each milestone, compute:
 
 ## Step 3: Read Velocity (file read)
 
-Read `~/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/velocity.json`
+Read `.claude/state/velocity.json`
 
 Extract:
 - `rolling_avg_3.pts_per_day`

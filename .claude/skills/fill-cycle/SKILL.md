@@ -58,7 +58,7 @@ Compute:
 
 ## Step 2: Read Velocity Baseline
 
-Read `~/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/velocity.json`.
+Read `.claude/state/velocity.json`.
 
 Extract:
 - `rolling_avg_pts_per_day` = `rolling_avg_3.pts_per_day`

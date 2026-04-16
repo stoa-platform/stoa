@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.5.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.4.1...control-plane-api-v1.5.0) (2026-04-16)
+
+
+### Features
+
+* **api:** drop execution_logs table (CAB-1977) [MIGRATION ONLY] ([#2297](https://github.com/stoa-platform/stoa/issues/2297)) ([a3b8454](https://github.com/stoa-platform/stoa/commit/a3b84545b0986f96fc5671df1dfb0fe643151969))
+
+
+### Bug Fixes
+
+* **api:** alembic 094 paramstyle — CAST(:desired_state AS JSONB) (CAB-1977) ([#2390](https://github.com/stoa-platform/stoa/issues/2390)) ([e95e64a](https://github.com/stoa-platform/stoa/commit/e95e64a324afe803736a8fc8bdc8004b4c790866))
+* **api:** alembic merge migration 095 to reconcile heads 092 + 094 (CAB-1977) ([#2386](https://github.com/stoa-platform/stoa/issues/2386)) ([d0c7ca8](https://github.com/stoa-platform/stoa/commit/d0c7ca838b51a4c9da7790f7f9f4abb1e2d44bfc))
+* **api:** enforce JWT issuer + cache Keycloak public key (CAB-2082) ([#2393](https://github.com/stoa-platform/stoa/issues/2393)) ([9fef152](https://github.com/stoa-platform/stoa/commit/9fef15230c065f8e8fc2113c53d9776a74ce4655))
+* **api:** exclude CHANGELOG.md from Parzival literal scan (CAB-2083) ([#2396](https://github.com/stoa-platform/stoa/issues/2396)) ([d0744d1](https://github.com/stoa-platform/stoa/commit/d0744d19f537d6359a396e914071622d24af328f))
+* **api:** isolate Kafka consumers from test boot path (CAB-2085) ([#2395](https://github.com/stoa-platform/stoa/issues/2395)) ([1b7daf8](https://github.com/stoa-platform/stoa/commit/1b7daf882d83235bd6f71d5008cedf8de996a4fe))
+* **api:** restore CP API CI green — schema + seeder + test fixtures ([#2387](https://github.com/stoa-platform/stoa/issues/2387)) ([61dcf56](https://github.com/stoa-platform/stoa/commit/61dcf5671be2c57041f03b1610a71eeb54c1dd91))
+* **e2e:** kill Parzival@2026! hardcoded fallback (CAB-2083) ([#2394](https://github.com/stoa-platform/stoa/issues/2394)) ([4b211e0](https://github.com/stoa-platform/stoa/commit/4b211e08d3a9fdf74ae75f5e703edbda3c2f590d))
+
 ## [1.4.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.4.0...control-plane-api-v1.4.1) (2026-04-15)
 
 

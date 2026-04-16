@@ -134,9 +134,10 @@ COPY control-plane-ui/nginx.conf.template /etc/nginx/custom-templates/default.co
 # Copy built app
 COPY --from=builder /app/control-plane-ui/dist /usr/share/nginx/html
 
-# Allow nginx user to write runtime-config.js at startup
+# Allow nginx user to write runtime-config.js and sed -i index.html at startup.
+# sed -i creates a temp file in the same directory, so the dir itself must be writable.
 USER root
-RUN chown nginx:nginx /usr/share/nginx/html/runtime-config.js
+RUN chown -R nginx:nginx /usr/share/nginx/html
 USER nginx
 
 # nginx-unprivileged listens on 8080

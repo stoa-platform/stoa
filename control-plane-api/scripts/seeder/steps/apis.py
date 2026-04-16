@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -165,7 +164,6 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
     """Create API catalog entries for the given profile."""
     apis = APIS_BY_PROFILE[profile]
     result = StepResult(name="apis")
-    now = datetime.now(UTC)
 
     for api_def in apis:
         row = await session.execute(
@@ -192,10 +190,10 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
             text("""
                 INSERT INTO api_catalog (
                     id, tenant_id, api_id, api_name, version, status,
-                    category, tags, audience, portal_published, metadata, created_at, updated_at
+                    category, tags, audience, portal_published, metadata
                 ) VALUES (
                     :id, :tid, :api_id, :api_name, :version, 'active',
-                    :category, :tags, :audience, true, :metadata, :now, :now
+                    :category, :tags, :audience, true, :metadata
                 )
             """),
             {
@@ -208,7 +206,6 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
                 "tags": json.dumps(api_def["tags"]),
                 "audience": api_def["audience"],
                 "metadata": json.dumps(metadata),
-                "now": now,
             },
         )
         result.created += 1

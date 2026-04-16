@@ -1039,7 +1039,9 @@ class TestImportEndpoint:
         """Import endpoint should be reachable (not 404/405).
 
         Requires real DB — mock session returns None for tenant lookup,
-        causing 404 from import_tenant's tenant validation.
+        causing 404 from import_tenant's tenant validation. So the
+        assertion `404 not in (404, 405)` only passes when a seeded
+        tenant exists, which requires the integration DB setup.
         """
         payload = {
             "archive": {

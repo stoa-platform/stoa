@@ -90,7 +90,7 @@ def upgrade() -> None:
                          desired_at, sync_status, sync_attempts)
                     VALUES
                         (gen_random_uuid(), :api_catalog_id, :gateway_id,
-                         :desired_state::jsonb, NOW(), 'pending', 0)
+                         CAST(:desired_state AS JSONB), NOW(), 'pending', 0)
                     ON CONFLICT ON CONSTRAINT uq_deployment_api_gateway DO NOTHING
                 """),
                 {

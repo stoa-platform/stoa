@@ -31,6 +31,9 @@ import os
 
 # Set environment variables to disable workers before any imports
 os.environ["ENABLE_SNAPSHOT_CONSUMER"] = "false"
+# CAB-2085: master gate that disables every Kafka-backed consumer during tests.
+# Keeps the FastAPI lifespan from spawning threads that try to reach the broker.
+os.environ["STOA_ENABLE_KAFKA_CONSUMERS"] = "false"
 
 # Explicit GIT_PROVIDER for test determinism (CAB-1890 dual-provider).
 # Tests that need GIT_PROVIDER=github override this via monkeypatch.setenv().

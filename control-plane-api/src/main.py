@@ -154,15 +154,26 @@ configure_logging()
 logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)
-ENABLE_DEPLOYMENT_NOTIFIER = os.getenv("ENABLE_DEPLOYMENT_NOTIFIER", "true").lower() == "true"
-ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
-ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
+# CAB-2085: master gate for Kafka-backed consumers. Default true so production
+# behaviour is unchanged; tests flip it to false in conftest.py so the lifespan
+# never spawns threads that try to reach `redpanda.stoa-system.svc.cluster.local`.
+KAFKA_CONSUMERS_ENABLED = os.getenv("STOA_ENABLE_KAFKA_CONSUMERS", "true").lower() == "true"
+
+ENABLE_DEPLOYMENT_NOTIFIER = (
+    KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_DEPLOYMENT_NOTIFIER", "true").lower() == "true"
+)
+ENABLE_SNAPSHOT_CONSUMER = KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
+ENABLE_SYNC_ENGINE = KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
-ENABLE_CHAT_METERING_CONSUMER = os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
-ENABLE_BILLING_METERING_CONSUMER = os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
+ENABLE_CHAT_METERING_CONSUMER = (
+    KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_CHAT_METERING_CONSUMER", "true").lower() == "true"
+)
+ENABLE_BILLING_METERING_CONSUMER = (
+    KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
+)
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"
-ENABLE_GIT_SYNC_WORKER = os.getenv("ENABLE_GIT_SYNC_WORKER", "true").lower() == "true"
+ENABLE_GIT_SYNC_WORKER = KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_GIT_SYNC_WORKER", "true").lower() == "true"
 
 
 @asynccontextmanager

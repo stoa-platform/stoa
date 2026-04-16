@@ -91,6 +91,7 @@ jobs:
       - name: Run adapter boundary tests (CAB-1951)
         working-directory: control-plane-api
         env:
+          STOA_ENABLE_KAFKA_CONSUMERS: 'false'  # CAB-2085
           ENABLE_DEPLOYMENT_WORKER: 'false'
           ENABLE_SNAPSHOT_CONSUMER: 'false'
         run: |
@@ -99,6 +100,7 @@ jobs:
         working-directory: control-plane-api
         env:
           DATABASE_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_test
+          STOA_ENABLE_KAFKA_CONSUMERS: 'false'  # CAB-2085
           ENABLE_DEPLOYMENT_WORKER: 'false'
           ENABLE_SNAPSHOT_CONSUMER: 'false'
         run: |

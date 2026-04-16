@@ -1,0 +1,184 @@
+# STOA PR Guardian — advisory AI review on every PR
+# ADR-065 (stoa-docs). Binary GO/NO-GO verdict + confidence. Fail-visible.
+#
+# Kill-switch: repo variable DISABLE_PR_GUARDIAN=true disables all runs.
+# Per-PR skip:  label `skip-guardian` or `wip`, or convert PR to draft.
+#
+# Complementary to claude-review.yml (generic Ship/Show/Ask). Not a replacement.
+
+name: STOA PR Guardian
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+
+concurrency:
+  group: guardian-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  guardian:
+    # Skip: kill-switch, bot authors, draft PRs, opt-out labels, fork PRs (secrets protection)
+    if: |
+      vars.DISABLE_PR_GUARDIAN != 'true' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !endsWith(github.actor, '[bot]') &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-guardian') &&
+      !contains(github.event.pull_request.labels.*.name, 'wip')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # ------------------------------------------------------------------
+      # Pre-flight: compute diff size, short-circuit if over 1000 lines
+      # ------------------------------------------------------------------
+      - name: Diff size guard (1000-line cap)
+        id: diff-guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          DIFF_LINES=$(gh pr diff "$PR_NUM" --patch 2>/dev/null | wc -l | tr -d ' ')
+          echo "diff_lines=${DIFF_LINES}" >> "$GITHUB_OUTPUT"
+          echo "PR #${PR_NUM} diff: ${DIFF_LINES} lines"
+
+          if [ "${DIFF_LINES:-0}" -gt 1000 ]; then
+            echo "too_large=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "too_large=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Remove previous Guardian comment (idempotence)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          # Find and delete any previous Guardian summary comment so we can post a fresh one.
+          # This is simpler than editing; the marker ensures we only touch our own comments.
+          REPO="${{ github.repository }}"
+          COMMENT_IDS=$(gh api "repos/${REPO}/issues/${PR_NUM}/comments" \
+            --jq '.[] | select(.body | contains("<!-- stoa-pr-guardian -->")) | .id' 2>/dev/null || echo "")
+          for id in $COMMENT_IDS; do
+            gh api -X DELETE "repos/${REPO}/issues/comments/${id}" >/dev/null 2>&1 || true
+          done
+
+      - name: Post oversize notice and exit
+        if: steps.diff-guard.outputs.too_large == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUM" --body "$(cat <<'EOF'
+          <!-- stoa-pr-guardian -->
+          **STOA PR Guardian — skipped**
+
+          Diff too large for guardian review (${{ steps.diff-guard.outputs.diff_lines }} lines > 1000 cap).
+          Human review required. Consider splitting this PR per CLAUDE.md rule.
+          EOF
+          )"
+          echo "::notice::Guardian skipped on PR #${PR_NUM} — diff ${{ steps.diff-guard.outputs.diff_lines }} lines"
+
+      # ------------------------------------------------------------------
+      # Guardian run (only if within diff cap)
+      # ------------------------------------------------------------------
+      - name: Run STOA PR Guardian
+        id: guardian
+        if: steps.diff-guard.outputs.too_large != 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            Run the STOA PR Guardian on PR #${{ github.event.pull_request.number }}.
+
+            PR metadata:
+              Title: ${{ github.event.pull_request.title }}
+              Author: ${{ github.event.pull_request.user.login }}
+              Base: ${{ github.event.pull_request.base.ref }}
+              Head: ${{ github.event.pull_request.head.sha }}
+              URL: ${{ github.event.pull_request.html_url }}
+
+            Steps:
+              1. Read the skill `.claude/skills/pr-guardian/SKILL.md`.
+              2. Read the policy pack `docs/ai/pr-guardian-policy.md`.
+              3. Follow the skill's instructions to the letter.
+              4. Post inline comments via `gh pr review --comment` or `gh api` if inline
+                 positioning is needed. Summary comment via `gh pr comment`.
+              5. If verdict = NO-GO, POST Slack notification via the webhook in env
+                 $SLACK_WEBHOOK_STOA_REVIEWS (curl). If the env var is empty, log
+                 `::warning::Slack webhook missing` and continue.
+
+            Hard rules (from the skill, restated):
+              - Never approve. Never request changes via API. Comment only.
+              - Comments max 4 lines, no preamble, no emoji, no TODO injection.
+              - English in GitHub comments. French OK in Slack alert.
+              - All summary comments MUST start with the literal marker `<!-- stoa-pr-guardian -->`.
+          # Sonnet 4.6 per CLAUDE.md CI policy. Bash/Read/Glob/Grep + gh/curl are enough.
+          claude_args: "--model claude-sonnet-4-6 --max-turns 20 --allowedTools Read,Glob,Grep,Bash"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REPO: ${{ github.repository }}
+          SLACK_WEBHOOK_STOA_REVIEWS: ${{ secrets.SLACK_WEBHOOK_STOA_REVIEWS }}
+
+      # ------------------------------------------------------------------
+      # Failure mode: never silent
+      # ------------------------------------------------------------------
+      - name: Post fallback comment on Guardian failure
+        if: steps.guardian.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUM" --body "$(cat <<'EOF'
+          <!-- stoa-pr-guardian -->
+          **STOA PR Guardian — unavailable**
+
+          Guardian could not analyze this PR. Non-blocking. Human review still required.
+
+          Possible causes: API rate limit, transient error, ADR fetch failure.
+          Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )" || true
+
+      - name: Alert ops on Guardian failure
+        if: steps.guardian.outcome == 'failure'
+        env:
+          SLACK_WEBHOOK_GUARDIAN_ALERTS: ${{ secrets.SLACK_WEBHOOK_GUARDIAN_ALERTS }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${SLACK_WEBHOOK_GUARDIAN_ALERTS}" ]; then
+            echo "::warning::SLACK_WEBHOOK_GUARDIAN_ALERTS not set — ops alert skipped"
+            exit 0
+          fi
+          payload=$(jq -cn \
+            --arg text "⚠️ STOA PR Guardian failed on ${PR_TITLE}" \
+            --arg pr "${PR_URL}" \
+            --arg run "${RUN_URL}" \
+            '{text: $text, attachments: [{color: "warning", fields: [{title: "PR", value: $pr, short: false}, {title: "Run", value: $run, short: false}]}]}')
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            --data "$payload" "${SLACK_WEBHOOK_GUARDIAN_ALERTS}" >/dev/null || true
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, Stage=pr-guardian, PR=${{ github.event.pull_request.number }}, Outcome=${{ steps.guardian.outcome }}"

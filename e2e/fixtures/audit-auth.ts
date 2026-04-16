@@ -6,7 +6,11 @@ import type { Page } from '@playwright/test';
 
 const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'http://localhost:3000';
 const PARZIVAL_USER = process.env.PARZIVAL_USER || 'parzival';
-const PARZIVAL_PASSWORD = process.env.PARZIVAL_PASSWORD || 'Parzival@2026!';
+const PARZIVAL_PASSWORD = (() => {
+  const v = process.env.PARZIVAL_PASSWORD;
+  if (!v) throw new Error('PARZIVAL_PASSWORD env var is required');
+  return v;
+})();
 
 export async function loginAndGetToken(page: Page): Promise<string> {
   await page.goto(CONSOLE_URL);

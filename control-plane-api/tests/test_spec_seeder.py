@@ -29,7 +29,7 @@ class TestProfileDataCreation:
 
         assert len(dev_steps) >= 7, (
             "Dev profile must define at least 7 steps: "
-            "tenants, gateway, apis, plans, consumers, mcp_servers, prospects"
+            "tenants, gateway, apis, plans, consumers, mcp_servers, security_posture"
         )
 
     def test_ac1_dev_profile_has_all_step_types(self):
@@ -44,7 +44,7 @@ class TestProfileDataCreation:
             "plans",
             "consumers",
             "mcp_servers",
-            "prospects",
+            "security_posture",
         }
         assert expected.issubset(step_names), f"Dev profile missing steps: {expected - step_names}"
 

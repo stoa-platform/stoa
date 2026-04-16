@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.4](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.3...stoa-gateway-v0.9.4) (2026-04-15)
+
+
+### Bug Fixes
+
+* **gateway:** correct insta redaction path for mcp-capabilities ([#2322](https://github.com/stoa-platform/stoa/issues/2322)) ([96b1202](https://github.com/stoa-platform/stoa/commit/96b1202b35b6c5b575faa0a2cfaed51ee02efc7e))
+
 ## [0.9.3](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.2...stoa-gateway-v0.9.3) (2026-04-11)
 
 

@@ -214,11 +214,10 @@ pub async fn api_proxy_handler(
             429,
             start.elapsed().as_secs_f64(),
         );
-        let retry_after = if backend.config.rate_limit_rpm > 0 {
-            (60 / backend.config.rate_limit_rpm).max(1)
-        } else {
-            1
-        };
+        let retry_after = 60u32
+            .checked_div(backend.config.rate_limit_rpm)
+            .unwrap_or(1)
+            .max(1);
         return Response::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
             .header("Retry-After", retry_after.to_string())

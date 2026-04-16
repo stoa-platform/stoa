@@ -25,7 +25,8 @@ log() { echo "[baseline] $(date -u +%H:%M:%S) $*"; }
 # 1. Start gateway
 # -------------------------------------------------------------------
 log "Starting gateway on port ${GATEWAY_PORT}..."
-"$GATEWAY_BINARY" --port "$GATEWAY_PORT" &
+# Gateway reads STOA_PORT from env (no --port CLI flag). See stoa-gateway/src/config.rs.
+STOA_PORT="$GATEWAY_PORT" "$GATEWAY_BINARY" &
 GATEWAY_PID=$!
 
 cleanup() {

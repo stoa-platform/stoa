@@ -376,6 +376,9 @@ export function MySubscriptions() {
           </button>
           <button
             onClick={() => setActiveTab('apis')}
+            role="tab"
+            aria-selected={activeTab === 'apis'}
+            data-testid="subscriptions-tab-apis"
             className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'apis'
                 ? 'border-primary-500 text-primary-600 dark:text-primary-400'

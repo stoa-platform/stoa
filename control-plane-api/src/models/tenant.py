@@ -53,7 +53,7 @@ class Tenant(Base):
     provisioning_error = Column(Text, nullable=True)
     provisioning_started_at = Column(DateTime(timezone=True), nullable=True)
     kc_group_id = Column(String(255), nullable=True)
-    provisioning_attempts = Column(Integer, default=0, nullable=False)
+    provisioning_attempts = Column(Integer, default=0, server_default="0", nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

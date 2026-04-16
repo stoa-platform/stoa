@@ -145,7 +145,7 @@ def test_get_wrong_tenant(mock_kc):
 
 @pytest.mark.integration
 @patch("src.routers.applications.keycloak_service")
-def test_create(mock_kc):
+def test_create(mock_kc, integration_db):
     mock_kc.create_client = AsyncMock(
         return_value={"id": "new-uuid", "client_id": "acme-newapp", "client_secret": "s3cret"}
     )

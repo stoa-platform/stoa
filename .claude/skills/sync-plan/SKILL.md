@@ -197,43 +197,51 @@ Calculate and display:
 - **Completion %**: Done / Scope
 - **Burn rate**: issues completed per day (based on cycle start date)
 
-### 7a. Auto-Update velocity.json on Cycle Close
+### 7a. Auto-Update velocity.json (close + backfill)
 
-After computing metrics, check if the current cycle should be recorded:
+Read `.claude/state/velocity.json` once.
 
-**Trigger**: cycle completion is 100% OR today > cycle end date.
+Compute the set of cycles that should be recorded:
 
-If triggered AND this cycle is not already in velocity.json:
+1. `last_recorded` = max `id` in `cycles[]`
+2. `previous_cycle` = number of the most recent **closed** cycle (from `list_cycles(type: "previous")`)
+3. **Missing set** = every cycle number in range `(last_recorded, previous_cycle]` that has no entry in `cycles[]`
+4. Also include the **current cycle** if `completion_pct == 100` OR `today > end_date` (the original close trigger)
 
-1. Read `~/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/velocity.json`
-2. Append new cycle entry:
+For each cycle in the missing set + current-if-closed, in ascending order:
+
+a. Fetch its issues:
+   ```
+   linear.list_issues(team: "<LINEAR_TEAM_ID>", cycle: "<N>", limit: 250)
+   ```
+b. Build the entry (same schema as before):
    ```json
    {
      "id": <cycle_number>,
-     "name": "<cycle_name>",
-     "start": "<start_date>",
-     "end": "<end_date>",
+     "name": "Cycle <N>",
+     "start": "<startsAt date>",
+     "end": "<endsAt date>",
      "days": <duration_days>,
-     "points_committed": <scope>,
-     "points_done": <done_pts>,
-     "issues_total": <total_issues>,
-     "issues_done": <done_issues>,
-     "prs_merged": <count from gh pr list if available, else null>,
+     "points_committed": <scope; prefer Linear's scopeHistory[-1] if it includes sub-issues>,
+     "points_done": <sum of estimate.value for status=="Done"; cross-check with completedScopeHistory[-1]>,
+     "issues_total": <total>,
+     "issues_done": <done count>,
+     "prs_merged": <gh pr list --search "merged:<start>..<end>" --json number | jq length, else null>,
      "pts_per_day": <done_pts / days>,
-     "completion_pct": <done_pts / scope * 100>
+     "completion_pct": <done_pts / scope * 100>,
+     "note": "<set if scopeHistory grew >1.2x mid-cycle, else omit>"
    }
    ```
-3. Recompute `rolling_avg_3`:
-   - Take last 3 cycle entries (or fewer if < 3 exist)
-   - `pts_per_day` = average of cycle pts_per_day values
-   - `issues_per_day` = average of (issues_done / days) values
-   - `completion_pct` = average of cycle completion_pct values
-4. Write updated velocity.json
+c. Append to `cycles[]` only if `id` not already present (idempotent).
+
+After processing the missing set, recompute `rolling_avg_3` from the last 3 entries (averages of `pts_per_day`, `issues_done/days`, `completion_pct`). Update `last_synced` to today. Write the file in a single atomic operation.
 
 **Rules**:
-- velocity.json is **append-only** for cycle entries — never modify historical data
-- Only append when cycle ID is not already present (idempotent)
-- `prs_merged` can be null if PR count isn't available (optional enrichment)
+- Append-only — never modify historical entries (a stale value once written is preserved as a snapshot)
+- Idempotent — re-running the same day is a no-op once cycles are recorded
+- Cap backfill at 8 cycles per run to bound MCP cost; log a warning if more are missing
+- `prs_merged` is best-effort; null is acceptable
+- For sub-issue accuracy: trust Linear's `scopeHistory[-1]` / `completedScopeHistory[-1]` over `list_issues` sums when both are available
 
 ### 7b. Velocity Report (--velocity mode)
 
@@ -292,7 +300,7 @@ plan.md updated. Review changes with `git diff plan.md`.
 
 After every sync (all modes except `--velocity`), compute utilization:
 
-1. Read `~/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/velocity.json`
+1. Read `.claude/state/velocity.json`
 2. Compute: `capacity = rolling_avg_3.pts_per_day × cycle_days`
 3. Compute: `target = capacity × target_utilization`
 4. Compute: `utilization = pts_committed / target × 100`

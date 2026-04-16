@@ -182,6 +182,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - Council S1/S2/S3: seuil ≥ 8.0/10. <8 = rework, pas de contournement.
 - MEGA jamais marqué Done directement. Toujours `/verify-mega` (5 gates).
 - Sub-ticket Done sans comment "PR #N" = gate 1 échoue.
+- **Decision Challenge Gate** (HLFH-wide) avant exécution d'un plan matchant ≥1 trigger: (a) temps Claude > 5h, (b) impact business direct (GTM/pricing/positioning/contenu stratégique/partenariat/roadmap lourde), (c) irréversible (données/contrats/branding). Rappeler le gate et exiger contre-analyse d'un challenger externe non-aligné (GPT ou autre, PAS Claude). Framework + logs: `stoa-docs/HEGEMON/DECISION_GATE.md`.
 
 ### Sécurité
 - NEVER reset/change/rotate password ou credential. Human-only.

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.3.0...control-plane-ui-v1.4.0) (2026-04-16)
+
+
+### Features
+
+* **mcp:** stoa-impact MCP + SDD L1 (CAB-2066) ([#2377](https://github.com/stoa-platform/stoa/issues/2377)) ([551d330](https://github.com/stoa-platform/stoa/commit/551d330e5af0251e544c62317bc5e2fb1ddfa738))
+
+
+### Bug Fixes
+
+* **ui:** chown /usr/share/nginx/html for sed -i index.html ([#2375](https://github.com/stoa-platform/stoa/issues/2375)) ([17a693b](https://github.com/stoa-platform/stoa/commit/17a693b94d81e3b940ad24d119a39b9a0c13398e))
+
 ## [1.3.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.2...control-plane-ui-v1.3.0) (2026-04-16)
 
 

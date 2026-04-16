@@ -5,8 +5,8 @@
 set -euo pipefail
 
 # --- Configuration ---
-CP_IP="144.91.73.37"
-WORKER_IP="164.68.121.123"
+CP_IP="${K3S_CP_IP:?Set K3S_CP_IP}"
+WORKER_IP="${K3S_WORKER_IP:?Set K3S_WORKER_IP}"
 SSH_KEY="$HOME/.ssh/id_ed25519_stoa"
 SSH_USER="hegemon"
 SSH="ssh -i $SSH_KEY $SSH_USER"
@@ -86,7 +86,7 @@ CADDYEOF
 sudo systemctl restart caddy"
 
 echo "=== Phase 12: Open K3s API for ArgoCD (OVH nodes) ==="
-for ovh_ip in 91.134.108.238 91.134.108.168 91.134.108.210; do
+for ovh_ip in ${OVH_NODE_IPS:?Set OVH_NODE_IPS (space-separated)}; do
   $SSH@$CP_IP "sudo ufw allow from $ovh_ip to any port 6443 comment 'ArgoCD OVH'"
 done
 

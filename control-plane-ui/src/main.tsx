@@ -40,8 +40,9 @@ const oidcConfig = {
   // Explicitly require PKCE (S256 is the only secure option)
   // This ensures code_challenge and code_challenge_method are sent
   pkce_method: 'S256',
-  // Persist tokens in localStorage for cross-tab session and faster boot
-  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  // Tokens in sessionStorage (cleared on tab close, reduces XSS blast radius).
+  // See .claude/rules/security.md — localStorage forbidden for Keycloak tokens.
+  userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   onSigninCallback: () => {
     // Remove OIDC params from URL after successful login
     window.history.replaceState({}, document.title, window.location.pathname);

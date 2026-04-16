@@ -45,7 +45,7 @@ log_step() { echo -e "\n${BLUE}==>${NC} $1"; }
 BACKEND_URL="${BACKEND_URL:-http://control-plane-api.stoa-system.svc.cluster.local:8000}"
 GATEWAY_URL="${GATEWAY_URL:-http://apigateway.stoa-system.svc.cluster.local:5555}"
 GATEWAY_USER="${GATEWAY_USER:-Administrator}"
-GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+GATEWAY_PASSWORD="${GATEWAY_PASSWORD:?Set GATEWAY_PASSWORD}"
 API_NAME="${API_NAME:-Control-Plane-API}"
 API_VERSION="${API_VERSION:-2.0}"
 DRY_RUN="${DRY_RUN:-false}"

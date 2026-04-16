@@ -1,0 +1,68 @@
+# CAB-2071 phase 3: dedicated builder for the tls-cert-monitor ops image.
+# Tiny alpine image (openssl + curl + coreutils) consumed by the
+# tls-cert-monitor CronJob in stoa-infra (k8s/security/tls-cert-monitor-cronjob.yaml).
+# Kept separate from docker-publish.yml because this is not a release artifact
+# and has no Release Please coupling.
+
+name: Build tls-cert-monitor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/security/Dockerfile'
+      - '.github/workflows/build-tls-cert-monitor.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/security/Dockerfile'
+      - '.github/workflows/build-tls-cert-monitor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/${{ github.repository_owner }}/tls-cert-monitor
+
+jobs:
+  build:
+    name: Build & push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: Build (and push on main)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: ./scripts/security
+          file: ./scripts/security/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=tls-cert-monitor
+          cache-to: type=gha,mode=max,scope=tls-cert-monitor

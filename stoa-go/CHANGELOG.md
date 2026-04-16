@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.4...stoa-go-v0.3.5) (2026-04-15)
+
+
+### Features
+
+* **cli:** add full resource CRUD to stoactl (CAB-2053 phase 3) ([#2345](https://github.com/stoa-platform/stoa/issues/2345)) ([be1ac62](https://github.com/stoa-platform/stoa/commit/be1ac625c10f9a7ce1a0985c7344211084da212d))
+* **cli:** unified schema registry gostoa.dev/v1beta1 (CAB-2053 phase 4) ([#2348](https://github.com/stoa-platform/stoa/issues/2348)) ([f70c12d](https://github.com/stoa-platform/stoa/commit/f70c12d8a9cf5560f49a0031756f8e6ce0f12f6c))
+
 ## [0.3.4](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.3...stoa-go-v0.3.4) (2026-04-09)
 
 

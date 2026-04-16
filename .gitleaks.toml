@@ -12,40 +12,41 @@ description = "Allowlist for false positives"
 
 paths = [
   '''scripts/e2e/.*''',
-  '''docs/.*\.md''',
-  '''.*SUBSCRIPTIONS\.md''',
-  '''.*README\.md''',
   '''.*\.example''',
   '''tests/.*''',
   # Docker compose main files (env var defaults for local dev only)
   '''deploy/docker-compose/docker-compose\.yml''',
   '''deploy/docker-compose/docker-compose\..*\.yml''',
+  '''deploy/docker-compose/init/.*''',
+  '''deploy/docker-compose/test/.*''',
+  '''deploy/docker-compose/sidecar/.*''',
   # External Secrets manifests (references, not actual secrets)
   '''deploy/external-secrets/.*''',
+  # VPS deployment configs and docs (IPs, default creds for local dev gateways)
+  '''deploy/vps/.*''',
+  # Demo federation configs (dev-only Keycloak client secrets)
+  '''deploy/demo-federation/.*''',
+  # Platform bootstrap configs (Helm templates with variable refs)
+  '''deploy/platform-bootstrap/.*''',
   # Jenkins pipeline files with variable references
   '''jenkins/.*''',
   # UI quickstart guide with curl examples
   '''control-plane-ui/src/components/tools/QuickStartGuide\.tsx''',
   # Schema definitions (field names, not actual keys)
   '''control-plane-api/src/schemas/client\.py''',
-  # Plan documents
-  '''PLAN_DETAILLE\.md''',
-  # Demo scripts with test/demo credentials (not real secrets)
-  '''scripts/demo/.*''',
-  '''demo/.*''',
-  # VPS deploy files with webMethods trial default credentials (not real secrets)
-  '''deploy/vps/webmethods/.*''',
   # AI Factory rules (examples and anti-pattern documentation, not real secrets)
   '''\.claude/rules/.*\.md''',
-  # VPS benchmark deploy scripts with example Pushgateway credentials
-  '''deploy/vps/bench/.*''',
   # Onboarding wizard with curl template literals (${trialKey} interpolation, not real secrets)
   '''portal/src/components/onboarding/steps/FirstCall\.tsx''',
   # E2E smoke mock fixtures with fake JWT tokens (not real secrets)
   '''e2e/smoke-mock/.*''',
+  # E2E visual regression fixtures with mock JWT tokens (not real secrets)
+  '''e2e/visual/.*''',
   # Gateway Rust inline test fixtures (#[cfg(test)] blocks) — test RSA keys and fake JWTs
   '''stoa-gateway/src/oauth/client_auth\.rs''',
   '''stoa-gateway/src/oauth/proxy\.rs''',
+  # Gateway proxy module — SSRF blocklist uses IPs in test assertions
+  '''stoa-gateway/src/proxy/dynamic\.rs''',
   # UI crypto test fixtures — forge-generated test keys (not real secrets)
   '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
   # UI component test fixtures — mock PEM keys for certificate wizard tests
@@ -55,6 +56,36 @@ paths = [
   # Vault local dev init script — env var defaults for quickstart (not real secrets)
   '''deploy/local/vault/init-vault-local\.sh''',
   '''deploy/local/vault/vault-init-job\.yaml''',
+  # Alembic historical migrations (IPs documented with warnings, cannot rewrite)
+  '''control-plane-api/alembic/versions/057_.*''',
+  '''control-plane-api/alembic/versions/079_.*''',
+  # OpSec scanner itself (contains detection patterns as regex literals)
+  '''scripts/opsec-scan\.sh''',
+  # Ops scripts (vault credential verification, infra fixes, VPS inventory)
+  '''scripts/ops/.*''',
+  '''scripts/verify-vault-db-credentials\.sh''',
+  '''scripts/cab-964-infra-fix\.sh''',
+  # Demo scripts (smoke tests, live demos with dev credentials)
+  '''scripts/demo/.*''',
+  # Traffic scripts (arena benchmarks with VPS IPs)
+  '''scripts/traffic/.*''',
+  # Helm chart templates (use {{ .Values }} not real secrets)
+  '''charts/.*''',
+  # Internal documentation (curl examples with default creds, IPs, JWT examples)
+  '''docs/ibm/.*''',
+  '''docs/runbooks/.*''',
+  '''docs/guides/.*''',
+  '''docs/MCP-CLAUDEAI-INTEGRATION\.md''',
+  '''docs/PORTAL\.md''',
+  # Audit HTML reports (contain shell password patterns in Playwright traces)
+  '''docs/audits/.*''',
+  # Demo POC scripts (one-off demo with dev creds)
+  '''demo/.*''',
+  # State files (contain IP references in text, not actual secrets)
+  '''memory\.md''',
+  '''plan\.md''',
+  # Root README (historical example URLs)
+  '''README\.md''',
 ]
 
 regexes = [
@@ -81,6 +112,13 @@ commits = [
   "4e9b396296cc68dbff36a3f90b95014d4365bdd1",  # Historical ansible playbook db_password comment
   "ef2e357f4fab1ec2011cb0583d8d1f78604546fa",  # Historical ansible playbook db_password comment (dup)
   "64b5c3c76c34e746d43ff76ba6ba97ab9245b849",  # E2E deploy script curl-auth-header false positive (test key "not-a-real-key")
+  # Historical files deleted in OpSec purge (CAB-2057) — commits remain in git history
+  "7ece421e32d821291575e7068e848f66b73cc218",  # ansible/roles/webmethods/README.md default password (file deleted)
+  "b7d4d189d0c6e30cadea16eab28cf207ced38045",  # docs/ibm/webmethods-gateway-api.md curl-auth-user examples (file deleted)
+  "24565ac9cf1d3c8e704dd4c21ca69deb2482d194",  # README.md historical example URL with auth header
+  "502e1488",                                     # deploy/vps/webmethods/README.md infrastructure IPs (file deleted)
+  # memory-archive.md introduced then deleted in same branch (CLAUDE.md refacto) — financial-data = internal API cost logs (€0.05-0.12 Council S3 runs), not secrets
+  "a2c47bd775d96300db43459abcf4f0869dc1d04e",     # refactor: nuke .claude/rules/ (memory-archive.md added here)
 ]
 
 # Rules to modify or disable
@@ -149,5 +187,72 @@ regex = '''\$2[aby]?\$[0-9]+\$[./A-Za-z0-9]{53}'''
 allowlist = { paths = [
   '''tests/.*''',
   '''stoa-gateway/src/.*\.rs''',  # test fixtures in #[cfg(test)]
+]}
+
+# ============================================
+# OpSec rules — infrastructure & business intelligence (CAB-2057)
+# ============================================
+
+# STOA VPS infrastructure IPs (OVH, Contabo, Hetzner ranges)
+[[rules]]
+id = "stoa-infra-ip"
+description = "Hardcoded STOA infrastructure IP address"
+regex = '''(?:51\.83\.45\.\d+|51\.195\.43\.\d+|51\.255\.201\.\d+|51\.255\.193\.\d+|51\.254\.139\.\d+|54\.36\.209\.\d+|94\.23\.107\.\d+|135\.125\.204\.\d+|164\.68\.121\.\d+|144\.91\.73\.\d+|213\.199\.45\.\d+|91\.134\.108\.\d+)'''
+allowlist = { paths = [
+  '''\.claude/rules/.*\.md''',
+  '''control-plane-api/alembic/versions/.*''',
+  # VPS deployment documentation (IPs are in deploy README files, not secrets)
+  '''deploy/vps/.*README\.md''',
+]}
+
+# Password defaults in shell scripts (:-Default pattern)
+[[rules]]
+id = "shell-password-default"
+description = "Shell variable with hardcoded password default"
+regex = '''(?i)(?:PASSWORD|SECRET|TOKEN).*:-[A-Za-z0-9!@#$%^&*_\-]{6,}'''
+allowlist = { paths = [
+  '''tests/.*''',
+  '''\.claude/rules/.*\.md''',
+  # Local dev scripts — default values for local Keycloak/gateway (not real secrets)
+  '''scripts/traffic/.*''',
+  '''scripts/demo/.*''',
+  '''deploy/local/.*''',
+]}
+
+# Hardcoded client secrets in scripts
+[[rules]]
+id = "hardcoded-client-secret"
+description = "Hardcoded OIDC client secret"
+regex = '''(?i)client_secret[=:]["']?[a-z][\w-]{8,}["']?'''
+allowlist = { paths = [
+  '''tests/.*''',
+  '''\.claude/rules/.*\.md''',
+  '''deploy/demo-federation/keycloak/.*\.json''',
+  # Local dev scripts — dev-only client secrets for local Keycloak
+  '''scripts/traffic/.*''',
+  '''scripts/demo/.*''',
+  # API source — client_secret field references in routers/services (not hardcoded values)
+  '''control-plane-api/src/routers/.*''',
+  '''control-plane-api/src/services/.*''',
+]}
+
+# Financial data (EUR amounts, rates)
+[[rules]]
+id = "financial-data"
+description = "Financial data (EUR amounts, pricing)"
+regex = '''(?:\d+\s*€/[hj]|\d{1,3}[\s.]?\d{3}\s*€|€\s*\d{1,3}[\s.]?\d{3}|tarif.*\d+€|facturation|chiffre\s*d.affaires)'''
+allowlist = { paths = [
+  '''\.claude/rules/.*\.md''',
+  # Council review script has inline cost comments (~€0.036 per round-trip)
+  '''scripts/council-review\.sh''',
+]}
+
+# Client type disclosure (bank, insurance, etc.)
+[[rules]]
+id = "client-disclosure"
+description = "Client type or name disclosure"
+regex = '''(?i)(?:banque\s+centrale|client\s*\(.*banque|mission\s+client|prestation.*banque|mission.*banque)'''
+allowlist = { paths = [
+  '''\.claude/rules/.*\.md''',
 ]}
 

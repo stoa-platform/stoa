@@ -175,3 +175,23 @@ backups/
 kubeconfig*
 .kube/
 .env.keycloak
+
+# Ephemeral agent/tool state
+.playwright-mcp/
+.claude/scheduled_tasks.lock
+
+# Council S3 (CAB-2047) — history + metrics, never commit
+council-history.jsonl
+council-history-*.jsonl
+
+# ============================================
+# OpSec — Financial & Strategic (NEVER commit)
+# ============================================
+# CIR / tax credit documents (rates, billing, client references)
+cir-*.md
+CIR-*.md
+*-cir-*.md
+# Internal competitive benchmarks (scoring methodology)
+*-benchmark-*.md
+!docs/benchmarks/README.md
+memory-archive.md

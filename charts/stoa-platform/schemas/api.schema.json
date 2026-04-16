@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/api.schema.json",
+  "title": "STOA API Resource",
+  "description": "Schema for stoactl apply -f with kind: API",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "gostoa.dev/v1beta1",
+      "description": "STOA API version"
+    },
+    "kind": {
+      "type": "string",
+      "const": "API",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Resource name (unique within tenant)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Tenant ID (optional, falls back to CLI context)"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "$defs": {
+        "BackendApiAuthTypeEnum": {
+          "description": "Authentication type for the backend API.",
+          "enum": [
+            "none",
+            "api_key",
+            "bearer",
+            "basic",
+            "oauth2_cc"
+          ],
+          "title": "BackendApiAuthTypeEnum",
+          "type": "string"
+        }
+      },
+      "description": "Schema for registering a new backend API.",
+      "example": {
+        "auth_config": {
+          "header_name": "X-API-Key",
+          "header_value": "secret123"
+        },
+        "auth_type": "api_key",
+        "backend_url": "https://petstore.swagger.io/v2",
+        "description": "Sample Petstore backend",
+        "display_name": "Petstore API",
+        "name": "petstore-api",
+        "openapi_spec_url": "https://petstore.swagger.io/v2/swagger.json"
+      },
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "backend_url": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Backend Url",
+          "type": "string"
+        },
+        "openapi_spec_url": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Openapi Spec Url"
+        },
+        "auth_type": {
+          "$ref": "#/$defs/BackendApiAuthTypeEnum",
+          "default": "none"
+        },
+        "auth_config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Backend credentials (api_key, bearer token, basic user/pass, oauth2 client_id/secret+token_url)",
+          "title": "Auth Config"
+        }
+      },
+      "required": [
+        "name",
+        "backend_url"
+      ],
+      "title": "BackendApiCreate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

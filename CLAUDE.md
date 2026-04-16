@@ -90,12 +90,19 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 | **Notion** | Knowledge search | `notion-search`, `notion-fetch` |
 | **n8n** | Workflow automation | `execute_workflow` |
 
-Full reference: `.claude/rules/mcp-integrations.md`
+Full reference on-demand: `.claude/docs/mcp-integrations.md`
 
-### Rules (`.claude/rules/`)
-Key rules for AI Factory workflow:
-- `mcp-integrations.md` — Linear, Cloudflare, Vercel, Notion, n8n MCP usage patterns
-- `seo-content.md` — SEO content generation, blog templates, hub & spoke model, editorial calendar integration
+### Quand lire `.claude/docs/`
+
+`CLAUDE.md` (racine + par service) = décisions GO/NOGO auto-chargées. `.claude/docs/<topic>.md` = protocoles détaillés, exemples, tables de gotchas — **jamais auto-chargés**.
+
+Lire `docs/<topic>.md` quand:
+- Tu touches un domaine spécifique (ex: modifier le gateway → lire `code-style-rust.md` + `mcp-oauth.md`)
+- Un CLAUDE.md référence explicitement un fichier docs/
+- Tu écris un skill/command qui automatise un protocole (crash-recovery, council-s3, phase-ownership)
+- Une règle CLAUDE.md mentionne un seuil sans le détailler
+
+**Règle**: décisions binaires → CLAUDE.md. Protocoles, exemples, tables → `.claude/docs/`. Jamais dupliquer.
 
 ### Skills (`.claude/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
@@ -138,60 +145,65 @@ zh   # hotfix worktree (ephemeral, from main)
 
 Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all hooks.
 
-### Manual usage (local sessions)
+### Manual usage
+- `docs/scripts/build-context.sh --component X --intent "..."` ou `--ticket CAB-XXXX`
+- Lire le context pack dans `docs/context-packs/` avant de coder.
+- Impact >= HIGH (16+) → Council obligatoire. CRITICAL (31+) → review Christophe.
+- Legacy: `impact-check.sh`, `contract-check.sh`, `dashboard.sh`. DB: `docs/stoa-impact.db`.
 
-1. Générer le context pack :
-   ```bash
-   docs/scripts/build-context.sh --component {composant} --intent "{description}"
-   ```
-   Ou si ticket Linear connu :
-   ```bash
-   docs/scripts/build-context.sh --ticket "CAB-XXXX"
-   ```
+## Règles
 
-2. LIRE le context pack généré dans `docs/context-packs/`. Il contient :
-   - Composants impactés avec niveau de risque
-   - Contrats à ne pas casser
-   - Scénarios E2E traversés
-   - Fichiers à modifier et à vérifier
-   - Risques ouverts
-   - DoD contextualisé
+Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 
-3. Si Impact Score >= HIGH (16+) → Council OBLIGATOIRE avant de coder.
-   Si Impact Score CRITICAL (31+) → Christophe review le context pack avant GO.
+### Workflow & Sessions
+- 1 MEGA par session. `/clear` entre chaque.
+- `memory.md` mis à jour AVANT chaque `/clear` ou fin de session.
+- Jamais coder sans plan validé. "Tant que j'y suis" interdit.
+- Session-End State Lint (5 checks) obligatoire avant SESSION-END.
+- Context budget: délégation à 60%, `/compact` à 80%, arrêt à 90%.
 
-### Après chaque merge (automatisé par CI)
+### Qualité & CI
+- CI rouge sur `main` = P0 absolu. Rien ne merge, rien ne démarre.
+- Pre-push hook (Gate 1) obligatoire. `--no-verify` interdit sauf urgence explicite.
+- PR > 300 LOC interdit. Split en micro-PRs.
+- `fix()` sans test de régression = bloqué (regression-guard.yml).
+- Test-first par défaut pour `feat()` et `fix()`. Tests qui échouent AVANT le code.
+- Coverage: cp-api ≥70%, mcp-gateway ≥40%. Jamais descendre.
+- Ne jamais mocker la boundary sous test (httpx.MockTransport, MSW, pas AsyncMock).
 
-```bash
-# Automatique via context-compiler-learn.yml — ou manuellement :
-docs/scripts/post-change-learn.sh --commit HEAD --ticket CAB-XXXX
-```
+### Git & Merge
+- Toujours `--squash` + `--delete-branch`. Jamais push direct sur `main`.
+- `--force`, `git reset --hard`, suppression branche tiers = demander avant.
+- Conventional commits obligatoires. Ticket ID sur 1er commit.
+- Évidence archive obligatoire après Playwright: `docs/audits/<date>-<topic>/`.
 
-### Hebdomadaire (automatisé par CI)
+### Council & MEGA
+- Impact Score ≥ HIGH (16+) → Council obligatoire avant code.
+- Council S1/S2/S3: seuil ≥ 8.0/10. <8 = rework, pas de contournement.
+- MEGA jamais marqué Done directement. Toujours `/verify-mega` (5 gates).
+- Sub-ticket Done sans comment "PR #N" = gate 1 échoue.
 
-```bash
-# Automatique via claude-self-improve.yml — ou manuellement :
-docs/scripts/discover-cochanges.sh --commits 50
-docs/scripts/dashboard.sh
-```
+### Sécurité
+- NEVER reset/change/rotate password ou credential. Human-only.
+- NEVER `terraform destroy`, suppression cluster, topic Kafka prod sans confirmation.
+- NEVER hardcode secrets. Vault (`hcvault.gostoa.dev`) = source of truth.
+- Secrets K8s YAML: `REPLACE_FROM_VAULT` placeholder, jamais valeur réelle.
+- Fichiers interdits en commit: `.env*`, `*.pem`, `*.key`, `*.tfvars`, `*credentials*`.
 
-### Délégation
+### Documentation
+- Docs user-facing → `stoa-docs`. Runbooks/ops-only → `stoa/docs/`.
+- ADR numbers: stoa-docs owns. Next = ADR-061.
+- Jamais dupliquer un guide entre stoa et stoa-docs.
 
-Quand un contributeur prend un ticket :
-1. Générer le context pack (ou récupérer l'artifact CI)
-2. Partager le `.md` avec le contributeur
-3. Le contributeur charge le context pack en début de session Claude Code
-4. Après merge, `context-compiler-learn.yml` s'exécute automatiquement
+### Outillage
+- stoactl > curl/bash. Lire `.claude/context/cli-reference.md` avant de scanner src/.
+- Linear MCP = state changes. Local files = context. Batch reads, minimize writes.
+- Context7 avant de deviner une API de lib.
 
-### Legacy scripts (toujours disponibles)
-```bash
-docs/scripts/impact-check.sh {composant}     # Quick impact view (terminal)
-docs/scripts/contract-check.sh "{endpoint}"  # Contract lookup
-docs/scripts/dashboard.sh                    # Full dashboard + accuracy metrics
-```
-
-### DB location
-`docs/stoa-impact.db` — source of truth. `docs/DEPENDENCIES.md` et `docs/SCENARIOS.md` sont des vues auto-générées.
+### Phase Ownership (multi-instance)
+- Claim via `.claude/claims/<ID>.json` + `mkdir` atomic lock.
+- End-to-end ownership: qui claim finit la phase.
+- Claim stale = 2h sans activité → auto-release.
 
 ## Repos
 

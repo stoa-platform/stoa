@@ -299,9 +299,24 @@ class TestRegression_PlatformExternalURL:
         )
 
     def test_platform_status_uses_external_url(self, client_as_cpi_admin: TestClient):
-        """Platform status response must use external URL, not internal K8s URL."""
+        """Platform status response must use external URL, not internal K8s URL.
+
+        Post CAB-1887 G7: mock fallback removed, so we simulate a successful
+        ArgoCD response and assert external_links still use external URLs.
+        """
+        from unittest.mock import AsyncMock
+
         mock_argocd = MagicMock()
-        mock_argocd.is_connected = False
+        mock_argocd.is_connected = True
+        mock_argocd.health_check = AsyncMock(return_value=True)
+        mock_argocd.get_platform_status = AsyncMock(
+            return_value={
+                "status": "healthy",
+                "components": [],
+                "checked_at": "2026-04-15T00:00:00Z",
+                "events": {},
+            }
+        )
 
         mock_settings = MagicMock()
         mock_settings.ARGOCD_URL = "http://argocd-server.argocd.svc:8080"

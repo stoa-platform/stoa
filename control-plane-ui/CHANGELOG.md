@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.4.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.3.0...control-plane-ui-v1.4.0) (2026-04-16)
+
+
+### Features
+
+* **mcp:** stoa-impact MCP + SDD L1 (CAB-2066) ([#2377](https://github.com/stoa-platform/stoa/issues/2377)) ([551d330](https://github.com/stoa-platform/stoa/commit/551d330e5af0251e544c62317bc5e2fb1ddfa738))
+
+
+### Bug Fixes
+
+* **ui:** chown /usr/share/nginx/html for sed -i index.html ([#2375](https://github.com/stoa-platform/stoa/issues/2375)) ([17a693b](https://github.com/stoa-platform/stoa/commit/17a693b94d81e3b940ad24d119a39b9a0c13398e))
+
+## [1.3.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.2...control-plane-ui-v1.3.0) (2026-04-16)
+
+
+### Features
+
+* **local:** Tilt + k3d local environment + Alembic migration fixes ([#2359](https://github.com/stoa-platform/stoa/issues/2359)) ([86392f8](https://github.com/stoa-platform/stoa/commit/86392f891154071cc2201a26a85967fd91065c62))
+
+
+### Bug Fixes
+
+* **ci:** resolve Helm lint and ESLint SAST pre-existing failures (CAB-2053) ([#2351](https://github.com/stoa-platform/stoa/issues/2351)) ([530fafa](https://github.com/stoa-platform/stoa/commit/530fafa8fdc8c28bd8ce5765ac51e608febf53eb))
+* **ui:** Gateway Dashboard Inconsistencies — unified status, remove mocks, aggregated multi-gateway overview (CAB-1887) ([#2365](https://github.com/stoa-platform/stoa/issues/2365)) ([db2c4af](https://github.com/stoa-platform/stoa/commit/db2c4aff42b583251a02570368b92c6b3f6fadb6))
+* **ui:** prevent stale runtime-config.js browser cache ([#2294](https://github.com/stoa-platform/stoa/issues/2294)) ([3a65210](https://github.com/stoa-platform/stoa/commit/3a6521094d7e29c724f11018e6e83a55562ff257))
+
+## [1.2.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.1...control-plane-ui-v1.2.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* **deps:** revert Vite 8, Tailwind 4, plugin-react 6 breaking bumps (CAB-2034) ([#2292](https://github.com/stoa-platform/stoa/issues/2292)) ([4b65694](https://github.com/stoa-platform/stoa/commit/4b656942ec5b814ceae41735179f3b185604a8bc))
+* **security:** remove default credentials, enforce Vault (CAB-2052) ([#2296](https://github.com/stoa-platform/stoa/issues/2296)) ([c953ae3](https://github.com/stoa-platform/stoa/commit/c953ae3cc63f74aebb7dad2fbe8546ced52cde0c))
+* **ui:** skip broken MCPServers tests + remove orphaned test (CAB-2034) ([#2289](https://github.com/stoa-platform/stoa/issues/2289)) ([655f16b](https://github.com/stoa-platform/stoa/commit/655f16bf93e7ca5c36cb891a9a4bd222f0694c78))
+
 ## [1.2.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.0...control-plane-ui-v1.2.1) (2026-04-09)
 
 

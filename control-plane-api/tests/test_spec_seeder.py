@@ -9,6 +9,7 @@ Run: cd control-plane-api && pytest tests/test_spec_seeder.py -v
 
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -364,6 +365,8 @@ class TestEdgeCases:
 class TestCLIEntrypoint:
     """Verify the CLI entrypoint exists and parses args."""
 
+    _CWD = str(Path(__file__).resolve().parent.parent)
+
     def test_cli_module_importable(self):
         """The __main__.py module exists."""
         from scripts.seeder import __main__  # noqa: F401
@@ -374,7 +377,7 @@ class TestCLIEntrypoint:
             [sys.executable, "-m", "scripts.seeder", "--help"],
             capture_output=True,
             text=True,
-            cwd="/Users/torpedo/hlfh-repos/stoa/control-plane-api",
+            cwd=self._CWD,
         )
         assert result.returncode == 0
         assert "--profile" in result.stdout
@@ -386,7 +389,7 @@ class TestCLIEntrypoint:
             [sys.executable, "-m", "scripts.seeder", "--profile", "qa"],
             capture_output=True,
             text=True,
-            cwd="/Users/torpedo/hlfh-repos/stoa/control-plane-api",
+            cwd=self._CWD,
         )
         assert result.returncode != 0
         assert "invalid choice" in result.stderr or "Unknown profile" in result.stderr

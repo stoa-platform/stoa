@@ -13,7 +13,9 @@ export function useGatewayStatus() {
     queryFn: getGatewayStatus,
     refetchInterval: 30000,
     staleTime: 10000,
-    retry: false, // getGatewayStatus never throws; no need to retry
+    // CAB-1887 G2: getGatewayStatus now throws when all endpoints fail.
+    // React Query surfaces the error; callers render an explicit error state.
+    retry: 1,
   });
 }
 

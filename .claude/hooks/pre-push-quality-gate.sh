@@ -5,6 +5,8 @@
 #
 # Kill switch: DISABLE_PRE_PUSH_GATE=1
 # Skip for specific push: SKIP_QUALITY_GATE=1 git push ...
+# Council S3 kill-switch: DISABLE_COUNCIL_GATE=1 (skip council-review.sh only)
+# Council S3 threshold: COUNCIL_MIN_DIFF_LINES=20 (below = CI-only)
 
 set -euo pipefail
 
@@ -61,7 +63,19 @@ while IFS= read -r f; do
   esac
 done <<< "$CHANGED_FILES"
 
-# Docs-only changes skip quality gates
+# --- OpSec scan (ALWAYS runs, even docs-only — sensitive content can be in .md) ---
+if [ -x "$REPO_ROOT/scripts/opsec-scan.sh" ] && [ "${DISABLE_OPSEC_SCAN:-}" != "1" ]; then
+  echo "⏳ [opsec] scanning for sensitive content..." >&2
+  if ! "$REPO_ROOT/scripts/opsec-scan.sh" 2>&1 >&2; then
+    echo "" >&2
+    echo "🚫 OpSec scan BLOCKED push — fix findings above" >&2
+    echo "Kill switch: DISABLE_OPSEC_SCAN=1" >&2
+    exit 2
+  fi
+  echo "✅ [opsec] clean" >&2
+fi
+
+# Docs-only changes skip quality gates (but NOT opsec — already ran above)
 if [ "$ONLY_DOCS" = "true" ]; then
   exit 0
 fi
@@ -85,8 +99,13 @@ run_check() {
 
 # Python (control-plane-api)
 if [ "$HAS_PYTHON_API" = "true" ]; then
-  run_check "api:ruff" "cd $REPO_ROOT/control-plane-api && ruff check ."
-  run_check "api:black" "cd $REPO_ROOT/control-plane-api && black --check ."
+  # Scope: src/ only — matches CI exactly (reusable-python-ci.yml runs ruff check src/).
+  # tests/ has pre-existing violations out of CI scope; linting them here blocked pushes
+  # on unrelated legacy debt (CAB-2053 Phase 2 bug class #7).
+  # black removed: CI does NOT run black (reusable-python-ci.yml only runs ruff + mypy).
+  # src/ has 83 pre-existing black violations that CI tolerates — hook should not be
+  # stricter than CI.
+  run_check "api:ruff" "cd $REPO_ROOT/control-plane-api && ruff check src/"
 fi
 
 # Console (control-plane-ui)
@@ -130,4 +149,31 @@ fi
 if [ "$CHECKS_RUN" -gt 0 ]; then
   echo "✅ Pre-push quality gate passed ($CHECKS_RUN checks)" >&2
 fi
+
+# --- Council Stage 3 (CAB-2046 / CAB-2048) ---
+# Conditional on diff size: small diffs go through CI (council-gate.yml) only.
+COUNCIL_HISTORY_FILE="${COUNCIL_HISTORY_FILE:-${REPO_ROOT}/council-history.jsonl}"
+COUNCIL_MIN_DIFF_LINES="${COUNCIL_MIN_DIFF_LINES:-20}"
+COUNCIL_DIFF_LINES=$(git diff --numstat "${MERGE_BASE}" HEAD 2>/dev/null \
+  | awk '{sum+=$1+$2} END {print sum+0}')
+
+if [ "${DISABLE_COUNCIL_GATE:-}" = "1" ]; then
+  echo "⏭️  Council S3 BYPASSED (DISABLE_COUNCIL_GATE=1)" >&2
+  printf '{"timestamp":"%s","status":"BYPASSED","reason":"local_kill_switch","diff_lines":%s}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$COUNCIL_DIFF_LINES" >> "$COUNCIL_HISTORY_FILE"
+elif [ "$COUNCIL_DIFF_LINES" -lt "$COUNCIL_MIN_DIFF_LINES" ]; then
+  echo "⏭️  Council S3 SKIPPED (diff $COUNCIL_DIFF_LINES lines < $COUNCIL_MIN_DIFF_LINES — CI-only)" >&2
+elif [ ! -x "$REPO_ROOT/scripts/council-review.sh" ]; then
+  echo "⏭️  Council S3 SKIPPED (scripts/council-review.sh missing or not executable)" >&2
+else
+  echo "⏳ [council:s3] running ($COUNCIL_DIFF_LINES diff lines)..." >&2
+  if ! "$REPO_ROOT/scripts/council-review.sh" --diff "${MERGE_BASE}..HEAD" 1>&2; then
+    echo "" >&2
+    echo "🚫 Council S3 REWORK — address blockers above, then push again" >&2
+    echo "To bypass (emergency): DISABLE_COUNCIL_GATE=1 git push ..." >&2
+    exit 2
+  fi
+  echo "✅ [council:s3] APPROVED" >&2
+fi
+
 exit 0

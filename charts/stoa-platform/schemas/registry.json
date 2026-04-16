@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.gostoa.dev/schemas/registry.json",
+  "title": "STOA Schema Registry",
+  "description": "Registry of all 10 stoactl resource kinds at gostoa.dev/v1beta1",
+  "apiVersion": "gostoa.dev/v1beta1",
+  "kinds": {
+    "API": {
+      "schema": "api.schema.json",
+      "description": "STOA API resource"
+    },
+    "Consumer": {
+      "schema": "consumer.schema.json",
+      "description": "STOA Consumer resource"
+    },
+    "Contract": {
+      "schema": "contract.schema.json",
+      "description": "STOA Contract resource"
+    },
+    "Gateway": {
+      "schema": "gateway.schema.json",
+      "description": "STOA Gateway resource"
+    },
+    "MCPServer": {
+      "schema": "mcpserver.schema.json",
+      "description": "STOA MCPServer resource"
+    },
+    "Plan": {
+      "schema": "plan.schema.json",
+      "description": "STOA Plan resource"
+    },
+    "ServiceAccount": {
+      "schema": "serviceaccount.schema.json",
+      "description": "STOA ServiceAccount resource"
+    },
+    "Subscription": {
+      "schema": "subscription.schema.json",
+      "description": "STOA Subscription resource"
+    },
+    "Tenant": {
+      "schema": "tenant.schema.json",
+      "description": "STOA Tenant resource"
+    },
+    "Webhook": {
+      "schema": "webhook.schema.json",
+      "description": "STOA Webhook resource"
+    }
+  }
+}

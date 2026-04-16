@@ -144,7 +144,7 @@ done
 
 # Test LDAP federation: eve-gamma token via ROPC
 R=$(curl -s --max-time 15 -X POST "https://auth.gostoa.dev/realms/demo-org-gamma/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=federation-demo&client_secret=gamma-demo-secret&username=eve-gamma&password=demo" 2>/dev/null || echo "error")
+  -d "grant_type=password&client_id=federation-demo&client_secret=${FEDERATION_SECRET_GAMMA:?Set FEDERATION_SECRET_GAMMA}&username=eve-gamma&password=${DEMO_PASSWORD:?Set DEMO_PASSWORD}" 2>/dev/null || echo "error")
 check "LDAP federation (eve-gamma token)" "$R" "access_token"
 
 # ─────────────────────────────────────────────────────────────────────

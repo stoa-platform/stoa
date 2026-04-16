@@ -68,4 +68,27 @@ fi
     done
 ) || true
 
+# --- Council S3: rotate council-history.jsonl monthly (CAB-2046 / CAB-2050) ---
+# Runs best-effort on session start. Keeps monthly snapshots, prunes >90 days.
+(
+    cd "$PROJECT_DIR" 2>/dev/null || exit 0
+    HISTORY_FILE="council-history.jsonl"
+    [ -f "$HISTORY_FILE" ] || exit 0
+
+    CURRENT_MONTH=$(date +%Y-%m)
+    FIRST_TIMESTAMP=$(head -1 "$HISTORY_FILE" 2>/dev/null | jq -r '.timestamp // empty' 2>/dev/null || echo "")
+    LAST_MONTH="${FIRST_TIMESTAMP:0:7}"
+
+    if [ -n "$LAST_MONTH" ] && [ "$LAST_MONTH" != "$CURRENT_MONTH" ]; then
+        ROTATED="council-history-${LAST_MONTH}.jsonl"
+        if [ ! -e "$ROTATED" ]; then
+            mv "$HISTORY_FILE" "$ROTATED" 2>/dev/null && \
+                echo "[council-s3] rotated council-history.jsonl → $ROTATED" >&2
+        fi
+    fi
+
+    # Prune rotated files older than 90 days (never touches the live jsonl)
+    find . -maxdepth 1 -name "council-history-*.jsonl" -mtime +90 -delete 2>/dev/null || true
+) || true
+
 exit 0

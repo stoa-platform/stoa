@@ -1,0 +1,18 @@
+diff --git a/example/sample.py b/example/sample.py
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/example/sample.py
+@@ -0,0 +1,12 @@
++"""Sample module for council-review smoke test.
++
++Used only to exercise anthropic_call + evaluate_axis(conformance)
++with a real API call (~€0.003). Contains intentionally clean code
++so the expected verdict is APPROVED (score >= 8).
++"""
++
++
++def add(a: int, b: int) -> int:
++    """Return the sum of two integers."""
++    return a + b
++

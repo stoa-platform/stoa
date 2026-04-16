@@ -97,7 +97,10 @@ class GatewayReconciler:
 
     async def _reconcile(self) -> None:
         """Main reconciliation: list ArgoCD apps → upsert/prune gateway_instances."""
-        # Fetch all ArgoCD applications using static token (no user token needed)
+        # Skip when no static token is configured (typical local dev without ArgoCD).
+        # Without a token, httpx would reject the empty "Bearer " header on every cycle.
+        if not settings.ARGOCD_TOKEN:
+            return
         try:
             all_apps = await argocd_service.get_applications(auth_token="")
         except Exception as e:

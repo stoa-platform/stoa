@@ -2,7 +2,10 @@
 
 CAB-330: Enhanced debug logging for authentication troubleshooting.
 CAB-438: Sender-constrained token validation (RFC 8705/9449).
+CAB-2082: JWT issuer validation + Keycloak public-key cache (Security P0-01).
 """
+
+import time
 
 import httpx
 from fastapi import Depends, HTTPException, Request, status
@@ -17,6 +20,21 @@ from .sender_constrained import validate_sender_constrained_token
 logger = get_logger(__name__)
 security = HTTPBearer(auto_error=False)
 
+# CAB-2082: cache the Keycloak realm public key in-memory (TTL 5 min).
+# Prior behavior refetched on every request — DoS vector if Keycloak slow,
+# and no pinning/cache meant MITM could substitute the key freely.
+_KC_PUBLIC_KEY_CACHE: dict[str, tuple[str, float]] = {}
+_KC_PUBLIC_KEY_TTL_SEC = 300.0
+_KC_HTTP_TIMEOUT_SEC = 3.0
+
+
+def _kc_realm_url() -> str:
+    return f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+
+
+def _clear_keycloak_public_key_cache() -> None:
+    _KC_PUBLIC_KEY_CACHE.clear()
+
 
 class User(BaseModel):
     id: str
@@ -26,14 +44,24 @@ class User(BaseModel):
     tenant_id: str | None = None
 
 
-async def get_keycloak_public_key():
-    """Fetch Keycloak realm public key"""
-    url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
-    async with httpx.AsyncClient() as client:
+async def get_keycloak_public_key() -> str:
+    """Fetch Keycloak realm public key, cached in-memory for 5 minutes."""
+    url = _kc_realm_url()
+    now = time.monotonic()
+    cached = _KC_PUBLIC_KEY_CACHE.get(url)
+    if cached is not None and now - cached[1] < _KC_PUBLIC_KEY_TTL_SEC:
+        return cached[0]
+
+    async with httpx.AsyncClient(timeout=_KC_HTTP_TIMEOUT_SEC) as client:
         response = await client.get(url)
+        response.raise_for_status()
         data = response.json()
-        public_key = data.get("public_key")
-        return f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
+    public_key = data.get("public_key")
+    if not public_key:
+        raise httpx.HTTPError("Keycloak realm endpoint returned no public_key")
+    pem = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
+    _KC_PUBLIC_KEY_CACHE[url] = (pem, now)
+    return pem
 
 
 async def get_current_user(
@@ -83,8 +111,16 @@ async def get_current_user(
     try:
         public_key = await get_keycloak_public_key()
 
-        # Decode without audience validation first
-        payload = jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
+        # CAB-2082: enforce issuer. Audience is validated manually below to
+        # support legacy clients still mapping azp instead of aud.
+        expected_issuer = _kc_realm_url()
+        payload = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            issuer=expected_issuer,
+            options={"verify_aud": False, "verify_iss": True},
+        )
 
         # Debug: log payload structure (not values) for troubleshooting
         if settings.LOG_DEBUG_AUTH_PAYLOAD:
@@ -137,9 +173,7 @@ async def get_current_user(
         # after all clients have migrated (target: Q2 2026).
         legacy_audiences = {"control-plane-ui", "stoa-portal"}
         primary_audience = {settings.KEYCLOAK_CLIENT_ID}
-        if any(aud in legacy_audiences for aud in token_aud) and not any(
-            aud in primary_audience for aud in token_aud
-        ):
+        if any(aud in legacy_audiences for aud in token_aud) and not any(aud in primary_audience for aud in token_aud):
             logger.warning(
                 "DEPRECATION: Token uses legacy audience, migrate to Audience Mapper",
                 token_aud=token_aud,
@@ -177,11 +211,7 @@ async def get_current_user(
         roles = normalize_roles(payload.get("realm_access", {}).get("roles", []))
         # Handle tenant_id as either string or list (from group membership mapper)
         raw_tenant_id = payload.get("tenant_id")
-        tenant_id = (
-            (raw_tenant_id[0] if raw_tenant_id else None)
-            if isinstance(raw_tenant_id, list)
-            else raw_tenant_id
-        )
+        tenant_id = (raw_tenant_id[0] if raw_tenant_id else None) if isinstance(raw_tenant_id, list) else raw_tenant_id
 
         # Get user ID from 'sub' claim (Keycloak UUID)
         # The 'sub' claim is mandatory in OIDC access tokens — if missing, the
@@ -252,9 +282,7 @@ async def get_current_user(
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}")
     except httpx.HTTPError as e:
         logger.error(
             "Failed to fetch Keycloak public key",

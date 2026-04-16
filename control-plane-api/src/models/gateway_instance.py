@@ -106,7 +106,7 @@ class GatewayInstance(Base):
 
     # Metadata
     version = Column(String(50), nullable=True)  # Gateway software version
-    tags = Column(JSONB, nullable=False, default=list)
+    tags = Column(JSONB, nullable=False, default=list, server_default="[]")
 
     # Operational control (CAB-1979)
     enabled = Column(Boolean, nullable=False, default=True, server_default="true")

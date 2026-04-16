@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.2...control-plane-ui-v1.3.0) (2026-04-16)
+
+
+### Features
+
+* **local:** Tilt + k3d local environment + Alembic migration fixes ([#2359](https://github.com/stoa-platform/stoa/issues/2359)) ([86392f8](https://github.com/stoa-platform/stoa/commit/86392f891154071cc2201a26a85967fd91065c62))
+
+
+### Bug Fixes
+
+* **ci:** resolve Helm lint and ESLint SAST pre-existing failures (CAB-2053) ([#2351](https://github.com/stoa-platform/stoa/issues/2351)) ([530fafa](https://github.com/stoa-platform/stoa/commit/530fafa8fdc8c28bd8ce5765ac51e608febf53eb))
+* **ui:** Gateway Dashboard Inconsistencies — unified status, remove mocks, aggregated multi-gateway overview (CAB-1887) ([#2365](https://github.com/stoa-platform/stoa/issues/2365)) ([db2c4af](https://github.com/stoa-platform/stoa/commit/db2c4aff42b583251a02570368b92c6b3f6fadb6))
+* **ui:** prevent stale runtime-config.js browser cache ([#2294](https://github.com/stoa-platform/stoa/issues/2294)) ([3a65210](https://github.com/stoa-platform/stoa/commit/3a6521094d7e29c724f11018e6e83a55562ff257))
+
 ## [1.2.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.2.1...control-plane-ui-v1.2.2) (2026-04-11)
 
 

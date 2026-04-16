@@ -24,7 +24,11 @@ const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'http://mcp.stoa.local';
 const KC_URL = process.env.KEYCLOAK_URL || 'http://auth.stoa.local';
 const LOKI_URL = process.env.LOKI_URL || 'http://localhost:3100';
 const USER = process.env.PARZIVAL_USER || 'parzival';
-const PASSWORD = process.env.PARZIVAL_PASSWORD || 'Parzival@2026!';
+const PASSWORD = (() => {
+  const v = process.env.PARZIVAL_PASSWORD;
+  if (!v) throw new Error('PARZIVAL_PASSWORD env var is required');
+  return v;
+})();
 const TENANT_ID = 'high-five';
 const TS = Date.now();
 

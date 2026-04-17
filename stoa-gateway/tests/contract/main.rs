@@ -12,6 +12,7 @@ mod discovery;
 mod errors;
 mod health;
 mod mcp_compliance;
+mod mcp_public_methods;
 mod oauth;
 mod sse_accept;
 mod tools;

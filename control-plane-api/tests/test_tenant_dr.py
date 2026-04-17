@@ -1034,14 +1034,13 @@ class TestImportEndpoint:
         response = client_as_other_tenant.post("/v1/tenants/acme/import", json=payload)
         assert response.status_code == 403
 
-    @pytest.mark.integration
     def test_import_endpoint_exists(self, client_as_cpi_admin):
-        """Import endpoint should be reachable (not 404/405).
+        """Import endpoint should be reachable (route registered + method allowed).
 
-        Requires real DB — mock session returns None for tenant lookup,
-        causing 404 from import_tenant's tenant validation. So the
-        assertion `404 not in (404, 405)` only passes when a seeded
-        tenant exists, which requires the integration DB setup.
+        Uses the mocked DB session, which returns None for tenant lookup and
+        makes the handler raise 404 "Tenant not found". That still proves the
+        route was resolved — FastAPI's own "route not found" response has
+        ``detail == "Not Found"``, whereas our handler returns a custom detail.
         """
         payload = {
             "archive": {
@@ -1063,6 +1062,7 @@ class TestImportEndpoint:
             "mode": {"conflict_resolution": "skip", "dry_run": True},
         }
         response = client_as_cpi_admin.post("/v1/tenants/test-tenant/import", json=payload)
-        # Should not be 404 (route exists) or 405 (method allowed)
-        # May be 200 (mock DB returns truthy) or 500 (mock DB issues)
-        assert response.status_code not in (404, 405)
+        assert response.status_code != 405, "POST should be allowed on /v1/tenants/{id}/import"
+        if response.status_code == 404:
+            detail = response.json().get("detail")
+            assert detail != "Not Found", "Route is not registered (FastAPI default 404)"

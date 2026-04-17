@@ -38,6 +38,15 @@ var (
 // AdminMode indicates whether --admin was passed (service account context).
 var AdminMode bool
 
+// NamespaceOverride holds the value of the persistent --namespace flag.
+// When non-empty, commands should prefer this over metadata.namespace / the
+// configured tenant.
+var NamespaceOverride string
+
+// Namespace returns the namespace override set via the --namespace flag,
+// or an empty string when the flag was not provided.
+func Namespace() string { return NamespaceOverride }
+
 var rootCmd = &cobra.Command{
 	Use:   "stoactl",
 	Short: "STOA Platform CLI",
@@ -66,6 +75,12 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&AdminMode, "admin", false, "Use service account token instead of user OIDC token")
+	// `-n` intentionally omitted: the `bridge` command already defines a
+	// local `-n` shortcut, and shadowing it globally would break existing
+	// scripts. Long form only; users still get kubectl-like UX.
+	rootCmd.PersistentFlags().StringVar(&NamespaceOverride, "namespace", "", "Target namespace (overrides metadata.namespace in manifests)")
+
+	apply.SetNamespaceOverrideFn(Namespace)
 
 	rootCmd.AddCommand(catalogcmd.NewCatalogCmd())
 	rootCmd.AddCommand(auditcmd.NewAuditCmd())

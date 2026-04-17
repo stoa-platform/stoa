@@ -205,6 +205,101 @@ func searchSubstr(s, substr string) bool {
 	return false
 }
 
+func TestMCPServerForTool_Label(t *testing.T) {
+	r := types.Resource{
+		Metadata: types.Metadata{
+			Labels: map[string]string{"mcp-server": "custom-mcp"},
+		},
+	}
+	spec := types.ToolSpec{APIRef: &types.APIRef{Name: "openapi"}}
+	if got := mcpServerForTool(r, spec); got != "custom-mcp" {
+		t.Errorf("label should win; got %q, want %q", got, "custom-mcp")
+	}
+}
+
+func TestMCPServerForTool_APIRefFallback(t *testing.T) {
+	r := types.Resource{Metadata: types.Metadata{}}
+	spec := types.ToolSpec{APIRef: &types.APIRef{Name: "petstore"}}
+	if got := mcpServerForTool(r, spec); got != "petstore-mcp" {
+		t.Errorf("apiRef fallback; got %q, want %q", got, "petstore-mcp")
+	}
+}
+
+func TestMCPServerForTool_NoHint(t *testing.T) {
+	r := types.Resource{Metadata: types.Metadata{}}
+	spec := types.ToolSpec{}
+	if got := mcpServerForTool(r, spec); got != "" {
+		t.Errorf("no hint should return empty; got %q", got)
+	}
+}
+
+func TestDecodeToolSpec_FromYAMLMap(t *testing.T) {
+	raw := map[string]any{
+		"displayName": "Get balance",
+		"endpoint":    "https://api.bank.fr/balance",
+		"method":      "GET",
+		"apiRef": map[string]any{
+			"name":        "openapi",
+			"operationId": "getBalance",
+		},
+	}
+	spec, err := decodeToolSpec(raw)
+	if err != nil {
+		t.Fatalf("decodeToolSpec() err = %v", err)
+	}
+	if spec.DisplayName != "Get balance" {
+		t.Errorf("displayName = %q", spec.DisplayName)
+	}
+	if spec.APIRef == nil || spec.APIRef.Name != "openapi" {
+		t.Errorf("apiRef not decoded: %+v", spec.APIRef)
+	}
+	if spec.APIRef.OperationID != "getBalance" {
+		t.Errorf("operationId = %q", spec.APIRef.OperationID)
+	}
+}
+
+func TestDecodeToolSpec_NilRejected(t *testing.T) {
+	if _, err := decodeToolSpec(nil); err == nil {
+		t.Error("decodeToolSpec(nil) should error")
+	}
+}
+
+func TestTenantFromResource_NamespaceOverrideWins(t *testing.T) {
+	prev := namespaceOverrideFn
+	defer func() { namespaceOverrideFn = prev }()
+	namespaceOverrideFn = func() string { return "flag-tenant" }
+
+	r := types.Resource{Metadata: types.Metadata{Namespace: "yaml-tenant"}}
+	if got := tenantFromResource(nil, r); got != "flag-tenant" {
+		t.Errorf("--namespace should override metadata.namespace; got %q", got)
+	}
+}
+
+func TestApplyFile_ToolMissingServerHint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "orphan-tool.yaml")
+	content := `apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: orphan-tool
+  namespace: demo
+spec:
+  displayName: Orphan
+  endpoint: https://example.com
+  method: GET
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	err := applyFile(nil, path)
+	if err == nil {
+		t.Fatal("Tool without server hint should error before network call")
+	}
+	if !contains(err.Error(), "parent MCP server") {
+		t.Errorf("error should mention 'parent MCP server'; got %q", err.Error())
+	}
+}
+
 func TestRunApply_MissingFile(t *testing.T) {
 	filePath = "/nonexistent/path/file.yaml"
 	dryRun = false

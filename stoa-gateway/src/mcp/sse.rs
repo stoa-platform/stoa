@@ -88,6 +88,32 @@ pub const METHOD_NOT_FOUND: i32 = -32601;
 pub const INVALID_PARAMS: i32 = -32602;
 pub const INTERNAL_ERROR: i32 = -32603;
 
+/// JSON-RPC methods that are part of the MCP capability-negotiation /
+/// discovery surface. MCP clients (claude.ai, MCP Inspector, claude-code)
+/// call these right after `initialize` — before any OAuth flow has
+/// attached a Bearer token — so 401-ing them breaks the whole handshake
+/// even when the server later advertises OAuth on protected operations.
+///
+/// Tool invocation (`tools/call`) is NOT listed here; authorisation for it
+/// goes through the UAC / OPA policy layer which already enforces scopes
+/// and tenant isolation. `notifications/*` are fire-and-forget client
+/// messages with no response body, equally safe to accept anonymously.
+const PUBLIC_METHODS: &[&str] = &[
+    "initialize",
+    "ping",
+    "tools/list",
+    "resources/list",
+    "resources/templates/list",
+    "resources/read",
+    "prompts/list",
+    "prompts/get",
+    "completion/complete",
+    "roots/list",
+    "logging/setLevel",
+    "notifications/initialized",
+    "notifications/cancelled",
+];
+
 // ============================================
 // MCP Protocol Version Negotiation (2025-11-25)
 // ============================================
@@ -212,18 +238,12 @@ pub async fn handle_sse_post(
     }
 
     // === OAuth 2.1 Auth Challenge (RFC 9728) ===
-    // Public methods that don't require authentication.
-    // tools/list is public to allow unauthenticated discovery (matches /mcp/tools/list behavior).
-    let public_methods = [
-        "initialize",
-        "ping",
-        "tools/list",
-        "notifications/initialized",
-        "notifications/cancelled",
-    ];
+    // Public methods = the MCP capability-negotiation / discovery surface;
+    // see `PUBLIC_METHODS` for the rationale. Tool invocation is gated by
+    // the UAC / OPA layer in `handle_tools_call`, not here.
     let has_auth = headers.get(header::AUTHORIZATION).is_some();
 
-    if !public_methods.contains(&request.method.as_str()) && !has_auth {
+    if !PUBLIC_METHODS.contains(&request.method.as_str()) && !has_auth {
         debug!(
             method = %request.method,
             "Unauthenticated request to protected method — returning 401"
@@ -665,16 +685,9 @@ pub async fn process_single_request(
 
     // For batch processing, we need simplified auth check
     // Full auth is handled in the main handler for single requests
-    let public_methods = [
-        "initialize",
-        "ping",
-        "tools/list",
-        "notifications/initialized",
-        "notifications/cancelled",
-    ];
     let has_auth = headers.get(header::AUTHORIZATION).is_some();
 
-    if !public_methods.contains(&request.method.as_str()) && !has_auth {
+    if !PUBLIC_METHODS.contains(&request.method.as_str()) && !has_auth {
         return JsonRpcResponse::error(request.id, -32001, "Authentication required");
     }
 

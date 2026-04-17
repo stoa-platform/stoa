@@ -99,7 +99,10 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
     """Create consumers for the given profile."""
     consumers = CONSUMERS_BY_PROFILE[profile]
     result = StepResult(name="consumers")
-    now = datetime.now(UTC)
+    # consumers.created_at / updated_at are DateTime (tz-naive) in the ORM,
+    # asyncpg rejects tz-aware datetimes against them. See fix notes in
+    # scripts/seeder/steps/plans.py.
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     for c_def in consumers:
         row = await session.execute(

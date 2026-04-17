@@ -77,6 +77,7 @@ func (m *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // interface used by sub-packages (catalog, audit, trace, quota).
 type TestClient struct {
 	baseURL   string
+	tenant    string
 	Transport *MockTransport
 	http      *http.Client
 }
@@ -87,6 +88,7 @@ func NewTestClient(routes Responses) *TestClient {
 	mt := NewMockTransport(routes)
 	return &TestClient{
 		baseURL:   "http://mock",
+		tenant:    "test-tenant",
 		Transport: mt,
 		http:      &http.Client{Transport: mt},
 	}
@@ -97,8 +99,20 @@ func NewTestClient(routes Responses) *TestClient {
 func NewTestClientWithURL(baseURL string) *TestClient {
 	return &TestClient{
 		baseURL: baseURL,
+		tenant:  "test-tenant",
 		http:    &http.Client{},
 	}
+}
+
+// WithTenant overrides the default test tenant ID.
+func (tc *TestClient) WithTenant(tenant string) *TestClient {
+	tc.tenant = tenant
+	return tc
+}
+
+// TenantID satisfies catalog.Doer.
+func (tc *TestClient) TenantID() string {
+	return tc.tenant
 }
 
 // Do performs an HTTP request, satisfying the catalog.Doer interface.

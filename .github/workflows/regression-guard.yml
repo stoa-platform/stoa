@@ -92,18 +92,36 @@ jobs:
             echo "Found TypeScript regression test"
           fi
 
+          # NOTE: `grep -q` exits on first match, which SIGPIPEs the upstream
+          # `git diff` on large diffs. Combined with `set -o pipefail` above, the
+          # pipeline then returns 141 and the `if` branch is treated as false
+          # even when a match exists. Count matches instead.
+
           # Rust regression tests (inline, detected via diff content)
           if echo "$CHANGED_FILES" | grep -qE '\.rs$'; then
-            # Check if any Rust file has a new regression_ test function
-            if git diff "origin/${{ github.base_ref }}...HEAD" -- '*.rs' 2>/dev/null | grep -qE '^\+.*fn regression_'; then
+            RUST_MATCHES=$(git diff "origin/${{ github.base_ref }}...HEAD" -- '*.rs' 2>/dev/null | grep -cE '^\+.*fn regression_' || true)
+            if [ "${RUST_MATCHES:-0}" -gt 0 ]; then
               HAS_REGRESSION="true"
               echo "Found Rust regression test"
             fi
           fi
 
+          # Go regression tests (inline, detected via diff content). Accept
+          # either a new test func explicitly named TestRegression*, or a
+          # comment of the form `// regression for CAB-XXXX` next to a test.
+          if echo "$CHANGED_FILES" | grep -qE '_test\.go$'; then
+            GO_MATCHES=$(git diff "origin/${{ github.base_ref }}...HEAD" -- '*_test.go' 2>/dev/null \
+              | grep -cE '^\+.*(func TestRegression|// [Rr]egression for CAB-|// [Rr]egression test for CAB-)' || true)
+            if [ "${GO_MATCHES:-0}" -gt 0 ]; then
+              HAS_REGRESSION="true"
+              echo "Found Go regression test"
+            fi
+          fi
+
           # E2E regression-tagged scenarios
           if echo "$CHANGED_FILES" | grep -qE '\.feature$'; then
-            if git diff "origin/${{ github.base_ref }}...HEAD" -- '*.feature' 2>/dev/null | grep -qE '^\+.*@regression'; then
+            E2E_MATCHES=$(git diff "origin/${{ github.base_ref }}...HEAD" -- '*.feature' 2>/dev/null | grep -cE '^\+.*@regression' || true)
+            if [ "${E2E_MATCHES:-0}" -gt 0 ]; then
               HAS_REGRESSION="true"
               echo "Found E2E regression scenario"
             fi
@@ -118,6 +136,7 @@ jobs:
           echo "  - Python: test_regression_cab_XXXX_description() in tests/test_regression_*.py"
           echo "  - TypeScript: describe('regression/CAB-XXXX', ...) in src/__tests__/regression/"
           echo "  - Rust: fn regression_description() in #[cfg(test)] mod tests"
+          echo "  - Go: func TestRegressionCABxxxx() or a '// regression for CAB-xxxx' comment in *_test.go"
           echo "  - E2E: @regression tag on Gherkin scenario"
           echo ""
           echo "If this fix truly cannot have a regression test, add the 'skip-regression' label."

@@ -34,8 +34,57 @@ Examples:
 	cmd.AddCommand(newTenantGetCmd())
 	cmd.AddCommand(newTenantCreateCmd())
 	cmd.AddCommand(newTenantDeleteCmd())
+	cmd.AddCommand(newTenantStatusCmd())
 
 	return cmd
+}
+
+func newTenantStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status <id>",
+		Short: "Show provisioning status for a tenant",
+		Long: `Poll the async provisioning saga for a tenant.
+
+After 'tenant create' the backend fires an async saga (Keycloak group + admin
+user + policy seed + Kafka events). Use this command to check progress.
+
+Example:
+  stoactl tenant status acme-corp`,
+		Args: cobra.ExactArgs(1),
+		RunE: runTenantStatus,
+	}
+}
+
+func runTenantStatus(cmd *cobra.Command, args []string) error {
+	c, err := client.New()
+	if err != nil {
+		return err
+	}
+
+	format := output.ParseFormat(outputFormat)
+	printer := output.NewPrinter(format)
+
+	st, err := c.GetTenantProvisioningStatus(args[0])
+	if err != nil {
+		return err
+	}
+
+	switch printer.Format {
+	case output.FormatJSON:
+		return printer.PrintJSON(st)
+	case output.FormatYAML:
+		return printer.PrintYAML(st)
+	default:
+		headers := []string{"TENANT", "STATUS", "ATTEMPTS", "KC GROUP", "ERROR"}
+		rows := [][]string{{
+			st.TenantID, st.ProvisioningStatus,
+			fmt.Sprintf("%d", st.ProvisioningAttempts),
+			st.KCGroupID, st.ProvisioningError,
+		}}
+		printer.PrintTable(headers, rows)
+	}
+
+	return nil
 }
 
 func newTenantListCmd() *cobra.Command {
@@ -64,6 +113,12 @@ func newTenantCreateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
+			}
+			if ownerEmail == "" {
+				return fmt.Errorf("--owner-email is required")
+			}
+			if displayName == "" {
+				displayName = name
 			}
 
 			c, err := client.New()

@@ -147,12 +147,17 @@ func TestTriggerSyncError(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	want := types.APIListResponse{
-		Items:      []types.API{{ID: "1", Name: "api-1", Version: "v1", Status: "active"}},
-		TotalCount: 1,
+	paged := struct {
+		Items    []types.API `json:"items"`
+		Total    int         `json:"total"`
+		Page     int         `json:"page"`
+		PageSize int         `json:"page_size"`
+	}{
+		Items: []types.API{{ID: "1", Name: "api-1", Version: "v1", Status: "active"}},
+		Total: 1,
 	}
 	tc := testutil.NewTestClient(testutil.Responses{
-		"GET /v1/portal/apis": {Status: http.StatusOK, Body: want},
+		"GET /v1/tenants/test-tenant/apis": {Status: http.StatusOK, Body: paged},
 	})
 
 	svc := New(tc)
@@ -160,8 +165,8 @@ func TestList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if got.TotalCount != 1 {
-		t.Errorf("List() TotalCount = %d, want 1", got.TotalCount)
+	if got.Total != 1 {
+		t.Errorf("List() TotalCount = %d, want 1", got.Total)
 	}
 	if got.Items[0].Name != "api-1" {
 		t.Errorf("List() Items[0].Name = %q, want %q", got.Items[0].Name, "api-1")
@@ -170,7 +175,7 @@ func TestList(t *testing.T) {
 
 func TestListError(t *testing.T) {
 	tc := testutil.NewTestClient(testutil.Responses{
-		"GET /v1/portal/apis": {Status: http.StatusInternalServerError, Body: "internal error"},
+		"GET /v1/tenants/test-tenant/apis": {Status: http.StatusInternalServerError, Body: "internal error"},
 	})
 
 	svc := New(tc)
@@ -184,8 +189,8 @@ func TestGet(t *testing.T) {
 	want := types.API{ID: "123", Name: "my-api", Version: "v1", Status: "active"}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/portal/apis/my-api" {
-			t.Errorf("path = %q, want /v1/portal/apis/my-api", r.URL.Path)
+		if r.URL.Path != "/v1/tenants/test-tenant/apis/my-api" {
+			t.Errorf("path = %q, want /v1/tenants/test-tenant/apis/my-api", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(want)
@@ -206,7 +211,7 @@ func TestGet(t *testing.T) {
 
 func TestGetNotFound(t *testing.T) {
 	tc := testutil.NewTestClient(testutil.Responses{
-		"GET /v1/portal/apis/gone": {Status: http.StatusNotFound},
+		"GET /v1/tenants/test-tenant/apis/gone": {Status: http.StatusNotFound},
 	})
 	svc := New(tc)
 
@@ -233,12 +238,38 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+// TestValidate — client-side validation passes for a complete spec. The
+// backend has no dry-run endpoint, so Validate is purely local (no HTTP).
 func TestValidate(t *testing.T) {
+	tc := testutil.NewTestClient(testutil.Responses{})
+	svc := New(tc)
+
+	resource := &types.Resource{
+		APIVersion: "gostoa.dev/v1beta1",
+		Kind:       "API",
+		Metadata:   types.Metadata{Name: "test"},
+		Spec: map[string]any{
+			"upstream": map[string]any{"url": "https://upstream.example.com"},
+		},
+	}
+	if err := svc.Validate(resource); err != nil {
+		t.Errorf("Validate() error = %v", err)
+	}
+}
+
+// regression for CAB-2095: stoactl API CRUD must use tenant-scoped paths.
+// Asserts that API resources are POSTed to the tenant-scoped admin path
+// with the flat payload shape expected by control-plane-api APICreate.
+// Prior to CAB-2095 the CLI hit /v1/apis which 404s on the backend.
+func TestRegressionCAB2095_APITenantScopedCreate(t *testing.T) {
+	var gotPath string
+	var gotPayload map[string]any
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("dryRun") != "true" {
-			t.Error("expected dryRun=true query parameter")
-		}
-		w.WriteHeader(http.StatusOK)
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&gotPayload)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"x","tenant_id":"test-tenant","name":"petstore","display_name":"Pet Store","version":"1.0.0","description":"","backend_url":"https://petstore.io"}`))
 	}))
 	defer server.Close()
 
@@ -246,11 +277,123 @@ func TestValidate(t *testing.T) {
 	svc := New(tc)
 
 	resource := &types.Resource{
-		APIVersion: "stoa.io/v1",
+		APIVersion: "gostoa.dev/v1beta1",
 		Kind:       "API",
-		Metadata:   types.Metadata{Name: "test"},
+		Metadata:   types.Metadata{Name: "petstore"},
+		Spec: map[string]any{
+			"version":     "1.0.0",
+			"description": "Pet store bridge",
+			"upstream":    map[string]any{"url": "https://petstore.io"},
+			"catalog":     map[string]any{"displayName": "Pet Store", "tags": []string{"demo"}},
+		},
 	}
-	if err := svc.Validate(resource); err != nil {
-		t.Errorf("Validate() error = %v", err)
+
+	if err := svc.CreateOrUpdate(resource); err != nil {
+		t.Fatalf("CreateOrUpdate() error = %v", err)
+	}
+	if gotPath != "/v1/tenants/test-tenant/apis" {
+		t.Errorf("path = %q, want /v1/tenants/test-tenant/apis (CAB-2095)", gotPath)
+	}
+	if gotPayload["backend_url"] != "https://petstore.io" {
+		t.Errorf("backend_url = %v, want https://petstore.io", gotPayload["backend_url"])
+	}
+	if gotPayload["display_name"] != "Pet Store" {
+		t.Errorf("display_name = %v, want Pet Store", gotPayload["display_name"])
+	}
+	if gotPayload["name"] != "petstore" {
+		t.Errorf("name = %v, want petstore", gotPayload["name"])
+	}
+}
+
+// TestCreateMetadataNamespaceOverride — manifest namespace wins over client tenant.
+func TestCreateMetadataNamespaceOverride(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	tc := testutil.NewTestClientWithURL(server.URL).WithTenant("ctx-tenant")
+	svc := New(tc)
+
+	resource := &types.Resource{
+		Kind:     "API",
+		Metadata: types.Metadata{Name: "petstore", Namespace: "override-tenant"},
+		Spec: map[string]any{
+			"upstream": map[string]any{"url": "https://petstore.io"},
+		},
+	}
+
+	if err := svc.CreateOrUpdate(resource); err != nil {
+		t.Fatalf("CreateOrUpdate() error = %v", err)
+	}
+	if gotPath != "/v1/tenants/override-tenant/apis" {
+		t.Errorf("path = %q, want /v1/tenants/override-tenant/apis", gotPath)
+	}
+}
+
+// TestValidateCatchesMissingBackendURL — client-side validation fails when
+// spec.upstream.url is missing, without any network call.
+func TestValidateCatchesMissingBackendURL(t *testing.T) {
+	tc := testutil.NewTestClient(testutil.Responses{})
+	svc := New(tc)
+
+	resource := &types.Resource{
+		Kind:     "API",
+		Metadata: types.Metadata{Name: "broken"},
+		Spec:     map[string]any{"version": "1.0.0"},
+	}
+	if err := svc.Validate(resource); err == nil {
+		t.Error("Validate() error = nil, want error for missing backend_url")
+	}
+}
+
+// TestCreateOrUpdateNoTenant — CLI context missing a tenant fails fast with
+// a clear error, before any HTTP call (CAB-2095 error-case).
+func TestCreateOrUpdateNoTenant(t *testing.T) {
+	tc := testutil.NewTestClient(testutil.Responses{}).WithTenant("")
+	svc := New(tc)
+
+	resource := &types.Resource{
+		Kind:     "API",
+		Metadata: types.Metadata{Name: "orphan"},
+		Spec:     map[string]any{"upstream": map[string]any{"url": "https://orphan.io"}},
+	}
+	err := svc.CreateOrUpdate(resource)
+	if err == nil {
+		t.Fatal("CreateOrUpdate() error = nil, want 'no tenant' error")
+	}
+	if len(tc.Transport.Calls) != 0 {
+		t.Errorf("expected 0 HTTP calls, got %d", len(tc.Transport.Calls))
+	}
+}
+
+// TestListNoTenant — same guard on List path (CAB-2095 error-case).
+func TestListNoTenant(t *testing.T) {
+	tc := testutil.NewTestClient(testutil.Responses{}).WithTenant("")
+	svc := New(tc)
+
+	if _, err := svc.List(); err == nil {
+		t.Fatal("List() error = nil, want 'no tenant' error")
+	}
+	if len(tc.Transport.Calls) != 0 {
+		t.Errorf("expected 0 HTTP calls, got %d", len(tc.Transport.Calls))
+	}
+}
+
+// TestValidateRejectsEmptySpec — coerceAPISpec returns an error for nil
+// spec, so Validate bubbles it up without touching the network.
+func TestValidateRejectsEmptySpec(t *testing.T) {
+	tc := testutil.NewTestClient(testutil.Responses{})
+	svc := New(tc)
+
+	resource := &types.Resource{
+		Kind:     "API",
+		Metadata: types.Metadata{Name: "empty"},
+		// Spec intentionally nil
+	}
+	if err := svc.Validate(resource); err == nil {
+		t.Error("Validate() error = nil, want error for nil spec")
 	}
 }

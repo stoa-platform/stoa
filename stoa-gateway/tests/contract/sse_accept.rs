@@ -61,8 +61,12 @@ fn content_type(headers: &axum::http::HeaderMap) -> String {
 // Accept: text/event-stream → SSE response
 // ===========================================================
 
+/// Regression for CAB-2106: claude.ai sent `Accept: text/event-stream` and
+/// the gateway returned `application/json`, causing the connector to abort
+/// the session every ~90 s. Any response that is not `text/event-stream`
+/// here reopens that bug.
 #[tokio::test]
-async fn initialize_returns_sse_when_accept_is_event_stream() {
+async fn regression_cab_2106_initialize_returns_sse_when_accept_is_event_stream() {
     let app = TestApp::new();
     let (status, headers, body) = app
         .post_raw(

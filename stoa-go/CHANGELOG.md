@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.5...stoa-go-v0.3.6) (2026-04-17)
+
+
+### Bug Fixes
+
+* **cli:** scope stoactl API CRUD to tenant paths + audit docs (CAB-2095) ([#2398](https://github.com/stoa-platform/stoa/issues/2398)) ([aca8fc5](https://github.com/stoa-platform/stoa/commit/aca8fc5319e728c0ce813c879ca573f83066bd67))
+
 ## [0.3.5](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.4...stoa-go-v0.3.5) (2026-04-15)
 
 

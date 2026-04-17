@@ -289,11 +289,9 @@ class TestSourceTagging:
         runner = SeederRunner(session=integration_db, profile="dev")
         await runner.run()
 
-        # Check that seeder-created tenants have the source tag
-        # The exact column depends on implementation (metadata JSON or dedicated column)
-        result = await integration_db.execute(
-            text("SELECT id FROM tenants WHERE " "metadata->>'source' = 'seeder' OR source = 'seeder'")
-        )
+        # Seeder writes the tag into the tenants.settings JSON column
+        # (see scripts/seeder/steps/tenants.py — SEEDER_TAG merged into settings).
+        result = await integration_db.execute(text("SELECT id FROM tenants WHERE settings->>'source' = 'seeder'"))
         rows = result.fetchall()
         assert len(rows) > 0, "Seeder tenants must have source=seeder tag"
 

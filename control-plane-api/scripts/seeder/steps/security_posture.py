@@ -150,21 +150,32 @@ FINDINGS_BY_PROFILE: dict[str, list[dict]] = {
 async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) -> StepResult:
     """Seed security_events and security_findings for the Security Posture dashboard."""
     result = StepResult(name="security_posture")
-    now = datetime.now(UTC)
+    # security_events.created_at is DateTime (tz-naive); asyncpg rejects
+    # tz-aware values. Use naive UTC — derived (now - timedelta) inherits it.
+    now = datetime.now(UTC).replace(tzinfo=None)
     tenant_id = "oasis"
     scan_id = uuid4()
 
     # --- Security events ---
     events = EVENTS_BY_PROFILE.get(profile, [])
     for evt_def in events:
-        # Check idempotent: skip if event_type + source + similar timestamp exists
+        payload = {**evt_def["payload"], "source": SEEDER_TAG}
+        # Idempotency on the full payload (JSONB equality) — several events
+        # share (event_type, source) but each payload is unique, so a looser
+        # key would collapse distinct rows into one and leave the dataset
+        # incomplete.
         check = await session.execute(
             text(
                 "SELECT COUNT(*) FROM security_events "
                 "WHERE tenant_id = :tid AND event_type = :et AND source = :src "
-                "AND payload::text LIKE :tag"
+                "AND payload = CAST(:payload AS jsonb)"
             ),
-            {"tid": tenant_id, "et": evt_def["event_type"], "src": evt_def["source"], "tag": f"%{SEEDER_TAG}%"},
+            {
+                "tid": tenant_id,
+                "et": evt_def["event_type"],
+                "src": evt_def["source"],
+                "payload": json.dumps(payload),
+            },
         )
         if check.scalar_one() > 0:
             result.skipped += 1
@@ -175,7 +186,6 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
             result.created += 1
             continue
 
-        payload = {**evt_def["payload"], "source": SEEDER_TAG}
         created_at = now - timedelta(hours=evt_def.get("hours_ago", 0))
 
         await session.execute(
@@ -207,15 +217,37 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
             {"tid": tenant_id},
         )
         if scan_exists.scalar_one() == 0:
+            # Every NOT NULL column on security_scans has only a
+            # Python-side default, so raw SQL INSERTs must supply a value.
+            # Severity breakdown is derived from the findings list.
+            sev_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+            for f in findings:
+                sev = f.get("severity", "low")
+                if sev in sev_counts:
+                    sev_counts[sev] += 1
             await session.execute(
                 text("""
                     INSERT INTO security_scans (
-                        id, tenant_id, scanner, status, findings_count, score, started_at, completed_at
+                        id, tenant_id, scanner, scan_type, status,
+                        findings_count, critical_count, high_count,
+                        medium_count, low_count, score, details,
+                        started_at, completed_at
                     ) VALUES (
-                        :id, :tid, 'seeder', 'completed', :cnt, NULL, :now, :now
+                        :id, :tid, 'seeder', 'seeder', 'completed',
+                        :cnt, :crit, :high, :med, :low, NULL,
+                        '{}', :now, :now
                     )
                 """),
-                {"id": scan_id, "tid": tenant_id, "cnt": len(findings), "now": now},
+                {
+                    "id": scan_id,
+                    "tid": tenant_id,
+                    "cnt": len(findings),
+                    "crit": sev_counts["critical"],
+                    "high": sev_counts["high"],
+                    "med": sev_counts["medium"],
+                    "low": sev_counts["low"],
+                    "now": now,
+                },
             )
         else:
             row = await session.execute(

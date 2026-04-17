@@ -13,4 +13,5 @@ mod errors;
 mod health;
 mod mcp_compliance;
 mod oauth;
+mod sse_accept;
 mod tools;

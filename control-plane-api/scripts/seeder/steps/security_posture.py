@@ -209,19 +209,37 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
             {"tid": tenant_id},
         )
         if scan_exists.scalar_one() == 0:
-            # scan_type is NOT NULL (Python-side default only; raw SQL must
-            # supply a value explicitly).
+            # Every NOT NULL column on security_scans has only a
+            # Python-side default, so raw SQL INSERTs must supply a value.
+            # Severity breakdown is derived from the findings list.
+            sev_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+            for f in findings:
+                sev = f.get("severity", "low")
+                if sev in sev_counts:
+                    sev_counts[sev] += 1
             await session.execute(
                 text("""
                     INSERT INTO security_scans (
                         id, tenant_id, scanner, scan_type, status,
-                        findings_count, score, started_at, completed_at
+                        findings_count, critical_count, high_count,
+                        medium_count, low_count, score, details,
+                        started_at, completed_at
                     ) VALUES (
                         :id, :tid, 'seeder', 'seeder', 'completed',
-                        :cnt, NULL, :now, :now
+                        :cnt, :crit, :high, :med, :low, NULL,
+                        '{}', :now, :now
                     )
                 """),
-                {"id": scan_id, "tid": tenant_id, "cnt": len(findings), "now": now},
+                {
+                    "id": scan_id,
+                    "tid": tenant_id,
+                    "cnt": len(findings),
+                    "crit": sev_counts["critical"],
+                    "high": sev_counts["high"],
+                    "med": sev_counts["medium"],
+                    "low": sev_counts["low"],
+                    "now": now,
+                },
             )
         else:
             row = await session.execute(

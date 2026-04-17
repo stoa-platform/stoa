@@ -77,8 +77,8 @@ func TestNewForMode_Admin(t *testing.T) {
 }
 
 // TestNewForMode_Admin_MissingToken surfaces the explicit "no admin token
-// found" error (the main DoD of CAB-2107) instead of falling through to an
-// unauthenticated 401. regression for CAB-2107.
+// found" error instead of falling through to an unauthenticated 401.
+// regression for CAB-2107
 func TestNewForMode_Admin_MissingToken(t *testing.T) {
 	seedTestContext(t)
 	t.Setenv("STOA_API_KEY", "")

@@ -3,6 +3,7 @@
 CAB-330: Enhanced debug logging for authentication troubleshooting.
 CAB-438: Sender-constrained token validation (RFC 8705/9449).
 CAB-2082: JWT issuer validation + Keycloak public-key cache (Security P0-01).
+CAB-2094: Split issuer (public KEYCLOAK_URL) from JWKS fetch (KEYCLOAK_INTERNAL_URL).
 """
 
 import time
@@ -28,8 +29,14 @@ _KC_PUBLIC_KEY_TTL_SEC = 300.0
 _KC_HTTP_TIMEOUT_SEC = 3.0
 
 
-def _kc_realm_url() -> str:
+def _kc_issuer_url() -> str:
+    """Expected `iss` claim — must match what Keycloak embeds in tokens."""
     return f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+
+
+def _kc_public_key_url() -> str:
+    """URL for fetching the realm public key (internal service URL when set)."""
+    return f"{settings.keycloak_internal_url}/realms/{settings.KEYCLOAK_REALM}"
 
 
 def _clear_keycloak_public_key_cache() -> None:
@@ -46,7 +53,7 @@ class User(BaseModel):
 
 async def get_keycloak_public_key() -> str:
     """Fetch Keycloak realm public key, cached in-memory for 5 minutes."""
-    url = _kc_realm_url()
+    url = _kc_public_key_url()
     now = time.monotonic()
     cached = _KC_PUBLIC_KEY_CACHE.get(url)
     if cached is not None and now - cached[1] < _KC_PUBLIC_KEY_TTL_SEC:
@@ -113,7 +120,9 @@ async def get_current_user(
 
         # CAB-2082: enforce issuer. Audience is validated manually below to
         # support legacy clients still mapping azp instead of aud.
-        expected_issuer = _kc_realm_url()
+        # CAB-2094: issuer comes from the PUBLIC URL regardless of where we
+        # fetched the public key (which may be the internal SVC URL).
+        expected_issuer = _kc_issuer_url()
         payload = jwt.decode(
             token,
             public_key,
@@ -287,7 +296,7 @@ async def get_current_user(
         logger.error(
             "Failed to fetch Keycloak public key",
             error=str(e),
-            keycloak_url=settings.KEYCLOAK_URL,
+            keycloak_url=settings.keycloak_internal_url,
             realm=settings.KEYCLOAK_REALM,
         )
         raise HTTPException(

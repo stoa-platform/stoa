@@ -10,8 +10,8 @@ import (
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/apply"
 	auditcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/audit"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/auth"
-	catalogcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/catalog"
 	bridgecmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/bridge"
+	catalogcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/catalog"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/completion"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/config"
 	connectcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/connect"
@@ -26,6 +26,7 @@ import (
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/subscription"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/tenant"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/token_usage"
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 )
 
 var (
@@ -34,9 +35,6 @@ var (
 	// Commit is set at build time
 	Commit = "none"
 )
-
-// AdminMode indicates whether --admin was passed (service account context).
-var AdminMode bool
 
 // NamespaceOverride holds the value of the persistent --namespace flag.
 // When non-empty, commands should prefer this over metadata.namespace / the
@@ -74,7 +72,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&AdminMode, "admin", false, "Use service account token instead of user OIDC token")
+	rootCmd.PersistentFlags().BoolVar(&cmdflags.AdminMode, "admin", false, "Use service account token instead of user OIDC token")
 	// `-n` intentionally omitted: the `bridge` command already defines a
 	// local `-n` shortcut, and shadowing it globally would break existing
 	// scripts. Long form only; users still get kubectl-like UX.
@@ -114,13 +112,13 @@ var versionCmd = &cobra.Command{
 
 // ExitCode constants following ADR-001
 const (
-	ExitSuccess           = 0
-	ExitGeneralError      = 1
-	ExitMisuse            = 2
-	ExitAuthFailed        = 3
-	ExitResourceNotFound  = 4
-	ExitConflict          = 5
-	ExitValidationError   = 6
+	ExitSuccess          = 0
+	ExitGeneralError     = 1
+	ExitMisuse           = 2
+	ExitAuthFailed       = 3
+	ExitResourceNotFound = 4
+	ExitConflict         = 5
+	ExitValidationError  = 6
 )
 
 // Exit exits with the specified code

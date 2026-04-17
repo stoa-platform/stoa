@@ -6,10 +6,92 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/stoa-platform/stoa-go/pkg/config"
 	"github.com/stoa-platform/stoa-go/pkg/types"
 )
+
+// seedTestContext writes a minimal stoactl config in a temp HOME so that
+// config.Load + GetCurrentContext succeed without touching the user's real
+// ~/.stoa directory. Returns the context name, which is unique per test so
+// that keychain lookups against "<name>-admin" reliably miss.
+func seedTestContext(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	name := "test-ctx-" + t.Name()
+	cfg := &config.Config{
+		APIVersion:     "stoa.io/v1",
+		Kind:           "Config",
+		CurrentContext: name,
+		Contexts: []config.Context{
+			{
+				Name: name,
+				Context: config.ContextDetail{
+					Server: "https://api.test.invalid",
+					Tenant: "test-tenant",
+				},
+			},
+		},
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+	return name
+}
+
+// TestNewForMode_User routes to New() when admin=false and honours STOA_API_KEY.
+func TestNewForMode_User(t *testing.T) {
+	seedTestContext(t)
+	t.Setenv("STOA_API_KEY", "user-env-token")
+	t.Setenv("STOA_ADMIN_KEY", "")
+
+	c, err := NewForMode(false)
+	if err != nil {
+		t.Fatalf("NewForMode(false) error = %v", err)
+	}
+	if !c.IsAuthenticated() {
+		t.Error("NewForMode(false) should load STOA_API_KEY")
+	}
+	if c.token != "user-env-token" {
+		t.Errorf("token = %q, want %q", c.token, "user-env-token")
+	}
+}
+
+// TestNewForMode_Admin routes to NewAdmin() when admin=true and honours STOA_ADMIN_KEY.
+func TestNewForMode_Admin(t *testing.T) {
+	seedTestContext(t)
+	t.Setenv("STOA_API_KEY", "")
+	t.Setenv("STOA_ADMIN_KEY", "admin-env-token")
+
+	c, err := NewForMode(true)
+	if err != nil {
+		t.Fatalf("NewForMode(true) error = %v", err)
+	}
+	if c.token != "admin-env-token" {
+		t.Errorf("token = %q, want %q", c.token, "admin-env-token")
+	}
+}
+
+// TestNewForMode_Admin_MissingToken surfaces the explicit "no admin token
+// found" error instead of falling through to an unauthenticated 401.
+// regression for CAB-2107
+func TestNewForMode_Admin_MissingToken(t *testing.T) {
+	seedTestContext(t)
+	t.Setenv("STOA_API_KEY", "")
+	t.Setenv("STOA_ADMIN_KEY", "")
+
+	_, err := NewForMode(true)
+	if err == nil {
+		t.Fatal("NewForMode(true) without admin token: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no admin token found") {
+		t.Errorf("error = %v, want to mention 'no admin token found'", err)
+	}
+}
 
 // TestNewWithConfig tests client creation with specific config
 func TestNewWithConfig(t *testing.T) {

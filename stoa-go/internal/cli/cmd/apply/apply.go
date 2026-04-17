@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 	"github.com/stoa-platform/stoa-go/pkg/types"
@@ -21,6 +22,19 @@ var (
 	filePath string
 	dryRun   bool
 )
+
+// namespaceOverrideFn is the callback used by apply to read the root-level
+// --namespace flag without importing the cmd package (which would create an
+// import cycle). The root package wires this at init time.
+var namespaceOverrideFn = func() string { return "" }
+
+// SetNamespaceOverrideFn wires the --namespace override accessor. Called by
+// the root package during init.
+func SetNamespaceOverrideFn(fn func() string) {
+	if fn != nil {
+		namespaceOverrideFn = fn
+	}
+}
 
 // NewApplyCmd creates the apply command
 func NewApplyCmd() *cobra.Command {
@@ -33,7 +47,7 @@ The resource will be created if it doesn't exist, or updated if it does.
 This command is idempotent and safe to run multiple times.
 
 Supported kinds: API, Tenant, Gateway, Subscription, Consumer, Contract,
-MCPServer, ServiceAccount, Plan, Webhook.
+MCPServer, ServiceAccount, Plan, Webhook, Tool.
 
 Examples:
   # Apply an API definition
@@ -59,7 +73,7 @@ Examples:
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := client.NewForMode(cmdflags.AdminMode)
 	if err != nil {
 		return err
 	}
@@ -186,8 +200,12 @@ func applyFile(c *client.Client, path string) error {
 		if err := applyGeneric(c, fmt.Sprintf("/v1/tenants/%s/webhooks", tenant), resource); err != nil {
 			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
 		}
+	case "Tool":
+		if err := applyTool(c, resource); err != nil {
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.Kind, resource.Metadata.Name, err)
+		}
 	default:
-		return fmt.Errorf("unsupported resource kind: %s", resource.Kind)
+		return fmt.Errorf("unsupported resource kind: %s (supported: API, Tenant, Gateway, Subscription, Consumer, Contract, MCPServer, ServiceAccount, Plan, Webhook, Tool)", resource.Kind)
 	}
 
 	output.Success("%s/%s configured", resource.Kind, resource.Metadata.Name)
@@ -231,10 +249,93 @@ func buildApplyBody(resource types.Resource) map[string]any {
 	return body
 }
 
-// tenantFromResource returns the tenant from metadata.namespace or falls back to the client's configured tenant.
+// tenantFromResource resolves the tenant for a resource with precedence:
+// --namespace flag > metadata.namespace > client's configured tenant.
 func tenantFromResource(c *client.Client, resource types.Resource) string {
+	if ns := namespaceOverrideFn(); ns != "" {
+		return ns
+	}
 	if resource.Metadata.Namespace != "" {
 		return resource.Metadata.Namespace
 	}
 	return c.TenantID()
+}
+
+// applyTool registers a Tool CRD under its parent MCP server.
+// Parent server is resolved from (in order): metadata.labels["mcp-server"],
+// spec.apiRef.name + "-mcp", or an explicit error. If the server does not
+// exist, it is auto-created to match `stoactl bridge --apply` semantics.
+func applyTool(c *client.Client, resource types.Resource) error {
+	spec, err := decodeToolSpec(resource.Spec)
+	if err != nil {
+		return err
+	}
+
+	serverName := mcpServerForTool(resource, spec)
+	if serverName == "" {
+		return fmt.Errorf("cannot resolve parent MCP server: add metadata.labels[\"mcp-server\"] or spec.apiRef.name")
+	}
+
+	serverID, created, err := findOrCreateMCPServer(c, serverName, resource)
+	if err != nil {
+		return err
+	}
+	if created {
+		output.Info("  created MCP server %q (id=%s)", serverName, serverID)
+	}
+
+	return c.AddToolToServer(serverID, resource.Metadata.Name, spec)
+}
+
+// decodeToolSpec converts a raw resource.Spec (typically map[string]any from YAML)
+// into the strongly-typed ToolSpec expected by the CP API client.
+func decodeToolSpec(raw any) (types.ToolSpec, error) {
+	var spec types.ToolSpec
+	if raw == nil {
+		return spec, fmt.Errorf("tool spec is empty")
+	}
+	b, err := yaml.Marshal(raw)
+	if err != nil {
+		return spec, fmt.Errorf("failed to re-marshal Tool spec: %w", err)
+	}
+	if err := yaml.Unmarshal(b, &spec); err != nil {
+		return spec, fmt.Errorf("invalid Tool spec: %w", err)
+	}
+	return spec, nil
+}
+
+// mcpServerForTool resolves the parent MCP server name for a Tool CRD.
+// Precedence: metadata.labels["mcp-server"] > spec.apiRef.name + "-mcp".
+func mcpServerForTool(r types.Resource, spec types.ToolSpec) string {
+	if v := r.Metadata.Labels["mcp-server"]; v != "" {
+		return v
+	}
+	if spec.APIRef != nil && spec.APIRef.Name != "" {
+		return spec.APIRef.Name + "-mcp"
+	}
+	return ""
+}
+
+// findOrCreateMCPServer looks up an MCP server by name. If missing, it creates
+// one and returns the new ID. The second return value is true when the server
+// was created by this call.
+func findOrCreateMCPServer(c *client.Client, name string, r types.Resource) (string, bool, error) {
+	list, err := c.ListMCPServers()
+	if err != nil {
+		return "", false, fmt.Errorf("failed to list MCP servers: %w", err)
+	}
+	for _, srv := range list.Servers {
+		if srv.Name == name {
+			return srv.ID, false, nil
+		}
+	}
+	desc := "Auto-created by stoactl apply"
+	if r.Metadata.Namespace != "" {
+		desc = fmt.Sprintf("Auto-created by stoactl apply (namespace=%s)", r.Metadata.Namespace)
+	}
+	id, err := c.CreateMCPServer(name, name, desc)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to create MCP server %q: %w", name, err)
+	}
+	return id, true, nil
 }

@@ -110,6 +110,18 @@ func New() (*Client, error) {
 	return client, nil
 }
 
+// NewForMode returns a client configured for the mode selected by the global
+// --admin CLI flag. When admin is true it delegates to NewAdmin (service
+// account token, resolved from STOA_ADMIN_KEY or the "<context>-admin" keychain
+// entry); otherwise it delegates to New (user OIDC token). Callers should pass
+// cmdflags.AdminMode so --admin plumbs through end-to-end (CAB-2107).
+func NewForMode(admin bool) (*Client, error) {
+	if admin {
+		return NewAdmin()
+	}
+	return New()
+}
+
 // NewWithConfig creates a client with specific config
 func NewWithConfig(baseURL, tenant, token string) *Client {
 	return &Client{

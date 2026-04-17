@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.5...stoa-gateway-v0.9.6) (2026-04-17)
+
+
+### Bug Fixes
+
+* **gateway:** honor Accept: text/event-stream on /mcp/sse (CAB-2106) ([#2402](https://github.com/stoa-platform/stoa/issues/2402)) ([bd28686](https://github.com/stoa-platform/stoa/commit/bd2868675d744e9aa34969630a110690e5fbbe40))
+
 ## [0.9.5](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.4...stoa-gateway-v0.9.5) (2026-04-16)
 
 

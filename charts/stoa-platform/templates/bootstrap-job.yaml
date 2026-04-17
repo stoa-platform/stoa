@@ -206,6 +206,24 @@ data:
     }"
 
     # ---------------------------------------------------------------
+    # stoactl CLI — public client, OAuth2 device authorization grant
+    # CAB-2103: required by `stoactl auth login` (hardcoded clientID)
+    # ---------------------------------------------------------------
+    create_client "stoactl" "{
+      \"clientId\": \"stoactl\",
+      \"name\": \"STOA CLI (stoactl)\",
+      \"enabled\": true,
+      \"publicClient\": true,
+      \"standardFlowEnabled\": false,
+      \"directAccessGrantsEnabled\": false,
+      \"serviceAccountsEnabled\": false,
+      \"attributes\": {
+        \"oauth2.device.authorization.grant.enabled\": \"true\"
+      },
+      \"defaultClientScopes\": [\"openid\", \"profile\", \"email\", \"stoa:read\", \"stoa:write\"]
+    }"
+
+    # ---------------------------------------------------------------
     # Create admin user (if adminEmail provided)
     # ---------------------------------------------------------------
     if [ -n "${ADMIN_EMAIL}" ]; then

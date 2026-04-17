@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	bridgelib "github.com/stoa-platform/stoa-go/internal/cli/bridge"
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 	"github.com/stoa-platform/stoa-go/pkg/types"
@@ -130,7 +131,7 @@ func runBridge(cmd *cobra.Command, args []string) error {
 
 	// --apply mode: create MCP server + register tools via CP API
 	if apply {
-		c, err := client.New()
+		c, err := client.NewForMode(cmdflags.AdminMode)
 		if err != nil {
 			return fmt.Errorf("failed to create API client: %w", err)
 		}

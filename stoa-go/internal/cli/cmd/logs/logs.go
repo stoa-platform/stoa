@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 )
@@ -44,7 +45,7 @@ Examples:
 func runLogs(_ *cobra.Command, args []string) error {
 	apiName := args[0]
 
-	c, err := client.New()
+	c, err := client.NewForMode(cmdflags.AdminMode)
 	if err != nil {
 		return err
 	}

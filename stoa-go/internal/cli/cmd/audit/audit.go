@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	auditpkg "github.com/stoa-platform/stoa-go/pkg/client/audit"
 	"github.com/stoa-platform/stoa-go/pkg/output"
@@ -76,7 +77,7 @@ Time range can be relative (7d, 30d, 24h) or absolute (2026-01-01).`,
 }
 
 func runExport(_ *cobra.Command, _ []string) error {
-	c, err := client.New()
+	c, err := client.NewForMode(cmdflags.AdminMode)
 	if err != nil {
 		return err
 	}

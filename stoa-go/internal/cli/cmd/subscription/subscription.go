@@ -5,6 +5,7 @@ package subscription
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 )
@@ -43,7 +44,7 @@ func newSubListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List subscriptions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := client.NewForMode(cmdflags.AdminMode)
 			if err != nil {
 				return err
 			}
@@ -100,7 +101,7 @@ func newSubGetCmd() *cobra.Command {
 		Short: "Get a subscription by ID",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := client.NewForMode(cmdflags.AdminMode)
 			if err != nil {
 				return err
 			}
@@ -135,7 +136,7 @@ func newSubApproveCmd() *cobra.Command {
 		Short: "Approve a pending subscription",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := client.NewForMode(cmdflags.AdminMode)
 			if err != nil {
 				return err
 			}
@@ -156,7 +157,7 @@ func newSubRevokeCmd() *cobra.Command {
 		Short: "Revoke an active subscription",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := client.NewForMode(cmdflags.AdminMode)
 			if err != nil {
 				return err
 			}

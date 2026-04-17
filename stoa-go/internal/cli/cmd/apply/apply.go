@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 	"github.com/stoa-platform/stoa-go/pkg/types"
@@ -72,7 +73,7 @@ Examples:
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := client.NewForMode(cmdflags.AdminMode)
 	if err != nil {
 		return err
 	}

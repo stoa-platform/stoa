@@ -257,7 +257,7 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-// TestRegressionCAB2095_APITenantScopedCreate — regression for CAB-2095.
+// regression for CAB-2095: stoactl API CRUD must use tenant-scoped paths.
 // Asserts that API resources are POSTed to the tenant-scoped admin path
 // with the flat payload shape expected by control-plane-api APICreate.
 // Prior to CAB-2095 the CLI hit /v1/apis which 404s on the backend.

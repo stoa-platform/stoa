@@ -11,7 +11,7 @@ use axum::{
     response::{sse::Event, IntoResponse, Response, Sse},
     Json,
 };
-use futures::stream::Stream;
+use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{convert::Infallible, time::Duration};
@@ -377,8 +377,72 @@ pub async fn handle_sse_post(
         ),
     };
 
+    // Content negotiation (MCP Streamable HTTP spec 2025-03-26): if the
+    // client accepts `text/event-stream`, wrap the JSON-RPC response in an
+    // SSE frame; otherwise keep the legacy `application/json` body for
+    // back-compat with curl / claude-code CLI callers that omit Accept.
+    if accepts_event_stream(&headers) {
+        return build_sse_single_response(&session_id, &response);
+    }
+
     // Always return Mcp-Session-Id header (required by Streamable HTTP transport)
     let mut resp = Json(response).into_response();
+    if let Ok(header_value) = session_id.parse() {
+        resp.headers_mut().insert("Mcp-Session-Id", header_value);
+    }
+    resp
+}
+
+/// Does the client accept `text/event-stream` for this request?
+///
+/// Parses the `Accept` header as a comma-separated media-range list and
+/// checks for an explicit `text/event-stream` token (case-insensitive,
+/// tolerant of quality values like `;q=0.9`). Wildcards (`*/*`) do NOT
+/// count as acceptance — legacy HTTP clients like curl that send no
+/// Accept (or only `*/*`) keep the pre-existing JSON response so this fix
+/// stays strictly additive.
+pub fn accepts_event_stream(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|accept| {
+            accept.split(',').any(|media_range| {
+                let mime = media_range.split(';').next().unwrap_or("").trim();
+                mime.eq_ignore_ascii_case("text/event-stream")
+            })
+        })
+        .unwrap_or(false)
+}
+
+/// Build the SSE response that carries a single JSON-RPC reply.
+///
+/// Emits one `event: message` frame with the serialized response and then
+/// closes the stream. The spec allows — and in fact recommends — closing
+/// after all correlated responses have been sent; clients that need
+/// server-initiated notifications open a long-lived `GET /mcp/sse`.
+fn build_sse_single_response(session_id: &str, response: &JsonRpcResponse) -> Response {
+    let data = serde_json::to_string(response).unwrap_or_else(|e| {
+        error!(error = %e, "SSE: failed to serialize JSON-RPC response");
+        json!({
+            "jsonrpc": "2.0",
+            "error": {"code": INTERNAL_ERROR, "message": "serialization failure"},
+            "id": Value::Null
+        })
+        .to_string()
+    });
+
+    let event = Event::default().event("message").data(data);
+    let one_event: Box<dyn Stream<Item = Result<Event, Infallible>> + Send + Unpin> =
+        Box::new(stream::iter(std::iter::once(Ok(event))));
+
+    let mut resp = Sse::new(one_event)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("ping"),
+        )
+        .into_response();
+
     if let Ok(header_value) = session_id.parse() {
         resp.headers_mut().insert("Mcp-Session-Id", header_value);
     }
@@ -1464,5 +1528,67 @@ mod tests {
         // Empty string is not a valid version, treated as unknown
         let result = negotiate_protocol_version(Some(""));
         assert_eq!(result, DEFAULT_PROTOCOL_VERSION);
+    }
+
+    // === Accept negotiation (CAB-2106 — claude.ai SSE fix) ===
+
+    fn accept(value: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(header::ACCEPT, value.parse().unwrap());
+        h
+    }
+
+    #[test]
+    fn test_accepts_event_stream_explicit() {
+        assert!(accepts_event_stream(&accept("text/event-stream")));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_mcp_compliant_client() {
+        // Spec 2025-03-26 says clients MUST list both media types.
+        assert!(accepts_event_stream(&accept(
+            "application/json, text/event-stream"
+        )));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_with_q_values() {
+        assert!(accepts_event_stream(&accept(
+            "application/json;q=0.8, text/event-stream;q=0.9"
+        )));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_case_insensitive() {
+        assert!(accepts_event_stream(&accept("Text/Event-Stream")));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_tolerates_whitespace() {
+        assert!(accepts_event_stream(&accept(
+            "  application/json ,  text/event-stream  "
+        )));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_rejects_json_only() {
+        assert!(!accepts_event_stream(&accept("application/json")));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_rejects_missing_header() {
+        assert!(!accepts_event_stream(&HeaderMap::new()));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_rejects_bare_wildcard() {
+        // `*/*` is intentionally NOT accepted: curl / claude-code callers
+        // that omit Accept or send `*/*` keep the back-compat JSON body.
+        assert!(!accepts_event_stream(&accept("*/*")));
+    }
+
+    #[test]
+    fn test_accepts_event_stream_rejects_unrelated_types() {
+        assert!(!accepts_event_stream(&accept("text/plain, text/html")));
     }
 }

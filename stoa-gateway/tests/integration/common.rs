@@ -1,7 +1,7 @@
 //! Shared test helpers for integration tests.
 
 use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::{HeaderMap, Request, StatusCode};
 use axum::Router;
 use tower::ServiceExt;
 
@@ -127,6 +127,46 @@ impl TestApp {
             .await
             .expect("read body");
         (status, String::from_utf8_lossy(&body).to_string())
+    }
+
+    /// Send a POST request with JSON body + optional Accept/Authorization and
+    /// return the full `(status, headers, body)` tuple so callers can assert on
+    /// `Content-Type`, `Mcp-Session-Id`, etc.
+    #[allow(dead_code)] // only consumed from the `contract` test harness
+    pub async fn post_raw(
+        &self,
+        uri: &str,
+        json_body: &str,
+        accept: Option<&str>,
+        bearer: Option<&str>,
+    ) -> (StatusCode, HeaderMap, String) {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("Content-Type", "application/json");
+        if let Some(a) = accept {
+            builder = builder.header("Accept", a);
+        }
+        if let Some(t) = bearer {
+            builder = builder.header("Authorization", format!("Bearer {}", t));
+        }
+        let request = builder
+            .body(Body::from(json_body.to_string()))
+            .expect("valid request");
+
+        let response = self
+            .router
+            .clone()
+            .oneshot(request)
+            .await
+            .expect("router should not error");
+
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = axum::body::to_bytes(response.into_body(), 1_048_576)
+            .await
+            .expect("read body");
+        (status, headers, String::from_utf8_lossy(&body).to_string())
     }
 }
 

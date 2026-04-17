@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.5.0...control-plane-api-v1.5.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* **api:** restore CP API Integration Tests (unblock release 1.5.1) ([#2406](https://github.com/stoa-platform/stoa/issues/2406)) ([3f05a00](https://github.com/stoa-platform/stoa/commit/3f05a00547fef8cc10e1822e18666bdd387cff9c))
+* **api:** split Keycloak public vs internal URL (CAB-2094) ([#2399](https://github.com/stoa-platform/stoa/issues/2399)) ([d300949](https://github.com/stoa-platform/stoa/commit/d300949ba9317cae4d5fed238156b67d47f5e4e6))
+
 ## [1.5.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.4.1...control-plane-api-v1.5.0) (2026-04-16)
 
 

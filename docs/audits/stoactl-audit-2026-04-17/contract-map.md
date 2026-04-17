@@ -18,8 +18,8 @@
 
 | cli_cmd | endpoint (CLI view) | status | owner |
 |---------|---------------------|--------|-------|
-| apply (API) | `POST /v1/tenants/{tenant_id}/apis` | implemented | — | <!-- CAB-2095: was /v1/apis (renamed) -->
-| apply (API, dry-run) | client-side validation only (no HTTP) | offline | — | <!-- CAB-2095: backend has no ?dryRun, Service.Validate is now local -->  
+| apply (API) | `POST /v1/tenants/{tenant_id}/apis` | implemented | — |
+| apply (API, dry-run) | client-side validation only (no HTTP) | offline | — |
 | apply (Consumer) | `POST /v1/consumers/{tenant_id}` | implemented | — |
 | apply (Contract) | `POST /v1/tenants/{tenant_id}/contracts` | implemented | — |
 | apply (Gateway) | `POST /v1/admin/gateways` | implemented | — |
@@ -33,7 +33,7 @@
 | audit export (csv) | `GET /v1/audit/{tenant_id}/export/csv` | implemented | — |
 | auth login | Keycloak device flow `auth.gostoa.dev/realms/stoa/...` | external | — |
 | auth logout | (keyring + token file) | offline | — |
-| auth rotate-key | (no network calls — likely stub) | offline | cli | <!-- TODO(CAB-2096): verify or descope in Phase C -->  
+| auth rotate-key | (no network calls — likely stub) | offline | cli |
 | auth status | (local keyring read) | offline | — |
 | bridge (generate only) | (local OpenAPI → CRD YAML) | offline | — |
 | bridge --apply | `POST /v1/admin/mcp/servers` + `POST /v1/admin/mcp/servers/{id}/tools` | implemented | — |
@@ -50,7 +50,7 @@
 | connect discover | `GET {agent_url}/discover` (stoa-connect agent) | external | — |
 | connect status | `GET {agent_url}/health` (stoa-connect agent) | external | — |
 | connect sync | `POST {agent_url}/sync` (stoa-connect agent) | external | — |
-| delete api `<name>` | `DELETE /v1/tenants/{tenant_id}/apis/{api_id}` | implemented | — | <!-- CAB-2095 -->  
+| delete api `<name>` | `DELETE /v1/tenants/{tenant_id}/apis/{api_id}` | implemented | — |
 | delete consumer `<id>` | `DELETE /v1/consumers/{tenant_id}/{id}` | implemented | — |
 | delete contract `<id>` | `DELETE /v1/tenants/{tenant_id}/contracts/{id}` | implemented | — |
 | delete gateway `<id>` | `DELETE /v1/admin/gateways/{id}` | implemented | — |
@@ -67,8 +67,8 @@
 | gateway get `<id>` | `GET /v1/admin/gateways/{id}` | implemented | — |
 | gateway health | `GET /v1/admin/gateways/health` | implemented | — |
 | gateway list | `GET /v1/admin/gateways` | implemented | — |
-| get apis | `GET /v1/tenants/{tenant_id}/apis` | implemented | — | <!-- CAB-2095: was /v1/portal/apis (portal consumer view, wrong semantic) -->
-| get api `<name>` | `GET /v1/tenants/{tenant_id}/apis/{api_id}` | implemented | — | <!-- CAB-2095 -->  
+| get apis | `GET /v1/tenants/{tenant_id}/apis` | implemented | — |
+| get api `<name>` | `GET /v1/tenants/{tenant_id}/apis/{api_id}` | implemented | — |
 | get consumers | `GET /v1/consumers/{tenant_id}` | implemented | — |
 | get consumer `<id>` | `GET /v1/consumers/{tenant_id}/{id}` | implemented | — |
 | get contracts | `GET /v1/tenants/{tenant_id}/contracts` | implemented | — |
@@ -118,7 +118,13 @@
 
 ### Correction log — 2026-04-17 (CAB-2095)
 
-Phase A initial map classified `POST/GET/DELETE /v1/apis` as `implemented` after the Explore agent matched `/v1/apis` against `@router.get("/apis")` in `routers/gateway.py` (portal consumer route, wrong semantic). Phase B3 reproduction proved these endpoints return 404 — the real admin router is mounted at `/v1/tenants/{tenant_id}/apis`. Rows for `apply/get/delete api` are now corrected above. Lesson: contract audits must grep the **prefix** AND the method decorator together, and cross-reference admin vs consumer semantics for paths that look similar.
+Phase A initial map classified `POST/GET/DELETE /v1/apis` as `implemented` after the Explore agent matched `/v1/apis` against `@router.get("/apis")` in `routers/gateway.py` (portal consumer route, wrong semantic). Phase B3 reproduction proved these endpoints return 404 — the real admin router is mounted at `/v1/tenants/{tenant_id}/apis`.
+
+Rows for `apply/get/delete api` are corrected above to reflect the tenant-scoped admin paths. `apply (API, dry-run)` moved to `offline` because the backend has no `?dryRun=true` endpoint — `catalog.Service.Validate` is now client-side only (builds the APICreate payload and surfaces missing required fields without a network call).
+
+Follow-ups filed as separate tickets: `auth rotate-key` stub verification / descope (CAB-2096, Phase C). The subscription listing drift (`get subscriptions`, `subscription list`) is tracked separately in Phase C.
+
+Lesson: contract audits must grep the **prefix** AND the method decorator together, and cross-reference admin vs consumer semantics for paths that look similar.
 
 ### Drifts (fix_verdict candidates)
 

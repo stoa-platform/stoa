@@ -101,7 +101,10 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
     """Create plans for the given profile."""
     plans = PLANS_BY_PROFILE[profile]
     result = StepResult(name="plans")
-    now = datetime.now(UTC)
+    # plans.created_at / updated_at are DateTime (tz-naive) in the ORM, so
+    # the value passed to asyncpg must also be naive — otherwise asyncpg
+    # raises "can't subtract offset-naive and offset-aware datetimes".
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     for plan_def in plans:
         row = await session.execute(

@@ -4,6 +4,7 @@ package get
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -104,8 +105,8 @@ func getAPI(c *client.Client, printer *output.Printer, name string) error {
 	case output.FormatJSON:
 		return printer.PrintJSON(api)
 	default:
-		headers := []string{"NAME", "VERSION", "STATUS", "PATH"}
-		rows := [][]string{{api.Name, api.Version, api.Status, api.Path}}
+		headers := []string{"NAME", "VERSION", "STATUS", "BACKEND"}
+		rows := [][]string{{api.Name, api.Version, api.Status, api.BackendURL}}
 		printer.PrintTable(headers, rows)
 	}
 
@@ -133,25 +134,25 @@ func listAPIs(c *client.Client, printer *output.Printer) error {
 	case output.FormatJSON:
 		return printer.PrintJSON(resp.Items)
 	case output.FormatWide:
-		headers := []string{"NAME", "VERSION", "STATUS", "PATH", "UPSTREAM", "TENANT", "CREATED"}
+		headers := []string{"NAME", "DISPLAY NAME", "VERSION", "STATUS", "BACKEND", "TENANT", "TAGS"}
 		var rows [][]string
 		for _, api := range resp.Items {
 			rows = append(rows, []string{
 				api.Name,
+				api.DisplayName,
 				api.Version,
 				api.Status,
-				api.Path,
-				api.Upstream,
-				api.Tenant,
-				api.CreatedAt,
+				api.BackendURL,
+				api.TenantID,
+				strings.Join(api.Tags, ","),
 			})
 		}
 		printer.PrintTable(headers, rows)
 	default:
-		headers := []string{"NAME", "VERSION", "STATUS", "PATH"}
+		headers := []string{"NAME", "VERSION", "STATUS", "BACKEND"}
 		var rows [][]string
 		for _, api := range resp.Items {
-			rows = append(rows, []string{api.Name, api.Version, api.Status, api.Path})
+			rows = append(rows, []string{api.Name, api.Version, api.Status, api.BackendURL})
 		}
 		printer.PrintTable(headers, rows)
 	}
@@ -161,20 +162,21 @@ func listAPIs(c *client.Client, printer *output.Printer) error {
 
 func apiToResource(api *types.API) types.Resource {
 	return types.Resource{
-		APIVersion: "stoa.io/v1",
+		APIVersion: types.CanonicalAPIVersion,
 		Kind:       "API",
 		Metadata: types.Metadata{
 			Name:      api.Name,
-			Namespace: api.Tenant,
+			Namespace: api.TenantID,
 		},
 		Spec: types.APISpec{
 			Version:     api.Version,
 			Description: api.Description,
 			Upstream: types.UpstreamSpec{
-				URL: api.Upstream,
+				URL: api.BackendURL,
 			},
-			Routing: types.RoutingSpec{
-				Path: api.Path,
+			Catalog: types.CatalogSpec{
+				DisplayName: api.DisplayName,
+				Tags:        api.Tags,
 			},
 		},
 	}

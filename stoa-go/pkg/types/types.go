@@ -102,28 +102,37 @@ type CachePolicy struct {
 
 // CatalogSpec defines catalog visibility
 type CatalogSpec struct {
-	Visibility string   `yaml:"visibility,omitempty" json:"visibility,omitempty"`
-	Categories []string `yaml:"categories,omitempty" json:"categories,omitempty"`
+	Visibility  string   `yaml:"visibility,omitempty" json:"visibility,omitempty"`
+	Categories  []string `yaml:"categories,omitempty" json:"categories,omitempty"`
+	DisplayName string   `yaml:"displayName,omitempty" json:"displayName,omitempty"`
+	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	OpenAPISpec string   `yaml:"openapiSpec,omitempty" json:"openapiSpec,omitempty"`
 }
 
-// API represents an API from the STOA API
+// API represents an API as returned by GET /v1/tenants/{tenant_id}/apis[/{api_id}].
+// Fields mirror control-plane-api APIResponse (src/routers/apis.py).
 type API struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Version     string   `json:"version,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Tenant      string   `json:"tenant,omitempty"`
-	Status      string   `json:"status,omitempty"`
-	Upstream    string   `json:"upstream,omitempty"`
-	Path        string   `json:"path,omitempty"`
-	CreatedAt   string   `json:"createdAt,omitempty"`
-	UpdatedAt   string   `json:"updatedAt,omitempty"`
+	ID              string   `json:"id"`
+	TenantID        string   `json:"tenant_id,omitempty"`
+	Name            string   `json:"name"`
+	DisplayName     string   `json:"display_name,omitempty"`
+	Version         string   `json:"version,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	BackendURL      string   `json:"backend_url,omitempty"`
+	Status          string   `json:"status,omitempty"`
+	DeployedDev     bool     `json:"deployed_dev,omitempty"`
+	DeployedStaging bool     `json:"deployed_staging,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	PortalPromoted  bool     `json:"portal_promoted,omitempty"`
 }
 
-// APIListResponse represents the response from GET /v1/portal/apis
+// APIListResponse represents the response from GET /v1/tenants/{tenant_id}/apis.
+// Mirrors PaginatedResponse[APIResponse] from control-plane-api.
 type APIListResponse struct {
-	Items      []API `json:"items"`
-	TotalCount int   `json:"totalCount"`
+	Items    []API `json:"items"`
+	Total    int   `json:"total"`
+	Page     int   `json:"page,omitempty"`
+	PageSize int   `json:"page_size,omitempty"`
 }
 
 // Deployment represents a deployment from the STOA API

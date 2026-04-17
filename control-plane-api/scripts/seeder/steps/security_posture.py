@@ -159,14 +159,23 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
     # --- Security events ---
     events = EVENTS_BY_PROFILE.get(profile, [])
     for evt_def in events:
-        # Check idempotent: skip if event_type + source + similar timestamp exists
+        payload = {**evt_def["payload"], "source": SEEDER_TAG}
+        # Idempotency on the full payload (JSONB equality) — several events
+        # share (event_type, source) but each payload is unique, so a looser
+        # key would collapse distinct rows into one and leave the dataset
+        # incomplete.
         check = await session.execute(
             text(
                 "SELECT COUNT(*) FROM security_events "
                 "WHERE tenant_id = :tid AND event_type = :et AND source = :src "
-                "AND payload::text LIKE :tag"
+                "AND payload = CAST(:payload AS jsonb)"
             ),
-            {"tid": tenant_id, "et": evt_def["event_type"], "src": evt_def["source"], "tag": f"%{SEEDER_TAG}%"},
+            {
+                "tid": tenant_id,
+                "et": evt_def["event_type"],
+                "src": evt_def["source"],
+                "payload": json.dumps(payload),
+            },
         )
         if check.scalar_one() > 0:
             result.skipped += 1
@@ -177,7 +186,6 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
             result.created += 1
             continue
 
-        payload = {**evt_def["payload"], "source": SEEDER_TAG}
         created_at = now - timedelta(hours=evt_def.get("hours_ago", 0))
 
         await session.execute(

@@ -291,7 +291,7 @@ func applyTool(c *client.Client, resource types.Resource) error {
 func decodeToolSpec(raw any) (types.ToolSpec, error) {
 	var spec types.ToolSpec
 	if raw == nil {
-		return spec, fmt.Errorf("Tool spec is empty")
+		return spec, fmt.Errorf("tool spec is empty")
 	}
 	b, err := yaml.Marshal(raw)
 	if err != nil {

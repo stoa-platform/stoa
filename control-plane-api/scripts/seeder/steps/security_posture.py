@@ -209,12 +209,16 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
             {"tid": tenant_id},
         )
         if scan_exists.scalar_one() == 0:
+            # scan_type is NOT NULL (Python-side default only; raw SQL must
+            # supply a value explicitly).
             await session.execute(
                 text("""
                     INSERT INTO security_scans (
-                        id, tenant_id, scanner, status, findings_count, score, started_at, completed_at
+                        id, tenant_id, scanner, scan_type, status,
+                        findings_count, score, started_at, completed_at
                     ) VALUES (
-                        :id, :tid, 'seeder', 'completed', :cnt, NULL, :now, :now
+                        :id, :tid, 'seeder', 'seeder', 'completed',
+                        :cnt, NULL, :now, :now
                     )
                 """),
                 {"id": scan_id, "tid": tenant_id, "cnt": len(findings), "now": now},

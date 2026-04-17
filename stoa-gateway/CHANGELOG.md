@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.7](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.6...stoa-gateway-v0.9.7) (2026-04-17)
+
+
+### Bug Fixes
+
+* **gateway:** unblock /mcp/sse capability-negotiation discovery methods (CAB-2109) ([#2411](https://github.com/stoa-platform/stoa/issues/2411)) ([fb082f8](https://github.com/stoa-platform/stoa/commit/fb082f8cfac6c5eb5bcf6b48249653653c7beebe))
+
 ## [0.9.6](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.5...stoa-gateway-v0.9.6) (2026-04-17)
 
 

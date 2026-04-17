@@ -41,7 +41,7 @@ func TestNewWithConfigNoToken(t *testing.T) {
 	}
 }
 
-// TestListAPIs tests the ListAPIs method
+// TestListAPIs tests the ListAPIs method (CAB-2095: tenant-scoped path).
 func TestListAPIs(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,8 +49,8 @@ func TestListAPIs(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET request, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/portal/apis" {
-			t.Errorf("Expected path /v1/portal/apis, got %s", r.URL.Path)
+		if r.URL.Path != "/v1/tenants/test-tenant/apis" {
+			t.Errorf("Expected path /v1/tenants/test-tenant/apis, got %s", r.URL.Path)
 		}
 
 		// Check headers
@@ -64,13 +64,15 @@ func TestListAPIs(t *testing.T) {
 			t.Errorf("Expected Accept header 'application/json', got %q", r.Header.Get("Accept"))
 		}
 
-		// Send response
-		response := types.APIListResponse{
-			Items: []types.API{
+		// Send response — backend PaginatedResponse shape (total, not totalCount)
+		response := map[string]any{
+			"items": []types.API{
 				{ID: "1", Name: "api-1", Version: "v1", Status: "active"},
 				{ID: "2", Name: "api-2", Version: "v2", Status: "inactive"},
 			},
-			TotalCount: 2,
+			"total":     2,
+			"page":      1,
+			"page_size": 20,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -85,8 +87,8 @@ func TestListAPIs(t *testing.T) {
 		t.Fatalf("ListAPIs() error = %v", err)
 	}
 
-	if result.TotalCount != 2 {
-		t.Errorf("ListAPIs() TotalCount = %d, want 2", result.TotalCount)
+	if result.Total != 2 {
+		t.Errorf("ListAPIs() TotalCount = %d, want 2", result.Total)
 	}
 
 	if len(result.Items) != 2 {
@@ -120,8 +122,8 @@ func TestGetAPI(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET request, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/portal/apis/my-api" {
-			t.Errorf("Expected path /v1/portal/apis/my-api, got %s", r.URL.Path)
+		if r.URL.Path != "/v1/tenants/test-tenant/apis/my-api" {
+			t.Errorf("Expected path /v1/tenants/test-tenant/apis/my-api, got %s", r.URL.Path)
 		}
 
 		response := types.API{
@@ -130,8 +132,7 @@ func TestGetAPI(t *testing.T) {
 			Version:     "v1",
 			Description: "My test API",
 			Status:      "active",
-			Upstream:    "https://backend.example.com",
-			Path:        "/api/v1",
+			BackendURL:  "https://backend.example.com",
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -178,8 +179,8 @@ func TestDeleteAPI(t *testing.T) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("Expected DELETE request, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/apis/my-api" {
-			t.Errorf("Expected path /v1/apis/my-api, got %s", r.URL.Path)
+		if r.URL.Path != "/v1/tenants/test-tenant/apis/my-api" {
+			t.Errorf("Expected path /v1/tenants/test-tenant/apis/my-api, got %s", r.URL.Path)
 		}
 
 		w.WriteHeader(http.StatusNoContent)
@@ -209,27 +210,30 @@ func TestDeleteAPINotFound(t *testing.T) {
 	}
 }
 
-// TestCreateOrUpdateAPI tests the CreateOrUpdateAPI method
+// TestCreateOrUpdateAPI — tenant-scoped path and flat backend payload (CAB-2095).
 func TestCreateOrUpdateAPI(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("Expected POST request, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/apis" {
-			t.Errorf("Expected path /v1/apis, got %s", r.URL.Path)
+		if r.URL.Path != "/v1/tenants/test-tenant/apis" {
+			t.Errorf("Expected path /v1/tenants/test-tenant/apis, got %s", r.URL.Path)
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("Expected Content-Type 'application/json', got %q", r.Header.Get("Content-Type"))
 		}
 
-		// Decode and verify the body
-		var resource types.Resource
-		if err := json.NewDecoder(r.Body).Decode(&resource); err != nil {
+		// Decode and verify the flat APICreate payload (not the CLI Resource shape)
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("Failed to decode request body: %v", err)
 		}
 
-		if resource.Metadata.Name != "test-api" {
-			t.Errorf("Expected resource name 'test-api', got %q", resource.Metadata.Name)
+		if body["name"] != "test-api" {
+			t.Errorf("Expected name 'test-api', got %v", body["name"])
+		}
+		if body["backend_url"] != "https://upstream.example.com" {
+			t.Errorf("Expected backend_url set, got %v", body["backend_url"])
 		}
 
 		w.WriteHeader(http.StatusCreated)
@@ -239,13 +243,14 @@ func TestCreateOrUpdateAPI(t *testing.T) {
 	client := NewWithConfig(server.URL, "test-tenant", "test-token")
 
 	resource := &types.Resource{
-		APIVersion: "stoa.io/v1",
+		APIVersion: "gostoa.dev/v1beta1",
 		Kind:       "API",
 		Metadata: types.Metadata{
 			Name: "test-api",
 		},
-		Spec: map[string]interface{}{
-			"version": "v1",
+		Spec: map[string]any{
+			"version":  "v1",
+			"upstream": map[string]any{"url": "https://upstream.example.com"},
 		},
 	}
 
@@ -255,30 +260,18 @@ func TestCreateOrUpdateAPI(t *testing.T) {
 	}
 }
 
-// TestValidateResource tests the ValidateResource method (dry-run)
+// TestValidateResource — now client-side only, no HTTP call.
 func TestValidateResource(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("Expected POST request, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/apis" {
-			t.Errorf("Expected path /v1/apis, got %s", r.URL.Path)
-		}
-		if r.URL.Query().Get("dryRun") != "true" {
-			t.Error("Expected dryRun=true query parameter")
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	client := NewWithConfig(server.URL, "test-tenant", "test-token")
+	client := NewWithConfig("http://unused", "test-tenant", "test-token")
 
 	resource := &types.Resource{
-		APIVersion: "stoa.io/v1",
+		APIVersion: "gostoa.dev/v1beta1",
 		Kind:       "API",
 		Metadata: types.Metadata{
 			Name: "test-api",
+		},
+		Spec: map[string]any{
+			"upstream": map[string]any{"url": "https://upstream.example.com"},
 		},
 	}
 
@@ -288,25 +281,20 @@ func TestValidateResource(t *testing.T) {
 	}
 }
 
-// TestValidateResourceError tests validation failure
+// TestValidateResourceError — client-side validation fails on missing backend_url.
 func TestValidateResourceError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error": "invalid spec"}`))
-	}))
-	defer server.Close()
-
-	client := NewWithConfig(server.URL, "test-tenant", "test-token")
+	client := NewWithConfig("http://unused", "test-tenant", "test-token")
 
 	resource := &types.Resource{
-		APIVersion: "stoa.io/v1",
+		APIVersion: "gostoa.dev/v1beta1",
 		Kind:       "API",
 		Metadata:   types.Metadata{Name: "invalid-api"},
+		Spec:       map[string]any{"version": "v1"},
 	}
 
 	err := client.ValidateResource(resource)
 	if err == nil {
-		t.Error("ValidateResource() error = nil, want error for validation failure")
+		t.Error("ValidateResource() error = nil, want error for missing backend_url")
 	}
 }
 
@@ -438,30 +426,15 @@ func TestAddToolToServerError(t *testing.T) {
 	}
 }
 
-// TestClientWithoutTenant tests requests without tenant header
+// TestClientWithoutTenant — post-CAB-2095, API operations require a tenant.
+// Without one, ListAPIs returns a clear error before any HTTP call.
 func TestClientWithoutTenant(t *testing.T) {
-	var receivedTenantHeader string
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedTenantHeader = r.Header.Get("X-Tenant-ID")
-
-		response := types.APIListResponse{Items: []types.API{}, TotalCount: 0}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
 	// Create client without tenant
-	client := NewWithConfig(server.URL, "", "test-token")
+	client := NewWithConfig("http://unused", "", "test-token")
 
 	_, err := client.ListAPIs()
-	if err != nil {
-		t.Fatalf("ListAPIs() error = %v", err)
-	}
-
-	// Tenant header should be empty
-	if receivedTenantHeader != "" {
-		t.Errorf("Expected no X-Tenant-ID header, got %q", receivedTenantHeader)
+	if err == nil {
+		t.Error("ListAPIs() error = nil, want 'no tenant' error")
 	}
 }
 
@@ -472,7 +445,7 @@ func TestClientWithoutToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAuthHeader = r.Header.Get("Authorization")
 
-		response := types.APIListResponse{Items: []types.API{}, TotalCount: 0}
+		response := types.APIListResponse{Items: []types.API{}, Total: 0}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(response)
 	}))

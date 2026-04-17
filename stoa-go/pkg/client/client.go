@@ -510,6 +510,35 @@ func (c *Client) GetTenant(id string) (*types.Tenant, error) {
 	return &result, nil
 }
 
+// GetTenantProvisioningStatus polls the async provisioning saga status for a
+// tenant (KC group + admin user + policy seed + Kafka events). Returned by
+// /v1/tenants/{id}/provisioning-status with fields: tenant_id,
+// provisioning_status (pending|provisioning|active|failed), provisioning_error,
+// kc_group_id, provisioning_attempts.
+func (c *Client) GetTenantProvisioningStatus(id string) (*types.TenantProvisioningStatus, error) {
+	resp, err := c.do("GET", fmt.Sprintf("/v1/tenants/%s/provisioning-status", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("tenant %q not found", id)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result types.TenantProvisioningStatus
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // CreateTenant creates a new tenant
 func (c *Client) CreateTenant(create *types.TenantCreate) (*types.Tenant, error) {
 	resp, err := c.do("POST", "/v1/tenants", create)

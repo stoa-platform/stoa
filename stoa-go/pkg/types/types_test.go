@@ -101,19 +101,20 @@ func TestResourceJSONMarshalUnmarshal(t *testing.T) {
 	}
 }
 
-// TestAPIJSONMarshalUnmarshal tests API type JSON handling
+// TestAPIJSONMarshalUnmarshal tests API type JSON handling.
+// Post CAB-2095, the API struct mirrors control-plane-api APIResponse:
+// flat backend_url, display_name, tenant_id.
 func TestAPIJSONMarshalUnmarshal(t *testing.T) {
 	original := API{
 		ID:          "api-123",
+		TenantID:    "acme-corp",
 		Name:        "payment-api",
+		DisplayName: "Payment API",
 		Version:     "v2",
 		Description: "Payment processing API",
-		Tenant:      "acme-corp",
+		BackendURL:  "https://payments.internal.acme.com",
 		Status:      "active",
-		Upstream:    "https://payments.internal.acme.com",
-		Path:        "/api/payments",
-		CreatedAt:   "2024-01-15T10:30:00Z",
-		UpdatedAt:   "2024-01-20T14:45:00Z",
+		Tags:        []string{"payments", "internal"},
 	}
 
 	data, err := json.Marshal(original)
@@ -139,11 +140,11 @@ func TestAPIJSONMarshalUnmarshal(t *testing.T) {
 	if result.Status != original.Status {
 		t.Errorf("Status = %q, want %q", result.Status, original.Status)
 	}
-	if result.Upstream != original.Upstream {
-		t.Errorf("Upstream = %q, want %q", result.Upstream, original.Upstream)
+	if result.BackendURL != original.BackendURL {
+		t.Errorf("BackendURL = %q, want %q", result.BackendURL, original.BackendURL)
 	}
-	if result.Path != original.Path {
-		t.Errorf("Path = %q, want %q", result.Path, original.Path)
+	if result.TenantID != original.TenantID {
+		t.Errorf("TenantID = %q, want %q", result.TenantID, original.TenantID)
 	}
 }
 
@@ -155,7 +156,7 @@ func TestAPIListResponseJSON(t *testing.T) {
 			{ID: "2", Name: "api-2", Status: "inactive"},
 			{ID: "3", Name: "api-3", Status: "pending"},
 		},
-		TotalCount: 3,
+		Total: 3,
 	}
 
 	data, err := json.Marshal(original)
@@ -169,8 +170,8 @@ func TestAPIListResponseJSON(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	if result.TotalCount != original.TotalCount {
-		t.Errorf("TotalCount = %d, want %d", result.TotalCount, original.TotalCount)
+	if result.Total != original.Total {
+		t.Errorf("TotalCount = %d, want %d", result.Total, original.Total)
 	}
 	if len(result.Items) != len(original.Items) {
 		t.Fatalf("Items length = %d, want %d", len(result.Items), len(original.Items))
@@ -535,8 +536,8 @@ func TestEmptyAPIListResponse(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	if response.TotalCount != 0 {
-		t.Errorf("TotalCount = %d, want 0", response.TotalCount)
+	if response.Total != 0 {
+		t.Errorf("TotalCount = %d, want 0", response.Total)
 	}
 	if len(response.Items) != 0 {
 		t.Errorf("Items length = %d, want 0", len(response.Items))

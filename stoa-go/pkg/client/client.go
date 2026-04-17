@@ -26,6 +26,16 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// NewForMode returns an admin-scoped client when admin is true, otherwise a
+// user-scoped client. It exists so commands can honor the global --admin flag
+// uniformly without branching at every call site.
+func NewForMode(admin bool) (*Client, error) {
+	if admin {
+		return NewAdmin()
+	}
+	return New()
+}
+
 // NewAdmin creates a client using the admin service account token.
 // Resolution: STOA_ADMIN_KEY env > keychain "stoactl-admin" context.
 func NewAdmin() (*Client, error) {

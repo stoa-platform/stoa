@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stoa-platform/stoa-go/pkg/client"
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	auditpkg "github.com/stoa-platform/stoa-go/pkg/client/audit"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 	"github.com/stoa-platform/stoa-go/pkg/redact"
@@ -75,8 +75,8 @@ Time range can be relative (7d, 30d, 24h) or absolute (2026-01-01).`,
 	return cmd
 }
 
-func runExport(_ *cobra.Command, _ []string) error {
-	c, err := client.New()
+func runExport(cmd *cobra.Command, _ []string) error {
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}

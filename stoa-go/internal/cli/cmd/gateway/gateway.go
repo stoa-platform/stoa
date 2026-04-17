@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stoa-platform/stoa-go/pkg/client"
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 )
 
@@ -41,7 +41,7 @@ func newGatewayListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List all gateway instances",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -94,7 +94,7 @@ func newGatewayGetCmd() *cobra.Command {
 		Short: "Get a gateway instance by ID",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func newGatewayHealthCmd() *cobra.Command {
 		Short: "Check gateway health",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}

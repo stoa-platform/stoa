@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stoa-platform/stoa-go/pkg/client"
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 )
 
@@ -61,7 +61,7 @@ Examples:
 }
 
 func runDeleteAPI(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func newDeleteTenantCmd() *cobra.Command {
 		Short:   "Delete one or more tenants",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -106,7 +106,7 @@ func newDeleteGatewayCmd() *cobra.Command {
 		Short:   "Delete one or more gateway instances",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,7 @@ func newDeleteSubscriptionCmd() *cobra.Command {
 		Short:   "Delete one or more subscriptions",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -138,7 +138,7 @@ func newDeleteConsumerCmd() *cobra.Command {
 		Short:   "Delete one or more consumers",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -154,7 +154,7 @@ func newDeleteContractCmd() *cobra.Command {
 		Short:   "Delete one or more contracts",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -170,7 +170,7 @@ func newDeleteServiceAccountCmd() *cobra.Command {
 		Short:   "Delete one or more service accounts",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -186,7 +186,7 @@ func newDeletePlanCmd() *cobra.Command {
 		Short:   "Delete one or more subscription plans",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -202,7 +202,7 @@ func newDeleteWebhookCmd() *cobra.Command {
 		Short:   "Delete one or more webhooks",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}

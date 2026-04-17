@@ -257,10 +257,11 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-// TestCreateTenantScoped is the regression test for CAB-2095.
+// TestRegressionCAB2095_APITenantScopedCreate — regression for CAB-2095.
 // Asserts that API resources are POSTed to the tenant-scoped admin path
 // with the flat payload shape expected by control-plane-api APICreate.
-func TestCreateTenantScoped(t *testing.T) {
+// Prior to CAB-2095 the CLI hit /v1/apis which 404s on the backend.
+func TestRegressionCAB2095_APITenantScopedCreate(t *testing.T) {
 	var gotPath string
 	var gotPayload map[string]any
 

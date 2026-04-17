@@ -49,8 +49,10 @@ class KeycloakService:
         for client/user management.
         """
         try:
+            # CAB-2094: admin API uses the internal SVC URL when configured,
+            # avoiding hairpin NAT on OVH MKS.
             conn = KeycloakOpenIDConnection(
-                server_url=settings.KEYCLOAK_URL,
+                server_url=settings.keycloak_internal_url,
                 realm_name="master",
                 client_id=settings.KEYCLOAK_ADMIN_CLIENT_ID,
                 username="admin",
@@ -696,7 +698,8 @@ class KeycloakService:
             httpx.HTTPStatusError: If Keycloak returns an error
             RuntimeError: If Keycloak is unreachable
         """
-        token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}" f"/protocol/openid-connect/token"
+        # CAB-2094: server-side token exchange uses the internal SVC URL.
+        token_url = f"{settings.keycloak_internal_url}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/token"
 
         data = {
             "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -1035,7 +1038,11 @@ class KeycloakService:
                 logger.warning("Federation token exchange: no secret for client '%s'", client_id)
                 return None
 
-            token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}" "/protocol/openid-connect/token"
+            # CAB-2094: federation token exchange is a backend call.
+            token_url = (
+                f"{settings.keycloak_internal_url}/realms/{settings.KEYCLOAK_REALM}"
+                "/protocol/openid-connect/token"
+            )
             async with httpx.AsyncClient(timeout=10.0) as http:
                 resp = await http.post(
                     token_url,

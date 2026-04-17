@@ -38,6 +38,7 @@ def _base_payload(**overrides):
 def mock_settings():
     with patch("src.auth.dependencies.settings") as m:
         m.KEYCLOAK_URL = "https://auth.gostoa.dev"
+        m.keycloak_internal_url = "https://auth.gostoa.dev"
         m.KEYCLOAK_REALM = "stoa"
         m.KEYCLOAK_CLIENT_ID = "control-plane-api"
         m.gateway_api_keys_list = []
@@ -131,6 +132,7 @@ class TestJwtValidation:
     @pytest.mark.asyncio
     async def test_jwt_decode_error_401(self, mock_settings, mock_kc_key):
         from jose import JWTError
+
         with patch("src.auth.dependencies.jwt.decode", side_effect=JWTError("bad token")):
             app = _make_app()
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
@@ -179,8 +181,12 @@ class TestJwtValidation:
     @pytest.mark.asyncio
     async def test_keycloak_unreachable_503(self, mock_settings):
         import httpx
-        with patch("src.auth.dependencies.get_keycloak_public_key", new_callable=AsyncMock,
-                    side_effect=httpx.ConnectError("Connection refused")):
+
+        with patch(
+            "src.auth.dependencies.get_keycloak_public_key",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectError("Connection refused"),
+        ):
             app = _make_app()
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
                 resp = await c.get("/me", headers={"Authorization": "Bearer any"})

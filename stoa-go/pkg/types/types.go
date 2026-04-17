@@ -198,6 +198,17 @@ type TenantCreate struct {
 	OwnerEmail  string `json:"owner_email,omitempty"`
 }
 
+// TenantProvisioningStatus mirrors the backend response from
+// GET /v1/tenants/{id}/provisioning-status — async saga progress.
+type TenantProvisioningStatus struct {
+	TenantID              string `json:"tenant_id" yaml:"tenant_id"`
+	ProvisioningStatus    string `json:"provisioning_status" yaml:"provisioning_status"`
+	ProvisioningError     string `json:"provisioning_error,omitempty" yaml:"provisioning_error,omitempty"`
+	ProvisioningStartedAt string `json:"provisioning_started_at,omitempty" yaml:"provisioning_started_at,omitempty"`
+	KCGroupID             string `json:"kc_group_id,omitempty" yaml:"kc_group_id,omitempty"`
+	ProvisioningAttempts  int    `json:"provisioning_attempts" yaml:"provisioning_attempts"`
+}
+
 // Subscription represents a subscription from the STOA API
 type Subscription struct {
 	ID           string `json:"id"`

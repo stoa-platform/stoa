@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -80,9 +81,22 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if accessToken == "" {
-		output.Info("Not authenticated.")
-		output.Info("Run 'stoactl auth login' to authenticate.")
-		return nil
+		// Env-var auth paths bypass keychain entirely — check them before
+		// telling the user to log in. Matches the resolution order in
+		// pkg/client/client.go: STOA_ADMIN_KEY > STOA_API_KEY > keychain > file.
+		if envToken := os.Getenv("STOA_ADMIN_KEY"); envToken != "" {
+			accessToken = envToken
+			storedIn = "STOA_ADMIN_KEY env (service account)"
+			tokenContext = ctx.Name // env tokens implicitly match current context
+		} else if envToken := os.Getenv("STOA_API_KEY"); envToken != "" {
+			accessToken = envToken
+			storedIn = "STOA_API_KEY env"
+			tokenContext = ctx.Name
+		} else {
+			output.Info("Not authenticated.")
+			output.Info("Run 'stoactl auth login' to authenticate.")
+			return nil
+		}
 	}
 
 	// Check if token is for current context
@@ -92,8 +106,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Check if token is expired
-	if time.Now().Unix() > expiresAt {
+	// Check if token is expired. Env tokens have expiresAt=0 — treat as
+	// "unknown expiry" (user is responsible for rotation).
+	if expiresAt > 0 && time.Now().Unix() > expiresAt {
 		output.Info("Token expired.")
 		output.Info("Run 'stoactl auth login' to re-authenticate.")
 		return nil
@@ -122,8 +137,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Subject:    %s\n", claims.Subject)
 	fmt.Println()
 	fmt.Println("Token:")
-	fmt.Printf("  Expires:    %s\n", time.Unix(expiresAt, 0).Format(time.RFC3339))
-	fmt.Printf("  Valid for:  %s\n", time.Until(time.Unix(expiresAt, 0)).Round(time.Minute))
+	if expiresAt > 0 {
+		fmt.Printf("  Expires:    %s\n", time.Unix(expiresAt, 0).Format(time.RFC3339))
+		fmt.Printf("  Valid for:  %s\n", time.Until(time.Unix(expiresAt, 0)).Round(time.Minute))
+	} else {
+		fmt.Println("  Expires:    unknown (env-provided token)")
+	}
 
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 )
@@ -73,7 +74,7 @@ Examples:
 }
 
 func runTokenUsage(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}

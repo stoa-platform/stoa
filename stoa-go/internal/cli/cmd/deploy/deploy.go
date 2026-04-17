@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/config"
 	"github.com/stoa-platform/stoa-go/pkg/output"
@@ -79,7 +80,7 @@ func runDeployFromFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--env is required (e.g. --env production)")
 	}
 
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -193,7 +194,7 @@ Examples:
 }
 
 func runDeployCreate(cmd *cobra.Command, _ []string) error {
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -220,8 +221,8 @@ func runDeployCreate(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runDeployList(_ *cobra.Command, _ []string) error {
-	c, err := client.New()
+func runDeployList(cmd *cobra.Command, _ []string) error {
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -279,8 +280,8 @@ func runDeployList(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runDeployGet(_ *cobra.Command, args []string) error {
-	c, err := client.New()
+func runDeployGet(cmd *cobra.Command, args []string) error {
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -335,8 +336,8 @@ func runDeployGet(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func runDeployRollback(_ *cobra.Command, args []string) error {
-	c, err := client.New()
+func runDeployRollback(cmd *cobra.Command, args []string) error {
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}

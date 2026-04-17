@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stoa-platform/stoa-go/pkg/client"
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 	"github.com/stoa-platform/stoa-go/pkg/types"
 )
@@ -56,7 +56,7 @@ Example:
 }
 
 func runTenantStatus(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func newTenantCreateCmd() *cobra.Command {
 				displayName = name
 			}
 
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -157,7 +157,7 @@ func newTenantDeleteCmd() *cobra.Command {
 		Short: "Delete a tenant",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -173,7 +173,7 @@ func newTenantDeleteCmd() *cobra.Command {
 }
 
 func runTenantList(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func runTenantList(cmd *cobra.Command, args []string) error {
 }
 
 func runTenantGet(cmd *cobra.Command, args []string) error {
-	c, err := client.New()
+	c, err := clientx.New(cmd)
 	if err != nil {
 		return err
 	}

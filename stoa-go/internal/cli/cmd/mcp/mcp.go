@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/clientx"
 	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 	"github.com/stoa-platform/stoa-go/pkg/types"
@@ -58,7 +59,7 @@ func newListServersCmd() *cobra.Command {
 		Use:   "list-servers",
 		Short: "List registered MCP servers",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -116,7 +117,7 @@ Examples:
 				return listToolsFromGateway(gatewayURL)
 			}
 
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -229,7 +230,7 @@ Examples:
 				return fmt.Errorf("--server is required (specify MCP server name)")
 			}
 
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}
@@ -282,7 +283,7 @@ Examples:
 				return healthFromGateway(gatewayURL)
 			}
 
-			c, err := client.New()
+			c, err := clientx.New(cmd)
 			if err != nil {
 				return err
 			}

@@ -107,12 +107,12 @@ jobs:
       - name: Run coverage
         env:
           RUSTC_WRAPPER: ''
-        run: cargo llvm-cov ${{ inputs.cargo-features }} --summary-only 2>&1 | tee /tmp/cov-summary.txt
+        run: cargo llvm-cov ${{ inputs.cargo-features }} --summary-only 2>&1 | tee "${RUNNER_TEMP}/cov-summary.txt"
 
       - name: Extract coverage percentage
         id: extract-cov
         run: |
-          COV_PCT=$(grep -oP 'TOTAL\s+\d+\s+\d+\s+\K[\d.]+' /tmp/cov-summary.txt || echo "0")
+          COV_PCT=$(grep -oP 'TOTAL\s+\d+\s+\d+\s+\K[\d.]+' "${RUNNER_TEMP}/cov-summary.txt" || echo "0")
           echo "coverage_pct=$COV_PCT" >> $GITHUB_OUTPUT
           echo "Coverage: $COV_PCT%"
 
@@ -160,5 +160,5 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: coverage-report
-          path: /tmp/cov-summary.txt
+          path: ${{ runner.temp }}/cov-summary.txt
           retention-days: 30

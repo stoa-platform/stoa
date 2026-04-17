@@ -150,7 +150,9 @@ FINDINGS_BY_PROFILE: dict[str, list[dict]] = {
 async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) -> StepResult:
     """Seed security_events and security_findings for the Security Posture dashboard."""
     result = StepResult(name="security_posture")
-    now = datetime.now(UTC)
+    # security_events.created_at is DateTime (tz-naive); asyncpg rejects
+    # tz-aware values. Use naive UTC — derived (now - timedelta) inherits it.
+    now = datetime.now(UTC).replace(tzinfo=None)
     tenant_id = "oasis"
     scan_id = uuid4()
 

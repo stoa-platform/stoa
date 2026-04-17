@@ -25,32 +25,49 @@ from sqlalchemy.ext.asyncio import AsyncSession
 def _mock_session_with_no_existing_rows() -> AsyncMock:
     session = AsyncMock(spec=AsyncSession)
     scalar_result = MagicMock()
-    scalar_result.scalar_one.return_value = 0  # no existing plans
+    # Steps use SELECT COUNT(*) → scalar_one() == 0 OR SELECT id/slug →
+    # scalar_one_or_none() is None, both meaning "row does not exist yet".
+    scalar_result.scalar_one.return_value = 0
+    scalar_result.scalar_one_or_none.return_value = None
     session.execute = AsyncMock(return_value=scalar_result)
     return session
 
 
-@pytest.mark.asyncio
-async def test_regression_cab_2085_plans_seeder_uses_tz_naive_datetime():
-    """plans seeder must bind a tz-naive datetime to `:now`.
+# Steps whose target table uses `DateTime` (tz-naive) columns in the ORM.
+# asyncpg rejects tz-aware datetimes against those columns, so each of
+# these seeder steps must bind a naive UTC value.
+TZ_NAIVE_STEPS = [
+    "plans",
+    "consumers",
+    "mcp_servers",
+    "security_posture",
+]
 
-    Regression: before the fix, `datetime.now(UTC)` was passed to asyncpg
-    against a `DateTime` (tz-naive) column, raising DataError at runtime.
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step_name", TZ_NAIVE_STEPS)
+async def test_regression_cab_2085_seeder_steps_bind_tz_naive_datetime(step_name: str):
+    """Every seeder step writing into tz-naive columns must bind a naive `:now`.
+
+    Regression: `datetime.now(UTC)` was passed to asyncpg against `DateTime`
+    (tz-naive) columns, raising DataError at runtime and blocking
+    release-please PR #2400 for cp-api 1.5.1.
     """
-    from scripts.seeder.steps.plans import seed
+    import importlib
+
+    module = importlib.import_module(f"scripts.seeder.steps.{step_name}")
 
     session = _mock_session_with_no_existing_rows()
-
-    await seed(session, profile="dev")
+    await module.seed(session, profile="dev")
 
     insert_calls = [
         call
         for call in session.execute.await_args_list
         if len(call.args) >= 2 and isinstance(call.args[1], dict) and "now" in call.args[1]
     ]
-    assert insert_calls, "plans seeder should issue INSERTs binding `:now`"
+    assert insert_calls, f"{step_name} seeder should issue INSERTs binding `:now`"
     for call in insert_calls:
         bound_now = call.args[1]["now"]
-        assert (
-            bound_now.tzinfo is None
-        ), f"plans.created_at is tz-naive — seeder must bind a naive datetime, got {bound_now!r}"
+        assert bound_now.tzinfo is None, (
+            f"{step_name}: target column is tz-naive — seeder must bind a " f"naive datetime, got {bound_now!r}"
+        )

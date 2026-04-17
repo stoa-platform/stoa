@@ -24,11 +24,26 @@ class Settings(BaseSettings):
     BASE_DOMAIN: str = _BASE_DOMAIN
 
     # Keycloak Authentication
+    # KEYCLOAK_URL is the PUBLIC URL Keycloak embeds in token `iss` claims
+    # (e.g. https://auth.gostoa.dev). Must match what clients see — used for
+    # issuer validation and for the `token_endpoint` returned to external
+    # consumers. CAB-2094: previously set to the in-cluster svc URL in prod,
+    # which broke issuer validation for every user token.
+    # KEYCLOAK_INTERNAL_URL is the in-cluster service URL used for backend-to-KC
+    # calls (admin API, token exchange, JWKS fetch). Avoids hairpin NAT on
+    # OVH MKS and similar cloud providers. Falls back to KEYCLOAK_URL when
+    # unset. Mirrors the stoa-gateway STOA_KEYCLOAK_URL / _INTERNAL_URL pattern.
     KEYCLOAK_URL: str = f"https://auth.{_BASE_DOMAIN}"
+    KEYCLOAK_INTERNAL_URL: str = ""
     KEYCLOAK_REALM: str = "stoa"
     KEYCLOAK_CLIENT_ID: str = "control-plane-api"
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_VERIFY_SSL: bool = True
+
+    @property
+    def keycloak_internal_url(self) -> str:
+        """Return internal URL for backend-to-KC calls, falling back to public URL."""
+        return self.KEYCLOAK_INTERNAL_URL or self.KEYCLOAK_URL
 
     # Keycloak Admin API (for Service Account management)
     # Uses a dedicated admin client with realm-management roles

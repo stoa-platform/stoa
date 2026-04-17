@@ -58,6 +58,7 @@ def _base_payload(**overrides):
 def mock_settings():
     with patch("src.auth.dependencies.settings") as m:
         m.KEYCLOAK_URL = "https://auth.gostoa.dev"
+        m.keycloak_internal_url = "https://auth.gostoa.dev"
         m.KEYCLOAK_REALM = "stoa"
         m.KEYCLOAK_CLIENT_ID = "control-plane-api"
         m.gateway_api_keys_list = []
@@ -136,6 +137,7 @@ class TestPublicKeyCache:
             patch("src.auth.dependencies.settings") as m,
         ):
             m.KEYCLOAK_URL = "https://auth.test"
+            m.keycloak_internal_url = "https://auth.test"
             m.KEYCLOAK_REALM = "stoa"
             pem1 = await get_keycloak_public_key()
             pem2 = await get_keycloak_public_key()
@@ -159,6 +161,7 @@ class TestPublicKeyCache:
             patch("src.auth.dependencies.settings") as m,
         ):
             m.KEYCLOAK_URL = "https://auth.test"
+            m.keycloak_internal_url = "https://auth.test"
             m.KEYCLOAK_REALM = "stoa"
             with pytest.raises(httpx.HTTPError):
                 await get_keycloak_public_key()

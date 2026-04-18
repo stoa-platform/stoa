@@ -64,10 +64,15 @@ jobs:
       checks: write
 
   # === Integration Tests: real PostgreSQL ===
+  # CAB-2114: moved to ubuntu-latest. The self-hosted runner pool leaked
+  # postgres:16 containers between jobs (port 5432 already allocated) and
+  # was missing a Python 3.11 binary for Debian 12 x64. GitHub-hosted
+  # runners are ephemeral and have a Python tools cache — both issues
+  # disappear at the cost of a few free CI minutes per PR.
   integration:
     name: Integration Tests
     needs: ci
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16

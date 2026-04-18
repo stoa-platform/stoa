@@ -11,6 +11,7 @@ mod common;
 mod discovery;
 mod errors;
 mod health;
+mod initialize_schema;
 mod mcp_compliance;
 mod mcp_public_methods;
 mod oauth;

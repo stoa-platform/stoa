@@ -45,18 +45,20 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Install system deps (rdkafka)
+      - name: Install system deps (rdkafka + python3)
         working-directory: .
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake build-essential
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake build-essential \
+            python3 python3-venv python3-pip
 
       - uses: ./.github/actions/setup-rust-env
 
-      - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v6.0.0
-        with:
-          python-version: '3.11'
-
       - name: Install MCP Python SDK
-        run: python -m pip install --quiet "mcp>=${PY_MCP_VERSION}"
+        working-directory: .
+        run: |
+          python3 -m venv .venv-mcp
+          .venv-mcp/bin/pip install --quiet "mcp>=${PY_MCP_VERSION}"
 
       - name: Build gateway binary
         run: cargo build --release
@@ -83,7 +85,7 @@ jobs:
         env:
           STOA_GATEWAY_URL: http://127.0.0.1:8080/mcp/sse
           STOA_SMOKE_CALL_TOOL: '0'
-        run: python tests/e2e/mcp_sdk_smoke.py
+        run: ../.venv-mcp/bin/python tests/e2e/mcp_sdk_smoke.py
 
       - name: Dump gateway log on failure
         if: failure()
@@ -107,15 +109,15 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v6.0.0
-        with:
-          python-version: '3.11'
-
-      - name: Install MCP Python SDK
-        run: python -m pip install --quiet "mcp>=${PY_MCP_VERSION}"
+      - name: Install python3 + MCP Python SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-venv python3-pip
+          python3 -m venv .venv-mcp
+          .venv-mcp/bin/pip install --quiet "mcp>=${PY_MCP_VERSION}"
 
       - name: Run MCP SDK smoke against prod
         env:
           STOA_GATEWAY_URL: https://mcp.gostoa.dev/mcp/sse
           STOA_SMOKE_CALL_TOOL: '0'
-        run: python stoa-gateway/tests/e2e/mcp_sdk_smoke.py
+        run: .venv-mcp/bin/python stoa-gateway/tests/e2e/mcp_sdk_smoke.py

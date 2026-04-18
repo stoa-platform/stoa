@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.8](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.7...stoa-gateway-v0.9.8) (2026-04-18)
+
+
+### Bug Fixes
+
+* **gateway:** drop non-dict experimental.transports from InitializeResult (CAB-2112) ([#2414](https://github.com/stoa-platform/stoa/issues/2414)) ([3570f39](https://github.com/stoa-platform/stoa/commit/3570f39193c85ae803c2fc72f3234093e061a1eb))
+
 ## [0.9.7](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.6...stoa-gateway-v0.9.7) (2026-04-17)
 
 

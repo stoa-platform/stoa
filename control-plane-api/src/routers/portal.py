@@ -24,6 +24,7 @@ from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerCategory, MCPServerStatus, MCPServerTool
 from ..repositories.catalog import CatalogRepository, escape_like, get_allowed_audiences
 from ..schemas.portal import APIListItem, MCPServerListItem
+from ..services.mcp_tool_expander import expand_api
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/portal", tags=["Portal"])
@@ -175,6 +176,78 @@ async def internal_list_apis(
     except Exception as e:
         logger.error(f"Failed to list internal APIs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to list APIs: {e!s}")
+
+
+class InternalExpandedTool(BaseModel):
+    """One MCP tool descriptor emitted by the expander (CAB-2113 Phase 0)."""
+
+    name: str
+    description: str
+    input_schema: dict | None = None
+    backend_url: str
+    http_method: str
+    tenant_id: str
+    path_pattern: str | None = None
+
+
+class InternalExpandedToolsResponse(BaseModel):
+    """Runtime-overlay tool list for the gateway API bridge.
+
+    Drop-in alternative to ``/apis`` that emits per-operation tools when an
+    ``openapi_spec`` is available on the catalog row, and the legacy coarse
+    ``{action, params}`` tool otherwise.
+    """
+
+    tools: list[InternalExpandedTool]
+
+
+@internal_router.get("/apis/expanded", response_model=InternalExpandedToolsResponse)
+async def internal_list_apis_expanded(
+    gateway_id: UUID | None = Query(None, description="Filter APIs assigned to this gateway (CAB-1940)"),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Expand published APIs into per-operation MCP tool descriptors.
+
+    Internal endpoint — same auth model and gateway scoping as ``/apis``.
+    Consumed by ``stoa-gateway`` when ``STOA_TOOL_EXPANSION_MODE=per_operation``.
+
+    Falls back to a single coarse tool per API when ``openapi_spec`` is missing
+    so switching the gateway flag is safe even on a partially-specced catalog.
+    """
+    try:
+        repo = CatalogRepository(db)
+        apis, _total = await repo.get_portal_apis(page=1, page_size=100, gateway_id=gateway_id)
+
+        tools: list[InternalExpandedTool] = []
+        for api in apis:
+            metadata: dict = api.api_metadata or {}
+            backend_url: str = metadata.get("backend_url") or ""
+            if not backend_url:
+                continue
+            expanded = expand_api(
+                api_id=str(api.api_id),
+                tenant_id=str(api.tenant_id),
+                api_name=str(api.api_name or api.api_id),
+                backend_url=backend_url,
+                openapi_spec=api.openapi_spec if isinstance(api.openapi_spec, dict) else None,
+            )
+            for t in expanded:
+                tools.append(
+                    InternalExpandedTool(
+                        name=t.name,
+                        description=t.description,
+                        input_schema=t.input_schema,
+                        backend_url=t.backend_url,
+                        http_method=t.http_method,
+                        tenant_id=t.tenant_id,
+                        path_pattern=t.path_pattern,
+                    )
+                )
+        return InternalExpandedToolsResponse(tools=tools)
+
+    except Exception as e:
+        logger.error(f"Failed to expand internal APIs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to expand APIs: {e!s}")
 
 
 class PortalMCPServerResponse(BaseModel):

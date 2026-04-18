@@ -1,0 +1,121 @@
+name: MCP SDK smoke (gateway)
+
+# Reference-client smoke tests for stoa-gateway using the official Python
+# MCP SDK (Pydantic-backed, same strict validator family as Anthropic's
+# Toolbox / claude.ai). Catches schema regressions like CAB-2106
+# (Accept), CAB-2109 (public_methods) and CAB-2112 (InitializeResult
+# shape) BEFORE they ship to prod.
+
+on:
+  pull_request:
+    paths:
+      - 'stoa-gateway/**'
+      - '.github/workflows/mcp-sdk-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'stoa-gateway/**'
+      - '.github/workflows/mcp-sdk-smoke.yml'
+  schedule:
+    # 08:00 UTC daily probe against prod — catches config drift / chart
+    # regressions that bypass the repo (e.g. tool registry changes).
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: mcp-sdk-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+  PY_MCP_VERSION: '1.0.0'
+
+jobs:
+  pre-merge:
+    # PR + main push: build the gateway from HEAD and run the smoke
+    # against a locally-started binary. This is the blocking gate.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Pre-merge (local gateway)
+    runs-on: contabo-runner-1
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: stoa-gateway
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install system deps (rdkafka)
+        working-directory: .
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake build-essential
+
+      - uses: ./.github/actions/setup-rust-env
+
+      - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v6.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install MCP Python SDK
+        run: python -m pip install --quiet "mcp>=${PY_MCP_VERSION}"
+
+      - name: Build gateway binary
+        run: cargo build --release
+
+      - name: Boot gateway and wait for /health
+        run: |
+          STOA_PORT=8080 \
+          STOA_JWT_VALIDATION_DISABLED=true \
+          STOA_OTEL_ENDPOINT='' \
+          ./target/release/stoa-gateway >"${RUNNER_TEMP}/gateway.log" 2>&1 &
+          echo $! > "${RUNNER_TEMP}/gateway.pid"
+          for i in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:8080/health >/dev/null 2>&1; then
+              echo "gateway ready on :8080 (after ${i}s)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::gateway never became healthy"
+          tail -80 "${RUNNER_TEMP}/gateway.log" || true
+          exit 1
+
+      - name: Run MCP SDK smoke
+        env:
+          STOA_GATEWAY_URL: http://127.0.0.1:8080/mcp/sse
+          STOA_SMOKE_CALL_TOOL: '0'
+        run: python tests/e2e/mcp_sdk_smoke.py
+
+      - name: Dump gateway log on failure
+        if: failure()
+        run: tail -200 "${RUNNER_TEMP}/gateway.log" || true
+
+      - name: Stop gateway
+        if: always()
+        run: |
+          PID=$(cat "${RUNNER_TEMP}/gateway.pid" 2>/dev/null || echo)
+          [ -n "$PID" ] && kill "$PID" 2>/dev/null || true
+          wait 2>/dev/null || true
+
+  post-deploy:
+    # Daily cron + manual dispatch: probe prod `mcp.gostoa.dev`. Catches
+    # config drift that the repo-level gate misses (tool registry, chart
+    # defaults changed out-of-band, etc.).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Post-deploy (prod probe)
+    runs-on: contabo-runner-1
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v6.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install MCP Python SDK
+        run: python -m pip install --quiet "mcp>=${PY_MCP_VERSION}"
+
+      - name: Run MCP SDK smoke against prod
+        env:
+          STOA_GATEWAY_URL: https://mcp.gostoa.dev/mcp/sse
+          STOA_SMOKE_CALL_TOOL: '0'
+        run: python stoa-gateway/tests/e2e/mcp_sdk_smoke.py

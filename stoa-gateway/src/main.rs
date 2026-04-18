@@ -308,16 +308,30 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
             None => None,
         };
 
-        match api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client, gw_id)
-            .await
-        {
+        let expansion_mode = state.config.tool_expansion_mode;
+        let discovery = match expansion_mode {
+            stoa_gateway::config::ExpansionMode::Coarse => {
+                api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client, gw_id)
+                    .await
+            }
+            stoa_gateway::config::ExpansionMode::PerOp => {
+                api_bridge::discover_expanded_api_tools(
+                    &state.tool_registry,
+                    &cp_url,
+                    &http_client,
+                    gw_id,
+                )
+                .await
+            }
+        };
+        match discovery {
             Ok(count) => {
                 if count > 0 {
-                    info!(count, "API catalog tools registered");
+                    info!(count, mode = ?expansion_mode, "API catalog tools registered");
                 }
             }
             Err(e) => {
-                warn!(error = %e, "API catalog discovery failed (will retry in background)");
+                warn!(error = %e, mode = ?expansion_mode, "API catalog discovery failed (will retry in background)");
             }
         }
 
@@ -328,6 +342,7 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
             cp_url,
             http_client,
             registrar,
+            expansion_mode,
         );
     } else {
         info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (sidecar/shadow mode)");

@@ -833,11 +833,18 @@ async fn handle_initialize(
                 "levels": ["none", "moderate", "aggressive"]
             },
             // Advertise elicitation support (Phase 5)
-            "elicitation": {},
-            // Advertise supported transports (CAB-1345 Phase 3)
-            "experimental": {
-                "transports": ["sse", "websocket"]
-            }
+            "elicitation": {}
+            // CAB-2110: `experimental.transports` used to be advertised as
+            // `{"transports": ["sse", "websocket"]}` but MCP 2025-11-25 / the
+            // Anthropic Toolbox validator expect every value under
+            // `capabilities.experimental` to be a dict (per-feature config
+            // object), not an array. Claude.ai failed initialize with:
+            //   ValidationError: capabilities.experimental.transports
+            //   Input should be a valid dictionary
+            // HTTP-level transport is negotiated via URL + Accept anyway;
+            // advertising it in the JSON-RPC capabilities block was purely
+            // informational and outside the spec. Drop it entirely rather
+            // than reshape it into a dummy dict.
         },
         "serverInfo": {
             "name": "STOA Gateway",

@@ -64,30 +64,68 @@ jobs:
       checks: write
 
   # === Integration Tests: real PostgreSQL ===
+  # CAB-2114: avoid self-hosted runner port collisions by starting postgres
+  # in a step with a dynamic host port + run-scoped container name, instead of
+  # a workflow-level `services:` block that hardcodes 5432:5432.
   integration:
     name: Integration Tests
     needs: ci
     runs-on: self-hosted
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: stoa_test
-          POSTGRES_PASSWORD: stoa_test
-          POSTGRES_DB: stoa_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    env:
+      PG_CONTAINER: stoa-int-pg-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-python-env
         with:
           python-version: '3.11'
           working-directory: control-plane-api
+
+      - name: Prune leaked integration-test containers (>1h old)
+        run: |
+          set -u
+          for cid in $(docker ps -q --filter "label=stoa-int-test=1"); do
+            started=$(docker inspect --format '{{.State.StartedAt}}' "$cid" 2>/dev/null || true)
+            [ -z "$started" ] && continue
+            started_epoch=$(date -d "$started" +%s 2>/dev/null || echo 0)
+            age=$(( $(date +%s) - started_epoch ))
+            if [ "$age" -gt 3600 ]; then
+              echo "Pruning leaked container $cid (age ${age}s)"
+              docker rm -f "$cid" || true
+            fi
+          done
+
+      - name: Start postgres with dynamic host port
+        run: |
+          set -euo pipefail
+          docker run -d --rm \
+            --name "$PG_CONTAINER" \
+            --label stoa-int-test=1 \
+            -e POSTGRES_USER=stoa_test \
+            -e POSTGRES_PASSWORD=stoa_test \
+            -e POSTGRES_DB=stoa_test \
+            -p 5432 \
+            --health-cmd pg_isready \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            postgres:16
+          PG_PORT=$(docker port "$PG_CONTAINER" 5432/tcp | head -1 | awk -F: '{print $NF}')
+          echo "Postgres bound on host port $PG_PORT"
+          echo "PG_PORT=$PG_PORT" >> "$GITHUB_ENV"
+
+      - name: Wait for postgres to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker exec "$PG_CONTAINER" pg_isready -U stoa_test -d stoa_test >/dev/null 2>&1; then
+              echo "Postgres ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Postgres failed to become ready"
+          docker logs "$PG_CONTAINER" || true
+          exit 1
+
       - name: Run adapter boundary tests (CAB-1951)
         working-directory: control-plane-api
         env:
@@ -96,21 +134,27 @@ jobs:
           ENABLE_SNAPSHOT_CONSUMER: 'false'
         run: |
           pytest tests/test_int_webmethods_adapter.py -v --tb=short
+
       - name: Run DB integration tests
         working-directory: control-plane-api
         env:
-          DATABASE_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_test
+          DATABASE_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:${{ env.PG_PORT }}/stoa_test
           STOA_ENABLE_KAFKA_CONSUMERS: 'false'  # CAB-2085
           ENABLE_DEPLOYMENT_WORKER: 'false'
           ENABLE_SNAPSHOT_CONSUMER: 'false'
         run: |
           pytest tests/ -v -m integration --ignore=tests/test_opensearch.py --tb=short --junit-xml=junit-integration.xml
+
       - name: Upload integration test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: integration-test-results
           path: control-plane-api/junit-integration.xml
+
+      - name: Stop postgres
+        if: always()
+        run: docker rm -f "$PG_CONTAINER" || true
 
   # === Docker: build + push GHCR ===
   docker:

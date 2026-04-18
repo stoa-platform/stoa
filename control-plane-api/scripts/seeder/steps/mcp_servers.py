@@ -73,7 +73,10 @@ async def seed(session: AsyncSession, profile: str, *, dry_run: bool = False) ->
     """Create MCP servers and tools for the given profile."""
     servers = MCP_SERVERS_BY_PROFILE[profile]
     result = StepResult(name="mcp_servers")
-    now = datetime.now(UTC)
+    # mcp_servers.created_at / mcp_server_tools.created_at are DateTime
+    # (tz-naive) in the ORM — asyncpg rejects tz-aware datetimes against
+    # them. See fix notes in scripts/seeder/steps/plans.py.
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     for srv_def in servers:
         row = await session.execute(

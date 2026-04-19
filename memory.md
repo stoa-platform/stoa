@@ -2,28 +2,28 @@
 
 > Dernière MAJ: 2026-04-15. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
 
-## 🚨 FREEZE ACTIVE (depuis 2026-04-11)
+## ✅ FREEZE LEVÉ (2026-04-19)
 
-Seul travail autorisé :
-- **CAB-2053** stabilisation (voir IN PROGRESS)
-- **CAB-2046** remaining subs (CAB-2049/2050/2051 — infra Council S3)
-- Hotfixes P0 production
+Feature freeze CAB-2053 (déclaré 2026-04-11, PR #2318) officiellement dissous.
 
-Tous autres MEGA/tickets P1-P3 suspendus jusqu'à CAB-2053 Phase 6 close gate.
+Bilan:
+- Phase 0 ✅ freeze declaration (#2318)
+- Phase 1 ✅ In Review queue drainée 43→0 (2026-04-12)
+- Phase 2 ✅ 7 fixes structurels mergés (2026-04-12)
+- Phase 3 🟡 stoactl baseline (#2345, 2026-04-12) — gaps audit 2026-04-19 trackés CAB-2119/2120/2121/2122 (P3 reste In Progress)
+- Phase 4 ✅ Schema registry `gostoa.dev/v1beta1` (#2348, 2026-04-12)
+- Phase 5 ✅ CLI-first context pack (#2349, 2026-04-12)
+- Phase 6 ⏸️ Close gate (7j CI green + feature sans `src/`) — deprioritized post-démo
+- Phase 7 ⏸️ ADR-061 controller framework — deprioritized post-démo
+
+Raison dissolution: freeze non appliqué en pratique depuis 2026-04-13 (110 commits `main` depuis déclaration, dont features hors scope CAB-2066/2071/2088/2113 + 7 release trains). Maintenir un freeze en façade diluait la gouvernance. Phase 6-7 replanifiées en C16 post-démo (2026-04-28).
+
+Note gouvernance: CAB-2053 reste **In Progress** — rouvert 2026-04-19 pour rétro-décomposition (verify-mega Gate 0 failure, pas de sub-tickets à la fermeture initiale). Le freeze est dissous; CAB-2053 ne sera clos qu'après terminaison de P3 et live verification.
 
 ## 🔴 IN PROGRESS
 
-### CAB-2053: [MEGA] Feature freeze + CLI-first stabilization (21 pts, P1) — Council 8.0/10
-- Phase 0 ✅ feature freeze (PR #2318)
-- Phase 1 ✅ In Review queue drained 43→0 (2026-04-12)
-- Phase 2 ✅ Bug recurrence root cause — 7 fixes structurels (PRs #2329, #2333, #2335, #2334, #2339, #2336, #2330)
-- Phase 3 [owner: —] stoactl completeness: apply/get/delete/list 100% des kinds
-- Phase 4 [owner: —] Schema registry unifié `gostoa.dev/v1beta1`
-- Phase 5 [owner: —] Context pack CLI-first (cible < 40% context usage)
-- Phase 6 [owner: —] Close gate: 7j CI green + feature sans lire `src/` + shadow metric CAB-2051
-- Phase 7 [owner: —] ADR-061 controller framework
-
-**Close gate binaire**: feature codée sans lire `src/` — uniquement stoactl + schemas.
+### CAB-2053: [MEGA] Feature freeze + CLI-first stabilization (21 pts, P1)
+Rouvert 2026-04-19 pour rétro-décomposition (verify-mega Gate 0). Sub-tickets: CAB-2125 (P0 Done), CAB-2126 (P1 Done), CAB-2127 (P2 Done), CAB-2128 (P3 **In Progress** — gaps audit), CAB-2129 (P4 Done), CAB-2130 (P5 Done), CAB-2131/CAB-2132 (P6/P7 duplicateOf CAB-2118).
 
 ### CAB-2054: [MEGA] Council 8 personas (13 pts) — 3/4 phases merged
 - Phase 2 🔄 ADR-061 amendment in stoa-docs (PR #151, awaiting review)

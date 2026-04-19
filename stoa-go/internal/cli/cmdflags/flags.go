@@ -51,7 +51,7 @@ func WarnDeprecatedNamespace(cmdName string) {
 	if target == "" {
 		target = "<cmd>"
 	}
-	fmt.Fprintf(WarnStderr,
+	_, _ = fmt.Fprintf(WarnStderr,
 		"--namespace is deprecated for tenant scope on 'stoactl %s', use --tenant\n",
 		target)
 }

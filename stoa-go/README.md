@@ -129,14 +129,16 @@ different things and live at different layers (CAB-2117).
 
 ```bash
 stoactl bridge openapi.yaml \
-  --namespace stoa-demo \   # K8s namespace → metadata.namespace of CRDs
-  --tenant demo \           # CP tenant → admin-API scope for --apply
+  --namespace stoa-demo \
+  --tenant demo \
   --apply
 ```
 
-The two scopes coexist without conflict: `metadata.namespace=stoa-demo` ends
-up on the generated Tool CRDs, while `POST /v1/admin/mcp/servers` runs under
-`tenant=demo`.
+`--namespace stoa-demo` drives `metadata.namespace` of the generated Tool
+CRDs (Kubernetes scope). `--tenant demo` drives the admin-API calls issued
+by `--apply` (CP scope). The two scopes coexist without conflict:
+`POST /v1/admin/mcp/servers` runs under `tenant=demo` while the CRDs
+land in K8s namespace `stoa-demo`.
 
 ### Migration plan
 

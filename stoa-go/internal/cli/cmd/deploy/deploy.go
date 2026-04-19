@@ -80,7 +80,7 @@ func runDeployFromFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--env is required (e.g. --env production)")
 	}
 
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ Examples:
 }
 
 func runDeployCreate(cmd *cobra.Command, _ []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ func runDeployCreate(cmd *cobra.Command, _ []string) error {
 }
 
 func runDeployList(_ *cobra.Command, _ []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}
@@ -281,7 +281,7 @@ func runDeployList(_ *cobra.Command, _ []string) error {
 }
 
 func runDeployGet(_ *cobra.Command, args []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func runDeployGet(_ *cobra.Command, args []string) error {
 }
 
 func runDeployRollback(_ *cobra.Command, args []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}

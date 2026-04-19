@@ -23,14 +23,6 @@ var (
 	dryRun   bool
 )
 
-// resolveTenantOverride reads --tenant / STOACTL_TENANT first, then falls
-// back to the deprecated --namespace / STOACTL_NAMESPACE alias (emitting the
-// deprecation warning). It is exposed as a function variable so tests can
-// stub it.
-var resolveTenantOverride = func() string {
-	return cmdflags.ResolveTenant("apply", true)
-}
-
 // NewApplyCmd creates the apply command
 func NewApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -68,15 +60,9 @@ Examples:
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
-	}
-
-	// Apply the global --tenant override (or deprecated --namespace alias)
-	// before firing any HTTP request so X-Tenant-ID and path params agree.
-	if tenant := resolveTenantOverride(); tenant != "" {
-		c.SetTenantID(tenant)
 	}
 
 	// Check if path is directory

@@ -339,38 +339,9 @@ func TestTenantFromResource_ContextFallback(t *testing.T) {
 	}
 }
 
-// regression for CAB-2117
-// On apply, --namespace alone is honored as the deprecated tenant alias
-// (until release N+1). resolveTenantOverride exposes that aliasing.
-func TestResolveTenantOverride_DeprecatedNamespaceAlias(t *testing.T) {
-	resetCmdflags := func() {
-		cmdflags.TenantOverride = ""
-		cmdflags.NamespaceOverride = ""
-	}
-	defer resetCmdflags()
-
-	cmdflags.NamespaceOverride = "legacy"
-	if got := resolveTenantOverride(); got != "legacy" {
-		t.Errorf("resolveTenantOverride = %q, want %q", got, "legacy")
-	}
-}
-
-// regression for CAB-2117
-// --tenant takes precedence over --namespace.
-func TestResolveTenantOverride_TenantWins(t *testing.T) {
-	resetCmdflags := func() {
-		cmdflags.TenantOverride = ""
-		cmdflags.NamespaceOverride = ""
-	}
-	defer resetCmdflags()
-
-	cmdflags.TenantOverride = "modern"
-	cmdflags.NamespaceOverride = "legacy"
-
-	if got := resolveTenantOverride(); got != "modern" {
-		t.Errorf("--tenant should win; got %q", got)
-	}
-}
+// Precedence tests for ResolveTenant moved to cmdflags/flags_test.go and
+// cmdflags/client_test.go since apply no longer owns the resolver. See
+// TestResolveTenant_* in those files.
 
 func TestApplyFile_ToolMissingServerHint(t *testing.T) {
 	dir := t.TempDir()

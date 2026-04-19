@@ -1,4 +1,4 @@
-# CLAUDE.md — STOA Platform
+# AGENTS.md — STOA Platform
 
 ## Project
 **STOA Platform** — "The European Agent Gateway"
@@ -70,7 +70,7 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 
 ## AI Factory
 
-### Subagents (`.claude/agents/`)
+### Subagents (`.Codex/agents/`)
 | Agent | Specialite | Mode |
 |-------|-----------|------|
 | `security-reviewer` | OWASP, secrets, RBAC, deps vulns | Read-only (plan) |
@@ -81,7 +81,7 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 | `verify-app` | Post-deploy SRE verification (9 checks) | Read-only (plan) |
 | `competitive-analyst` | AI coding tools competitive intelligence | Read-only (plan) |
 
-### MCP Integrations (Claude.ai Native)
+### MCP Integrations (Codex.ai Native)
 | Service | Use For | Key Actions |
 |---------|---------|-------------|
 | **Linear** | Ticket lifecycle | `get_issue` (DoD), `update_issue` (Done), `create_comment` (PR link) |
@@ -90,21 +90,21 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 | **Notion** | Knowledge search | `notion-search`, `notion-fetch` |
 | **n8n** | Workflow automation | `execute_workflow` |
 
-Full reference on-demand: `.claude/docs/mcp-integrations.md`
+Full reference on-demand: `.Codex/docs/mcp-integrations.md`
 
-### Quand lire `.claude/docs/`
+### Quand lire `.Codex/docs/`
 
-`CLAUDE.md` (racine + par service) = décisions GO/NOGO auto-chargées. `.claude/docs/<topic>.md` = protocoles détaillés, exemples, tables de gotchas — **jamais auto-chargés**.
+`AGENTS.md` (racine + par service) = décisions GO/NOGO auto-chargées. `.Codex/docs/<topic>.md` = protocoles détaillés, exemples, tables de gotchas — **jamais auto-chargés**.
 
 Lire `docs/<topic>.md` quand:
 - Tu touches un domaine spécifique (ex: modifier le gateway → lire `code-style-rust.md` + `mcp-oauth.md`)
-- Un CLAUDE.md référence explicitement un fichier docs/
+- Un AGENTS.md référence explicitement un fichier docs/
 - Tu écris un skill/command qui automatise un protocole (crash-recovery, council-s3, phase-ownership)
-- Une règle CLAUDE.md mentionne un seuil sans le détailler
+- Une règle AGENTS.md mentionne un seuil sans le détailler
 
-**Règle**: décisions binaires → CLAUDE.md. Protocoles, exemples, tables → `.claude/docs/`. Jamais dupliquer.
+**Règle**: décisions binaires → AGENTS.md. Protocoles, exemples, tables → `.Codex/docs/`. Jamais dupliquer.
 
-### Skills (`.claude/skills/`)
+### Skills (`.Codex/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
 - 3 MCP-powered: `/council` (4-persona validation → Linear), `/sync-plan` (plan.md ↔ Linear), `/decompose` (MEGA → component-scoped sub-issues + DAG)
@@ -112,7 +112,7 @@ Lire `docs/<topic>.md` quand:
 - 2 sprint: `/fill-cycle` (capacity gap analysis), `/generate-backlog` (MEGA backlog generation)
 - 1 visibility: `/roadmap` (strategic progress snapshot — themes, milestones, velocity)
 
-### Slash Commands (`.claude/commands/`)
+### Slash Commands (`.Codex/commands/`)
 - `/status` — quick project snapshot (git, PRs, CI, pods, tokens)
 - `/deploy-check` — post-merge CD verification
 - `/token-report` — 7-day token cost analysis
@@ -122,7 +122,7 @@ Lire `docs/<topic>.md` quand:
 Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 
 ### Parallel Sessions (git worktrees)
-Named worktrees in `.claude/worktrees/` for concurrent Claude Code sessions:
+Named worktrees in `.Codex/worktrees/` for concurrent Codex sessions:
 ```bash
 za   # analysis worktree (read-only exploration)
 zf   # feature session (main repo)
@@ -139,9 +139,9 @@ zh   # hotfix worktree (ephemeral, from main)
 
 | Hook | Workflow | Trigger | What |
 |------|----------|---------|------|
-| Pre-coding | `claude-linear-dispatch.yml` | `/go` on ticket | Generates context pack, alerts on CRITICAL |
+| Pre-coding | `Codex-linear-dispatch.yml` | `/go` on ticket | Generates context pack, alerts on CRITICAL |
 | Post-merge | `context-compiler-learn.yml` | Push to main | Compares predicted vs actual, enriches DB |
-| Weekly | `claude-self-improve.yml` | Friday 18:00 UTC | Co-change discovery, dashboard, doc regen |
+| Weekly | `Codex-self-improve.yml` | Friday 18:00 UTC | Co-change discovery, dashboard, doc regen |
 
 Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all hooks.
 
@@ -153,7 +153,7 @@ Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all
 
 ## Règles
 
-Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
+Règles binaires GO/NOGO. Détail on-demand dans `.Codex/docs/<rule>.md`.
 
 ### Workflow & Sessions
 - 1 MEGA par session. `/clear` entre chaque.
@@ -182,7 +182,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - Council S1/S2/S3: seuil ≥ 8.0/10. <8 = rework, pas de contournement.
 - MEGA jamais marqué Done directement. Toujours `/verify-mega` (5 gates).
 - Sub-ticket Done sans comment "PR #N" = gate 1 échoue.
-- **Decision Challenge Gate** (HLFH-wide) avant exécution d'un plan matchant ≥1 trigger: (a) temps Claude > 5h, (b) impact business direct (GTM/pricing/positioning/contenu stratégique/partenariat/roadmap lourde), (c) irréversible (données/contrats/branding). Rappeler le gate et exiger contre-analyse d'un challenger externe non-aligné (GPT ou autre, PAS Claude). Framework + logs: `stoa-docs/HEGEMON/DECISION_GATE.md`.
+- **Decision Challenge Gate** (HLFH-wide) avant exécution d'un plan matchant ≥1 trigger: (a) temps Codex > 5h, (b) impact business direct (GTM/pricing/positioning/contenu stratégique/partenariat/roadmap lourde), (c) irréversible (données/contrats/branding). Rappeler le gate et exiger contre-analyse d'un challenger externe non-aligné (GPT ou autre, PAS Codex). Framework + logs: `stoa-docs/HEGEMON/DECISION_GATE.md`.
 - **Plan validation workflow** (convention, pas de hook): plan taggé `triggers: [...]` → fichier canonique dans `docs/plans/YYYY-MM-DD-<slug>.md` avec frontmatter `validation_status: draft|challenged|validated|rejected`. Verdict du challenger lié dans `docs/decisions/YYYY-MM-DD-<slug>.md` (`plan_ref` + `verdict`). **Pas d'exécution tant que `validation_status != validated`**. Templates: `docs/plans/_template.md`, `docs/decisions/_template-plan-validation.md`. Exemple canonique: `docs/plans/2026-04-19-dev-tools-gateway.md` (rejected, log #7).
 
 ### Sécurité
@@ -198,12 +198,12 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - Jamais dupliquer un guide entre stoa et stoa-docs.
 
 ### Outillage
-- stoactl > curl/bash. Lire `.claude/context/cli-reference.md` avant de scanner src/.
+- stoactl > curl/bash. Lire `.Codex/context/cli-reference.md` avant de scanner src/.
 - Linear MCP = state changes. Local files = context. Batch reads, minimize writes.
 - Context7 avant de deviner une API de lib.
 
 ### Phase Ownership (multi-instance)
-- Claim via `.claude/claims/<ID>.json` + `mkdir` atomic lock.
+- Claim via `.Codex/claims/<ID>.json` + `mkdir` atomic lock.
 - End-to-end ownership: qui claim finit la phase.
 - Claim stale = 2h sans activité → auto-release.
 

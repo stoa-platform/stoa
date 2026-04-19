@@ -1,0 +1,156 @@
+openapi: "3.0.3"
+info:
+  title: Payment Processing API
+  version: "3.0.0"
+  description: |
+    Payment initiation and processing for the Bank of Gondor.
+    Supports PSD2 Payment Initiation Service (PIS) with SCA.
+  contact:
+    name: Gondor IT Department
+    email: it@gondor-bank.demo
+servers:
+  - url: https://httpbin.org/anything
+    description: Mock backend
+paths:
+  /payments:
+    post:
+      summary: Initiate a payment
+      operationId: initiatePayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - debtorAccount
+                - creditorAccount
+                - amount
+                - currency
+              properties:
+                debtorAccount:
+                  type: string
+                  description: Debtor IBAN
+                creditorAccount:
+                  type: string
+                  description: Creditor IBAN
+                creditorName:
+                  type: string
+                amount:
+                  type: number
+                  format: double
+                currency:
+                  type: string
+                  enum: [EUR, GBP, USD]
+                  default: EUR
+                paymentType:
+                  type: string
+                  enum: [sepa_credit, sepa_instant, swift]
+                  default: sepa_credit
+                reference:
+                  type: string
+                  description: Payment reference / remittance info
+      responses:
+        "201":
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "422":
+          description: Insufficient funds or validation error
+  /payments/{paymentId}:
+    get:
+      summary: Get payment details
+      operationId: getPayment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+  /payments/{paymentId}/status:
+    get:
+      summary: Get payment status
+      operationId: getPaymentStatus
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  paymentId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, rejected, cancelled]
+                  scaStatus:
+                    type: string
+                    enum: [required, completed, exempted]
+                  updatedAt:
+                    type: string
+                    format: date-time
+  /payments/{paymentId}/cancel:
+    post:
+      summary: Cancel a pending payment
+      operationId: cancelPayment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Payment cancelled
+        "409":
+          description: Payment already processed
+components:
+  schemas:
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        debtorAccount:
+          type: string
+        creditorAccount:
+          type: string
+        creditorName:
+          type: string
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+        paymentType:
+          type: string
+          enum: [sepa_credit, sepa_instant, swift]
+        status:
+          type: string
+          enum: [pending, processing, completed, rejected, cancelled]
+        reference:
+          type: string
+        createdAt:
+          type: string
+          format: date-time

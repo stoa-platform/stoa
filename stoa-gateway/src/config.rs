@@ -488,6 +488,13 @@ pub struct Config {
     #[serde(default = "default_tool_max_staleness_secs")]
     pub tool_max_staleness_secs: u64,
 
+    /// Catalog tool expansion mode (CAB-2113 Phase 0).
+    /// `coarse` (default) → one `{action, params}` tool per API (legacy behaviour).
+    /// `per-op` → one tool per OpenAPI operation via `/apis/expanded`.
+    /// Env: STOA_TOOL_EXPANSION_MODE
+    #[serde(default)]
+    pub tool_expansion_mode: ExpansionMode,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -1251,6 +1258,17 @@ fn default_tool_max_staleness_secs() -> u64 {
     1800
 }
 
+/// Catalog tool expansion mode (CAB-2113 Phase 0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExpansionMode {
+    /// One `{action, params}` tool per API (legacy `/apis`).
+    #[default]
+    Coarse,
+    /// One tool per OpenAPI operation via `/apis/expanded`.
+    PerOp,
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -1460,6 +1478,7 @@ impl Default for Config {
             classification_enforcement_enabled: false,
             tool_refresh_ttl_secs: default_tool_refresh_ttl_secs(),
             tool_max_staleness_secs: default_tool_max_staleness_secs(),
+            tool_expansion_mode: ExpansionMode::default(),
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),

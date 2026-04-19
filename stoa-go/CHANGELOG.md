@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.7](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.6...stoa-go-v0.3.7) (2026-04-19)
+
+
+### Features
+
+* **cli:** support Tool kind in stoactl apply + global --namespace flag ([#2407](https://github.com/stoa-platform/stoa/issues/2407)) ([a2b28cc](https://github.com/stoa-platform/stoa/commit/a2b28cc4321ca5a519955003c090d243fd1802d6))
+
+
+### Bug Fixes
+
+* **cli:** plumb --admin flag through all stoactl commands (CAB-2107) ([#2413](https://github.com/stoa-platform/stoa/issues/2413)) ([c124691](https://github.com/stoa-platform/stoa/commit/c124691691d7f8541f0a8b7efa9fcf53e7b10a4f))
+* **mcp:** restore temperature=0 + add tool-name bijection in phase05 bench (CAB-2116) ([#2428](https://github.com/stoa-platform/stoa/issues/2428)) ([0d6eccc](https://github.com/stoa-platform/stoa/commit/0d6eccc75830b29edccc79a963842982ec643b24))
+
 ## [0.3.6](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.5...stoa-go-v0.3.6) (2026-04-17)
 
 

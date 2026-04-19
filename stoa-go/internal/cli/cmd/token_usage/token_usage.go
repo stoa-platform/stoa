@@ -74,7 +74,7 @@ Examples:
 }
 
 func runTokenUsage(cmd *cobra.Command, args []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}

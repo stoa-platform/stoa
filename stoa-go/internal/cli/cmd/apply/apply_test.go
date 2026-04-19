@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
+	"github.com/stoa-platform/stoa-go/pkg/client"
 	"github.com/stoa-platform/stoa-go/pkg/types"
 )
 
@@ -264,16 +266,82 @@ func TestDecodeToolSpec_NilRejected(t *testing.T) {
 	}
 }
 
-func TestTenantFromResource_NamespaceOverrideWins(t *testing.T) {
-	prev := namespaceOverrideFn
-	defer func() { namespaceOverrideFn = prev }()
-	namespaceOverrideFn = func() string { return "flag-tenant" }
+// regression for CAB-2117
+// Verify --tenant overrides metadata.namespace when resolving the CP tenant
+// for a resource.
+func TestTenantFromResource_TenantFlagWins(t *testing.T) {
+	resetCmdflags := func() {
+		cmdflags.TenantOverride = ""
+		cmdflags.NamespaceOverride = ""
+	}
+	defer resetCmdflags()
+
+	cmdflags.TenantOverride = "flag-tenant"
+	c := client.NewWithConfig("http://example", "flag-tenant", "tok")
 
 	r := types.Resource{Metadata: types.Metadata{Namespace: "yaml-tenant"}}
-	if got := tenantFromResource(nil, r); got != "flag-tenant" {
-		t.Errorf("--namespace should override metadata.namespace; got %q", got)
+	if got := tenantFromResource(c, r); got != "flag-tenant" {
+		t.Errorf("--tenant should override metadata.namespace; got %q", got)
 	}
 }
+
+// regression for CAB-2117
+// --namespace on apply is a deprecated tenant alias — it must still win over
+// metadata.namespace in release N (to preserve legacy behavior) while also
+// triggering the deprecation warning via resolveTenantOverride.
+func TestTenantFromResource_DeprecatedNamespaceAliasWins(t *testing.T) {
+	resetCmdflags := func() {
+		cmdflags.TenantOverride = ""
+		cmdflags.NamespaceOverride = ""
+	}
+	defer resetCmdflags()
+
+	cmdflags.NamespaceOverride = "legacy-tenant"
+	c := client.NewWithConfig("http://example", "legacy-tenant", "tok")
+
+	r := types.Resource{Metadata: types.Metadata{Namespace: "yaml-tenant"}}
+	if got := tenantFromResource(c, r); got != "legacy-tenant" {
+		t.Errorf("--namespace alias should win over metadata.namespace; got %q", got)
+	}
+}
+
+// regression for CAB-2117
+// With no CLI overrides, metadata.namespace continues to take precedence over
+// the context-default tenant.
+func TestTenantFromResource_MetadataNamespaceMiddlePriority(t *testing.T) {
+	resetCmdflags := func() {
+		cmdflags.TenantOverride = ""
+		cmdflags.NamespaceOverride = ""
+	}
+	defer resetCmdflags()
+
+	c := client.NewWithConfig("http://example", "ctx-tenant", "tok")
+	r := types.Resource{Metadata: types.Metadata{Namespace: "yaml-tenant"}}
+	if got := tenantFromResource(c, r); got != "yaml-tenant" {
+		t.Errorf("metadata.namespace should win over context default; got %q", got)
+	}
+}
+
+// regression for CAB-2117
+// No overrides + no metadata.namespace → fall back to the context-configured
+// tenant.
+func TestTenantFromResource_ContextFallback(t *testing.T) {
+	resetCmdflags := func() {
+		cmdflags.TenantOverride = ""
+		cmdflags.NamespaceOverride = ""
+	}
+	defer resetCmdflags()
+
+	c := client.NewWithConfig("http://example", "ctx-tenant", "tok")
+	r := types.Resource{}
+	if got := tenantFromResource(c, r); got != "ctx-tenant" {
+		t.Errorf("fallback should be context tenant; got %q", got)
+	}
+}
+
+// Precedence tests for ResolveTenant moved to cmdflags/flags_test.go and
+// cmdflags/client_test.go since apply no longer owns the resolver. See
+// TestResolveTenant_* in those files.
 
 func TestApplyFile_ToolMissingServerHint(t *testing.T) {
 	dir := t.TempDir()

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stoa-platform/stoa-go/pkg/client"
+	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 	catalogpkg "github.com/stoa-platform/stoa-go/pkg/client/catalog"
 	"github.com/stoa-platform/stoa-go/pkg/output"
 )
@@ -64,7 +64,7 @@ With --apply: triggers a server-side catalog sync from Git and polls until compl
 }
 
 func runSync(_ *cobra.Command, _ []string) error {
-	c, err := client.NewAdmin()
+	c, err := cmdflags.NewAdminClient()
 	if err != nil {
 		return err
 	}

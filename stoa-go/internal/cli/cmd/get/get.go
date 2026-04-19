@@ -76,7 +76,7 @@ Examples:
 }
 
 func runGetAPIs(cmd *cobra.Command, args []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func newGetTenantsCmd() *cobra.Command {
 		Short:   "Display tenants",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func newGetSubscriptionsCmd() *cobra.Command {
 		Short:   "Display subscriptions",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -339,7 +339,7 @@ func newGetGatewaysCmd() *cobra.Command {
 		Short:   "Display gateway instances",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -411,7 +411,7 @@ func newGetConsumersCmd() *cobra.Command {
 		Short:   "Display consumers",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -482,7 +482,7 @@ func newGetContractsCmd() *cobra.Command {
 		Short:   "Display Universal API Contracts",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -553,7 +553,7 @@ func newGetServiceAccountsCmd() *cobra.Command {
 		Short:   "Display service accounts",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -597,7 +597,7 @@ func newGetEnvironmentsCmd() *cobra.Command {
 		Short:   "Display environments",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -641,7 +641,7 @@ func newGetPlansCmd() *cobra.Command {
 		Short:   "Display subscription plans",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -712,7 +712,7 @@ func newGetWebhooksCmd() *cobra.Command {
 		Short:   "Display webhook configurations",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}

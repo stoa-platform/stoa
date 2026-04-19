@@ -362,18 +362,54 @@ pub fn start_api_tool_refresh_task(
                 }
             };
 
+            let mode_label = expansion_mode_label(mode);
             match result {
                 Ok(count) => {
+                    crate::metrics::TOOL_EXPANSION_REFRESH_TOTAL
+                        .with_label_values(&[mode_label, "ok"])
+                        .inc();
+                    crate::metrics::TOOL_EXPANSION_OPS_REGISTERED
+                        .with_label_values(&[mode_label])
+                        .set(count as f64);
                     if count > 0 {
                         info!(count, mode = ?mode, "New API tools discovered from catalog");
                     }
                 }
                 Err(e) => {
+                    crate::metrics::TOOL_EXPANSION_REFRESH_TOTAL
+                        .with_label_values(&[mode_label, "err"])
+                        .inc();
+                    crate::metrics::TOOL_EXPANSION_ERRORS_TOTAL
+                        .with_label_values(&[classify_refresh_error(&e)])
+                        .inc();
                     debug!(error = %e, mode = ?mode, "API tool refresh failed (keeping existing tools)");
                 }
             }
         }
     });
+}
+
+/// Stable Prometheus label for an `ExpansionMode`. Kept as a free fn so tests
+/// can assert the label surface without touching the metric registry.
+fn expansion_mode_label(mode: ExpansionMode) -> &'static str {
+    match mode {
+        ExpansionMode::Coarse => "coarse",
+        ExpansionMode::PerOp => "per-op",
+    }
+}
+
+/// Coarse categorisation of refresh error strings for the
+/// `stoa_gateway_tool_expansion_errors_total{reason=...}` counter. The matching
+/// order matters: parse errors come from `resp.json()` after a successful HTTP
+/// status, so they must be checked before the generic transport bucket.
+fn classify_refresh_error(err: &str) -> &'static str {
+    if err.contains("Failed to parse") {
+        "parse"
+    } else if err.contains("returned") {
+        "upstream_status"
+    } else {
+        "transport"
+    }
 }
 
 #[cfg(test)]
@@ -801,5 +837,27 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains("500"), "got: {err}");
+    }
+
+    #[test]
+    fn expansion_mode_label_is_kebab_canonical() {
+        assert_eq!(expansion_mode_label(ExpansionMode::Coarse), "coarse");
+        assert_eq!(expansion_mode_label(ExpansionMode::PerOp), "per-op");
+    }
+
+    #[test]
+    fn classify_refresh_error_buckets_parse_upstream_transport() {
+        assert_eq!(
+            classify_refresh_error("Failed to parse CP expanded catalog response: eof"),
+            "parse"
+        );
+        assert_eq!(
+            classify_refresh_error("CP expanded catalog returned 503: unavailable"),
+            "upstream_status"
+        );
+        assert_eq!(
+            classify_refresh_error("CP expanded catalog request failed: connection refused"),
+            "transport"
+        );
     }
 }

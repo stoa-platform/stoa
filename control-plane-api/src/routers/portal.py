@@ -209,7 +209,9 @@ async def internal_list_apis_expanded(
     """Expand published APIs into per-operation MCP tool descriptors.
 
     Internal endpoint — same auth model and gateway scoping as ``/apis``.
-    Consumed by ``stoa-gateway`` when ``STOA_TOOL_EXPANSION_MODE=per_operation``.
+    Consumed by ``stoa-gateway`` when ``STOA_TOOL_EXPANSION_MODE=per-op``
+    (canonical kebab-case; ``per_operation`` still accepted as a deprecated
+    alias for one release, see CAB-2113 PR3).
 
     Falls back to a single coarse tool per API when ``openapi_spec`` is missing
     so switching the gateway flag is safe even on a partially-specced catalog.

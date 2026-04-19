@@ -114,6 +114,42 @@ stoactl apply -f api.yaml
 | `stoactl delete <resource> <name>` | Delete a resource |
 | `stoactl version` | Print version information |
 
+## Scoping flags: `--tenant` vs `--namespace`
+
+`stoactl` exposes two **distinct** scoping flags. They look similar but mean
+different things and live at different layers (CAB-2117).
+
+| Flag | Scope | Where it applies |
+|------|-------|------------------|
+| `--tenant` (or `STOACTL_TENANT`) | CP tenant — sets `X-Tenant-ID` and tenant-scoped paths on the admin API | Persistent root flag, inherited by every subcommand |
+| `--namespace` (or `STOACTL_NAMESPACE`) on `stoactl bridge` | Kubernetes namespace written to `metadata.namespace` of generated Tool CRDs | `stoactl bridge` only |
+| `--namespace` (or `STOACTL_NAMESPACE`) on every other command | **Deprecated** legacy alias for `--tenant`; emits a stderr warning and will be removed in the next breaking release | All non-`bridge` commands |
+
+### Canonical two-scope example
+
+```bash
+stoactl bridge openapi.yaml \
+  --namespace stoa-demo \   # K8s namespace → metadata.namespace of CRDs
+  --tenant demo \           # CP tenant → admin-API scope for --apply
+  --apply
+```
+
+The two scopes coexist without conflict: `metadata.namespace=stoa-demo` ends
+up on the generated Tool CRDs, while `POST /v1/admin/mcp/servers` runs under
+`tenant=demo`.
+
+### Migration plan
+
+* **This release (N)** — `--tenant` introduced everywhere; `--namespace` on
+  non-bridge commands keeps working but emits this warning on stderr:
+  ```
+  --namespace is deprecated for tenant scope on 'stoactl <cmd>', use --tenant
+  ```
+* **Next breaking release (N+1)** — `--namespace` is removed from
+  non-`bridge` commands; using it will exit with an explicit error pointing
+  to `--tenant`. `stoactl bridge --namespace` keeps its K8s meaning
+  unchanged.
+
 ## Configuration
 
 stoactl stores configuration in `~/.stoactl/config.yaml`:

@@ -23,17 +23,12 @@ var (
 	dryRun   bool
 )
 
-// namespaceOverrideFn is the callback used by apply to read the root-level
-// --namespace flag without importing the cmd package (which would create an
-// import cycle). The root package wires this at init time.
-var namespaceOverrideFn = func() string { return "" }
-
-// SetNamespaceOverrideFn wires the --namespace override accessor. Called by
-// the root package during init.
-func SetNamespaceOverrideFn(fn func() string) {
-	if fn != nil {
-		namespaceOverrideFn = fn
-	}
+// resolveTenantOverride reads --tenant / STOACTL_TENANT first, then falls
+// back to the deprecated --namespace / STOACTL_NAMESPACE alias (emitting the
+// deprecation warning). It is exposed as a function variable so tests can
+// stub it.
+var resolveTenantOverride = func() string {
+	return cmdflags.ResolveTenant("apply", true)
 }
 
 // NewApplyCmd creates the apply command
@@ -76,6 +71,12 @@ func runApply(cmd *cobra.Command, args []string) error {
 	c, err := client.NewForMode(cmdflags.AdminMode)
 	if err != nil {
 		return err
+	}
+
+	// Apply the global --tenant override (or deprecated --namespace alias)
+	// before firing any HTTP request so X-Tenant-ID and path params agree.
+	if tenant := resolveTenantOverride(); tenant != "" {
+		c.SetTenantID(tenant)
 	}
 
 	// Check if path is directory
@@ -250,10 +251,20 @@ func buildApplyBody(resource types.Resource) map[string]any {
 }
 
 // tenantFromResource resolves the tenant for a resource with precedence:
-// --namespace flag > metadata.namespace > client's configured tenant.
+//  1. --tenant / STOACTL_TENANT flag (TenantOverride)
+//  2. --namespace / STOACTL_NAMESPACE flag (NamespaceOverride — deprecated
+//     alias, warning already emitted by runApply via resolveTenantOverride)
+//  3. resource.Metadata.Namespace
+//  4. client's configured context tenant
+//
+// When (1) or (2) are set, runApply has already applied them via
+// c.SetTenantID so c.TenantID() already reflects the override. Consulting
+// cmdflags here only disambiguates "explicit override" from "context
+// default", which is what lets metadata.namespace take precedence over the
+// context default.
 func tenantFromResource(c *client.Client, resource types.Resource) string {
-	if ns := namespaceOverrideFn(); ns != "" {
-		return ns
+	if cmdflags.TenantOverride != "" || cmdflags.NamespaceOverride != "" {
+		return c.TenantID()
 	}
 	if resource.Metadata.Namespace != "" {
 		return resource.Metadata.Namespace

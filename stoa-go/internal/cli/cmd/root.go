@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -29,21 +30,20 @@ import (
 	"github.com/stoa-platform/stoa-go/internal/cli/cmdflags"
 )
 
+// envTenant and envNamespace are read once at init so that CLI flag defaults
+// pick up STOACTL_TENANT / STOACTL_NAMESPACE without needing a PersistentPreRun
+// hook. --tenant / --namespace CLI args still override them.
+var (
+	envTenant    = os.Getenv("STOACTL_TENANT")
+	envNamespace = os.Getenv("STOACTL_NAMESPACE")
+)
+
 var (
 	// Version is set at build time
 	Version = "dev"
 	// Commit is set at build time
 	Commit = "none"
 )
-
-// NamespaceOverride holds the value of the persistent --namespace flag.
-// When non-empty, commands should prefer this over metadata.namespace / the
-// configured tenant.
-var NamespaceOverride string
-
-// Namespace returns the namespace override set via the --namespace flag,
-// or an empty string when the flag was not provided.
-func Namespace() string { return NamespaceOverride }
 
 var rootCmd = &cobra.Command{
 	Use:   "stoactl",
@@ -62,8 +62,28 @@ Example usage:
 
 Admin mode:
   stoactl --admin get apis         # Uses service account token instead of user OIDC`,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	SilenceUsage:      true,
+	SilenceErrors:     true,
+	PersistentPreRunE: warnDeprecatedNamespaceIfNeeded,
+}
+
+// warnDeprecatedNamespaceIfNeeded emits the CAB-2117 deprecation warning
+// when --namespace / STOACTL_NAMESPACE is set on any subcommand other than
+// `bridge` (where --namespace keeps its K8s semantic). Runs exactly once per
+// CLI invocation thanks to cobra's PersistentPreRun lifecycle.
+func warnDeprecatedNamespaceIfNeeded(cmd *cobra.Command, _ []string) error {
+	if cmdflags.NamespaceOverride == "" {
+		return nil
+	}
+	// `bridge` keeps --namespace as K8s semantic; never warn there.
+	if cmd.Name() == "bridge" {
+		return nil
+	}
+	// CommandPath() returns "stoactl <sub> [<sub2>...]"; strip the program
+	// prefix so the warning reads e.g. "stoactl get apis" once formatted.
+	path := strings.TrimPrefix(cmd.CommandPath(), "stoactl ")
+	cmdflags.WarnDeprecatedNamespace(path)
+	return nil
 }
 
 // Execute runs the root command
@@ -76,9 +96,15 @@ func init() {
 	// `-n` intentionally omitted: the `bridge` command already defines a
 	// local `-n` shortcut, and shadowing it globally would break existing
 	// scripts. Long form only; users still get kubectl-like UX.
-	rootCmd.PersistentFlags().StringVar(&NamespaceOverride, "namespace", "", "Target namespace (overrides metadata.namespace in manifests)")
-
-	apply.SetNamespaceOverrideFn(Namespace)
+	rootCmd.PersistentFlags().StringVar(&cmdflags.NamespaceOverride, "namespace", envNamespace,
+		"[DEPRECATED for tenant scope — use --tenant] Target namespace. "+
+			"On 'stoactl bridge': K8s namespace written to metadata.namespace "+
+			"of generated Tool CRDs. On every other command: legacy alias for "+
+			"--tenant; emits a deprecation warning on stderr and will be removed "+
+			"in the next breaking release.")
+	rootCmd.PersistentFlags().StringVar(&cmdflags.TenantOverride, "tenant", envTenant,
+		"Target CP tenant (overrides context tenant). "+
+			"Accepts STOACTL_TENANT env var as default.")
 
 	rootCmd.AddCommand(catalogcmd.NewCatalogCmd())
 	rootCmd.AddCommand(auditcmd.NewAuditCmd())

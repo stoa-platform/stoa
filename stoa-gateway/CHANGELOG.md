@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.9](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.8...stoa-gateway-v0.9.9) (2026-04-19)
+
+
+### Features
+
+* **gateway:** consume /apis/expanded + path-param substitution (CAB-2113) ([#2420](https://github.com/stoa-platform/stoa/issues/2420)) ([3e57435](https://github.com/stoa-platform/stoa/commit/3e57435dff98c6d75f0c3789a54c8242c90f2ac4))
+* **gateway:** tool-expansion observability + runbook (CAB-2113 PR3) ([#2422](https://github.com/stoa-platform/stoa/issues/2422)) ([cd99417](https://github.com/stoa-platform/stoa/commit/cd9941741c234f3b6fd0b6bde4afad480615aa27))
+
+
+### Bug Fixes
+
+* **gateway:** public per-op tools now surface in standard discovery (CAB-2123) ([#2426](https://github.com/stoa-platform/stoa/issues/2426)) ([3a0614b](https://github.com/stoa-platform/stoa/commit/3a0614bcadb86b032eb487d03be7f57512db1c34))
+* **mcp:** restore temperature=0 + add tool-name bijection in phase05 bench (CAB-2116) ([#2428](https://github.com/stoa-platform/stoa/issues/2428)) ([0d6eccc](https://github.com/stoa-platform/stoa/commit/0d6eccc75830b29edccc79a963842982ec643b24))
+
 ## [0.9.8](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.7...stoa-gateway-v0.9.8) (2026-04-18)
 
 

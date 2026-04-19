@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.4.0...control-plane-ui-v1.4.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **mcp:** restore temperature=0 + add tool-name bijection in phase05 bench (CAB-2116) ([#2428](https://github.com/stoa-platform/stoa/issues/2428)) ([0d6eccc](https://github.com/stoa-platform/stoa/commit/0d6eccc75830b29edccc79a963842982ec643b24))
+
 ## [1.4.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.3.0...control-plane-ui-v1.4.0) (2026-04-16)
 
 

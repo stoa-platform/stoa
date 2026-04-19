@@ -20,26 +20,15 @@
 ### In Review
 Voir Linear (queue typiquement ~40 tickets mais drainée à 0 en Phase 1 CAB-2053).
 
-### 🚨 FREEZE Active — Council 8.0/10 Go
-- [~] **CAB-2053** Feature freeze + CLI-first stabilization (21 pts P1) — Phase 0-2 done
-  - Phase 3 stoactl completeness 100%
-  - Phase 4 Schema registry `gostoa.dev/v1beta1`
-  - Phase 5 Context pack CLI-first (< 40% context usage)
-  - Phase 6 Close gate: 7j CI green + feature sans `src/`
-  - Phase 7 ADR-061 controller framework
-  - Shadow metric via CAB-2051 REWORK rate < 50% baseline
-  - Exceptions: CAB-2049/2050 (Council S3 infra) + hotfixes P0
+### ✅ Freeze dissous (2026-04-19)
+- [~] **CAB-2053** Feature freeze + CLI-first stabilization (21 pts P1) — rouvert pour rétro-décomposition
+  - Sub-tickets: CAB-2125 (P0 Done), CAB-2126 (P1 Done), CAB-2127 (P2 Done), CAB-2128 (P3 **In Progress** — baseline #2345 livré, gaps audit 2026-04-19 trackés CAB-2119/2120/2121/2122), CAB-2129 (P4 Done), CAB-2130 (P5 Done), CAB-2131/CAB-2132 (P6/P7 duplicateOf CAB-2118).
+  - Dissolution: freeze non enforcement-able (110 commits hors scope en 8j). Le freeze est dissous mais CAB-2053 reste ouvert jusqu'à terminaison P3 + live verification.
 
-### Suspendus jusqu'à fin CAB-2053
-- CAB-1887 Gateway Dashboard Inconsistencies (21 pts P1-Urgent)
-- CAB-1917 Fix API creation + deploy pipeline (21 pts)
-- CAB-1930 Deploy Single Path SSE (21 pts)
-- CAB-1867 Bus Factor Mitigation (13 pts)
-- CAB-1855 Constant real data in prod (21 pts)
-- CAB-1795 Unified Secrets Vault (21 pts)
-- CAB-1977 Unified observability (21 pts) — 4 subs In Review
-- CAB-1989 AI-Verified UI Testing (21 pts) — 6 subs In Review
-- CAB-2019 stoactl CLI-First Operations (21 pts) — 3/6 done
+### Priorité active C15 (Apr 13-26)
+- Démo wM/Axway 28/04 (ex-CAB-2088, nouveau ticket opé à créer) — bloquant externe
+- CAB-2049/2050 (Council S3 infra)
+- Hotfixes P0 prod
 
 ## Cycle 16 (Apr 13–19) — NEXT
 
@@ -66,4 +55,4 @@ Voir Linear (queue typiquement ~40 tickets mais drainée à 0 en Phase 1 CAB-205
 2. Si bloqué > 1h → contourner, noter, avancer.
 3. 1 sous-tâche par session Claude Code.
 4. `/sync-plan` avant et après chaque session.
-5. Freeze active: seul CAB-2053 + exceptions.
+5. Freeze dissous (2026-04-19) — priorité démo 28/04 + CAB-2049/2050 + hotfixes P0.

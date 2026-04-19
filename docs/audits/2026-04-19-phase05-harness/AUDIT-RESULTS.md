@@ -63,9 +63,9 @@ The mechanical verdict (RED on both) reads as: **"neither variant clears all gat
 ## P1 harness defects discovered during P2 (transport-layer, not methodology)
 
 1. **Tool name pattern violation** — `build_enriched.py:145,189` emits `f"{tenant}:{api_name}"` containing `:`. Anthropic API requires `^[a-zA-Z0-9_-]{1,128}$` → HTTP 400. Fix applied in `run_bench.py::_call_anthropic` via explicit bijection `:` ↔ `__`, canonical name preserved in persisted records (`score.py:60` unchanged).
-2. **`temperature=0` deprecated** — rejected by Claude 4.x models (opus-4-7, sonnet-4-6, haiku-4-5). Removed from `client.messages.create()` call.
+2. **`temperature=0` accidentally dropped during the bijection refactor** — initial note in this audit claimed the parameter was deprecated on Claude 4.x and had to be removed; that was incorrect. The refactor dropped it silently, which flipped the bench from deterministic to stochastic sampling and invalidated `--runs N` semantics, `score.py` top-1 accuracy, and comparability with prior bench records. Restored by commit [`a064fb6a`](https://github.com/stoa-platform/stoa/commit/a064fb6a) (CAB-2116) — `run_bench.py::_call_anthropic` sends `temperature=0` as designed. Claude 4.x accepts it.
 
-Neither changes specs, prompts, generator, or decision rule. Both are P1 bugs: the harness was never validated against the live API prior to P2 (only the deterministic stub path). Recommend follow-up ticket to add live-API smoke test to `tools/phase05-harness/tests/` with single-prompt single-model guard, behind a `RUN_LIVE_SMOKE=1` flag.
+Neither changes specs, prompts, generator, or decision rule. Both are P1 bugs: the harness was never validated against the live API prior to P2 (only the deterministic stub path). Follow-up shipped as CAB-2124 — `tools/phase05-harness/tests/test_live_smoke.py` (gated on `STOA_LIVE_SMOKE=1` + `ANTHROPIC_API_KEY`) plus an offline transport-contract test.
 
 ## Artifacts
 

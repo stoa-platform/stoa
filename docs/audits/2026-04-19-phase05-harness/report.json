@@ -1,0 +1,254 @@
+{
+  "config": {
+    "acc_gate": 0.1,
+    "bootstrap_iters": 10000,
+    "bootstrap_seed": 20260419,
+    "regression_gate": 0.2,
+    "scalability_gate": 0.9,
+    "target_model": "claude-sonnet-4-6"
+  },
+  "per_cell": {
+    "claude-haiku-4-5-20251001|coarse": {
+      "condition": "coarse",
+      "latency_p95_ms": 2254.8471670015715,
+      "median_cost_tokens": 795.0,
+      "model": "claude-haiku-4-5-20251001",
+      "n": 270,
+      "top1_accuracy": 0.11481481481481481,
+      "top1_accuracy_by_category": {
+        "distractor": 0.07407407407407407,
+        "no_valid_tool": 0.7777777777777778,
+        "normal": 0.031746031746031744
+      }
+    },
+    "claude-haiku-4-5-20251001|enriched-single": {
+      "condition": "enriched-single",
+      "latency_p95_ms": 2765.1654170003894,
+      "median_cost_tokens": 1345.0,
+      "model": "claude-haiku-4-5-20251001",
+      "n": 270,
+      "top1_accuracy": 0.7185185185185186,
+      "top1_accuracy_by_category": {
+        "distractor": 0.5370370370370371,
+        "no_valid_tool": 1.0,
+        "normal": 0.7301587301587301
+      }
+    },
+    "claude-haiku-4-5-20251001|per-op": {
+      "condition": "per-op",
+      "latency_p95_ms": 2748.1105829974695,
+      "median_cost_tokens": 7187.0,
+      "model": "claude-haiku-4-5-20251001",
+      "n": 1080,
+      "top1_accuracy": 0.7555555555555555,
+      "top1_accuracy_by_category": {
+        "distractor": 0.5972222222222222,
+        "no_valid_tool": 1.0,
+        "normal": 0.7658730158730159
+      }
+    },
+    "claude-opus-4-7|coarse": {
+      "condition": "coarse",
+      "latency_p95_ms": 3708.9090410008794,
+      "median_cost_tokens": 1063.0,
+      "model": "claude-opus-4-7",
+      "n": 270,
+      "top1_accuracy": 0.34444444444444444,
+      "top1_accuracy_by_category": {
+        "distractor": 0.3333333333333333,
+        "no_valid_tool": 0.6666666666666666,
+        "normal": 0.30158730158730157
+      }
+    },
+    "claude-opus-4-7|enriched-single": {
+      "condition": "enriched-single",
+      "latency_p95_ms": 5181.094540999766,
+      "median_cost_tokens": 1787.0,
+      "model": "claude-opus-4-7",
+      "n": 270,
+      "top1_accuracy": 0.7407407407407407,
+      "top1_accuracy_by_category": {
+        "distractor": 0.6666666666666666,
+        "no_valid_tool": 1.0,
+        "normal": 0.7248677248677249
+      }
+    },
+    "claude-opus-4-7|per-op": {
+      "condition": "per-op",
+      "latency_p95_ms": 4551.362458001677,
+      "median_cost_tokens": 9653.0,
+      "model": "claude-opus-4-7",
+      "n": 1080,
+      "top1_accuracy": 0.7277777777777777,
+      "top1_accuracy_by_category": {
+        "distractor": 0.6157407407407407,
+        "no_valid_tool": 1.0,
+        "normal": 0.7208994708994709
+      }
+    },
+    "claude-sonnet-4-6|coarse": {
+      "condition": "coarse",
+      "latency_p95_ms": 4026.9622090017947,
+      "median_cost_tokens": 796.0,
+      "model": "claude-sonnet-4-6",
+      "n": 270,
+      "top1_accuracy": 0.3111111111111111,
+      "top1_accuracy_by_category": {
+        "distractor": 0.2222222222222222,
+        "no_valid_tool": 0.6666666666666666,
+        "normal": 0.2857142857142857
+      }
+    },
+    "claude-sonnet-4-6|enriched-single": {
+      "condition": "enriched-single",
+      "latency_p95_ms": 4739.539374997548,
+      "median_cost_tokens": 1336.0,
+      "model": "claude-sonnet-4-6",
+      "n": 270,
+      "top1_accuracy": 0.6814814814814815,
+      "top1_accuracy_by_category": {
+        "distractor": 0.5,
+        "no_valid_tool": 1.0,
+        "normal": 0.6878306878306878
+      }
+    },
+    "claude-sonnet-4-6|per-op": {
+      "condition": "per-op",
+      "latency_p95_ms": 4824.875415997667,
+      "median_cost_tokens": 7187.0,
+      "model": "claude-sonnet-4-6",
+      "n": 1080,
+      "top1_accuracy": 0.7129629629629629,
+      "top1_accuracy_by_category": {
+        "distractor": 0.5509259259259259,
+        "no_valid_tool": 1.0,
+        "normal": 0.7182539682539683
+      }
+    }
+  },
+  "verdicts": {
+    "enriched-single": {
+      "any_other_green": false,
+      "per_model": {
+        "claude-haiku-4-5-20251001": {
+          "checks": {
+            "ci95_lower_positive": true,
+            "cost_not_regressed": false,
+            "gain_10pts": true,
+            "latency_not_regressed": false
+          },
+          "ci95": [
+            0.4444444444444444,
+            0.6888888888888889
+          ],
+          "cost_regression": 0.6918238993710693,
+          "green": false,
+          "latency_regression": 0.22632054955521608,
+          "mean_gain": 0.5666666666666667,
+          "n_paired": 90
+        },
+        "claude-opus-4-7": {
+          "checks": {
+            "ci95_lower_positive": true,
+            "cost_not_regressed": false,
+            "gain_10pts": true,
+            "latency_not_regressed": false
+          },
+          "ci95": [
+            0.2222222222222222,
+            0.5666666666666667
+          ],
+          "cost_regression": 0.6810912511759173,
+          "green": false,
+          "latency_regression": 0.3969322201553924,
+          "mean_gain": 0.4,
+          "n_paired": 90
+        },
+        "claude-sonnet-4-6": {
+          "checks": {
+            "ci95_lower_positive": true,
+            "cost_not_regressed": false,
+            "gain_10pts": true,
+            "latency_not_regressed": true
+          },
+          "ci95": [
+            0.18888888888888888,
+            0.5333333333333333
+          ],
+          "cost_regression": 0.6783919597989949,
+          "green": false,
+          "latency_regression": 0.17695154039510785,
+          "mean_gain": 0.36666666666666664,
+          "n_paired": 90
+        }
+      },
+      "target_model": "claude-sonnet-4-6",
+      "target_model_green": false,
+      "variant": "enriched-single",
+      "verdict": "RED"
+    },
+    "per-op": {
+      "any_other_green": false,
+      "per_model": {
+        "claude-haiku-4-5-20251001": {
+          "checks": {
+            "ci95_lower_positive": true,
+            "cost_not_regressed": false,
+            "gain_10pts": true,
+            "latency_not_regressed": false,
+            "scalability": true
+          },
+          "ci95": [
+            0.6111111111111112,
+            0.8111111111111111
+          ],
+          "cost_regression": 8.040251572327044,
+          "green": false,
+          "latency_regression": 0.21875691763704985,
+          "mean_gain": 0.7111111111111111,
+          "n_paired": 90
+        },
+        "claude-opus-4-7": {
+          "checks": {
+            "ci95_lower_positive": true,
+            "cost_not_regressed": false,
+            "gain_10pts": true,
+            "latency_not_regressed": false,
+            "scalability": true
+          },
+          "ci95": [
+            0.2,
+            0.5555555555555556
+          ],
+          "cost_regression": 8.080903104421449,
+          "green": false,
+          "latency_regression": 0.22714318622746665,
+          "mean_gain": 0.37777777777777777,
+          "n_paired": 90
+        },
+        "claude-sonnet-4-6": {
+          "checks": {
+            "ci95_lower_positive": true,
+            "cost_not_regressed": false,
+            "gain_10pts": true,
+            "latency_not_regressed": true,
+            "scalability": true
+          },
+          "ci95": [
+            0.2777777777777778,
+            0.6
+          ],
+          "cost_regression": 8.02889447236181,
+          "green": false,
+          "latency_regression": 0.19814271045609333,
+          "mean_gain": 0.4444444444444444,
+          "n_paired": 90
+        }
+      },
+      "target_model": "claude-sonnet-4-6",
+      "target_model_green": false,
+      "variant": "per-op",
+      "verdict": "RED"
+    }
+  }
+}

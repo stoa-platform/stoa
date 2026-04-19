@@ -123,6 +123,25 @@ python3 run_bench.py --prompts prompts.jsonl --specs-dir specs --dry-run --runs 
 python3 score.py --prompts prompts.jsonl --runs /tmp/runs.jsonl --out /tmp/report.json
 ```
 
+### Live smoke (pre-Px gate)
+
+Fails fast against the real Anthropic API on all three conditions before a
+full scoring run. Catches regressions that deterministic tests cannot see:
+the `^[a-zA-Z0-9_-]{1,128}$` tool-name validator, deprecated
+`client.messages.create` params, and the canonical-name reverse-mapping in
+`run_bench._call_anthropic`.
+
+```bash
+STOA_LIVE_SMOKE=1 ANTHROPIC_API_KEY=sk-... \
+    python3 -m pytest tests/test_live_smoke.py -v
+```
+
+Runs 3 calls (coarse / per-op / enriched-single) on
+`claude-haiku-4-5-20251001` against `payment-api` — cost ≪ $0.01 per
+invocation. Must pass before every Px run, same priority as
+`test_determinism.py`. Without both env vars the suite is skipped with a
+clear reason so CI stays free.
+
 ### Full P2 run (requires `ANTHROPIC_API_KEY`)
 
 ```bash

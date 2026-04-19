@@ -129,7 +129,14 @@ impl Tool for DynamicTool {
     }
 
     fn tenant_id(&self) -> Option<&str> {
-        Some(&self.tenant_id)
+        // Public tools (catalog API bridge, per-op expanded tools) are visible
+        // to every tenant in `tools/list`. Non-public tools stay tenant-scoped.
+        // Execute-time isolation still reads `self.tenant_id` directly via `execute()`.
+        if self.public {
+            None
+        } else {
+            Some(&self.tenant_id)
+        }
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
@@ -682,5 +689,155 @@ mod tests {
         tool.execute(json!({"id": "42", "amount": 100}), &ctx)
             .await
             .unwrap();
+    }
+
+    // === CAB-2123: public DynamicTool must be tenant_id=None in discovery ===
+    //
+    // regression for CAB-2123
+    // Before the fix, `Tool::tenant_id` returned `Some(&self.tenant_id)` even when
+    // the tool was registered via `.into_public()` — so `ToolRegistry::list(Some(caller))`
+    // filtered public per-op tools out for every caller whose tenant didn't match the CRD
+    // namespace. This broke standard /mcp/v1/tools discovery for the CAB-2113 banking
+    // catalog, forcing clients through the bricolé `stoa_tools action=list` path.
+
+    fn schema_empty_object() -> ToolSchema {
+        ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        }
+    }
+
+    #[test]
+    fn cab_2123_public_dynamic_tool_has_no_tenant_in_definition() {
+        let tool = DynamicTool::new(
+            "demo_public",
+            "public tool",
+            "http://localhost",
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .into_public();
+
+        assert_eq!(tool.tenant_id(), None);
+        assert!(tool.definition().tenant_id.is_none());
+    }
+
+    #[test]
+    fn cab_2123_private_dynamic_tool_keeps_tenant_in_definition() {
+        let tool = DynamicTool::new(
+            "demo_private",
+            "private tool",
+            "http://localhost",
+            "GET",
+            schema_empty_object(),
+            "demo",
+        );
+
+        assert_eq!(tool.tenant_id(), Some("demo"));
+        assert_eq!(tool.definition().tenant_id.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn cab_2123_registry_list_includes_public_dynamic_tool_for_any_tenant() {
+        use super::super::ToolRegistry;
+        use std::sync::Arc;
+
+        let registry = ToolRegistry::new();
+        let tool = DynamicTool::new(
+            "demo:bank:get-customer",
+            "Get customer",
+            "http://mock",
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .into_public();
+
+        registry.register(Arc::new(tool));
+
+        // Public tool must surface for any caller tenant, not just "demo".
+        for caller in ["demo", "stoa-demo", "other-tenant", "acme"] {
+            let tools = registry.list(Some(caller));
+            assert!(
+                tools.iter().any(|t| t.name == "demo:bank:get-customer"),
+                "public tool invisible to tenant `{}`",
+                caller
+            );
+        }
+    }
+
+    #[test]
+    fn cab_2123_registry_list_keeps_private_dynamic_tool_tenant_scoped() {
+        use super::super::ToolRegistry;
+        use std::sync::Arc;
+
+        let registry = ToolRegistry::new();
+        let tool = DynamicTool::new(
+            "acme_internal",
+            "Internal tool",
+            "http://mock",
+            "GET",
+            schema_empty_object(),
+            "acme",
+        );
+        registry.register(Arc::new(tool));
+
+        // Owner sees it; other tenants don't.
+        assert!(
+            registry
+                .list(Some("acme"))
+                .iter()
+                .any(|t| t.name == "acme_internal"),
+            "owner must see its private tool"
+        );
+        assert!(
+            registry
+                .list(Some("other"))
+                .iter()
+                .all(|t| t.name != "acme_internal"),
+            "non-owner must not see private tool"
+        );
+    }
+
+    #[test]
+    fn cab_2123_public_per_op_tool_surfaces_via_standard_list() {
+        // Reproduces the api_bridge::discover_expanded_api_tools registration pattern
+        // (CAB-2113 Phase 0): per-op public tool with a path pattern must surface
+        // via `list(Some(caller))` for a caller whose tenant doesn't match the CRD
+        // namespace. This is the CAB-2120 demo path that was still broken after the
+        // STOA_TOOL_EXPANSION_MODE=per-op prod flip.
+        use super::super::ToolRegistry;
+        use std::sync::Arc;
+
+        let registry = ToolRegistry::new();
+        let tool = DynamicTool::new(
+            "demo:bank:get-customer-by-number",
+            "Get customer by number",
+            "http://banking-mock",
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .with_action(Action::Read)
+        .with_annotations(ToolAnnotations {
+            title: Some("Banking: get customer".to_string()),
+            open_world_hint: Some(true),
+            ..Default::default()
+        })
+        .into_public()
+        .with_path_pattern("/customers/{customerNumber}");
+
+        registry.register(Arc::new(tool));
+
+        // stoa-demo JWT caller (the real demo scenario) must see the per-op tool.
+        let tools = registry.list(Some("stoa-demo"));
+        assert!(
+            tools
+                .iter()
+                .any(|t| t.name == "demo:bank:get-customer-by-number"),
+            "per-op public tool must surface via standard discovery (CAB-2123)"
+        );
     }
 }

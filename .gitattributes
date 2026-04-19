@@ -22,6 +22,13 @@ docs/file-map.json filter=git-crypt diff=git-crypt
 docs/scripts/seed.sql filter=git-crypt diff=git-crypt
 
 # ══════════════════════════════════════════════════
+# Phase 0.5 harness OpenAPI snapshots (CAB-2116)
+# Pinned by sha256 in README; treated as binary blobs
+# to keep reviewer diffs focused on code, not specs.
+# ══════════════════════════════════════════════════
+tools/phase05-harness/specs/*.yaml -diff -merge linguist-generated
+
+# ══════════════════════════════════════════════════
 # PAS chiffrés (safe à publier) :
 # - docs/scripts/*.sh (tooling générique)
 # - docs/scripts/*.py (tooling générique)

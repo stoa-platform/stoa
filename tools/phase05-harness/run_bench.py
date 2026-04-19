@@ -95,17 +95,27 @@ def _call_anthropic(
     tools: list[dict[str, Any]],
     prompt: str,
 ) -> dict[str, Any]:
-    """Returns {tool_call, latency_ms, tokens_in, tokens_out, stop_reason}."""
+    """Returns {tool_call, latency_ms, tokens_in, tokens_out, stop_reason}.
+
+    Transport-layer bijection: Anthropic requires tool names to match
+    ^[a-zA-Z0-9_-]{1,128}$, but the canonical coarse/enriched form uses
+    `tenant:api` (colon). We substitute `:` -> `__` before the API call
+    and reverse-map the response before persistence, preserving score.py's
+    canonical-name expectation. See Decision Gate log #6 (2026-04-19).
+    """
     t0 = time.perf_counter()
-    # MCP-tool schema -> Anthropic tool schema
-    anth_tools = [
-        {"name": t["name"], "description": t["description"], "input_schema": t["inputSchema"]}
-        for t in tools
-    ]
+    # MCP-tool schema -> Anthropic tool schema, with colon bijection
+    transport_to_canonical: dict[str, str] = {}
+    anth_tools = []
+    for t in tools:
+        transport_name = t["name"].replace(":", "__")
+        transport_to_canonical[transport_name] = t["name"]
+        anth_tools.append(
+            {"name": transport_name, "description": t["description"], "input_schema": t["inputSchema"]}
+        )
     resp = client.messages.create(
         model=model,
         max_tokens=1024,
-        temperature=0,
         system=SYSTEM_PROMPT,
         tools=anth_tools,
         messages=[{"role": "user", "content": prompt}],
@@ -115,7 +125,8 @@ def _call_anthropic(
     tool_call: dict[str, Any] | None = None
     for block in resp.content:
         if getattr(block, "type", None) == "tool_use":
-            tool_call = {"tool_name": block.name, "input": block.input}
+            canonical_name = transport_to_canonical.get(block.name, block.name)
+            tool_call = {"tool_name": canonical_name, "input": block.input}
             break
 
     usage = getattr(resp, "usage", None)

@@ -22,7 +22,7 @@ pub struct DynamicTool {
     name: String,
     /// Human-readable description
     description: String,
-    /// HTTP endpoint URL
+    /// HTTP endpoint URL (base for per-op tools, full URL for coarse tools)
     endpoint: String,
     /// HTTP method (GET, POST, PUT, DELETE)
     method: String,
@@ -38,6 +38,11 @@ pub struct DynamicTool {
     tenant_id: String,
     /// Skip tenant isolation check (for catalog API tools accessible to all)
     public: bool,
+    /// Optional OpenAPI path pattern with `{name}` placeholders (CAB-2113 Phase 0).
+    /// When set, the final URL is `endpoint + substituted(path_pattern)`.
+    /// Tokens are pulled from the tool args and removed before the remainder is
+    /// sent as query string (GET/DELETE) or JSON body (POST/PUT/PATCH).
+    path_pattern: Option<String>,
     /// HTTP client
     client: Client,
 }
@@ -63,11 +68,20 @@ impl DynamicTool {
             action: Action::Read,
             tenant_id: tenant_id.into(),
             public: false,
+            path_pattern: None,
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("HTTP client"),
         }
+    }
+
+    /// Attach an OpenAPI path pattern (e.g. `/customers/{id}`) for per-op tools.
+    /// At execute-time, `{name}` tokens are substituted from the tool args and
+    /// appended to `endpoint` to form the final request URL.
+    pub fn with_path_pattern(mut self, pattern: impl Into<String>) -> Self {
+        self.path_pattern = Some(pattern.into());
+        self
     }
 
     pub fn with_output_schema(mut self, schema: Value) -> Self {
@@ -128,20 +142,31 @@ impl Tool for DynamicTool {
             )));
         }
 
+        // CAB-2113 Phase 0: when a path pattern is attached, substitute `{name}`
+        // tokens from args into the path and append to endpoint. The matched
+        // args are removed so they don't leak into the query/body.
+        let (final_url, remaining_args) = match &self.path_pattern {
+            Some(pattern) => {
+                let (path, stripped) = substitute_path_pattern(pattern, args, &self.name)?;
+                (format!("{}{}", self.endpoint, path), stripped)
+            }
+            None => (self.endpoint.clone(), args),
+        };
+
         debug!(
             tool = %self.name,
-            endpoint = %self.endpoint,
+            endpoint = %final_url,
             method = %self.method,
             "Executing dynamic tool"
         );
 
         // Build HTTP request
         let mut req = match self.method.to_uppercase().as_str() {
-            "GET" => self.client.get(&self.endpoint),
-            "POST" => self.client.post(&self.endpoint),
-            "PUT" => self.client.put(&self.endpoint),
-            "DELETE" => self.client.delete(&self.endpoint),
-            "PATCH" => self.client.patch(&self.endpoint),
+            "GET" => self.client.get(&final_url),
+            "POST" => self.client.post(&final_url),
+            "PUT" => self.client.put(&final_url),
+            "DELETE" => self.client.delete(&final_url),
+            "PATCH" => self.client.patch(&final_url),
             other => {
                 return Err(ToolError::ExecutionFailed(format!(
                     "Unsupported HTTP method: {}",
@@ -160,13 +185,23 @@ impl Tool for DynamicTool {
             req = req.header("X-Skill-Context", instructions.as_str());
         }
 
-        // Send arguments as JSON body for POST/PUT/PATCH
         let has_body = matches!(
             self.method.to_uppercase().as_str(),
             "POST" | "PUT" | "PATCH"
         );
-        if has_body && !args.is_null() {
-            req = req.json(&args);
+        if has_body && !remaining_args.is_null() {
+            req = req.json(&remaining_args);
+        } else if !has_body {
+            // GET/DELETE: surface remaining scalar args as query string.
+            if let Some(obj) = remaining_args.as_object() {
+                let pairs: Vec<(String, String)> = obj
+                    .iter()
+                    .filter_map(|(k, v)| value_to_query_string(v).map(|s| (k.clone(), s)))
+                    .collect();
+                if !pairs.is_empty() {
+                    req = req.query(&pairs);
+                }
+            }
         }
 
         // Execute request
@@ -188,6 +223,91 @@ impl Tool for DynamicTool {
         }
 
         Ok(ToolResult::text(body))
+    }
+}
+
+/// Substitute `{name}` tokens in an OpenAPI path pattern from a JSON args object.
+///
+/// Returns the substituted path + remaining args (with matched keys removed).
+/// Non-object args with a non-empty pattern is an error. A missing required
+/// token is an error. Matched values are URL-encoded.
+fn substitute_path_pattern(
+    pattern: &str,
+    args: Value,
+    tool_name: &str,
+) -> Result<(String, Value), ToolError> {
+    let tokens = extract_path_tokens(pattern);
+    if tokens.is_empty() {
+        return Ok((pattern.to_string(), args));
+    }
+
+    let mut obj = match args {
+        Value::Object(map) => map,
+        Value::Null => serde_json::Map::new(),
+        other => {
+            return Err(ToolError::ExecutionFailed(format!(
+                "Tool {} expects object args for path pattern {}, got {}",
+                tool_name, pattern, other
+            )));
+        }
+    };
+
+    let mut substituted = pattern.to_string();
+    for token in &tokens {
+        let value = obj.remove(token).ok_or_else(|| {
+            ToolError::ExecutionFailed(format!(
+                "Tool {} missing required path parameter: {}",
+                tool_name, token
+            ))
+        })?;
+        let rendered = value_to_query_string(&value).ok_or_else(|| {
+            ToolError::ExecutionFailed(format!(
+                "Tool {} path parameter {} must be scalar",
+                tool_name, token
+            ))
+        })?;
+        substituted =
+            substituted.replace(&format!("{{{}}}", token), &urlencoding::encode(&rendered));
+    }
+
+    let remaining = if obj.is_empty() {
+        Value::Null
+    } else {
+        Value::Object(obj)
+    };
+    Ok((substituted, remaining))
+}
+
+/// Extract `{name}` tokens from an OpenAPI path pattern, in document order.
+fn extract_path_tokens(pattern: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = pattern.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' {
+            if let Some(end) = pattern[i + 1..].find('}') {
+                let name = &pattern[i + 1..i + 1 + end];
+                if !name.is_empty() && !name.contains('{') {
+                    out.push(name.to_string());
+                }
+                i += end + 2;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Render a scalar JSON value as a query-string-ready string.
+/// Returns `None` for objects/arrays (not supported in v1).
+fn value_to_query_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        Value::Null => None,
+        Value::Array(_) | Value::Object(_) => None,
     }
 }
 
@@ -411,5 +531,156 @@ mod tests {
                 false
             }
         }));
+    }
+
+    // === CAB-2113 Phase 0: path-pattern helpers + DynamicTool substitution ===
+
+    #[test]
+    fn cab_2113_extract_path_tokens_basic() {
+        assert_eq!(
+            extract_path_tokens("/customers/{id}"),
+            vec!["id".to_string()]
+        );
+        assert_eq!(
+            extract_path_tokens("/a/{x}/b/{y}"),
+            vec!["x".to_string(), "y".to_string()]
+        );
+        assert!(extract_path_tokens("/no/tokens").is_empty());
+        assert!(extract_path_tokens("/broken/{unclosed").is_empty());
+    }
+
+    #[test]
+    fn cab_2113_substitute_path_pattern_strips_matched_keys() {
+        let (path, rest) = substitute_path_pattern(
+            "/customers/{id}",
+            json!({"id": "42", "email": "foo@bar.com"}),
+            "demo:bank:get-customer",
+        )
+        .unwrap();
+        assert_eq!(path, "/customers/42");
+        assert_eq!(rest, json!({"email": "foo@bar.com"}));
+    }
+
+    #[test]
+    fn cab_2113_substitute_path_pattern_missing_token_errors() {
+        let err = substitute_path_pattern(
+            "/customers/{id}",
+            json!({"other": "x"}),
+            "demo:bank:get-customer",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("missing required path parameter"));
+    }
+
+    #[test]
+    fn cab_2113_substitute_path_pattern_url_encodes_values() {
+        let (path, _) =
+            substitute_path_pattern("/items/{id}", json!({"id": "a/b c"}), "demo:store:get-item")
+                .unwrap();
+        assert_eq!(path, "/items/a%2Fb%20c");
+    }
+
+    #[tokio::test]
+    async fn cab_2113_dynamic_tool_substitutes_path_and_forwards_query() {
+        use wiremock::matchers::{method, path as m_path, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(m_path("/customers/42"))
+            .and(query_param("expand", "accounts"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&mock)
+            .await;
+
+        let schema = ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        };
+        let tool = DynamicTool::new(
+            "demo:bank:get-customer",
+            "Get customer",
+            mock.uri(),
+            "GET",
+            schema,
+            "demo",
+        )
+        .into_public()
+        .with_path_pattern("/customers/{id}");
+
+        let ctx = ToolContext {
+            tenant_id: "demo".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c".to_string(),
+            from_control_plane: false,
+        };
+
+        let res = tool
+            .execute(json!({"id": "42", "expand": "accounts"}), &ctx)
+            .await
+            .unwrap();
+        assert!(res.content.iter().any(|c| {
+            if let super::super::ToolContent::Text { text } = c {
+                text.contains("\"ok\":true")
+            } else {
+                false
+            }
+        }));
+    }
+
+    #[tokio::test]
+    async fn cab_2113_dynamic_tool_post_sends_remainder_as_body() {
+        use wiremock::matchers::{body_partial_json, method, path as m_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(m_path("/customers/42/transfers"))
+            .and(body_partial_json(json!({"amount": 100})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"created": true})))
+            .mount(&mock)
+            .await;
+
+        let schema = ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        };
+        let tool = DynamicTool::new(
+            "demo:bank:create-transfer",
+            "Create transfer",
+            mock.uri(),
+            "POST",
+            schema,
+            "demo",
+        )
+        .into_public()
+        .with_path_pattern("/customers/{id}/transfers");
+
+        let ctx = ToolContext {
+            tenant_id: "demo".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c".to_string(),
+            from_control_plane: false,
+        };
+
+        tool.execute(json!({"id": "42", "amount": 100}), &ctx)
+            .await
+            .unwrap();
     }
 }

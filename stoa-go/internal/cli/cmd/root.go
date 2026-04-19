@@ -76,12 +76,12 @@ func warnDeprecatedNamespaceIfNeeded(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	// `bridge` keeps --namespace as K8s semantic; never warn there.
-	if cmd.Name() == "bridge" {
+	if cmd.Name() == cmdflags.BridgeCommandName {
 		return nil
 	}
 	// CommandPath() returns "stoactl <sub> [<sub2>...]"; strip the program
 	// prefix so the warning reads e.g. "stoactl get apis" once formatted.
-	path := strings.TrimPrefix(cmd.CommandPath(), "stoactl ")
+	path := strings.TrimPrefix(cmd.CommandPath(), cmdflags.StoactlBinaryName+" ")
 	cmdflags.WarnDeprecatedNamespace(path)
 	return nil
 }

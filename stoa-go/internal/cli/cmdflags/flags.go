@@ -14,6 +14,24 @@ import (
 	"os"
 )
 
+// Contract strings for the --tenant / --namespace split (CAB-2117). Kept as
+// constants so tests and the root PreRun hook use the exact same values.
+const (
+	// deprecationWarningFormat is the stderr template emitted whenever
+	// --namespace is consumed as a tenant alias outside of `bridge`.
+	deprecationWarningFormat = "--namespace is deprecated for tenant scope on 'stoactl %s', use --tenant\n"
+	// genericCmdPlaceholder is the fallback rendered when the caller does
+	// not know (or cannot supply) the leaf subcommand name.
+	genericCmdPlaceholder = "<cmd>"
+	// StoactlBinaryName is the program name; exposed so the root PreRun
+	// hook can trim it off `cobra.Command.CommandPath()` without
+	// hard-coding the string at two sites.
+	StoactlBinaryName = "stoactl"
+	// BridgeCommandName is the one subcommand where --namespace keeps its
+	// K8s semantic and the deprecation warning is suppressed.
+	BridgeCommandName = "bridge"
+)
+
 // AdminMode indicates whether --admin was passed. Subcommands pass this to
 // client.NewForMode to select between the user OIDC token and the service
 // account token.
@@ -49,11 +67,9 @@ var WarnStderr io.Writer = os.Stderr
 func WarnDeprecatedNamespace(cmdName string) {
 	target := cmdName
 	if target == "" {
-		target = "<cmd>"
+		target = genericCmdPlaceholder
 	}
-	_, _ = fmt.Fprintf(WarnStderr,
-		"--namespace is deprecated for tenant scope on 'stoactl %s', use --tenant\n",
-		target)
+	_, _ = fmt.Fprintf(WarnStderr, deprecationWarningFormat, target)
 }
 
 // ResolveTenant returns the effective CP tenant using the precedence order

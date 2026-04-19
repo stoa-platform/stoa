@@ -3,6 +3,9 @@
 package cmdflags
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stoa-platform/stoa-go/pkg/client"
@@ -53,5 +56,36 @@ func TestApplyTenantOverride_NoOverridePreservesContext(t *testing.T) {
 
 	if got := c.TenantID(); got != "ctx-default" {
 		t.Errorf("Client.TenantID() = %q, want %q (context preserved)", got, "ctx-default")
+	}
+}
+
+// regression for CAB-2117
+// End-to-end: a client configured by the wrapper must actually send the
+// overridden tenant in the X-Tenant-ID header of outgoing requests. This
+// covers every non-bridge subcommand because they all go through the same
+// helper + Client.do() pipeline.
+func TestApplyTenantOverride_PropagatesInXTenantIDHeader(t *testing.T) {
+	defer reset()
+
+	var observed string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed = r.Header.Get("X-Tenant-ID")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	TenantOverride = "override-tenant"
+	c := client.NewWithConfig(srv.URL, "ctx-default", "tok")
+	applyTenantOverride(c)
+
+	resp, err := c.Do("GET", "/ping", nil)
+	if err != nil {
+		t.Fatalf("Do() err = %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	if observed != "override-tenant" {
+		t.Errorf("X-Tenant-ID header = %q, want %q", observed, "override-tenant")
 	}
 }

@@ -709,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn cab_2123_public_dynamic_tool_has_no_tenant_in_definition() {
+    fn regression_cab_2123_public_dynamic_tool_has_no_tenant_in_definition() {
         let tool = DynamicTool::new(
             "demo_public",
             "public tool",
@@ -725,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn cab_2123_private_dynamic_tool_keeps_tenant_in_definition() {
+    fn regression_cab_2123_private_dynamic_tool_keeps_tenant_in_definition() {
         let tool = DynamicTool::new(
             "demo_private",
             "private tool",
@@ -740,7 +740,7 @@ mod tests {
     }
 
     #[test]
-    fn cab_2123_registry_list_includes_public_dynamic_tool_for_any_tenant() {
+    fn regression_cab_2123_registry_list_includes_public_dynamic_tool_for_any_tenant() {
         use super::super::ToolRegistry;
         use std::sync::Arc;
 
@@ -769,7 +769,7 @@ mod tests {
     }
 
     #[test]
-    fn cab_2123_registry_list_keeps_private_dynamic_tool_tenant_scoped() {
+    fn regression_cab_2123_registry_list_keeps_private_dynamic_tool_tenant_scoped() {
         use super::super::ToolRegistry;
         use std::sync::Arc;
 
@@ -802,7 +802,7 @@ mod tests {
     }
 
     #[test]
-    fn cab_2123_public_per_op_tool_surfaces_via_standard_list() {
+    fn regression_cab_2123_public_per_op_tool_surfaces_via_standard_list() {
         // Reproduces the api_bridge::discover_expanded_api_tools registration pattern
         // (CAB-2113 Phase 0): per-op public tool with a path pattern must surface
         // via `list(Some(caller))` for a caller whose tenant doesn't match the CRD

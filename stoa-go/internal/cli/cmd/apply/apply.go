@@ -23,19 +23,6 @@ var (
 	dryRun   bool
 )
 
-// namespaceOverrideFn is the callback used by apply to read the root-level
-// --namespace flag without importing the cmd package (which would create an
-// import cycle). The root package wires this at init time.
-var namespaceOverrideFn = func() string { return "" }
-
-// SetNamespaceOverrideFn wires the --namespace override accessor. Called by
-// the root package during init.
-func SetNamespaceOverrideFn(fn func() string) {
-	if fn != nil {
-		namespaceOverrideFn = fn
-	}
-}
-
 // NewApplyCmd creates the apply command
 func NewApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -73,7 +60,7 @@ Examples:
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
-	c, err := client.NewForMode(cmdflags.AdminMode)
+	c, err := cmdflags.NewClientForMode()
 	if err != nil {
 		return err
 	}
@@ -250,10 +237,20 @@ func buildApplyBody(resource types.Resource) map[string]any {
 }
 
 // tenantFromResource resolves the tenant for a resource with precedence:
-// --namespace flag > metadata.namespace > client's configured tenant.
+//  1. --tenant / STOACTL_TENANT flag (TenantOverride)
+//  2. --namespace / STOACTL_NAMESPACE flag (NamespaceOverride — deprecated
+//     alias, warning already emitted by runApply via resolveTenantOverride)
+//  3. resource.Metadata.Namespace
+//  4. client's configured context tenant
+//
+// When (1) or (2) are set, runApply has already applied them via
+// c.SetTenantID so c.TenantID() already reflects the override. Consulting
+// cmdflags here only disambiguates "explicit override" from "context
+// default", which is what lets metadata.namespace take precedence over the
+// context default.
 func tenantFromResource(c *client.Client, resource types.Resource) string {
-	if ns := namespaceOverrideFn(); ns != "" {
-		return ns
+	if cmdflags.TenantOverride != "" || cmdflags.NamespaceOverride != "" {
+		return c.TenantID()
 	}
 	if resource.Metadata.Namespace != "" {
 		return resource.Metadata.Namespace

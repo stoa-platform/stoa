@@ -476,6 +476,13 @@ func (c *Client) TenantID() string {
 	return c.tenant
 }
 
+// SetTenantID overrides the tenant scope for subsequent requests. Used by
+// CLI subcommands to apply the --tenant / STOACTL_TENANT override after the
+// client has been constructed from the persisted context (CAB-2117).
+func (c *Client) SetTenantID(id string) {
+	c.tenant = id
+}
+
 // ListTenants fetches all tenants
 func (c *Client) ListTenants() ([]types.Tenant, error) {
 	resp, err := c.do("GET", "/v1/tenants", nil)

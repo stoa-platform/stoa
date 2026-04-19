@@ -40,26 +40,38 @@ func NewBridgeCmd() *cobra.Command {
 Each operation becomes a Tool CRD YAML file, ready for 'stoactl apply -f'.
 This enables any REST API to be exposed as MCP tools through the STOA Gateway.
 
+This command exposes TWO orthogonal scopes (CAB-2117):
+  --namespace (-n): Kubernetes namespace written to metadata.namespace of the
+                    generated Tool CRDs. Local concern of the manifests.
+  --tenant:         CP tenant used by --apply when registering MCP servers /
+                    tools via the admin API. Defaults to STOACTL_TENANT then
+                    the configured context tenant.
+
+The two flags coexist without conflict — see the "two-scope" example below.
+
 Examples:
-  # Generate Tool CRDs from a Petstore spec
-  stoactl bridge petstore.yaml --namespace tenant-acme
+  # Generate Tool CRDs from a Petstore spec (K8s namespace only)
+  stoactl bridge petstore.yaml --namespace stoa-demo
+
+  # Canonical two-scope usage: generate CRDs in K8s namespace stoa-demo AND
+  # register them on the CP under tenant "demo"
+  stoactl bridge petstore.yaml --namespace stoa-demo --tenant demo --apply
 
   # Preview without writing files
-  stoactl bridge petstore.yaml --namespace tenant-acme --dry-run
+  stoactl bridge petstore.yaml --namespace stoa-demo --dry-run
 
   # Filter by tags
-  stoactl bridge petstore.yaml --namespace tenant-acme --include-tags payments
+  stoactl bridge petstore.yaml --namespace stoa-demo --include-tags payments
 
   # Override server URL
-  stoactl bridge petstore.yaml --namespace tenant-acme --server https://api.internal.com
-
-  # Apply directly to gateway
-  stoactl bridge petstore.yaml --namespace tenant-acme --apply`,
+  stoactl bridge petstore.yaml --namespace stoa-demo --server https://api.internal.com`,
 		Args: cobra.ExactArgs(1),
 		RunE: runBridge,
 	}
 
-	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Target namespace for generated tools (required)")
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "",
+		"K8s namespace written to metadata.namespace of generated Tool CRDs (required). "+
+			"Not a CP tenant — use the root --tenant flag for CP-scope operations.")
 	cmd.Flags().StringVarP(&outputDir, "output", "o", "./tools/", "Output directory for generated YAML files")
 	cmd.Flags().BoolVar(&apply, "apply", false, "Apply tools directly to gateway via API")
 	cmd.Flags().StringVar(&serverName, "server-name", "", "MCP server name for --apply (default: derived from spec title)")
@@ -134,6 +146,13 @@ func runBridge(cmd *cobra.Command, args []string) error {
 		c, err := client.NewForMode(cmdflags.AdminMode)
 		if err != nil {
 			return fmt.Errorf("failed to create API client: %w", err)
+		}
+
+		// On bridge, --namespace is ALWAYS the K8s namespace (never a tenant
+		// alias), so namespaceIsDeprecated=false — we only honour --tenant
+		// / STOACTL_TENANT here.
+		if t := cmdflags.ResolveTenant("bridge", false); t != "" {
+			c.SetTenantID(t)
 		}
 
 		if !c.IsAuthenticated() {

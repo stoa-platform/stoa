@@ -59,7 +59,7 @@ func newListServersCmd() *cobra.Command {
 		Use:   "list-servers",
 		Short: "List registered MCP servers",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -117,7 +117,7 @@ Examples:
 				return listToolsFromGateway(gatewayURL)
 			}
 
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -230,7 +230,7 @@ Examples:
 				return fmt.Errorf("--server is required (specify MCP server name)")
 			}
 
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}
@@ -283,7 +283,7 @@ Examples:
 				return healthFromGateway(gatewayURL)
 			}
 
-			c, err := client.NewForMode(cmdflags.AdminMode)
+			c, err := cmdflags.NewClientForMode()
 			if err != nil {
 				return err
 			}

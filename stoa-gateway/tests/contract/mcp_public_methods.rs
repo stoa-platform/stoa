@@ -1,22 +1,25 @@
-//! MCP capability-negotiation public-method matrix (CAB-2109).
+//! MCP capability-negotiation public-method matrix.
 //!
-//! Anonymous MCP clients (claude.ai, MCP Inspector, claude-code) call the
-//! discovery / metadata methods immediately after `initialize`, before any
-//! OAuth flow has attached a Bearer token. If any of those methods 401,
-//! the client never reaches `tools/call` and abandons the session — which
-//! is the exact failure mode reported as Anthropic error ref
-//! `ofid_5f1fcc086cd04144`.
+//! CAB-2109 locked `initialize` / `ping` / `notifications/*` as anonymously
+//! reachable so claude.ai, MCP Inspector and claude-code can complete the
+//! MCP handshake before attaching an OAuth token.
 //!
-//! This test matrix locks the entire read-only / discovery surface as
-//! anonymously accessible. `tools/call` stays out of the list and is
-//! gated by the UAC/OPA policy layer (covered in `mcp_compliance.rs`).
+//! CAB-2121 then tightened the surface: `tools/list`, `resources/*`,
+//! `prompts/*`, `completion/*`, `roots/list`, `logging/setLevel` were
+//! removed from the anonymous allowlist because they leaked tool and
+//! resource inventory to unauthenticated callers over Streamable HTTP.
+//! Those methods must now 401 when called without a Bearer token, so MCP
+//! clients get the standard OAuth challenge and retry with a token.
+//!
+//! `tools/call` stays covered in its own regression below — it was never
+//! part of the anon surface.
 
 use serde_json::{json, Value};
 
 use crate::common::TestApp;
 
-/// Every read-only MCP method that an unauthenticated client is allowed
-/// to call during capability negotiation. Pair is `(method, params)`.
+/// Every MCP method that an unauthenticated client is allowed to call
+/// during capability negotiation. Pair is `(method, params)`.
 fn discovery_methods() -> Vec<(&'static str, Value)> {
     vec![
         (
@@ -28,6 +31,13 @@ fn discovery_methods() -> Vec<(&'static str, Value)> {
             }),
         ),
         ("ping", json!({})),
+    ]
+}
+
+/// MCP methods that used to be anon-accessible (CAB-2109) but were
+/// re-gated by CAB-2121 because they leak tool/resource inventory.
+fn gated_read_methods() -> Vec<(&'static str, Value)> {
+    vec![
         ("tools/list", json!({})),
         ("resources/list", json!({})),
         ("resources/templates/list", json!({})),
@@ -115,6 +125,54 @@ async fn regression_cab_2109_notifications_initialized_anonymous() {
         axum::http::StatusCode::NO_CONTENT,
         "notifications/initialized must accept anonymous posts with 204"
     );
+}
+
+/// Regression for CAB-2121: methods removed from the anon allowlist must
+/// return 401 `-32001 Authentication required` so MCP clients trigger the
+/// OAuth flow instead of receiving a leaked tool/resource inventory.
+#[tokio::test]
+async fn regression_cab_2121_gated_methods_require_auth() {
+    let app = TestApp::new();
+
+    for (method, params) in gated_read_methods() {
+        let body = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params
+        })
+        .to_string();
+
+        let (status, _headers, text) = app
+            .post_raw("/mcp/sse", &body, Some("application/json"), None)
+            .await;
+
+        assert_eq!(
+            status,
+            axum::http::StatusCode::UNAUTHORIZED,
+            "method `{}` MUST require auth (CAB-2121); got {} with body {}",
+            method,
+            status,
+            text
+        );
+
+        let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|e| {
+            panic!(
+                "method `{}` returned non-JSON body: {} ({})",
+                method, text, e
+            )
+        });
+        let code = parsed
+            .get("error")
+            .and_then(|e| e.get("code"))
+            .and_then(|c| c.as_i64())
+            .unwrap_or(0);
+        assert_eq!(
+            code, -32001,
+            "method `{}` must return -32001 Authentication required, got: {}",
+            method, parsed
+        );
+    }
 }
 
 /// `tools/call` is intentionally NOT in the public list: without a

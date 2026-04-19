@@ -21,10 +21,9 @@
 Voir Linear (queue typiquement ~40 tickets mais drainée à 0 en Phase 1 CAB-2053).
 
 ### ✅ Freeze dissous (2026-04-19)
-- [x] **CAB-2053** Feature freeze + CLI-first stabilization (21 pts P1) — Phases 0-5 done
-  - Phase 6 (close gate 7j CI green) → replanifiée C16 post-démo
-  - Phase 7 (ADR-061 controller framework) → replanifiée C16 post-démo
-  - Dissolution: freeze non enforcement-able (110 commits hors scope en 8j). Phases restantes dépriorisées vs démo CAB-2088 (28/04) et C15 delivery.
+- [~] **CAB-2053** Feature freeze + CLI-first stabilization (21 pts P1) — rouvert pour rétro-décomposition
+  - Sub-tickets: CAB-2125 (P0 Done), CAB-2126 (P1 Done), CAB-2127 (P2 Done), CAB-2128 (P3 **In Progress** — baseline #2345 livré, gaps audit 2026-04-19 trackés CAB-2119/2120/2121/2122), CAB-2129 (P4 Done), CAB-2130 (P5 Done), CAB-2131/CAB-2132 (P6/P7 duplicateOf CAB-2118).
+  - Dissolution: freeze non enforcement-able (110 commits hors scope en 8j). Le freeze est dissous mais CAB-2053 reste ouvert jusqu'à terminaison P3 + live verification.
 
 ### Priorité active C15 (Apr 13-26)
 - Démo wM/Axway 28/04 (ex-CAB-2088, nouveau ticket opé à créer) — bloquant externe

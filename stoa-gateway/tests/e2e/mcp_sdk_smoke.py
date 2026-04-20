@@ -89,67 +89,81 @@ async def run_smoke(
                     )
                 )
 
-                # 2. Discovery surface — locks CAB-2109 (public_methods).
-                tools = await session.list_tools()
-                results.append(
-                    StageResult(
-                        "tools/list",
-                        len(tools.tools) > 0,
-                        f"{len(tools.tools)} tools",
-                        tools,
-                    )
-                )
-
-                resources = await session.list_resources()
-                results.append(
-                    StageResult(
-                        "resources/list",
-                        True,
-                        f"{len(resources.resources)} resources",
-                        resources,
-                    )
-                )
-
-                templates = await session.list_resource_templates()
-                results.append(
-                    StageResult(
-                        "resources/templates/list",
-                        True,
-                        f"{len(templates.resourceTemplates)} templates",
-                        templates,
-                    )
-                )
-
-                prompts = await session.list_prompts()
-                results.append(
-                    StageResult(
-                        "prompts/list",
-                        True,
-                        f"{len(prompts.prompts)} prompts",
-                        prompts,
-                    )
-                )
-
+                # `ping` stays anonymous — part of PUBLIC_METHODS per CAB-2109.
                 ping = await session.send_ping()
                 results.append(StageResult("ping", True, str(ping), ping))
 
-                logging_result = await session.set_logging_level("info")
-                results.append(
-                    StageResult(
-                        "logging/setLevel",
-                        True,
-                        "level=info accepted",
-                        logging_result,
+                # 2. Discovery surface — CAB-2121 gated these behind Bearer.
+                #    Without a bearer, record an AUTH_SKIP so post-deploy cron
+                #    without a CI secret doesn't flap; pre-merge injects a
+                #    dummy bearer so `jwt_validator=None` accepts it
+                #    (stoa-gateway/src/mcp/sse.rs:280) and we exercise the
+                #    real discovery surface.
+                if bearer is None:
+                    results.append(
+                        StageResult(
+                            "discovery",
+                            True,
+                            "AUTH_SKIP: set STOA_GATEWAY_BEARER to exercise "
+                            "tools/list, resources/list, prompts/list, logging/setLevel",
+                        )
                     )
-                )
+                else:
+                    tools = await session.list_tools()
+                    results.append(
+                        StageResult(
+                            "tools/list",
+                            len(tools.tools) > 0,
+                            f"{len(tools.tools)} tools",
+                            tools,
+                        )
+                    )
+
+                    resources = await session.list_resources()
+                    results.append(
+                        StageResult(
+                            "resources/list",
+                            True,
+                            f"{len(resources.resources)} resources",
+                            resources,
+                        )
+                    )
+
+                    templates = await session.list_resource_templates()
+                    results.append(
+                        StageResult(
+                            "resources/templates/list",
+                            True,
+                            f"{len(templates.resourceTemplates)} templates",
+                            templates,
+                        )
+                    )
+
+                    prompts = await session.list_prompts()
+                    results.append(
+                        StageResult(
+                            "prompts/list",
+                            True,
+                            f"{len(prompts.prompts)} prompts",
+                            prompts,
+                        )
+                    )
+
+                    logging_result = await session.set_logging_level("info")
+                    results.append(
+                        StageResult(
+                            "logging/setLevel",
+                            True,
+                            "level=info accepted",
+                            logging_result,
+                        )
+                    )
 
                 # 3. One concrete tool invocation (no external deps).
                 #    `stoa_platform_info` is a self-describing health tool.
-                #    Gated on `call_tool=True` because anonymous tools/call
-                #    must 401 per the CAB-2109 contract; the pre-merge gate
-                #    exercises discovery only and leaves tool invocation to
-                #    the post-deploy probe (which attaches a Bearer token).
-                if call_tool:
+                #    Requires a bearer for the same CAB-2121 reason as
+                #    discovery; pre-merge supplies a dummy bearer.
+                if call_tool and bearer is not None:
                     info = await session.call_tool(
                         "stoa_platform_info", arguments={}
                     )

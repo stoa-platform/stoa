@@ -125,7 +125,7 @@ Tâches :
 ### Phase 2 — P0 Validation canary puis prod
 
 1. Tilt k3d local : re-tester `POST /mcp/sse` avec curl matrix + MCP Inspector (`npx @modelcontextprotocol/inspector`). Gotcha Tilt k3d en mémoire (`gotcha_tilt_local.md`) — lire avant.
-2. Dev VPS (`dev-vps` 94.23.107.107 — Docker Compose, pas K8s) : déployer build.
+2. Dev VPS (`dev-vps` <dev-vps-ip> — Docker Compose, pas K8s) : déployer build.
 3. Configurer un connecteur MCP claude.ai de test pointant sur l'URL dev (ex : `https://dev-mcp.gostoa.dev` si existe, sinon prod avec feature flag — à clarifier).
 4. Observer les logs dev : séquence `DCR → token → initialize → tools/list → tools/call` sans boucle.
 5. Bump version chart gateway (patch) + release PR automatique (release-please).

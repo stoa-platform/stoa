@@ -89,7 +89,10 @@ jobs:
           # us exercise the CAB-2121-gated discovery surface without a real
           # token. Post-deploy prod probe omits this → runs public stages only.
           STOA_GATEWAY_BEARER: dummy
-          STOA_SMOKE_CALL_TOOL: '1'
+          # tools/call requires a real scope (UAC layer in handle_tools_call).
+          # A dummy bearer gets through the has_auth gate but has no scope —
+          # leave tool-invocation to the post-deploy probe with a real token.
+          STOA_SMOKE_CALL_TOOL: '0'
         run: ../.venv-mcp/bin/python tests/e2e/mcp_sdk_smoke.py
 
       - name: Dump gateway log on failure

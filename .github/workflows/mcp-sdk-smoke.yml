@@ -84,7 +84,12 @@ jobs:
       - name: Run MCP SDK smoke
         env:
           STOA_GATEWAY_URL: http://127.0.0.1:8080/mcp/sse
-          STOA_SMOKE_CALL_TOOL: '0'
+          # Local gateway boots without jwt_validator (no KC) → accepts any
+          # Bearer unchallenged (stoa-gateway/src/mcp/sse.rs:280). This lets
+          # us exercise the CAB-2121-gated discovery surface without a real
+          # token. Post-deploy prod probe omits this → runs public stages only.
+          STOA_GATEWAY_BEARER: dummy
+          STOA_SMOKE_CALL_TOOL: '1'
         run: ../.venv-mcp/bin/python tests/e2e/mcp_sdk_smoke.py
 
       - name: Dump gateway log on failure

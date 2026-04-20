@@ -22,7 +22,7 @@
     "@tanstack/react-query": "^5.96.2",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
-    "axios": "^1.14.0",
+    "axios": "^1.15.0",
     "clsx": "^2.1.0",
     "i18next": "^26.0.3",
     "lucide-react": "^1.7.0",
@@ -64,6 +64,7 @@
     "vitest": "^4.0.18"
   },
   "overrides": {
-    "minimatch@^9.0.0": "9.0.7"
+    "minimatch@^9.0.0": "9.0.7",
+    "follow-redirects": "^1.16.0"
   }
 }

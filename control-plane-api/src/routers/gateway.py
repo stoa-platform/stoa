@@ -220,7 +220,7 @@ async def import_gateway_api(
         raise
     except Exception as e:
         logger.error(f"Failed to import API {request.apiName}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway error")
 
 
 @router.get("/apis/{api_id}", response_model=GatewayAPIDetailResponse)
@@ -239,7 +239,7 @@ async def get_gateway_api(api_id: str, user: User = Depends(get_current_user), t
         raise
     except Exception as e:
         logger.error(f"Failed to get Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway error")
 
 
 @router.put("/apis/{api_id}/activate", response_model=GatewayActionResponse)
@@ -257,7 +257,7 @@ async def activate_gateway_api(
         return {"success": True, "message": f"API {api_id} activated", "result": result}
     except Exception as e:
         logger.error(f"Failed to activate Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway error")
 
 
 @router.put("/apis/{api_id}/deactivate", response_model=GatewayActionResponse)
@@ -275,7 +275,7 @@ async def deactivate_gateway_api(
         return {"success": True, "message": f"API {api_id} deactivated", "result": result}
     except Exception as e:
         logger.error(f"Failed to deactivate Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway error")
 
 
 @router.delete("/apis/{api_id}")
@@ -291,7 +291,7 @@ async def delete_gateway_api(api_id: str, user: User = Depends(get_current_user)
         return {"success": True, "message": f"API {api_id} deleted"}
     except Exception as e:
         logger.error(f"Failed to delete Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway error")
 
 
 # ============================================================================
@@ -355,7 +355,7 @@ async def list_gateway_scopes(user: User = Depends(get_current_user), token: str
         ]
     except Exception as e:
         logger.error(f"Failed to list Gateway scopes: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
+        raise HTTPException(status_code=500, detail="Gateway error")
 
 
 # ============================================================================

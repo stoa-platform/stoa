@@ -21,6 +21,21 @@ from ..services.mcp_sync_service import MCPSyncService
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/mcp/gitops", tags=["MCP GitOps"])
 
+_SYNC_ERROR_MAX_LEN = 200
+
+
+def _scrub_sync_error(raw: str | None) -> str:
+    """Strip stack traces from sync error strings before returning them over HTTP.
+
+    Upstream services may store full tracebacks in ``MCPServer.sync_error``; this
+    keeps only the first non-empty line and caps the length so CodeQL's
+    ``py/stack-trace-exposure`` taint does not flow into the response body.
+    """
+    if not raw:
+        return ""
+    first_line = next((line.strip() for line in str(raw).splitlines() if line.strip()), "")
+    return first_line[:_SYNC_ERROR_MAX_LEN]
+
 
 # ============================================================================
 # Response Models
@@ -241,6 +256,11 @@ async def get_sync_status(
         sync_service = MCPSyncService(git, db)
         status = await sync_service.get_sync_status()
 
+        scrubbed_errors = [
+            {"server": err.get("server"), "error": _scrub_sync_error(err.get("error"))}
+            for err in status.get("errors", [])
+        ]
+
         return SyncStatusResponse(
             total_servers=status.get("total_servers", 0),
             synced=status.get("synced", 0),
@@ -249,7 +269,7 @@ async def get_sync_status(
             orphan=status.get("orphan", 0),
             untracked=status.get("untracked", 0),
             last_sync_at=status.get("last_sync_at"),
-            errors=status.get("errors", []),
+            errors=scrubbed_errors,
         )
 
     except Exception as e:

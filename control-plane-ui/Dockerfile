@@ -12,9 +12,9 @@ RUN cd shared && npm ci --ignore-scripts --legacy-peer-deps
 # Copy main package files
 COPY control-plane-ui/package*.json ./control-plane-ui/
 
-# Install dependencies
+# Install dependencies (matches portal: .npmrc is not copied by package*.json glob)
 WORKDIR /app/control-plane-ui
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy source files (tsconfig.base.json needed by tsconfig.json extends)
 WORKDIR /app

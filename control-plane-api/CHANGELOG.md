@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.1...control-plane-api-v1.6.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* **api:** honor github catalog repo for override lookup (CAB-1889) ([#2445](https://github.com/stoa-platform/stoa/issues/2445)) ([a69da30](https://github.com/stoa-platform/stoa/commit/a69da302ceec34fadc3006b172bea1f08cc6aee6))
+* **api:** preserve spec.tags and spec.category in catalog normalization (CAB-2135) ([#2447](https://github.com/stoa-platform/stoa/issues/2447)) ([3519aa7](https://github.com/stoa-platform/stoa/commit/3519aa73dacf9f5fc119b215da6c7376650ed8c4))
+
 ## [1.6.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.0...control-plane-api-v1.6.1) (2026-04-20)
 
 

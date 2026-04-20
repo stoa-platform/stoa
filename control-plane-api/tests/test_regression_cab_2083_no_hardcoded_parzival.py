@@ -29,8 +29,8 @@ def test_parzival_password_is_never_hardcoded() -> None:
     # .gitignore automatically, so vendored copies in node_modules, venv,
     # target, etc. don't leak into the scan.
     # CHANGELOG files are release-please-generated history of commit titles.
-    # A past commit message that legitimately quoted the literal (e.g. the
-    # very fix that removed it) is not a regression.
+    # Audit archives under docs/audits/** are historical incident reports that
+    # legitimately quote the literal for traceability. Neither is a regression.
     result = subprocess.run(  # noqa: S603 — fixed args, no user input
         [  # noqa: S607
             "git",
@@ -40,6 +40,7 @@ def test_parzival_password_is_never_hardcoded() -> None:
             FORBIDDEN_LITERAL,
             "--",
             ":!**/CHANGELOG.md",
+            ":!docs/audits/**",
         ],
         capture_output=True,
         text=True,

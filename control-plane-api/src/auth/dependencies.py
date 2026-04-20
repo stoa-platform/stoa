@@ -4,8 +4,10 @@ CAB-330: Enhanced debug logging for authentication troubleshooting.
 CAB-438: Sender-constrained token validation (RFC 8705/9449).
 CAB-2082: JWT issuer validation + Keycloak public-key cache (Security P0-01).
 CAB-2094: Split issuer (public KEYCLOAK_URL) from JWKS fetch (KEYCLOAK_INTERNAL_URL).
+CAB-2146: Expose operator-key fingerprint on request.state for per-key rate-limit.
 """
 
+import hashlib
 import time
 
 import httpx
@@ -82,7 +84,16 @@ async def get_current_user(
     # Service-to-service auth for internal operators (ADR-042)
     operator_key = request.headers.get("X-Operator-Key")
     if operator_key and operator_key in settings.gateway_api_keys_list:
-        logger.info("Operator authenticated via X-Operator-Key")
+        # CAB-2146: fingerprint the key so the rate-limit bucket is per-operator.
+        # Never log or store the raw key — only the sha256[:16] fingerprint.
+        fingerprint = hashlib.sha256(operator_key.encode("utf-8")).hexdigest()[:16]
+        request.state.operator_fingerprint = fingerprint
+        logger.info(
+            "Operator authenticated via X-Operator-Key",
+            fingerprint=fingerprint,
+            client_ip=request.client.host if request.client else None,
+            path=request.url.path,
+        )
         bind_request_context(user_id="stoa-operator")
         # Store on request.state for audit middleware (CAB-1793)
         request.state.user = {

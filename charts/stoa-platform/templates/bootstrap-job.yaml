@@ -224,6 +224,75 @@ data:
     }"
 
     # ---------------------------------------------------------------
+    # stoactl-admin — confidential SA client with cpi-admin role.
+    # Lets CI/CD and `stoactl --admin` obtain a JWT via client_credentials
+    # without any human-in-the-loop.
+    #
+    # Security posture:
+    # - MFA does not apply to the client_credentials grant (machine auth).
+    #   Mitigation: the client secret lives in Infisical (RBAC-protected)
+    #   and is rotated every 90 days via the runbook.
+    # - The bootstrap job does NOT retrieve the auto-generated client_secret
+    #   — it lacks Infisical write credentials and running the job with them
+    #   would broaden the blast radius. Retrieval + Infisical write are a
+    #   separate operator step: see runbook
+    #   docs/runbooks/cab-2108-stoactl-admin-kc-client.md.
+    # - Client + role names kept hardcoded to match the convention used
+    #   for stoa-mcp-gateway / control-plane-api above; follow-up ticket
+    #   if we ever want these chart-configurable uniformly.
+    # ---------------------------------------------------------------
+    STOACTL_ADMIN_CLIENT=stoactl-admin
+    STOACTL_ADMIN_ROLE=cpi-admin
+    # access.token.lifespan=300 caps JWTs to 5 minutes regardless of realm
+    # default, limiting blast radius of a leaked admin token.
+    create_client "$STOACTL_ADMIN_CLIENT" "{
+      \"clientId\": \"${STOACTL_ADMIN_CLIENT}\",
+      \"name\": \"STOA CLI Admin (service account)\",
+      \"enabled\": true,
+      \"publicClient\": false,
+      \"serviceAccountsEnabled\": true,
+      \"standardFlowEnabled\": false,
+      \"directAccessGrantsEnabled\": false,
+      \"attributes\": {
+        \"access.token.lifespan\": \"300\",
+        \"client_credentials.use_refresh_token\": \"false\"
+      }
+    }"
+
+    # Assign the admin realm role to the service-account user. KC returns
+    # the target entity's `id` first in its JSON responses; `head -1` on
+    # the sed extraction therefore always picks the correct UUID even if
+    # sub-objects carry their own `id` fields. jq would be cleaner but is
+    # not available in the curlimages/curl base image.
+    SA_CLIENT_UUID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${STOACTL_ADMIN_CLIENT}" \
+      -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+    SA_USER_ID=""
+    ROLE_ID=""
+    if [ -n "$SA_CLIENT_UUID" ]; then
+      SA_USER_ID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${SA_CLIENT_UUID}/service-account-user" \
+        -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+      ROLE_ID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${STOACTL_ADMIN_ROLE}" \
+        -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+    fi
+    if [ -n "$SA_USER_ID" ] && [ -n "$ROLE_ID" ]; then
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${SA_USER_ID}/role-mappings/realm" \
+        -H "${AUTH}" -H "Content-Type: application/json" \
+        -d "[{\"id\": \"${ROLE_ID}\", \"name\": \"${STOACTL_ADMIN_ROLE}\"}]")
+      case "$STATUS" in
+        204|200) log "Assigned ${STOACTL_ADMIN_ROLE} role to ${STOACTL_ADMIN_CLIENT} service account" ;;
+        409)     log "${STOACTL_ADMIN_ROLE} role already on ${STOACTL_ADMIN_CLIENT} SA (OK)" ;;
+        *)       log "WARN: ${STOACTL_ADMIN_CLIENT} role-mapping returned ${STATUS}" ;;
+      esac
+    else
+      log "WARN: could not resolve ${STOACTL_ADMIN_CLIENT} SA user (uuid=${SA_CLIENT_UUID:-?} user=${SA_USER_ID:-?}) or ${STOACTL_ADMIN_ROLE} role (id=${ROLE_ID:-?})"
+    fi
+
+    # Remind the operator that the client_secret still needs to be harvested
+    # and pushed to Infisical. The job intentionally does not do this itself.
+    log "NOTE: run docs/runbooks/cab-2108-stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to Infisical"
+
+    # ---------------------------------------------------------------
     # Create admin user (if adminEmail provided)
     # ---------------------------------------------------------------
     if [ -n "${ADMIN_EMAIL}" ]; then

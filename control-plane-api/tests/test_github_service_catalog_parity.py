@@ -1,6 +1,7 @@
 """Focused parity tests for GitHubService catalog reads."""
 
 from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import patch
 
 from src.services.github_service import GitHubService
 
@@ -109,3 +110,21 @@ spec:
         ]
         repo.get_contents.assert_called_once_with("tenants/demo/mcp-servers", ref="main")
         svc.get_mcp_server.assert_awaited_once_with("demo", "banking-demo")
+
+    async def test_get_api_override_uses_github_catalog_repo_even_if_gitlab_id_is_present(self):
+        svc = GitHubService()
+        svc.get_file_content = AsyncMock(return_value="rateLimit: 25\n")
+
+        with patch("src.services.git_provider.settings") as mock_settings:
+            mock_settings.GIT_PROVIDER = "github"
+            mock_settings.GITLAB_PROJECT_ID = "12345"
+            mock_settings.GITHUB_ORG = "stoa-platform"
+            mock_settings.GITHUB_CATALOG_REPO = "stoa-catalog"
+
+            override = await svc.get_api_override("banking-demo", "fapi-banking", "prod")
+
+        assert override == {"rateLimit": 25}
+        svc.get_file_content.assert_awaited_once_with(
+            "stoa-platform/stoa-catalog",
+            "tenants/banking-demo/apis/fapi-banking/overrides/prod.yaml",
+        )

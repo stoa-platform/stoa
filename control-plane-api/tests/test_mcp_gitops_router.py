@@ -24,7 +24,16 @@ def mock_git_provider():
     """Create a mock GitProvider with _project attribute."""
     mock = MagicMock()
     mock._project = MagicMock()
+    mock.is_connected = MagicMock(return_value=True)
     mock.connect = AsyncMock()
+    mock.get_repo_info = AsyncMock(
+        return_value={
+            "name": "stoa-mcp-servers",
+            "default_branch": "main",
+            "url": "https://github.com/stoa-platform/stoa-catalog",
+            "visibility": "private",
+        }
+    )
     mock.list_all_mcp_servers = AsyncMock(return_value=[])
     return mock
 
@@ -76,6 +85,7 @@ class TestMCPGitOpsRouter:
         """POST /sync connects to git provider if not already connected."""
         mock_result = self._mock_sync_result()
         mock_git_provider._project = None
+        mock_git_provider.is_connected.return_value = False
 
         with patch("src.routers.mcp_gitops.MCPSyncService") as MockSyncSvc:
             MockSyncSvc.return_value.sync_all_servers = AsyncMock(return_value=mock_result)
@@ -173,10 +183,6 @@ class TestMCPGitOpsRouter:
 
     def test_git_health_success(self, app_with_git_provider, mock_git_provider):
         """GET /git/health returns healthy status."""
-        mock_git_provider._project.name = "stoa-mcp-servers"
-        mock_git_provider._project.id = 42
-        mock_git_provider._project.repository_tree.return_value = []
-
         with TestClient(app_with_git_provider) as client:
             response = client.get("/v1/mcp/gitops/git/health")
 
@@ -188,6 +194,7 @@ class TestMCPGitOpsRouter:
     def test_git_health_unhealthy(self, app_with_git_provider, mock_git_provider):
         """GET /git/health returns unhealthy when provider is down."""
         mock_git_provider._project = None
+        mock_git_provider.is_connected.return_value = False
         mock_git_provider.connect = AsyncMock(side_effect=Exception("Connection refused"))
 
         with TestClient(app_with_git_provider, raise_server_exceptions=False) as client:

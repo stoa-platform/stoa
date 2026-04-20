@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
+from ..config import settings
 from ..database import get_db as get_async_db
 from ..services.git_provider import GitProvider, get_git_provider
 from ..services.mcp_sync_service import MCPSyncService
@@ -56,7 +57,7 @@ class GitHealthResponse(BaseModel):
 
     status: str
     project: str | None = None
-    project_id: int | None = None
+    project_id: str | int | None = None
     default_branch: str | None = None
     error: str | None = None
 
@@ -118,7 +119,7 @@ async def trigger_full_sync(
 
     try:
         # Ensure git provider connection
-        if not git._project:  # TODO(CAB-1889): abstract _project access
+        if not git.is_connected():
             await git.connect()
 
         # Run sync
@@ -157,7 +158,7 @@ async def trigger_tenant_sync(
     logger.info(f"User {user.username} triggered MCP sync for tenant {tenant_id}")
 
     try:
-        if not git._project:  # TODO(CAB-1889): abstract _project access
+        if not git.is_connected():
             await git.connect()
 
         sync_service = MCPSyncService(git, db)
@@ -194,7 +195,7 @@ async def trigger_server_sync(
     logger.info(f"User {user.username} triggered sync for MCP server {server_name}")
 
     try:
-        if not git._project:  # TODO(CAB-1889): abstract _project access
+        if not git.is_connected():
             await git.connect()
 
         sync_service = MCPSyncService(git, db)
@@ -272,17 +273,21 @@ async def get_git_health(
     Requires: cpi-admin role
     """
     try:
-        if not git._project:  # TODO(CAB-1889): abstract _project access
+        if not git.is_connected():
             await git.connect()
 
-        # Try to list root directory
-        git._project.repository_tree(ref="main", per_page=1)  # TODO(CAB-1889): abstract _project access
+        project_id: str | int
+        if settings.GIT_PROVIDER.lower() == "github":
+            project_id = f"{settings.GITHUB_ORG}/{settings.GITHUB_CATALOG_REPO}"
+        else:
+            project_id = settings.GITLAB_PROJECT_ID
+        repo = await git.get_repo_info(str(project_id))
 
         return {
             "status": "healthy",
-            "project": git._project.name,  # TODO(CAB-1889): abstract _project access
-            "project_id": git._project.id,  # TODO(CAB-1889): abstract _project access
-            "default_branch": "main",
+            "project": repo.get("name"),
+            "project_id": project_id,
+            "default_branch": repo.get("default_branch", "main"),
         }
 
     except Exception:
@@ -306,7 +311,7 @@ async def list_git_servers(
     Requires: cpi-admin role
     """
     try:
-        if not git._project:  # TODO(CAB-1889): abstract _project access
+        if not git.is_connected():
             await git.connect()
 
         servers = await git.list_all_mcp_servers()  # TODO(CAB-1889): add list_all_mcp_servers to GitProvider ABC

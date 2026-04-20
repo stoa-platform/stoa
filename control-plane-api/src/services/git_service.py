@@ -119,6 +119,25 @@ class GitLabService(GitProvider):
         self._gl = None
         self._project = None
 
+    async def get_head_commit_sha(self, ref: str = "main") -> str | None:
+        """Return the current HEAD commit SHA from GitLab."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        commits = self._project.commits.list(ref_name=ref, per_page=1)
+        if not commits:
+            return None
+        return commits[0].id
+
+    async def list_tenants(self) -> list[str]:
+        """List tenant IDs from the catalog repository."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        try:
+            tree = self._project.repository_tree(path="tenants", ref="main")
+            return [item["name"] for item in tree if item["type"] == "tree"]
+        except gitlab.exceptions.GitlabGetError:
+            return []
+
     # ============================================================
     # GitProvider ABC implementations
     # ============================================================

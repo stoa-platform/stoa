@@ -88,6 +88,40 @@ pub static MCP_SESSIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
         .expect("Failed to create stoa_mcp_sessions_active metric")
 });
 
+// === Tool Expansion Metrics (CAB-2113 Phase 0) ===
+
+/// Counter of catalog tool refresh cycles by expansion mode and outcome.
+/// `mode` = `coarse` | `per-op`. `result` = `ok` | `err`.
+pub static TOOL_EXPANSION_REFRESH_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_gateway_tool_expansion_refresh_total",
+        "Total catalog tool refresh cycles by expansion mode and outcome",
+        &["mode", "result"]
+    )
+    .expect("Failed to create stoa_gateway_tool_expansion_refresh_total metric")
+});
+
+/// Gauge of tools registered by the most recent refresh, by expansion mode.
+pub static TOOL_EXPANSION_OPS_REGISTERED: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "stoa_gateway_tool_expansion_ops_registered",
+        "Tools registered at last refresh cycle, by expansion mode",
+        &["mode"]
+    )
+    .expect("Failed to create stoa_gateway_tool_expansion_ops_registered metric")
+});
+
+/// Counter of expansion refresh errors by coarse reason category.
+/// `reason` = `transport` | `parse` | `upstream_status` | `empty_catalog`.
+pub static TOOL_EXPANSION_ERRORS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_gateway_tool_expansion_errors_total",
+        "Total expansion refresh errors by coarse reason",
+        &["reason"]
+    )
+    .expect("Failed to create stoa_gateway_tool_expansion_errors_total metric")
+});
+
 // === TCP Early Filter Metrics (CAB-1830) ===
 
 /// Counter of TCP connections rejected before HTTP processing.

@@ -9,6 +9,7 @@
 
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +18,7 @@ use uuid::Uuid;
 
 use super::dynamic_tool::DynamicTool;
 use super::{ToolAnnotations, ToolRegistry, ToolSchema};
+use crate::config::ExpansionMode;
 use crate::uac::Action;
 
 /// Refresh interval for API tool discovery
@@ -41,6 +43,34 @@ struct CatalogApi {
 struct CatalogApisResponse {
     #[serde(default)]
     apis: Vec<CatalogApi>,
+}
+
+/// Per-operation tool descriptor from `/v1/internal/catalog/apis/expanded`
+/// (CAB-2113 Phase 0). Matches the `ExpandedTool` dataclass emitted by
+/// `control-plane-api/src/services/mcp_tool_expander.py`.
+#[derive(Debug, Deserialize)]
+struct ExpandedTool {
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    input_schema: Option<Value>,
+    backend_url: String,
+    #[serde(default = "default_http_method")]
+    http_method: String,
+    tenant_id: String,
+    #[serde(default)]
+    path_pattern: Option<String>,
+}
+
+fn default_http_method() -> String {
+    "POST".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+struct ExpandedToolsResponse {
+    #[serde(default)]
+    tools: Vec<ExpandedTool>,
 }
 
 /// Discover published APIs from the CP catalog and register as MCP tools.
@@ -151,6 +181,118 @@ pub async fn discover_api_tools(
     Ok(count)
 }
 
+/// CAB-2113 Phase 0: discover per-operation MCP tools from the CP expansion endpoint.
+///
+/// Fetches `/v1/internal/catalog/apis/expanded` (introduced in PR #2415) which
+/// returns one `ExpandedTool` per OpenAPI operation. Each tool is registered
+/// with its pre-built input schema and path pattern; `DynamicTool` handles
+/// path-param substitution + query/body routing at invocation time.
+///
+/// Falls back silently to zero tools on transport errors — the background
+/// refresh task retries, consistent with `discover_api_tools`.
+pub async fn discover_expanded_api_tools(
+    registry: &ToolRegistry,
+    cp_base_url: &str,
+    client: &Client,
+    gateway_id: Option<Uuid>,
+) -> Result<usize, String> {
+    let catalog = fetch_expanded_catalog(cp_base_url, client, gateway_id).await?;
+
+    let catalog = match gateway_id {
+        Some(gw_id) if catalog.tools.is_empty() => {
+            warn!(
+                gateway_id = %gw_id,
+                "No expanded tools found for gateway — falling back to unfiltered catalog"
+            );
+            fetch_expanded_catalog(cp_base_url, client, None).await?
+        }
+        _ => catalog,
+    };
+
+    let mut count = 0;
+    for tool in catalog.tools {
+        if tool.backend_url.is_empty() {
+            debug!(tool = %tool.name, "Skipping expanded tool without backend_url");
+            continue;
+        }
+        if registry.get(&tool.name).is_some() {
+            debug!(tool = %tool.name, "Expanded tool already registered, skipping");
+            continue;
+        }
+
+        let schema = tool
+            .input_schema
+            .as_ref()
+            .map(super::dynamic_tool::schema_from_value)
+            .unwrap_or_else(|| ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            });
+
+        let mut dyn_tool = DynamicTool::new(
+            &tool.name,
+            tool.description.clone(),
+            &tool.backend_url,
+            &tool.http_method,
+            schema,
+            &tool.tenant_id,
+        )
+        .with_action(Action::Read)
+        .with_annotations(ToolAnnotations {
+            title: Some(tool.name.clone()),
+            open_world_hint: Some(true),
+            ..Default::default()
+        })
+        .into_public();
+
+        if let Some(pattern) = tool.path_pattern {
+            if !pattern.is_empty() {
+                dyn_tool = dyn_tool.with_path_pattern(pattern);
+            }
+        }
+
+        registry.register(Arc::new(dyn_tool));
+        count += 1;
+        info!(tool = %tool.name, backend = %tool.backend_url, method = %tool.http_method, "Registered expanded tool");
+    }
+
+    Ok(count)
+}
+
+async fn fetch_expanded_catalog(
+    cp_base_url: &str,
+    client: &Client,
+    gateway_id: Option<Uuid>,
+) -> Result<ExpandedToolsResponse, String> {
+    let mut url = format!(
+        "{}/v1/internal/catalog/apis/expanded",
+        cp_base_url.trim_end_matches('/')
+    );
+    if let Some(gw_id) = gateway_id {
+        url.push_str(&format!("?gateway_id={gw_id}"));
+    }
+
+    debug!(url = %url, "Discovering expanded tools from CP");
+
+    let resp = client
+        .get(&url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("CP expanded catalog request failed: {e}"))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("CP expanded catalog returned {status}: {body}"));
+    }
+
+    resp.json()
+        .await
+        .map_err(|e| format!("Failed to parse CP expanded catalog response: {e}"))
+}
+
 /// Fetch the API catalog from the Control Plane.
 ///
 /// When `gateway_id` is `Some`, appends `?gateway_id={id}` to scope results
@@ -192,11 +334,15 @@ async fn fetch_catalog(
 ///
 /// When `registrar` is provided, reads the gateway's assigned ID on each tick
 /// so the catalog fetch is scoped to this gateway's assigned APIs (CAB-1940).
+///
+/// `mode` selects between coarse (`/apis`, one tool per API) and per-op
+/// (`/apis/expanded`, one tool per OpenAPI operation) discovery (CAB-2113).
 pub fn start_api_tool_refresh_task(
     registry: Arc<ToolRegistry>,
     cp_base_url: String,
     client: Client,
     registrar: Option<Arc<crate::control_plane::registration::GatewayRegistrar>>,
+    mode: ExpansionMode,
 ) {
     tokio::spawn(async move {
         loop {
@@ -207,18 +353,63 @@ pub fn start_api_tool_refresh_task(
                 None => None,
             };
 
-            match discover_api_tools(&registry, &cp_base_url, &client, gw_id).await {
+            let result = match mode {
+                ExpansionMode::Coarse => {
+                    discover_api_tools(&registry, &cp_base_url, &client, gw_id).await
+                }
+                ExpansionMode::PerOp => {
+                    discover_expanded_api_tools(&registry, &cp_base_url, &client, gw_id).await
+                }
+            };
+
+            let mode_label = expansion_mode_label(mode);
+            match result {
                 Ok(count) => {
+                    crate::metrics::TOOL_EXPANSION_REFRESH_TOTAL
+                        .with_label_values(&[mode_label, "ok"])
+                        .inc();
+                    crate::metrics::TOOL_EXPANSION_OPS_REGISTERED
+                        .with_label_values(&[mode_label])
+                        .set(count as f64);
                     if count > 0 {
-                        info!(count, "New API tools discovered from catalog");
+                        info!(count, mode = ?mode, "New API tools discovered from catalog");
                     }
                 }
                 Err(e) => {
-                    debug!(error = %e, "API tool refresh failed (keeping existing tools)");
+                    crate::metrics::TOOL_EXPANSION_REFRESH_TOTAL
+                        .with_label_values(&[mode_label, "err"])
+                        .inc();
+                    crate::metrics::TOOL_EXPANSION_ERRORS_TOTAL
+                        .with_label_values(&[classify_refresh_error(&e)])
+                        .inc();
+                    debug!(error = %e, mode = ?mode, "API tool refresh failed (keeping existing tools)");
                 }
             }
         }
     });
+}
+
+/// Stable Prometheus label for an `ExpansionMode`. Kept as a free fn so tests
+/// can assert the label surface without touching the metric registry.
+fn expansion_mode_label(mode: ExpansionMode) -> &'static str {
+    match mode {
+        ExpansionMode::Coarse => "coarse",
+        ExpansionMode::PerOp => "per-op",
+    }
+}
+
+/// Coarse categorisation of refresh error strings for the
+/// `stoa_gateway_tool_expansion_errors_total{reason=...}` counter. The matching
+/// order matters: parse errors come from `resp.json()` after a successful HTTP
+/// status, so they must be checked before the generic transport bucket.
+fn classify_refresh_error(err: &str) -> &'static str {
+    if err.contains("Failed to parse") {
+        "parse"
+    } else if err.contains("returned") {
+        "upstream_status"
+    } else {
+        "transport"
+    }
 }
 
 #[cfg(test)]
@@ -469,5 +660,204 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    // === CAB-2113 Phase 0: per-operation expansion ===
+
+    fn expanded_tool_json(
+        name: &str,
+        backend: &str,
+        method: &str,
+        path_pattern: Option<&str>,
+    ) -> serde_json::Value {
+        let mut obj = serde_json::json!({
+            "name": name,
+            "description": format!("op {}", name),
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+            "backend_url": backend,
+            "http_method": method,
+            "tenant_id": "demo",
+        });
+        if let Some(p) = path_pattern {
+            obj["path_pattern"] = serde_json::Value::String(p.to_string());
+        }
+        obj
+    }
+
+    #[tokio::test]
+    async fn cab_2113_discovers_expanded_tools() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [
+                    expanded_tool_json("demo:bank:get-customer", "http://bank:8080", "GET", Some("/customers/{id}")),
+                    expanded_tool_json("demo:bank:list-accounts", "http://bank:8080", "GET", Some("/accounts")),
+                ]
+            })))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap();
+
+        assert_eq!(count, 2);
+        assert!(registry.get("demo:bank:get-customer").is_some());
+        assert!(registry.get("demo:bank:list-accounts").is_some());
+    }
+
+    #[tokio::test]
+    async fn cab_2113_expanded_tools_are_idempotent() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [expanded_tool_json("demo:bank:op", "http://bank:8080", "POST", None)]
+            })))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let first = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap();
+        let second = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap();
+
+        assert_eq!(first, 1);
+        assert_eq!(second, 0, "second pass must not double-register");
+    }
+
+    #[tokio::test]
+    async fn cab_2113_skips_tool_without_backend_url() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [expanded_tool_json("demo:bank:broken", "", "POST", None)]
+            })))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn cab_2113_gateway_id_scope_and_fallback() {
+        let gw_id = Uuid::new_v4();
+        let mock = MockServer::start().await;
+
+        // Filtered request: empty
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .and(query_param("gateway_id", gw_id.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tools": []})),
+            )
+            .mount(&mock)
+            .await;
+
+        // Unfiltered fallback: returns tools
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [expanded_tool_json("demo:bank:op", "http://bank:8080", "GET", None)]
+            })))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, Some(gw_id))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            count, 1,
+            "must fallback to unfiltered catalog when scoped is empty"
+        );
+    }
+
+    #[tokio::test]
+    async fn cab_2113_fifty_operation_scalability() {
+        // Challenger callout: verify expander round-trip holds at 50 ops,
+        // matching the mcp_tool_expander test on the CP side.
+        let tools: Vec<_> = (0..50)
+            .map(|i| {
+                expanded_tool_json(
+                    &format!("demo:bank:op{i}"),
+                    "http://bank:8080",
+                    "GET",
+                    Some(&format!("/ops/{{id}}#{i}")),
+                )
+            })
+            .collect();
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tools": tools})),
+            )
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap();
+        assert_eq!(count, 50);
+        assert!(registry.get("demo:bank:op0").is_some());
+        assert!(registry.get("demo:bank:op49").is_some());
+    }
+
+    #[tokio::test]
+    async fn cab_2113_expanded_http_error_returns_err() {
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let err = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+            .await
+            .unwrap_err();
+        assert!(err.contains("500"), "got: {err}");
+    }
+
+    #[test]
+    fn expansion_mode_label_is_kebab_canonical() {
+        assert_eq!(expansion_mode_label(ExpansionMode::Coarse), "coarse");
+        assert_eq!(expansion_mode_label(ExpansionMode::PerOp), "per-op");
+    }
+
+    #[test]
+    fn classify_refresh_error_buckets_parse_upstream_transport() {
+        assert_eq!(
+            classify_refresh_error("Failed to parse CP expanded catalog response: eof"),
+            "parse"
+        );
+        assert_eq!(
+            classify_refresh_error("CP expanded catalog returned 503: unavailable"),
+            "upstream_status"
+        );
+        assert_eq!(
+            classify_refresh_error("CP expanded catalog request failed: connection refused"),
+            "transport"
+        );
     }
 }

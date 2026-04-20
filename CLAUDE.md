@@ -183,6 +183,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - MEGA jamais marqué Done directement. Toujours `/verify-mega` (5 gates).
 - Sub-ticket Done sans comment "PR #N" = gate 1 échoue.
 - **Decision Challenge Gate** (HLFH-wide) avant exécution d'un plan matchant ≥1 trigger: (a) temps Claude > 5h, (b) impact business direct (GTM/pricing/positioning/contenu stratégique/partenariat/roadmap lourde), (c) irréversible (données/contrats/branding). Rappeler le gate et exiger contre-analyse d'un challenger externe non-aligné (GPT ou autre, PAS Claude). Framework + logs: `stoa-docs/HEGEMON/DECISION_GATE.md`.
+- **Plan validation workflow** (convention, pas de hook): plan taggé `triggers: [...]` → fichier canonique dans `docs/plans/YYYY-MM-DD-<slug>.md` avec frontmatter `validation_status: draft|challenged|validated|rejected`. Verdict du challenger lié dans `docs/decisions/YYYY-MM-DD-<slug>.md` (`plan_ref` + `verdict`). **Pas d'exécution tant que `validation_status != validated`**. Templates: `docs/plans/_template.md`, `docs/decisions/_template-plan-validation.md`. Exemple canonique: `docs/plans/2026-04-19-dev-tools-gateway.md` (rejected, log #7).
 
 ### Sécurité
 - NEVER reset/change/rotate password ou credential. Human-only.

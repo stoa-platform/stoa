@@ -488,6 +488,13 @@ pub struct Config {
     #[serde(default = "default_tool_max_staleness_secs")]
     pub tool_max_staleness_secs: u64,
 
+    /// Catalog tool expansion mode (CAB-2113 Phase 0).
+    /// `coarse` (default) → one `{action, params}` tool per API (legacy behaviour).
+    /// `per-op` → one tool per OpenAPI operation via `/apis/expanded`.
+    /// Env: STOA_TOOL_EXPANSION_MODE
+    #[serde(default)]
+    pub tool_expansion_mode: ExpansionMode,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -1251,6 +1258,23 @@ fn default_tool_max_staleness_secs() -> u64 {
     1800
 }
 
+/// Catalog tool expansion mode (CAB-2113 Phase 0).
+///
+/// `per-op` is the canonical kebab-case value; `per_operation` is accepted as
+/// a deprecated alias so existing docs / manifests keep parsing (PR3 doc drift
+/// fix: `control-plane-api/src/routers/portal.py` pre-2026-04-19 used the
+/// snake form). Prefer the canonical form in new configs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExpansionMode {
+    /// One `{action, params}` tool per API (legacy `/apis`).
+    #[default]
+    Coarse,
+    /// One tool per OpenAPI operation via `/apis/expanded`.
+    #[serde(alias = "per_operation")]
+    PerOp,
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -1460,6 +1484,7 @@ impl Default for Config {
             classification_enforcement_enabled: false,
             tool_refresh_ttl_secs: default_tool_refresh_ttl_secs(),
             tool_max_staleness_secs: default_tool_max_staleness_secs(),
+            tool_expansion_mode: ExpansionMode::default(),
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
@@ -1929,5 +1954,20 @@ mod tests {
             config.keycloak_backend_url(),
             Some("http://keycloak.stoa-system.svc.cluster.local:8080")
         );
+    }
+
+    #[test]
+    fn expansion_mode_accepts_kebab_and_snake_alias() {
+        // Canonical kebab-case value (CAB-2113 Phase 0).
+        let kebab: ExpansionMode = serde_json::from_str("\"per-op\"").unwrap();
+        assert_eq!(kebab, ExpansionMode::PerOp);
+
+        // Deprecated snake-case alias — kept only for the PR3 doc-drift window
+        // on `control-plane-api/src/routers/portal.py`. Drop with Release N+1.
+        let snake: ExpansionMode = serde_json::from_str("\"per_operation\"").unwrap();
+        assert_eq!(snake, ExpansionMode::PerOp);
+
+        // Default stays coarse — flipping to per-op must be explicit.
+        assert_eq!(ExpansionMode::default(), ExpansionMode::Coarse);
     }
 }

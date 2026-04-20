@@ -179,6 +179,11 @@ kubeconfig*
 # Ephemeral agent/tool state
 .playwright-mcp/
 .claude/scheduled_tasks.lock
+.claude/agent-memory/
+.codex/
+.agents/skills/
+tools/phase05-harness/report.json
+tools/phase05-harness/runs.jsonl
 
 # Council S3 (CAB-2047) — history + metrics, never commit
 council-history.jsonl

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.5.1...control-plane-api-v1.6.0) (2026-04-19)
+
+
+### Features
+
+* **cp-api:** /v1/internal/catalog/apis/expanded overlay (CAB-2113) ([#2415](https://github.com/stoa-platform/stoa/issues/2415)) ([28a3a17](https://github.com/stoa-platform/stoa/commit/28a3a17fccfbd8c571f8b628dd1b1f2ee9168287))
+* **gateway:** tool-expansion observability + runbook (CAB-2113 PR3) ([#2422](https://github.com/stoa-platform/stoa/issues/2422)) ([cd99417](https://github.com/stoa-platform/stoa/commit/cd9941741c234f3b6fd0b6bde4afad480615aa27))
+
+
+### Bug Fixes
+
+* **mcp:** restore temperature=0 + add tool-name bijection in phase05 bench (CAB-2116) ([#2428](https://github.com/stoa-platform/stoa/issues/2428)) ([0d6eccc](https://github.com/stoa-platform/stoa/commit/0d6eccc75830b29edccc79a963842982ec643b24))
+
 ## [1.5.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.5.0...control-plane-api-v1.5.1) (2026-04-17)
 
 

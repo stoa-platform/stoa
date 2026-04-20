@@ -1,6 +1,9 @@
-"""Tests for rate_limit middleware helpers (CAB-1388)."""
+"""Tests for rate_limit middleware helpers (CAB-1388, CAB-2146).
 
-from unittest.mock import MagicMock
+CAB-2146: switched from MagicMock users to dict users to match prod behavior.
+"""
+
+from starlette.requests import Request
 
 from src.middleware.rate_limit import (
     get_rate_limit_key,
@@ -14,56 +17,54 @@ from src.middleware.rate_limit import (
 # ── get_rate_limit_key ──
 
 
-class TestGetRateLimitKey:
-    def _req(self, user=None, api_key=None, remote_addr="1.2.3.4"):
-        req = MagicMock()
-        req.state = MagicMock()
-        req.state.user = user
-        req.headers = MagicMock()
-        req.headers.get = MagicMock(return_value=api_key)
-        req.url = MagicMock()
-        req.url.path = "/api/test"
-        req.client = MagicMock()
-        req.client.host = remote_addr
-        return req
+def _req(
+    *,
+    user: dict | None = None,
+    api_key: str | None = None,
+    remote_addr: str = "1.2.3.4",
+    path: str = "/api/test",
+) -> Request:
+    headers: list[tuple[bytes, bytes]] = []
+    if api_key:
+        headers.append((b"x-api-key", api_key.encode()))
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "query_string": b"",
+        "headers": headers,
+        "client": (remote_addr, 12345),
+    }
+    r = Request(scope)
+    if user is not None:
+        r.state.user = user
+    return r
 
+
+class TestGetRateLimitKey:
     def test_authenticated_user_with_tenant(self):
-        user = MagicMock(tenant_id="acme", sub="u-1")
-        req = self._req(user=user)
-        key = get_rate_limit_key(req)
-        assert key == "tenant:acme:user:u-1"
+        req = _req(user={"sub": "u-1", "tenant_id": "acme"})
+        assert get_rate_limit_key(req) == "tenant:acme:user:u-1"
 
     def test_authenticated_user_without_tenant_uses_azp(self):
-        user = MagicMock(tenant_id=None, sub="u-2", azp="app-x")
-        req = self._req(user=user)
-        key = get_rate_limit_key(req)
-        assert key == "tenant:app-x:user:u-2"
+        req = _req(user={"sub": "u-2", "tenant_id": None, "azp": "app-x"})
+        assert get_rate_limit_key(req) == "tenant:app-x:user:u-2"
 
     def test_api_key_uses_prefix(self):
-        req = self._req(user=None, api_key="ABCDEFGHIJKLMNOP-extra")
-        key = get_rate_limit_key(req)
-        assert key == "apikey:ABCDEFGHIJKLMNOP"
+        req = _req(api_key="ABCDEFGHIJKLMNOP-extra")
+        assert get_rate_limit_key(req) == "apikey:ABCDEFGHIJKLMNOP"
 
     def test_fallback_to_ip(self):
-        req = self._req(user=None, api_key=None)
         from unittest.mock import patch
 
-        # get_remote_address reads from request.client.host or headers
+        req = _req()
         with patch("src.middleware.rate_limit.get_remote_address", return_value="1.2.3.4"):
-            key = get_rate_limit_key(req)
-        assert key == "ip:1.2.3.4"
+            assert get_rate_limit_key(req) == "ip:1.2.3.4"
 
 
 class TestGetStrictRateLimitKey:
     def test_includes_path(self):
-        user = MagicMock(tenant_id="t1", sub="u1")
-        req = MagicMock()
-        req.state = MagicMock()
-        req.state.user = user
-        req.headers = MagicMock()
-        req.headers.get = MagicMock(return_value=None)
-        req.url = MagicMock()
-        req.url.path = "/tools/invoke"
+        req = _req(user={"sub": "u1", "tenant_id": "t1"}, path="/tools/invoke")
         key = get_strict_rate_limit_key(req)
         assert "path:" in key
         assert "/tools/invoke" in key

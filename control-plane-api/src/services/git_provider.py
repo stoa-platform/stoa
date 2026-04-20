@@ -181,9 +181,11 @@ class GitProvider(ABC):
         """
         import yaml
 
-        project_id = getattr(settings, "GITLAB_PROJECT_ID", None) or (
-            f"{getattr(settings, 'GITHUB_ORG', '')}/{getattr(settings, 'GITHUB_CATALOG_REPO', '')}"
-        )
+        provider = getattr(settings, "GIT_PROVIDER", "gitlab").lower()
+        if provider == "github":
+            project_id = f"{getattr(settings, 'GITHUB_ORG', '')}/{getattr(settings, 'GITHUB_CATALOG_REPO', '')}"
+        else:
+            project_id = getattr(settings, "GITLAB_PROJECT_ID", None)
         file_path = f"tenants/{tenant_id}/apis/{api_id}/overrides/{environment}.yaml"
         try:
             content = await self.get_file_content(str(project_id), file_path)

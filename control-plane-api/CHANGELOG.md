@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.0...control-plane-api-v1.6.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* **api:** drop gitlab _project deref in catalog sync (CAB-1889) ([#2439](https://github.com/stoa-platform/stoa/issues/2439)) ([0c01ba3](https://github.com/stoa-platform/stoa/commit/0c01ba318e0794b7a5deb1281110746e5e38ba62))
+* **api:** scrub stack traces + axios/follow-redirects bumps (CAB-2138) ([#2441](https://github.com/stoa-platform/stoa/issues/2441)) ([ab2a26b](https://github.com/stoa-platform/stoa/commit/ab2a26b303c7baf86a8eea77f62edd3d8a534b8c))
+
 ## [1.6.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.5.1...control-plane-api-v1.6.0) (2026-04-19)
 
 

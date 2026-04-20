@@ -1,7 +1,6 @@
 """Focused parity tests for GitHubService catalog reads."""
 
-from unittest.mock import AsyncMock, MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.github_service import GitHubService
 
@@ -49,9 +48,12 @@ class TestGitHubServiceCatalogParity:
         repo.get_contents.assert_called_once_with("tenants", ref="main")
 
     async def test_get_api_normalizes_kubernetes_style_yaml(self):
+        # regression for CAB-2135: spec.tags and spec.category must survive
+        # normalization — without them the sync downstream leaves
+        # portal_published=False on every Kind=API manifest (the tag set
+        # drives the portal promotion flag).
         svc = GitHubService()
-        svc.get_file_content = AsyncMock(
-            return_value="""
+        svc.get_file_content = AsyncMock(return_value="""
 apiVersion: gostoa.dev/v1
 kind: API
 metadata:
@@ -60,13 +62,16 @@ metadata:
 spec:
   displayName: Banking Services
   description: Banking API
+  category: banking
+  tags:
+    - portal:published
+    - banking
   backend:
     url: http://banking-mock.demo-banking-mock.svc.cluster.local:8080/api/v1
   deployments:
     dev: true
     staging: false
-"""
-        )
+""")
 
         api = await svc.get_api("demo", "banking-services-v1-2")
 
@@ -78,6 +83,8 @@ spec:
             "description": "Banking API",
             "backend_url": "http://banking-mock.demo-banking-mock.svc.cluster.local:8080/api/v1",
             "status": "draft",
+            "category": "banking",
+            "tags": ["portal:published", "banking"],
             "deployments": {"dev": True, "staging": False},
         }
 

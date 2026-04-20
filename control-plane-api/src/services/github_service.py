@@ -37,6 +37,8 @@ def _normalize_api_data(raw_data: dict) -> dict:
             "description": spec.get("description", ""),
             "backend_url": backend.get("url", ""),
             "status": spec.get("status", "draft"),
+            "category": spec.get("category"),
+            "tags": spec.get("tags", []),
             "deployments": {
                 "dev": deployments.get("dev", False),
                 "staging": deployments.get("staging", False),

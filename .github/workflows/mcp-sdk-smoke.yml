@@ -37,7 +37,7 @@ jobs:
     # against a locally-started binary. This is the blocking gate.
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     name: Pre-merge (local gateway)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
       run:
@@ -104,7 +104,7 @@ jobs:
     # defaults changed out-of-band, etc.).
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Post-deploy (prod probe)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

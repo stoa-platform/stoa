@@ -5,12 +5,28 @@ For Kubernetes deployments, set these in ConfigMaps/Secrets.
 """
 
 import json
+import logging
 import os
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 # Base domain - used to construct default URLs
 _BASE_DOMAIN = os.getenv("BASE_DOMAIN", "gostoa.dev")
+
+_logger = logging.getLogger(__name__)
+
+# CAB-2145: flags that emit credential-grade data (raw JWT tokens, decoded
+# JWT payload, Authorization/Cookie headers, raw request bodies). They must
+# never be `True` in production. Adding a new flag to this list is enough to
+# make the startup validator enforce the gate.
+SENSITIVE_DEBUG_FLAGS_IN_PROD: tuple[str, ...] = (
+    "LOG_DEBUG_AUTH_TOKENS",
+    "LOG_DEBUG_AUTH_HEADERS",
+    "LOG_DEBUG_AUTH_PAYLOAD",
+    "LOG_DEBUG_HTTP_BODY",
+    "LOG_DEBUG_HTTP_HEADERS",
+)
 
 
 class Settings(BaseSettings):
@@ -400,6 +416,33 @@ class Settings(BaseSettings):
         if not self.GATEWAY_API_KEYS:
             return []
         return [key.strip() for key in self.GATEWAY_API_KEYS.split(",") if key.strip()]
+
+    @model_validator(mode="after")
+    def _gate_sensitive_debug_flags_in_prod(self) -> "Settings":
+        """CAB-2145: fail fast if a credential-leaking debug flag is enabled in prod.
+
+        Raises on `ENVIRONMENT=production`; logs a warning in any other env so
+        developers still see the foot-gun during local debugging.
+        """
+        offenders = [flag for flag in SENSITIVE_DEBUG_FLAGS_IN_PROD if getattr(self, flag, False)]
+        if not offenders:
+            return self
+
+        joined = ", ".join(offenders)
+        if self.ENVIRONMENT == "production":
+            raise ValueError(
+                f"Refusing to boot: sensitive debug flag(s) {joined} are True while "
+                f"ENVIRONMENT=production. These flags leak JWT tokens, Authorization "
+                f"headers, or request bodies into logs. Unset them in your Helm override."
+            )
+
+        _logger.warning(
+            "Sensitive debug flag(s) %s are True (ENVIRONMENT=%s). "
+            "These MUST be False in production — do not deploy this config.",
+            joined,
+            self.ENVIRONMENT,
+        )
+        return self
 
     class Config:
         env_file = ".env"

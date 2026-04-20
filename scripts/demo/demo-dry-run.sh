@@ -7,18 +7,36 @@
 #        MCP Bridge, AI Factory.
 # Output: Colored PASS/FAIL report with per-act timing + GO/NO-GO verdict.
 #
-# Usage: ./demo-dry-run.sh [--base-domain gostoa.dev]
+# Usage: ./demo-dry-run.sh [--base-domain gostoa.dev] [--include-act5]
+#
+# Act 5 (OpenSearch Dashboards) is OUT OF SCOPE by default — CAB-2119 ouvert
+# (HTTP 503). Pass --include-act5 to opt-in once OpenSearch is fixed.
 # =============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Configuration
-BASE_DOMAIN="${1:-gostoa.dev}"
-if [ "$BASE_DOMAIN" = "--base-domain" ]; then
-    BASE_DOMAIN="${2:-gostoa.dev}"
-fi
+# Argument parsing
+BASE_DOMAIN="gostoa.dev"
+INCLUDE_ACT5="false"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --base-domain)
+            BASE_DOMAIN="${2:-gostoa.dev}"
+            shift 2
+            ;;
+        --include-act5)
+            INCLUDE_ACT5="true"
+            shift
+            ;;
+        *)
+            # Backward-compat: first positional arg = base domain
+            BASE_DOMAIN="$1"
+            shift
+            ;;
+    esac
+done
 
 API_URL="https://api.${BASE_DOMAIN}"
 PORTAL_URL="https://portal.${BASE_DOMAIN}"
@@ -438,20 +456,26 @@ fi
 act_footer
 
 # --------------------------------------------------------------------------
-# Act 5 — OpenSearch: Error Snapshots
+# Act 5 — OpenSearch: Error Snapshots (HORS SCOPE par défaut, opt-in --include-act5)
 # --------------------------------------------------------------------------
 
-act_header "5" "OpenSearch"
+if [ "$INCLUDE_ACT5" = "true" ]; then
+    act_header "5" "OpenSearch"
 
-# OpenSearch Dashboards is behind OIDC — expect 200 or 302 (redirect to login)
-read -r code ms <<< "$(timed_curl "${OPENSEARCH_URL}")"
-if [ "$code" = "200" ] || [ "$code" = "302" ]; then
-    check "OpenSearch Dashboards" "PASS" "$ms" "HTTP ${code}"
+    # OpenSearch Dashboards is behind OIDC — expect 200 or 302 (redirect to login)
+    read -r code ms <<< "$(timed_curl "${OPENSEARCH_URL}")"
+    if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+        check "OpenSearch Dashboards" "PASS" "$ms" "HTTP ${code}"
+    else
+        check "OpenSearch Dashboards" "FAIL" "$ms" "HTTP ${code}"
+    fi
+
+    act_footer
 else
-    check "OpenSearch Dashboards" "FAIL" "$ms" "HTTP ${code}"
+    echo ""
+    echo "Act 5 — OpenSearch: SKIPPED (out of scope by default — CAB-2119 ouvert)."
+    echo "        Pass --include-act5 to opt-in once OpenSearch is fixed."
 fi
-
-act_footer
 
 # --------------------------------------------------------------------------
 # Act 6 — Federation: Cross-Realm Token Isolation

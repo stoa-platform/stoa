@@ -1,0 +1,8 @@
+200|0.083199s | https://mcp.gostoa.dev/health
+200|0.109445s | https://api.gostoa.dev/health
+200|0.112048s | https://console.gostoa.dev
+200|0.107216s | https://portal.gostoa.dev
+curl: (6) Could not resolve host: grafana.gostoa.dev
+000|0.018873s | https://grafana.gostoa.dev/api/health
+503|0.093783s | https://opensearch.gostoa.dev
+200|0.104994s | https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration

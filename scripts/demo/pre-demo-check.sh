@@ -20,7 +20,7 @@ set -e
 # Configuration
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-https://api.gostoa.dev}"
 GATEWAY_URL="${GATEWAY_URL:-https://mcp.gostoa.dev}"
-GRAFANA_URL="${GRAFANA_URL:-https://grafana.gostoa.dev}"
+GRAFANA_URL="${GRAFANA_URL:-https://console.gostoa.dev/grafana}"
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 VERBOSE="${1:-}"
 
@@ -45,17 +45,17 @@ check() {
 
     if [ "$result" = "pass" ]; then
         echo -e "  ${GREEN}[PASS]${NC} $name"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     elif [ "$result" = "warn" ]; then
         echo -e "  ${YELLOW}[WARN]${NC} $name"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     else
         if [ "$critical" = "true" ]; then
             echo -e "  ${RED}[FAIL]${NC} $name"
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
         else
             echo -e "  ${YELLOW}[SKIP]${NC} $name (non-critical)"
-            ((WARNINGS++))
+            WARNINGS=$((WARNINGS + 1))
         fi
     fi
 }
@@ -210,8 +210,14 @@ echo ""
 echo -e "${CYAN}MCP Tools${NC}"
 echo "─────────────────────────────────────────"
 
-# List tools via gateway
-TOOLS_RESPONSE=$(curl -s "$GATEWAY_URL/mcp/v1/tools" --max-time 10 2>/dev/null || echo '{"error": "failed"}')
+# List tools via gateway. Post CAB-2121 (PR #2433), anon discovery returns 401
+# by design — claude.ai connector authenticates via OAuth before calling tools/list.
+# Use AUTH_TOKEN env if available, else accept 401 anon as expected.
+if [ -n "$AUTH_TOKEN" ]; then
+    TOOLS_RESPONSE=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$GATEWAY_URL/mcp/v1/tools" --max-time 10 2>/dev/null || echo '{"error": "failed"}')
+else
+    TOOLS_RESPONSE=$(curl -s "$GATEWAY_URL/mcp/v1/tools" --max-time 10 2>/dev/null || echo '{"error": "failed"}')
+fi
 if echo "$TOOLS_RESPONSE" | grep -q '"tools"'; then
     TOOL_COUNT=$(echo "$TOOLS_RESPONSE" | grep -o '"name"' | wc -l | tr -d ' ')
     if [ "$TOOL_COUNT" -ge 5 ]; then
@@ -219,6 +225,8 @@ if echo "$TOOLS_RESPONSE" | grep -q '"tools"'; then
     else
         check "MCP tools registered ($TOOL_COUNT tools - low)" "warn"
     fi
+elif echo "$TOOLS_RESPONSE" | grep -q '"unauthorized"'; then
+    check "MCP discovery anon → 401 (CAB-2121 expected; set AUTH_TOKEN to test fully)" "pass"
 else
     check "MCP tools list failed" "warn" "false"
 fi

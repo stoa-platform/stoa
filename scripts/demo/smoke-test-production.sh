@@ -155,8 +155,15 @@ echo -e "${BLUE}Act 7: MCP${NC}"
 R=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 10 https://mcp.gostoa.dev/health 2>/dev/null || echo "000")
 check "MCP endpoint health" "$R" "200"
 
-R=$(curl -s --max-time 10 https://mcp.gostoa.dev/mcp/v1/tools 2>/dev/null || echo "error")
-check "MCP tools list" "$R" "tools\|name"
+# Post CAB-2121 (PR #2433), anon discovery returns 401 by design.
+# Accept either tools listing (with AUTH_TOKEN) or 401 unauthorized (expected anon).
+if [ -n "$AUTH_TOKEN" ]; then
+    R=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" --max-time 10 https://mcp.gostoa.dev/mcp/v1/tools 2>/dev/null || echo "error")
+    check "MCP tools list (auth)" "$R" "tools\|name"
+else
+    R=$(curl -s --max-time 10 https://mcp.gostoa.dev/mcp/v1/tools 2>/dev/null || echo "error")
+    check "MCP tools list anon → 401 (CAB-2121 expected)" "$R" "unauthorized\|tools"
+fi
 
 # ─────────────────────────────────────────────────────────────────────
 # External Gateways (VPS — Kong, Gravitee, webMethods)

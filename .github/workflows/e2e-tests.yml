@@ -87,7 +87,10 @@ jobs:
         continue-on-error: true  # Gracefully fall back to GitHub secrets if Vault fails
         uses: hashicorp/vault-action@v3
         with:
-          url: https://vault.gostoa.dev
+          # vault.gostoa.dev = Infisical (different product) — E2E secrets live on
+          # the HashiCorp Vault instance at hcvault.gostoa.dev. Changing this URL
+          # broke silently because `continue-on-error: true` masked the 404.
+          url: https://hcvault.gostoa.dev
           method: jwt
           role: github-actions
           jwtGithubAudience: sigstore

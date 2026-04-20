@@ -94,22 +94,18 @@ pub const INTERNAL_ERROR: i32 = -32603;
 /// attached a Bearer token — so 401-ing them breaks the whole handshake
 /// even when the server later advertises OAuth on protected operations.
 ///
-/// Tool invocation (`tools/call`) is NOT listed here; authorisation for it
-/// goes through the UAC / OPA policy layer which already enforces scopes
-/// and tenant isolation. `notifications/*` are fire-and-forget client
-/// messages with no response body, equally safe to accept anonymously.
+/// CAB-2121: tightened to the bare handshake surface only. `tools/list`,
+/// `resources/*`, `prompts/*`, `completion/complete`, `roots/list`, and
+/// `logging/setLevel` were removed because they leak tool/resource
+/// inventory to anonymous callers over Streamable HTTP (`POST /mcp`) —
+/// the REST equivalents (`/mcp/tools/list`, `/mcp/v1/tools`, …) are
+/// JWT-gated by the router-level `mcp_jwt_required` middleware.
+///
+/// `notifications/*` are fire-and-forget client messages with no response
+/// body, equally safe to accept anonymously.
 const PUBLIC_METHODS: &[&str] = &[
     "initialize",
     "ping",
-    "tools/list",
-    "resources/list",
-    "resources/templates/list",
-    "resources/read",
-    "prompts/list",
-    "prompts/get",
-    "completion/complete",
-    "roots/list",
-    "logging/setLevel",
     "notifications/initialized",
     "notifications/cancelled",
 ];

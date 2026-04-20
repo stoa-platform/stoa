@@ -57,10 +57,16 @@ async fn test_mcp_health_endpoint() {
 
 // ========================================================================
 // MCP Tools — direct JSON (not JSON-RPC envelope)
+//
+// These tests run against TestApp::new(), which uses Config::default() — i.e.
+// `keycloak_url = None` so `jwt_validator` is `None`. In that mode the
+// `mcp_jwt_required` middleware (CAB-2121) is a passthrough, so anonymous
+// requests still reach the handlers. The validator-configured behaviour
+// (anon → 401) is covered in `tests/security/auth.rs`.
 // ========================================================================
 
 #[tokio::test]
-async fn test_mcp_tools_list_returns_tools() {
+async fn test_mcp_tools_list_no_validator_returns_tools() {
     let app = TestApp::new();
     // ToolsListRequest expects {"cursor": null} or just {}
     let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
@@ -71,7 +77,7 @@ async fn test_mcp_tools_list_returns_tools() {
 }
 
 #[tokio::test]
-async fn test_mcp_tools_call_unknown_tool() {
+async fn test_mcp_tools_call_no_validator_unknown_tool() {
     let app = TestApp::new();
     // ToolsCallRequest: {"name": "xxx", "arguments": {}}
     let (status, body) = app
@@ -96,7 +102,7 @@ async fn test_mcp_tools_call_unknown_tool() {
 }
 
 #[tokio::test]
-async fn test_mcp_tools_list_response_structure() {
+async fn test_mcp_tools_list_no_validator_response_structure() {
     // Verify tools/list returns proper ToolsListResponse shape
     let app = TestApp::new();
     let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
@@ -109,11 +115,11 @@ async fn test_mcp_tools_list_response_structure() {
 }
 
 // ========================================================================
-// MCP v1 REST API
+// MCP v1 REST API (validator unset → auth middleware passthrough)
 // ========================================================================
 
 #[tokio::test]
-async fn test_mcp_rest_tools_list() {
+async fn test_mcp_rest_tools_list_no_validator() {
     let app = TestApp::new();
     let (status, body) = app.get("/mcp/v1/tools").await;
     assert_eq!(status, StatusCode::OK);
@@ -123,7 +129,7 @@ async fn test_mcp_rest_tools_list() {
 }
 
 #[tokio::test]
-async fn test_mcp_rest_tools_invoke_unknown() {
+async fn test_mcp_rest_tools_invoke_no_validator_unknown() {
     let app = TestApp::new();
     // RestToolInvokeRequest: {"tool": "name", "arguments": {}}
     let invoke = r#"{"tool":"nonexistent","arguments":{}}"#;

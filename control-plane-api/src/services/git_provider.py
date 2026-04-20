@@ -4,6 +4,7 @@ ABC that defines the contract for git-based catalog operations.
 Implementations: GitLabService (existing), GitHubService (Wave 2).
 """
 
+import asyncio
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
@@ -189,6 +190,55 @@ class GitProvider(ABC):
             return yaml.safe_load(content)
         except FileNotFoundError:
             return None
+
+    def is_connected(self) -> bool:
+        """Return True when the provider client is initialized."""
+        return bool(getattr(self, "_project", None) or getattr(self, "_gh", None))
+
+    async def get_head_commit_sha(self, ref: str = "main") -> str | None:
+        """Return the current HEAD commit SHA for the provider's catalog repo."""
+        raise NotImplementedError("get_head_commit_sha() must be implemented by the provider")
+
+    async def get_tenant(self, tenant_id: str) -> dict | None:
+        """Return tenant metadata from the provider's catalog repo."""
+        raise NotImplementedError("get_tenant() must be implemented by the provider")
+
+    async def list_tenants(self) -> list[str]:
+        """List tenant identifiers from the provider's catalog repo."""
+        raise NotImplementedError("list_tenants() must be implemented by the provider")
+
+    async def get_api(self, tenant_id: str, api_name: str) -> dict | None:
+        """Return normalized API metadata for a tenant API."""
+        raise NotImplementedError("get_api() must be implemented by the provider")
+
+    async def list_apis(self, tenant_id: str) -> list[dict]:
+        """List normalized APIs for a tenant."""
+        raise NotImplementedError("list_apis() must be implemented by the provider")
+
+    async def get_api_openapi_spec(self, tenant_id: str, api_name: str) -> dict | None:
+        """Return the parsed OpenAPI spec for a tenant API, if present."""
+        raise NotImplementedError("get_api_openapi_spec() must be implemented by the provider")
+
+    async def list_apis_parallel(self, tenant_id: str) -> list[dict]:
+        """Provider-agnostic fallback to sequential API listing."""
+        return await self.list_apis(tenant_id)
+
+    async def get_all_openapi_specs_parallel(self, tenant_id: str, api_ids: list[str]) -> dict[str, dict | None]:
+        """Provider-agnostic fallback to parallel OpenAPI spec fetches."""
+
+        async def fetch_spec(api_id: str) -> tuple[str, dict | None]:
+            return (api_id, await self.get_api_openapi_spec(tenant_id, api_id))
+
+        results = await asyncio.gather(*[fetch_spec(api_id) for api_id in api_ids])
+        return dict(results)
+
+    async def list_mcp_servers(self, tenant_id: str = "_platform") -> list[dict]:
+        """List MCP servers defined for a tenant or platform scope."""
+        raise NotImplementedError("list_mcp_servers() must be implemented by the provider")
+
+    async def list_all_mcp_servers(self) -> list[dict]:
+        """List MCP servers across platform and tenant scopes."""
+        raise NotImplementedError("list_all_mcp_servers() must be implemented by the provider")
 
     @abstractmethod
     async def batch_commit(

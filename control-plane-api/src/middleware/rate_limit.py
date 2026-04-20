@@ -25,37 +25,38 @@ logger = structlog.get_logger(__name__)
 # Rate Limit Key Functions
 # =============================================================================
 
+
 def get_rate_limit_key(request: Request) -> str:
     """
     Generate rate limit key based on authentication context.
 
-    MVP: user_id or API key or IP
-    Future (CAB-459): tenant_id + user_id + product_roles
-
     Priority:
-    1. Authenticated user (JWT) -> tenant:xxx:user:yyy
-    2. API Key -> apikey:prefix
-    3. IP address -> ip:xxx.xxx.xxx.xxx
+    1. X-Operator-Key fingerprint (set by auth/dependencies.py) -> operator:<fp>
+    2. Authenticated user (JWT) -> tenant:xxx:user:yyy
+    3. API Key -> apikey:prefix
+    4. IP address -> ip:xxx.xxx.xxx.xxx
     """
-    # Check for authenticated user from JWT
-    user = getattr(request.state, "user", None)
-    if user:
-        # Prepare for multi-tenant: extract tenant_id when available
-        tenant_id = getattr(user, "tenant_id", None)
-        if not tenant_id:
-            # Try to extract from JWT claims
-            tenant_id = getattr(user, "azp", "default")  # azp = authorized party
+    # CAB-2146: operator-key gets its own bucket per key fingerprint so distinct
+    # operators don't share a single rate-limit bucket (previous keying collapsed
+    # every operator onto `tenant:default:user:stoa-operator`).
+    operator_fingerprint = getattr(request.state, "operator_fingerprint", None)
+    if operator_fingerprint:
+        return f"operator:{operator_fingerprint}"
 
-        user_id = getattr(user, "sub", "unknown")
+    # CAB-2146: `request.state.user` is stored as a dict in auth/dependencies.py,
+    # not an object. The previous `getattr(user, "sub", "unknown")` always hit
+    # the default because dicts don't expose keys as attributes — all JWT users
+    # collapsed to `tenant:default:user:unknown`.
+    user = getattr(request.state, "user", None)
+    if isinstance(user, dict):
+        tenant_id = user.get("tenant_id") or user.get("azp") or "default"
+        user_id = user.get("sub") or "unknown"
         return f"tenant:{tenant_id}:user:{user_id}"
 
-    # Check for API key authentication
     api_key = request.headers.get("X-API-Key")
     if api_key:
-        # Use first 16 chars as identifier (safe prefix)
         return f"apikey:{api_key[:16]}"
 
-    # Fallback to IP address
     return f"ip:{get_remote_address(request)}"
 
 
@@ -76,11 +77,11 @@ def get_strict_rate_limit_key(request: Request) -> str:
 
 # Default limits by authentication type
 DEFAULT_LIMITS = {
-    "authenticated": "100/minute",    # JWT users
-    "api_key": "200/minute",          # Service accounts with API keys
-    "anonymous": "30/minute",         # Anonymous/IP-based
-    "tool_invoke": "60/minute",       # Tool invocations (stricter)
-    "subscription": "30/minute",      # Subscription operations
+    "authenticated": "100/minute",  # JWT users
+    "api_key": "200/minute",  # Service accounts with API keys
+    "anonymous": "30/minute",  # Anonymous/IP-based
+    "tool_invoke": "60/minute",  # Tool invocations (stricter)
+    "subscription": "30/minute",  # Subscription operations
 }
 
 # Create the limiter instance
@@ -95,6 +96,7 @@ limiter = Limiter(
 # =============================================================================
 # Rate Limit Exception Handler
 # =============================================================================
+
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """
@@ -135,6 +137,7 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) 
 # =============================================================================
 # Convenience Decorators
 # =============================================================================
+
 
 def limit_authenticated(limit: str = DEFAULT_LIMITS["authenticated"]):
     """Rate limit for authenticated endpoints."""

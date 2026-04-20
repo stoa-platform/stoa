@@ -1,7 +1,16 @@
-"""Tests for rate limiting middleware (CAB-1291)"""
+"""Tests for rate limiting middleware (CAB-1291, CAB-2146).
+
+CAB-2146: `request.state.user` is a dict in prod (set by auth/dependencies.py),
+not a MagicMock/object. Previous tests inadvertently validated MagicMock
+attribute access semantics, which masked the prod bug where every JWT user
+collapsed onto `tenant:default:user:unknown`. These tests now use real
+Starlette Requests with dict users.
+"""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
+from starlette.requests import Request
 
 from src.middleware.rate_limit import (
     DEFAULT_LIMITS,
@@ -11,48 +20,40 @@ from src.middleware.rate_limit import (
 )
 
 
-def _make_request(user=None, api_key=None, remote_addr="1.2.3.4", path="/v1/test"):
-    """Build a mock Request with given auth context."""
-    request = MagicMock()
-    request.state = MagicMock()
-    if user:
-        request.state.user = user
-    else:
-        request.state.user = None
-        # getattr(request.state, "user", None) should return None
-        del request.state.user
-
-    headers = {}
+def _make_request(
+    *,
+    user: dict | None = None,
+    api_key: str | None = None,
+    remote_addr: str = "1.2.3.4",
+    path: str = "/v1/test",
+) -> Request:
+    """Build a real Starlette Request with the given auth context."""
+    raw_headers: list[tuple[bytes, bytes]] = []
     if api_key:
-        headers["X-API-Key"] = api_key
-    request.headers = headers
-    request.url.path = path
-    request.method = "GET"
+        raw_headers.append((b"x-api-key", api_key.encode()))
 
-    # For get_remote_address fallback
-    request.client = MagicMock()
-    request.client.host = remote_addr
-
-    return request
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "query_string": b"",
+        "headers": raw_headers,
+        "client": (remote_addr, 12345),
+    }
+    req = Request(scope)
+    if user is not None:
+        req.state.user = user
+    return req
 
 
 class TestGetRateLimitKey:
     def test_authenticated_user_with_tenant(self):
-        user = MagicMock()
-        user.tenant_id = "acme"
-        user.sub = "user-123"
-        request = _make_request(user=user)
+        request = _make_request(user={"sub": "user-123", "tenant_id": "acme"})
         key = get_rate_limit_key(request)
         assert key == "tenant:acme:user:user-123"
 
     def test_authenticated_user_no_tenant_uses_azp(self):
-        user = MagicMock(spec=[])
-        user.tenant_id = None
-        user.sub = "user-456"
-        user.azp = "my-client"
-        # Simulate getattr behavior
-        request = MagicMock()
-        request.state.user = user
+        request = _make_request(user={"sub": "user-456", "tenant_id": None, "azp": "my-client"})
         key = get_rate_limit_key(request)
         assert key == "tenant:my-client:user:user-456"
 

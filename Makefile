@@ -2,6 +2,7 @@
 # Usage: make <target>
 
 .PHONY: setup test test-all lint lint-all run-api run-ui run-portal run-gateway \
+	dev-up dev-down dev-doctor \
 	test-api test-ui test-portal test-gateway test-cli \
 	lint-api lint-ui lint-portal lint-gateway lint-cli \
 	check-docs \
@@ -26,6 +27,17 @@ setup: ## Install dependencies for all components
 	@echo "==> Setting up cli..."
 	cd cli && pip install -e ".[dev]"
 	@echo "✓ All components installed"
+
+# ── Local Dev (k3d + Tilt + nginx proxy on *.stoa.local) ─────────────────────
+
+dev-up: ## Bring up full local stack (k3d + stateful + Tilt + https://*.stoa.local)
+	@./scripts/dev/dev-up.sh
+
+dev-down: ## Stop Tilt workloads + stateful services (keeps k3d cluster)
+	@./scripts/dev/dev-down.sh
+
+dev-doctor: ## Verify local dev prereqs (dnsmasq, resolver, certs, k3d, .env)
+	@./scripts/dev/dev-doctor.sh
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 

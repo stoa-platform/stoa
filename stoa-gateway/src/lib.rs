@@ -292,6 +292,33 @@ pub fn build_router(state: AppState) -> Router {
     let metrics_state = state.clone();
     let mode_router = match state.config.gateway_mode {
         GatewayMode::EdgeMcp => {
+            // CAB-2121: MCP REST routes behind JWT gate. Build as a sub-router
+            // so the auth layer applies only to protected endpoints; public
+            // discovery (/mcp, /mcp/capabilities, /mcp/health) stays anon.
+            let protected_mcp = Router::new()
+                // MCP Tools (JSON-RPC style)
+                .route("/mcp/tools/list", post(mcp_tools_list))
+                .route("/mcp/tools/call", post(mcp_tools_call))
+                // MCP Resources, Prompts, Completion (REST — CAB-1472)
+                .route("/mcp/resources/list", post(mcp_resources_list))
+                .route("/mcp/resources/read", post(mcp_resources_read))
+                .route(
+                    "/mcp/resources/templates/list",
+                    post(mcp_resources_templates_list),
+                )
+                .route("/mcp/prompts/list", post(mcp_prompts_list))
+                .route("/mcp/prompts/get", post(mcp_prompts_get))
+                .route("/mcp/completion/complete", post(mcp_completion_complete))
+                // MCP v1 REST API (demo + simple HTTP clients)
+                .route("/mcp/v1/tools", get(mcp_rest_tools_list))
+                .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))
+                // MCP Event Polling Fallback (CAB-1179)
+                .route("/mcp/events", get(poll_events))
+                .layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    auth::middleware::mcp_jwt_required,
+                ));
+
             // Full MCP protocol: OAuth discovery, MCP tools, SSE transport
             let edge_base = base
                 // OAuth Discovery + Proxy (RFC 9728, RFC 8414, OIDC, DCR)
@@ -318,27 +345,12 @@ pub fn build_router(state: AppState) -> Router {
                         .put(oauth::proxy::register_update_proxy)
                         .delete(oauth::proxy::register_delete_proxy),
                 )
-                // MCP Discovery
+                // MCP Discovery (public — no tool enumeration in GET /mcp)
                 .route("/mcp", get(mcp_discovery).post(handle_streamable_http_post))
                 .route("/mcp/capabilities", get(mcp_capabilities))
                 .route("/mcp/health", get(mcp_health))
-                // MCP Tools (JSON-RPC style)
-                .route("/mcp/tools/list", post(mcp_tools_list))
-                .route("/mcp/tools/call", post(mcp_tools_call))
-                // MCP Resources, Prompts, Completion (REST — CAB-1472)
-                .route("/mcp/resources/list", post(mcp_resources_list))
-                .route("/mcp/resources/read", post(mcp_resources_read))
-                .route(
-                    "/mcp/resources/templates/list",
-                    post(mcp_resources_templates_list),
-                )
-                .route("/mcp/prompts/list", post(mcp_prompts_list))
-                .route("/mcp/prompts/get", post(mcp_prompts_get))
-                .route("/mcp/completion/complete", post(mcp_completion_complete))
-                // MCP v1 REST API (demo + simple HTTP clients)
-                .route("/mcp/v1/tools", get(mcp_rest_tools_list))
-                .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))
-                // MCP SSE Transport (Streamable HTTP)
+                // MCP SSE Transport (Streamable HTTP) — auth handled in-handler
+                // via PUBLIC_METHODS allowlist (see mcp/sse.rs)
                 .route(
                     "/mcp/sse",
                     get(handle_sse_get)
@@ -347,8 +359,8 @@ pub fn build_router(state: AppState) -> Router {
                 )
                 // MCP WebSocket Transport (CAB-1345: bidirectional)
                 .route("/mcp/ws", get(handle_ws_upgrade))
-                // MCP Event Polling Fallback (CAB-1179)
-                .route("/mcp/events", get(poll_events))
+                // Merge the protected MCP sub-router (JWT-gated — CAB-2121)
+                .merge(protected_mcp)
                 // LLM API Proxy (CAB-1568: STOA Dogfood) — before fallback
                 .route("/v1/messages", post(llm_proxy_handler))
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))

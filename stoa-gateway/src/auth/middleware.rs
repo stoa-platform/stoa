@@ -22,6 +22,7 @@ use tracing::{debug, instrument, warn};
 use super::claims::Claims;
 use super::jwt::{JwtError, JwtValidator, ValidatedToken};
 use super::subscription::SubscriptionValidator;
+use crate::state::AppState;
 
 // =============================================================================
 // Auth State
@@ -246,6 +247,94 @@ pub async fn require_auth(
         required: true,
     };
     auth_middleware(State(state), request, next).await
+}
+
+/// Require JWT authentication on MCP REST routes (CAB-2121).
+///
+/// Runs on `State<AppState>` so it can read `Option<Arc<JwtValidator>>` directly.
+/// Returns 401 with `WWW-Authenticate: Bearer …` when the caller is anonymous or
+/// presents an invalid token. When `state.jwt_validator` is `None` (dev/test
+/// configurations without Keycloak), the middleware is a passthrough. Production
+/// always has `keycloak_url` set so `jwt_validator` is `Some`.
+#[instrument(name = "auth.mcp_jwt_required", skip_all, fields(otel.kind = "internal"))]
+pub async fn mcp_jwt_required(
+    State(state): State<AppState>,
+    mut request: Request<Body>,
+    next: Next,
+) -> Response {
+    let validator = match &state.jwt_validator {
+        Some(v) => v.clone(),
+        None => {
+            warn!("JWT validator not configured — /mcp/* auth gate bypassed");
+            return next.run(request).await;
+        }
+    };
+
+    let auth_header = request
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok());
+
+    let header = match auth_header {
+        Some(h) => h,
+        None => {
+            return mcp_auth_challenge(
+                r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+                "Missing Authorization header",
+            );
+        }
+    };
+
+    let token = match JwtValidator::extract_token(header) {
+        Ok(t) => t,
+        Err(_) => {
+            return mcp_auth_challenge(
+                r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
+                "Malformed Authorization header",
+            );
+        }
+    };
+
+    let claims = match validator.validate(token).await {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(error = %e, "JWT validation failed on /mcp/* route");
+            let msg = match e {
+                JwtError::Expired => "Token expired",
+                JwtError::InvalidIssuer { .. } => "Invalid issuer",
+                JwtError::InvalidAudience { .. } => "Invalid audience",
+                JwtError::InvalidSignature => "Invalid signature",
+                _ => "Invalid token",
+            };
+            return mcp_auth_challenge(
+                r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
+                msg,
+            );
+        }
+    };
+
+    let validated = ValidatedToken::new(token.to_string(), claims);
+    let user = AuthenticatedUser::from_token(validated);
+    debug!(
+        user_id = %user.user_id,
+        tenant = ?user.tenant_id,
+        "MCP request authenticated",
+    );
+    request.extensions_mut().insert(user);
+
+    next.run(request).await
+}
+
+/// Build the 401 response for `mcp_jwt_required` with a uniform body shape.
+fn mcp_auth_challenge(www_authenticate: &'static str, message: &str) -> Response {
+    let body = AuthError::unauthorized(message);
+    let mut response = (StatusCode::UNAUTHORIZED, Json(body)).into_response();
+    if let Ok(value) = axum::http::HeaderValue::from_str(www_authenticate) {
+        response
+            .headers_mut()
+            .insert(axum::http::header::WWW_AUTHENTICATE, value);
+    }
+    response
 }
 
 /// Optional authentication middleware (continues if no token).

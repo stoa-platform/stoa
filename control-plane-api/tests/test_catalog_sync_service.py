@@ -43,7 +43,11 @@ def _make_git() -> MagicMock:
     """Return a minimal GitLabService mock with a truthy _project."""
     git = MagicMock()
     git._project = MagicMock()  # truthy → no auto-connect
+    git.is_connected = MagicMock(return_value=True)
     git.connect = AsyncMock()
+    git.get_head_commit_sha = AsyncMock(return_value=None)
+    git.list_tenants = AsyncMock(return_value=[])
+    git.get_tenant = AsyncMock(return_value=None)
     git.get_full_tree_recursive = AsyncMock(return_value=[])
     git.parse_tree_to_tenant_apis = MagicMock(return_value={})
     git.list_apis_parallel = AsyncMock(return_value=[])
@@ -52,6 +56,7 @@ def _make_git() -> MagicMock:
     git.get_api_openapi_spec = AsyncMock(return_value=None)
     git.get_api_override = AsyncMock(return_value=None)  # CAB-2015: no override by default
     git.list_mcp_servers = AsyncMock(return_value=[])
+    git.list_all_mcp_servers = AsyncMock(return_value=[])
     return git
 
 
@@ -122,10 +127,7 @@ class TestSyncAll:
         db = _make_db()
         git = _make_git()
 
-        # Simulate a commit SHA
-        commit = MagicMock()
-        commit.id = "abc123"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "abc123"
 
         # Two tenants, one API each
         git.parse_tree_to_tenant_apis.return_value = {
@@ -155,7 +157,8 @@ class TestSyncAll:
         """git.connect raises → status=FAILED, exception re-raised."""
         db = _make_db()
         git = _make_git()
-        git._project = None  # force connect
+        git._project = None  # legacy marker
+        git.is_connected.return_value = False
         git.connect.side_effect = ConnectionError("GitLab down")
 
         svc = CatalogSyncService(db, git)
@@ -173,9 +176,7 @@ class TestSyncAll:
         db = _make_db()
         git = _make_git()
 
-        commit = MagicMock()
-        commit.id = "sha999"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "sha999"
 
         git.parse_tree_to_tenant_apis.return_value = {
             "bad-tenant": ["api-1"],
@@ -209,9 +210,7 @@ class TestSyncAll:
         db = _make_db()
         git = _make_git()
 
-        commit = MagicMock()
-        commit.id = "deadbeef"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "deadbeef"
         git.parse_tree_to_tenant_apis.return_value = {}
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
@@ -229,9 +228,7 @@ class TestSyncAll:
         db = _make_db()
         git = _make_git()
 
-        commit = MagicMock()
-        commit.id = "c0ffee"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "c0ffee"
         git.parse_tree_to_tenant_apis.return_value = {"acme": ["api-1"]}
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
@@ -260,9 +257,7 @@ class TestSyncTenant:
         db = _make_db()
         git = _make_git()
 
-        commit = MagicMock()
-        commit.id = "sha-tenant"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "sha-tenant"
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
 
@@ -273,11 +268,28 @@ class TestSyncTenant:
         assert status.items_synced == 3
         assert status.git_commit_sha == "sha-tenant"
 
+    async def test_success_without_private_project_attr_when_provider_connected(self):
+        """GitHub-like providers should sync without exposing a GitLab-style _project."""
+        db = _make_db()
+        git = _make_git()
+        git._project = None
+        git.is_connected.return_value = True
+        git.get_head_commit_sha.return_value = "sha-github"
+
+        svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
+
+        with patch.object(svc, "_sync_tenant_apis", AsyncMock(return_value=2)):
+            status = await svc.sync_tenant("banking-demo")
+
+        git.connect.assert_not_called()
+        assert status.status == SyncStatus.SUCCESS.value
+        assert status.git_commit_sha == "sha-github"
+
     async def test_failure_raises_and_marks_failed(self):
         """Exception in _sync_tenant_apis → status=FAILED, exception re-raised."""
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.return_value = [MagicMock(id="sha")]
+        git.get_head_commit_sha.return_value = "sha"
 
         svc = CatalogSyncService(db, git)
 
@@ -293,14 +305,13 @@ class TestSyncTenant:
         db = _make_db()
         git = _make_git()
         git._project = None
-        git._project = None  # stays None to trigger connect
-
-        commit = MagicMock()
-        commit.id = "xyz"
+        git._project = None  # legacy marker
+        git.is_connected.return_value = False
 
         async def fake_connect():
             git._project = MagicMock()
-            git._project.commits.list.return_value = [commit]
+            git.is_connected.return_value = True
+            git.get_head_commit_sha.return_value = "xyz"
 
         git.connect.side_effect = fake_connect
 
@@ -315,7 +326,7 @@ class TestSyncTenant:
         """CatalogSyncStatus created with sync_type=TENANT."""
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.return_value = [MagicMock(id="s")]
+        git.get_head_commit_sha.return_value = "s"
 
         added_objects = []
         db.add.side_effect = lambda obj: added_objects.append(obj)
@@ -340,9 +351,7 @@ class TestGetCurrentCommitSha:
     async def test_returns_sha_from_first_commit(self):
         db = _make_db()
         git = _make_git()
-        commit = MagicMock()
-        commit.id = "1a2b3c4d"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "1a2b3c4d"
 
         svc = CatalogSyncService(db, git)
         sha = await svc._get_current_commit_sha()
@@ -352,17 +361,38 @@ class TestGetCurrentCommitSha:
     async def test_no_commits_returns_none(self):
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.return_value = []
+        git.get_head_commit_sha.return_value = None
 
         svc = CatalogSyncService(db, git)
         sha = await svc._get_current_commit_sha()
 
         assert sha is None
 
+
+class TestEnsureTenantFromGit:
+    """_ensure_tenant_from_git() — tenant hydration via provider abstraction."""
+
+    async def test_reads_tenant_metadata_via_provider_method(self):
+        db = _make_db()
+        git = _make_git()
+        git.get_tenant.return_value = {
+            "metadata": {"displayName": "Banking Demo", "description": "Regulated tenant"},
+            "spec": {"settings": {"region": "eu"}},
+        }
+        db.execute.return_value = _exec_returning(scalar=None)
+
+        svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
+
+        created = await svc._ensure_tenant_from_git("banking-demo")
+
+        assert created is True
+        git.get_tenant.assert_awaited_once_with("banking-demo")
+        db.add.assert_called_once()
+
     async def test_exception_returns_none(self):
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.side_effect = Exception("GL down")
+        git.get_head_commit_sha.side_effect = Exception("GL down")
 
         svc = CatalogSyncService(db, git)
         sha = await svc._get_current_commit_sha()
@@ -791,7 +821,7 @@ class TestSyncMcpServers:
 
         commit = MagicMock()
         commit.id = "sha-mcp"
-        git._project.commits.list.return_value = [commit]
+        git.get_head_commit_sha.return_value = "sha-mcp"
 
         svc = CatalogSyncService(db, git)
 
@@ -808,7 +838,7 @@ class TestSyncMcpServers:
         """With tenant_id → only that tenant synced, no orphan check."""
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.return_value = [MagicMock(id="sha")]
+        git.get_head_commit_sha.return_value = "sha"
 
         svc = CatalogSyncService(db, git)
 
@@ -825,7 +855,7 @@ class TestSyncMcpServers:
         """One tenant failing → continues, error recorded in stats."""
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.return_value = [MagicMock(id="sha")]
+        git.get_head_commit_sha.return_value = "sha"
 
         svc = CatalogSyncService(db, git)
 
@@ -850,7 +880,7 @@ class TestSyncMcpServers:
         """Full sync calls _mark_orphan_mcp_servers at the end."""
         db = _make_db()
         git = _make_git()
-        git._project.commits.list.return_value = [MagicMock(id="sha")]
+        git.get_head_commit_sha.return_value = "sha"
 
         svc = CatalogSyncService(db, git)
         orphan_mock = AsyncMock(return_value=3)

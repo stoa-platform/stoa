@@ -4,7 +4,6 @@ import logging
 import time
 from datetime import UTC, datetime
 
-import yaml
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,8 +64,8 @@ class CatalogSyncService:
             apis_failed = 0
             errors = []
 
-            # Ensure GitLab connection
-            if not self.git._project:
+            # Ensure provider connection
+            if not self.git.is_connected():
                 await self.git.connect()
 
             # Get current commit SHA
@@ -152,8 +151,8 @@ class CatalogSyncService:
         await self.db.refresh(sync_status)
 
         try:
-            # Ensure GitLab connection
-            if not self.git._project:
+            # Ensure provider connection
+            if not self.git.is_connected():
                 await self.git.connect()
 
             commit_sha = await self._get_current_commit_sha()
@@ -180,20 +179,17 @@ class CatalogSyncService:
             raise
 
     async def _get_current_commit_sha(self) -> str | None:
-        """Get the current HEAD commit SHA from GitLab"""
+        """Get the current HEAD commit SHA from the configured git provider."""
         try:
-            commits = self.git._project.commits.list(ref_name="main", per_page=1)
-            if commits:
-                return commits[0].id
+            return await self.git.get_head_commit_sha()
         except Exception as e:
             logger.warning(f"Failed to get current commit SHA: {e}")
         return None
 
     async def _list_tenants(self) -> list[str]:
-        """List all tenant IDs from GitLab"""
+        """List all tenant IDs from the configured git provider."""
         try:
-            tree = self.git._project.repository_tree(path="tenants", ref="main")
-            return [item["name"] for item in tree if item["type"] == "tree"]
+            return await self.git.list_tenants()
         except Exception as e:
             logger.warning(f"Failed to list tenants: {e}")
             return []
@@ -209,11 +205,10 @@ class CatalogSyncService:
         if existing is not None:
             return False
 
-        # Read tenant.yaml from Git
+        # Read tenant.yaml from the provider
         tenant_meta = {}
         try:
-            file = self.git._project.files.get(f"tenants/{tenant_id}/tenant.yaml", ref="main")
-            tenant_meta = yaml.safe_load(file.decode()) or {}
+            tenant_meta = await self.git.get_tenant(tenant_id) or {}
         except Exception as e:
             logger.debug(f"No tenant.yaml for {tenant_id}: {e}")
 
@@ -504,8 +499,8 @@ class CatalogSyncService:
             "errors": [],
         }
 
-        # Ensure GitLab connection
-        if not self.git._project:
+        # Ensure provider connection
+        if not self.git.is_connected():
             await self.git.connect()
 
         commit_sha = await self._get_current_commit_sha()

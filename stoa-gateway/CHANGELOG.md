@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.10](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.9...stoa-gateway-v0.9.10) (2026-04-20)
+
+
+### Bug Fixes
+
+* **gateway:** require JWT on /mcp/* protected routes (CAB-2121) ([#2433](https://github.com/stoa-platform/stoa/issues/2433)) ([360eb1b](https://github.com/stoa-platform/stoa/commit/360eb1b9f494af8fd27d41e52a49a25083d8b783))
+
 ## [0.9.9](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.8...stoa-gateway-v0.9.9) (2026-04-19)
 
 

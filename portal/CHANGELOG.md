@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/stoa-platform/stoa/compare/portal-v1.3.1...portal-v1.3.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* **api:** scrub stack traces + axios/follow-redirects bumps (CAB-2138) ([#2441](https://github.com/stoa-platform/stoa/issues/2441)) ([ab2a26b](https://github.com/stoa-platform/stoa/commit/ab2a26b303c7baf86a8eea77f62edd3d8a534b8c))
+
 ## [1.3.1](https://github.com/stoa-platform/stoa/compare/portal-v1.3.0...portal-v1.3.1) (2026-04-19)
 
 

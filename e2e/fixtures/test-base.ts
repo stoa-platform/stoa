@@ -10,6 +10,7 @@ import { test as base } from 'playwright-bdd';
 import { expect, Page, BrowserContext, Browser } from '@playwright/test';
 import { PERSONAS, PersonaKey, Persona, getAuthStatePath } from './personas';
 import * as fs from 'fs';
+import * as path from 'path';
 
 // URLs
 const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
@@ -26,31 +27,55 @@ export interface AuthSession {
 }
 
 /**
- * Restore sessionStorage for a persona after navigation.
- * Playwright's storageState only captures cookies + localStorage natively.
- * react-oidc-context stores OIDC tokens in sessionStorage, so we restore them manually.
+ * Resolve auth state paths relative to the e2e workspace root.
  */
-async function restoreSessionStorage(
-  page: Page,
-  personaKey: PersonaKey,
-  navigateUrl: string,
-): Promise<void> {
-  const authStatePath = getAuthStatePath(personaKey);
-  if (!fs.existsSync(authStatePath)) return;
+function resolveAuthStatePath(authStatePath: string): string {
+  return path.isAbsolute(authStatePath)
+    ? authStatePath
+    : path.resolve(__dirname, '..', authStatePath);
+}
 
-  const stateData = JSON.parse(fs.readFileSync(authStatePath, 'utf-8'));
-  if (!stateData.sessionStorage || Object.keys(stateData.sessionStorage).length === 0) return;
+/**
+ * Load custom sessionStorage persisted alongside Playwright's storageState.
+ * Playwright restores only cookies + localStorage natively; our auth setup writes
+ * OIDC sessionStorage into the same JSON file under a custom `sessionStorage` key.
+ */
+function loadSessionStorageFromAuthState(authStatePath: string): Record<string, string> {
+  const resolvedPath = resolveAuthStatePath(authStatePath);
+  if (!fs.existsSync(resolvedPath)) return {};
 
-  // Navigate to target URL first so we have a valid origin for sessionStorage
-  if (!page.url().startsWith('http')) {
-    await page.goto(navigateUrl);
-  }
-
-  await page.evaluate((data: Record<string, string>) => {
-    for (const [key, value] of Object.entries(data)) {
-      sessionStorage.setItem(key, value);
+  try {
+    const stateData = JSON.parse(fs.readFileSync(resolvedPath, 'utf-8'));
+    if (!stateData.sessionStorage || typeof stateData.sessionStorage !== 'object') {
+      return {};
     }
-  }, stateData.sessionStorage);
+    return stateData.sessionStorage;
+  } catch (error) {
+    console.warn(`Failed to read auth state from ${resolvedPath}: ${String(error)}`);
+    return {};
+  }
+}
+
+/**
+ * Inject persisted sessionStorage into every page created in the context.
+ * The init script runs before app code on each navigation, which keeps `{ page }`
+ * fixtures aligned with `authSession.page`.
+ */
+async function installSessionStorageInitScript(
+  context: BrowserContext,
+  sessionData: Record<string, string>,
+): Promise<void> {
+  if (Object.keys(sessionData).length === 0) return;
+
+  await context.addInitScript((data: Record<string, string>) => {
+    for (const [key, value] of Object.entries(data)) {
+      try {
+        sessionStorage.setItem(key, value);
+      } catch {
+        // Ignore pages/origins where sessionStorage is unavailable.
+      }
+    }
+  }, sessionData);
 }
 
 /**
@@ -64,7 +89,7 @@ export async function createAuthenticatedContext(
   baseURL?: string,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const persona = PERSONAS[personaKey];
-  const authStatePath = getAuthStatePath(personaKey);
+  const authStatePath = resolveAuthStatePath(getAuthStatePath(personaKey));
   const targetBaseURL =
     baseURL || (persona.defaultApp === 'portal' ? PORTAL_URL : CONSOLE_URL);
 
@@ -77,10 +102,11 @@ export async function createAuthenticatedContext(
   }
 
   const context = await browser.newContext(contextOptions);
+  await installSessionStorageInitScript(
+    context,
+    loadSessionStorageFromAuthState(authStatePath),
+  );
   const page = await context.newPage();
-
-  // Restore sessionStorage (not handled by storageState)
-  await restoreSessionStorage(page, personaKey, targetBaseURL);
 
   return { context, page };
 }
@@ -100,6 +126,20 @@ export type TestFixtures = {
  * Extended test with STOA-specific fixtures
  */
 export const test = base.extend<TestFixtures>({
+  // Keep the default Playwright page/context fixtures, but add our custom
+  // sessionStorage restoration before any test page is created.
+  context: async ({ context }, use, testInfo) => {
+    const projectStorageState = testInfo.project.use.storageState;
+    if (typeof projectStorageState === 'string') {
+      await installSessionStorageInitScript(
+        context,
+        loadSessionStorageFromAuthState(projectStorageState),
+      );
+    }
+
+    await use(context);
+  },
+
   // Current persona (set via step definitions)
   persona: [null, { option: true }],
 
@@ -154,7 +194,7 @@ export const test = base.extend<TestFixtures>({
   // Authenticated context (loaded from storage state)
   authenticatedContext: async ({ browser }, use) => {
     const personaKey: PersonaKey = 'parzival';
-    const authStatePath = getAuthStatePath(personaKey);
+    const authStatePath = resolveAuthStatePath(getAuthStatePath(personaKey));
 
     let context;
     if (fs.existsSync(authStatePath)) {
@@ -165,6 +205,11 @@ export const test = base.extend<TestFixtures>({
       console.warn(`Auth state not found for ${personaKey}, using fresh context`);
       context = await browser.newContext();
     }
+
+    await installSessionStorageInitScript(
+      context,
+      loadSessionStorageFromAuthState(authStatePath),
+    );
 
     await use(context);
     await context.close();
@@ -181,7 +226,7 @@ export async function loadPersonaContext(
   baseURL?: string,
 ): Promise<BrowserContext> {
   const persona = PERSONAS[personaKey];
-  const authStatePath = getAuthStatePath(personaKey);
+  const authStatePath = resolveAuthStatePath(getAuthStatePath(personaKey));
 
   const options: Parameters<Browser['newContext']>[0] = {
     baseURL: baseURL || (persona.defaultApp === 'portal' ? PORTAL_URL : CONSOLE_URL),
@@ -193,7 +238,12 @@ export async function loadPersonaContext(
     console.warn(`Auth state not found for ${personaKey}`);
   }
 
-  return browser.newContext(options);
+  const context = await browser.newContext(options);
+  await installSessionStorageInitScript(
+    context,
+    loadSessionStorageFromAuthState(authStatePath),
+  );
+  return context;
 }
 
 /**

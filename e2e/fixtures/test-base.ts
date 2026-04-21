@@ -11,6 +11,10 @@ import { expect, Page, BrowserContext, Browser } from '@playwright/test';
 import { PERSONAS, PersonaKey, Persona, getAuthStatePath } from './personas';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // URLs
 const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';

@@ -30,6 +30,11 @@ export interface AuthSession {
   switchPersona: (personaKey: PersonaKey, navigateUrl?: string) => Promise<void>;
 }
 
+type PersistedAuthState = {
+  cookies: Parameters<BrowserContext['addCookies']>[0];
+  sessionStorage: Record<string, string>;
+};
+
 /**
  * Resolve auth state paths relative to the e2e workspace root.
  */
@@ -39,25 +44,34 @@ function resolveAuthStatePath(authStatePath: string): string {
     : path.resolve(__dirname, '..', authStatePath);
 }
 
+function loadPersistedAuthState(authStatePath: string): PersistedAuthState {
+  const resolvedPath = resolveAuthStatePath(authStatePath);
+  if (!fs.existsSync(resolvedPath)) {
+    return { cookies: [], sessionStorage: {} };
+  }
+
+  try {
+    const stateData = JSON.parse(fs.readFileSync(resolvedPath, 'utf-8'));
+    return {
+      cookies: Array.isArray(stateData.cookies) ? stateData.cookies : [],
+      sessionStorage:
+        stateData.sessionStorage && typeof stateData.sessionStorage === 'object'
+          ? stateData.sessionStorage
+          : {},
+    };
+  } catch (error) {
+    console.warn(`Failed to read auth state from ${resolvedPath}: ${String(error)}`);
+    return { cookies: [], sessionStorage: {} };
+  }
+}
+
 /**
  * Load custom sessionStorage persisted alongside Playwright's storageState.
  * Playwright restores only cookies + localStorage natively; our auth setup writes
  * OIDC sessionStorage into the same JSON file under a custom `sessionStorage` key.
  */
 function loadSessionStorageFromAuthState(authStatePath: string): Record<string, string> {
-  const resolvedPath = resolveAuthStatePath(authStatePath);
-  if (!fs.existsSync(resolvedPath)) return {};
-
-  try {
-    const stateData = JSON.parse(fs.readFileSync(resolvedPath, 'utf-8'));
-    if (!stateData.sessionStorage || typeof stateData.sessionStorage !== 'object') {
-      return {};
-    }
-    return stateData.sessionStorage;
-  } catch (error) {
-    console.warn(`Failed to read auth state from ${resolvedPath}: ${String(error)}`);
-    return {};
-  }
+  return loadPersistedAuthState(authStatePath).sessionStorage;
 }
 
 /**
@@ -82,6 +96,34 @@ async function installSessionStorageInitScript(
   }, sessionData);
 }
 
+async function createContextFromStorageState(
+  browser: Browser,
+  storageStatePath?: string,
+  baseURL?: string,
+): Promise<{ context: BrowserContext; page: Page }> {
+  const resolvedStorageStatePath = storageStatePath
+    ? resolveAuthStatePath(storageStatePath)
+    : undefined;
+  const contextOptions: Parameters<Browser['newContext']>[0] = { baseURL };
+
+  if (resolvedStorageStatePath && fs.existsSync(resolvedStorageStatePath)) {
+    contextOptions.storageState = resolvedStorageStatePath;
+  } else if (resolvedStorageStatePath) {
+    console.warn(`Auth state not found at ${resolvedStorageStatePath}, using fresh context`);
+  }
+
+  const context = await browser.newContext(contextOptions);
+  if (resolvedStorageStatePath) {
+    await installSessionStorageInitScript(
+      context,
+      loadSessionStorageFromAuthState(resolvedStorageStatePath),
+    );
+  }
+
+  const page = await context.newPage();
+  return { context, page };
+}
+
 /**
  * Create a new authenticated browser context using Playwright's storageState.
  * This is the recommended Playwright pattern: cookies + localStorage are loaded
@@ -93,26 +135,9 @@ export async function createAuthenticatedContext(
   baseURL?: string,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const persona = PERSONAS[personaKey];
-  const authStatePath = resolveAuthStatePath(getAuthStatePath(personaKey));
   const targetBaseURL =
     baseURL || (persona.defaultApp === 'portal' ? PORTAL_URL : CONSOLE_URL);
-
-  const contextOptions: Parameters<Browser['newContext']>[0] = { baseURL: targetBaseURL };
-
-  if (fs.existsSync(authStatePath)) {
-    contextOptions.storageState = authStatePath;
-  } else {
-    console.warn(`Auth state not found for ${personaKey}, using fresh context`);
-  }
-
-  const context = await browser.newContext(contextOptions);
-  await installSessionStorageInitScript(
-    context,
-    loadSessionStorageFromAuthState(authStatePath),
-  );
-  const page = await context.newPage();
-
-  return { context, page };
+  return createContextFromStorageState(browser, getAuthStatePath(personaKey), targetBaseURL);
 }
 
 /**
@@ -130,49 +155,92 @@ export type TestFixtures = {
  * Extended test with STOA-specific fixtures
  */
 export const test = base.extend<TestFixtures>({
-  // Keep the default Playwright page/context fixtures, but add our custom
-  // sessionStorage restoration before any test page is created.
-  context: async ({ context }, use, testInfo) => {
-    const projectStorageState = testInfo.project.use.storageState;
-    if (typeof projectStorageState === 'string') {
-      await installSessionStorageInitScript(
-        context,
-        loadSessionStorageFromAuthState(projectStorageState),
-      );
-    }
-
-    await use(context);
-  },
-
   // Current persona (set via step definitions)
   persona: [null, { option: true }],
 
   // Mutable auth session — holds the active page/context pair.
   // Auth steps call authSession.switchPersona() to swap to a different persona.
-  authSession: async ({ browser, page, context }, use) => {
-    const extraContexts: BrowserContext[] = [];
+  authSession: async ({ browser }, use, testInfo) => {
+    const projectStorageState =
+      typeof testInfo.project.use.storageState === 'string'
+        ? testInfo.project.use.storageState
+        : undefined;
+    const projectBaseURL =
+      typeof testInfo.project.use.baseURL === 'string'
+        ? testInfo.project.use.baseURL
+        : undefined;
+    const initialSession = await createContextFromStorageState(
+      browser,
+      projectStorageState,
+      projectBaseURL,
+    );
+    const contextsToClose = new Set<BrowserContext>([initialSession.context]);
 
     const session: AuthSession = {
-      page,
-      context,
+      page: initialSession.page,
+      context: initialSession.context,
       switchPersona: async (personaKey: PersonaKey, navigateUrl?: string) => {
-        const { context: newCtx, page: newPage } = await createAuthenticatedContext(
+        const nextSession = await createAuthenticatedContext(
           browser,
           personaKey,
-          navigateUrl,
+          navigateUrl || projectBaseURL,
         );
-        extraContexts.push(newCtx);
-        session.page = newPage;
-        session.context = newCtx;
+        contextsToClose.add(nextSession.context);
+        session.page = nextSession.page;
+        session.context = nextSession.context;
       },
     };
 
     await use(session);
 
-    // Cleanup extra contexts created during the test
-    for (const ctx of extraContexts) {
+    for (const ctx of contextsToClose) {
       await ctx.close().catch(() => {});
     }
+  },
+
+  // The default page fixture must follow authSession.switchPersona().
+  page: async ({ authSession }, use) => {
+    const proxy = new Proxy(
+      {},
+      {
+        get(_target, prop) {
+          const currentPage = authSession.page as unknown as Record<PropertyKey, unknown>;
+          const value = currentPage[prop];
+          return typeof value === 'function' ? value.bind(authSession.page) : value;
+        },
+        set(_target, prop, value) {
+          (authSession.page as unknown as Record<PropertyKey, unknown>)[prop] = value;
+          return true;
+        },
+        has(_target, prop) {
+          return prop in (authSession.page as unknown as Record<PropertyKey, unknown>);
+        },
+      },
+    ) as Page;
+
+    await use(proxy);
+  },
+
+  context: async ({ authSession }, use) => {
+    const proxy = new Proxy(
+      {},
+      {
+        get(_target, prop) {
+          const currentContext = authSession.context as unknown as Record<PropertyKey, unknown>;
+          const value = currentContext[prop];
+          return typeof value === 'function' ? value.bind(authSession.context) : value;
+        },
+        set(_target, prop, value) {
+          (authSession.context as unknown as Record<PropertyKey, unknown>)[prop] = value;
+          return true;
+        },
+        has(_target, prop) {
+          return prop in (authSession.context as unknown as Record<PropertyKey, unknown>);
+        },
+      },
+    ) as BrowserContext;
+
+    await use(proxy);
   },
 
   // Portal page fixture

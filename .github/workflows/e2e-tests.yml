@@ -92,8 +92,10 @@ jobs:
           # broke silently because `continue-on-error: true` masked the 404.
           url: https://hcvault.gostoa.dev
           method: jwt
-          role: github-actions
-          jwtGithubAudience: sigstore
+          # Dedicated role (separated from gha-stoa-deploy for privilege isolation).
+          # Created by stoa-infra: deploy/vps/vault/setup-gha-e2e-oidc.sh.
+          role: gha-stoa-e2e
+          jwtGithubAudience: https://github.com/stoa-platform/stoa
           exportEnv: true
           secrets: |
             secret/data/e2e/urls PORTAL_URL | E2E_PORTAL_URL ;

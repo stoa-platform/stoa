@@ -5,7 +5,6 @@ Feature: Console - AI Tools and Applications
   I want to access AI Tool management pages
   So that I can manage tool catalog, subscriptions, usage, and applications.
 
-  # regression for CAB-2147 — addInitScript/React-OIDC boot race
   @smoke @critical @regression
   Scenario: Tenant admin views AI Tool Catalog
     Given I am logged in to Console as "parzival" from team "high-five"
@@ -13,7 +12,6 @@ Feature: Console - AI Tools and Applications
     When I navigate to the AI Tool Catalog page
     Then the AI Tool Catalog page loads successfully
 
-  # regression for CAB-2147 — addInitScript/React-OIDC boot race
   @smoke @regression
   Scenario: Tenant admin views AI Tool subscriptions
     Given I am logged in to Console as "parzival" from team "high-five"
@@ -35,7 +33,6 @@ Feature: Console - AI Tools and Applications
     And I search for a tool in the catalog
     Then the tool search results are displayed
 
-  # regression for CAB-2147 — addInitScript/React-OIDC boot race
   @smoke @regression
   Scenario: Tenant admin views Applications page
     Given I am logged in to Console as "parzival" from team "high-five"

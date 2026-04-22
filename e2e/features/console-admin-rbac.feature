@@ -5,7 +5,6 @@ Feature: Console - Admin RBAC enforcement
   I want to enforce granular role-based access control
   So that each persona can only perform actions matching their role.
 
-  # regression for CAB-2147 — addInitScript/React-OIDC boot race
   @smoke @regression
   Scenario: CPI admin can access all admin sections
     Given I am logged in to Console as "anorak" platform admin

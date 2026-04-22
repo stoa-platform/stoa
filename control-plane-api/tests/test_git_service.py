@@ -38,7 +38,9 @@ from unittest.mock import MagicMock, patch
 import gitlab
 import pytest
 import yaml
+from pydantic import SecretStr
 
+from src.config import GitHubConfig, GitLabConfig, GitProviderConfig
 from src.services.git_service import (
     GITLAB_MAX_RETRIES,
     GITLAB_SEMAPHORE,
@@ -361,9 +363,14 @@ class TestConnect:
         mock_gl.projects.get.return_value = mock_project
 
         with patch("src.services.git_service.settings") as mock_settings:
-            mock_settings.GITLAB_URL = "https://gitlab.example.com"
-            mock_settings.GITLAB_TOKEN = "token"
-            mock_settings.GITLAB_PROJECT_ID = 1
+            mock_settings.git = GitProviderConfig(
+                provider="gitlab",
+                gitlab=GitLabConfig(
+                    url="https://gitlab.example.com",
+                    token=SecretStr("token"),
+                    project_id="1",
+                ),
+            )
             with patch("src.services.git_service.gitlab.Gitlab", return_value=mock_gl):
                 await svc.connect()
 
@@ -374,9 +381,14 @@ class TestConnect:
     async def test_connect_failure_raises(self):
         svc = GitLabService()
         with patch("src.services.git_service.settings") as mock_settings:
-            mock_settings.GITLAB_URL = "https://gitlab.example.com"
-            mock_settings.GITLAB_TOKEN = "token"
-            mock_settings.GITLAB_PROJECT_ID = 1
+            mock_settings.git = GitProviderConfig(
+                provider="gitlab",
+                gitlab=GitLabConfig(
+                    url="https://gitlab.example.com",
+                    token=SecretStr("token"),
+                    project_id="1",
+                ),
+            )
             with patch("src.services.git_service.gitlab.Gitlab", side_effect=Exception("fail")):
                 with pytest.raises(Exception, match="fail"):
                     await svc.connect()
@@ -384,9 +396,14 @@ class TestConnect:
     async def test_connect_clears_state_on_failure(self):
         svc = GitLabService()
         with patch("src.services.git_service.settings") as mock_settings:
-            mock_settings.GITLAB_URL = "https://gitlab.example.com"
-            mock_settings.GITLAB_TOKEN = "token"
-            mock_settings.GITLAB_PROJECT_ID = 1
+            mock_settings.git = GitProviderConfig(
+                provider="gitlab",
+                gitlab=GitLabConfig(
+                    url="https://gitlab.example.com",
+                    token=SecretStr("token"),
+                    project_id="1",
+                ),
+            )
             with patch("src.services.git_service.gitlab.Gitlab", side_effect=RuntimeError("boom")):
                 with pytest.raises(RuntimeError):
                     await svc.connect()
@@ -1388,10 +1405,15 @@ def _make_provider(git_provider: str):
     get_git_provider.cache_clear()
 
     with patch("src.services.git_provider.settings") as mock_settings:
-        mock_settings.GIT_PROVIDER = git_provider
-        mock_settings.GITLAB_URL = "https://gitlab.example.com"
-        mock_settings.GITLAB_TOKEN = "test-token"
-        mock_settings.GITLAB_PROJECT_ID = "12345"
+        mock_settings.git = GitProviderConfig(
+            provider=git_provider,
+            github=GitHubConfig(),
+            gitlab=GitLabConfig(
+                url="https://gitlab.example.com",
+                token=SecretStr("test-token"),
+                project_id="12345",
+            ),
+        )
         return git_provider_factory()
 
 

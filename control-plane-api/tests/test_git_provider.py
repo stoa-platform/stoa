@@ -3,7 +3,9 @@
 from unittest.mock import patch
 
 import pytest
+from pydantic import SecretStr
 
+from src.config import GitHubConfig, GitLabConfig, GitProviderConfig
 from src.services.git_provider import GitProvider, git_provider_factory
 
 
@@ -35,30 +37,31 @@ class TestGitProviderABC:
         assert abstract_methods == expected
 
 
+def _git_cfg(provider: str) -> GitProviderConfig:
+    """Build a fully populated GitProviderConfig for factory tests.
+
+    CAB-1889 CP-2: factory reads settings.git.provider via Literal, so the
+    provider argument here is typed as str only to support the negative
+    tests that bypass schema validation.
+    """
+    return GitProviderConfig.model_construct(
+        provider=provider,
+        github=GitHubConfig(org="stoa-platform", catalog_repo="stoa-catalog"),
+        gitlab=GitLabConfig(
+            url="https://gitlab.com",
+            token=SecretStr("test-token"),
+            project_id="12345",
+        ),
+    )
+
+
 class TestGitProviderFactory:
-    """Verify factory routing based on GIT_PROVIDER setting."""
+    """Verify factory routing based on settings.git.provider."""
 
     @patch("src.services.git_provider.settings")
     def test_factory_returns_gitlab_service(self, mock_settings):
-        """GIT_PROVIDER=gitlab must return a GitLabService instance."""
-        mock_settings.GIT_PROVIDER = "gitlab"
-        mock_settings.GITLAB_URL = "https://gitlab.com"
-        mock_settings.GITLAB_TOKEN = "test-token"
-        mock_settings.GITLAB_PROJECT_ID = "12345"
-
-        provider = git_provider_factory()
-
-        from src.services.git_service import GitLabService
-
-        assert isinstance(provider, GitLabService)
-
-    @patch("src.services.git_provider.settings")
-    def test_factory_gitlab_case_insensitive(self, mock_settings):
-        """Factory should handle case variations."""
-        mock_settings.GIT_PROVIDER = "GitLab"
-        mock_settings.GITLAB_URL = "https://gitlab.com"
-        mock_settings.GITLAB_TOKEN = "test-token"
-        mock_settings.GITLAB_PROJECT_ID = "12345"
+        """provider=gitlab must return a GitLabService instance."""
+        mock_settings.git = _git_cfg("gitlab")
 
         provider = git_provider_factory()
 
@@ -68,8 +71,8 @@ class TestGitProviderFactory:
 
     @patch("src.services.git_provider.settings")
     def test_factory_returns_github_service(self, mock_settings):
-        """GIT_PROVIDER=github must return a GitHubService instance."""
-        mock_settings.GIT_PROVIDER = "github"
+        """provider=github must return a GitHubService instance."""
+        mock_settings.git = _git_cfg("github")
 
         provider = git_provider_factory()
 
@@ -79,16 +82,16 @@ class TestGitProviderFactory:
 
     @patch("src.services.git_provider.settings")
     def test_factory_unknown_provider_raises(self, mock_settings):
-        """Unknown provider must raise ValueError with supported values."""
-        mock_settings.GIT_PROVIDER = "bitbucket"
+        """Unsupported provider (bypassing Literal via model_construct) must raise."""
+        mock_settings.git = _git_cfg("bitbucket")
 
         with pytest.raises(ValueError, match="Unsupported GIT_PROVIDER"):
             git_provider_factory()
 
     @patch("src.services.git_provider.settings")
     def test_factory_empty_provider_raises(self, mock_settings):
-        """Empty string provider must raise ValueError."""
-        mock_settings.GIT_PROVIDER = ""
+        """Empty provider (bypassing Literal via model_construct) must raise."""
+        mock_settings.git = _git_cfg("")
 
         with pytest.raises(ValueError, match="Unsupported GIT_PROVIDER"):
             git_provider_factory()
@@ -97,7 +100,7 @@ class TestGitProviderFactory:
 class TestGitProviderConfig:
     """Verify GIT_PROVIDER config defaults in Settings."""
 
-    def test_default_provider_is_gitlab(self):
+    def test_default_provider_is_github(self):
         """Default GIT_PROVIDER must be 'github' (migrated from GitLab — CAB-1890)."""
         from src.config import Settings
 
@@ -112,5 +115,4 @@ class TestGitProviderConfig:
         assert Settings.model_fields["GITHUB_TOKEN"].default == ""
         assert Settings.model_fields["GITHUB_ORG"].default == "stoa-platform"
         assert Settings.model_fields["GITHUB_CATALOG_REPO"].default == "stoa-catalog"
-        assert Settings.model_fields["GITHUB_GITOPS_REPO"].default == "stoa-gitops"
         assert Settings.model_fields["GITHUB_WEBHOOK_SECRET"].default == ""

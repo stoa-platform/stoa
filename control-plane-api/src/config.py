@@ -7,8 +7,9 @@ For Kubernetes deployments, set these in ConfigMaps/Secrets.
 import json
 import logging
 import os
+from typing import Literal
 
-from pydantic import model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings
 
 # Base domain - used to construct default URLs
@@ -27,6 +28,56 @@ SENSITIVE_DEBUG_FLAGS_IN_PROD: tuple[str, ...] = (
     "LOG_DEBUG_HTTP_BODY",
     "LOG_DEBUG_HTTP_HEADERS",
 )
+
+# CAB-1889 CP-2: startup validation gate. Activated in C.3 once all consumers
+# migrated to `settings.git.*` (verified by scripts/check_git_config_access.sh).
+_VALIDATE_GIT_CONFIG: bool = True
+
+
+class GitHubConfig(BaseModel):
+    """GitHub provider config — hydrated from flat env vars by Settings validator."""
+
+    token: SecretStr = Field(default=SecretStr(""))
+    org: str = "stoa-platform"
+    catalog_repo: str = "stoa-catalog"
+    webhook_secret: SecretStr = Field(default=SecretStr(""))
+
+    @property
+    def catalog_project_id(self) -> str:
+        """Provider-agnostic project identifier: 'org/repo'."""
+        return f"{self.org}/{self.catalog_repo}"
+
+
+class GitLabConfig(BaseModel):
+    """GitLab provider config — hydrated from flat env vars by Settings validator."""
+
+    url: str = "https://gitlab.com"
+    token: SecretStr = Field(default=SecretStr(""))
+    project_id: str = ""
+    webhook_secret: SecretStr = Field(default=SecretStr(""))
+
+    @property
+    def catalog_project_id(self) -> str:
+        return self.project_id
+
+
+class GitProviderConfig(BaseModel):
+    """Single entry point for Git provider config.
+
+    Consumers must read from ``settings.git.*`` only. A grep gate in CI
+    enforces this (see ``scripts/check_git_config_access.sh``).
+    """
+
+    provider: Literal["github", "gitlab"] = "github"
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
+    gitlab: GitLabConfig = Field(default_factory=GitLabConfig)
+
+    @property
+    def active_catalog_project_id(self) -> str:
+        """Provider-agnostic ``project_id`` for the currently selected provider."""
+        if self.provider == "github":
+            return self.github.catalog_project_id
+        return self.gitlab.catalog_project_id
 
 
 class Settings(BaseSettings):
@@ -75,39 +126,25 @@ class Settings(BaseSettings):
     SLACK_BOT_TOKEN: str = ""  # Bot API token (preferred, supports threading)
     SLACK_CHANNEL_ID: str = ""  # Target channel ID for Bot API
 
-    # GitLab Integration
-    GITLAB_URL: str = "https://gitlab.com"
-    GITLAB_TOKEN: str = ""
-    GITLAB_WEBHOOK_SECRET: str = ""
-    GITLAB_DEFAULT_BRANCH: str = "main"
+    # ── Git Provider — legacy flat ingress (CAB-1889 CP-2) ───────────────
+    # These 9 fields exist only so Pydantic Settings can hydrate them from
+    # env vars, .env and K8s ConfigMap. They are `exclude=True` so they
+    # never appear in model_dump() or JSON schema.
+    #
+    # Consumers MUST read `settings.git.*` instead. A grep gate in CI
+    # enforces this (see scripts/check_git_config_access.sh).
+    GIT_PROVIDER: Literal["github", "gitlab"] = Field(default="github", exclude=True)
+    GITHUB_TOKEN: str = Field(default="", exclude=True)
+    GITHUB_ORG: str = Field(default="stoa-platform", exclude=True)
+    GITHUB_CATALOG_REPO: str = Field(default="stoa-catalog", exclude=True)
+    GITHUB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
+    GITLAB_URL: str = Field(default="https://gitlab.com", exclude=True)
+    GITLAB_TOKEN: str = Field(default="", exclude=True)
+    GITLAB_PROJECT_ID: str = Field(default="", exclude=True)
+    GITLAB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
 
-    # GitLab Project ID - primary project for API catalog (stoa-catalog)
-    # This is the main project ID used by git_service for tenant/API operations
-    # Can be set via GITLAB_PROJECT_ID env var (for backward compatibility)
-    # or GITLAB_CATALOG_PROJECT_ID (explicit naming)
-    GITLAB_PROJECT_ID: str = ""  # Set via env - defaults to stoa-catalog
-    GITLAB_CATALOG_PROJECT_PATH: str = "cab6961310/stoa-catalog"
-
-    # stoa-gitops: Infrastructure configs, policies, Ansible playbooks (secondary)
-    GITLAB_GITOPS_PROJECT_ID: str = "77260481"  # cab6961310/stoa-gitops
-    GITLAB_GITOPS_PROJECT_PATH: str = "cab6961310/stoa-gitops"
-
-    # Alias for catalog project ID (for code clarity)
-    @property
-    def GITLAB_CATALOG_PROJECT_ID(self) -> str:
-        return self.GITLAB_PROJECT_ID
-
-    @property
-    def GITLAB_PROJECT_PATH(self) -> str:
-        return self.GITLAB_CATALOG_PROJECT_PATH
-
-    # Git Provider Abstraction (CAB-1890 — GitLab→GitHub migration)
-    GIT_PROVIDER: str = "github"  # "gitlab" or "github" (default)
-    GITHUB_TOKEN: str = ""
-    GITHUB_ORG: str = "stoa-platform"
-    GITHUB_CATALOG_REPO: str = "stoa-catalog"
-    GITHUB_GITOPS_REPO: str = "stoa-gitops"
-    GITHUB_WEBHOOK_SECRET: str = ""
+    # ── Git Provider — single source of truth for consumers ──────────────
+    git: GitProviderConfig = Field(default_factory=GitProviderConfig)
 
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
@@ -312,7 +349,6 @@ class Settings(BaseSettings):
     LOG_DEBUG_AUTH_PAYLOAD: bool = False
 
     # Logging - External Services Debug
-    LOG_DEBUG_GITLAB_API: bool = False
     LOG_DEBUG_KEYCLOAK_API: bool = False
     LOG_DEBUG_GATEWAY_API: bool = False
 
@@ -416,6 +452,76 @@ class Settings(BaseSettings):
         if not self.GATEWAY_API_KEYS:
             return []
         return [key.strip() for key in self.GATEWAY_API_KEYS.split(",") if key.strip()]
+
+    @model_validator(mode="after")
+    def _hydrate_and_validate_git(self) -> "Settings":
+        """CAB-1889 CP-2: hydrate ``settings.git`` from legacy flat env vars.
+
+        Runs unconditionally so consumers see a coherent ``settings.git.*``
+        tree. When ``_VALIDATE_GIT_CONFIG`` is True (flipped in C.3), also
+        fails fast in production if the selected provider is misconfigured,
+        and warns in dev/staging.
+        """
+        # Step 1 — hydration (always, wrapping SecretStr at the boundary).
+        self.git = GitProviderConfig(
+            provider=self.GIT_PROVIDER,
+            github=GitHubConfig(
+                token=SecretStr(self.GITHUB_TOKEN),
+                org=self.GITHUB_ORG,
+                catalog_repo=self.GITHUB_CATALOG_REPO,
+                webhook_secret=SecretStr(self.GITHUB_WEBHOOK_SECRET),
+            ),
+            gitlab=GitLabConfig(
+                url=self.GITLAB_URL,
+                token=SecretStr(self.GITLAB_TOKEN),
+                project_id=self.GITLAB_PROJECT_ID,
+                webhook_secret=SecretStr(self.GITLAB_WEBHOOK_SECRET),
+            ),
+        )
+
+        # Step 2 — validation (gated; flipped in C.3).
+        if not _VALIDATE_GIT_CONFIG:
+            return self
+
+        git = self.git
+        offender_msgs: list[str] = []
+
+        if git.provider == "github":
+            if not git.github.token.get_secret_value():
+                offender_msgs.append("GIT_PROVIDER=github but GITHUB_TOKEN is empty")
+            if git.gitlab.token.get_secret_value():
+                _logger.warning(
+                    "GIT_PROVIDER=github but GITLAB_TOKEN is also set. "
+                    "Inactive provider credentials should be removed."
+                )
+        else:  # gitlab
+            if not git.gitlab.token.get_secret_value():
+                offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_TOKEN is empty")
+            if not git.gitlab.project_id:
+                offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_PROJECT_ID is empty")
+            if git.github.token.get_secret_value():
+                _logger.warning(
+                    "GIT_PROVIDER=gitlab but GITHUB_TOKEN is also set. "
+                    "Inactive provider credentials should be removed."
+                )
+
+        if not offender_msgs:
+            return self
+
+        joined = "; ".join(offender_msgs)
+        if self.ENVIRONMENT == "production":
+            raise ValueError(
+                f"Refusing to boot: Git provider config is incoherent ({joined}). "
+                f"Set the required env vars in your Helm override."
+            )
+
+        _logger.warning(
+            "Git provider config incomplete (ENVIRONMENT=%s): %s. "
+            "Catalog operations will fail at request time. Fix before prod.",
+            self.ENVIRONMENT,
+            joined,
+        )
+        return self
 
     @model_validator(mode="after")
     def _gate_sensitive_debug_flags_in_prod(self) -> "Settings":

@@ -1,6 +1,7 @@
-"""Git router - provider-agnostic GitOps operations (CAB-1890)"""
+"""Git router - provider-agnostic GitOps operations (CAB-1890, CAB-1889 CP-1)."""
 
 import logging
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -100,6 +101,11 @@ def _tenant_path(tenant_id: str, path: str = "") -> str:
     return f"{base}/{path}" if path else base
 
 
+def _require_connected(git: GitProvider) -> None:
+    if not git.is_connected():
+        raise HTTPException(status_code=503, detail="Git provider not connected")
+
+
 @router.get("/commits", response_model=list[CommitInfo])
 @require_tenant_access
 async def list_commits(
@@ -112,10 +118,8 @@ async def list_commits(
     """List recent commits for tenant repository"""
     scoped_path = _tenant_path(tenant_id, path) if path else _tenant_path(tenant_id)
     try:
-        commits = await git.list_commits(
-            path=scoped_path, limit=limit
-        )  # TODO(CAB-1889): add list_commits to GitProvider ABC
-        return [CommitInfo(**c) for c in commits]
+        commits = await git.list_path_commits(path=scoped_path, limit=limit)
+        return [CommitInfo(**asdict(c)) for c in commits]
     except Exception as e:
         logger.error(f"Failed to list commits for tenant {tenant_id}: {e}")
         return []
@@ -132,7 +136,7 @@ async def get_file(
 ):
     """Get file content from git provider"""
     scoped_path = _tenant_path(tenant_id, file_path)
-    content = await git.get_file(scoped_path, ref=ref)  # TODO(CAB-1889): add get_file to GitProvider ABC
+    content = await git.read_file(scoped_path, ref=ref)
     if content is None:
         raise HTTPException(status_code=404, detail="File not found")
     return FileContent(path=file_path, content=content)
@@ -148,14 +152,11 @@ async def get_tree(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Get directory tree from git provider"""
+    _require_connected(git)
     scoped_path = _tenant_path(tenant_id, path) if path else _tenant_path(tenant_id)
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
     try:
-        tree = git._project.repository_tree(path=scoped_path, ref=ref)  # TODO(CAB-1889): abstract _project access
-        items = [TreeItem(name=item["name"], type=item["type"], path=item["path"]) for item in tree]
-        return TreeListResponse(items=items)
+        entries = await git.list_tree(scoped_path, ref=ref)
+        return TreeListResponse(items=[TreeItem(**asdict(e)) for e in entries])
     except Exception:
         return TreeListResponse(items=[])
 
@@ -173,35 +174,17 @@ async def create_or_update_file(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Create or update a file in git provider"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     scoped_path = _tenant_path(tenant_id, file_path)
     msg = commit_message or f"Update {file_path} for tenant {tenant_id}"
 
-    # Try to get existing file to determine create vs update
-    existing = await git.get_file(scoped_path, ref=branch)  # TODO(CAB-1889): add get_file to GitProvider ABC
     try:
-        if existing is not None:
-            # TODO(CAB-1889): abstract _project access
-            file_obj = git._project.files.get(scoped_path, ref=branch)
-            file_obj.content = body.content
-            file_obj.save(branch=branch, commit_message=msg)
-        else:
-            # TODO(CAB-1889): abstract _project access
-            git._project.files.create(
-                {
-                    "file_path": scoped_path,
-                    "branch": branch,
-                    "content": body.content,
-                    "commit_message": msg,
-                }
-            )
+        action = await git.write_file(scoped_path, body.content, commit_message=msg, branch=branch)
     except Exception as e:
         logger.error(f"Failed to create/update file {scoped_path}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
-    return {"path": file_path, "action": "updated" if existing else "created"}
+    return {"path": file_path, "action": action}
 
 
 @router.delete("/files/{file_path:path}", response_model=MessageResponse)
@@ -216,16 +199,12 @@ async def delete_file(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Delete a file from git provider"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     scoped_path = _tenant_path(tenant_id, file_path)
     msg = commit_message or f"Delete {file_path} for tenant {tenant_id}"
 
     try:
-        git._project.files.delete(
-            file_path=scoped_path, commit_message=msg, branch=branch
-        )  # TODO(CAB-1889): abstract _project access
+        await git.remove_file(scoped_path, commit_message=msg, branch=branch)
     except Exception as e:
         logger.error(f"Failed to delete file {scoped_path}: {e}")
         raise HTTPException(status_code=404, detail="File not found")
@@ -243,26 +222,10 @@ async def list_merge_requests(
     git: GitProvider = Depends(get_git_provider),
 ):
     """List merge requests"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     try:
-        mrs = git._project.mergerequests.list(state=state)  # TODO(CAB-1889): abstract _project access
-        return [
-            MergeRequestResponse(
-                id=mr.id,
-                iid=mr.iid,
-                title=mr.title,
-                description=mr.description or "",
-                state=mr.state,
-                source_branch=mr.source_branch,
-                target_branch=mr.target_branch,
-                web_url=mr.web_url,
-                created_at=mr.created_at,
-                author=mr.author.get("name", "") if isinstance(mr.author, dict) else str(mr.author),
-            )
-            for mr in mrs
-        ]
+        mrs = await git.list_merge_requests(state=state)
+        return [MergeRequestResponse(**asdict(mr)) for mr in mrs]
     except Exception as e:
         logger.error(f"Failed to list merge requests: {e}")
         return []
@@ -278,31 +241,15 @@ async def create_merge_request(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Create a merge request"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     try:
-        # TODO(CAB-1889): abstract _project access
-        new_mr = git._project.mergerequests.create(
-            {
-                "title": mr.title,
-                "description": mr.description,
-                "source_branch": mr.source_branch,
-                "target_branch": mr.target_branch,
-            }
+        new_mr = await git.create_merge_request(
+            title=mr.title,
+            description=mr.description,
+            source_branch=mr.source_branch,
+            target_branch=mr.target_branch,
         )
-        return MergeRequestResponse(
-            id=new_mr.id,
-            iid=new_mr.iid,
-            title=new_mr.title,
-            description=new_mr.description or "",
-            state=new_mr.state,
-            source_branch=new_mr.source_branch,
-            target_branch=new_mr.target_branch,
-            web_url=new_mr.web_url,
-            created_at=new_mr.created_at,
-            author=new_mr.author.get("name", "") if isinstance(new_mr.author, dict) else str(new_mr.author),
-        )
+        return MergeRequestResponse(**asdict(new_mr))
     except Exception as e:
         logger.error(f"Failed to create merge request: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create merge request: {e}")
@@ -318,12 +265,9 @@ async def merge_request(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Merge a merge request"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     try:
-        mr = git._project.mergerequests.get(mr_iid)  # TODO(CAB-1889): abstract _project access
-        mr.merge()
+        await git.merge_merge_request(mr_iid)
         return {"message": "Merge request merged", "iid": mr_iid}
     except Exception as e:
         logger.error(f"Failed to merge MR !{mr_iid}: {e}")
@@ -339,19 +283,10 @@ async def list_branches(
     git: GitProvider = Depends(get_git_provider),
 ):
     """List branches"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     try:
-        branches = git._project.branches.list()  # TODO(CAB-1889): abstract _project access
-        return [
-            BranchInfo(
-                name=b.name,
-                commit_sha=b.commit["id"] if isinstance(b.commit, dict) else str(b.commit),
-                protected=getattr(b, "protected", False),
-            )
-            for b in branches
-        ]
+        branches = await git.list_branches()
+        return [BranchInfo(**asdict(b)) for b in branches]
     except Exception as e:
         logger.error(f"Failed to list branches: {e}")
         return []
@@ -367,22 +302,10 @@ async def create_branch(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Create a new branch"""
-    if not git._project:  # TODO(CAB-1889): abstract _project access
-        raise HTTPException(status_code=503, detail="Git provider not connected")
-
+    _require_connected(git)
     try:
-        # TODO(CAB-1889): abstract _project access
-        branch = git._project.branches.create(
-            {
-                "branch": body.name,
-                "ref": body.ref,
-            }
-        )
-        return BranchInfo(
-            name=branch.name,
-            commit_sha=branch.commit["id"] if isinstance(branch.commit, dict) else str(branch.commit),
-            protected=getattr(branch, "protected", False),
-        )
+        branch = await git.create_branch(name=body.name, ref=body.ref)
+        return BranchInfo(**asdict(branch))
     except Exception as e:
         logger.error(f"Failed to create branch {body.name}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create branch: {e}")

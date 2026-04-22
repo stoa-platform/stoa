@@ -10,13 +10,13 @@ import logging
 import re
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from github import Auth, Github, GithubException, InputGitTreeElement
 
 from ..config import settings
-from .git_provider import GitProvider
+from .git_provider import BranchRef, CommitRef, GitProvider, MergeRequestRef, TreeEntry
 
 logger = logging.getLogger(__name__)
 
@@ -896,3 +896,122 @@ class GitHubService(GitProvider):
 
         logger.info("Deleted MCP server %s", server_name)
         return True
+
+    # ============================================================
+    # CAB-1889 CP-1: provider-agnostic surface (GitProvider ABC).
+    # Operates on the catalog repo resolved via _catalog_project_id().
+    # ============================================================
+
+    async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
+        repo = self._get_repo(self._catalog_project_id())
+        try:
+            contents = repo.get_contents(path, ref=ref)
+        except GithubException as exc:
+            if exc.status == 404:
+                return []
+            raise
+        if not isinstance(contents, list):
+            contents = [contents]
+        return [
+            TreeEntry(
+                name=item.name,
+                type="tree" if item.type == "dir" else "blob",
+                path=item.path,
+            )
+            for item in contents
+        ]
+
+    async def read_file(self, path: str, ref: str = "main") -> str | None:
+        try:
+            return await self.get_file_content(self._catalog_project_id(), path, ref=ref)
+        except FileNotFoundError:
+            return None
+
+    async def list_path_commits(self, path: str | None, limit: int = 20) -> list[CommitRef]:
+        repo = self._get_repo(self._catalog_project_id())
+        kwargs: dict[str, Any] = {}
+        if path:
+            kwargs["path"] = path
+        commits = repo.get_commits(**kwargs)[:limit]
+        refs: list[CommitRef] = []
+        for c in commits:
+            author = ""
+            if c.author and getattr(c.author, "login", None):
+                author = c.author.login
+            elif c.commit and c.commit.author and c.commit.author.name:
+                author = c.commit.author.name
+            date = c.commit.author.date.isoformat() if c.commit and c.commit.author and c.commit.author.date else ""
+            refs.append(CommitRef(sha=c.sha, message=c.commit.message if c.commit else "", author=author, date=date))
+        return refs
+
+    async def write_file(
+        self, path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> Literal["created", "updated"]:
+        project_id = self._catalog_project_id()
+        if await self._file_exists(project_id, path, ref=branch):
+            await self.update_file(project_id, path, content, commit_message, branch=branch)
+            return "updated"
+        await self.create_file(project_id, path, content, commit_message, branch=branch)
+        return "created"
+
+    async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
+        return await self.delete_file(self._catalog_project_id(), path, commit_message, branch=branch)
+
+    async def list_branches(self) -> list[BranchRef]:
+        repo = self._get_repo(self._catalog_project_id())
+        return [
+            BranchRef(name=b.name, commit_sha=b.commit.sha, protected=getattr(b, "protected", False))
+            for b in repo.get_branches()
+        ]
+
+    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
+        repo = self._get_repo(self._catalog_project_id())
+        base_ref = repo.get_git_ref(f"heads/{ref}")
+        repo.create_git_ref(f"refs/heads/{name}", base_ref.object.sha)
+        branch = repo.get_branch(name)
+        return BranchRef(
+            name=branch.name, commit_sha=branch.commit.sha, protected=getattr(branch, "protected", False)
+        )
+
+    @staticmethod
+    def _pr_to_ref(pr: Any) -> MergeRequestRef:
+        author = pr.user.login if pr.user and getattr(pr.user, "login", None) else ""
+        created_at = pr.created_at.isoformat() if getattr(pr, "created_at", None) else ""
+        return MergeRequestRef(
+            id=pr.id,
+            iid=pr.number,
+            title=pr.title,
+            description=pr.body or "",
+            state=pr.state,
+            source_branch=pr.head.ref if pr.head else "",
+            target_branch=pr.base.ref if pr.base else "",
+            web_url=pr.html_url,
+            created_at=created_at,
+            author=author,
+        )
+
+    @staticmethod
+    def _map_mr_state_to_github(state: str) -> str:
+        return {"opened": "open", "closed": "closed", "merged": "closed", "all": "all"}.get(state, state)
+
+    async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]:
+        repo = self._get_repo(self._catalog_project_id())
+        gh_state = self._map_mr_state_to_github(state)
+        return [self._pr_to_ref(pr) for pr in repo.get_pulls(state=gh_state)]
+
+    async def create_merge_request(
+        self,
+        title: str,
+        description: str,
+        source_branch: str,
+        target_branch: str = "main",
+    ) -> MergeRequestRef:
+        repo = self._get_repo(self._catalog_project_id())
+        pr = repo.create_pull(title=title, body=description, head=source_branch, base=target_branch)
+        return self._pr_to_ref(pr)
+
+    async def merge_merge_request(self, iid: int) -> MergeRequestRef:
+        repo = self._get_repo(self._catalog_project_id())
+        pr = repo.get_pull(iid)
+        pr.merge()
+        return self._pr_to_ref(repo.get_pull(iid))

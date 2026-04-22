@@ -81,7 +81,8 @@ func (a *Agent) RunCredentialSync(ctx context.Context, vc *VaultClient, adapter 
 }
 
 // StartCredentialSync starts a background goroutine that syncs credentials
-// from Vault to the local gateway at the configured interval.
+// from Vault to the local gateway at the configured interval. See
+// runCredentialSyncLoop in loop_credentials.go for the loop body.
 func (a *Agent) StartCredentialSync(ctx context.Context, vc *VaultClient, adapter adapters.GatewayAdapter, adminURL string, cfg CredentialSyncConfig) {
 	if adminURL == "" {
 		log.Println("credential-sync skipped: no gateway admin URL configured")
@@ -91,27 +92,10 @@ func (a *Agent) StartCredentialSync(ctx context.Context, vc *VaultClient, adapte
 		log.Println("credential-sync skipped: STOA_TENANT_ID not set")
 		return
 	}
-
 	interval := cfg.Interval
 	if interval == 0 {
 		interval = 60 * time.Second
 	}
-
 	log.Printf("starting credential sync loop (interval=%s, tenant=%s)", interval, cfg.TenantID)
-
-	ticker := time.NewTicker(interval)
-	go func() {
-		defer ticker.Stop()
-		// Run immediately on start
-		a.RunCredentialSync(ctx, vc, adapter, adminURL, cfg.TenantID)
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("credential-sync stopped")
-				return
-			case <-ticker.C:
-				a.RunCredentialSync(ctx, vc, adapter, adminURL, cfg.TenantID)
-			}
-		}
-	}()
+	go runCredentialSyncLoop(ctx, a, vc, adapter, adminURL, cfg.TenantID, interval)
 }

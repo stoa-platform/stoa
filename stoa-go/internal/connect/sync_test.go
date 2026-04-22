@@ -3,6 +3,7 @@ package connect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +40,7 @@ func TestFetchConfig(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	config, err := agent.FetchConfig(context.Background())
 	if err != nil {
@@ -85,7 +86,7 @@ func TestReportSyncAck(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	results := []SyncedPolicyResult{
 		{PolicyID: "pol-1", Status: "applied"},
@@ -106,14 +107,14 @@ func TestReportSyncAck(t *testing.T) {
 
 // mockSyncAdapter implements GatewayAdapter for sync testing.
 type mockSyncAdapter struct {
-	appliedPolicies   []string
-	removedPolicies   []string
-	syncedRoutes      []adapters.Route
-	injectedCreds     []adapters.Credential
-	applyErr          error
-	removeErr         error
-	syncRoutesErr     error
-	injectCredsErr    error
+	appliedPolicies []string
+	removedPolicies []string
+	syncedRoutes    []adapters.Route
+	injectedCreds   []adapters.Credential
+	applyErr        error
+	removeErr       error
+	syncRoutesErr   error
+	injectCredsErr  error
 }
 
 func (m *mockSyncAdapter) Detect(ctx context.Context, adminURL string) (bool, error) {
@@ -173,7 +174,7 @@ func TestRunSyncAppliesEnabledPolicies(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{}
 	agent.RunSync(context.Background(), adapter, cpServer.URL)
@@ -221,7 +222,7 @@ func TestRunSyncNoPolicies(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{}
 	agent.RunSync(context.Background(), adapter, cpServer.URL)
@@ -264,7 +265,7 @@ func TestReportRouteSyncAck(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	results := []SyncedRouteResult{
 		{DeploymentID: "dep-1", Status: "applied"},
@@ -298,11 +299,8 @@ func TestReportRouteSyncAckNotRegistered(t *testing.T) {
 	err := agent.ReportRouteSyncAck(context.Background(), []SyncedRouteResult{
 		{DeploymentID: "dep-1", Status: "applied"},
 	})
-	if err == nil {
-		t.Fatal("expected error when not registered")
-	}
-	if err.Error() != "not registered" {
-		t.Errorf("expected 'not registered', got %s", err.Error())
+	if !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("expected ErrNotRegistered, got %v", err)
 	}
 }
 
@@ -317,7 +315,7 @@ func TestReportRouteSyncAckServerError(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	err := agent.ReportRouteSyncAck(context.Background(), []SyncedRouteResult{
 		{DeploymentID: "dep-1", Status: "applied"},

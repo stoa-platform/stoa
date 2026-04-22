@@ -17,8 +17,10 @@ use tracing::info;
 use crate::mode::GatewayMode;
 
 mod expansion;
+mod federation;
 
 pub use expansion::ExpansionMode;
+pub use federation::FederationUpstreamConfig;
 
 /// Gateway configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -819,19 +821,6 @@ pub struct Config {
 
 /// LLM provider router configuration (CAB-1487)
 ///
-/// Configuration for a single upstream MCP server in federation (CAB-1752).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FederationUpstreamConfig {
-    /// Upstream MCP server URL
-    pub url: String,
-    /// Transport type (default: "sse")
-    pub transport: Option<String>,
-    /// Optional auth token (never exposed in admin API)
-    pub auth_token: Option<String>,
-    /// Connection timeout in seconds (default: 30)
-    pub timeout_secs: Option<u64>,
-}
-
 /// Configures multi-provider LLM routing with cost tracking and budget enforcement.
 /// Providers are defined as a list; disabled providers are filtered at startup.
 #[derive(Debug, Clone, Serialize, Deserialize)]

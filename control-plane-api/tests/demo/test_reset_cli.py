@@ -7,8 +7,6 @@ when the CLI is wired into the Phase 2 demo harness.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 from scripts.demo.reset import _main, parse_args
 
@@ -29,7 +27,11 @@ class TestParseArgs:
 
 
 class TestMissingDatabaseUrl:
-    def test_regression_cab_2149_cli_exits_1_without_database_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_regression_cab_2149_cli_exits_1_without_database_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Must be async: a sync test calling asyncio.run() nulls set_event_loop
+        # and poisons the session-scoped event_loop fixture for every later test.
         monkeypatch.delenv("DATABASE_URL", raising=False)
-        exit_code = asyncio.run(_main(parse_args([])))
+        exit_code = await _main(parse_args([]))
         assert exit_code == 1

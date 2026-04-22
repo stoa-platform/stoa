@@ -6,7 +6,8 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { Button } from '@stoa/shared/components/Button';
-import type { Promotion, PromotionStatus, PromotionDiffResponse, Tenant, API } from '../types';
+import type { Promotion, PromotionStatus, Tenant, API } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 import {
   ArrowRight,
   CheckCircle2,
@@ -137,7 +138,7 @@ function PromotionPipeline({ promotions }: { promotions: Promotion[] }) {
 // DIFF VIEWER
 // =============================================================================
 
-function DiffViewer({ diff }: { diff: PromotionDiffResponse }) {
+function DiffViewer({ diff }: { diff: Schemas['PromotionDiffResponse'] }) {
   return (
     <div className="space-y-4 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
       <div className="grid grid-cols-2 gap-4">
@@ -371,7 +372,7 @@ function PromotionRow({
   onRefresh,
 }: PromotionRowProps) {
   const [expanded, setExpanded] = useState(false);
-  const [diff, setDiff] = useState<PromotionDiffResponse | null>(null);
+  const [diff, setDiff] = useState<Schemas['PromotionDiffResponse'] | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const toast = useToastActions();

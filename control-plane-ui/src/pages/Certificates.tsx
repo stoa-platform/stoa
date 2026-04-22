@@ -95,7 +95,7 @@ export function Certificates() {
       .filter((c) => c.certificate_fingerprint)
       .map((c) => ({
         ...c,
-        _daysUntilExpiry: getDaysUntilExpiry(c.certificate_not_after),
+        _daysUntilExpiry: getDaysUntilExpiry(c.certificate_not_after ?? ''),
       }));
   }, [consumers]);
 

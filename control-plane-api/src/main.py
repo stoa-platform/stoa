@@ -661,13 +661,33 @@ async def catch_all_error_handler(request: Request, exc: Exception) -> JSONRespo
 # GZip compression for responses > 1KB (reduces JSON payload size by ~70%)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS
+# CORS (CAB-2142) — explicit allow-lists instead of wildcards.
+# `allow_credentials=True` combined with `*` was blocked by the CORS spec
+# anyway, but the middleware silently coerced it. Listing methods/headers
+# here bounds the attack surface to what the Console and Portal actually use.
+ALLOWED_CORS_METHODS: list[str] = [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+]
+ALLOWED_CORS_HEADERS: list[str] = [
+    "Authorization",
+    "Content-Type",
+    "X-Tenant-Id",
+    "X-Operator-Key",
+    "X-Request-Id",
+    "X-API-Key",
+    "Traceparent",
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=ALLOWED_CORS_METHODS,
+    allow_headers=ALLOWED_CORS_HEADERS,
 )
 
 # Prometheus metrics middleware

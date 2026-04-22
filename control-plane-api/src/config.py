@@ -29,9 +29,9 @@ SENSITIVE_DEBUG_FLAGS_IN_PROD: tuple[str, ...] = (
     "LOG_DEBUG_HTTP_HEADERS",
 )
 
-# CAB-1889 CP-2: startup validation gate. C.1 lands hydration only; C.3 flips
-# this to True once consumers have migrated to `settings.git.*`.
-_VALIDATE_GIT_CONFIG: bool = False
+# CAB-1889 CP-2: startup validation gate. Activated in C.3 once all consumers
+# migrated to `settings.git.*` (verified by scripts/check_git_config_access.sh).
+_VALIDATE_GIT_CONFIG: bool = True
 
 
 class GitHubConfig(BaseModel):

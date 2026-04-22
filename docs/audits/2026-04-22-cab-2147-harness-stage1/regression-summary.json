@@ -1,0 +1,83 @@
+{
+  "stats": {
+    "startTime": "2026-04-22T07:45:39.582Z",
+    "duration": 474964.516,
+    "expected": 26,
+    "skipped": 0,
+    "unexpected": 16,
+    "flaky": 1
+  },
+  "regression_scenarios": [
+    {
+      "title": "Platform admin views Access Requests page",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 2711,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "title": "CPI admin can access all admin sections",
+      "status": "flaky",
+      "results": [
+        {
+          "status": "failed",
+          "duration": 50408,
+          "retry": 0
+        },
+        {
+          "status": "passed",
+          "duration": 24283,
+          "retry": 1
+        }
+      ]
+    },
+    {
+      "title": "Admin accesses tenants page",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 2552,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "title": "Tenant admin views AI Tool Catalog",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 2214,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "title": "Tenant admin views AI Tool subscriptions",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 2025,
+          "retry": 0
+        }
+      ]
+    },
+    {
+      "title": "Tenant admin views Applications page",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 1743,
+          "retry": 0
+        }
+      ]
+    }
+  ]
+}

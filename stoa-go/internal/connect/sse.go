@@ -92,26 +92,35 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 }
 
 // streamEvents connects to the SSE endpoint via a.sse and dispatches each
-// parsed rawEvent through handleSSEEvent. Returns the terminal cause surfaced
-// by sseStream.Run — scanner error, HTTP status, or io.EOF on clean close.
+// parsed rawEvent through a per-call dispatcher wired with the adapter +
+// adminURL closures. Returns the terminal cause surfaced by sseStream.Run.
+//
+// A fresh dispatcher is built per call (cheap — handlers are closure refs)
+// so reconnects pick up the latest adapter/adminURL if the caller ever
+// re-invokes with different values. In practice the args are stable across
+// the lifetime of StartDeploymentStream.
 func (a *Agent) streamEvents(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) error {
+	dispatcher := a.newSSEDispatcher(adapter, adminURL)
 	gatewayID := a.state.GatewayID()
 	return a.sse.Run(ctx, gatewayID, func(evCtx context.Context, ev rawEvent) error {
-		a.handleSSEEvent(evCtx, adapter, adminURL, ev.Type, ev.Data)
+		dispatcher.Dispatch(evCtx, ev)
 		return nil
 	})
 }
 
-// handleSSEEvent processes a single SSE event.
-func (a *Agent) handleSSEEvent(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, eventType string, data []byte) {
-	switch eventType {
-	case "sync-deployment":
+// newSSEDispatcher wires the SSE event table. sync-deployment applies the
+// route to the local gateway via handleSyncDeployment; heartbeat is an
+// explicit no-op so the unknown-event log line stays silent on every
+// keepalive. Unknown types are logged by the dispatcher itself.
+func (a *Agent) newSSEDispatcher(adapter adapters.GatewayAdapter, adminURL string) *eventDispatcher {
+	d := newEventDispatcher()
+	d.Register("sync-deployment", func(ctx context.Context, data []byte) {
 		a.handleSyncDeployment(ctx, adapter, adminURL, data)
-	case "heartbeat":
-		// Keepalive — ignore
-	default:
-		log.Printf("sse-stream: unknown event type %q", eventType)
-	}
+	})
+	d.Register("heartbeat", func(ctx context.Context, data []byte) {
+		// keepalive — deliberately empty
+	})
+	return d
 }
 
 // handleSyncDeployment processes a sync-deployment event by applying the route and acking.

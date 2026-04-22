@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.4.2...control-plane-ui-v1.5.0) (2026-04-22)
+
+
+### Features
+
+* **ui:** migrate critical entities to OpenAPI-generated types (Wave 1) ([#2471](https://github.com/stoa-platform/stoa/issues/2471)) ([ce505b0](https://github.com/stoa-platform/stoa/commit/ce505b0acdd8cf08a51b9eb4686ce4f406cb252f))
+
+
+### Bug Fixes
+
+* **ui:** align Application alias with regenerated schema (CAB-2159) ([#2476](https://github.com/stoa-platform/stoa/issues/2476)) ([d41ba1c](https://github.com/stoa-platform/stoa/commit/d41ba1c0028662729cccd97626f9045cd155e47c))
+
 ## [1.4.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.4.1...control-plane-ui-v1.4.2) (2026-04-20)
 
 

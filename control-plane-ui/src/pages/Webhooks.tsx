@@ -29,13 +29,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import type {
   TenantWebhook,
-  WebhookCreate,
-  WebhookUpdate,
   WebhookDelivery,
   WebhookEventType,
   WebhookListResponse,
   WebhookDeliveryListResponse,
 } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 import { SubNav } from '../components/SubNav';
 import { applicationsTabs } from '../components/subNavGroups';
 
@@ -120,12 +119,12 @@ export function Webhooks() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: WebhookCreate) => apiService.createWebhook(tenantId, data),
+    mutationFn: (data: Schemas['WebhookCreate']) => apiService.createWebhook(tenantId, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['webhooks', tenantId] }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ webhookId, data }: { webhookId: string; data: WebhookUpdate }) =>
+    mutationFn: ({ webhookId, data }: { webhookId: string; data: Schemas['WebhookUpdate'] }) =>
       apiService.updateWebhook(tenantId, webhookId, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['webhooks', tenantId] }),
   });
@@ -140,7 +139,7 @@ export function Webhooks() {
   });
 
   const handleCreate = useCallback(
-    async (data: WebhookCreate) => {
+    async (data: Schemas['WebhookCreate']) => {
       try {
         await createMutation.mutateAsync(data);
         toast.success('Webhook created', 'Your webhook has been created successfully.');
@@ -156,7 +155,7 @@ export function Webhooks() {
   );
 
   const handleUpdate = useCallback(
-    async (webhookId: string, data: WebhookUpdate) => {
+    async (webhookId: string, data: Schemas['WebhookUpdate']) => {
       try {
         await updateMutation.mutateAsync({ webhookId, data });
         toast.success('Webhook updated', 'Your changes have been saved.');
@@ -406,7 +405,7 @@ export function Webhooks() {
           onSave={(data) =>
             editingWebhook
               ? handleUpdate(editingWebhook.id, data)
-              : handleCreate(data as WebhookCreate)
+              : handleCreate(data as Schemas['WebhookCreate'])
           }
           isLoading={createMutation.isPending || updateMutation.isPending}
         />
@@ -563,7 +562,7 @@ function WebhookCard({
 interface WebhookModalProps {
   webhook: TenantWebhook | null;
   onClose: () => void;
-  onSave: (data: WebhookCreate | Partial<WebhookCreate>) => void;
+  onSave: (data: Schemas['WebhookCreate'] | Partial<Schemas['WebhookCreate']>) => void;
   isLoading: boolean;
 }
 
@@ -591,7 +590,7 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
       return;
     }
 
-    const data: WebhookCreate | Partial<WebhookCreate> = {
+    const data: Schemas['WebhookCreate'] | Partial<Schemas['WebhookCreate']> = {
       name: name.trim(),
       url: url.trim(),
       events,

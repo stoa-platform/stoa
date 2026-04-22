@@ -1,4 +1,17 @@
-// User and Auth types
+// =============================================================================
+// View-models, narrowed enums, and UI-only types.
+//
+// Wire formats live in `@stoa/shared/api-types` (`Schemas['XxxResponse']`)
+// and are imported here to build view-models when needed (drift, enrichment).
+// =============================================================================
+
+import type { Schemas } from '@stoa/shared/api-types';
+
+// ---- User / Auth ------------------------------------------------------------
+//
+// `User` is a session-local view-model assembled from the OIDC token + the
+// `/me` endpoint. It is NOT the wire type — see `Schemas['UserPermissionsResponse']`
+// for the raw `/me` payload.
 export interface User {
   id: string;
   email: string;
@@ -12,45 +25,35 @@ export interface User {
 
 export type Role = 'cpi-admin' | 'tenant-admin' | 'devops' | 'viewer';
 
+// `Permission` mirrors what UI consumers expect; backend nests this under
+// `RoleResponse.permissions` without extracting a named schema (BUG-5).
 export interface Permission {
   name: string;
   description: string;
 }
 
-// Tenant types
-export interface Tenant {
-  id: string;
-  name: string;
-  display_name: string;
-  status: 'active' | 'suspended' | 'pending';
-  created_at: string;
-  updated_at: string;
-}
+// ---- Tenant -----------------------------------------------------------------
+// Wire alias. Status is `string` at the wire level — UI status maps must be
+// typed `Record<string, ...>`. Nullable timestamps require guards.
+export type Tenant = Schemas['TenantResponse'];
 
+// Intentionally narrower than `Schemas['TenantCreate']` (which requires
+// `description` and `owner_email`). UI flows currently only send these two.
 export interface TenantCreate {
   name: string;
   display_name: string;
 }
 
-// API types
-export interface API {
-  id: string;
-  tenant_id: string;
-  name: string;
-  display_name: string;
-  version: string;
-  description: string;
-  backend_url: string;
-  status: 'draft' | 'published' | 'deprecated';
-  deployed_dev: boolean;
-  deployed_staging: boolean;
+// ---- API (catalog entity) ---------------------------------------------------
+// Wire = `Schemas['APIResponse']`. UI ENRICHES with four optional fields
+// the backend doesn't (yet) emit — see BUG-4. Consumers already guard with
+// `?? defaults`, so optional is honest.
+export type API = Schemas['APIResponse'] & {
   openapi_spec?: string | Record<string, unknown>;
-  tags?: string[];
-  portal_promoted?: boolean; // Whether API is promoted to Developer Portal
   audience?: 'public' | 'internal' | 'partner';
-  created_at: string;
-  updated_at: string;
-}
+  created_at?: string;
+  updated_at?: string;
+};
 
 export interface APICreate {
   name: string;
@@ -63,29 +66,22 @@ export interface APICreate {
   portal_promoted?: boolean; // Add portal:published tag when true
 }
 
-export interface APIVersionEntry {
-  sha: string;
-  message: string;
-  author: string;
-  date: string;
-}
-
-// Application types
-export interface Application {
-  id: string;
-  tenant_id: string;
-  name: string;
-  display_name: string;
-  description: string;
+// ---- Application ------------------------------------------------------------
+// Wire = `Schemas['src__routers__portal_applications__ApplicationResponse']`
+// (long Pydantic-namespaced name because BUG-1 — backend never extracted
+// a clean `ApplicationResponse` schema). UI narrows two nullable fields
+// (`client_id, tenant_id`) and adds a UI-only `environment` field.
+export type Application = Omit<
+  Schemas['src__routers__portal_applications__ApplicationResponse'],
+  'client_id' | 'tenant_id'
+> & {
+  /** UI assumes always set (BUG-1: backend should make it required). */
   client_id: string;
-  status: 'pending' | 'approved' | 'suspended' | 'active' | 'disabled';
-  api_subscriptions: string[];
+  /** UI assumes always set in the contexts we render. */
+  tenant_id: string;
+  /** UI-only field, populated client-side via filters/context. */
   environment?: string;
-  security_profile?: string;
-  jwks_uri?: string;
-  created_at: string;
-  updated_at: string;
-}
+};
 
 export type SecurityProfile =
   | 'api_key'
@@ -111,54 +107,15 @@ export type CertificateStatus = 'active' | 'rotating' | 'revoked' | 'expired';
 // Token binding mode (CAB-438 — Sender-Constrained Tokens)
 export type TokenBindingMode = 'mtls' | 'dpop' | 'none';
 
-export interface Consumer {
-  id: string;
-  tenant_id: string;
-  external_id: string;
-  name: string;
-  email: string;
-  company?: string;
-  description?: string;
-  status: 'active' | 'suspended' | 'blocked';
-  certificate_fingerprint?: string;
-  certificate_status?: CertificateStatus;
-  certificate_subject_dn?: string;
-  certificate_not_before?: string;
-  certificate_not_after?: string;
-  last_rotated_at?: string;
-  rotation_count?: number;
-  dpop_jkt?: string; // DPoP JWK Thumbprint (RFC 9449) — set when DPoP binding is active
-  created_at: string;
-  updated_at: string;
-}
+// Wire = `Schemas['ConsumerResponse']`. UI ENRICHES with `dpop_jkt` (RFC 9449
+// DPoP thumbprint, CAB-438). `certificate_status` is widened to
+// `CertificateStatus` union via `as` casts at consumer sites.
+export type Consumer = Schemas['ConsumerResponse'] & {
+  /** DPoP JWK Thumbprint (RFC 9449) — set when DPoP binding is active. */
+  dpop_jkt?: string;
+};
 
 // Certificate lifecycle types (CAB-872)
-export interface CertificateExpiryItem {
-  consumer_id: string;
-  external_id: string;
-  name: string;
-  tenant_id: string;
-  certificate_fingerprint: string;
-  certificate_subject_dn?: string;
-  certificate_not_after: string;
-  days_until_expiry: number;
-  health_score: number;
-  certificate_status: CertificateStatus;
-}
-
-export interface CertificateExpiryResponse {
-  items: CertificateExpiryItem[];
-  total: number;
-  days_threshold: number;
-}
-
-export interface BulkRevokeResponse {
-  success: number;
-  failed: number;
-  skipped: number;
-  errors: string[];
-}
-
 // Tenant CA types (CAB-1787/1788 — per-tenant CA management)
 export interface TenantCAInfo {
   tenant_id: string;
@@ -171,19 +128,6 @@ export interface TenantCAInfo {
   ca_certificate_pem: string;
   status: string;
   created_at?: string;
-}
-
-export interface CSRSignResponse {
-  id: string;
-  signed_certificate_pem: string;
-  subject_dn: string;
-  issuer_dn: string;
-  serial_number: string;
-  fingerprint_sha256: string;
-  not_before: string;
-  not_after: string;
-  validity_days: number;
-  status: string;
 }
 
 export interface IssuedCertificate {
@@ -743,11 +687,6 @@ export interface ApplicationDiffResponse {
   resources: ApplicationDiffResource[];
 }
 
-export interface SyncResponse {
-  message: string;
-  operation: string | null;
-}
-
 // =============================================================================
 // External MCP Server Types
 // =============================================================================
@@ -845,30 +784,8 @@ export interface ExternalMCPServerListResponse {
   page_size: number;
 }
 
-export interface TestConnectionResponse {
-  success: boolean;
-  latency_ms?: number;
-  error?: string;
-  server_info?: Record<string, unknown>;
-  tools_discovered?: number;
-}
-
-export interface SyncToolsResponse {
-  synced_count: number;
-  removed_count: number;
-  tools: ExternalMCPServerTool[];
-}
-
 // Tool Observability types (CAB-1821)
 // =============================================================================
-
-export interface GatewayBindingInfo {
-  gateway_instance_id?: string;
-  gateway_name?: string;
-  gateway_type?: string;
-  gateway_environment?: string;
-  gateway_status?: string;
-}
 
 export interface ToolObservabilityItem {
   id: string;
@@ -889,7 +806,7 @@ export interface ToolsObservabilityResponse {
   health_status: string;
   last_health_check?: string;
   last_sync_at?: string;
-  gateway: GatewayBindingInfo;
+  gateway: Schemas['GatewayBindingInfo'];
   tools: ToolObservabilityItem[];
   tools_count: number;
   enabled_count: number;
@@ -989,12 +906,6 @@ export interface TimingMetrics {
   avg_time_to_first_tool_seconds?: number;
 }
 
-export interface CompanyStats {
-  company: string;
-  invite_count: number;
-  converted_count: number;
-}
-
 export interface ProspectsMetricsResponse {
   total_invited: number;
   total_active: number;
@@ -1003,7 +914,7 @@ export interface ProspectsMetricsResponse {
   by_status: ConversionFunnel;
   nps: NPSDistribution;
   timing: TimingMetrics;
-  top_companies: CompanyStats[];
+  top_companies: Schemas['CompanyStats'][];
 }
 
 export interface ProspectsFilters {
@@ -1064,26 +975,6 @@ export interface BackendApi {
   created_by: string | null;
 }
 
-export interface BackendApiCreate {
-  name: string;
-  display_name?: string;
-  description?: string;
-  backend_url: string;
-  openapi_spec_url?: string;
-  auth_type: BackendApiAuthType;
-  auth_config?: Record<string, string>;
-}
-
-export interface BackendApiUpdate {
-  display_name?: string;
-  description?: string;
-  backend_url?: string;
-  openapi_spec_url?: string;
-  auth_type?: BackendApiAuthType;
-  auth_config?: Record<string, string>;
-  status?: BackendApiStatus;
-}
-
 export interface BackendApiListResponse {
   items: BackendApi[];
   total: number;
@@ -1111,21 +1002,6 @@ export interface SaasApiKey {
   expires_at: string | null;
   last_used_at: string | null;
   created_by: string | null;
-}
-
-export interface SaasApiKeyCreate {
-  name: string;
-  description?: string;
-  allowed_backend_api_ids: string[];
-  rate_limit_rpm?: number;
-  expires_at?: string;
-}
-
-export interface SaasApiKeyCreatedResponse {
-  id: string;
-  name: string;
-  key: string;
-  key_prefix: string;
 }
 
 export interface SaasApiKeyListResponse {
@@ -1159,34 +1035,27 @@ export type DeploymentSyncStatus =
   | 'error'
   | 'deleting';
 
-export interface GatewayInstance {
-  id: string;
-  name: string;
-  display_name: string;
+// ---- GatewayInstance --------------------------------------------------------
+// Wire = `Schemas['GatewayInstanceResponse']`. View-model NARROWS three
+// stringy fields to unions (BUG-2 — backend should use `Literal[...]`) and
+// ENRICHES with admin fields the backend emits via `extra='allow'` Pydantic
+// but doesn't declare in its schema.
+export type GatewayInstance = Omit<
+  Schemas['GatewayInstanceResponse'],
+  'gateway_type' | 'mode' | 'status'
+> & {
   gateway_type: GatewayType;
-  environment: string;
-  tenant_id?: string;
-  base_url: string;
-  target_gateway_url?: string | null;
-  public_url?: string | null;
-  ui_url?: string | null;
-  auth_config: Record<string, unknown>;
-  status: GatewayInstanceStatus;
-  last_health_check?: string;
-  health_details?: Record<string, unknown>;
-  capabilities: string[];
-  version?: string;
-  tags: string[];
   mode?: GatewayMode;
+  status: GatewayInstanceStatus;
+  /** Admin toggle, BUG-2. */
   enabled: boolean;
-  visibility?: { tenant_ids: string[] } | null;
+  /** Where the instance was registered, BUG-2. */
   source?: 'argocd' | 'self_register' | 'manual';
-  protected?: boolean;
-  deleted_at?: string | null;
-  deleted_by?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+  /** Tenant ACL, BUG-2. */
+  visibility?: { tenant_ids: string[] } | null;
+  /** UI navigation URL — synthesized client-side for some gateways. */
+  ui_url?: string | null;
+};
 
 export interface GatewayInstanceCreate {
   name: string;
@@ -1209,13 +1078,6 @@ export interface GatewayInstanceUpdate {
   tags?: string[];
   enabled?: boolean;
   visibility?: { tenant_ids: string[] } | null;
-}
-
-export interface GatewayHealthCheckResponse {
-  status: string;
-  details: Record<string, unknown>;
-  gateway_name: string;
-  gateway_type: string;
 }
 
 export interface PaginatedGatewayInstances {
@@ -1254,16 +1116,6 @@ export interface GatewayDeployment {
   gateway_display_name?: string;
   gateway_type?: string;
   gateway_environment?: string;
-}
-
-export interface DeploymentStatusSummary {
-  pending: number;
-  syncing: number;
-  synced: number;
-  drifted: number;
-  error: number;
-  deleting: number;
-  total: number;
 }
 
 // =============================================================================
@@ -1338,12 +1190,6 @@ export type WorkflowStatus =
 export type Sector = 'fintech' | 'startup' | 'enterprise';
 export type StepAction = 'approved' | 'rejected' | 'skipped';
 
-export interface ApprovalStepDef {
-  step_index: number;
-  role: string;
-  label: string;
-}
-
 export interface WorkflowTemplate {
   id: string;
   tenant_id: string;
@@ -1351,7 +1197,7 @@ export interface WorkflowTemplate {
   mode: WorkflowMode;
   name: string;
   description: string | null;
-  approval_steps: ApprovalStepDef[];
+  approval_steps: Schemas['ApprovalStepDef'][];
   auto_provision: boolean;
   notification_config: Record<string, unknown>;
   sector: Sector | null;
@@ -1365,7 +1211,7 @@ export interface WorkflowTemplateCreate {
   mode: WorkflowMode;
   name: string;
   description?: string | null;
-  approval_steps?: ApprovalStepDef[];
+  approval_steps?: Schemas['ApprovalStepDef'][];
   auto_provision?: boolean;
   notification_config?: Record<string, unknown>;
   sector?: Sector | null;
@@ -1375,7 +1221,7 @@ export interface WorkflowTemplateUpdate {
   mode?: WorkflowMode;
   name?: string;
   description?: string | null;
-  approval_steps?: ApprovalStepDef[];
+  approval_steps?: Schemas['ApprovalStepDef'][];
   auto_provision?: boolean;
   notification_config?: Record<string, unknown>;
   sector?: Sector | null;
@@ -1427,12 +1273,6 @@ export interface MasterAccount {
   sub_account_count: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface MasterAccountCreate {
-  name: string;
-  description?: string;
-  max_sub_accounts?: number;
 }
 
 export interface MasterAccountUpdate {
@@ -1499,12 +1339,6 @@ export interface UsageResponse {
   total_requests: number;
   total_tokens: number;
   sub_accounts: UsageSubAccountStat[];
-}
-
-export interface FederationBulkRevokeResponse {
-  revoked_count: number;
-  already_revoked: number;
-  total: number;
 }
 
 // CAB-1454: Admin Users Management
@@ -1596,29 +1430,6 @@ export interface ConnectorCatalogResponse {
   total_count: number;
 }
 
-export interface AuthorizeResponse {
-  authorize_url: string;
-  state: string;
-}
-
-export interface CallbackResponse {
-  server_id: string;
-  server_name: string;
-  display_name: string;
-  slug: string;
-  tools_sync_triggered: boolean;
-  redirect_url?: string;
-}
-
-export interface PromoteResponse {
-  slug: string;
-  source_environment: string;
-  target_environment: string;
-  server_id: string;
-  server_name: string;
-  credentials_cloned: boolean;
-}
-
 // ============== Subscription Management (CAB-1635) ==============
 
 export type SubscriptionStatus =
@@ -1674,22 +1485,6 @@ export interface SubscriptionStats {
   avg_approval_time_hours: number | null;
 }
 
-export interface BulkSubscriptionAction {
-  ids: string[];
-  action: 'approve' | 'reject';
-  reason?: string;
-}
-
-export interface BulkActionFailure {
-  id: string;
-  error: string;
-}
-
-export interface BulkActionResult {
-  succeeded: number;
-  failed: BulkActionFailure[];
-}
-
 // ============ Webhook Types (CAB-1647) ============
 
 export type WebhookEventType =
@@ -1716,23 +1511,6 @@ export interface TenantWebhook {
   created_by?: string;
 }
 
-export interface WebhookCreate {
-  name: string;
-  url: string;
-  events: WebhookEventType[];
-  secret?: string;
-  headers?: Record<string, string>;
-}
-
-export interface WebhookUpdate {
-  name?: string;
-  url?: string;
-  events?: WebhookEventType[];
-  secret?: string;
-  headers?: Record<string, string>;
-  enabled?: boolean;
-}
-
 export interface WebhookDelivery {
   id: string;
   webhook_id: string;
@@ -1749,14 +1527,6 @@ export interface WebhookDelivery {
   last_attempt_at?: string;
   next_retry_at?: string;
   delivered_at?: string;
-}
-
-export interface WebhookTestResponse {
-  success: boolean;
-  status_code?: number;
-  response_body?: string;
-  error?: string;
-  signature_header?: string;
 }
 
 export interface WebhookListResponse {
@@ -1786,23 +1556,6 @@ export interface CredentialMapping {
   created_at: string;
   updated_at: string;
   created_by: string | null;
-}
-
-export interface CredentialMappingCreate {
-  consumer_id: string;
-  api_id: string;
-  auth_type: CredentialAuthType;
-  header_name: string;
-  credential_value: string;
-  description?: string;
-}
-
-export interface CredentialMappingUpdate {
-  auth_type?: CredentialAuthType;
-  header_name?: string;
-  credential_value?: string;
-  description?: string;
-  is_active?: boolean;
 }
 
 export interface CredentialMappingListResponse {
@@ -1853,14 +1606,6 @@ export interface ContractCreate {
   status?: ContractStatus;
 }
 
-export interface ContractUpdate {
-  display_name?: string;
-  description?: string;
-  version?: string;
-  openapi_spec_url?: string;
-  status?: ContractStatus;
-}
-
 export interface GeneratedBinding {
   protocol: ProtocolType;
   endpoint: string;
@@ -1901,30 +1646,11 @@ export interface Promotion {
   updated_at: string;
 }
 
-export interface PromotionCreate {
-  source_environment: string;
-  target_environment: string;
-  message: string;
-}
-
-export interface PromotionRollbackRequest {
-  message: string;
-}
-
 export interface PromotionListResponse {
   items: Promotion[];
   total: number;
   page: number;
   page_size: number;
-}
-
-export interface PromotionDiffResponse {
-  promotion_id: string;
-  source_environment: string;
-  target_environment: string;
-  source_spec: Record<string, unknown> | null;
-  target_spec: Record<string, unknown> | null;
-  diff_summary: Record<string, unknown> | null;
 }
 
 // ─── EU API Catalog (CAB-1639) ────────────────────────────────────────────────
@@ -1977,12 +1703,6 @@ export interface TenantToolPermission {
   created_by: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface TenantToolPermissionCreate {
-  mcp_server_id: string;
-  tool_name: string;
-  allowed: boolean;
 }
 
 export interface TenantToolPermissionListResponse {

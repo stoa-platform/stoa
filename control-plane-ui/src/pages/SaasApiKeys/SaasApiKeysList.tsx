@@ -7,7 +7,8 @@ import { CreateKeyModal } from './CreateKeyModal';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
-import type { SaasApiKeyStatus, SaasApiKeyCreatedResponse } from '../../types';
+import type { SaasApiKeyStatus } from '../../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 const statusConfig: Record<SaasApiKeyStatus, { color: string; label: string }> = {
   active: {
@@ -39,7 +40,7 @@ export function SaasApiKeysList() {
   const queryClient = useQueryClient();
   const [confirm, ConfirmDialog] = useConfirm();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [revealedKey, setRevealedKey] = useState<SaasApiKeyCreatedResponse | null>(null);
+  const [revealedKey, setRevealedKey] = useState<Schemas['SaasApiKeyCreatedResponse'] | null>(null);
   const [copied, setCopied] = useState(false);
 
   const tenantId = user?.tenant_id || '';
@@ -87,7 +88,7 @@ export function SaasApiKeysList() {
   );
 
   const handleKeyCreated = useCallback(
-    (result: SaasApiKeyCreatedResponse) => {
+    (result: Schemas['SaasApiKeyCreatedResponse']) => {
       setShowCreateModal(false);
       setRevealedKey(result);
       setCopied(false);

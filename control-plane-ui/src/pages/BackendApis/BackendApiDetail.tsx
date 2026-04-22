@@ -17,7 +17,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { backendApisService } from '../../services/backendApisApi';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
-import type { BackendApiStatus, BackendApiAuthType, BackendApiUpdate } from '../../types';
+import type { BackendApiStatus, BackendApiAuthType } from '../../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 const statusConfig: Record<BackendApiStatus, { color: string; label: string }> = {
   draft: {
@@ -54,7 +55,7 @@ export function BackendApiDetail() {
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState<BackendApiUpdate>({});
+  const [editForm, setEditForm] = useState<Schemas['BackendApiUpdate']>({});
 
   const {
     data: api,

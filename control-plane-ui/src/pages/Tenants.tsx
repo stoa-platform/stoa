@@ -117,13 +117,17 @@ export function Tenants() {
                   <span className="text-neutral-500 dark:text-neutral-400">
                     {t('tenants.created')}
                   </span>
-                  <span>{new Date(tenant.created_at).toLocaleDateString()}</span>
+                  <span>
+                    {tenant.created_at ? new Date(tenant.created_at).toLocaleDateString() : '—'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500 dark:text-neutral-400">
                     {t('common.lastUpdated')}
                   </span>
-                  <span>{new Date(tenant.updated_at).toLocaleDateString()}</span>
+                  <span>
+                    {tenant.updated_at ? new Date(tenant.updated_at).toLocaleDateString() : '—'}
+                  </span>
                 </div>
               </div>
             </div>

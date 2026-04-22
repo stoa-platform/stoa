@@ -7,7 +7,6 @@
 import { apiService } from './api';
 import type {
   MasterAccount,
-  MasterAccountCreate,
   MasterAccountUpdate,
   MasterAccountListResponse,
   SubAccount,
@@ -16,8 +15,8 @@ import type {
   SubAccountListResponse,
   ToolAllowListResponse,
   UsageResponse,
-  FederationBulkRevokeResponse,
 } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 class FederationService {
   // ==========================================================================
@@ -48,7 +47,7 @@ class FederationService {
    */
   async createMasterAccount(
     tenantId: string,
-    payload: MasterAccountCreate
+    payload: Schemas['MasterAccountCreate']
   ): Promise<MasterAccount> {
     const { data } = await apiService.post(`/v1/tenants/${tenantId}/federation/accounts`, payload);
     return data;
@@ -175,7 +174,10 @@ class FederationService {
    * Bulk revoke all active sub-accounts.
    * Endpoint: POST /v1/tenants/{tenant_id}/federation/accounts/{masterId}/bulk-revoke
    */
-  async bulkRevoke(tenantId: string, masterId: string): Promise<FederationBulkRevokeResponse> {
+  async bulkRevoke(
+    tenantId: string,
+    masterId: string
+  ): Promise<Schemas['FederationBulkRevokeResponse']> {
     const { data } = await apiService.post(
       `/v1/tenants/${tenantId}/federation/accounts/${masterId}/bulk-revoke`
     );

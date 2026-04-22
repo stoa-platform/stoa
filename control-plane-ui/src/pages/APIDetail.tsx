@@ -29,7 +29,8 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { Button } from '@stoa/shared/components/Button';
 import { EnvironmentPipeline } from '../components/EnvironmentPipeline';
-import type { API, APIVersionEntry, GatewayDeployment } from '../types';
+import type { API, GatewayDeployment } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 import { DeployAPIDialog } from './GatewayDeployments/DeployAPIDialog';
 
 type TabId = 'overview' | 'spec' | 'versions' | 'deployments' | 'promotions';
@@ -374,7 +375,13 @@ function SpecTab({ api }: { api: API }) {
   );
 }
 
-function VersionsTab({ versions, loading }: { versions: APIVersionEntry[]; loading: boolean }) {
+function VersionsTab({
+  versions,
+  loading,
+}: {
+  versions: Schemas['APIVersionEntry'][];
+  loading: boolean;
+}) {
   if (loading) {
     return (
       <div className="space-y-3">

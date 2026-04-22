@@ -19,7 +19,8 @@ import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
 import { SubNav } from '../../components/SubNav';
 import { apiDeploymentTabs } from '../../components/subNavGroups';
-import type { GatewayDeployment, DeploymentStatusSummary } from '../../types';
+import type { GatewayDeployment } from '../../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 const PAGE_SIZE = 20;
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -46,7 +47,7 @@ export function ApiDeploymentsDashboard() {
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<GatewayDeployment[]>([]);
-  const [summary, setSummary] = useState<DeploymentStatusSummary | null>(null);
+  const [summary, setSummary] = useState<Schemas['DeploymentStatusSummary'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');

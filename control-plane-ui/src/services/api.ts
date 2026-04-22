@@ -6,12 +6,9 @@ import type {
   TenantCreate,
   API,
   APICreate,
-  APIVersionEntry,
   Application,
   ApplicationCreate,
   Consumer,
-  CertificateExpiryResponse,
-  BulkRevokeResponse,
   Deployment,
   DeploymentCreate,
   DeploymentListResponse,
@@ -42,36 +39,24 @@ import type {
   Subscription,
   SubscriptionListResponse,
   SubscriptionStats,
-  BulkSubscriptionAction,
-  BulkActionResult,
   TenantWebhook,
-  WebhookCreate,
-  WebhookUpdate,
   WebhookListResponse,
   WebhookDeliveryListResponse,
-  WebhookTestResponse,
   CredentialMapping,
-  CredentialMappingCreate,
-  CredentialMappingUpdate,
   CredentialMappingListResponse,
   Contract,
   ContractCreate,
-  ContractUpdate,
   ContractListResponse,
   PublishContractResponse,
   ProtocolBinding,
   Promotion,
-  PromotionCreate,
-  PromotionRollbackRequest,
   PromotionListResponse,
-  PromotionDiffResponse,
   TenantCAInfo,
-  CSRSignResponse,
   IssuedCertificateListResponse,
   TenantToolPermission,
-  TenantToolPermissionCreate,
   TenantToolPermissionListResponse,
 } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 const API_BASE_URL = config.api.baseUrl;
 
@@ -279,7 +264,11 @@ class ApiService {
     await this.client.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
   }
 
-  async getApiVersions(tenantId: string, apiId: string, limit = 20): Promise<APIVersionEntry[]> {
+  async getApiVersions(
+    tenantId: string,
+    apiId: string,
+    limit = 20
+  ): Promise<Schemas['APIVersionEntry'][]> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis/${apiId}/versions`, {
       params: { limit },
     });
@@ -399,7 +388,7 @@ class ApiService {
   async getExpiringCertificates(
     tenantId: string,
     days: number = 30
-  ): Promise<CertificateExpiryResponse> {
+  ): Promise<Schemas['CertificateExpiryResponse']> {
     const { data } = await this.client.get(`/v1/consumers/${tenantId}/certificates/expiring`, {
       params: { days },
     });
@@ -409,7 +398,7 @@ class ApiService {
   async bulkRevokeCertificates(
     tenantId: string,
     consumerIds: string[]
-  ): Promise<BulkRevokeResponse> {
+  ): Promise<Schemas['BulkRevokeResponse']> {
     const { data } = await this.client.post(`/v1/consumers/${tenantId}/certificates/bulk-revoke`, {
       consumer_ids: consumerIds,
     });
@@ -431,7 +420,7 @@ class ApiService {
     tenantId: string,
     csrPem: string,
     validityDays: number = 365
-  ): Promise<CSRSignResponse> {
+  ): Promise<Schemas['CSRSignResponse']> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/ca/sign`, {
       csr_pem: csrPem,
       validity_days: validityDays,
@@ -531,7 +520,7 @@ class ApiService {
   async createPromotion(
     tenantId: string,
     apiId: string,
-    request: PromotionCreate
+    request: Schemas['PromotionCreate']
   ): Promise<Promotion> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/promotions/${apiId}`, request);
     return data;
@@ -554,7 +543,7 @@ class ApiService {
   async rollbackPromotion(
     tenantId: string,
     promotionId: string,
-    request: PromotionRollbackRequest
+    request: Schemas['PromotionRollbackRequest']
   ): Promise<Promotion> {
     const { data } = await this.client.post(
       `/v1/tenants/${tenantId}/promotions/${promotionId}/rollback`,
@@ -563,7 +552,10 @@ class ApiService {
     return data;
   }
 
-  async getPromotionDiff(tenantId: string, promotionId: string): Promise<PromotionDiffResponse> {
+  async getPromotionDiff(
+    tenantId: string,
+    promotionId: string
+  ): Promise<Schemas['PromotionDiffResponse']> {
     const { data } = await this.client.get(
       `/v1/tenants/${tenantId}/promotions/${promotionId}/diff`
     );
@@ -1095,7 +1087,7 @@ class ApiService {
 
   async upsertToolPermission(
     tenantId: string,
-    body: TenantToolPermissionCreate
+    body: Schemas['TenantToolPermissionCreate']
   ): Promise<TenantToolPermission> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/tool-permissions`, body);
     return data;
@@ -1293,7 +1285,9 @@ class ApiService {
     return data;
   }
 
-  async bulkSubscriptionAction(payload: BulkSubscriptionAction): Promise<BulkActionResult> {
+  async bulkSubscriptionAction(
+    payload: Schemas['BulkSubscriptionAction']
+  ): Promise<Schemas['BulkActionResult']> {
     const { data } = await this.client.post('/v1/subscriptions/bulk', payload);
     return data;
   }
@@ -1310,7 +1304,7 @@ class ApiService {
     return data;
   }
 
-  async createWebhook(tenantId: string, payload: WebhookCreate): Promise<TenantWebhook> {
+  async createWebhook(tenantId: string, payload: Schemas['WebhookCreate']): Promise<TenantWebhook> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/webhooks`, payload);
     return data;
   }
@@ -1318,7 +1312,7 @@ class ApiService {
   async updateWebhook(
     tenantId: string,
     webhookId: string,
-    payload: WebhookUpdate
+    payload: Schemas['WebhookUpdate']
   ): Promise<TenantWebhook> {
     const { data } = await this.client.patch(
       `/v1/tenants/${tenantId}/webhooks/${webhookId}`,
@@ -1331,7 +1325,7 @@ class ApiService {
     await this.client.delete(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
   }
 
-  async testWebhook(tenantId: string, webhookId: string): Promise<WebhookTestResponse> {
+  async testWebhook(tenantId: string, webhookId: string): Promise<Schemas['WebhookTestResponse']> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/webhooks/${webhookId}/test`, {
       event_type: 'subscription.created',
     });
@@ -1369,7 +1363,7 @@ class ApiService {
 
   async createCredentialMapping(
     tenantId: string,
-    payload: CredentialMappingCreate
+    payload: Schemas['CredentialMappingCreate']
   ): Promise<CredentialMapping> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/credential-mappings`, payload);
     return data;
@@ -1378,7 +1372,7 @@ class ApiService {
   async updateCredentialMapping(
     tenantId: string,
     mappingId: string,
-    payload: CredentialMappingUpdate
+    payload: Schemas['CredentialMappingUpdate']
   ): Promise<CredentialMapping> {
     const { data } = await this.client.put(
       `/v1/tenants/${tenantId}/credential-mappings/${mappingId}`,
@@ -1418,7 +1412,7 @@ class ApiService {
   async updateContract(
     tenantId: string,
     contractId: string,
-    payload: ContractUpdate
+    payload: Schemas['ContractUpdate']
   ): Promise<Contract> {
     const { data } = await this.client.patch(
       `/v1/tenants/${tenantId}/contracts/${contractId}`,

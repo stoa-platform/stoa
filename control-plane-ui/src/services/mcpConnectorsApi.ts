@@ -6,12 +6,8 @@
  */
 
 import { apiService } from './api';
-import type {
-  ConnectorCatalogResponse,
-  AuthorizeResponse,
-  CallbackResponse,
-  PromoteResponse,
-} from '../types';
+import type { ConnectorCatalogResponse } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 class MCPConnectorsService {
   /**
@@ -40,7 +36,7 @@ class MCPConnectorsService {
       client_id?: string;
       client_secret?: string;
     }
-  ): Promise<AuthorizeResponse> {
+  ): Promise<Schemas['AuthorizeResponse']> {
     const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/authorize`, body);
     return data;
   }
@@ -49,7 +45,10 @@ class MCPConnectorsService {
    * Exchange OAuth code for tokens and create the server.
    * Endpoint: POST /v1/admin/mcp-connectors/callback
    */
-  async handleCallback(body: { code: string; state: string }): Promise<CallbackResponse> {
+  async handleCallback(body: {
+    code: string;
+    state: string;
+  }): Promise<Schemas['CallbackResponse']> {
     const { data } = await apiService.post('/v1/admin/mcp-connectors/callback', body);
     return data;
   }
@@ -74,7 +73,7 @@ class MCPConnectorsService {
       tenant_id?: string;
       confirm?: boolean;
     }
-  ): Promise<PromoteResponse> {
+  ): Promise<Schemas['PromoteResponse']> {
     const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/promote`, body);
     return data;
   }

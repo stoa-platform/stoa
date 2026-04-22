@@ -13,10 +13,9 @@ import type {
   ExternalMCPServerUpdate,
   ExternalMCPServerListResponse,
   ExternalMCPServerTool,
-  TestConnectionResponse,
-  SyncToolsResponse,
   ToolsObservabilityResponse,
 } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 /**
  * External MCP Servers Service
@@ -95,7 +94,7 @@ class ExternalMCPServersService {
    * Test connection to an external MCP server.
    * Endpoint: POST /v1/admin/external-mcp-servers/{id}/test-connection
    */
-  async testConnection(serverId: string): Promise<TestConnectionResponse> {
+  async testConnection(serverId: string): Promise<Schemas['TestConnectionResponse']> {
     const { data } = await apiService.post(
       `/v1/admin/external-mcp-servers/${serverId}/test-connection`
     );
@@ -106,7 +105,7 @@ class ExternalMCPServersService {
    * Sync tools from an external MCP server.
    * Endpoint: POST /v1/admin/external-mcp-servers/{id}/sync-tools
    */
-  async syncTools(serverId: string): Promise<SyncToolsResponse> {
+  async syncTools(serverId: string): Promise<Schemas['SyncToolsResponse']> {
     const { data } = await apiService.post(`/v1/admin/external-mcp-servers/${serverId}/sync-tools`);
     return data;
   }

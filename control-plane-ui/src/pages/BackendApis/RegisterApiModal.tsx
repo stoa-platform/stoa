@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { backendApisService } from '../../services/backendApisApi';
 import { useToastActions } from '@stoa/shared/components/Toast';
-import type { BackendApiAuthType, BackendApiCreate } from '../../types';
+import type { BackendApiAuthType } from '../../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 interface RegisterApiModalProps {
   tenantId: string;
@@ -62,7 +63,7 @@ export function RegisterApiModal({ tenantId, onClose, onCreated }: RegisterApiMo
         };
       }
 
-      const payload: BackendApiCreate = {
+      const payload: Schemas['BackendApiCreate'] = {
         name,
         display_name: displayName || undefined,
         description: description || undefined,

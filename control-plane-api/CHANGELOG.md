@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.7.0...control-plane-api-v1.8.0) (2026-04-22)
+
+
+### Features
+
+* **api:** demo reset CLI entry point (CAB-2149 c/3) ([#2468](https://github.com/stoa-platform/stoa/issues/2468)) ([f26a03b](https://github.com/stoa-platform/stoa/commit/f26a03b1a73043418cf10942ba755780b406b4c1))
+* **api:** demo reset service with tenant isolation (CAB-2149 b/3) ([#2467](https://github.com/stoa-platform/stoa/issues/2467)) ([4674fbf](https://github.com/stoa-platform/stoa/commit/4674fbf8625173e964abc0d2fc6912711c7749a6))
+
 ## [1.7.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.4...control-plane-api-v1.7.0) (2026-04-22)
 
 

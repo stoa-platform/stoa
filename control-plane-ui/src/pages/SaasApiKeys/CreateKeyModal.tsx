@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { backendApisService } from '../../services/backendApisApi';
-import type { SaasApiKeyCreatedResponse } from '../../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 interface CreateKeyModalProps {
   tenantId: string;
   onClose: () => void;
-  onCreated: (result: SaasApiKeyCreatedResponse) => void;
+  onCreated: (result: Schemas['SaasApiKeyCreatedResponse']) => void;
 }
 
 export function CreateKeyModal({ tenantId, onClose, onCreated }: CreateKeyModalProps) {

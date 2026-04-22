@@ -16,12 +16,8 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
-import type {
-  GatewayInstance,
-  GatewayInstanceStatus,
-  GatewayDeployment,
-  DeploymentStatusSummary,
-} from '../../types';
+import type { GatewayInstance, GatewayInstanceStatus, GatewayDeployment } from '../../types';
+import type { Schemas } from '@stoa/shared/api-types';
 import { SubNav } from '../../components/SubNav';
 import { gatewayTabs } from '../../components/subNavGroups';
 
@@ -82,7 +78,7 @@ export function DriftDetection() {
 
   const [gateways, setGateways] = useState<GatewayInstance[]>([]);
   const [driftedDeployments, setDriftedDeployments] = useState<GatewayDeployment[]>([]);
-  const [summary, setSummary] = useState<DeploymentStatusSummary | null>(null);
+  const [summary, setSummary] = useState<Schemas['DeploymentStatusSummary'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);

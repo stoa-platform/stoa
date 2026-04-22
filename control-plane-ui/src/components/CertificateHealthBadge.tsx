@@ -2,7 +2,7 @@ import type { CertificateStatus } from '../types';
 
 interface Props {
   status?: CertificateStatus;
-  notAfter?: string;
+  notAfter?: string | null;
   className?: string;
 }
 
@@ -14,7 +14,7 @@ function getDaysUntilExpiry(notAfter: string): number {
 
 type HealthLevel = 'valid' | 'expiring-soon' | 'expiring' | 'critical' | 'expired' | 'revoked';
 
-function getHealthLevel(status?: CertificateStatus, notAfter?: string): HealthLevel {
+function getHealthLevel(status?: CertificateStatus, notAfter?: string | null): HealthLevel {
   if (status === 'revoked') return 'revoked';
   if (status === 'expired') return 'expired';
 

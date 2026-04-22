@@ -39,6 +39,7 @@ def _make_gateway_instance(**overrides):
         "protected": False,
         "enabled": True,
         "visibility": None,
+        "source": "self_register",
         "deleted_at": None,
         "deleted_by": None,
         "created_at": datetime.now(UTC),
@@ -406,7 +407,9 @@ class TestGatewayConfigTenantScoping:
 def _make_tool(
     tool_name: str = "acme__payment-api__charge",
     description: str = "Charge a card",
-    input_schema: str | None = '{"type": "object", "properties": {"amount": {"type": "number"}}, "required": ["amount"]}',
+    input_schema: (
+        str | None
+    ) = '{"type": "object", "properties": {"amount": {"type": "number"}}, "required": ["amount"]}',
     output_schema: str | None = None,
     backend_url: str = "https://api.acme.com",
     http_method: str = "POST",
@@ -507,9 +510,7 @@ class TestInternalToolDiscovery:
         ):
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_instance = MockGenerator.return_value
-            mock_instance.get_tools_for_tenant = AsyncMock(
-                return_value=[enabled_tool, disabled_tool]
-            )
+            mock_instance.get_tools_for_tenant = AsyncMock(return_value=[enabled_tool, disabled_tool])
 
             resp = client.get(
                 "/v1/internal/gateways/tools?tenant_id=acme",
@@ -523,9 +524,7 @@ class TestInternalToolDiscovery:
 
     def test_tools_parses_input_schema_json(self, client):
         """input_schema string is parsed into the inputSchema object."""
-        tool = _make_tool(
-            input_schema='{"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}'
-        )
+        tool = _make_tool(input_schema='{"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}')
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -627,9 +626,7 @@ class TestInternalToolDiscovery:
 
     def test_generated_tools_total_matches_tools_length(self, client):
         """total field in TenantToolsResponse matches the actual number of tools."""
-        tools = [
-            _make_tool(tool_name=f"tool-{i}") for i in range(3)
-        ]
+        tools = [_make_tool(tool_name=f"tool-{i}") for i in range(3)]
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -666,15 +663,17 @@ class TestListGatewayRoutes:
 
     def test_routes_returns_basic_fields(self, client):
         """Route with no openapi_spec returns standard fields."""
-        dep = _make_deployment({
-            "api_catalog_id": "cat-1",
-            "api_name": "petstore",
-            "backend_url": "http://petstore:8080",
-            "methods": ["GET", "POST"],
-            "spec_hash": "abc123",
-            "activated": True,
-            "tenant_id": "tenant-a",
-        })
+        dep = _make_deployment(
+            {
+                "api_catalog_id": "cat-1",
+                "api_name": "petstore",
+                "backend_url": "http://petstore:8080",
+                "methods": ["GET", "POST"],
+                "spec_hash": "abc123",
+                "activated": True,
+                "tenant_id": "tenant-a",
+            }
+        )
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -700,16 +699,18 @@ class TestListGatewayRoutes:
         webMethods requires apiDefinition as a JSON object (not a string).
         """
         spec_dict = {"openapi": "3.1.0", "info": {"title": "Petstore", "version": "1.0.0"}}
-        dep = _make_deployment({
-            "api_catalog_id": "cat-2",
-            "api_name": "petstore-spec",
-            "backend_url": "http://petstore:8080",
-            "methods": ["GET"],
-            "spec_hash": "sha-xyz",
-            "activated": True,
-            "tenant_id": "tenant-b",
-            "openapi_spec": spec_dict,
-        })
+        dep = _make_deployment(
+            {
+                "api_catalog_id": "cat-2",
+                "api_name": "petstore-spec",
+                "backend_url": "http://petstore:8080",
+                "methods": ["GET"],
+                "spec_hash": "sha-xyz",
+                "activated": True,
+                "tenant_id": "tenant-b",
+                "openapi_spec": spec_dict,
+            }
+        )
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,
@@ -733,12 +734,14 @@ class TestListGatewayRoutes:
 
     def test_routes_skips_deployment_without_backend_url(self, client):
         """Deployments with no backend_url are excluded from the route list."""
-        dep = _make_deployment({
-            "api_catalog_id": "cat-3",
-            "api_name": "no-backend",
-            "backend_url": "",
-            "tenant_id": "tenant-a",
-        })
+        dep = _make_deployment(
+            {
+                "api_catalog_id": "cat-3",
+                "api_name": "no-backend",
+                "backend_url": "",
+                "tenant_id": "tenant-a",
+            }
+        )
 
         with (
             patch("src.routers.gateway_internal.settings") as mock_settings,

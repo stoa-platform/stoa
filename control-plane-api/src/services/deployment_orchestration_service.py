@@ -99,7 +99,8 @@ class DeploymentOrchestrationService:
         try:
             from ..services.git_service import git_service
 
-            if not git_service._project:
+            # regression for CAB-1889: use provider-agnostic is_connected, not _project
+            if not git_service.is_connected():
                 await git_service.connect()
 
             api_data = await git_service.get_api(tenant_id, api_id)
@@ -117,11 +118,10 @@ class DeploymentOrchestrationService:
             with contextlib.suppress(Exception):
                 openapi_spec = await git_service.get_api_openapi_spec(tenant_id, api_id)
 
-            commit_sha = None
+            commit_sha: str | None = None
             with contextlib.suppress(Exception):
-                commits = git_service._project.commits.list(ref_name="main", per_page=1)
-                if commits:
-                    commit_sha = commits[0].id
+                # regression for CAB-1889: use provider-agnostic ABC, not _project
+                commit_sha = await git_service.get_head_commit_sha(ref="main")
 
             await sync_svc._upsert_api(tenant_id, api_id, api_data, openapi_spec, commit_sha)
             await self.db.commit()

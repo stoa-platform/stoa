@@ -74,51 +74,6 @@ func ConfigFromEnv(version string) Config {
 	return cfg
 }
 
-// RegistrationPayload is the payload sent to POST /v1/internal/gateways/register.
-type RegistrationPayload struct {
-	Hostname         string   `json:"hostname"`
-	Mode             string   `json:"mode"`
-	Version          string   `json:"version"`
-	Environment      string   `json:"environment"`
-	Capabilities     []string `json:"capabilities"`
-	AdminURL         string   `json:"admin_url"`
-	TargetGatewayURL string   `json:"target_gateway_url,omitempty"`
-	PublicURL        string   `json:"public_url,omitempty"`
-	UIURL            string   `json:"ui_url,omitempty"`
-}
-
-// RegistrationResponse is the response from the register endpoint.
-type RegistrationResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Environment string `json:"environment"`
-	Status      string `json:"status"`
-}
-
-// HeartbeatPayload is the payload sent to POST /v1/internal/gateways/{id}/heartbeat.
-type HeartbeatPayload struct {
-	UptimeSeconds  int `json:"uptime_seconds"`
-	RoutesCount    int `json:"routes_count"`
-	PoliciesCount  int `json:"policies_count"`
-	DiscoveredAPIs int `json:"discovered_apis"`
-}
-
-// DiscoveryPayload is the payload sent to POST /v1/internal/gateways/{id}/discovery.
-type DiscoveryPayload struct {
-	APIs []DiscoveredAPIPayload `json:"apis"`
-}
-
-// DiscoveredAPIPayload represents a single discovered API for the CP.
-type DiscoveredAPIPayload struct {
-	Name       string   `json:"name"`
-	Version    string   `json:"version,omitempty"`
-	BackendURL string   `json:"backend_url,omitempty"`
-	Paths      []string `json:"paths,omitempty"`
-	Methods    []string `json:"methods,omitempty"`
-	Policies   []string `json:"policies,omitempty"`
-	IsActive   bool     `json:"is_active"`
-}
-
 // Agent is the STOA Connect runtime agent.
 //
 // Mutable runtime state (gatewayID, discovered APIs) lives under Agent.state
@@ -244,15 +199,11 @@ func (a *Agent) GatewayID() string {
 	return a.state.GatewayID()
 }
 
-// ErrGatewayNotFound is returned when the CP responds 404 to a heartbeat,
-// indicating the gateway instance was purged and needs re-registration.
-var ErrGatewayNotFound = fmt.Errorf("gateway not found on Control Plane (purged)")
-
 // Heartbeat sends a single heartbeat to the Control Plane.
 func (a *Agent) Heartbeat(ctx context.Context) error {
 	gatewayID := a.state.GatewayID()
 	if gatewayID == "" {
-		return fmt.Errorf("not registered")
+		return ErrNotRegistered
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.heartbeat",
@@ -375,7 +326,7 @@ func (a *Agent) IsConfigured() bool {
 func (a *Agent) ReportDiscovery(ctx context.Context, apis []DiscoveredAPIPayload) error {
 	gatewayID := a.state.GatewayID()
 	if gatewayID == "" {
-		return fmt.Errorf("not registered")
+		return ErrNotRegistered
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.discovery",

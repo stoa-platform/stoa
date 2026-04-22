@@ -22,53 +22,11 @@ type SyncConfig struct {
 	Interval time.Duration
 }
 
-// GatewayConfigResponse is the response from GET /v1/internal/gateways/{id}/config.
-type GatewayConfigResponse struct {
-	GatewayID          string          `json:"gateway_id"`
-	Name               string          `json:"name"`
-	Environment        string          `json:"environment"`
-	TenantID           string          `json:"tenant_id"`
-	PendingDeployments []interface{}   `json:"pending_deployments"`
-	PendingPolicies    []PendingPolicy `json:"pending_policies"`
-}
-
-// PendingPolicy represents a policy from the CP config endpoint.
-type PendingPolicy struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name"`
-	PolicyType string                 `json:"policy_type"`
-	Config     map[string]interface{} `json:"config"`
-	Priority   int                    `json:"priority"`
-	Enabled    bool                   `json:"enabled"`
-}
-
-// SyncAckPayload is sent to POST /v1/internal/gateways/{id}/sync-ack.
-type SyncAckPayload struct {
-	SyncedPolicies []SyncedPolicyResult `json:"synced_policies"`
-	SyncTimestamp  string               `json:"sync_timestamp"`
-}
-
-// SyncedPolicyResult reports the sync result for one policy.
-type SyncedPolicyResult struct {
-	PolicyID string `json:"policy_id"`
-	Status   string `json:"status"` // "applied", "removed", "failed"
-	Error    string `json:"error,omitempty"`
-}
-
-// SyncStep records a single step in a sync pipeline for observability.
-type SyncStep struct {
-	Name        string `json:"name"`
-	Status      string `json:"status"` // "success", "failed", "skipped"
-	StartedAt   string `json:"started_at"`
-	CompletedAt string `json:"completed_at,omitempty"`
-	Detail      string `json:"detail,omitempty"`
-}
-
 // FetchConfig pulls the gateway config (policies, deployments) from the CP.
 func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error) {
 	gatewayID := a.state.GatewayID()
 	if gatewayID == "" {
-		return nil, fmt.Errorf("not registered")
+		return nil, ErrNotRegistered
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync.fetch-config",
@@ -119,7 +77,7 @@ func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error)
 func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult) error {
 	gatewayID := a.state.GatewayID()
 	if gatewayID == "" {
-		return fmt.Errorf("not registered")
+		return ErrNotRegistered
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync.ack",
@@ -190,26 +148,11 @@ func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult)
 	return nil
 }
 
-// RouteSyncAckPayload is sent to POST /v1/internal/gateways/{id}/route-sync-ack.
-type RouteSyncAckPayload struct {
-	SyncedRoutes  []SyncedRouteResult `json:"synced_routes"`
-	SyncTimestamp string              `json:"sync_timestamp"`
-}
-
-// SyncedRouteResult reports the sync result for one route deployment.
-type SyncedRouteResult struct {
-	DeploymentID string     `json:"deployment_id"`
-	Status       string     `json:"status"` // "applied", "failed"
-	Error        string     `json:"error,omitempty"`
-	Steps        []SyncStep `json:"steps,omitempty"`
-	Generation   int        `json:"generation,omitempty"` // CAB-1950: generation that was synced
-}
-
 // ReportRouteSyncAck sends route sync results to the CP.
 func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteResult) error {
 	gatewayID := a.state.GatewayID()
 	if gatewayID == "" {
-		return fmt.Errorf("not registered")
+		return ErrNotRegistered
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.routes.ack",
@@ -409,18 +352,6 @@ func (a *Agent) StartSync(ctx context.Context, adapter adapters.GatewayAdapter, 
 			}
 		}
 	}()
-}
-
-// newSyncStep creates a completed SyncStep with the current timestamp.
-func newSyncStep(name, status, detail string) SyncStep {
-	now := time.Now().UTC().Format(time.RFC3339)
-	return SyncStep{
-		Name:        name,
-		Status:      status,
-		StartedAt:   now,
-		CompletedAt: now,
-		Detail:      detail,
-	}
 }
 
 // getStringConfig safely extracts a string value from a config map.

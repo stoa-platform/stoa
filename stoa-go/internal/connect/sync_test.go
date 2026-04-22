@@ -3,6 +3,7 @@ package connect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -298,11 +299,8 @@ func TestReportRouteSyncAckNotRegistered(t *testing.T) {
 	err := agent.ReportRouteSyncAck(context.Background(), []SyncedRouteResult{
 		{DeploymentID: "dep-1", Status: "applied"},
 	})
-	if err == nil {
-		t.Fatal("expected error when not registered")
-	}
-	if err.Error() != "not registered" {
-		t.Errorf("expected 'not registered', got %s", err.Error())
+	if !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("expected ErrNotRegistered, got %v", err)
 	}
 }
 

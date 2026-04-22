@@ -42,21 +42,6 @@ func SSEConfigFromEnv() SSEConfig {
 	return cfg
 }
 
-// SSEEvent represents a parsed Server-Sent Event.
-type SSEEvent struct {
-	Event string          `json:"event"`
-	Data  json.RawMessage `json:"data"`
-}
-
-// DeploymentEvent is the data payload for a sync-deployment SSE event.
-type DeploymentEvent struct {
-	DeploymentID      string          `json:"deployment_id"`
-	APICatalogID      string          `json:"api_catalog_id"`
-	GatewayInstanceID string          `json:"gateway_instance_id"`
-	SyncStatus        string          `json:"sync_status"`
-	DesiredState      json.RawMessage `json:"desired_state"`
-}
-
 // StartDeploymentStream starts an SSE listener for real-time deployment events (ADR-059).
 // On each event, it syncs the route to the local gateway and reports back via route-sync-ack.
 // On disconnect, it catches up via FetchRoutes() then resumes SSE.

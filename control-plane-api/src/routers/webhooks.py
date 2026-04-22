@@ -169,7 +169,7 @@ async def gitlab_webhook(
         )
 
         # Step 2: Token Verification (CAB-DDoS: always enforce)
-        webhook_secret = getattr(settings, "GITLAB_WEBHOOK_SECRET", "")
+        webhook_secret = settings.git.gitlab.webhook_secret.get_secret_value()
         if not verify_gitlab_token(x_gitlab_token, webhook_secret):
             await service.add_step(
                 trace,
@@ -249,7 +249,9 @@ async def github_webhook(
     body = await request.json()
 
     # Verify HMAC-SHA256
-    if not verify_github_signature(raw_body, x_hub_signature_256, settings.GITHUB_WEBHOOK_SECRET):
+    if not verify_github_signature(
+        raw_body, x_hub_signature_256, settings.git.github.webhook_secret.get_secret_value()
+    ):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     # Extract git info

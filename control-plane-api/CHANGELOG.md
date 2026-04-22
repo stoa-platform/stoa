@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.4](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.3...control-plane-api-v1.6.4) (2026-04-22)
+
+
+### Bug Fixes
+
+* **security:** tighten CORS methods/headers + strip localhost in prod (CAB-2142) ([#2450](https://github.com/stoa-platform/stoa/issues/2450)) ([cd0635a](https://github.com/stoa-platform/stoa/commit/cd0635aec2bdbd0cc28c1a52c596d05ade6f7160))
+
 ## [1.6.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.2...control-plane-api-v1.6.3) (2026-04-21)
 
 

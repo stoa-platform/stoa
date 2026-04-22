@@ -63,6 +63,11 @@ import {
   createEventSource as createEventSourceCore,
   type TokenRefresher,
 } from './http';
+import { gitClient } from './api/git';
+import { sessionClient } from './api/session';
+import { adminClient } from './api/admin';
+import { toolPermissionsClient } from './api/toolPermissions';
+import { workflowsClient } from './api/workflows';
 
 // =============================================================================
 // Façade ApiService — agrège le core transport (services/http) et les méthodes
@@ -123,8 +128,7 @@ class ApiService {
     role_display_names?: Record<string, string>;
     tenant_id?: string;
   }> {
-    const { data } = await httpClient.get('/v1/me');
-    return data;
+    return sessionClient.getMe();
   }
 
   // Tenants
@@ -154,8 +158,7 @@ class ApiService {
 
   // Environments (ADR-040)
   async getEnvironments(): Promise<EnvironmentConfig[]> {
-    const { data } = await httpClient.get('/v1/environments');
-    return data.environments;
+    return sessionClient.listEnvironments();
   }
 
   // APIs
@@ -502,14 +505,11 @@ class ApiService {
 
   // Git
   async getCommits(tenantId: string, path?: string): Promise<CommitInfo[]> {
-    const params = path ? { path } : {};
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/git/commits`, { params });
-    return data;
+    return gitClient.listCommits(tenantId, path);
   }
 
   async getMergeRequests(tenantId: string): Promise<MergeRequest[]> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/git/merge-requests`);
-    return data;
+    return gitClient.listMergeRequests(tenantId);
   }
 
   // SSE Events — délègue au helper du core transport
@@ -618,21 +618,18 @@ class ApiService {
     page?: number;
     limit?: number;
   }): Promise<ProspectListResponse> {
-    const { data } = await httpClient.get('/v1/admin/prospects', { params });
-    return data;
+    return adminClient.listProspects(params);
   }
 
   async getProspectsMetrics(params?: {
     date_from?: string;
     date_to?: string;
   }): Promise<ProspectsMetricsResponse> {
-    const { data } = await httpClient.get('/v1/admin/prospects/metrics', { params });
-    return data;
+    return adminClient.getProspectsMetrics(params);
   }
 
   async getProspect(inviteId: string): Promise<ProspectDetail> {
-    const { data } = await httpClient.get(`/v1/admin/prospects/${inviteId}`);
-    return data;
+    return adminClient.getProspect(inviteId);
   }
 
   async exportProspectsCSV(params?: {
@@ -641,11 +638,7 @@ class ApiService {
     date_from?: string;
     date_to?: string;
   }): Promise<Blob> {
-    const { data } = await httpClient.get('/v1/admin/prospects/export', {
-      params,
-      responseType: 'blob',
-    });
-    return data;
+    return adminClient.exportProspectsCSV(params);
   }
 
   // Admin Access Requests (CAB-1468)
@@ -654,8 +647,7 @@ class ApiService {
     page?: number;
     limit?: number;
   }): Promise<AccessRequestListResponse> {
-    const { data } = await httpClient.get('/v1/admin/access-requests', { params });
-    return data;
+    return adminClient.listAccessRequests(params);
   }
 
   // Gateway Instances (Control Plane Agnostique)
@@ -944,16 +936,14 @@ class ApiService {
 
   // Workflow Engine methods (CAB-593)
   async listWorkflowTemplates(tenantId: string): Promise<WorkflowTemplateListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/workflows/templates`);
-    return data;
+    return workflowsClient.listTemplates(tenantId);
   }
 
   async createWorkflowTemplate(
     tenantId: string,
     payload: WorkflowTemplateCreate
   ): Promise<WorkflowTemplate> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/workflows/templates`, payload);
-    return data;
+    return workflowsClient.createTemplate(tenantId, payload);
   }
 
   async updateWorkflowTemplate(
@@ -961,33 +951,25 @@ class ApiService {
     templateId: string,
     payload: WorkflowTemplateUpdate
   ): Promise<WorkflowTemplate> {
-    const { data } = await httpClient.put(
-      `/v1/tenants/${tenantId}/workflows/templates/${templateId}`,
-      payload
-    );
-    return data;
+    return workflowsClient.updateTemplate(tenantId, templateId, payload);
   }
 
   async deleteWorkflowTemplate(tenantId: string, templateId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/workflows/templates/${templateId}`);
+    return workflowsClient.deleteTemplate(tenantId, templateId);
   }
 
   async listWorkflowInstances(
     tenantId: string,
     params?: { status?: string; skip?: number; limit?: number }
   ): Promise<WorkflowListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/workflows/instances`, {
-      params,
-    });
-    return data;
+    return workflowsClient.listInstances(tenantId, params);
   }
 
   async startWorkflow(
     tenantId: string,
     payload: { template_id: string; subject_id: string; subject_email: string }
   ): Promise<WorkflowInstance> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/workflows/instances`, payload);
-    return data;
+    return workflowsClient.start(tenantId, payload);
   }
 
   async approveWorkflowStep(
@@ -995,11 +977,7 @@ class ApiService {
     instanceId: string,
     payload: { comment?: string }
   ): Promise<WorkflowInstance> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/workflows/instances/${instanceId}/approve`,
-      payload
-    );
-    return data;
+    return workflowsClient.approveStep(tenantId, instanceId, payload);
   }
 
   async rejectWorkflowStep(
@@ -1007,16 +985,11 @@ class ApiService {
     instanceId: string,
     payload: { comment?: string }
   ): Promise<WorkflowInstance> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/workflows/instances/${instanceId}/reject`,
-      payload
-    );
-    return data;
+    return workflowsClient.rejectStep(tenantId, instanceId, payload);
   }
 
   async seedWorkflowTemplates(tenantId: string): Promise<{ message: string }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/workflows/templates/seed`);
-    return data;
+    return workflowsClient.seedTemplates(tenantId);
   }
 
   // Tool Permissions (CAB-1982)
@@ -1024,22 +997,18 @@ class ApiService {
     tenantId: string,
     params?: { mcp_server_id?: string; page?: number; page_size?: number }
   ): Promise<TenantToolPermissionListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/tool-permissions`, {
-      params: { ...params, page_size: params?.page_size ?? 100 },
-    });
-    return data;
+    return toolPermissionsClient.list(tenantId, params);
   }
 
   async upsertToolPermission(
     tenantId: string,
     body: Schemas['TenantToolPermissionCreate']
   ): Promise<TenantToolPermission> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/tool-permissions`, body);
-    return data;
+    return toolPermissionsClient.upsert(tenantId, body);
   }
 
   async deleteToolPermission(tenantId: string, permissionId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/tool-permissions/${permissionId}`);
+    return toolPermissionsClient.remove(tenantId, permissionId);
   }
 
   // Chat Settings (CAB-1852)
@@ -1113,8 +1082,7 @@ class ApiService {
     page?: number;
     limit?: number;
   }): Promise<AdminUserListResponse> {
-    const { data } = await httpClient.get('/v1/admin/users', { params });
-    return data;
+    return adminClient.listUsers(params);
   }
 
   // =========================================================================
@@ -1122,13 +1090,11 @@ class ApiService {
   // =========================================================================
 
   async getPlatformSettings(params?: { category?: string }): Promise<PlatformSettingsResponse> {
-    const { data } = await httpClient.get('/v1/admin/settings', { params });
-    return data;
+    return adminClient.listSettings(params);
   }
 
   async updatePlatformSetting(key: string, value: string): Promise<PlatformSetting> {
-    const { data } = await httpClient.put(`/v1/admin/settings/${key}`, { value });
-    return data;
+    return adminClient.updateSetting(key, value);
   }
 
   // =========================================================================
@@ -1136,8 +1102,7 @@ class ApiService {
   // =========================================================================
 
   async getAdminRoles(): Promise<RoleListResponse> {
-    const { data } = await httpClient.get('/v1/admin/roles');
-    return data;
+    return adminClient.listRoles();
   }
 
   // =========================================================================

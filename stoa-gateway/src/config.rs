@@ -824,6 +824,5 @@ pub struct Config {
     pub snapshot_extra_pii_patterns: Vec<String>,
 }
 
-
 #[cfg(test)]
 mod tests;

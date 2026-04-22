@@ -5,7 +5,9 @@
 //! wires them together. Keeping fns + impl in the same file means adding a
 //! new root-level field only ever touches this module plus `config.rs`.
 
-use super::{ApiProxyConfig, Config, ExpansionMode, LlmRouterConfig, MtlsConfig, SenderConstraintConfig};
+use super::{
+    ApiProxyConfig, Config, ExpansionMode, LlmRouterConfig, MtlsConfig, SenderConstraintConfig,
+};
 use crate::mode::GatewayMode;
 
 pub(super) fn default_true() -> bool {

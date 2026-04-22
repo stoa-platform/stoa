@@ -5,7 +5,6 @@ Feature: Console - Admin and Observability
   I want to access admin pages and observability dashboards
   So that I can manage the platform and monitor its health.
 
-  # regression for CAB-2147 — addInitScript/React-OIDC boot race
   @critical @smoke @regression
   Scenario: Admin accesses tenants page
     Given I am logged in to Console as "anorak" platform admin

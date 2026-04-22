@@ -59,6 +59,113 @@ function loadSessionStorageFromAuthState(authStatePath: string): Record<string, 
 }
 
 /**
+ * Parse an OIDC storage key of the form `oidc.user:{authority}:{clientId}`
+ * and extract authority + clientId. Returns null on malformed keys.
+ */
+function parseOidcStorageKey(key: string): { authority: string; clientId: string } | null {
+  const prefix = 'oidc.user:';
+  if (!key.startsWith(prefix)) return null;
+  const rest = key.slice(prefix.length);
+  const colonBeforeClient = rest.lastIndexOf(':');
+  if (colonBeforeClient < 0) return null;
+  return {
+    authority: rest.slice(0, colonBeforeClient),
+    clientId: rest.slice(colonBeforeClient + 1),
+  };
+}
+
+/**
+ * Refresh any expired OIDC access tokens in sessionData by POSTing a
+ * `refresh_token` grant to the authority's token endpoint. Returns a new
+ * sessionData map with refreshed blobs (and original blobs left untouched
+ * when the token is still valid or the refresh fails).
+ *
+ * Root cause this addresses: KC default access_token lifespan is ~5min, but
+ * E2E jobs take 4-9min between auth-setup and the failing test. React-OIDC's
+ * silent renew relies on an iframe that needs SameSite=None KC cookies — and
+ * those aren't preserved across Playwright contexts. Refreshing directly via
+ * refresh_token grant bypasses the iframe path entirely.
+ */
+async function refreshExpiredOidcTokens(
+  sessionData: Record<string, string>,
+): Promise<Record<string, string>> {
+  const now = Math.floor(Date.now() / 1000);
+  const EXPIRY_BUFFER_S = 60; // refresh if token expires within 60s
+  const refreshed: Record<string, string> = { ...sessionData };
+
+  for (const [key, rawValue] of Object.entries(sessionData)) {
+    const parsed = parseOidcStorageKey(key);
+    if (!parsed) continue;
+
+    let blob: Record<string, unknown>;
+    try {
+      blob = JSON.parse(rawValue);
+    } catch {
+      continue;
+    }
+    const expiresAt = typeof blob.expires_at === 'number' ? blob.expires_at : 0;
+    const refreshToken = typeof blob.refresh_token === 'string' ? blob.refresh_token : '';
+    if (!refreshToken) continue;
+    if (expiresAt > now + EXPIRY_BUFFER_S) continue; // still valid
+
+    try {
+      const tokenUrl = `${parsed.authority}/protocol/openid-connect/token`;
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: parsed.clientId,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+        }),
+      });
+      if (!response.ok) {
+        console.warn(
+          `[auth-harness] refresh failed for ${parsed.clientId}: HTTP ${response.status}`,
+        );
+        continue;
+      }
+      const tokens = (await response.json()) as {
+        access_token: string;
+        refresh_token?: string;
+        id_token?: string;
+        expires_in: number;
+        scope?: string;
+        token_type?: string;
+      };
+      const nextBlob = {
+        ...blob,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token ?? refreshToken,
+        id_token: tokens.id_token ?? blob.id_token,
+        token_type: tokens.token_type ?? blob.token_type ?? 'Bearer',
+        scope: tokens.scope ?? blob.scope,
+        expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+      };
+      // Update profile if id_token was rotated (claims may have changed)
+      if (tokens.id_token) {
+        try {
+          const payload = tokens.id_token.split('.')[1];
+          nextBlob.profile = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+        } catch {
+          // Keep existing profile
+        }
+      }
+      refreshed[key] = JSON.stringify(nextBlob);
+      console.log(
+        `[auth-harness] refreshed ${parsed.clientId} token (was exp=${expiresAt}, now exp=${nextBlob.expires_at})`,
+      );
+    } catch (error) {
+      console.warn(
+        `[auth-harness] refresh threw for ${parsed.clientId}: ${String(error)}`,
+      );
+    }
+  }
+
+  return refreshed;
+}
+
+/**
  * Inject persisted sessionStorage into every page created in the context.
  * The init script runs before app code on each navigation, which keeps `{ page }`
  * fixtures aligned with `authSession.page`.
@@ -132,7 +239,7 @@ async function createContextFromStorageState(
   browser: Browser,
   storageStatePath?: string,
   baseURL?: string,
-): Promise<{ context: BrowserContext; page: Page }> {
+): Promise<{ context: BrowserContext; page: Page; sessionData: Record<string, string> }> {
   const resolvedStorageStatePath = storageStatePath
     ? resolveAuthStatePath(storageStatePath)
     : undefined;
@@ -145,15 +252,16 @@ async function createContextFromStorageState(
   }
 
   const context = await browser.newContext(contextOptions);
+  let sessionData: Record<string, string> = {};
   if (resolvedStorageStatePath) {
-    await installSessionStorageInitScript(
-      context,
+    sessionData = await refreshExpiredOidcTokens(
       loadSessionStorageFromAuthState(resolvedStorageStatePath),
     );
+    await installSessionStorageInitScript(context, sessionData);
   }
 
   const page = await context.newPage();
-  return { context, page };
+  return { context, page, sessionData };
 }
 
 /**
@@ -165,7 +273,7 @@ export async function createAuthenticatedContext(
   browser: Browser,
   personaKey: PersonaKey,
   baseURL?: string,
-): Promise<{ context: BrowserContext; page: Page }> {
+): Promise<{ context: BrowserContext; page: Page; sessionData: Record<string, string> }> {
   const persona = PERSONAS[personaKey];
   const targetBaseURL =
     baseURL || (persona.defaultApp === 'portal' ? PORTAL_URL : CONSOLE_URL);
@@ -221,14 +329,12 @@ export const test = base.extend<TestFixtures>({
         session.page = nextSession.page;
         session.context = nextSession.context;
 
-        // Pre-navigate + verify OIDC sessionStorage loaded — this closes the
-        // addInitScript / React-OIDC boot race that otherwise surfaces as
-        // "Login with Keycloak" on authenticated Console tests.
+        // Pre-navigate + verify OIDC sessionStorage loaded with freshly refreshed
+        // tokens — closes both the addInitScript/React-OIDC boot race AND the
+        // token-expiry window (KC default 5min access_token TTL vs 4-9min CI runs).
         if (navigateUrl) {
-          const authPath = resolveAuthStatePath(getAuthStatePath(personaKey));
-          const sessionData = loadSessionStorageFromAuthState(authPath);
           await nextSession.page.goto(navigateUrl, { waitUntil: 'domcontentloaded' });
-          await ensureSessionStorageLoaded(nextSession.page, sessionData);
+          await ensureSessionStorageLoaded(nextSession.page, nextSession.sessionData);
         }
       },
     };
@@ -322,7 +428,7 @@ export const test = base.extend<TestFixtures>({
 
     await installSessionStorageInitScript(
       context,
-      loadSessionStorageFromAuthState(authStatePath),
+      await refreshExpiredOidcTokens(loadSessionStorageFromAuthState(authStatePath)),
     );
 
     await use(context);
@@ -355,7 +461,7 @@ export async function loadPersonaContext(
   const context = await browser.newContext(options);
   await installSessionStorageInitScript(
     context,
-    loadSessionStorageFromAuthState(authStatePath),
+    await refreshExpiredOidcTokens(loadSessionStorageFromAuthState(authStatePath)),
   );
   return context;
 }

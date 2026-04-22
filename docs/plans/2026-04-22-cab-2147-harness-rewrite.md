@@ -185,15 +185,17 @@ No migration, no prod state change, no CI secret rotation. 100% reversible.
 
 **Total: 6-8h Claude time.** Fits within 1 session, no Decision Gate escalation required (<5h threshold borderline — if the run goes past 5h, stop and re-plan).
 
-## Exit criteria (binary DoD)
+## Exit criteria (binary DoD, tracked on CAB-2147)
 
-- [ ] Stage 1 shipped: 6 Console Login fails → 0 on `run 24750762663` re-run (shard 2 + shard 3)
-- [ ] Stage 2 shipped: auth-setup runs in <15s (was ~2 min with UI dance)
-- [ ] Stage 3 shipped: `e2e/fixtures/auth.setup.ts` < 100 LOC
-- [ ] No regression on Portal tests (parzival catalog scenarios)
-- [ ] `e2e/CLAUDE.md` updated with new pattern
-- [ ] PR merged, CAB-2147 advanced from Backlog → In Progress
-- [ ] Does **NOT** close CAB-2147 — Phase 2 (KC clients) + Phase 3 (seed data) still required for the remaining 40 fails
+Each bullet is a gate for merging the corresponding Stage PR.
+
+- Stage 1 shipped: 6 Console Login fails → 0 on `run 24750762663` re-run (shard 2 + shard 3)
+- Stage 2 shipped: auth-setup runs in <15s (was ~2 min with UI dance)
+- Stage 3 shipped: `e2e/fixtures/auth.setup.ts` < 100 LOC
+- No regression on Portal tests (parzival catalog scenarios)
+- `e2e/CLAUDE.md` updated with new pattern
+- PR merged, CAB-2147 advanced from Backlog → In Progress
+- Does NOT close CAB-2147 — Phase 2 (KC clients) + Phase 3 (seed data) still required for the remaining 40 fails
 
 ## Next step
 

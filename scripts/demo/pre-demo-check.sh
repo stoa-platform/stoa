@@ -1,336 +1,102 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
-# CAB-1104: Pre-Demo Checklist Script
+# CAB-2150 (parent CAB-2148): Pre-demo binary gate.
 # =============================================================================
-# Comprehensive GO/NO-GO check before the demo.
-# Validates all components are ready:
-# - Kubernetes cluster health
-# - API connectivity
-# - Grafana dashboards
-# - MCP tools availability
-# - Cache warmth
+# Preflight checks for the demo environment. Prints a PASS/FAIL line per check
+# and exits non-zero on ANY red signal (binary gate — no "warning" state).
 #
-# Returns exit code 0 (GO) or 1 (NO-GO)
+# Checks (all MUST pass):
+#   1. Control Plane /healthz reachable, returns 200
+#   2. Gateway /healthz reachable, returns 200
+#   3. Demo seed integrity: GET /api/v1/demo/status reports 'seeded'
+#   4. Audience claim present on a fresh token from the demo client
+#   5. Tenant count: at least ${STOA_DEMO_MIN_TENANTS:-4} tenants exposed
 #
-# Usage: ./pre-demo-check.sh [--verbose]
+# Usage: ./pre-demo-check.sh
+# Env:
+#   STOA_API_URL            (required)
+#   STOA_GATEWAY_URL        (required)
+#   STOA_API_TOKEN          (required) Bearer token used to read demo status
+#   STOA_DEMO_MIN_TENANTS   (optional, default 4)
 # =============================================================================
 
-set -e
+set -euo pipefail
 
-# Configuration
-CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-https://api.gostoa.dev}"
-GATEWAY_URL="${GATEWAY_URL:-https://mcp.gostoa.dev}"
-GRAFANA_URL="${GRAFANA_URL:-https://console.gostoa.dev/grafana}"
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
-VERBOSE="${1:-}"
+: "${STOA_API_URL:?STOA_API_URL must be set}"
+: "${STOA_GATEWAY_URL:?STOA_GATEWAY_URL must be set}"
+: "${STOA_API_TOKEN:?STOA_API_TOKEN must be set}"
+MIN_TENANTS="${STOA_DEMO_MIN_TENANTS:-4}"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-# Counters
-PASSED=0
-FAILED=0
-WARNINGS=0
-
-# Check function
-check() {
-    local name="$1"
-    local result="$2"
-    local critical="${3:-true}"
-
-    if [ "$result" = "pass" ]; then
-        echo -e "  ${GREEN}[PASS]${NC} $name"
-        PASSED=$((PASSED + 1))
-    elif [ "$result" = "warn" ]; then
-        echo -e "  ${YELLOW}[WARN]${NC} $name"
-        WARNINGS=$((WARNINGS + 1))
+PASS=0
+FAIL=0
+report() {
+    local status="$1" name="$2" detail="${3:-}"
+    if [ "$status" = "PASS" ]; then
+        printf '[PASS] %s\n' "$name"
+        PASS=$((PASS + 1))
     else
-        if [ "$critical" = "true" ]; then
-            echo -e "  ${RED}[FAIL]${NC} $name"
-            FAILED=$((FAILED + 1))
-        else
-            echo -e "  ${YELLOW}[SKIP]${NC} $name (non-critical)"
-            WARNINGS=$((WARNINGS + 1))
-        fi
+        printf '[FAIL] %s — %s\n' "$name" "$detail" >&2
+        FAIL=$((FAIL + 1))
     fi
 }
 
-echo ""
-echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           STOA Demo Pre-Flight Checklist                   ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "Timestamp: $(date -Iseconds)"
-echo ""
+http_code() {
+    curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$@" || echo "000"
+}
 
-# =============================================================================
-# Infrastructure Checks
-# =============================================================================
-echo -e "${CYAN}Infrastructure${NC}"
-echo "─────────────────────────────────────────"
+http_get_body() {
+    curl -sS --max-time 10 \
+        -H "Authorization: Bearer ${STOA_API_TOKEN}" \
+        -H 'Accept: application/json' \
+        "$@" || true
+}
 
-# Kubernetes cluster
-if command -v kubectl &> /dev/null; then
-    if kubectl cluster-info &> /dev/null; then
-        NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d ' ')
-        if [ "$NODE_COUNT" -gt 0 ]; then
-            check "Kubernetes cluster ($NODE_COUNT nodes)" "pass"
-        else
-            check "Kubernetes cluster (no nodes ready)" "fail"
-        fi
-    else
-        check "Kubernetes cluster unreachable" "fail"
-    fi
+# 1. Control Plane health
+code="$(http_code "${STOA_API_URL%/}/healthz")"
+if [ "$code" = "200" ]; then
+    report PASS "control-plane /healthz"
 else
-    check "kubectl not available" "warn" "false"
+    report FAIL "control-plane /healthz" "HTTP ${code}"
 fi
 
-# MCP Gateway pods
-if command -v kubectl &> /dev/null; then
-    GATEWAY_READY=$(kubectl get pods -n stoa-system -l app=mcp-gateway --no-headers 2>/dev/null | grep -c "Running" || echo "0")
-    if [ "$GATEWAY_READY" -gt 0 ]; then
-        check "MCP Gateway pods ($GATEWAY_READY running)" "pass"
-    else
-        check "MCP Gateway pods (none running)" "fail"
-    fi
+# 2. Gateway health
+code="$(http_code "${STOA_GATEWAY_URL%/}/healthz")"
+if [ "$code" = "200" ]; then
+    report PASS "gateway /healthz"
 else
-    check "MCP Gateway pods" "warn" "false"
+    report FAIL "gateway /healthz" "HTTP ${code}"
 fi
 
-# Control Plane pods
-if command -v kubectl &> /dev/null; then
-    CP_READY=$(kubectl get pods -n stoa-system -l app=control-plane-api --no-headers 2>/dev/null | grep -c "Running" || echo "0")
-    if [ "$CP_READY" -gt 0 ]; then
-        check "Control Plane pods ($CP_READY running)" "pass"
-    else
-        check "Control Plane pods (none running)" "warn" "false"
-    fi
+# 3. Demo seed integrity (contract from CAB-2149)
+body="$(http_get_body "${STOA_API_URL%/}/api/v1/demo/status")"
+if printf '%s' "$body" | grep -q '"seed_state"[[:space:]]*:[[:space:]]*"seeded"'; then
+    report PASS "demo seed integrity"
 else
-    check "Control Plane pods" "warn" "false"
+    report FAIL "demo seed integrity" "expected seed_state=seeded, got: ${body:-<empty>}"
 fi
 
-echo ""
-
-# =============================================================================
-# Service Health Checks
-# =============================================================================
-echo -e "${CYAN}Service Health${NC}"
-echo "─────────────────────────────────────────"
-
-# Gateway health
-GATEWAY_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "$GATEWAY_URL/health" --max-time 5 2>/dev/null || echo "000")
-if [ "$GATEWAY_HEALTH" = "200" ]; then
-    check "MCP Gateway health ($GATEWAY_URL)" "pass"
+# 4. Audience claim present in JWT (inspect payload of STOA_API_TOKEN)
+jwt_payload="$(printf '%s' "$STOA_API_TOKEN" | awk -F. '{print $2}')"
+# Base64URL decode (pad to multiple of 4)
+pad=$(( (4 - ${#jwt_payload} % 4) % 4 ))
+padded="${jwt_payload}$(printf '%*s' "$pad" '' | tr ' ' '=')"
+decoded="$(printf '%s' "$padded" | tr '_-' '/+' | base64 -d 2>/dev/null || true)"
+if printf '%s' "$decoded" | grep -q '"aud"'; then
+    report PASS "audience claim present"
 else
-    check "MCP Gateway health (HTTP $GATEWAY_HEALTH)" "fail"
+    report FAIL "audience claim present" "no 'aud' in token payload"
 fi
 
-# Control Plane health
-CP_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "$CONTROL_PLANE_URL/health" --max-time 5 2>/dev/null || echo "000")
-if [ "$CP_HEALTH" = "200" ]; then
-    check "Control Plane health ($CONTROL_PLANE_URL)" "pass"
+# 5. Tenant count
+body="$(http_get_body "${STOA_API_URL%/}/api/v1/tenants")"
+# Count "id" fields as a lower bound on tenant entries; avoids jq dep.
+count="$(printf '%s' "$body" | grep -o '"id"[[:space:]]*:' | wc -l | tr -d ' ')"
+if [ "${count:-0}" -ge "$MIN_TENANTS" ]; then
+    report PASS "tenant count >= ${MIN_TENANTS} (got ${count})"
 else
-    check "Control Plane health (HTTP $CP_HEALTH)" "warn" "false"
+    report FAIL "tenant count" "expected >= ${MIN_TENANTS}, got ${count:-0}"
 fi
 
-# Grafana health
-GRAFANA_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "$GRAFANA_URL/api/health" --max-time 5 2>/dev/null || echo "000")
-if [ "$GRAFANA_HEALTH" = "200" ]; then
-    check "Grafana health ($GRAFANA_URL)" "pass"
-else
-    check "Grafana health (HTTP $GRAFANA_HEALTH)" "warn" "false"
-fi
-
-# Keycloak health
-KC_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "$KEYCLOAK_URL/health/ready" --max-time 5 2>/dev/null || echo "000")
-if [ "$KC_HEALTH" = "200" ]; then
-    check "Keycloak health ($KEYCLOAK_URL)" "pass"
-else
-    check "Keycloak health (HTTP $KC_HEALTH)" "warn" "false"
-fi
-
-echo ""
-
-# =============================================================================
-# External APIs Checks
-# =============================================================================
-echo -e "${CYAN}External APIs${NC}"
-echo "─────────────────────────────────────────"
-
-# CoinGecko
-COINGECKO=$(curl -s -o /dev/null -w "%{http_code}" "https://api.coingecko.com/api/v3/ping" --max-time 5 2>/dev/null || echo "000")
-if [ "$COINGECKO" = "200" ]; then
-    check "CoinGecko API (crypto prices)" "pass"
-else
-    check "CoinGecko API (HTTP $COINGECKO)" "warn" "false"
-fi
-
-# Open-Meteo
-OPEN_METEO=$(curl -s -o /dev/null -w "%{http_code}" "https://api.open-meteo.com/v1/forecast?latitude=48.85&longitude=2.35&current_weather=true" --max-time 5 2>/dev/null || echo "000")
-if [ "$OPEN_METEO" = "200" ]; then
-    check "Open-Meteo API (weather)" "pass"
-else
-    check "Open-Meteo API (HTTP $OPEN_METEO)" "warn" "false"
-fi
-
-# JSONPlaceholder
-JSONPLACEHOLDER=$(curl -s -o /dev/null -w "%{http_code}" "https://jsonplaceholder.typicode.com/posts/1" --max-time 5 2>/dev/null || echo "000")
-if [ "$JSONPLACEHOLDER" = "200" ]; then
-    check "JSONPlaceholder API (CRUD demo)" "pass"
-else
-    check "JSONPlaceholder API (HTTP $JSONPLACEHOLDER)" "warn" "false"
-fi
-
-# DummyJSON
-DUMMYJSON=$(curl -s -o /dev/null -w "%{http_code}" "https://dummyjson.com/users/1" --max-time 5 2>/dev/null || echo "000")
-if [ "$DUMMYJSON" = "200" ]; then
-    check "DummyJSON API (CRM demo)" "pass"
-else
-    check "DummyJSON API (HTTP $DUMMYJSON)" "warn" "false"
-fi
-
-# httpbin
-HTTPBIN=$(curl -s -o /dev/null -w "%{http_code}" "https://httpbin.org/get" --max-time 5 2>/dev/null || echo "000")
-if [ "$HTTPBIN" = "200" ]; then
-    check "httpbin API (legacy mock)" "pass"
-else
-    check "httpbin API (HTTP $HTTPBIN)" "warn" "false"
-fi
-
-echo ""
-
-# =============================================================================
-# MCP Tools Checks
-# =============================================================================
-echo -e "${CYAN}MCP Tools${NC}"
-echo "─────────────────────────────────────────"
-
-# List tools via gateway. Post CAB-2121 (PR #2433), anon discovery returns 401
-# by design — claude.ai connector authenticates via OAuth before calling tools/list.
-# Use AUTH_TOKEN env if available, else accept 401 anon as expected.
-if [ -n "$AUTH_TOKEN" ]; then
-    TOOLS_RESPONSE=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" "$GATEWAY_URL/mcp/v1/tools" --max-time 10 2>/dev/null || echo '{"error": "failed"}')
-else
-    TOOLS_RESPONSE=$(curl -s "$GATEWAY_URL/mcp/v1/tools" --max-time 10 2>/dev/null || echo '{"error": "failed"}')
-fi
-if echo "$TOOLS_RESPONSE" | grep -q '"tools"'; then
-    TOOL_COUNT=$(echo "$TOOLS_RESPONSE" | grep -o '"name"' | wc -l | tr -d ' ')
-    if [ "$TOOL_COUNT" -ge 5 ]; then
-        check "MCP tools registered ($TOOL_COUNT tools)" "pass"
-    else
-        check "MCP tools registered ($TOOL_COUNT tools - low)" "warn"
-    fi
-elif echo "$TOOLS_RESPONSE" | grep -q '"unauthorized"'; then
-    check "MCP discovery anon → 401 (CAB-2121 expected; set AUTH_TOKEN to test fully)" "pass"
-else
-    check "MCP tools list failed" "warn" "false"
-fi
-
-# Check K8s Tool CRDs
-if command -v kubectl &> /dev/null; then
-    CRD_COUNT=$(kubectl get tools -A --no-headers 2>/dev/null | wc -l | tr -d ' ' || echo "0")
-    if [ "$CRD_COUNT" -ge 10 ]; then
-        check "Tool CRDs in cluster ($CRD_COUNT tools)" "pass"
-    else
-        check "Tool CRDs in cluster ($CRD_COUNT tools)" "warn"
-    fi
-else
-    check "Tool CRDs" "warn" "false"
-fi
-
-echo ""
-
-# =============================================================================
-# Tenant Checks
-# =============================================================================
-echo -e "${CYAN}Tenants${NC}"
-echo "─────────────────────────────────────────"
-
-# Demo tenants exist
-if command -v kubectl &> /dev/null; then
-    for tenant in "high-five" "ioi" "oasis"; do
-        NS_EXISTS=$(kubectl get namespace "tenant-$tenant" --no-headers 2>/dev/null | wc -l | tr -d ' ' || echo "0")
-        if [ "$NS_EXISTS" -gt 0 ]; then
-            check "Tenant namespace: tenant-$tenant" "pass"
-        else
-            check "Tenant namespace: tenant-$tenant" "warn" "false"
-        fi
-    done
-else
-    check "Tenant namespaces (kubectl not available)" "warn" "false"
-fi
-
-echo ""
-
-# =============================================================================
-# Grafana Dashboards Check
-# =============================================================================
-echo -e "${CYAN}Grafana Dashboards${NC}"
-echo "─────────────────────────────────────────"
-
-DASHBOARDS=("stoa-platform-overview" "stoa-mcp-tools" "stoa-security-events")
-
-for dashboard in "${DASHBOARDS[@]}"; do
-    DASH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "$GRAFANA_URL/api/dashboards/uid/$dashboard" --max-time 5 2>/dev/null || echo "000")
-    if [ "$DASH_CHECK" = "200" ]; then
-        check "Dashboard: $dashboard" "pass"
-    else
-        check "Dashboard: $dashboard (not found)" "warn" "false"
-    fi
-done
-
-echo ""
-
-# =============================================================================
-# Summary
-# =============================================================================
-TOTAL=$((PASSED + FAILED + WARNINGS))
-
-echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
-echo ""
-echo -e "Summary: ${GREEN}$PASSED passed${NC}, ${RED}$FAILED failed${NC}, ${YELLOW}$WARNINGS warnings${NC}"
-echo ""
-
-if [ "$FAILED" -eq 0 ]; then
-    echo -e "  ╔═══════════════════════════════════════╗"
-    echo -e "  ║                                       ║"
-    echo -e "  ║   ${GREEN}██████╗  ██████╗ ${NC}                  ║"
-    echo -e "  ║   ${GREEN}██╔════╝ ██╔═══██╗${NC}                  ║"
-    echo -e "  ║   ${GREEN}██║  ███╗██║   ██║${NC}                  ║"
-    echo -e "  ║   ${GREEN}██║   ██║██║   ██║${NC}                  ║"
-    echo -e "  ║   ${GREEN}╚██████╔╝╚██████╔╝${NC}                  ║"
-    echo -e "  ║   ${GREEN} ╚═════╝  ╚═════╝ ${NC}                  ║"
-    echo -e "  ║                                       ║"
-    echo -e "  ║   ${GREEN}All critical checks passed!${NC}         ║"
-    echo -e "  ║   Ready to start the demo.            ║"
-    echo -e "  ║                                       ║"
-    echo -e "  ╚═══════════════════════════════════════╝"
-    echo ""
-    exit 0
-else
-    echo -e "  ╔═══════════════════════════════════════╗"
-    echo -e "  ║                                       ║"
-    echo -e "  ║   ${RED}███╗   ██╗ ██████╗ ${NC}                 ║"
-    echo -e "  ║   ${RED}████╗  ██║██╔═══██╗${NC}                 ║"
-    echo -e "  ║   ${RED}██╔██╗ ██║██║   ██║${NC}                 ║"
-    echo -e "  ║   ${RED}██║╚██╗██║██║   ██║${NC}                 ║"
-    echo -e "  ║   ${RED}██║ ╚████║╚██████╔╝${NC}                 ║"
-    echo -e "  ║   ${RED}╚═╝  ╚═══╝ ╚═════╝ ${NC}-GO              ║"
-    echo -e "  ║                                       ║"
-    echo -e "  ║   ${RED}$FAILED critical checks failed!${NC}       ║"
-    echo -e "  ║   Fix issues before starting demo.    ║"
-    echo -e "  ║                                       ║"
-    echo -e "  ╚═══════════════════════════════════════╝"
-    echo ""
-    echo "Recommended actions:"
-    echo "  1. Check failed components"
-    echo "  2. Run: ./reset-demo.sh"
-    echo "  3. Re-run this check"
-    echo ""
-    exit 1
-fi
+printf '\nResult: %d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ] || exit 1
+exit 0

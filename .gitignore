@@ -166,6 +166,9 @@ backups/
 # Git worktrees (parallel Claude sessions)
 .claude/worktrees/
 
+# Ephemeral hook state (edit-attempts tracker, session-scoped)
+.claude/state/
+
 # Infisical
 .infisical.json
 

@@ -171,6 +171,13 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - Coverage: cp-api ≥70%, mcp-gateway ≥40%. Jamais descendre.
 - Ne jamais mocker la boundary sous test (httpx.MockTransport, MSW, pas AsyncMock).
 
+### Rewrite vs Patch (context rot mitigation)
+- 2 Edit échecs consécutifs même fichier → **Write (rewrite complet) ou subagent**. Pas de 3e tentative Edit.
+- Diff estimé >30% du fichier → Write direct. Pas de série d'Edit qui dérive.
+- >3 itérations de fix sur même fichier dans la même session → `/clear` ou délégation subagent (contexte frais).
+- Skill `/rewrite <path>` disponible pour forcer rewrite propre quand Edit échoue.
+- Détail: `.claude/docs/rewrite-vs-patch.md`. Hook: `post-edit-failure-tracker.sh`.
+
 ### Git & Merge
 - Toujours `--squash` + `--delete-branch`. Jamais push direct sur `main`.
 - `--force`, `git reset --hard`, suppression branche tiers = demander avant.

@@ -50,6 +50,21 @@ permissions:
   attestations: write
 
 jobs:
+  # === Git provider config gate (CAB-1889 CP-2) ===
+  # Fails if a consumer reads the legacy flat settings.GIT_PROVIDER /
+  # GITHUB_* / GITLAB_* attributes outside src/config.py. All consumers
+  # must go through settings.git.* (hydrated from the same env vars but
+  # via the canonical GitProviderConfig entry point).
+  git-config-gate:
+    name: Git provider config gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check for legacy settings.GIT_* reads
+        working-directory: control-plane-api
+        run: |
+          bash scripts/check_git_config_access.sh src
+
   # === CI: lint + mypy + pytest + coverage ===
   ci:
     uses: ./.github/workflows/reusable-python-ci.yml

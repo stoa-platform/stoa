@@ -9,6 +9,7 @@ Note: This router has NO auth dependency — uses X-Gitlab-Token header instead.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 TRACE_SVC_PATH = "src.routers.webhooks.TraceService"
 KAFKA_SVC_PATH = "src.routers.webhooks.kafka_service"
@@ -118,7 +119,7 @@ class TestGitlabWebhookPost:
         """Valid push hook with correct token is processed."""
         svc, _trace = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         mock_kafka = MagicMock()
         mock_kafka.publish = AsyncMock(return_value="event-id-1")
@@ -147,7 +148,7 @@ class TestGitlabWebhookPost:
         """Missing X-Gitlab-Token returns 401."""
         svc, _ = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         with patch(TRACE_SVC_PATH, return_value=svc), patch(SETTINGS_PATH, mock_settings):
             client = _build_no_auth_client(app, mock_db_session)
@@ -163,7 +164,7 @@ class TestGitlabWebhookPost:
         """Wrong X-Gitlab-Token returns 401."""
         svc, _ = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         with patch(TRACE_SVC_PATH, return_value=svc), patch(SETTINGS_PATH, mock_settings):
             client = _build_no_auth_client(app, mock_db_session)
@@ -182,7 +183,7 @@ class TestGitlabWebhookPost:
         """Merge request hook is processed correctly."""
         svc, _trace = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         mock_kafka = MagicMock()
         mock_kafka.publish = AsyncMock(return_value="event-id-2")
@@ -209,7 +210,7 @@ class TestGitlabWebhookPost:
         """Unknown event type returns status=ignored."""
         svc, _ = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         with patch(TRACE_SVC_PATH, return_value=svc), patch(SETTINGS_PATH, mock_settings):
             client = _build_no_auth_client(app, mock_db_session)
@@ -229,7 +230,7 @@ class TestGitlabWebhookPost:
         """Push to non-main branch is still processed (returns status=processed)."""
         svc, _ = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         feature_push = {**_PUSH_PAYLOAD, "ref": "refs/heads/feature/my-feature"}
 
@@ -251,7 +252,7 @@ class TestGitlabWebhookPost:
         """Tag push hook is handled correctly."""
         svc, _trace = _make_trace_service_mock()
         mock_settings = MagicMock()
-        mock_settings.GITLAB_WEBHOOK_SECRET = VALID_TOKEN
+        mock_settings.git.gitlab.webhook_secret = SecretStr(VALID_TOKEN)
 
         with patch(TRACE_SVC_PATH, return_value=svc), patch(SETTINGS_PATH, mock_settings):
             client = _build_no_auth_client(app, mock_db_session)

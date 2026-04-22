@@ -8,7 +8,9 @@ quickly and catch misconfiguration early.
 from unittest.mock import patch
 
 import pytest
+from pydantic import SecretStr
 
+from src.config import GitHubConfig, GitLabConfig, GitProviderConfig
 from src.services.git_provider import GitProvider, get_git_provider, git_provider_factory
 
 
@@ -26,7 +28,11 @@ class TestGitHubProviderSmoke:
     def test_factory_github_returns_github_service(self, monkeypatch):
         monkeypatch.setenv("GIT_PROVIDER", "github")
         with patch("src.services.git_provider.settings") as mock_settings:
-            mock_settings.GIT_PROVIDER = "github"
+            mock_settings.git = GitProviderConfig(
+                provider="github",
+                github=GitHubConfig(),
+                gitlab=GitLabConfig(),
+            )
             provider = git_provider_factory()
         from src.services.github_service import GitHubService
 
@@ -36,10 +42,15 @@ class TestGitHubProviderSmoke:
     def test_factory_gitlab_returns_gitlab_service(self, monkeypatch):
         monkeypatch.setenv("GIT_PROVIDER", "gitlab")
         with patch("src.services.git_provider.settings") as mock_settings:
-            mock_settings.GIT_PROVIDER = "gitlab"
-            mock_settings.GITLAB_URL = "https://gitlab.example.com"
-            mock_settings.GITLAB_TOKEN = "test-token"
-            mock_settings.GITLAB_PROJECT_ID = "12345"
+            mock_settings.git = GitProviderConfig(
+                provider="gitlab",
+                github=GitHubConfig(),
+                gitlab=GitLabConfig(
+                    url="https://gitlab.example.com",
+                    token=SecretStr("test-token"),
+                    project_id="12345",
+                ),
+            )
             provider = git_provider_factory()
         from src.services.git_service import GitLabService
 

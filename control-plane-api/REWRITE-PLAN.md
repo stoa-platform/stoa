@@ -1,245 +1,392 @@
-# REWRITE-PLAN — Git Provider abstraction (CP-1 / CAB-1889)
+# REWRITE-PLAN — Git Provider config (CP-2) — v2 (amended after review)
 
-**Scope** : `src/routers/git.py`, `src/services/git_provider.py`, `src/services/git_service.py`, `src/services/github_service.py`, tests associés.
-**Métrique binaire de succès** : zéro accès `_project` ou `_gh` depuis `src/routers/git.py`.
+**Scope** : `src/config.py` (section Git), tous les consommateurs qui lisent la config Git provider, `.env.example`, `k8s/configmap.yaml`, tests liés.
 
----
+**Métriques binaires de succès** :
+1. **Un seul point d'entrée** côté consommateurs : `settings.git.*` (3 modèles internes — `GitHubConfig`, `GitLabConfig`, `GitProviderConfig` — agrégés via le champ `settings.git`).
+2. Au startup, `ENVIRONMENT=production` + config incohérente → `Settings()` lève `pydantic.ValidationError`. App refuse de démarrer.
+3. `grep -rn 'settings\.\(GIT_PROVIDER\|GITHUB_\|GITLAB_\)' src/` → **zéro occurrence** en dehors de `src/config.py` (toutes passent par `settings.git.*`).
+4. `.env.example` expose `GIT_PROVIDER`, `GITHUB_TOKEN`, `GITHUB_ORG`, `GITHUB_CATALOG_REPO`, `GITHUB_WEBHOOK_SECRET`, `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_PROJECT_ID`, `GITLAB_WEBHOOK_SECRET`.
 
-## A. Carte des fuites (`src/routers/git.py`)
-
-Fichier actuel : 388 LOC. 45 tests. **17 accès directs aux internals** (tous `_project`), regroupés en **6 domaines métier** :
-
-| # | Ligne | Opération métier | Accès interne | Méthode ABC actuelle | Statut |
-|---|-------|------------------|---------------|----------------------|--------|
-| 1 | 115 | Lister les commits d'un chemin | `git.list_commits(...)` | ❌ absent de l'ABC (présent sur `GitLabService`, absent de `GitHubService`) | **ABSENT** |
-| 2 | 135, 183 | Lire le contenu d'un fichier (None si absent) | `git.get_file(...)` | ❌ `get_file_content` existe mais **raise** FileNotFoundError | **MISMATCH sémantique** |
-| 3 | 152, 156 | Vérifier connexion + lister un dossier | `git._project` + `repository_tree(path, ref)` | ❌ `list_files` existe mais retourne `list[str]` (pas `[{name, type, path}]`) | **ABSENT (tree shape)** |
-| 4 | 176, 192-198 | Créer un fichier | `git._project.files.create({...})` | ✅ `create_file(project_id, path, content, msg, branch)` existe | **NON UTILISÉ** |
-| 5 | 186-189 | Update via file object | `git._project.files.get(...).save(...)` | ✅ `update_file(...)` existe | **NON UTILISÉ** |
-| 6 | 219, 226-228 | Supprimer un fichier | `git._project.files.delete(...)` | ✅ `delete_file(...)` existe | **NON UTILISÉ** |
-| 7 | 246, 250 | Lister merge requests (state) | `git._project.mergerequests.list(state=...)` | ❌ absent | **ABSENT** |
-| 8 | 281, 286-293 | Créer une merge request | `git._project.mergerequests.create({...})` | ❌ absent | **ABSENT** |
-| 9 | 321, 325-326 | Merger une merge request (by iid) | `git._project.mergerequests.get(iid).merge()` | ❌ absent | **ABSENT** |
-| 10 | 342, 346 | Lister les branches | `git._project.branches.list()` | ❌ absent | **ABSENT** |
-| 11 | 370, 375-380 | Créer une branche | `git._project.branches.create({branch, ref})` | ❌ absent | **ABSENT** |
-
-**Constat** :
-1. L'ABC existante est inconsistante : `create_file`, `update_file`, `delete_file`, `get_file_content`, `list_files`, `batch_commit` sont définis mais **le router ne les utilise pas** pour les ops fichiers (3 contournements alors que l'API est dispo).
-2. 8 opérations métier (tree, commits, get_file nullable, MRs x3, branches x2) ne sont **pas dans l'ABC** — c'est la fuite structurelle.
-3. `is_connected()` existe déjà sur la base class (`git_provider.py:196-198`) — utilisable pour remplacer tous les `if not git._project`.
-4. Semantic drift `get_file` vs `get_file_content` : l'un retourne `None`, l'autre `raise`. Les callers du router veulent la variante `None`.
-
-**Hors périmètre strict, mais même pattern à documenter** : `src/services/iam_sync_service.py:205-209` et `src/services/deployment_orchestration_service.py:102,122` leak aussi `_project` → 4 accès à sortir dans un suivi (pas dans ce rewrite).
-
-**Responsabilités mélangées dans `git.py`** :
-- Routing FastAPI + décorateurs RBAC
-- Construction du `scoped_path` (préfixe tenant) — **à garder dans le router** (c'est une règle de scoping tenant)
-- Mapping objet provider → Pydantic response (MR, Branch, Commit) — **à descendre dans l'interface** (retour d'objets déjà normalisés)
-- Error fallback (return `[]`, return `503`, return `500`) — **à garder dans le router** (c'est la politique HTTP)
+**Hors scope** (flaggés risques, ne seront PAS corrigés ici) :
+- Le singleton `git_service = GitLabService()` dans `src/services/git_service.py:1111` (voir Risque R-1).
+- Aucun changement de comportement observable API.
+- Aucun rename de variable d'env (backward compat déploiement K8s garantie).
+- Suppression des champs plats actifs de `Settings` (ils restent comme ingestion interne, `exclude=True`). Si on veut un jour les vraiment supprimer, ça passera par un `settings_customise_sources` custom — ticket ultérieur, pas nécessaire pour atteindre les 4 métriques.
 
 ---
 
-## B. Nouvelle interface `GitProvider`
+## A. Matrice actuelle
 
-Méthodes ajoutées (toutes `async`, type hints complets). Les modèles de retour sont des `dataclass` frozen (colocalisés dans `git_provider.py`) pour éviter le leak PyGitLab/PyGithub.
+### A.1 Variables GitHub
 
-### Nouveaux types valeur (colocalisés dans `git_provider.py`)
+| Var env (config.py:line) | Default | Lue par (hors config.py) | Statut |
+|---|---|---|---|
+| `GIT_PROVIDER` (:105) | `"github"` | `git_provider.py:232` (fallback `"gitlab"`), `:389`, `:403`; `routers/mcp_gitops.py:300`; `workers/git_sync_worker.py:84` (commentaire seul) | **CONTRADICTOIRE** — 3 defaults diff (voir A.3) |
+| `GITHUB_TOKEN` (:106) | `""` | `github_service.py:115,137` | OK, mais empty accepté silencieusement |
+| `GITHUB_ORG` (:107) | `"stoa-platform"` | `github_service.py:576`, `git_provider.py:234`, `routers/mcp_gitops.py:301` | OK |
+| `GITHUB_CATALOG_REPO` (:108) | `"stoa-catalog"` | `github_service.py:576`, `git_provider.py:234`, `routers/mcp_gitops.py:301` | OK |
+| `GITHUB_GITOPS_REPO` (:109) | `"stoa-gitops"` | **aucun runtime caller** (seulement `tests/test_git_provider.py:115` qui asserte le default) | **DEAD** |
+| `GITHUB_WEBHOOK_SECRET` (:110) | `""` | `routers/webhooks.py:252` | OK, mais empty accepté silencieusement |
+
+### A.2 Variables GitLab
+
+| Var env (config.py:line) | Default | Lue par (hors config.py) | Statut |
+|---|---|---|---|
+| `GITLAB_URL` (:79) | `"https://gitlab.com"` | `git_service.py:106` | OK |
+| `GITLAB_TOKEN` (:80) | `""` | `git_service.py:106,148` | OK, empty accepté silencieusement |
+| `GITLAB_WEBHOOK_SECRET` (:81) | `""` | `routers/webhooks.py:172` (via `getattr` redondant) | OK, `getattr` à supprimer |
+| `GITLAB_DEFAULT_BRANCH` (:82) | `"main"` | **aucun caller** | **DEAD** |
+| `GITLAB_PROJECT_ID` (:88) | `""` | `git_service.py:110`, `git_provider.py:236`, `routers/mcp_gitops.py:303` | OK |
+| `GITLAB_CATALOG_PROJECT_PATH` (:89) | `"cab6961310/stoa-catalog"` | **aucun caller** (property alias `GITLAB_PROJECT_PATH` non plus) | **DEAD** |
+| `GITLAB_GITOPS_PROJECT_ID` (:92) | `"77260481"` | **aucun caller** | **DEAD** |
+| `GITLAB_GITOPS_PROJECT_PATH` (:93) | `"cab6961310/stoa-gitops"` | **aucun caller** | **DEAD** |
+| `GITLAB_CATALOG_PROJECT_ID` (:97, property alias) | alias sur `GITLAB_PROJECT_ID` | **aucun caller** | **DEAD** |
+| `GITLAB_PROJECT_PATH` (:101, property alias) | alias sur `GITLAB_CATALOG_PROJECT_PATH` | **aucun caller** | **DEAD** |
+| `LOG_DEBUG_GITLAB_API` (:315) | `False` | **aucun caller** | **DEAD** (flag logging orphelin) |
+
+**Bilan** : 7 variables dead + 1 flag log dead. À supprimer en C.1 (pas de backward compat à préserver — aucun caller, aucun ConfigMap prod, aucune mention Helm).
+
+### A.3 Chemins de lecture dispersés
+
+| Fichier:ligne | Pattern | Nature |
+|---|---|---|
+| `config.py:105-110` | Déclaration `Settings` | source de truth déclarée |
+| `git_provider.py:232-236` | `getattr(settings, "GIT_PROVIDER", "gitlab")` + résolution `project_id` provider-aware | **leak** — base ABC lit `GIT_PROVIDER` directement (BUG-04 déjà tracé dans `REWRITE-BUGS.md`) |
+| `git_provider.py:389-403` | `git_provider_factory()` — `settings.GIT_PROVIDER.lower()` | OK (point d'entrée légitime du factory, à migrer vers `settings.git.provider`) |
+| `routers/mcp_gitops.py:300-303` | `if settings.GIT_PROVIDER.lower() == "github"` → calcule `project_id` | **leak** — duplique la logique du factory dans un router |
+| `routers/webhooks.py:172` | `getattr(settings, "GITLAB_WEBHOOK_SECRET", "")` | redondant (champ déjà déclaré avec `""` default) |
+| `conftest.py:40` | `os.environ.setdefault("GIT_PROVIDER", "gitlab")` | OK pour les tests, mais default **différent** de `config.py` |
+| `stoa-infra/charts/control-plane-api/values.yaml:11` | `GIT_PROVIDER: gitlab` | prod tourne effectivement en GitLab (!= default code) |
+| `k8s/configmap.yaml:30` | `GIT_PROVIDER: "github"` | manifest K8s du repo — **non utilisé en prod** (Helm override) |
+| `.env.example:81-83` | mentionne uniquement `GITLAB_*`, pas de `GIT_PROVIDER` ni de `GITHUB_*` | **incomplet** |
+
+### A.4 Startup / lifespan
+
+- `main.py:196` appelle `await git_service.connect()` avec `git_service = GitLabService()` importé du module `services/git_service.py:1111`.
+- Quel que soit `GIT_PROVIDER`, le lifespan **tente toujours** une connexion GitLab. Échec → `warning` log, app démarre quand même.
+- Aucun endpoint `/ready` ne valide la cohérence de la config Git provider.
+- `/health` ne check pas le provider (sauf l'endpoint dédié `routers/mcp_gitops.py:290` "health git provider", protégé `cpi-admin`).
+
+**Conclusion** : l'app démarre avec n'importe quelle combinaison d'env vars. Le premier appel API catalogue provoque l'erreur à distance de la cause.
+
+---
+
+## B. Config cible
+
+### B.1 Architecture — ingestion plate + hydration (amendée après review)
+
+**Décision design** : Pydantic Settings ne lit pas les env vars via les aliases déclarés sur un `BaseModel` imbriqué dans `BaseSettings` sans un `env_nested_delimiter` explicite. Une variable d'env `GIT_PROVIDER=gitlab` ne populera pas `settings.git.provider` même avec `alias="GIT_PROVIDER"` sur le sous-modèle. (Reproduit sur Pydantic 2.13 / pydantic-settings 2.12.)
+
+Deux voies propres, la première retenue :
+
+**Voie 1 (retenue) — Ingestion plate interne + hydration dans validator**
+
+- Garder dans `Settings` les 9 champs plats **actifs** (`GIT_PROVIDER`, `GITHUB_TOKEN`, `GITHUB_ORG`, `GITHUB_CATALOG_REPO`, `GITHUB_WEBHOOK_SECRET`, `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_PROJECT_ID`, `GITLAB_WEBHOOK_SECRET`) avec `exclude=True` (hors schéma de serialization).
+- Ajouter `git: GitProviderConfig` — agrégat de 3 sous-modèles (`GitHubConfig` + `GitLabConfig` + `provider`).
+- Un `model_validator(mode="after")` hydrate `settings.git` depuis les champs plats, **puis** exécute la validation cohérence provider.
+- Les consommateurs lisent **uniquement** `settings.git.*`. Les champs plats sont privés du module `config.py`.
+
+**Voie 2 (écartée) — `settings_customise_sources` custom**
+
+- Remappe les env vars plates vers un payload JSON `git={...}` via une source custom.
+- Pydantic le supporte, mais c'est plus de code, plus de surface de test, et pas nécessaire pour atteindre la métrique 3 (qui se valide au niveau **consommateur**, pas au niveau déclaration `Settings`).
+- Garder en réserve si on décide un jour de vraiment supprimer les champs plats.
+
+**Fausse sortie écartée** — faire de `GitProviderConfig` un `BaseSettings` imbriqué : dans les tests, il lit `os.environ` mais pas le `.env` du parent. Pas déterministe.
+
+### B.2 Code cible (extrait)
 
 ```python
-@dataclass(frozen=True)
-class TreeEntry:
-    name: str
-    type: Literal["tree", "blob"]
-    path: str
+# src/config.py (extrait cible — après C.1)
 
-@dataclass(frozen=True)
-class CommitRef:
-    sha: str
-    message: str
-    author: str
-    date: str
+from typing import Literal
 
-@dataclass(frozen=True)
-class BranchRef:
-    name: str
-    commit_sha: str
-    protected: bool
+from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-@dataclass(frozen=True)
-class MergeRequestRef:
-    id: int
-    iid: int              # GitLab iid / GitHub pr_number
-    title: str
-    description: str
-    state: str            # opened | merged | closed
-    source_branch: str
-    target_branch: str
-    web_url: str
-    created_at: str
-    author: str
+
+class GitHubConfig(BaseModel):
+    """GitHub provider config — hydrated from flat env vars by Settings validator."""
+    token: SecretStr = Field(default=SecretStr(""))
+    org: str = "stoa-platform"
+    catalog_repo: str = "stoa-catalog"
+    webhook_secret: SecretStr = Field(default=SecretStr(""))
+
+    @property
+    def catalog_project_id(self) -> str:
+        """Provider-agnostic project identifier: 'org/repo'."""
+        return f"{self.org}/{self.catalog_repo}"
+
+
+class GitLabConfig(BaseModel):
+    """GitLab provider config — hydrated from flat env vars by Settings validator."""
+    url: str = "https://gitlab.com"
+    token: SecretStr = Field(default=SecretStr(""))
+    project_id: str = ""
+    webhook_secret: SecretStr = Field(default=SecretStr(""))
+
+    @property
+    def catalog_project_id(self) -> str:
+        return self.project_id
+
+
+class GitProviderConfig(BaseModel):
+    """Single entry point for Git provider config. Consumers use settings.git.*."""
+    provider: Literal["github", "gitlab"] = "github"
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
+    gitlab: GitLabConfig = Field(default_factory=GitLabConfig)
+
+    @property
+    def active_catalog_project_id(self) -> str:
+        """Provider-agnostic 'project_id' for the currently selected provider."""
+        if self.provider == "github":
+            return self.github.catalog_project_id
+        return self.gitlab.catalog_project_id
+
+
+class Settings(BaseSettings):
+    # ... other fields unchanged ...
+
+    # ── Git Provider — legacy flat ingress (DO NOT READ from consumers) ────
+    # These 9 fields exist only so Pydantic Settings can hydrate them from
+    # env vars, .env and K8s ConfigMap. They are `exclude=True` so they
+    # never appear in Settings().model_dump().
+    # Consumers must read `settings.git.*` instead. A grep gate in CI
+    # enforces this (see C.5).
+    GIT_PROVIDER: Literal["github", "gitlab"] = Field(default="github", exclude=True)
+    GITHUB_TOKEN: str = Field(default="", exclude=True)
+    GITHUB_ORG: str = Field(default="stoa-platform", exclude=True)
+    GITHUB_CATALOG_REPO: str = Field(default="stoa-catalog", exclude=True)
+    GITHUB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
+    GITLAB_URL: str = Field(default="https://gitlab.com", exclude=True)
+    GITLAB_TOKEN: str = Field(default="", exclude=True)
+    GITLAB_PROJECT_ID: str = Field(default="", exclude=True)
+    GITLAB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
+
+    # ── Git Provider — single source of truth for consumers ────────────────
+    git: GitProviderConfig = Field(default_factory=GitProviderConfig)
+
+    @model_validator(mode="after")
+    def _hydrate_and_validate_git(self) -> "Settings":
+        """CAB-1889 CP-2: hydrate settings.git from legacy flat env vars,
+        then (C.3) fail fast in prod if the selected provider is misconfigured.
+        """
+        # Step 1 — hydration (always, wrapping SecretStr at the boundary).
+        self.git = GitProviderConfig(
+            provider=self.GIT_PROVIDER,
+            github=GitHubConfig(
+                token=SecretStr(self.GITHUB_TOKEN),
+                org=self.GITHUB_ORG,
+                catalog_repo=self.GITHUB_CATALOG_REPO,
+                webhook_secret=SecretStr(self.GITHUB_WEBHOOK_SECRET),
+            ),
+            gitlab=GitLabConfig(
+                url=self.GITLAB_URL,
+                token=SecretStr(self.GITLAB_TOKEN),
+                project_id=self.GITLAB_PROJECT_ID,
+                webhook_secret=SecretStr(self.GITLAB_WEBHOOK_SECRET),
+            ),
+        )
+
+        # Step 2 — validation (gated; flipped in C.3).
+        if not _VALIDATE_GIT_CONFIG:
+            return self
+
+        git = self.git
+        offender_msgs: list[str] = []
+
+        if git.provider == "github":
+            if not git.github.token.get_secret_value():
+                offender_msgs.append("GIT_PROVIDER=github but GITHUB_TOKEN is empty")
+            if git.gitlab.token.get_secret_value():
+                _logger.warning(
+                    "GIT_PROVIDER=github but GITLAB_TOKEN is also set. "
+                    "Inactive provider credentials should be removed."
+                )
+        else:  # gitlab
+            if not git.gitlab.token.get_secret_value():
+                offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_TOKEN is empty")
+            if not git.gitlab.project_id:
+                offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_PROJECT_ID is empty")
+            if git.github.token.get_secret_value():
+                _logger.warning(
+                    "GIT_PROVIDER=gitlab but GITHUB_TOKEN is also set. "
+                    "Inactive provider credentials should be removed."
+                )
+
+        if not offender_msgs:
+            return self
+
+        joined = "; ".join(offender_msgs)
+        if self.ENVIRONMENT == "production":
+            raise ValueError(
+                f"Refusing to boot: Git provider config is incoherent ({joined}). "
+                f"Set the required env vars in your Helm override."
+            )
+
+        _logger.warning(
+            "Git provider config incomplete (ENVIRONMENT=%s): %s. "
+            "Catalog operations will fail at request time. Fix before prod.",
+            self.ENVIRONMENT,
+            joined,
+        )
+        return self
 ```
 
-### Méthodes ajoutées à `GitProvider` (ABC)
+**Note test contract** : `raise ValueError(...)` à l'intérieur d'un `model_validator` est encapsulé par Pydantic en `pydantic.ValidationError` (qui hérite de `ValueError`). Les tests de C.3 doivent cibler `pytest.raises(ValidationError)` pour être explicites.
 
+### B.3 Utilisation côté consommateurs
+
+Avant :
 ```python
-# Connectivity
-def is_connected(self) -> bool: ...   # déjà présent, on s'appuie dessus
-
-# Reads
-async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]: ...
-async def read_file(self, path: str, ref: str = "main") -> str | None:
-    """Return file content or None if missing. Does not raise on 404."""
-async def list_path_commits(self, path: str | None, limit: int = 20) -> list[CommitRef]: ...
-
-# Files (already exist — use them, kill the _project.files.* leak)
-# create_file / update_file / delete_file existent déjà — à signature près (project_id arg).
-# → nouvelle surcharge sans project_id qui tape le repo "catalog par défaut" du provider.
-async def write_file(self, path: str, content: str, commit_message: str, branch: str = "main") -> None:
-    """Create-or-update file on the provider's default catalog repo. Implemented on top of existing create_file/update_file."""
-async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> None: ...
-
-# Branches
-async def list_branches(self) -> list[BranchRef]: ...
-async def create_branch(self, name: str, ref: str = "main") -> BranchRef: ...
-
-# Merge requests / Pull requests
-async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]: ...
-async def create_merge_request(
-    self, title: str, description: str, source_branch: str, target_branch: str = "main"
-) -> MergeRequestRef: ...
-async def merge_merge_request(self, iid: int) -> MergeRequestRef: ...
+# routers/mcp_gitops.py
+if settings.GIT_PROVIDER.lower() == "github":
+    project_id = f"{settings.GITHUB_ORG}/{settings.GITHUB_CATALOG_REPO}"
+else:
+    project_id = settings.GITLAB_PROJECT_ID
 ```
 
-Contrat sémantique :
-- `iid` pour GitLab = `iid`, pour GitHub = `pr.number`. Mapping documenté dans chaque impl.
-- Les nouvelles méthodes opèrent sur **le repo catalog du provider** (GitLab `GITLAB_PROJECT_ID`, GitHub `GITHUB_ORG/GITHUB_CATALOG_REPO`). Le router n'a jamais besoin de passer un `project_id`.
-- Ne raise pas de 404 implicite → le router ne fait plus le mapping. `read_file` renvoie `None`, `list_tree` renvoie `[]` si le chemin est absent.
-
-### Ce qui ne change pas
-
-- `connect` / `disconnect` / `clone_repo` / `get_file_content` / `list_files` / `create_webhook` / `delete_webhook` / `get_repo_info` / `create_file` / `update_file` / `delete_file` / `batch_commit` / catalog methods (`get_tenant`, `list_tenants`, `get_api`, `list_apis`, `get_api_openapi_spec`, `list_mcp_servers`, …) — **inchangés** (utilisés par `git_sync_worker`, `catalog_admin`, `mcp_gitops`, `tenants`, `deployments`, `apis`, `portal`, `health`, `iam_sync_service`).
-
----
-
-## C. Découpage fichier
-
-État actuel (LOC) :
-
-| Fichier | LOC | Split dans CP-1 ? |
-|---------|-----|-------------------|
-| `src/routers/git.py` | 388 | **NON** — sous seuil après cleanup attendu ~280 LOC |
-| `src/services/git_provider.py` | 303 | **NON** — grossit ~+80 LOC (types + méthodes ABC) → ~380 |
-| `src/services/git_service.py` (GitLab) | 992 | **DIFFÉRÉ** — Phase 2 séparée |
-| `src/services/github_service.py` | 898 | **DIFFÉRÉ** — Phase 2 séparée |
-
-**Décision** : le split des deux services est un rewrite à part entière (restructuration fichiers + mixins + backcompat imports). Il n'appartient pas au noyau CP-1 « fermer la fuite d'abstraction ». Il est **sorti de ce plan** et tracé comme Phase 2 CAB-1889 dédiée (voir section **Phase 2 (séparée, hors CP-1)** plus bas).
-
-Dans CP-1 on accepte temporairement que `git_service.py` et `github_service.py` dépassent 500 LOC — ils grossissent un peu plus (les nouvelles méthodes d'interface s'y ajoutent). C'est le prix pour garder CP-1 focalisé sur le contrat.
-
-**Schemas du router** : `git.py` garde ses Pydantic inline (on ne touche pas au shape OpenAPI). Pas de déplacement.
-
----
-
-## D. Plan d'exécution (bottom-up)
-
-### Étape 0 — baseline (ne code rien)
-- [ ] Snapshot OpenAPI : `python -c "from src.main import app; import json; print(json.dumps(app.openapi(), indent=2, sort_keys=True))" > /tmp/openapi-before.json`
-- [ ] `pytest tests/test_git_router.py tests/test_git_provider.py tests/test_git_service.py tests/test_github_service.py -q` — note les compteurs (255 tests total, 45 router).
-- [ ] `wc -l src/routers/git.py src/services/git_provider.py src/services/git_service.py src/services/github_service.py` — note les tailles.
-- **Commit 0** : rien (baseline, outputs archivés dans `/tmp/`).
-
-### Étape 1 — enrichir l'ABC
-- [ ] Dans `git_provider.py` : ajouter les dataclasses (`TreeEntry`, `CommitRef`, `BranchRef`, `MergeRequestRef`).
-- [ ] Ajouter les méthodes `list_tree`, `read_file`, `list_path_commits`, `write_file`, `remove_file`, `list_branches`, `create_branch`, `list_merge_requests`, `create_merge_request`, `merge_merge_request` — chacune `async` abstraite (raise `NotImplementedError` côté base pour éviter l'ABCError forçant toutes les impls à bouger d'un coup ; `@abstractmethod` seulement sur ce qui est hard-required).
-- [ ] Tests : **Étape 1.5** on ajoute `tests/test_git_provider_contract.py` qui fait tourner un contrat minimal (chaque impl doit produire les mêmes dataclasses).
-- [ ] `pytest tests/test_git_provider.py -q` : pass.
-- **Commit 1** : `refactor(git): extend GitProvider with tree/branches/MR interface (CAB-1889)`.
-
-### Étape 2 — implémenter côté `GitLabService`
-- [ ] Ajouter dans `git_service.py` (monolithe toujours) les implémentations des nouvelles méthodes, en mappant sur `self._project.branches/mergerequests/files/commits/repository_tree`. Utiliser les dataclasses pour le retour.
-- [ ] `read_file` = wrap de `get_file` existant (déjà nullable).
-- [ ] `list_path_commits` = wrap de `list_commits` existant.
-- [ ] Unit tests : `tests/test_git_service.py` — ajouter les cas mismatch (`read_file` returns None, `list_tree` returns `[]`).
-- [ ] `pytest tests/test_git_service.py -q` : pass.
-- **Commit 2** : `feat(git): GitLab impl for tree/branches/MR abstraction (CAB-1889)`.
-
-### Étape 3 — implémenter côté `GitHubService`
-- [ ] Ajouter dans `github_service.py` les implémentations (PyGithub). `MergeRequestRef.iid` ← `pr.number`. `list_tree` via `repo.get_contents(path)`. `read_file` = wrap de `get_file_content` qui catch `FileNotFoundError` → `None`. `list_path_commits` via `repo.get_commits(path=...)`.
-- [ ] Unit tests : `tests/test_github_service.py` — mêmes cas.
-- [ ] `pytest tests/test_github_service.py -q` : pass.
-- **Commit 3** : `feat(git): GitHub impl for tree/branches/MR abstraction (CAB-1889)`.
-
-### Étape 4 — réécrire le router `git.py`
-- [ ] Remplacer tous les `if not git._project` par `if not git.is_connected()`.
-- [ ] Remplacer chaque bloc `_project.xxx` par l'appel interface correspondant :
-  - tree → `git.list_tree(scoped_path, ref)`
-  - create/update file → `git.write_file(scoped_path, ...)` (consolide les 2 endpoints POST)
-  - delete file → `git.remove_file(scoped_path, ...)`
-  - MRs → `git.list_merge_requests / create_merge_request / merge_merge_request`
-  - branches → `git.list_branches / create_branch`
-  - commits → `git.list_path_commits(...)` (remplace `list_commits`)
-  - get_file → `git.read_file(...)` (remplace `get_file`)
-- [ ] Le mapping dataclass → Pydantic (`BranchInfo(**asdict(b))`) est fait au niveau du router → aucun champ de response model ne bouge.
-- [ ] Vérifier que chaque endpoint conserve status code + response schema identique.
-- [ ] `grep -n "\._project\|\._gh\|\._repo" src/routers/git.py` → attendu **0**.
-- **Commit 4** : `refactor(git): route git.py through GitProvider interface only (CAB-1889)`.
-
-### Étape 5 — rewriter `tests/test_git_router.py`
-- [ ] Les tests existants mockent `_project.*` — invalides désormais. Réécrire chaque test pour mocker la méthode d'interface (`mock_git.list_tree.return_value = [...]`, etc.).
-- [ ] Les tests de **comportement** (status codes, RBAC, response shape) restent **identiques dans leurs assertions** — seules les setups changent.
-- [ ] Compteur de tests ≥ 45 (ajouter 2-3 cas : `is_connected=False`, provider-agnostic GitHub-like MR via `iid`).
-- [ ] `pytest tests/test_git_router.py -q` : pass.
-- **Commit 5** : `test(git): mock GitProvider interface instead of internals (CAB-1889)`.
-
-### Étape 6 — validation finale
-- [ ] `grep -n "\._project\|\._gh\|\._repo\|_internal\|_private" src/routers/git.py` → **0**.
-- [ ] `grep -rn "github_service\|gitlab_service" src/routers/git.py` → **0**.
-- [ ] `pytest --cov=src --cov-fail-under=70 -q` → green, coverage ≥ 70.
-- [ ] `ruff check src/` → 0 issue.
-- [ ] `mypy src/services/git_provider.py src/services/git_service.py src/services/github_service.py src/routers/git.py` → 0 nouvelle erreur.
-- [ ] `wc -l src/routers/git.py src/services/git_provider.py` → tous les **fichiers touchés dans le périmètre CP-1** < 500. `git_service.py` / `github_service.py` restent > 500 → tracé Phase 2.
-- [ ] OpenAPI diff : `diff /tmp/openapi-before.json /tmp/openapi-after.json` → **vide**.
-
----
-
-## E. Risques identifiés
-
-| # | Risque | Impact | Mitigation |
-|---|--------|--------|------------|
-| R1 | `test_git_router.py` actuel asserte `_project.xxx.assert_called_once()` → 30+ tests à réécrire | Moyen — dette visible, invalide la "non-régression" des tests actuels | Étape 5 dédiée. Les **assertions sur response body + status code** restent des specs. Les **assertions sur `_project.xxx`** sont reconnues comme testant l'implémentation et légitimement réécrites. |
-| R2 | GitHub PR vs GitLab MR : sémantique `iid` ≠ `pr.number` | Moyen | Mapping explicite `iid ← pr.number` documenté dans `GitHubService`. Tests contrat dans `test_git_provider_contract.py`. |
-| R3 | `GitHubService` n'a pas de `_project` → `test_git_router.py` mocks casseront en dev local si on switch GIT_PROVIDER=github | Faible | `is_connected()` abstrait cette bifurcation. Les tests n'utilisent plus `_project` après étape 5. |
-| R4 | Les callers externes (`iam_sync_service`, `deployment_orchestration_service`) leakent aussi `_project` | Faible (hors périmètre strict) | Documenter dans `REWRITE-BUGS.md`, ticket suivi CAB-1889-follow-up. Ne pas fixer dans ce rewrite. |
-| R5 | La méthode `GitLabService._gl.projects.get(project_id)` dans `create_file`/`update_file`/`delete_file` ignore la semaphore `_fetch_with_protection` | Moyen (déjà présent — pas introduit par le rewrite) | Documenter dans `REWRITE-BUGS.md`. Le rewrite n'aggrave pas. |
-| R6 | Le bootstrap `git_service = git_provider_factory()` au module-load (`git.py:43`) est un workaround pour le patching de tests (conftest `_git_di_bridge`). Il peut casser si on change l'ordre d'import | Faible | Garder le shim tant que conftest l'utilise. Vérifier à l'étape 4. |
-| R7 | `git_service.py` / `github_service.py` dépassent déjà 500 LOC et grossissent encore (~+80 LOC / fichier) dans CP-1 | Faible | Accepté — traité dans Phase 2 séparée. Documenté ici pour que le dépassement soit conscient et borné. |
-| R8 | `get_api_override` (git_provider.py:175) a une logique provider-aware dans la base class (regarde `settings.GIT_PROVIDER`) — smell. | Très faible | Hors périmètre. Noter dans `REWRITE-BUGS.md`. |
-
-**Budget estimé CP-1** : 5-7h IA (revu à la baisse — le split était le gros morceau). Étape 5 (rewrite tests) = le plus long (~3h).
-
----
-
-## Livrables à chaque commit
-
-Chaque commit a un message conventionnel + référence `CAB-1889`. Tests verts entre chaque. Ruff/mypy verts entre chaque. Aucun changement de comportement observable (OpenAPI spec identique). Les tests de comportement restent des specs de non-régression ; les tests implementation-detail sont réécrits explicitement.
-
----
-
-## Phase 2 (séparée, hors CP-1)
-
-**Objectif** : découper `git_service.py` (~1070 LOC après CP-1) et `github_service.py` (~980 LOC après CP-1) en modules par domaine.
-
-**Prérequis** : CP-1 mergé. Interface `GitProvider` stable. Tous les callers router passent par l'interface.
-
-**Esquisse du split** (ré-évaluation au moment du kick-off — à ne pas graver ici) :
+Après :
+```python
+project_id = settings.git.active_catalog_project_id
 ```
-src/services/git/
-├── gitlab/  { client, rate_limit, reads, writes, branches, merge_requests, catalog, mcp }
-├── github/  { structure identique }
-└── schemas.py  # dataclasses déjà créées en CP-1
+
+Avant :
+```python
+# services/github_service.py
+auth = Auth.Token(settings.GITHUB_TOKEN)
 ```
-Pattern : mixins composés dans `GitLabService` / `GitHubService`. `git_service.py` et `github_service.py` deviennent des shims backcompat (re-export) — on ne casse pas les imports `iam_sync_service`, `git_sync_worker`, `main.py`, `apis.py`, `tenants.py`, `deployments.py`, `portal.py`, `health.py`, `catalog_admin.py`, `mcp_gitops.py`.
 
-**Livrable attendu** : un `PHASE2-SPLIT-PLAN.md` dédié au moment où on ouvre la Phase 2 (pas maintenant).
+Après :
+```python
+auth = Auth.Token(settings.git.github.token.get_secret_value())
+```
 
-**STOP CP-1 ici — attends validation avant d'exécuter les étapes 1-6.**
+Avant :
+```python
+# services/git_service.py
+self._gl = gitlab.Gitlab(settings.GITLAB_URL, private_token=settings.GITLAB_TOKEN)
+self._project = self._gl.projects.get(settings.GITLAB_PROJECT_ID)
+```
+
+Après :
+```python
+gl_cfg = settings.git.gitlab
+self._gl = gitlab.Gitlab(gl_cfg.url, private_token=gl_cfg.token.get_secret_value())
+self._project = self._gl.projects.get(gl_cfg.project_id)
+```
+
+---
+
+## C. Plan de migration (ordre amendé)
+
+Ordre bottom-up. **Chaque commit consommateur embarque sa MAJ de tests** — pas de commit qui casse la suite.
+
+### C.1 — Introduire `GitProviderConfig` + hydration en shadow
+- Ajouter les 3 classes `GitHubConfig` / `GitLabConfig` / `GitProviderConfig` dans `config.py`.
+- Ajouter le champ `git: GitProviderConfig = Field(default_factory=GitProviderConfig)` dans `Settings`.
+- Ajouter `exclude=True` aux 9 champs plats actifs.
+- Retirer les 7 champs dead + 1 flag log dead + 2 `@property` alias morts.
+- Ajouter le `model_validator` avec **hydration active** mais **validation désactivée** via flag module-level `_VALIDATE_GIT_CONFIG = False` (C.3 le flippera).
+- Tests affectés dans le même commit : `tests/test_git_provider.py:115` (retrait assertion `GITHUB_GITOPS_REPO`).
+- `pytest` vert — aucune régression.
+
+### C.2 — Migrer les consommateurs, un fichier par commit, tests inclus
+
+| # | Fichier code | Tests à migrer dans le même commit |
+|---|---|---|
+| 1 | `routers/webhooks.py` (retire `getattr` redondant + migre les deux webhook secrets) | `tests/test_webhooks.py`, `tests/test_webhooks_router.py` |
+| 2 | `routers/mcp_gitops.py:300-303` → `settings.git.active_catalog_project_id` | couverture indirecte via integration |
+| 3 | `services/git_provider.py:232-236` (`get_api_override`) → `settings.git.active_catalog_project_id`. Ferme BUG-04. | `tests/test_git_provider.py` si couvre `get_api_override` |
+| 4 | `services/git_provider.py:389,403` (factory) → `settings.git.provider`. Suppression du `.lower()` (`Literal` garantit la casse). | `tests/test_dual_provider_smoke.py`, `tests/test_git_provider.py` (patches `mock_settings.GIT_PROVIDER` → patcher `mock_settings.git`) |
+| 5 | `services/github_service.py:115,137,576` → `settings.git.github.*` | `tests/test_github_service_catalog_parity.py`, `tests/test_regression_cab_1889_github_*` |
+| 6 | `services/git_service.py:106,110,148` → `settings.git.gitlab.*` | `tests/test_git_service.py` |
+| 7 | `workers/git_sync_worker.py:84` — commentaire seul, rien runtime | aucun |
+
+`conftest.py:40` — mis à jour en **C.3**.
+
+### C.3 — Activer la validation startup
+- Flip `_VALIDATE_GIT_CONFIG = True`.
+- Mettre à jour `conftest.py:40` pour set `GITLAB_TOKEN=test-token` + `GITLAB_PROJECT_ID=1` (évite le spam de warnings pendant la suite).
+- Ajouter `tests/test_config_git_provider_validation.py` couvrant :
+  - `ENVIRONMENT=production` + combos manquants → `ValidationError`
+  - `ENVIRONMENT=dev` + combos manquants → warning via `caplog`
+  - Tokens des deux providers set → warning sur l'inactif
+  - `GIT_PROVIDER=invalid` → `ValidationError` (via `Literal`)
+  - Défaut code (`GIT_PROVIDER=github`) + `GITHUB_TOKEN=""` + prod → `ValidationError` (couvre R-3)
+
+### C.4 — Artefacts déploiement
+- `.env.example` : section `# ── Git Provider ──` explicite (9 vars).
+- `k8s/configmap.yaml` : retire les vars dead commentées + `GITHUB_GITOPS_REPO` + `GITLAB_DEFAULT_BRANCH`.
+- `stoa-infra/charts/control-plane-api/values.yaml` : **pas modifié** (prod reste `GIT_PROVIDER=gitlab`, flip vers github = CAB-1890).
+
+### C.5 — Grep gate CI
+`scripts/check_git_config_access.sh` + step dans `.github/workflows/lint.yml`.
+
+---
+
+## D. Startup validation
+
+`model_validator(mode="after")` sur `Settings` → exécuté dès l'instanciation `settings = Settings()` en tête de `config.py` (première ligne importée par `main.py:19`, avant DB/cache/Kafka).
+
+- `ENVIRONMENT=production` + config incohérente → `ValueError` encapsulé en `ValidationError` Pydantic → crash process. K8s relance, readiness KO, alerte.
+- `ENVIRONMENT=dev|staging` → `_logger.warning(...)`, app démarre.
+
+Aligné sur `_gate_sensitive_debug_flags_in_prod` (config.py:420-445).
+
+Webhooks non validés au startup (optionnels) — `webhooks.py:75,85` refuse déjà au runtime si secret absent.
+
+---
+
+## E. Chemins morts à supprimer (C.1)
+
+| Var | Raison |
+|---|---|
+| `GITHUB_GITOPS_REPO` | Jamais câblée. Test `test_git_provider.py:115` retiré aussi. |
+| `GITLAB_DEFAULT_BRANCH` | Constante `"main"` hard-codée ailleurs. |
+| `GITLAB_CATALOG_PROJECT_PATH` | Non lu. |
+| `GITLAB_GITOPS_PROJECT_ID` / `_PATH` | Non lus. |
+| `GITLAB_CATALOG_PROJECT_ID` / `GITLAB_PROJECT_PATH` (properties) | Non lues. |
+| `LOG_DEBUG_GITLAB_API` | Jamais référencé. |
+
+Aucun ConfigMap prod ne les utilise non-commentées. `k8s/configmap.yaml` les liste en commentaires → nettoyage en C.4.
+
+---
+
+## F. Risques identifiés
+
+### R-1 — Singleton `git_service = GitLabService()` ignore `GIT_PROVIDER`
+`src/services/git_service.py:1111`. `main.py:196`, `iam_sync_service.py`, `deployment_orchestration_service.py`, `mcp_sync_service.py` utilisent ce singleton. La validation de CP-2 vérifie les creds du provider **déclaré** — sans résoudre le singleton. Hors scope CP-2, à reprendre en CP-3 (remplacer par `get_git_provider()` via `Depends` ou `app.state.git_provider`). Mitigation CP-2 : warning visible si les creds de l'inactif sont set.
+
+### R-2 — Tests qui patchent `mock_settings.GITLAB_*` / `GITHUB_*`
+Les attributs plats existent toujours (`exclude=True` exclut du dump, pas du getattr). Les patches ne crashent pas mais le code consommateur lit maintenant `settings.git.*` qui a été hydraté **une seule fois** à l'init. Chaque commit C.2 patche `mock_settings.git = GitProviderConfig(...)` ou équivalent.
+
+### R-3 — `conftest.py:40` default `gitlab` vs code default `github`
+Angle mort dans les tests. Mitigation : `test_default_git_provider_is_github_and_requires_github_token` en C.3.
+
+### R-4 — `routers/webhooks.py` utilise `getattr` redondant
+Supprimé en C.2 commit #1.
+
+### R-5 — Stoa-infra `GIT_PROVIDER: gitlab` en prod — vérifier secret avant C.3
+`kubectl get secret gitlab-secrets -n stoa-system -o yaml` pour confirmer que `GITLAB_TOKEN` + `GITLAB_PROJECT_ID` sont présents. Si `GITLAB_PROJECT_ID` manque, ajouter au secret/ConfigMap **avant** merge C.3, sinon la validation casse le rollout.
+
+### R-6 — Double source Helm `charts/stoa-platform/` vs `stoa-infra/`
+Source ArgoCD live = `stoa-infra/charts/control-plane-api/values.yaml`. Monorepo `k8s/configmap.yaml` = legacy non déployé. Cleanup C.4 uniquement cosmétique.
+
+### R-7 — `exclude=True` n'empêche pas le getattr
+Un caller qui continue `settings.GITHUB_TOKEN` aura une valeur vivante (hydratée depuis env). La grep gate de C.5 est **obligatoire** pour empêcher la régression consommateur.
+
+---
+
+## Livrables Phase 2 (après validation de ce plan)
+
+- **Commit 1 (C.1)** : introduce `GitProviderConfig` shadow + hydration + retire les 7 vars dead + 1 flag log dead + 2 property alias. Validator présent mais validation désactivée (`_VALIDATE_GIT_CONFIG = False`).
+- **Commits 2-8 (C.2)** : migrer chaque consommateur + ses tests (7 commits).
+- **Commit 9 (C.3)** : flip `_VALIDATE_GIT_CONFIG = True`, mise à jour `conftest.py`, nouveau `tests/test_config_git_provider_validation.py`.
+- **Commit 10 (C.4)** : `.env.example` + `k8s/configmap.yaml` cleanup + `REWRITE-BUGS.md` update (BUG-04 closed par C.2 commit #3).
+- **Commit 11 (C.5)** : grep gate CI.
+
+---
+
+**Phase 2 en cours — ce plan est la v2 validée par le reviewer.**

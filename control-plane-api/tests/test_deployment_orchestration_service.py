@@ -340,3 +340,44 @@ class TestDeploymentOrchestrationService:
             assert result[2]["environment"] == "production"
             assert result[2]["deployable"] is False
 
+
+class TestRegressionCab1889:
+    """regression for CAB-1889: _sync_api_from_git must use provider-agnostic ABC, not _project."""
+
+    async def test_regression_cab_1889_deployment_orch_uses_get_head_commit_sha(self):
+        """_sync_api_from_git must call is_connected + get_head_commit_sha, never _project."""
+        from src.services.deployment_orchestration_service import (
+            DeploymentOrchestrationService,
+        )
+
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        # Stub the catalog upsert path so the test focuses on the git access pattern.
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = MagicMock()
+        db.execute.return_value = mock_result
+
+        with (
+            patch("src.services.git_service.git_service") as mock_git,
+            patch(
+                "src.services.catalog_sync_service.CatalogSyncService"
+            ) as mock_catalog_cls,
+        ):
+            mock_git.is_connected.return_value = True
+            mock_git.connect = AsyncMock()
+            mock_git.get_api = AsyncMock(return_value={"api_id": "payments", "version": "2.0.0"})
+            mock_git.get_api_openapi_spec = AsyncMock(return_value={"openapi": "3.0.0"})
+            mock_git.get_head_commit_sha = AsyncMock(return_value="sha123")
+            mock_catalog_cls.return_value._upsert_api = AsyncMock()
+
+            await svc._sync_api_from_git("acme", "payments")
+
+            mock_git.is_connected.assert_called()
+            mock_git.get_head_commit_sha.assert_awaited_once_with(ref="main")
+            # _project must never be touched — if it is, this attribute access would work on MagicMock
+            # so we assert that only the interface methods were called.
+            assert not any(
+                "_project" in str(call) for call in mock_git.mock_calls
+            ), f"_project leaked into calls: {mock_git.mock_calls}"
+

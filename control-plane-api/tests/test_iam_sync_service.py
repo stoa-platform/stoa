@@ -1,8 +1,9 @@
 """Tests for IAMSyncService (CAB-1291 + CAB-1292)"""
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.services.git_provider import TreeEntry
 from src.services.iam_sync_service import IAMSyncService
 
 
@@ -213,20 +214,20 @@ class TestSyncAllTenants:
     async def test_git_not_connected(self):
         svc = IAMSyncService()
         with patch("src.services.iam_sync_service.git_service") as mock_git:
-            mock_git._project = None
+            mock_git.is_connected.return_value = False
             result = await svc.sync_all_tenants()
-        assert "GitLab not connected" in result.get("errors", [])
+        assert "Git provider not connected" in result.get("errors", [])
 
     async def test_syncs_each_tenant(self):
         svc = IAMSyncService()
         svc.sync_tenant = AsyncMock(return_value={"actions": ["a"], "errors": []})
         with patch("src.services.iam_sync_service.git_service") as mock_git:
-            mock_git._project = MagicMock()
-            mock_git._project.repository_tree.return_value = [
-                {"type": "tree", "name": "acme"},
-                {"type": "tree", "name": "corp"},
-                {"type": "blob", "name": ".gitkeep"},
-            ]
+            mock_git.is_connected.return_value = True
+            mock_git.list_tree = AsyncMock(return_value=[
+                TreeEntry(name="acme", type="tree", path="tenants/acme"),
+                TreeEntry(name="corp", type="tree", path="tenants/corp"),
+                TreeEntry(name=".gitkeep", type="blob", path="tenants/.gitkeep"),
+            ])
             result = await svc.sync_all_tenants()
         assert svc.sync_tenant.call_count == 2
         assert result["total_actions"] == 2
@@ -624,11 +625,26 @@ class TestSyncAllTenantsException:
         """sync_all_tenants() catches top-level exception and adds to result."""
         svc = IAMSyncService()
         with patch("src.services.iam_sync_service.git_service") as mock_git:
-            mock_git._project = MagicMock()
-            mock_git._project.repository_tree.side_effect = Exception("GitLab down")
+            mock_git.is_connected.return_value = True
+            mock_git.list_tree = AsyncMock(side_effect=Exception("Git down"))
             result = await svc.sync_all_tenants()
         assert "errors" in result
         assert len(result["errors"]) > 0
+
+
+class TestRegressionCab1889:
+    """regression for CAB-1889: external services must use provider-agnostic ABC, not _project."""
+
+    async def test_regression_cab_1889_iam_sync_uses_list_tree(self):
+        """sync_all_tenants must call list_tree + is_connected, never _project directly."""
+        svc = IAMSyncService()
+        svc.sync_tenant = AsyncMock(return_value={"actions": [], "errors": []})
+        with patch("src.services.iam_sync_service.git_service") as mock_git:
+            mock_git.is_connected.return_value = True
+            mock_git.list_tree = AsyncMock(return_value=[])
+            await svc.sync_all_tenants()
+            mock_git.is_connected.assert_called()
+            mock_git.list_tree.assert_awaited_once_with("tenants", ref="main")
 
 
 class TestHandleTenantEventUserRemovedNoEmail:

@@ -68,16 +68,16 @@ describe('UI-2 S2d domain clients', () => {
         environment: 'prod',
       } as never)
     ).resolves.toBe(deployment);
-    await expect(
-      deploymentsClient.rollback('tenant-1', 'dep-1', '1.2.3')
-    ).resolves.toBe(deployment);
+    await expect(deploymentsClient.rollback('tenant-1', 'dep-1', '1.2.3')).resolves.toBe(
+      deployment
+    );
     await expect(deploymentsClient.getLogs('tenant-1', 'dep-1', 10, 50)).resolves.toBe(logs);
-    await expect(
-      deploymentsClient.getEnvironmentStatus('tenant-1', 'prod')
-    ).resolves.toBe(envStatus);
-    await expect(
-      deploymentsClient.getDeployableEnvironments('tenant-1', 'api-1')
-    ).resolves.toBe(deployable);
+    await expect(deploymentsClient.getEnvironmentStatus('tenant-1', 'prod')).resolves.toBe(
+      envStatus
+    );
+    await expect(deploymentsClient.getDeployableEnvironments('tenant-1', 'api-1')).resolves.toBe(
+      deployable
+    );
     await expect(
       deploymentsClient.deployApiToEnv('tenant-1', 'api-1', {
         environment: 'prod',
@@ -107,10 +107,7 @@ describe('UI-2 S2d domain clients', () => {
         page_size: 20,
       },
     });
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/tenants/tenant-1/deployments/dep-1'
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/tenants/tenant-1/deployments/dep-1');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/deployments', {
       api_id: 'api-1',
       environment: 'prod',
@@ -184,9 +181,7 @@ describe('UI-2 S2d domain clients', () => {
       .mockResolvedValueOnce({ data: aiStats })
       .mockResolvedValueOnce({ data: csvBlob });
 
-    await expect(
-      tracesClient.list(25, 'tenant-1', 'failed', 'prod')
-    ).resolves.toBe(traceList);
+    await expect(tracesClient.list(25, 'tenant-1', 'failed', 'prod')).resolves.toBe(traceList);
     await expect(tracesClient.get('trace-1')).resolves.toBe(trace);
     await expect(tracesClient.getTimeline('trace-1')).resolves.toBe(timeline);
     await expect(tracesClient.getStats()).resolves.toBe(stats);
@@ -246,7 +241,10 @@ describe('UI-2 S2d domain clients', () => {
     mockHttpClient.put
       .mockResolvedValueOnce({ data: gateway })
       .mockResolvedValueOnce({ data: policy });
-    mockHttpClient.delete.mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({});
+    mockHttpClient.delete
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
 
     await expect(
       gatewaysClient.listInstances({
@@ -359,7 +357,9 @@ describe('UI-2 S2d domain clients', () => {
     const created = [{ id: 'dep-1' }];
     const syncResult = { synced: true };
     const testResult = { reachable: true, status_code: 200 };
-    const catalogEntries = [{ id: 'cat-1', api_name: 'Payments', tenant_id: 'tenant-1', version: '1.0.0' }];
+    const catalogEntries = [
+      { id: 'cat-1', api_name: 'Payments', tenant_id: 'tenant-1', version: '1.0.0' },
+    ];
 
     mockHttpClient.get
       .mockResolvedValueOnce({ data: statusSummary })
@@ -414,9 +414,6 @@ describe('UI-2 S2d domain clients', () => {
     expect(mockHttpClient.delete).toHaveBeenCalledWith('/v1/admin/deployments/dep-1');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(2, '/v1/admin/deployments/dep-1/sync');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(3, '/v1/admin/deployments/dep-1/test');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      4,
-      '/v1/admin/deployments/catalog-entries'
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(4, '/v1/admin/deployments/catalog-entries');
   });
 });

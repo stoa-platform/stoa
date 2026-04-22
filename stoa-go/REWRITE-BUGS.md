@@ -176,6 +176,36 @@ Caller side (`sse.go:StartDeploymentStream`) logue maintenant `"sse-stream: term
 
 ---
 
+## Asymétries policy sync consolidées en S8
+
+### C.1 — `OIDCAdapter` interface asymétrique apply vs remove (documented, out of GO-2 scope)
+
+**Lieu** : `internal/connect/adapters/adapter.go:128-132` — `OIDCAdapter` interface.
+
+**Constat** :
+- **Apply side** : 3 méthodes typées (`UpsertAuthServer`, `UpsertStrategy`, `UpsertScope`) + fallback générique `ApplyPolicy` via `GatewayAdapter`.
+- **Remove side** : 1 seule méthode typée (`DeleteAuthServer`). `DeleteStrategy` et `DeleteScope` **n'existent pas sur l'interface**.
+
+**Conséquence runtime** : quand le CP émet une `PendingPolicy{PolicyType: "oidc_strategy", Enabled: false}` (i.e. "désactive cette stratégie"), le `policySyncer.remove` tombe sur le fallback `adapter.RemovePolicy(ctx, adminURL, name, "oidc_strategy")`. C'est à l'implémentation concrète (webmethods / kong / gravitee) de reconnaître ce hint string et de faire la bonne chose — ou de no-op silencieusement.
+
+**Bug latent potentiel** : si webmethods.RemovePolicy ne gère pas le type `oidc_strategy`, on a un leak — la strategy reste configurée côté gateway alors que le CP pense l'avoir supprimée. Pas vérifié dans cette passe (hors scope).
+
+**Pourquoi pas fixé en GO-2** : ajouter `DeleteStrategy` / `DeleteScope` touche l'interface dans `adapters/`, qui est le territoire de GO-1 (rewrite adapters terminé). GO-2 se limite à `internal/connect/` hors adapters. Un ticket GO-3 ou un fix ciblé côté webmethods est le bon chemin.
+
+**Preuve de comportement préservé** :
+- `TestPolicySyncerRemovesOIDCStrategyViaGenericFallback` vérifie que le disabled `oidc_strategy` passe bien par `RemovePolicy("oidc_strategy")` (pas un crash, pas un chemin typé).
+- `TestPolicySyncerRemovesOIDCAuthServer` vérifie que seul `oidc_auth_server` prend le chemin typé `DeleteAuthServer`.
+
+### C.2 — `AliasAdapter` non utilisé dans RunSync (documented, follow-up)
+
+**Lieu** : `internal/connect/adapters/adapter.go:136-139` — `AliasAdapter{UpsertAlias, DeleteAlias}` existe mais aucune référence dans `internal/connect/*.go` hors tests.
+
+**Conséquence** : si le CP émet un `PolicyType: "alias"` (ou similaire), il tombe dans le fallback générique `adapter.ApplyPolicy` — l'interface `AliasAdapter` reste dead code.
+
+**Traitement** : à brancher dans un ticket séparé si le CP doit émettre des policies d'alias côté connect. Pour l'instant : dead code côté connect, utilisé ailleurs (peut-être par stoa-gateway ou stoa-connect côté webmethods adapter interne).
+
+---
+
 ## Non-bugs relevés mais conscients
 
 - **`a.client.Timeout = 15s`** global vs SSE override via nouveau `http.Client{Transport: a.client.Transport}` (ligne 129) : OK, le otelhttp transport est partagé correctement. Juste une alloc par reconnect, négligeable.

@@ -51,7 +51,9 @@ func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteRes
 	})
 }
 
-// RunSync performs a single policy sync cycle: fetch config → apply/remove → ack.
+// RunSync performs a single policy sync cycle: fetch config → dispatch via
+// policySyncer → update metrics → ack. Per-policy dispatch (OIDC vs
+// generic, apply vs remove) lives in sync_policy.go.
 func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync",
 		attribute.String("stoa.gateway_id", a.state.GatewayID()),
@@ -75,73 +77,8 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 	span.SetAttributes(attribute.Int("stoa.pending_policies", len(config.PendingPolicies)))
 	log.Printf("sync: %d policies to reconcile", len(config.PendingPolicies))
 
-	var results []SyncedPolicyResult
-
-	// Check if adapter supports OIDC operations
-	oidcAdapter, hasOIDC := adapter.(adapters.OIDCAdapter)
-
-	for _, policy := range config.PendingPolicies {
-		result := SyncedPolicyResult{PolicyID: policy.ID}
-
-		if !policy.Enabled {
-			var syncErr error
-			if policy.PolicyType == "oidc_auth_server" && hasOIDC {
-				syncErr = oidcAdapter.DeleteAuthServer(ctx, adminURL, policy.Name)
-			} else {
-				syncErr = adapter.RemovePolicy(ctx, adminURL, policy.Name, policy.PolicyType)
-			}
-			if syncErr != nil {
-				result.Status = "failed"
-				result.Error = syncErr.Error()
-				log.Printf("sync: remove policy %s failed: %v", policy.Name, syncErr)
-			} else {
-				result.Status = "removed"
-				log.Printf("sync: removed policy %s (%s)", policy.Name, policy.PolicyType)
-			}
-		} else {
-			var syncErr error
-			switch {
-			case policy.PolicyType == "oidc_auth_server" && hasOIDC:
-				syncErr = oidcAdapter.UpsertAuthServer(ctx, adminURL, adapters.AuthServerSpec{
-					Name:         policy.Name,
-					DiscoveryURL: getStringConfig(policy.Config, "discovery_url"),
-					ClientID:     getStringConfig(policy.Config, "client_id"),
-					ClientSecret: getStringConfig(policy.Config, "client_secret"),
-					Scopes:       getStringSliceConfig(policy.Config, "scopes"),
-				})
-			case policy.PolicyType == "oidc_strategy" && hasOIDC:
-				syncErr = oidcAdapter.UpsertStrategy(ctx, adminURL, adapters.StrategySpec{
-					Name:            policy.Name,
-					AuthServerAlias: getStringConfig(policy.Config, "auth_server_alias"),
-					ClientID:        getStringConfig(policy.Config, "client_id"),
-					Audience:        getStringConfig(policy.Config, "audience"),
-				})
-			case policy.PolicyType == "oidc_scope" && hasOIDC:
-				syncErr = oidcAdapter.UpsertScope(ctx, adminURL, adapters.ScopeSpec{
-					ScopeName:       getStringConfig(policy.Config, "scope_name"),
-					Audience:        getStringConfig(policy.Config, "audience"),
-					AuthServerAlias: getStringConfig(policy.Config, "auth_server_alias"),
-					KeycloakScope:   getStringConfig(policy.Config, "keycloak_scope"),
-				})
-			default:
-				action := adapters.PolicyAction{
-					Type:   policy.PolicyType,
-					Config: policy.Config,
-				}
-				syncErr = adapter.ApplyPolicy(ctx, adminURL, policy.Name, action)
-			}
-			if syncErr != nil {
-				result.Status = "failed"
-				result.Error = syncErr.Error()
-				log.Printf("sync: apply policy %s failed: %v", policy.Name, syncErr)
-			} else {
-				result.Status = "applied"
-				log.Printf("sync: applied policy %s (%s)", policy.Name, policy.PolicyType)
-			}
-		}
-
-		results = append(results, result)
-	}
+	syncer := newPolicySyncer(adapter)
+	results := syncer.SyncPolicies(ctx, adminURL, config.PendingPolicies)
 
 	// Update Prometheus metrics
 	allOk := true
@@ -198,36 +135,4 @@ func (a *Agent) StartSync(ctx context.Context, adapter adapters.GatewayAdapter, 
 			}
 		}
 	}()
-}
-
-// getStringConfig safely extracts a string value from a config map.
-func getStringConfig(config map[string]interface{}, key string) string {
-	if v, ok := config[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-// getStringSliceConfig safely extracts a string slice from a config map.
-func getStringSliceConfig(config map[string]interface{}, key string) []string {
-	v, ok := config[key]
-	if !ok {
-		return nil
-	}
-	switch val := v.(type) {
-	case []string:
-		return val
-	case []interface{}:
-		var result []string
-		for _, item := range val {
-			if s, ok := item.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result
-	default:
-		return nil
-	}
 }

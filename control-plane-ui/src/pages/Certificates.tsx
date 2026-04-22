@@ -89,13 +89,14 @@ export function Certificates() {
 
   const loading = tenantsLoading || consumersLoading;
 
-  // Only consumers with certificates
+  // Only consumers with certificates AND a valid expiry date — wire allows
+  // either to be null/missing independently, but the table column needs both.
   const certConsumers: CertConsumer[] = useMemo(() => {
     return consumers
-      .filter((c) => c.certificate_fingerprint)
+      .filter((c) => c.certificate_fingerprint && c.certificate_not_after)
       .map((c) => ({
         ...c,
-        _daysUntilExpiry: getDaysUntilExpiry(c.certificate_not_after ?? ''),
+        _daysUntilExpiry: getDaysUntilExpiry(c.certificate_not_after as string),
       }));
   }, [consumers]);
 

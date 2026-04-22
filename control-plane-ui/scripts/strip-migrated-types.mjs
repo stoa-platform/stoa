@@ -8,8 +8,8 @@
 // follow-up pass can clean up. Better than risking off-by-one corruption.
 //
 // DELETION CRITERIA: same as migrate-types.mjs. Sunset both scripts together
-// when UI-1-Wave2 is merged AND backend BUG-1/2/4 resolved.
-// Owner of deletion: whoever closes UI-1-Wave2.
+// when CAB-2158 (UI-1-Wave2) merged AND CAB-2159 (backend BUG-1/2/4) resolved.
+// Owner of deletion: whoever closes CAB-2158.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import ts from 'typescript';

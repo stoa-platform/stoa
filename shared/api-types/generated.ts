@@ -13,8 +13,8 @@
  * declarations — only error-reporting on this file is suppressed.
  *
  * REMOVE `@ts-nocheck` when:
- *   1. Backend dedupes the offending operationIds (cf. BACKEND-BUG-1/2/4
- *      ticket — proposed fix: prefix with scope, e.g. `admin_list_apps`).
+ *   1. Backend dedupes the offending operationIds (tracked in **CAB-2159** —
+ *      proposed fix: prefix with scope, e.g. `admin_list_apps`).
  *   2. `cd shared && rm scripts/inject-tsnocheck.mjs` and revert
  *      `shared/package.json` scripts back to bare `openapi-typescript` calls.
  *   3. `tsc -p control-plane-ui/tsconfig.app.json --noEmit` passes without

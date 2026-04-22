@@ -3,6 +3,12 @@
 > Issues dans le contrat OpenAPI (`control-plane-api/openapi-snapshot.json`)
 > trouvées pendant le rewrite des types UI. **Hors périmètre rewrite — à
 > remonter à l'équipe backend (control-plane-api).**
+>
+> **Tracking ticket**: **CAB-2159** (BACKEND-BUG — 3 OpenAPI contract gaps).
+> Owner: whoever claims that ticket. Resolution unblocks **CAB-2158** (UI-1-Wave2).
+>
+> **Blocks**: CAB-2158 (UI-1-Wave2 remaining migration) and, indirectly,
+> CAB-2160 (UI-1-polish adapter pattern).
 
 ---
 

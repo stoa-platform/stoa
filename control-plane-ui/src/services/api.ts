@@ -77,6 +77,10 @@ import { tenantsClient } from './api/tenants';
 import { apisClient } from './api/apis';
 import { applicationsClient } from './api/applications';
 import { consumersClient } from './api/consumers';
+import { deploymentsClient } from './api/deployments';
+import { tracesClient } from './api/traces';
+import { gatewaysClient } from './api/gateways';
+import { gatewayDeploymentsClient } from './api/gatewayDeployments';
 
 // =============================================================================
 // Façade ApiService — agrège le core transport (services/http) et les méthodes
@@ -345,18 +349,15 @@ class ApiService {
       page_size?: number;
     }
   ): Promise<DeploymentListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/deployments`, { params });
-    return data;
+    return deploymentsClient.list(tenantId, params);
   }
 
   async getDeployment(tenantId: string, deploymentId: string): Promise<Deployment> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/deployments/${deploymentId}`);
-    return data;
+    return deploymentsClient.get(tenantId, deploymentId);
   }
 
   async createDeployment(tenantId: string, request: DeploymentCreate): Promise<Deployment> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/deployments`, request);
-    return data;
+    return deploymentsClient.create(tenantId, request);
   }
 
   async rollbackDeployment(
@@ -364,11 +365,7 @@ class ApiService {
     deploymentId: string,
     targetVersion?: string
   ): Promise<Deployment> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/deployments/${deploymentId}/rollback`,
-      { target_version: targetVersion }
-    );
-    return data;
+    return deploymentsClient.rollback(tenantId, deploymentId, targetVersion);
   }
 
   async getDeploymentLogs(
@@ -377,11 +374,7 @@ class ApiService {
     afterSeq: number = 0,
     limit: number = 200
   ): Promise<DeploymentLogListResponse> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/deployments/${deploymentId}/logs`,
-      { params: { after_seq: afterSeq, limit } }
-    );
-    return data;
+    return deploymentsClient.getLogs(tenantId, deploymentId, afterSeq, limit);
   }
 
   // ── Promotions (CAB-1706) ──────────────────────────────────────────────────
@@ -440,10 +433,7 @@ class ApiService {
     tenantId: string,
     environment: string
   ): Promise<EnvironmentStatusResponse> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/deployments/environments/${environment}/status`
-    );
-    return data;
+    return deploymentsClient.getEnvironmentStatus(tenantId, environment);
   }
 
   // Git
@@ -467,54 +457,32 @@ class ApiService {
     status?: string,
     environment?: string
   ): Promise<{ traces: TraceSummary[]; total: number }> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const params: Record<string, any> = {};
-    if (limit) params.limit = limit;
-    if (tenantId) params.tenant_id = tenantId;
-    if (status) params.status = status;
-    if (environment) params.environment = environment;
-    const { data } = await httpClient.get('/v1/traces', { params });
-    return data;
+    return tracesClient.list(limit, tenantId, status, environment);
   }
 
   async getTrace(traceId: string): Promise<PipelineTrace> {
-    const { data } = await httpClient.get(`/v1/traces/${traceId}`);
-    return data;
+    return tracesClient.get(traceId);
   }
 
   async getTraceTimeline(traceId: string): Promise<TraceTimeline> {
-    const { data } = await httpClient.get(`/v1/traces/${traceId}/timeline`);
-    return data;
+    return tracesClient.getTimeline(traceId);
   }
 
   async getTraceStats(): Promise<TraceStats> {
-    const { data } = await httpClient.get('/v1/traces/stats');
-    return data;
+    return tracesClient.getStats();
   }
 
   async getLiveTraces(): Promise<{ traces: PipelineTrace[]; count: number }> {
-    const { data } = await httpClient.get('/v1/traces/live');
-    return data;
+    return tracesClient.listLive();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getAiSessionStats(days?: number, worker?: string): Promise<any> {
-    const params: Record<string, string | number> = {};
-    if (days) params.days = days;
-    if (worker) params.worker = worker;
-    const { data } = await httpClient.get('/v1/traces/stats/ai-sessions', { params });
-    return data;
+    return tracesClient.getAiSessionStats(days, worker);
   }
 
   async exportAiSessionsCsv(days?: number, worker?: string): Promise<Blob> {
-    const params: Record<string, string | number> = {};
-    if (days) params.days = days;
-    if (worker) params.worker = worker;
-    const { data } = await httpClient.get('/v1/traces/export/ai-sessions', {
-      params,
-      responseType: 'blob',
-    });
-    return data;
+    return tracesClient.exportAiSessionsCsv(days, worker);
   }
 
   // Platform Status (CAB-654)
@@ -603,48 +571,41 @@ class ApiService {
     page_size?: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
-    const { data } = await httpClient.get('/v1/admin/gateways', { params });
-    return data;
+    return gatewaysClient.listInstances(params);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayInstance(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/gateways/${id}`);
-    return data;
+    return gatewaysClient.getInstance(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayTools(id: string): Promise<any[]> {
-    const { data } = await httpClient.get(`/v1/admin/gateways/${id}/tools`);
-    return data;
+    return gatewaysClient.listTools(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createGatewayInstance(payload: any): Promise<any> {
-    const { data } = await httpClient.post('/v1/admin/gateways', payload);
-    return data;
+    return gatewaysClient.createInstance(payload);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async updateGatewayInstance(id: string, payload: any): Promise<any> {
-    const { data } = await httpClient.put(`/v1/admin/gateways/${id}`, payload);
-    return data;
+    return gatewaysClient.updateInstance(id, payload);
   }
 
   async deleteGatewayInstance(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/gateways/${id}`);
+    return gatewaysClient.removeInstance(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async restoreGatewayInstance(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/gateways/${id}/restore`);
-    return data;
+    return gatewaysClient.restoreInstance(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async checkGatewayHealth(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/gateways/${id}/health`);
-    return data;
+    return gatewaysClient.checkHealth(id);
   }
 
   async getGatewayModeStats(): Promise<{
@@ -657,15 +618,13 @@ class ApiService {
     }>;
     total_gateways: number;
   }> {
-    const { data } = await httpClient.get('/v1/admin/gateways/modes/stats');
-    return data;
+    return gatewaysClient.getModeStats();
   }
 
   // Gateway Deployments
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getDeploymentStatusSummary(): Promise<any> {
-    const { data } = await httpClient.get('/v1/admin/deployments/status');
-    return data;
+    return gatewayDeploymentsClient.getStatusSummary();
   }
 
   async getGatewayDeployments(params?: {
@@ -677,14 +636,12 @@ class ApiService {
     page_size?: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
-    const { data } = await httpClient.get('/v1/admin/deployments', { params });
-    return data;
+    return gatewayDeploymentsClient.list(params);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayDeployment(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/deployments/${id}`);
-    return data;
+    return gatewayDeploymentsClient.get(id);
   }
 
   async deployApiToGateways(payload: {
@@ -692,18 +649,16 @@ class ApiService {
     gateway_instance_ids: string[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<any[]> {
-    const { data } = await httpClient.post('/v1/admin/deployments', payload);
-    return data;
+    return gatewayDeploymentsClient.deployApiToGateways(payload);
   }
 
   async undeployFromGateway(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/deployments/${id}`);
+    return gatewayDeploymentsClient.undeploy(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async forceSyncDeployment(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/deployments/${id}/sync`);
-    return data;
+    return gatewayDeploymentsClient.forceSync(id);
   }
 
   async testDeployment(id: string): Promise<{
@@ -714,15 +669,13 @@ class ApiService {
     gateway_url?: string;
     path?: string;
   }> {
-    const { data } = await httpClient.post(`/v1/admin/deployments/${id}/test`);
-    return data;
+    return gatewayDeploymentsClient.test(id);
   }
 
   async getCatalogEntries(): Promise<
     { id: string; api_name: string; tenant_id: string; version: string }[]
   > {
-    const { data } = await httpClient.get('/v1/admin/deployments/catalog-entries');
-    return data;
+    return gatewayDeploymentsClient.listCatalogEntries();
   }
 
   // API Deployment Orchestration (CAB-1888)
@@ -737,10 +690,7 @@ class ApiService {
       promotion_status: string;
     }[];
   }> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/apis/${apiId}/deployable-environments`
-    );
-    return data;
+    return deploymentsClient.getDeployableEnvironments(tenantId, apiId);
   }
 
   async deployApiToEnv(
@@ -748,8 +698,7 @@ class ApiService {
     apiId: string,
     payload: { environment: string; gateway_ids?: string[] }
   ): Promise<{ deployed: number; environment: string; deployment_ids: string[] }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/apis/${apiId}/deploy`, payload);
-    return data;
+    return deploymentsClient.deployApiToEnv(tenantId, apiId, payload);
   }
 
   async getApiGatewayAssignments(
@@ -758,11 +707,7 @@ class ApiService {
     environment?: string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ items: any[]; total: number }> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
-      { params: environment ? { environment } : {} }
-    );
-    return data;
+    return deploymentsClient.getApiGatewayAssignments(tenantId, apiId, environment);
   }
 
   async createApiGatewayAssignment(
@@ -771,11 +716,7 @@ class ApiService {
     payload: { gateway_id: string; environment: string; auto_deploy: boolean }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
-      payload
-    );
-    return data;
+    return deploymentsClient.createApiGatewayAssignment(tenantId, apiId, payload);
   }
 
   async deleteApiGatewayAssignment(
@@ -783,9 +724,7 @@ class ApiService {
     apiId: string,
     assignmentId: string
   ): Promise<void> {
-    await httpClient.delete(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments/${assignmentId}`
-    );
+    return deploymentsClient.deleteApiGatewayAssignment(tenantId, apiId, assignmentId);
   }
 
   // =========================================================================
@@ -794,28 +733,22 @@ class ApiService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayAggregatedMetrics(): Promise<any> {
-    const { data } = await httpClient.get('/v1/admin/gateways/metrics');
-    return data;
+    return gatewaysClient.getAggregatedMetrics();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGuardrailsEvents(limit = 20): Promise<any> {
-    const { data } = await httpClient.get(
-      `/v1/admin/gateways/metrics/guardrails/events?limit=${limit}`
-    );
-    return data;
+    return gatewaysClient.getGuardrailsEvents(limit);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayHealthSummary(): Promise<any> {
-    const { data } = await httpClient.get('/v1/admin/gateways/health-summary');
-    return data;
+    return gatewaysClient.getHealthSummary();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayInstanceMetrics(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/gateways/${id}/metrics`);
-    return data;
+    return gatewaysClient.getInstanceMetrics(id);
   }
 
   // =========================================================================
@@ -824,34 +757,30 @@ class ApiService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayPolicies(params?: { tenant_id?: string; environment?: string }): Promise<any[]> {
-    const { data } = await httpClient.get('/v1/admin/policies', { params });
-    return data;
+    return gatewaysClient.listPolicies(params);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createGatewayPolicy(payload: any): Promise<any> {
-    const { data } = await httpClient.post('/v1/admin/policies', payload);
-    return data;
+    return gatewaysClient.createPolicy(payload);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async updateGatewayPolicy(id: string, payload: any): Promise<any> {
-    const { data } = await httpClient.put(`/v1/admin/policies/${id}`, payload);
-    return data;
+    return gatewaysClient.updatePolicy(id, payload);
   }
 
   async deleteGatewayPolicy(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/policies/${id}`);
+    return gatewaysClient.removePolicy(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createPolicyBinding(payload: any): Promise<any> {
-    const { data } = await httpClient.post('/v1/admin/policies/bindings', payload);
-    return data;
+    return gatewaysClient.createPolicyBinding(payload);
   }
 
   async deletePolicyBinding(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/policies/bindings/${id}`);
+    return gatewaysClient.removePolicyBinding(id);
   }
 
   // =========================================================================

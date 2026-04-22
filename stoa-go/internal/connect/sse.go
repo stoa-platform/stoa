@@ -70,10 +70,15 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 		return
 	}
 
-	log.Printf("starting SSE deployment stream (reconnect=%s)", cfg.ReconnectInterval)
+	policy := backoffPolicy{
+		Initial:    cfg.ReconnectInterval,
+		Max:        cfg.MaxReconnectInterval,
+		Multiplier: 2.0,
+	}
+	log.Printf("starting SSE deployment stream (initial=%s max=%s)", policy.Initial, policy.Max)
 
 	go func() {
-		backoff := cfg.ReconnectInterval
+		attempt := 0
 
 		for {
 			select {
@@ -88,20 +93,17 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 
 			err := a.streamEvents(ctx, adapter, adminURL)
 			if err != nil && ctx.Err() == nil {
-				log.Printf("sse-stream: connection lost: %v (reconnecting in %s)", err, backoff)
+				attempt++
+				wait := policy.backoff(attempt)
+				log.Printf("sse-stream: connection lost: %v (reconnecting in %s, attempt %d)", err, wait, attempt)
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(backoff):
-				}
-				// Exponential backoff capped at max
-				backoff = backoff * 2
-				if backoff > cfg.MaxReconnectInterval {
-					backoff = cfg.MaxReconnectInterval
+				case <-time.After(wait):
 				}
 			} else {
-				// Reset backoff on clean disconnect
-				backoff = cfg.ReconnectInterval
+				// Reset attempt counter on clean disconnect
+				attempt = 0
 			}
 		}
 	}()

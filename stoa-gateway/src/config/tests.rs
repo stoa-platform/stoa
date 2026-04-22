@@ -207,3 +207,13 @@ fn test_git_provider_unknown_value_treated_as_gitlab() {
     // GitProvider::from_config would treat this as GitLab (the catch-all)
     assert_ne!(config.git_provider, "github");
 }
+
+/// Serialized snapshot of `Config::default()`. Drift of any default or field
+/// order will show up as a diff in the .snap file during `cargo insta review`.
+///
+/// Debug snapshots are explicitly NOT used here: the std::fmt::Debug derived
+/// format is documented as unstable across Rust versions.
+#[test]
+fn snapshot_default_config() {
+    insta::assert_json_snapshot!(Config::default());
+}

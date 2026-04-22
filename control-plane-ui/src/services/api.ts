@@ -68,6 +68,11 @@ import { sessionClient } from './api/session';
 import { adminClient } from './api/admin';
 import { toolPermissionsClient } from './api/toolPermissions';
 import { workflowsClient } from './api/workflows';
+import { subscriptionsClient } from './api/subscriptions';
+import { webhooksClient } from './api/webhooks';
+import { credentialMappingsClient } from './api/credentialMappings';
+import { contractsClient } from './api/contracts';
+import { promotionsClient } from './api/promotions';
 
 // =============================================================================
 // Façade ApiService — agrège le core transport (services/http) et les méthodes
@@ -439,13 +444,11 @@ class ApiService {
       page_size?: number;
     }
   ): Promise<PromotionListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/promotions`, { params });
-    return data;
+    return promotionsClient.list(tenantId, params);
   }
 
   async getPromotion(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/promotions/${promotionId}`);
-    return data;
+    return promotionsClient.get(tenantId, promotionId);
   }
 
   async createPromotion(
@@ -453,22 +456,15 @@ class ApiService {
     apiId: string,
     request: Schemas['PromotionCreate']
   ): Promise<Promotion> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/promotions/${apiId}`, request);
-    return data;
+    return promotionsClient.create(tenantId, apiId, request);
   }
 
   async approvePromotion(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/promotions/${promotionId}/approve`
-    );
-    return data;
+    return promotionsClient.approve(tenantId, promotionId);
   }
 
   async completePromotion(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/promotions/${promotionId}/complete`
-    );
-    return data;
+    return promotionsClient.complete(tenantId, promotionId);
   }
 
   async rollbackPromotion(
@@ -476,19 +472,14 @@ class ApiService {
     promotionId: string,
     request: Schemas['PromotionRollbackRequest']
   ): Promise<Promotion> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/promotions/${promotionId}/rollback`,
-      request
-    );
-    return data;
+    return promotionsClient.rollback(tenantId, promotionId, request);
   }
 
   async getPromotionDiff(
     tenantId: string,
     promotionId: string
   ): Promise<Schemas['PromotionDiffResponse']> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/promotions/${promotionId}/diff`);
-    return data;
+    return promotionsClient.getDiff(tenantId, promotionId);
   }
 
   // ── Environment Status ────────────────────────────────────────────────────
@@ -1161,10 +1152,7 @@ class ApiService {
     pageSize = 20,
     environment?: string
   ): Promise<SubscriptionListResponse> {
-    const { data } = await httpClient.get(`/v1/subscriptions/tenant/${tenantId}`, {
-      params: { status, page, page_size: pageSize, environment },
-    });
-    return data;
+    return subscriptionsClient.list(tenantId, status, page, pageSize, environment);
   }
 
   async getPendingSubscriptions(
@@ -1172,51 +1160,39 @@ class ApiService {
     page = 1,
     pageSize = 20
   ): Promise<SubscriptionListResponse> {
-    const { data } = await httpClient.get(`/v1/subscriptions/tenant/${tenantId}/pending`, {
-      params: { page, page_size: pageSize },
-    });
-    return data;
+    return subscriptionsClient.listPending(tenantId, page, pageSize);
   }
 
   async getSubscriptionStats(tenantId: string): Promise<SubscriptionStats> {
-    const { data } = await httpClient.get(`/v1/subscriptions/tenant/${tenantId}/stats`);
-    return data;
+    return subscriptionsClient.getStats(tenantId);
   }
 
   async approveSubscription(id: string, expiresAt?: string): Promise<Subscription> {
-    const { data } = await httpClient.post(`/v1/subscriptions/${id}/approve`, {
-      expires_at: expiresAt || null,
-    });
-    return data;
+    return subscriptionsClient.approve(id, expiresAt);
   }
 
   async rejectSubscription(id: string, reason: string): Promise<Subscription> {
-    const { data } = await httpClient.post(`/v1/subscriptions/${id}/reject`, { reason });
-    return data;
+    return subscriptionsClient.reject(id, reason);
   }
 
   async bulkSubscriptionAction(
     payload: Schemas['BulkSubscriptionAction']
   ): Promise<Schemas['BulkActionResult']> {
-    const { data } = await httpClient.post('/v1/subscriptions/bulk', payload);
-    return data;
+    return subscriptionsClient.bulkAction(payload);
   }
 
   // ============ Webhook Management (CAB-1647) ============
 
   async getWebhooks(tenantId: string): Promise<WebhookListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/webhooks`);
-    return data;
+    return webhooksClient.list(tenantId);
   }
 
   async getWebhook(tenantId: string, webhookId: string): Promise<TenantWebhook> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
-    return data;
+    return webhooksClient.get(tenantId, webhookId);
   }
 
   async createWebhook(tenantId: string, payload: Schemas['WebhookCreate']): Promise<TenantWebhook> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/webhooks`, payload);
-    return data;
+    return webhooksClient.create(tenantId, payload);
   }
 
   async updateWebhook(
@@ -1224,22 +1200,15 @@ class ApiService {
     webhookId: string,
     payload: Schemas['WebhookUpdate']
   ): Promise<TenantWebhook> {
-    const { data } = await httpClient.patch(
-      `/v1/tenants/${tenantId}/webhooks/${webhookId}`,
-      payload
-    );
-    return data;
+    return webhooksClient.update(tenantId, webhookId, payload);
   }
 
   async deleteWebhook(tenantId: string, webhookId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
+    return webhooksClient.remove(tenantId, webhookId);
   }
 
   async testWebhook(tenantId: string, webhookId: string): Promise<Schemas['WebhookTestResponse']> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/webhooks/${webhookId}/test`, {
-      event_type: 'subscription.created',
-    });
-    return data;
+    return webhooksClient.test(tenantId, webhookId);
   }
 
   async getWebhookDeliveries(
@@ -1247,11 +1216,7 @@ class ApiService {
     webhookId: string,
     limit = 50
   ): Promise<WebhookDeliveryListResponse> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries`,
-      { params: { limit } }
-    );
-    return data;
+    return webhooksClient.listDeliveries(tenantId, webhookId, limit);
   }
 
   async retryWebhookDelivery(
@@ -1259,24 +1224,20 @@ class ApiService {
     webhookId: string,
     deliveryId: string
   ): Promise<void> {
-    await httpClient.post(
-      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`
-    );
+    return webhooksClient.retryDelivery(tenantId, webhookId, deliveryId);
   }
 
   // ============ Credential Mappings (CAB-1648) ============
 
   async getCredentialMappings(tenantId: string): Promise<CredentialMappingListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/credential-mappings`);
-    return data;
+    return credentialMappingsClient.list(tenantId);
   }
 
   async createCredentialMapping(
     tenantId: string,
     payload: Schemas['CredentialMappingCreate']
   ): Promise<CredentialMapping> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/credential-mappings`, payload);
-    return data;
+    return credentialMappingsClient.create(tenantId, payload);
   }
 
   async updateCredentialMapping(
@@ -1284,39 +1245,29 @@ class ApiService {
     mappingId: string,
     payload: Schemas['CredentialMappingUpdate']
   ): Promise<CredentialMapping> {
-    const { data } = await httpClient.put(
-      `/v1/tenants/${tenantId}/credential-mappings/${mappingId}`,
-      payload
-    );
-    return data;
+    return credentialMappingsClient.update(tenantId, mappingId, payload);
   }
 
   async deleteCredentialMapping(tenantId: string, mappingId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/credential-mappings/${mappingId}`);
+    return credentialMappingsClient.remove(tenantId, mappingId);
   }
 
   // ============ Contracts / UAC (CAB-1649) ============
 
   async getContracts(tenantId: string): Promise<ContractListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/contracts`);
-    return data;
+    return contractsClient.list(tenantId);
   }
 
   async getContract(tenantId: string, contractId: string): Promise<Contract> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/contracts/${contractId}`);
-    return data;
+    return contractsClient.get(tenantId, contractId);
   }
 
   async createContract(tenantId: string, payload: ContractCreate): Promise<Contract> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/contracts`, payload);
-    return data;
+    return contractsClient.create(tenantId, payload);
   }
 
   async publishContract(tenantId: string, contractId: string): Promise<PublishContractResponse> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/publish`
-    );
-    return data;
+    return contractsClient.publish(tenantId, contractId);
   }
 
   async updateContract(
@@ -1324,22 +1275,15 @@ class ApiService {
     contractId: string,
     payload: Schemas['ContractUpdate']
   ): Promise<Contract> {
-    const { data } = await httpClient.patch(
-      `/v1/tenants/${tenantId}/contracts/${contractId}`,
-      payload
-    );
-    return data;
+    return contractsClient.update(tenantId, contractId, payload);
   }
 
   async deleteContract(tenantId: string, contractId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+    return contractsClient.remove(tenantId, contractId);
   }
 
   async getContractBindings(tenantId: string, contractId: string): Promise<ProtocolBinding[]> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`
-    );
-    return data;
+    return contractsClient.listBindings(tenantId, contractId);
   }
 
   async enableBinding(
@@ -1347,15 +1291,11 @@ class ApiService {
     contractId: string,
     protocol: string
   ): Promise<ProtocolBinding> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`,
-      { protocol }
-    );
-    return data;
+    return contractsClient.enableBinding(tenantId, contractId, protocol);
   }
 
   async disableBinding(tenantId: string, contractId: string, protocol: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/contracts/${contractId}/bindings/${protocol}`);
+    return contractsClient.disableBinding(tenantId, contractId, protocol);
   }
 
   // ============ Monitoring / Call Flow (CAB-1869) ============

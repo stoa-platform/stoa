@@ -53,6 +53,7 @@ def _make_gateway_instance(**overrides):
         "protected": False,
         "enabled": True,
         "visibility": None,
+        "source": "self_register",
         "deleted_at": None,
         "deleted_by": None,
         "created_at": datetime.now(UTC),
@@ -1009,7 +1010,6 @@ class TestRouteSyncAck:
             assert data["processed"] == 0
             assert data["not_found"] == 1
 
-
     def test_route_sync_ack_with_steps_merges_cp_step(self, client):
         """Ack with agent steps → sync_steps includes CP event_emitted + agent steps."""
         dep = _make_deployment()
@@ -1094,7 +1094,12 @@ class TestRouteSyncAck:
             agent_steps = [
                 {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
                 {"name": "adapter_connected", "status": "success", "started_at": "2026-04-02T12:00:02Z"},
-                {"name": "api_synced", "status": "failed", "started_at": "2026-04-02T12:00:03Z", "detail": "connection refused"},
+                {
+                    "name": "api_synced",
+                    "status": "failed",
+                    "started_at": "2026-04-02T12:00:03Z",
+                    "detail": "connection refused",
+                },
             ]
 
             resp = client.post(

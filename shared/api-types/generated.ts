@@ -3457,6 +3457,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/internal/catalog/apis/expanded": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Internal List Apis Expanded
+         * @description Expand published APIs into per-operation MCP tool descriptors.
+         *
+         *     Internal endpoint — same auth model and gateway scoping as ``/apis``.
+         *     Consumed by ``stoa-gateway`` when ``STOA_TOOL_EXPANSION_MODE=per-op``
+         *     (canonical kebab-case; ``per_operation`` still accepted as a deprecated
+         *     alias for one release, see CAB-2113 PR3).
+         *
+         *     Falls back to a single coarse tool per API when ``openapi_spec`` is missing
+         *     so switching the gateway flag is safe even on a partially-specced catalog.
+         */
+        get: operations["internal_list_apis_expanded"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/internal/external-mcp-servers": {
         parameters: {
             query?: never;
@@ -9361,8 +9389,16 @@ export interface components {
         };
         /** APIResponse */
         APIResponse: {
+            /**
+             * Audience
+             * @default public
+             * @enum {string}
+             */
+            audience: "public" | "internal" | "partner";
             /** Backend Url */
             backend_url: string;
+            /** Created At */
+            created_at?: string | null;
             /**
              * Deployed Dev
              * @default false
@@ -9398,6 +9434,8 @@ export interface components {
             tags: string[];
             /** Tenant Id */
             tenant_id: string;
+            /** Updated At */
+            updated_at?: string | null;
             /** Version */
             version: string;
         };
@@ -9614,6 +9652,52 @@ export interface components {
             version: string;
         };
         /**
+         * AdminApplicationResponse
+         * @description Admin tenant-scoped application view (disambiguated from portal_applications.ApplicationResponse).
+         *
+         *     Renamed from ``ApplicationResponse`` — CAB-2159 BUG-1. The portal router owns the
+         *     canonical ``ApplicationResponse`` schema name so the UI can import
+         *     ``Schemas['ApplicationResponse']`` without the Pydantic namespace prefix.
+         */
+        AdminApplicationResponse: {
+            /**
+             * Api Subscriptions
+             * @default []
+             */
+            api_subscriptions: string[];
+            /** Client Id */
+            client_id: string;
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Environment
+             * @default development
+             */
+            environment: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Security Profile
+             * @default oauth2_confidential
+             */
+            security_profile: string;
+            /**
+             * Status
+             * @default active
+             */
+            status: string;
+            /** Tenant Id */
+            tenant_id: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
          * AdminLogEntry
          * @description Single structured log entry for admin viewer.
          */
@@ -9736,6 +9820,62 @@ export interface components {
             total_resources: number;
         };
         /**
+         * ApplicationResponse
+         * @description Application response for Portal.
+         */
+        ApplicationResponse: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Api Key Prefix */
+            api_key_prefix?: string | null;
+            /**
+             * Api Subscriptions
+             * @default []
+             */
+            api_subscriptions: string[];
+            /** Client Id */
+            client_id?: string | null;
+            /** Client Secret */
+            client_secret?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id: string;
+            /** Jwks Data */
+            jwks_data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Jwks Uri */
+            jwks_uri?: string | null;
+            /** Name */
+            name: string;
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Redirect Uris
+             * @default []
+             */
+            redirect_uris: string[];
+            /**
+             * Security Profile
+             * @default oauth2_public
+             */
+            security_profile: string;
+            /**
+             * Status
+             * @default active
+             */
+            status: string;
+            /** Tenant Id */
+            tenant_id?: string | null;
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
          * ApplicationUpdateRequest
          * @description Request to update an application.
          */
@@ -9753,7 +9893,7 @@ export interface components {
          */
         ApplicationsListResponse: {
             /** Items */
-            items: components["schemas"]["src__routers__portal_applications__ApplicationResponse"][];
+            items: components["schemas"]["ApplicationResponse"][];
             /** Page */
             page: number;
             /** Pagesize */
@@ -14134,8 +14274,11 @@ export interface components {
             enabled: boolean;
             /** Environment */
             environment: string;
-            /** Gateway Type */
-            gateway_type: string;
+            /**
+             * Gateway Type
+             * @enum {string}
+             */
+            gateway_type: "webmethods" | "kong" | "apigee" | "aws_apigateway" | "stoa" | "stoa_edge_mcp" | "stoa_sidecar" | "stoa_proxy" | "stoa_shadow";
             /** Health Details */
             health_details: {
                 [key: string]: unknown;
@@ -14149,9 +14292,9 @@ export interface components {
             last_health_check: string | null;
             /**
              * Mode
-             * @description STOA Gateway mode: edge-mcp, sidecar, proxy, shadow
+             * @description STOA Gateway mode: edge-mcp, sidecar, proxy, shadow, connect
              */
-            mode?: string | null;
+            mode?: ("edge-mcp" | "sidecar" | "proxy" | "shadow" | "connect") | null;
             /** Name */
             name: string;
             /**
@@ -14165,8 +14308,18 @@ export interface components {
              * @description Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)
              */
             public_url?: string | null;
-            /** Status */
-            status: string;
+            /**
+             * Source
+             * @description Source of truth for this gateway entry — argocd (GitOps-managed), self_register (auto-announced via /v1/gateways/register) or manual (admin CLI)
+             * @default self_register
+             * @enum {string}
+             */
+            source: "argocd" | "self_register" | "manual";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "online" | "offline" | "degraded" | "maintenance";
             /** Tags */
             tags: string[];
             /**
@@ -14480,7 +14633,7 @@ export interface components {
             /** Project */
             project?: string | null;
             /** Project Id */
-            project_id?: number | null;
+            project_id?: string | number | null;
             /** Status */
             status: string;
         };
@@ -14946,6 +15099,40 @@ export interface components {
         InternalAPIsResponse: {
             /** Apis */
             apis: components["schemas"]["InternalAPIItem"][];
+        };
+        /**
+         * InternalExpandedTool
+         * @description One MCP tool descriptor emitted by the expander (CAB-2113 Phase 0).
+         */
+        InternalExpandedTool: {
+            /** Backend Url */
+            backend_url: string;
+            /** Description */
+            description: string;
+            /** Http Method */
+            http_method: string;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            } | null;
+            /** Name */
+            name: string;
+            /** Path Pattern */
+            path_pattern?: string | null;
+            /** Tenant Id */
+            tenant_id: string;
+        };
+        /**
+         * InternalExpandedToolsResponse
+         * @description Runtime-overlay tool list for the gateway API bridge.
+         *
+         *     Drop-in alternative to ``/apis`` that emits per-operation tools when an
+         *     ``openapi_spec`` is available on the catalog row, and the legacy coarse
+         *     ``{action, params}`` tool otherwise.
+         */
+        InternalExpandedToolsResponse: {
+            /** Tools */
+            tools: components["schemas"]["InternalExpandedTool"][];
         };
         /**
          * InternalToolDef
@@ -16673,10 +16860,10 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** PaginatedResponse[ApplicationResponse] */
-        PaginatedResponse_ApplicationResponse_: {
+        /** PaginatedResponse[AdminApplicationResponse] */
+        PaginatedResponse_AdminApplicationResponse_: {
             /** Items */
-            items: components["schemas"]["src__routers__applications__ApplicationResponse"][];
+            items: components["schemas"]["AdminApplicationResponse"][];
             /** Page */
             page: number;
             /** Page Size */
@@ -22021,45 +22208,6 @@ export interface components {
              */
             tools: components["schemas"]["CatalogTool"][];
         };
-        /** ApplicationResponse */
-        src__routers__applications__ApplicationResponse: {
-            /**
-             * Api Subscriptions
-             * @default []
-             */
-            api_subscriptions: string[];
-            /** Client Id */
-            client_id: string;
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string;
-            /** Display Name */
-            display_name: string;
-            /**
-             * Environment
-             * @default development
-             */
-            environment: string;
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /**
-             * Security Profile
-             * @default oauth2_confidential
-             */
-            security_profile: string;
-            /**
-             * Status
-             * @default active
-             */
-            status: string;
-            /** Tenant Id */
-            tenant_id: string;
-            /** Updated At */
-            updated_at: string;
-        };
         /**
          * AuditListResponse
          * @description Response for audit list endpoint.
@@ -22119,62 +22267,6 @@ export interface components {
             total_servers: number;
             /** Untracked */
             untracked: number;
-        };
-        /**
-         * ApplicationResponse
-         * @description Application response for Portal.
-         */
-        src__routers__portal_applications__ApplicationResponse: {
-            /** Api Key */
-            api_key?: string | null;
-            /** Api Key Prefix */
-            api_key_prefix?: string | null;
-            /**
-             * Api Subscriptions
-             * @default []
-             */
-            api_subscriptions: string[];
-            /** Client Id */
-            client_id?: string | null;
-            /** Client Secret */
-            client_secret?: string | null;
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string;
-            /** Display Name */
-            display_name: string;
-            /** Id */
-            id: string;
-            /** Jwks Data */
-            jwks_data?: {
-                [key: string]: unknown;
-            } | null;
-            /** Jwks Uri */
-            jwks_uri?: string | null;
-            /** Name */
-            name: string;
-            /** Owner Id */
-            owner_id?: string | null;
-            /**
-             * Redirect Uris
-             * @default []
-             */
-            redirect_uris: string[];
-            /**
-             * Security Profile
-             * @default oauth2_public
-             */
-            security_profile: string;
-            /**
-             * Status
-             * @default active
-             */
-            status: string;
-            /** Tenant Id */
-            tenant_id?: string | null;
-            /** Updated At */
-            updated_at: string;
         };
         /**
          * SyncStatusResponse
@@ -25810,7 +25902,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["src__routers__portal_applications__ApplicationResponse"];
+                    "application/json": components["schemas"]["ApplicationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -25841,7 +25933,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["src__routers__portal_applications__ApplicationResponse"];
+                    "application/json": components["schemas"]["ApplicationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -25907,7 +25999,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["src__routers__portal_applications__ApplicationResponse"];
+                    "application/json": components["schemas"]["ApplicationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -27647,6 +27739,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InternalAPIsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    internal_list_apis_expanded: {
+        parameters: {
+            query?: {
+                /** @description Filter APIs assigned to this gateway (CAB-1940) */
+                gateway_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalExpandedToolsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32428,7 +32552,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponse_ApplicationResponse_"];
+                    "application/json": components["schemas"]["PaginatedResponse_AdminApplicationResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -32463,7 +32587,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["src__routers__applications__ApplicationResponse"];
+                    "application/json": components["schemas"]["AdminApplicationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32495,7 +32619,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["src__routers__applications__ApplicationResponse"];
+                    "application/json": components["schemas"]["AdminApplicationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -32531,7 +32655,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["src__routers__applications__ApplicationResponse"];
+                    "application/json": components["schemas"]["AdminApplicationResponse"];
                 };
             };
             /** @description Validation Error */

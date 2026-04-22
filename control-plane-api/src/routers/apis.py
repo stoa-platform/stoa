@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -25,6 +26,9 @@ from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services.git_provider import git_provider_factory
 from ..services.kafka_service import kafka_service
+
+# CAB-2159 BUG-4 — keep in sync with src/models/catalog.py:AudienceEnum
+AudienceLiteral = Literal["public", "internal", "partner"]
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +70,13 @@ class APIResponse(BaseModel):
     deployed_staging: bool = False
     tags: list[str] = []
     portal_promoted: bool = False  # True if API has portal:published tag
+    audience: AudienceLiteral = "public"
+    # CAB-2159 BUG-4: APICatalog currently has no true created_at column; we surface
+    # ``synced_at`` as both timestamps so UI can render them uniformly with other
+    # entities. Adding real ``created_at``/``updated_at`` DB columns is tracked
+    # separately (migration scope).
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class APIVersionEntry(BaseModel):
@@ -119,6 +130,11 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
     promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
     portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
     deployments = metadata.get("deployments", {})
+    # CAB-2159 BUG-4 — audience column has a non-null default in the DB; coerce
+    # any unexpected stored value back into the Literal set so Pydantic validation
+    # never trips on legacy rows.
+    raw_audience = (api.audience or "public") if isinstance(api.audience, str) else "public"
+    audience: AudienceLiteral = raw_audience if raw_audience in ("public", "internal", "partner") else "public"
     return APIResponse(
         id=api.api_id,
         tenant_id=api.tenant_id,
@@ -132,6 +148,9 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
         deployed_staging=deployments.get("staging", False),
         tags=tags,
         portal_promoted=portal_promoted,
+        audience=audience,
+        created_at=api.synced_at,
+        updated_at=api.synced_at,
     )
 
 
@@ -227,9 +246,7 @@ async def create_api(
         settings = tenant.settings or {}
         check_trial_expiry(settings)
         max_apis, _ = get_tenant_limits(tenant)
-        current_apis, _ = await catalog_repo.get_portal_apis(
-            tenant_id=tenant_id, include_unpublished=True
-        )
+        current_apis, _ = await catalog_repo.get_portal_apis(tenant_id=tenant_id, include_unpublished=True)
         if len(current_apis) >= max_apis:
             raise HTTPException(status_code=429, detail=f"API limit reached ({max_apis})")
 
@@ -263,20 +280,17 @@ async def create_api(
             openapi_spec = None
 
     try:
-        stmt = (
-            insert(APICatalog)
-            .values(
-                tenant_id=tenant_id,
-                api_id=api_id,
-                api_name=api.name,
-                version=api.version,
-                status="draft",
-                tags=tags,
-                portal_published=portal_promoted,
-                api_metadata=api_metadata,
-                openapi_spec=openapi_spec,
-                synced_at=datetime.now(UTC),
-            )
+        stmt = insert(APICatalog).values(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            api_name=api.name,
+            version=api.version,
+            status="draft",
+            tags=tags,
+            portal_published=portal_promoted,
+            api_metadata=api_metadata,
+            openapi_spec=openapi_spec,
+            synced_at=datetime.now(UTC),
         )
         await db.execute(stmt)
         await db.commit()

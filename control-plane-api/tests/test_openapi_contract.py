@@ -16,6 +16,7 @@ When the API changes intentionally, update the snapshot:
         json.dump(app.openapi(), f, indent=2, sort_keys=True, default=str)
     "
 """
+
 import json
 from pathlib import Path
 
@@ -74,7 +75,9 @@ class TestOpenAPIContract:
         schema = app.openapi()
         return json.loads(json.dumps(schema, sort_keys=True, default=str))
 
-    @pytest.mark.skip(reason="CI ghost drift: passes locally, fails in CI due to env-dependent route loading. CAB-2055 follow-up.")
+    @pytest.mark.skip(
+        reason="CI ghost drift: passes locally, fails in CI due to env-dependent route loading. CAB-2055 follow-up."
+    )
     def test_openapi_paths_match_snapshot(self):
         """API paths must match committed snapshot (catches added/removed endpoints)."""
         assert SNAPSHOT_PATH.exists(), (
@@ -99,7 +102,9 @@ class TestOpenAPIContract:
             f"  Removed: {sorted(removed)[:10]}"
         )
 
-    @pytest.mark.skip(reason="CI ghost drift: passes locally, fails in CI due to env-dependent schema loading. CAB-2055 follow-up.")
+    @pytest.mark.skip(
+        reason="CI ghost drift: passes locally, fails in CI due to env-dependent schema loading. CAB-2055 follow-up."
+    )
     def test_openapi_schemas_match_snapshot(self):
         """Schema names must match committed snapshot (catches added/removed models)."""
         with open(SNAPSHOT_PATH) as f:
@@ -143,9 +148,7 @@ class TestOpenAPIContract:
             if added or removed:
                 diffs.append(f"  {name}: +{sorted(added)} -{sorted(removed)}")
 
-        assert not diffs, (
-            "Schema properties changed. Update the snapshot.\n" + "\n".join(diffs[:10])
-        )
+        assert not diffs, "Schema properties changed. Update the snapshot.\n" + "\n".join(diffs[:10])
 
     def test_openapi_schema_has_required_paths(self):
         """Key API endpoints must be present in the schema."""
@@ -179,8 +182,7 @@ class TestOpenAPIContract:
             props = set(schemas[schema_name].get("properties", {}).keys())
             for field in required_fields:
                 assert field in props, (
-                    f"Required field '{field}' missing from schema '{schema_name}'. "
-                    f"Available: {sorted(props)[:15]}"
+                    f"Required field '{field}' missing from schema '{schema_name}'. " f"Available: {sorted(props)[:15]}"
                 )
 
     def test_openapi_schema_field_types_stable(self):
@@ -203,14 +205,9 @@ class TestOpenAPIContract:
                 snap_type = snap_props[prop_name].get("type")
                 live_type = live_props[prop_name].get("type")
                 if snap_type and live_type and snap_type != live_type:
-                    type_diffs.append(
-                        f"  {name}.{prop_name}: {snap_type} -> {live_type}"
-                    )
+                    type_diffs.append(f"  {name}.{prop_name}: {snap_type} -> {live_type}")
 
-        assert not type_diffs, (
-            "Schema field types changed. Update the snapshot.\n"
-            + "\n".join(type_diffs[:10])
-        )
+        assert not type_diffs, "Schema field types changed. Update the snapshot.\n" + "\n".join(type_diffs[:10])
 
     def test_openapi_methods_stable(self):
         """HTTP methods per path must not change silently (CAB-1671)."""
@@ -229,11 +226,99 @@ class TestOpenAPIContract:
             added = live_methods - snap_methods
             removed = snap_methods - live_methods
             if added or removed:
-                method_diffs.append(
-                    f"  {path}: +{sorted(added)} -{sorted(removed)}"
-                )
+                method_diffs.append(f"  {path}: +{sorted(added)} -{sorted(removed)}")
 
-        assert not method_diffs, (
-            "HTTP methods changed on existing paths. Update the snapshot.\n"
-            + "\n".join(method_diffs[:10])
+        assert not method_diffs, "HTTP methods changed on existing paths. Update the snapshot.\n" + "\n".join(
+            method_diffs[:10]
         )
+
+
+class TestCAB2159BackendGaps:
+    """Regression guards for CAB-2159 — OpenAPI contract gaps blocking UI-1-Wave2.
+
+    See ``control-plane-ui/rewrite-bugs.md`` for the original discovery notes.
+    """
+
+    def _get_schemas(self) -> dict:
+        return app.openapi().get("components", {}).get("schemas", {})
+
+    # ---------------------------------------------------------------------
+    # BUG-1 — ApplicationResponse must be the canonical schema name
+    # ---------------------------------------------------------------------
+
+    def test_bug1_application_response_is_canonical(self):
+        """Portal ``ApplicationResponse`` must collapse to an un-namespaced schema.
+
+        Namespaced ``src__routers__portal_applications__ApplicationResponse`` forces
+        the UI to spell the namespace in consumer code. Admin variant is renamed
+        to ``AdminApplicationResponse`` so only one class owns the short name.
+        """
+        schemas = self._get_schemas()
+        assert (
+            "ApplicationResponse" in schemas
+        ), "ApplicationResponse missing — portal class must own the canonical name"
+        assert "AdminApplicationResponse" in schemas, (
+            "AdminApplicationResponse missing — admin router class must be renamed "
+            "to free the canonical name for portal"
+        )
+        # Namespaced aliases must NOT leak — they are the symptom of the collision
+        namespaced = [k for k in schemas if k.startswith("src__routers__") and "ApplicationResponse" in k]
+        assert not namespaced, (
+            f"Namespaced ApplicationResponse variants still present: {namespaced}. "
+            "Both class names must be distinct."
+        )
+
+    # ---------------------------------------------------------------------
+    # BUG-2 — GatewayInstanceResponse must expose ``source`` + Literal enums
+    # ---------------------------------------------------------------------
+
+    def test_bug2_gateway_instance_response_source_field(self):
+        """``source`` column exists on the ORM model — must be in the response schema."""
+        gir = self._get_schemas().get("GatewayInstanceResponse", {})
+        props = gir.get("properties", {})
+        assert "source" in props, (
+            "GatewayInstanceResponse.source missing — ORM has it (CAB-1979), "
+            "response schema must expose it so UI can branch on argocd vs self_register"
+        )
+
+    def test_bug2_gateway_instance_response_enum_fields(self):
+        """``gateway_type``, ``mode``, ``status`` must be ``enum`` not plain string."""
+        gir = self._get_schemas().get("GatewayInstanceResponse", {})
+        props = gir.get("properties", {})
+
+        def _has_enum(prop: dict) -> bool:
+            if "enum" in prop:
+                return True
+            return any("enum" in sub for sub in prop.get("anyOf", []))
+
+        for field in ("gateway_type", "mode", "status", "source"):
+            assert _has_enum(props.get(field, {})), (
+                f"GatewayInstanceResponse.{field} must be Literal[...] not plain str. " f"Current: {props.get(field)}"
+            )
+
+    # ---------------------------------------------------------------------
+    # BUG-4 — APIResponse must expose ``created_at``/``updated_at``/``audience``
+    # ---------------------------------------------------------------------
+
+    def test_bug4_api_response_timestamps_and_audience(self):
+        """APIResponse must carry the same timestamp + audience contract as siblings."""
+        ar = self._get_schemas().get("APIResponse", {})
+        props = ar.get("properties", {})
+        for field in ("created_at", "updated_at", "audience"):
+            assert field in props, (
+                f"APIResponse.{field} missing — UI consumes all three " f"(see control-plane-ui/rewrite-bugs.md BUG-4)"
+            )
+
+    def test_bug4_api_response_audience_is_enum(self):
+        """``audience`` must narrow to ``public|internal|partner``."""
+        ar = self._get_schemas().get("APIResponse", {})
+        audience = ar.get("properties", {}).get("audience", {})
+        values = set(audience.get("enum") or [])
+        if not values:
+            for sub in audience.get("anyOf", []):
+                values |= set(sub.get("enum") or [])
+        assert values == {
+            "public",
+            "internal",
+            "partner",
+        }, f"APIResponse.audience must be Literal['public','internal','partner']. Got: {values}"

@@ -27,7 +27,14 @@ class ApplicationCreate(BaseModel):
     api_subscriptions: list[str] = []
 
 
-class ApplicationResponse(BaseModel):
+class AdminApplicationResponse(BaseModel):
+    """Admin tenant-scoped application view (disambiguated from portal_applications.ApplicationResponse).
+
+    Renamed from ``ApplicationResponse`` — CAB-2159 BUG-1. The portal router owns the
+    canonical ``ApplicationResponse`` schema name so the UI can import
+    ``Schemas['ApplicationResponse']`` without the Pydantic namespace prefix.
+    """
+
     id: str
     tenant_id: str
     name: str
@@ -53,12 +60,12 @@ def _attr_str(attrs: dict, key: str, default: str = "") -> str:
     return val[0] if isinstance(val, list) else val
 
 
-def _kc_client_to_response(client: dict, tenant_id: str) -> ApplicationResponse:
-    """Convert a Keycloak client dict to ApplicationResponse."""
+def _kc_client_to_response(client: dict, tenant_id: str) -> AdminApplicationResponse:
+    """Convert a Keycloak client dict to AdminApplicationResponse."""
     attrs = client.get("attributes", {})
     subs_raw = attrs.get("api_subscriptions", ["[]"])
     subs_val = subs_raw[0] if isinstance(subs_raw, list) else subs_raw
-    return ApplicationResponse(
+    return AdminApplicationResponse(
         id=client["id"],
         tenant_id=tenant_id,
         name=client.get("clientId", "").removeprefix(f"{tenant_id}-"),
@@ -89,7 +96,7 @@ async def _get_tenant_client(app_id: str, tenant_id: str) -> dict:
     return client
 
 
-@router.get("", response_model=PaginatedResponse[ApplicationResponse])
+@router.get("", response_model=PaginatedResponse[AdminApplicationResponse])
 @require_tenant_access
 async def list_applications(
     tenant_id: str,
@@ -106,7 +113,7 @@ async def list_applications(
     return PaginatedResponse(items=items[start:end], total=total, page=page, page_size=page_size)
 
 
-@router.get("/{app_id}", response_model=ApplicationResponse)
+@router.get("/{app_id}", response_model=AdminApplicationResponse)
 @require_tenant_access
 async def get_application(tenant_id: str, app_id: str, user: User = Depends(get_current_user)):
     """Get application by ID."""
@@ -114,7 +121,7 @@ async def get_application(tenant_id: str, app_id: str, user: User = Depends(get_
     return _kc_client_to_response(client, tenant_id)
 
 
-@router.post("", response_model=ApplicationResponse, status_code=201)
+@router.post("", response_model=AdminApplicationResponse, status_code=201)
 @require_permission(Permission.APPS_CREATE)
 @require_tenant_access
 async def create_application(
@@ -158,7 +165,7 @@ async def create_application(
     return _kc_client_to_response(client, tenant_id)
 
 
-@router.put("/{app_id}", response_model=ApplicationResponse)
+@router.put("/{app_id}", response_model=AdminApplicationResponse)
 @require_permission(Permission.APPS_UPDATE)
 @require_tenant_access
 async def update_application(

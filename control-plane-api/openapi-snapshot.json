@@ -437,9 +437,31 @@
       },
       "APIResponse": {
         "properties": {
+          "audience": {
+            "default": "public",
+            "enum": [
+              "public",
+              "internal",
+              "partner"
+            ],
+            "title": "Audience",
+            "type": "string"
+          },
           "backend_url": {
             "title": "Backend Url",
             "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
           },
           "deployed_dev": {
             "default": false,
@@ -488,6 +510,18 @@
           "tenant_id": {
             "title": "Tenant Id",
             "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           },
           "version": {
             "title": "Version",
@@ -1006,6 +1040,78 @@
         "title": "AdminAPIResponse",
         "type": "object"
       },
+      "AdminApplicationResponse": {
+        "description": "Admin tenant-scoped application view (disambiguated from portal_applications.ApplicationResponse).\n\nRenamed from ``ApplicationResponse`` \u2014 CAB-2159 BUG-1. The portal router owns the\ncanonical ``ApplicationResponse`` schema name so the UI can import\n``Schemas['ApplicationResponse']`` without the Pydantic namespace prefix.",
+        "properties": {
+          "api_subscriptions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Api Subscriptions",
+            "type": "array"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "environment": {
+            "default": "development",
+            "title": "Environment",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "security_profile": {
+            "default": "oauth2_confidential",
+            "title": "Security Profile",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "display_name",
+          "description",
+          "client_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AdminApplicationResponse",
+        "type": "object"
+      },
       "AdminLogEntry": {
         "description": "Single structured log entry for admin viewer.",
         "properties": {
@@ -1330,6 +1436,160 @@
         "title": "ApplicationDiffResponse",
         "type": "object"
       },
+      "ApplicationResponse": {
+        "description": "Application response for Portal.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "api_key_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Prefix"
+          },
+          "api_subscriptions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Api Subscriptions",
+            "type": "array"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "jwks_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks Data"
+          },
+          "jwks_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks Uri"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "redirect_uris": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Redirect Uris",
+            "type": "array"
+          },
+          "security_profile": {
+            "default": "oauth2_public",
+            "title": "Security Profile",
+            "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "display_name",
+          "description",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationResponse",
+        "type": "object"
+      },
       "ApplicationUpdateRequest": {
         "description": "Request to update an application.",
         "properties": {
@@ -1378,7 +1638,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+              "$ref": "#/components/schemas/ApplicationResponse"
             },
             "title": "Items",
             "type": "array"
@@ -11222,6 +11482,17 @@
             "type": "string"
           },
           "gateway_type": {
+            "enum": [
+              "webmethods",
+              "kong",
+              "apigee",
+              "aws_apigateway",
+              "stoa",
+              "stoa_edge_mcp",
+              "stoa_sidecar",
+              "stoa_proxy",
+              "stoa_shadow"
+            ],
             "title": "Gateway Type",
             "type": "string"
           },
@@ -11257,13 +11528,20 @@
           "mode": {
             "anyOf": [
               {
+                "enum": [
+                  "edge-mcp",
+                  "sidecar",
+                  "proxy",
+                  "shadow",
+                  "connect"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "STOA Gateway mode: edge-mcp, sidecar, proxy, shadow",
+            "description": "STOA Gateway mode: edge-mcp, sidecar, proxy, shadow, connect",
             "title": "Mode"
           },
           "name": {
@@ -11288,7 +11566,24 @@
             "description": "Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)",
             "title": "Public Url"
           },
+          "source": {
+            "default": "self_register",
+            "description": "Source of truth for this gateway entry \u2014 argocd (GitOps-managed), self_register (auto-announced via /v1/gateways/register) or manual (admin CLI)",
+            "enum": [
+              "argocd",
+              "self_register",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
           "status": {
+            "enum": [
+              "online",
+              "offline",
+              "degraded",
+              "maintenance"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -12020,6 +12315,9 @@
           },
           "project_id": {
             "anyOf": [
+              {
+                "type": "string"
+              },
               {
                 "type": "integer"
               },
@@ -12958,6 +13256,80 @@
           "apis"
         ],
         "title": "InternalAPIsResponse",
+        "type": "object"
+      },
+      "InternalExpandedTool": {
+        "description": "One MCP tool descriptor emitted by the expander (CAB-2113 Phase 0).",
+        "properties": {
+          "backend_url": {
+            "title": "Backend Url",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "http_method": {
+            "title": "Http Method",
+            "type": "string"
+          },
+          "input_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Schema"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path Pattern"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "backend_url",
+          "http_method",
+          "tenant_id"
+        ],
+        "title": "InternalExpandedTool",
+        "type": "object"
+      },
+      "InternalExpandedToolsResponse": {
+        "description": "Runtime-overlay tool list for the gateway API bridge.\n\nDrop-in alternative to ``/apis`` that emits per-operation tools when an\n``openapi_spec`` is available on the catalog row, and the legacy coarse\n``{action, params}`` tool otherwise.",
+        "properties": {
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/InternalExpandedTool"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "title": "InternalExpandedToolsResponse",
         "type": "object"
       },
       "InternalToolDef": {
@@ -16757,11 +17129,11 @@
         "title": "PaginatedResponse[APIResponse]",
         "type": "object"
       },
-      "PaginatedResponse_ApplicationResponse_": {
+      "PaginatedResponse_AdminApplicationResponse_": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
+              "$ref": "#/components/schemas/AdminApplicationResponse"
             },
             "title": "Items",
             "type": "array"
@@ -16785,7 +17157,7 @@
           "page",
           "page_size"
         ],
-        "title": "PaginatedResponse[ApplicationResponse]",
+        "title": "PaginatedResponse[AdminApplicationResponse]",
         "type": "object"
       },
       "PaginatedResponse_GatewayAPIResponse_": {
@@ -28622,77 +28994,6 @@
         "title": "CatalogEntry",
         "type": "object"
       },
-      "src__routers__applications__ApplicationResponse": {
-        "properties": {
-          "api_subscriptions": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Api Subscriptions",
-            "type": "array"
-          },
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "environment": {
-            "default": "development",
-            "title": "Environment",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "security_profile": {
-            "default": "oauth2_confidential",
-            "title": "Security Profile",
-            "type": "string"
-          },
-          "status": {
-            "default": "active",
-            "title": "Status",
-            "type": "string"
-          },
-          "tenant_id": {
-            "title": "Tenant Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "tenant_id",
-          "name",
-          "display_name",
-          "description",
-          "client_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ApplicationResponse",
-        "type": "object"
-      },
       "src__routers__audit__AuditListResponse": {
         "description": "Response for audit list endpoint.",
         "properties": {
@@ -28832,160 +29133,6 @@
           "untracked"
         ],
         "title": "SyncStatusResponse",
-        "type": "object"
-      },
-      "src__routers__portal_applications__ApplicationResponse": {
-        "description": "Application response for Portal.",
-        "properties": {
-          "api_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Key"
-          },
-          "api_key_prefix": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Key Prefix"
-          },
-          "api_subscriptions": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Api Subscriptions",
-            "type": "array"
-          },
-          "client_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Id"
-          },
-          "client_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Secret"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "jwks_data": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Jwks Data"
-          },
-          "jwks_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Jwks Uri"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "owner_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Owner Id"
-          },
-          "redirect_uris": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Redirect Uris",
-            "type": "array"
-          },
-          "security_profile": {
-            "default": "oauth2_public",
-            "title": "Security Profile",
-            "type": "string"
-          },
-          "status": {
-            "default": "active",
-            "title": "Status",
-            "type": "string"
-          },
-          "tenant_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tenant Id"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "display_name",
-          "description",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ApplicationResponse",
         "type": "object"
       },
       "src__schemas__catalog__SyncStatusResponse": {
@@ -35430,7 +35577,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/ApplicationResponse"
                 }
               }
             },
@@ -35522,7 +35669,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/ApplicationResponse"
                 }
               }
             },
@@ -35578,7 +35725,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/ApplicationResponse"
                 }
               }
             },
@@ -38784,6 +38931,59 @@
           }
         },
         "summary": "Internal List Apis",
+        "tags": [
+          "Internal - Gateway API Bridge"
+        ]
+      }
+    },
+    "/v1/internal/catalog/apis/expanded": {
+      "get": {
+        "description": "Expand published APIs into per-operation MCP tool descriptors.\n\nInternal endpoint \u2014 same auth model and gateway scoping as ``/apis``.\nConsumed by ``stoa-gateway`` when ``STOA_TOOL_EXPANSION_MODE=per-op``\n(canonical kebab-case; ``per_operation`` still accepted as a deprecated\nalias for one release, see CAB-2113 PR3).\n\nFalls back to a single coarse tool per API when ``openapi_spec`` is missing\nso switching the gateway flag is safe even on a partially-specced catalog.",
+        "operationId": "internal_list_apis_expanded",
+        "parameters": [
+          {
+            "description": "Filter APIs assigned to this gateway (CAB-1940)",
+            "in": "query",
+            "name": "gateway_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter APIs assigned to this gateway (CAB-1940)",
+              "title": "Gateway Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalExpandedToolsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Internal List Apis Expanded",
         "tags": [
           "Internal - Gateway API Bridge"
         ]
@@ -47156,7 +47356,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse_ApplicationResponse_"
+                  "$ref": "#/components/schemas/PaginatedResponse_AdminApplicationResponse_"
                 }
               }
             },
@@ -47212,7 +47412,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/AdminApplicationResponse"
                 }
               }
             },
@@ -47317,7 +47517,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/AdminApplicationResponse"
                 }
               }
             },
@@ -47382,7 +47582,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/AdminApplicationResponse"
                 }
               }
             },

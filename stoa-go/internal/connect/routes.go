@@ -38,7 +38,7 @@ func RouteSyncConfigFromEnv() RouteSyncConfig {
 // FetchRoutes pulls the route table from the CP via GET /v1/internal/gateways/routes.
 func (a *Agent) FetchRoutes(ctx context.Context) ([]adapters.Route, error) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.routes.fetch",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
 
@@ -88,7 +88,7 @@ func (a *Agent) FetchRoutes(ctx context.Context) ([]adapters.Route, error) {
 // RunRouteSync performs a single route sync cycle: fetch CP routes → push to local gateway.
 func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.routes.sync",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
 

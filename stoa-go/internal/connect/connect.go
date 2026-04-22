@@ -120,14 +120,22 @@ type DiscoveredAPIPayload struct {
 }
 
 // Agent is the STOA Connect runtime agent.
+//
+// Mutable runtime state (gatewayID, discovered APIs) lives under Agent.state
+// behind a RWMutex — safe for concurrent access from the heartbeat, discovery,
+// sync, SSE and /health goroutines.
+//
+// Fields set once before any loop goroutine starts (cfg, client, startTime,
+// healthPort — written in the first Register call from main goroutine) are kept
+// on Agent without locking; happens-before is guaranteed by the `go` statement
+// that later launches the loops.
 type Agent struct {
-	cfg                Config
-	client             *http.Client
-	tracer             trace.Tracer
-	gatewayID          string
-	healthPort         string // stored after Register for re-registration
-	startTime          time.Time
-	lastDiscoveredAPIs []DiscoveredAPIPayload
+	cfg        Config
+	client     *http.Client
+	tracer     trace.Tracer
+	state      *agentState
+	healthPort string // set in the first Register; read from the heartbeat loop on re-register
+	startTime  time.Time
 }
 
 // New creates a new STOA Connect agent.
@@ -139,6 +147,7 @@ func New(cfg Config) *Agent {
 			Timeout:   15 * time.Second,
 			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
+		state:     newAgentState(),
 		startTime: time.Now(),
 	}
 }
@@ -222,7 +231,7 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 		return fmt.Errorf("decode registration response: %w", err)
 	}
 
-	a.gatewayID = result.ID
+	a.state.SetGatewayID(result.ID)
 	a.healthPort = healthPort
 	span.SetAttributes(attribute.String("stoa.gateway_id", result.ID))
 	span.SetStatus(codes.Ok, "registered")
@@ -232,7 +241,7 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 
 // GatewayID returns the assigned gateway ID after registration.
 func (a *Agent) GatewayID() string {
-	return a.gatewayID
+	return a.state.GatewayID()
 }
 
 // ErrGatewayNotFound is returned when the CP responds 404 to a heartbeat,
@@ -241,19 +250,20 @@ var ErrGatewayNotFound = fmt.Errorf("gateway not found on Control Plane (purged)
 
 // Heartbeat sends a single heartbeat to the Control Plane.
 func (a *Agent) Heartbeat(ctx context.Context) error {
-	if a.gatewayID == "" {
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
 		return fmt.Errorf("not registered")
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.heartbeat",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", gatewayID),
 	)
 	defer span.End()
 
 	payload := HeartbeatPayload{
 		UptimeSeconds:  int(time.Since(a.startTime).Seconds()),
-		RoutesCount:    a.computeRoutesCount(),
-		DiscoveredAPIs: len(a.lastDiscoveredAPIs),
+		RoutesCount:    a.state.ComputeRoutesCount(),
+		DiscoveredAPIs: a.state.DiscoveredAPIsCount(),
 	}
 
 	span.SetAttributes(
@@ -269,7 +279,7 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/heartbeat", a.cfg.ControlPlaneURL, a.gatewayID)
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/heartbeat", a.cfg.ControlPlaneURL, gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		span.RecordError(err)
@@ -309,12 +319,17 @@ func (a *Agent) Heartbeat(ctx context.Context) error {
 	return nil
 }
 
+// reRegisterThreshold is the number of consecutive 404 heartbeats before the
+// agent auto-re-registers with the Control Plane. Chosen conservatively to avoid
+// thrashing on transient CP outages; do not tune without validating CP-side
+// expectations (ADR-057).
+const reRegisterThreshold = 3
+
 // StartHeartbeat starts a background goroutine that sends heartbeats
 // at the configured interval. If the CP responds 404 (gateway purged),
-// it re-registers automatically after 3 consecutive 404s.
+// it re-registers automatically after reRegisterThreshold consecutive 404s.
 // Stops when ctx is cancelled.
 func (a *Agent) StartHeartbeat(ctx context.Context) {
-	const reRegisterThreshold = 3
 	ticker := time.NewTicker(a.cfg.HeartbeatInterval)
 	go func() {
 		defer ticker.Stop()
@@ -332,11 +347,11 @@ func (a *Agent) StartHeartbeat(ctx context.Context) {
 							consecutiveNotFound, reRegisterThreshold)
 						if consecutiveNotFound >= reRegisterThreshold {
 							log.Println("gateway purged from CP, re-registering...")
-							a.gatewayID = ""
+							a.state.ClearGatewayID()
 							if regErr := a.Register(ctx, a.healthPort); regErr != nil {
 								log.Printf("re-registration failed: %v", regErr)
 							} else {
-								log.Printf("re-registered with CP: id=%s", a.gatewayID)
+								log.Printf("re-registered with CP: id=%s", a.state.GatewayID())
 								consecutiveNotFound = 0
 							}
 						}
@@ -357,35 +372,18 @@ func (a *Agent) IsConfigured() bool {
 }
 
 // ReportDiscovery sends discovered APIs to the Control Plane.
-func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
-	if a.gatewayID == "" {
+func (a *Agent) ReportDiscovery(ctx context.Context, apis []DiscoveredAPIPayload) error {
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
 		return fmt.Errorf("not registered")
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.discovery",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", gatewayID),
 	)
 	defer span.End()
 
-	payload := DiscoveryPayload{}
-	// Convert adapters.DiscoveredAPI to DiscoveredAPIPayload
-	switch v := apis.(type) {
-	case []DiscoveredAPIPayload:
-		payload.APIs = v
-	default:
-		// Marshal and re-unmarshal for type conversion
-		data, err := json.Marshal(apis)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "marshal failed")
-			return fmt.Errorf("marshal discovery apis: %w", err)
-		}
-		if err := json.Unmarshal(data, &payload.APIs); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "convert failed")
-			return fmt.Errorf("convert discovery apis: %w", err)
-		}
-	}
+	payload := DiscoveryPayload{APIs: apis}
 
 	span.SetAttributes(attribute.Int("stoa.discovered_apis", len(payload.APIs)))
 
@@ -396,7 +394,7 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 		return fmt.Errorf("marshal discovery payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/discovery", a.cfg.ControlPlaneURL, a.gatewayID)
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/discovery", a.cfg.ControlPlaneURL, gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		span.RecordError(err)
@@ -428,24 +426,7 @@ func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
 	return nil
 }
 
-// computeRoutesCount computes the total number of routes from discovered APIs.
-// Each path on an active API counts as one route (CAB-1916).
-func (a *Agent) computeRoutesCount() int {
-	count := 0
-	for _, api := range a.lastDiscoveredAPIs {
-		if api.IsActive {
-			paths := len(api.Paths)
-			if paths == 0 {
-				// API with no explicit paths still counts as 1 route
-				paths = 1
-			}
-			count += paths
-		}
-	}
-	return count
-}
-
 // DiscoveredAPIsCount returns the count of last discovered APIs.
 func (a *Agent) DiscoveredAPIsCount() int {
-	return len(a.lastDiscoveredAPIs)
+	return a.state.DiscoveredAPIsCount()
 }

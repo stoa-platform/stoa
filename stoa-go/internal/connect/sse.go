@@ -61,7 +61,7 @@ type DeploymentEvent struct {
 // On each event, it syncs the route to the local gateway and reports back via route-sync-ack.
 // On disconnect, it catches up via FetchRoutes() then resumes SSE.
 func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg SSEConfig) {
-	if a.gatewayID == "" {
+	if a.state.GatewayID() == "" {
 		log.Println("sse-stream skipped: not registered with CP")
 		return
 	}
@@ -109,12 +109,13 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 
 // streamEvents connects to the SSE endpoint and processes events until the stream drops.
 func (a *Agent) streamEvents(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) error {
+	gatewayID := a.state.GatewayID()
 	ctx, span := a.startSpan(ctx, "stoa-connect.sse.stream",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", gatewayID),
 	)
 	defer span.End()
 
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/events", a.cfg.ControlPlaneURL, a.gatewayID)
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/events", a.cfg.ControlPlaneURL, gatewayID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -191,7 +192,7 @@ func (a *Agent) handleSSEEvent(ctx context.Context, adapter adapters.GatewayAdap
 // handleSyncDeployment processes a sync-deployment event by applying the route and acking.
 func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, data []byte) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.sse.sync-deployment",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
 

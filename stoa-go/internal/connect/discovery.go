@@ -155,10 +155,10 @@ func (a *Agent) runDiscovery(ctx context.Context, adapter adapters.GatewayAdapte
 			IsActive:   api.IsActive,
 		}
 	}
-	a.lastDiscoveredAPIs = payloads
+	a.state.SetDiscoveredAPIs(payloads)
 
 	// Report to CP if registered
-	if a.gatewayID != "" {
+	if a.state.GatewayID() != "" {
 		if err := a.ReportDiscovery(ctx, payloads); err != nil {
 			log.Printf("discovery report error: %v", err)
 		}

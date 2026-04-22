@@ -24,12 +24,12 @@ type SyncConfig struct {
 
 // GatewayConfigResponse is the response from GET /v1/internal/gateways/{id}/config.
 type GatewayConfigResponse struct {
-	GatewayID          string           `json:"gateway_id"`
-	Name               string           `json:"name"`
-	Environment        string           `json:"environment"`
-	TenantID           string           `json:"tenant_id"`
-	PendingDeployments []interface{}    `json:"pending_deployments"`
-	PendingPolicies    []PendingPolicy  `json:"pending_policies"`
+	GatewayID          string          `json:"gateway_id"`
+	Name               string          `json:"name"`
+	Environment        string          `json:"environment"`
+	TenantID           string          `json:"tenant_id"`
+	PendingDeployments []interface{}   `json:"pending_deployments"`
+	PendingPolicies    []PendingPolicy `json:"pending_policies"`
 }
 
 // PendingPolicy represents a policy from the CP config endpoint.
@@ -66,16 +66,17 @@ type SyncStep struct {
 
 // FetchConfig pulls the gateway config (policies, deployments) from the CP.
 func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error) {
-	if a.gatewayID == "" {
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
 		return nil, fmt.Errorf("not registered")
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync.fetch-config",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", gatewayID),
 	)
 	defer span.End()
 
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/config", a.cfg.ControlPlaneURL, a.gatewayID)
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/config", a.cfg.ControlPlaneURL, gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		span.RecordError(err)
@@ -116,12 +117,13 @@ func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error)
 
 // ReportSyncAck sends policy sync results to the CP.
 func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult) error {
-	if a.gatewayID == "" {
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
 		return fmt.Errorf("not registered")
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync.ack",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", gatewayID),
 		attribute.Int("stoa.synced_policies", len(results)),
 	)
 	defer span.End()
@@ -156,7 +158,7 @@ func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult)
 		return fmt.Errorf("marshal sync-ack: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/sync-ack", a.cfg.ControlPlaneURL, a.gatewayID)
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/sync-ack", a.cfg.ControlPlaneURL, gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		span.RecordError(err)
@@ -205,12 +207,13 @@ type SyncedRouteResult struct {
 
 // ReportRouteSyncAck sends route sync results to the CP.
 func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteResult) error {
-	if a.gatewayID == "" {
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
 		return fmt.Errorf("not registered")
 	}
 
 	ctx, span := a.startSpan(ctx, "stoa-connect.routes.ack",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", gatewayID),
 		attribute.Int("stoa.synced_routes", len(results)),
 	)
 	defer span.End()
@@ -227,7 +230,7 @@ func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteRes
 		return fmt.Errorf("marshal route-sync-ack: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/route-sync-ack", a.cfg.ControlPlaneURL, a.gatewayID)
+	url := fmt.Sprintf("%s/v1/internal/gateways/%s/route-sync-ack", a.cfg.ControlPlaneURL, gatewayID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		span.RecordError(err)
@@ -262,7 +265,7 @@ func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteRes
 // RunSync performs a single policy sync cycle: fetch config → apply/remove → ack.
 func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.2...control-plane-api-v1.6.3) (2026-04-21)
+
+
+### Bug Fixes
+
+* **security:** gate sensitive debug flags on prod boot (CAB-2145) ([#2452](https://github.com/stoa-platform/stoa/issues/2452)) ([811e8ec](https://github.com/stoa-platform/stoa/commit/811e8ecfeff502d879f2810e10296cba700c2d94))
+* **security:** rate-limit keying collapses all JWT users (CAB-2146) ([#2449](https://github.com/stoa-platform/stoa/issues/2449)) ([1c99a62](https://github.com/stoa-platform/stoa/commit/1c99a62188aec0344634a0853aa1dbbf3a019391))
+
 ## [1.6.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.1...control-plane-api-v1.6.2) (2026-04-20)
 
 

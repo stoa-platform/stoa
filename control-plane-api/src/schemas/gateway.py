@@ -1,9 +1,30 @@
 """Pydantic schemas for gateway instance and deployment endpoints."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# CAB-2159 BUG-2 — narrowed enums so the UI can branch on exact values rather
+# than carrying wire/UI adapter casts. Keep synchronized with:
+#   - src/models/gateway_instance.py:GatewayInstanceStatus
+#   - src/models/gateway_instance.py:source column
+#   - ADR-024 (Gateway 4-mode split)
+GatewayTypeLiteral = Literal[
+    "webmethods",
+    "kong",
+    "apigee",
+    "aws_apigateway",
+    "stoa",
+    "stoa_edge_mcp",
+    "stoa_sidecar",
+    "stoa_proxy",
+    "stoa_shadow",
+]
+GatewayModeLiteral = Literal["edge-mcp", "sidecar", "proxy", "shadow", "connect"]
+GatewayStatusLiteral = Literal["online", "offline", "degraded", "maintenance"]
+GatewaySourceLiteral = Literal["argocd", "self_register", "manual"]
 
 # =========================================================================
 # Gateway Instance Schemas
@@ -50,7 +71,7 @@ class GatewayInstanceResponse(BaseModel):
     id: UUID
     name: str
     display_name: str
-    gateway_type: str
+    gateway_type: GatewayTypeLiteral
     environment: str
     tenant_id: str | None
     base_url: str
@@ -62,16 +83,23 @@ class GatewayInstanceResponse(BaseModel):
         None, description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)"
     )
     auth_config: dict
-    status: str
+    status: GatewayStatusLiteral
     last_health_check: datetime | None
     health_details: dict | None
     capabilities: list[str]
     version: str | None
     tags: list[str]
-    mode: str | None = Field(None, description="STOA Gateway mode: edge-mcp, sidecar, proxy, shadow")
+    mode: GatewayModeLiteral | None = Field(
+        None, description="STOA Gateway mode: edge-mcp, sidecar, proxy, shadow, connect"
+    )
     protected: bool = Field(False, description="Whether this gateway is protected from deletion")
     enabled: bool = Field(True, description="Whether this gateway accepts deployments and syncs")
     visibility: dict | None = Field(None, description="Visibility restriction: {tenant_ids: [...]} or null (all)")
+    source: GatewaySourceLiteral = Field(
+        "self_register",
+        description="Source of truth for this gateway entry — argocd (GitOps-managed), "
+        "self_register (auto-announced via /v1/gateways/register) or manual (admin CLI)",
+    )
     deleted_at: datetime | None = Field(None, description="Soft-delete timestamp (null = active)")
     deleted_by: str | None = Field(None, description="User ID who deleted this gateway")
     created_at: datetime

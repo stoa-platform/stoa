@@ -5,6 +5,8 @@ CAB-438: Sender-constrained token validation (RFC 8705/9449).
 CAB-2082: JWT issuer validation + Keycloak public-key cache (Security P0-01).
 CAB-2094: Split issuer (public KEYCLOAK_URL) from JWKS fetch (KEYCLOAK_INTERNAL_URL).
 CAB-2146: Expose operator-key fingerprint on request.state for per-key rate-limit.
+CAB-2153: Accept `stoa-mcp-gateway` as legacy audience during the Audience
+Mapper rollout so MCP tokens authenticate even before the mapper lands.
 """
 
 import hashlib
@@ -171,9 +173,18 @@ async def get_current_user(
         # Accepted audiences:
         # - control-plane-api: Primary API audience (from Audience Mapper)
         # - account: Keycloak account management tokens
-        # - control-plane-ui, stoa-portal: Legacy support for tokens without Audience Mapper
-        #   TODO: Remove these once all users have refreshed their tokens
-        valid_audiences = {settings.KEYCLOAK_CLIENT_ID, "account", "control-plane-ui", "stoa-portal"}
+        # - control-plane-ui, stoa-portal, stoa-mcp-gateway: Legacy support for
+        #   tokens issued before the Audience Mapper was deployed on that
+        #   client. CAB-2153 adds `stoa-mcp-gateway` so the MCP migration
+        #   window (Mode B per CAB-2151) works end-to-end.
+        #   TODO: Remove these once all users have refreshed their tokens.
+        valid_audiences = {
+            settings.KEYCLOAK_CLIENT_ID,
+            "account",
+            "control-plane-ui",
+            "stoa-portal",
+            "stoa-mcp-gateway",
+        }
         token_aud = payload.get("aud", [])
         if isinstance(token_aud, str):
             token_aud = [token_aud]
@@ -191,7 +202,7 @@ async def get_current_user(
         # These clients should configure Audience Mappers in Keycloak to include
         # 'control-plane-api' in the 'aud' claim. Legacy support will be removed
         # after all clients have migrated (target: Q2 2026).
-        legacy_audiences = {"control-plane-ui", "stoa-portal"}
+        legacy_audiences = {"control-plane-ui", "stoa-portal", "stoa-mcp-gateway"}
         primary_audience = {settings.KEYCLOAK_CLIENT_ID}
         if any(aud in legacy_audiences for aud in token_aud) and not any(aud in primary_audience for aud in token_aud):
             logger.warning(

@@ -123,20 +123,19 @@ func (a *Agent) newSSEDispatcher(adapter adapters.GatewayAdapter, adminURL strin
 	return d
 }
 
-// handleSyncDeployment processes a sync-deployment event by applying the route and acking.
+// handleSyncDeployment processes a sync-deployment SSE event: decode the
+// event wrapper + desired_state, route the single-route batch through the
+// unified routeSyncer, and ack the result. Shares the route-sync code
+// path with the polling loop (RunRouteSync) — see sync_route.go.
 func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, data []byte) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.sse.sync-deployment",
 		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
 
-	var steps []SyncStep
-
-	// Step: agent_received — SSE event consumed
-	steps = append(steps, newSyncStep("agent_received", "success", ""))
-
 	var event DeploymentEvent
 	if err := json.Unmarshal(data, &event); err != nil {
+		// No deployment_id known — cannot ack. Surface + drop.
 		log.Printf("sse-stream: decode deployment event error: %v", err)
 		span.RecordError(err)
 		return
@@ -145,50 +144,50 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 	span.SetAttributes(attribute.String("stoa.deployment_id", event.DeploymentID))
 	log.Printf("sse-stream: received deployment %s (status=%s)", event.DeploymentID, event.SyncStatus)
 
-	// Step: adapter_connected — gateway adapter ready
-	steps = append(steps, newSyncStep("adapter_connected", "success", ""))
-
-	// Parse desired_state into a Route for the adapter
 	var route adapters.Route
 	if err := json.Unmarshal(event.DesiredState, &route); err != nil {
-		log.Printf("sse-stream: decode desired_state error: %v", err)
+		// Synthesize a failed ack with the same 3-step shape the polling
+		// path produces, so CP UI renders a consistent step trace. Note:
+		// Generation is unknown at this point (desired_state undecodable).
+		decodeDetail := fmt.Sprintf("decode desired_state: %v", err)
+		log.Printf("sse-stream: %s", decodeDetail)
 		span.RecordError(err)
-		steps = append(steps, newSyncStep("api_synced", "failed", fmt.Sprintf("decode desired_state: %v", err)))
-		a.reportDeploymentResultWithSteps(ctx, event.DeploymentID, "failed", fmt.Sprintf("decode desired_state: %v", err), steps)
+		span.SetStatus(codes.Error, "decode desired_state failed")
+		a.ackRouteResult(ctx, SyncedRouteResult{
+			DeploymentID: event.DeploymentID,
+			Status:       "failed",
+			Error:        decodeDetail,
+			Steps: []SyncStep{
+				newSyncStep("agent_received", "success", ""),
+				newSyncStep("adapter_connected", "success", ""),
+				newSyncStep("api_synced", "failed", decodeDetail),
+			},
+		})
 		return
 	}
 	route.DeploymentID = event.DeploymentID
 
-	// Apply to gateway — Step: api_synced
-	syncErr := adapter.SyncRoutes(ctx, adminURL, []adapters.Route{route})
+	syncer := newRouteSyncer(adapter)
+	results, syncErr := syncer.Sync(ctx, adminURL, []adapters.Route{route})
 
-	status := "applied"
-	errMsg := ""
 	if syncErr != nil {
-		status = "failed"
-		errMsg = syncErr.Error()
 		span.RecordError(syncErr)
 		span.SetStatus(codes.Error, "sync failed")
 		log.Printf("sse-stream: sync deployment %s failed: %v", event.DeploymentID, syncErr)
-		steps = append(steps, newSyncStep("api_synced", "failed", syncErr.Error()))
 	} else {
 		span.SetStatus(codes.Ok, "synced")
 		log.Printf("sse-stream: sync deployment %s applied", event.DeploymentID)
-		steps = append(steps, newSyncStep("api_synced", "success", ""))
 	}
 
-	a.reportDeploymentResultWithSteps(ctx, event.DeploymentID, status, errMsg, steps)
+	for _, result := range results {
+		a.ackRouteResult(ctx, result)
+	}
 }
 
-// reportDeploymentResultWithSteps sends a single deployment ack with step trace via route-sync-ack.
-func (a *Agent) reportDeploymentResultWithSteps(ctx context.Context, deploymentID, status, errMsg string, steps []SyncStep) {
-	result := SyncedRouteResult{
-		DeploymentID: deploymentID,
-		Status:       status,
-		Error:        errMsg,
-		Steps:        steps,
-	}
-	if ackErr := a.ReportRouteSyncAck(ctx, []SyncedRouteResult{result}); ackErr != nil {
-		log.Printf("sse-stream: ack error for %s: %v", deploymentID, ackErr)
+// ackRouteResult sends a single SyncedRouteResult via route-sync-ack,
+// logging on failure (fire-and-forget: the next sync cycle re-reconciles).
+func (a *Agent) ackRouteResult(ctx context.Context, result SyncedRouteResult) {
+	if err := a.ReportRouteSyncAck(ctx, []SyncedRouteResult{result}); err != nil {
+		log.Printf("sse-stream: ack error for %s: %v", result.DeploymentID, err)
 	}
 }

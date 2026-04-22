@@ -37,15 +37,15 @@ func (a *Agent) FetchRoutes(ctx context.Context) ([]adapters.Route, error) {
 	return a.cp.FetchRoutes(ctx, a.cfg.InstanceName)
 }
 
-// RunRouteSync performs a single route sync cycle: fetch CP routes → push to local gateway.
+// RunRouteSync performs a single route sync cycle: fetch CP routes → push
+// to local gateway via the unified routeSyncer → ack per-route results.
+// Shares the route-sync code path with the SSE deployment stream
+// (handleSyncDeployment) — see sync_route.go.
 func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.routes.sync",
 		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
-
-	// Step: agent_received — sync cycle started
-	agentStep := newSyncStep("agent_received", "success", "")
 
 	routes, err := a.FetchRoutes(ctx)
 	if err != nil {
@@ -61,59 +61,12 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 		return
 	}
 
-	// Step: adapter_connected — gateway adapter ready
-	adapterStep := newSyncStep("adapter_connected", "success", "")
-
 	span.SetAttributes(attribute.Int("stoa.routes_count", len(routes)))
 	log.Printf("route-sync: %d routes to push", len(routes))
 
-	syncErr := adapter.SyncRoutes(ctx, adminURL, routes)
+	syncer := newRouteSyncer(adapter)
+	results, syncErr := syncer.Sync(ctx, adminURL, routes)
 
-	// Step: api_synced
-	var apiStep SyncStep
-	if syncErr != nil {
-		apiStep = newSyncStep("api_synced", "failed", syncErr.Error())
-	} else {
-		apiStep = newSyncStep("api_synced", "success", "")
-	}
-
-	steps := []SyncStep{agentStep, adapterStep, apiStep}
-
-	// Build ack results — per-route status from adapter FailedRoutes map
-	// This gives accurate results: routes that succeeded are "applied",
-	// only routes that actually failed are "failed".
-	type failedRoutesProvider interface {
-		GetFailedRoutes() map[string]string
-	}
-	failedMap := make(map[string]string)
-	if frp, ok := adapter.(failedRoutesProvider); ok {
-		failedMap = frp.GetFailedRoutes()
-	}
-
-	var results []SyncedRouteResult
-	for _, r := range routes {
-		if r.DeploymentID == "" {
-			continue // Skip routes without deployment tracking
-		}
-		result := SyncedRouteResult{
-			DeploymentID: r.DeploymentID,
-			Steps:        steps,
-			Generation:   r.Generation,
-		}
-		if routeErr, failed := failedMap[r.DeploymentID]; failed {
-			result.Status = "failed"
-			result.Error = routeErr
-		} else if syncErr != nil && len(failedMap) == 0 {
-			// Fallback: global error without per-route tracking (non-webmethods adapters)
-			result.Status = "failed"
-			result.Error = syncErr.Error()
-		} else {
-			result.Status = "applied"
-		}
-		results = append(results, result)
-	}
-
-	// Report route sync results to CP (fire-and-forget: log warning on failure)
 	if len(results) > 0 {
 		if ackErr := a.ReportRouteSyncAck(ctx, results); ackErr != nil {
 			log.Printf("route-sync: report ack error: %v", ackErr)

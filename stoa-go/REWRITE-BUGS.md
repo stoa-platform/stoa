@@ -148,6 +148,34 @@ Caller side (`sse.go:StartDeploymentStream`) logue maintenant `"sse-stream: term
 
 ---
 
+## Divergences polling ↔ SSE fusionnées en S7
+
+### B.1 — Generation field silencieusement droppé sur chemin SSE (FIXED in S7)
+
+**Lieu pré-S7** : `sse.go:handleSyncDeployment` — construisait un `SyncedRouteResult` sans `Generation`. `routes.go:RunRouteSync` le posait correctement via `Generation: r.Generation`.
+
+**Impact** : CAB-1950 introduit un mécanisme de génération-based reconciliation côté CP. Quand un deployment arrive via SSE, l'agent applique la route mais l'ack revient sans generation → le CP ne peut pas vérifier quelle version est déployée. Divergence possible silencieuse entre état CP (base de données) et état gateway local. Jamais flaggé par les tests existants (aucun n'assertait sur `result.Generation` côté SSE).
+
+**Fix S7** : le `routeSyncer` unifié remplit toujours `Generation: r.Generation` quel que soit le chemin d'entrée (polling ou SSE). Regression guard : `TestRouteSyncerAppliedBatch` vérifie explicitement que `Generation` est propagé avec les valeurs exactes.
+
+---
+
+### B.2 — `failedRoutesProvider` type-assert sur polling uniquement (consolidated, no behavior change)
+
+**Divergence** : seul `routes.go:RunRouteSync` faisait le type-assert sur l'interface anonyme `failedRoutesProvider`. Le chemin SSE ignorait ce provider — mais comme SSE traite 1 route à la fois, un `syncErr != nil` mappe forcément vers cette unique route. Résultat fonctionnellement identique.
+
+**Fix S7** : le `routeSyncer` fait le type-assert inconditionnellement. Pour 1 route, `failedMap[dep-id]` détermine le status ; pour N routes, pareil ; pour un adapter sans l'interface, fallback sur le global error. Un seul chemin de résolution per-route, testable en isolation (`TestRouteSyncerPerRouteFailure`).
+
+---
+
+### B.3 — Route sans `deployment_id` silencieusement droppée (visibilité améliorée en S7)
+
+**Lieu pré-S7** : `routes.go:RunRouteSync` faisait `if r.DeploymentID == "" { continue }` sans log. Une route arrivant sans deployment_id = symptôme d'un contract drift CP↔agent (CP est censé toujours tagger), mais était invisible aux ops.
+
+**Fix S7** : le skip reste (on ne peut toujours pas ack sans deployment_id), mais `routeSyncer` logue `"route-sync: skipping route %q — missing deployment_id (CP contract drift?)"`. Regression guard : `TestRouteSyncerSkipsMissingDeploymentID`.
+
+---
+
 ## Non-bugs relevés mais conscients
 
 - **`a.client.Timeout = 15s`** global vs SSE override via nouveau `http.Client{Transport: a.client.Transport}` (ligne 129) : OK, le otelhttp transport est partagé correctement. Juste une alloc par reconnect, négligeable.

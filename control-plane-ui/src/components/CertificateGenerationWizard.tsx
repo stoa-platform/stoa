@@ -20,7 +20,7 @@ import {
   downloadPem,
   type GeneratedKeyPair,
 } from '../lib/crypto';
-import type { CSRSignResponse } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 import {
   KeyRound,
   FileSignature,
@@ -47,7 +47,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
   const [generating, setGenerating] = useState(false);
   const [signing, setSigning] = useState(false);
   const [keyPair, setKeyPair] = useState<GeneratedKeyPair | null>(null);
-  const [signedCert, setSignedCert] = useState<CSRSignResponse | null>(null);
+  const [signedCert, setSignedCert] = useState<Schemas['CSRSignResponse'] | null>(null);
   const [commonName, setCommonName] = useState('');
   const [validityDays, setValidityDays] = useState(365);
   const [downloaded, setDownloaded] = useState(false);

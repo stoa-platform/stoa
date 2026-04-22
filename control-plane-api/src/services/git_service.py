@@ -6,14 +6,14 @@ import re
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import gitlab
 import yaml
 from gitlab.v4.objects import Project
 
 from ..config import settings
-from .git_provider import GitProvider
+from .git_provider import BranchRef, CommitRef, GitProvider, MergeRequestRef, TreeEntry
 
 logger = logging.getLogger(__name__)
 
@@ -986,6 +986,125 @@ settings:
         except Exception as e:
             logger.error(f"Failed to delete MCP server: {e}")
             raise
+
+    # ============================================================
+    # CAB-1889 CP-1: provider-agnostic surface (GitProvider ABC).
+    # Operates on the connected catalog project (self._project).
+    # ============================================================
+
+    async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        try:
+            tree = self._project.repository_tree(path=path, ref=ref)
+        except gitlab.exceptions.GitlabGetError:
+            return []
+        return [TreeEntry(name=item["name"], type=item["type"], path=item["path"]) for item in tree]
+
+    async def read_file(self, path: str, ref: str = "main") -> str | None:
+        return await self.get_file(path, ref=ref)
+
+    async def list_path_commits(self, path: str | None, limit: int = 20) -> list[CommitRef]:
+        raw = await self.list_commits(path=path, limit=limit)
+        return [CommitRef(sha=c["sha"], message=c["message"], author=c["author"], date=c["date"]) for c in raw]
+
+    async def write_file(
+        self, path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> Literal["created", "updated"]:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        existing = await self.get_file(path, ref=branch)
+        if existing is not None:
+            file_obj = self._project.files.get(path, ref=branch)
+            file_obj.content = content
+            file_obj.save(branch=branch, commit_message=commit_message)
+            return "updated"
+        self._project.files.create(
+            {
+                "file_path": path,
+                "branch": branch,
+                "content": content,
+                "commit_message": commit_message,
+            }
+        )
+        return "created"
+
+    async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        self._project.files.delete(file_path=path, commit_message=commit_message, branch=branch)
+        return True
+
+    async def list_branches(self) -> list[BranchRef]:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        branches = self._project.branches.list()
+        return [
+            BranchRef(
+                name=b.name,
+                commit_sha=b.commit["id"] if isinstance(b.commit, dict) else str(b.commit),
+                protected=getattr(b, "protected", False),
+            )
+            for b in branches
+        ]
+
+    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        b = self._project.branches.create({"branch": name, "ref": ref})
+        return BranchRef(
+            name=b.name,
+            commit_sha=b.commit["id"] if isinstance(b.commit, dict) else str(b.commit),
+            protected=getattr(b, "protected", False),
+        )
+
+    @staticmethod
+    def _mr_to_ref(mr: Any) -> MergeRequestRef:
+        author = mr.author.get("name", "") if isinstance(mr.author, dict) else str(mr.author)
+        return MergeRequestRef(
+            id=mr.id,
+            iid=mr.iid,
+            title=mr.title,
+            description=mr.description or "",
+            state=mr.state,
+            source_branch=mr.source_branch,
+            target_branch=mr.target_branch,
+            web_url=mr.web_url,
+            created_at=mr.created_at,
+            author=author,
+        )
+
+    async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        mrs = self._project.mergerequests.list(state=state)
+        return [self._mr_to_ref(mr) for mr in mrs]
+
+    async def create_merge_request(
+        self,
+        title: str,
+        description: str,
+        source_branch: str,
+        target_branch: str = "main",
+    ) -> MergeRequestRef:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        mr = self._project.mergerequests.create(
+            {
+                "title": title,
+                "description": description,
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+            }
+        )
+        return self._mr_to_ref(mr)
+
+    async def merge_merge_request(self, iid: int) -> MergeRequestRef:
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        mr = self._project.mergerequests.get(iid)
+        mr.merge()
+        return self._mr_to_ref(mr)
 
 
 # Global instance

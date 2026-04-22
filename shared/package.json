@@ -5,8 +5,8 @@
   "description": "STOA Design System - Shared components and utilities",
   "main": "index.ts",
   "scripts": {
-    "generate:api-types": "openapi-typescript ../control-plane-api/openapi-snapshot.json -o api-types/generated.ts",
-    "check:api-types": "openapi-typescript ../control-plane-api/openapi-snapshot.json -o /tmp/stoa-api-types-check.ts && diff -q api-types/generated.ts /tmp/stoa-api-types-check.ts"
+    "generate:api-types": "openapi-typescript ../control-plane-api/openapi-snapshot.json -o api-types/generated.ts && node scripts/inject-tsnocheck.mjs api-types/generated.ts",
+    "check:api-types": "openapi-typescript ../control-plane-api/openapi-snapshot.json -o /tmp/stoa-api-types-check.ts && node scripts/inject-tsnocheck.mjs /tmp/stoa-api-types-check.ts && diff -q api-types/generated.ts /tmp/stoa-api-types-check.ts"
   },
   "peerDependencies": {
     "lucide-react": "^0.300.0 || ^0.475.0",

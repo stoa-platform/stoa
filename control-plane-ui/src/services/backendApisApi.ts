@@ -6,15 +6,8 @@
  */
 
 import { apiService } from './api';
-import type {
-  BackendApi,
-  BackendApiCreate,
-  BackendApiUpdate,
-  BackendApiListResponse,
-  SaasApiKeyCreate,
-  SaasApiKeyCreatedResponse,
-  SaasApiKeyListResponse,
-} from '../types';
+import type { BackendApi, BackendApiListResponse, SaasApiKeyListResponse } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 
 class BackendApisService {
   // ==========================================================================
@@ -35,7 +28,7 @@ class BackendApisService {
     return data;
   }
 
-  async createBackendApi(tenantId: string, api: BackendApiCreate): Promise<BackendApi> {
+  async createBackendApi(tenantId: string, api: Schemas['BackendApiCreate']): Promise<BackendApi> {
     const { data } = await apiService.post(`/v1/tenants/${tenantId}/backend-apis`, api);
     return data;
   }
@@ -43,7 +36,7 @@ class BackendApisService {
   async updateBackendApi(
     tenantId: string,
     apiId: string,
-    update: BackendApiUpdate
+    update: Schemas['BackendApiUpdate']
   ): Promise<BackendApi> {
     const { data } = await apiService.patch(
       `/v1/tenants/${tenantId}/backend-apis/${apiId}`,
@@ -78,7 +71,10 @@ class BackendApisService {
     return data;
   }
 
-  async createSaasKey(tenantId: string, key: SaasApiKeyCreate): Promise<SaasApiKeyCreatedResponse> {
+  async createSaasKey(
+    tenantId: string,
+    key: Schemas['SaasApiKeyCreate']
+  ): Promise<Schemas['SaasApiKeyCreatedResponse']> {
     const { data } = await apiService.post(`/v1/tenants/${tenantId}/saas-keys`, key);
     return data;
   }

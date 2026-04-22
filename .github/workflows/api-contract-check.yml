@@ -38,7 +38,9 @@ jobs:
         run: npm install --no-save openapi-typescript
       - name: Generate types from current spec
         working-directory: shared
-        run: npx openapi-typescript ../control-plane-api/openapi-snapshot.json -o /tmp/generated-check.ts
+        run: |
+          npx openapi-typescript ../control-plane-api/openapi-snapshot.json -o /tmp/generated-check.ts
+          node scripts/inject-tsnocheck.mjs /tmp/generated-check.ts
       - name: Check for drift
         run: |
           if ! diff -q shared/api-types/generated.ts /tmp/generated-check.ts > /dev/null 2>&1; then

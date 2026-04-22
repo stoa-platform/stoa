@@ -24,12 +24,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
-import type {
-  CredentialMapping,
-  CredentialMappingCreate,
-  CredentialMappingUpdate,
-  CredentialAuthType,
-} from '../types';
+import type { CredentialMapping, CredentialAuthType } from '../types';
+import type { Schemas } from '@stoa/shared/api-types';
 import { SubNav } from '../components/SubNav';
 import { consumersTabs } from '../components/subNavGroups';
 
@@ -185,7 +181,7 @@ export function CredentialMappings() {
 
       try {
         if (modal.mode === 'create') {
-          const payload: CredentialMappingCreate = {
+          const payload: Schemas['CredentialMappingCreate'] = {
             consumer_id: formData.consumer_id,
             api_id: formData.api_id,
             auth_type: formData.auth_type,
@@ -196,7 +192,7 @@ export function CredentialMappings() {
           await apiService.createCredentialMapping(tenantId, payload);
           toast.success('Credential mapping created');
         } else if (modal.editId) {
-          const payload: CredentialMappingUpdate = {
+          const payload: Schemas['CredentialMappingUpdate'] = {
             auth_type: formData.auth_type,
             header_name: formData.header_name,
             description: formData.description || undefined,

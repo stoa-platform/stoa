@@ -16,6 +16,10 @@ use tracing::info;
 
 use crate::mode::GatewayMode;
 
+mod expansion;
+
+pub use expansion::ExpansionMode;
+
 /// Gateway configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -1258,23 +1262,6 @@ fn default_tool_max_staleness_secs() -> u64 {
     1800
 }
 
-/// Catalog tool expansion mode (CAB-2113 Phase 0).
-///
-/// `per-op` is the canonical kebab-case value; `per_operation` is accepted as
-/// a deprecated alias so existing docs / manifests keep parsing (PR3 doc drift
-/// fix: `control-plane-api/src/routers/portal.py` pre-2026-04-19 used the
-/// snake form). Prefer the canonical form in new configs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum ExpansionMode {
-    /// One `{action, params}` tool per API (legacy `/apis`).
-    #[default]
-    Coarse,
-    /// One tool per OpenAPI operation via `/apis/expanded`.
-    #[serde(alias = "per_operation")]
-    PerOp,
-}
-
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -1956,18 +1943,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn expansion_mode_accepts_kebab_and_snake_alias() {
-        // Canonical kebab-case value (CAB-2113 Phase 0).
-        let kebab: ExpansionMode = serde_json::from_str("\"per-op\"").unwrap();
-        assert_eq!(kebab, ExpansionMode::PerOp);
-
-        // Deprecated snake-case alias — kept only for the PR3 doc-drift window
-        // on `control-plane-api/src/routers/portal.py`. Drop with Release N+1.
-        let snake: ExpansionMode = serde_json::from_str("\"per_operation\"").unwrap();
-        assert_eq!(snake, ExpansionMode::PerOp);
-
-        // Default stays coarse — flipping to per-op must be explicit.
-        assert_eq!(ExpansionMode::default(), ExpansionMode::Coarse);
-    }
 }

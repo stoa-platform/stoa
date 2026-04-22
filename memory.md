@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-04-15. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-04-22. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
 
 ## ✅ FREEZE LEVÉ (2026-04-19)
 
@@ -53,6 +53,11 @@ Phase 0 ✅ baseline (PR #2362). Phase 1 pending: Agent Teams flag + canary MEGA
 ## 🚫 BLOCKED
 
 - **control-plane-api CD**: pods sur `sha-4759aa7` (Apr 9). mypy no-any-return pre-existing bloque docker build. Ticket à créer: `fix(api): resolve pre-existing mypy no-any-return errors`.
+- **Demo UAC multi-client 5 etapes**: Decision Gate externe revenu `REFRAME` le 2026-04-21. Reframe applique dans `docs/plans/2026-04-21-demo-multi-client.md`: noyau repeatability-first (`reset`, seed deterministe, isolation tenant/persona, golden path) + contrat de preuve par etape + gouvernance recadree + 3 framings prospect. Le plan reste en `challenged`: interdiction de creer le MEGA, de creer des tickets Linear, ou d'executer le plan tant qu'il n'est pas explicitement passe en `validated`.
+  - Delta workshop DSL (2026-04-22): scenario `Paiements` juge banking-first et remplace dans les assets de cadrage par `Customer API / Referentiel Client`. Delta conditionnel note: Acte 3 "meme outil, memes regles..." depend du verdict du fix JWT pour passer de promesse verbale a preuve visuelle. Risque Q&A a preparer: mention "reference en production chez une banque centrale europeenne".
+  - Decisions Christophe du 2026-04-22 integrees en passe 3bis: `A` fix JWT audience en parallele (subset CAB-2079, evidence test avant phase 4, reintegration `stoa_*` si valide sinon fallback documente), `B` alignement des assets commerciaux sur la promesse restreinte controle + tracabilite + limites assumees, `C` owner des 3 framings = Christophe ABOULICAM.
+  - Second challenge externe (2026-04-22): nouveau `REFRAME`. Manques pointes par le challenger puis integres dans le plan: deux contrats de preuve distincts (`Mode A` avec fix JWT / `Mode B` fallback), gate binaire avant phase 4, matrice prospects ↔ mode avec banque hors cible en `Mode B`. Le plan reste en `challenged`.
+  - Troisieme challenge externe (2026-04-22): nouveau `REFRAME`, beaucoup plus etroit. Verrou restant integre dans le plan: fiche de qualification pre-demo opposable pour autoriser/interdire `Mode B` et verrouiller les claims par rendez-vous. Le plan reste en `challenged` tant qu'un challenger externe ne confirme pas ce dernier verrou.
 
 ## Préférences utilisateur
 
@@ -99,6 +104,9 @@ Phase 0 ✅ baseline (PR #2362). Phase 1 pending: Agent Teams flag + canary MEGA
 - Dropbox bypass: `git hash-object -w` + `git update-index --cacheinfo`
 - Rust `floor_char_boundary` stable ≥1.90 (Use `rust:1.93-bookworm`)
 - Axum `.layer()` applies only to routes registered BEFORE it
+- Runtime catalog still reads GitLab in prod: deployed source is `stoa-infra/charts/control-plane-api/values.yaml`, not `stoa/control-plane-api/k8s/configmap.yaml` in the monorepo. The monorepo configmap currently says GitHub but is dead code until infra values are migrated
+- CAB-2135 scope remains real but the immediate issue is config drift: monorepo `stoa/stoa-catalog/**/uac.yaml`, runtime GitLab catalog, and runtime contract/UAC are three distinct shapes; repo/source convergence is not yet deployed
+- GitHub migration requires infra change + secret change: set `GIT_PROVIDER=github` in `stoa-infra`, add `GITHUB_ORG/GITHUB_CATALOG_REPO/GITHUB_GITOPS_REPO`, inject `GITHUB_TOKEN`, then re-run catalog sync and verify `git_commit_sha` comes from GitHub
 
 ## L3.5 Autopilot LIVE
 

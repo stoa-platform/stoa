@@ -18,7 +18,13 @@
 //
 // After run: `npx tsc -p tsconfig.app.json --noEmit` then `npm test`.
 //
-// SAFE TO DELETE after successful migration + green CI.
+// DELETION CRITERIA (sunset this script when ALL true):
+//   1. UI-1-Wave2 ticket merged (covers ~150 cascading wrappers)
+//   2. Backend BUG-1, BUG-2, BUG-4 resolved upstream (REWRITE-BUGS.md)
+//   3. `grep -r "Schemas\['" src/` confirms all DUPLIQUÉs come from
+//      @stoa/shared/api-types (no manual re-declarations remain)
+//
+// Owner of deletion: whoever closes UI-1-Wave2.
 
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { argv, exit } from 'node:process';

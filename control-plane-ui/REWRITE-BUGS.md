@@ -170,6 +170,23 @@ comme PUREMENT UI tant que le schema n'est pas extrait.
 
 ---
 
+## Sunset — quand supprimer ce fichier
+
+Supprimer `REWRITE-BUGS.md` quand TOUTES les conditions sont remplies :
+
+1. BUG-1, BUG-2, BUG-3, BUG-4, BUG-5 marqués **RÉSOLU** (snapshot regénéré
+   sans erreurs, types Schemas alignés sur l'usage UI).
+2. `// @ts-nocheck` retiré de `shared/api-types/generated.ts` et le drift
+   gate CI passe sans le wrapper `inject-tsnocheck.mjs`.
+3. `control-plane-ui/scripts/migrate-types.mjs` et `strip-migrated-types.mjs`
+   eux-mêmes supprimés (UI-1-Wave2 fini).
+4. Les view-models DRIFT dans `src/types/index.ts` (`API`, `Application`,
+   `GatewayInstance`, `Consumer`) peuvent devenir des aliases purs `Schemas[X]`
+   ou être supprimés au profit d'imports directs.
+
+Si une partie seulement est résolue, marquer les BUG individuellement
+**RÉSOLU** dans leur section et garder le fichier jusqu'à clôture complète.
+
 ## Convention pour ajouts
 
 Quand un nouveau bug backend est trouvé pendant la migration :

@@ -12,9 +12,16 @@
  * Type IMPORTS still resolve correctly because TypeScript continues to parse
  * declarations — only error-reporting on this file is suppressed.
  *
+ * REMOVE `@ts-nocheck` when:
+ *   1. Backend dedupes the offending operationIds (cf. BACKEND-BUG-1/2/4
+ *      ticket — proposed fix: prefix with scope, e.g. `admin_list_apps`).
+ *   2. `cd shared && rm scripts/inject-tsnocheck.mjs` and revert
+ *      `shared/package.json` scripts back to bare `openapi-typescript` calls.
+ *   3. `tsc -p control-plane-ui/tsconfig.app.json --noEmit` passes without
+ *      this header (sanity-check after BUG-3 resolution).
+ *
  * Regen: `cd shared && npm run generate:api-types` (this header is
- * re-injected automatically by scripts/inject-tsnocheck.mjs — do not
- * delete it manually).
+ * re-injected automatically — do not delete it manually).
  */
 export interface paths {
     "/": {

@@ -7,7 +7,9 @@
 // move adjacent comments — those become orphan cosmetic noise that a single
 // follow-up pass can clean up. Better than risking off-by-one corruption.
 //
-// SAFE TO DELETE after merge.
+// DELETION CRITERIA: same as migrate-types.mjs. Sunset both scripts together
+// when UI-1-Wave2 is merged AND backend BUG-1/2/4 resolved.
+// Owner of deletion: whoever closes UI-1-Wave2.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import ts from 'typescript';

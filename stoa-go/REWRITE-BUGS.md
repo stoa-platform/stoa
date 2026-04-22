@@ -54,27 +54,37 @@ Slice header (ptr+len+cap) non-atomique. Lecture concurrente sans sync = data ra
 
 ## SSE transport
 
-### F.6 — `bufio.Scanner` buffer 64KB (fix in-flight S5)
+### F.6 — `bufio.Scanner` buffer 64KB (FIXED in S5, commit pending)
 
-**Lieu** : `sse.go:146` — `scanner := bufio.NewScanner(resp.Body)`.
+**Lieu original** : `sse.go:146` (pre-S5) — `scanner := bufio.NewScanner(resp.Body)` sans `scanner.Buffer(...)`.
 
-**Symptôme** : un event SSE avec `desired_state` volumineux (OpenAPI spec inlinée > 64KB) dépasse le buffer scanner défaut (`bufio.MaxScanTokenSize` = 64KB). Comportement :
-1. Scanner retourne `false` silencieusement.
-2. Boucle sort.
-3. `scanner.Err()` serait `bufio.ErrTooLong` **mais n'est jamais lu** par le code actuel.
-4. La fonction retourne `fmt.Errorf("SSE stream ended")` — l'erreur réelle est perdue.
-5. Outer loop reconnecte, même event arrive à nouveau, même truncation. Boucle infinie de reconnect.
+**Symptôme** : un event SSE avec `desired_state` volumineux (OpenAPI spec inlinée > 64KB) dépasse le buffer scanner défaut (`bufio.MaxScanTokenSize` = 64KB). Comportement observé en théorie :
+1. Scanner retourne `false` avec `scanner.Err() == bufio.ErrTooLong`.
+2. La boucle sort.
+3. `scanner.Err()` ÉTAIT lu (ligne 172 pré-S5) mais l'erreur retournée était ensuite écrasée par le sentinel `fmt.Errorf("SSE stream ended")` — donc le reconnect loop ne voyait jamais la cause réelle dans ses logs.
+4. Worst case : reconnect infini avec même event qui retruncate silencieusement.
 
-**Preuve** : `grep -n "scanner.Err()" internal/connect/sse.go` → ligne 172, mais la condition est seulement évaluée si la boucle `for scanner.Scan()` se termine "proprement" — or `ErrTooLong` met aussi fin à la boucle, donc en théorie `scanner.Err()` attrape bien l'erreur. À vérifier côté comportement observé.
+**Impact en prod** : latent. Jamais observé (les OpenAPI specs actuels passent sous 64KB). Devient un bug visible si un client pousse un spec volumineux (démo BDF type : spec webMethods complet avec ~200 paths).
 
-**Fix S5** :
+**Fix appliqué (S5)** :
 ```go
+// transport_sse.go
 scanner := bufio.NewScanner(resp.Body)
-scanner.Buffer(make([]byte, 0, 64<<10), 1<<20) // 1 MB max
+scanner.Buffer(make([]byte, 0, sseScannerInitialBuf), sseScannerMaxBuf) // 64KB init, 1MB max
+// ...
+if err := scanner.Err(); err != nil {
+    return spanFail(span, fmt.Errorf("SSE read: %w", err), "scanner error")
+}
+return io.EOF // clean end — distinguishable from scanner failure via errors.Is
 ```
-Et `sseStream.Run(ctx, sink) error` retourne `scanner.Err()` explicite (ne reformule pas en "stream ended").
 
-**Régression guard** : test avec `data:` > 64KB → `sink` reçoit le message entier sans truncation.
+**Régression guard** (`transport_sse_test.go`) :
+1. `TestSSEStreamAcceptsLargeEvent` — 500 KB event, sink doit recevoir le payload complet sans truncation.
+2. `TestSSEStreamReportsScannerErrorOnOversizedEvent` — 2 MB event (> 1 MB cap), `errors.Is(err, bufio.ErrTooLong)` doit être true.
+3. `TestSSEStreamPropagatesHTTPStatus` — non-200 surfaces proprement.
+4. `TestSSEStreamSinkErrorAborts` — sink error interrompt le stream et remonte.
+
+Caller side (`sse.go:StartDeploymentStream`) logue maintenant `"sse-stream: terminal error: <cause>"` avant backoff, plutôt que le générique `"connection lost"`. En production : les logs isolent immédiatement `ErrTooLong` d'une déconnexion réseau.
 
 ---
 

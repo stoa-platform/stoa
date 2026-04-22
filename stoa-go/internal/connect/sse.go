@@ -1,14 +1,11 @@
 package connect
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -44,7 +41,7 @@ func SSEConfigFromEnv() SSEConfig {
 
 // StartDeploymentStream starts an SSE listener for real-time deployment events (ADR-059).
 // On each event, it syncs the route to the local gateway and reports back via route-sync-ack.
-// On disconnect, it catches up via FetchRoutes() then resumes SSE.
+// On disconnect, it catches up via RunRouteSync() then resumes SSE with exponential backoff.
 func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg SSEConfig) {
 	if a.state.GatewayID() == "" {
 		log.Println("sse-stream skipped: not registered with CP")
@@ -80,7 +77,7 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 			if err != nil && ctx.Err() == nil {
 				attempt++
 				wait := policy.backoff(attempt)
-				log.Printf("sse-stream: connection lost: %v (reconnecting in %s, attempt %d)", err, wait, attempt)
+				log.Printf("sse-stream: terminal error: %v (reconnecting in %s, attempt %d)", err, wait, attempt)
 				select {
 				case <-ctx.Done():
 					return
@@ -94,74 +91,15 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 	}()
 }
 
-// streamEvents connects to the SSE endpoint and processes events until the stream drops.
+// streamEvents connects to the SSE endpoint via a.sse and dispatches each
+// parsed rawEvent through handleSSEEvent. Returns the terminal cause surfaced
+// by sseStream.Run — scanner error, HTTP status, or io.EOF on clean close.
 func (a *Agent) streamEvents(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) error {
 	gatewayID := a.state.GatewayID()
-	ctx, span := a.startSpan(ctx, "stoa-connect.sse.stream",
-		attribute.String("stoa.gateway_id", gatewayID),
-	)
-	defer span.End()
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/events", a.cfg.ControlPlaneURL, gatewayID)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		span.RecordError(err)
-		return fmt.Errorf("create SSE request: %w", err)
-	}
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
-
-	// Use a separate client without timeout for long-lived SSE connections
-	sseClient := &http.Client{Transport: a.transport}
-	resp, err := sseClient.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "SSE connect failed")
-		return fmt.Errorf("SSE connect: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		span.SetStatus(codes.Error, "SSE rejected")
-		return fmt.Errorf("SSE endpoint returned %d", resp.StatusCode)
-	}
-
-	log.Printf("sse-stream: connected to %s", url)
-	span.SetStatus(codes.Ok, "connected")
-
-	scanner := bufio.NewScanner(resp.Body)
-	var eventType string
-	var dataLines []string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if line == "" {
-			// Empty line = end of event
-			if eventType != "" && len(dataLines) > 0 {
-				data := strings.Join(dataLines, "\n")
-				a.handleSSEEvent(ctx, adapter, adminURL, eventType, []byte(data))
-			}
-			eventType = ""
-			dataLines = nil
-			continue
-		}
-
-		if strings.HasPrefix(line, "event:") {
-			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		} else if strings.HasPrefix(line, "data:") {
-			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-		}
-		// Ignore "id:", "retry:", comments (":")
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("SSE read: %w", err)
-	}
-
-	return fmt.Errorf("SSE stream ended")
+	return a.sse.Run(ctx, gatewayID, func(evCtx context.Context, ev rawEvent) error {
+		a.handleSSEEvent(evCtx, adapter, adminURL, ev.Type, ev.Data)
+		return nil
+	})
 }
 
 // handleSSEEvent processes a single SSE event.

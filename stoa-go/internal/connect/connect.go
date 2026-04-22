@@ -83,7 +83,8 @@ func ConfigFromEnv(version string) Config {
 type Agent struct {
 	cfg        Config
 	cp         *cpClient         // CP HTTP client; 7 endpoints delegated here
-	transport  http.RoundTripper // otelhttp-wrapped; shared with SSE stream
+	sse        *sseStream        // CP SSE transport; reconnect loop + dispatch live on Agent (for now)
+	transport  http.RoundTripper // otelhttp-wrapped; shared between cp and sse
 	tracer     trace.Tracer      // used for business spans that live on the Agent (RunSync etc.)
 	state      *agentState
 	healthPort string // set in the first Register; read from the heartbeat loop on re-register
@@ -92,12 +93,14 @@ type Agent struct {
 
 // New creates a new STOA Connect agent.
 // The HTTP transport is wrapped with otelhttp for automatic W3C traceparent
-// propagation and is shared between the CP client and the SSE stream.
+// propagation and is shared between the CP client (15s timeout) and the SSE
+// stream (no timeout).
 func New(cfg Config) *Agent {
 	transport := otelhttp.NewTransport(http.DefaultTransport)
 	return &Agent{
 		cfg:       cfg,
 		cp:        newCPClient(cfg.ControlPlaneURL, cfg.GatewayAPIKey, transport),
+		sse:       newSSEStream(cfg.ControlPlaneURL, cfg.GatewayAPIKey, transport),
 		transport: transport,
 		state:     newAgentState(),
 		startTime: time.Now(),
@@ -105,10 +108,12 @@ func New(cfg Config) *Agent {
 }
 
 // SetTracer sets the OpenTelemetry tracer for the agent. Propagates to the
-// CP client so every stoa-connect.<action> span uses the same tracer.
+// CP client and SSE stream so every stoa-connect.<action> span uses the
+// same tracer.
 func (a *Agent) SetTracer(t trace.Tracer) {
 	a.tracer = t
 	a.cp.SetTracer(t)
+	a.sse.SetTracer(t)
 }
 
 // startSpan creates a new span on the Agent's tracer if one is configured.

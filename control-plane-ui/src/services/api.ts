@@ -81,6 +81,81 @@ import { deploymentsClient } from './api/deployments';
 import { tracesClient } from './api/traces';
 import { gatewaysClient } from './api/gateways';
 import { gatewayDeploymentsClient } from './api/gatewayDeployments';
+import { platformClient } from './api/platform';
+import { chatClient } from './api/chat';
+import { llmClient } from './api/llm';
+import { monitoringClient } from './api/monitoring';
+
+// Imports internes des types co-localisés (nécessaires pour les signatures de
+// la classe ApiService ci-dessous). Ré-exports publics : voir en bas de fichier.
+import type {
+  OperationsMetrics,
+  BusinessMetrics,
+  TopAPI,
+  ComponentStatus,
+  PlatformEvent,
+  PlatformStatusResponse,
+  ApplicationDiffResponse,
+} from './api/platform';
+import type {
+  TenantChatSettings,
+  ChatUsageBySource,
+  TokenBudgetStatus,
+  TokenUsageStats,
+  ChatConversationMetrics,
+  ChatModelDistribution,
+} from './api/chat';
+import type {
+  LlmUsageResponse,
+  LlmTimeseriesResponse,
+  LlmProviderBreakdownResponse,
+  LlmBudgetResponse,
+} from './api/llm';
+import type {
+  MonitoringTransaction,
+  MonitoringTransactionDetail,
+  MonitoringStats,
+} from './api/monitoring';
+
+// ── Type re-exports (historiquement inline en bas de api.ts) ─────────────────
+// Ces types sont désormais co-localisés avec leur client de domaine.
+// On ré-exporte par sous-chemin explicite (pas de api/index.ts — collision
+// de résolution avec le fichier api.ts, cf. REWRITE-PLAN § C).
+export type {
+  OperationsMetrics,
+  BusinessMetrics,
+  TopAPI,
+  ComponentStatus,
+  GitOpsStatus,
+  PlatformEvent,
+  ExternalLinks,
+  PlatformStatusResponse,
+  ApplicationDiffResource,
+  ApplicationDiffResponse,
+} from './api/platform';
+export type {
+  TenantChatSettings,
+  ChatSourceEntry,
+  ChatUsageBySource,
+  TokenBudgetStatus,
+  TokenUsageStats,
+  ChatConversationMetrics,
+  ModelDistributionEntry,
+  ChatModelDistribution,
+} from './api/chat';
+export type {
+  LlmUsageResponse,
+  LlmTimeseriesPoint,
+  LlmTimeseriesResponse,
+  LlmProviderCostEntry,
+  LlmProviderBreakdownResponse,
+  LlmBudgetResponse,
+} from './api/llm';
+export type {
+  MonitoringTransaction,
+  MonitoringTransactionDetail,
+  MonitoringStats,
+} from './api/monitoring';
 
 // =============================================================================
 // Façade ApiService — agrège le core transport (services/http) et les méthodes
@@ -487,37 +562,27 @@ class ApiService {
 
   // Platform Status (CAB-654)
   async getPlatformStatus(): Promise<PlatformStatusResponse> {
-    const { data } = await httpClient.get('/v1/platform/status');
-    return data;
+    return platformClient.getStatus();
   }
 
   async getPlatformComponents(): Promise<ComponentStatus[]> {
-    const { data } = await httpClient.get('/v1/platform/components');
-    return data;
+    return platformClient.listComponents();
   }
 
   async getComponentStatus(name: string): Promise<ComponentStatus> {
-    const { data } = await httpClient.get(`/v1/platform/components/${name}`);
-    return data;
+    return platformClient.getComponent(name);
   }
 
   async syncPlatformComponent(name: string): Promise<{ message: string; operation: string }> {
-    const { data } = await httpClient.post(`/v1/platform/components/${name}/sync`);
-    return data;
+    return platformClient.syncComponent(name);
   }
 
   async getComponentDiff(name: string): Promise<ApplicationDiffResponse> {
-    const { data } = await httpClient.get(`/v1/platform/components/${name}/diff`);
-    return data;
+    return platformClient.getComponentDiff(name);
   }
 
   async getPlatformEvents(component?: string, limit?: number): Promise<PlatformEvent[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const params: Record<string, any> = {};
-    if (component) params.component = component;
-    if (limit) params.limit = limit;
-    const { data } = await httpClient.get('/v1/platform/events', { params });
-    return data;
+    return platformClient.listEvents(component, limit);
   }
 
   // Admin Prospects (CAB-911)
@@ -788,8 +853,7 @@ class ApiService {
   // =========================================================================
 
   async getOperationsMetrics(): Promise<OperationsMetrics> {
-    const { data } = await httpClient.get('/v1/operations/metrics');
-    return data;
+    return platformClient.getOperationsMetrics();
   }
 
   // =========================================================================
@@ -797,13 +861,11 @@ class ApiService {
   // =========================================================================
 
   async getBusinessMetrics(): Promise<BusinessMetrics> {
-    const { data } = await httpClient.get('/v1/business/metrics');
-    return data;
+    return platformClient.getBusinessMetrics();
   }
 
   async getTopAPIs(limit = 10): Promise<TopAPI[]> {
-    const { data } = await httpClient.get(`/v1/business/top-apis?limit=${limit}`);
-    return data;
+    return platformClient.getTopAPIs(limit);
   }
 
   // Workflow Engine methods (CAB-593)
@@ -885,29 +947,23 @@ class ApiService {
 
   // Chat Settings (CAB-1852)
   async getChatSettings(tenantId: string): Promise<TenantChatSettings> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/settings`);
-    return data;
+    return chatClient.getSettings(tenantId);
   }
 
   async updateChatSettings(
     tenantId: string,
     settings: Partial<TenantChatSettings>
   ): Promise<TenantChatSettings> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/chat/settings`, settings);
-    return data;
+    return chatClient.updateSettings(tenantId, settings);
   }
 
   // Chat Token Metering (CAB-288)
   async getChatBudgetStatus(tenantId: string): Promise<TokenBudgetStatus> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/budget`);
-    return data;
+    return chatClient.getBudgetStatus(tenantId);
   }
 
   async getChatUsageStats(tenantId: string, days = 30): Promise<TokenUsageStats> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/metering`, {
-      params: { days },
-    });
-    return data;
+    return chatClient.getUsageStats(tenantId, days);
   }
 
   // Chat Usage by source — per-app breakdown (CAB-1868)
@@ -915,32 +971,24 @@ class ApiService {
     tenantId: string,
     params: { group_by?: string; days?: number } = {}
   ): Promise<ChatUsageBySource> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/tenant`, {
-      params: { group_by: 'source', ...params },
-    });
-    return data;
+    return chatClient.getUsageBySource(tenantId, params);
   }
 
   // Chat conversation metrics — tenant-level aggregates (CAB-1868)
   async getChatConversationMetrics(tenantId: string): Promise<ChatConversationMetrics> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/tenant`);
-    return data;
+    return chatClient.getConversationMetrics(tenantId);
   }
 
   // Chat model distribution — conversations per model (CAB-1868)
   async getChatModelDistribution(tenantId: string): Promise<ChatModelDistribution> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/models`);
-    return data;
+    return chatClient.getModelDistribution(tenantId);
   }
 
   async createChatConversation(
     tenantId: string,
     title = 'New conversation'
   ): Promise<{ id: string }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/chat/conversations`, {
-      title,
-    });
-    return data;
+    return chatClient.createConversation(tenantId, title);
   }
 
   // =========================================================================
@@ -985,43 +1033,32 @@ class ApiService {
     tenantId: string,
     period: 'hour' | 'day' | 'week' | 'month' = 'month'
   ): Promise<LlmUsageResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage`, {
-      params: { period },
-    });
-    return data;
+    return llmClient.getUsage(tenantId, period);
   }
 
   async getLlmTimeseries(
     tenantId: string,
     period: 'hour' | 'day' | 'week' | 'month' = 'week'
   ): Promise<LlmTimeseriesResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage/timeseries`, {
-      params: { period },
-    });
-    return data;
+    return llmClient.getTimeseries(tenantId, period);
   }
 
   async getLlmProviderBreakdown(
     tenantId: string,
     period: 'hour' | 'day' | 'week' | 'month' = 'month'
   ): Promise<LlmProviderBreakdownResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage/providers`, {
-      params: { period },
-    });
-    return data;
+    return llmClient.getProviderBreakdown(tenantId, period);
   }
 
   async getLlmBudget(tenantId: string): Promise<LlmBudgetResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/budget`);
-    return data;
+    return llmClient.getBudget(tenantId);
   }
 
   async updateLlmBudget(
     tenantId: string,
     update: { monthly_limit_usd?: number; alert_threshold_pct?: number }
   ): Promise<LlmBudgetResponse> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/llm/budget`, update);
-    return data;
+    return llmClient.updateBudget(tenantId, update);
   }
 
   // ============== Subscription Management (CAB-1635) ==============
@@ -1189,272 +1226,23 @@ class ApiService {
     statusCode?: number,
     route?: string
   ): Promise<{ transactions: MonitoringTransaction[] }> {
-    const params: Record<string, string | number> = { limit };
-    if (status) params.status = status;
-    if (timeRange) params.time_range = timeRange;
-    if (serviceType) params.service_type = serviceType;
-    if (statusCode) params.status_code = statusCode;
-    if (route) params.route = route;
-    const { data } = await httpClient.get('/v1/monitoring/transactions', { params });
-    return data;
+    return monitoringClient.listTransactions(
+      limit,
+      status,
+      timeRange,
+      serviceType,
+      statusCode,
+      route
+    );
   }
 
   async getTransactionDetail(transactionId: string): Promise<MonitoringTransactionDetail> {
-    const { data } = await httpClient.get(`/v1/monitoring/transactions/${transactionId}`);
-    return data;
+    return monitoringClient.getTransactionDetail(transactionId);
   }
 
   async getTransactionStats(timeRange?: string): Promise<MonitoringStats> {
-    const params: Record<string, string> = {};
-    if (timeRange) params.time_range = timeRange;
-    const { data } = await httpClient.get('/v1/monitoring/transactions/stats', { params });
-    return data;
+    return monitoringClient.getTransactionStats(timeRange);
   }
-}
-
-// Operations metrics types (CAB-Observability)
-export interface OperationsMetrics {
-  error_rate: number;
-  p95_latency_ms: number;
-  requests_per_minute: number;
-  active_alerts: number;
-  uptime: number;
-}
-
-// Business metrics types (CAB-Observability)
-export interface BusinessMetrics {
-  active_tenants: number;
-  new_tenants_30d: number;
-  tenant_growth: number;
-  apdex_score: number;
-  total_tokens: number;
-  total_calls: number;
-}
-
-export interface TopAPI {
-  tool_name: string;
-  display_name: string;
-  calls: number;
-}
-
-// Chat Settings types (CAB-1852)
-export interface TenantChatSettings {
-  chat_console_enabled: boolean;
-  chat_portal_enabled: boolean;
-  chat_daily_budget: number;
-}
-
-// Chat Usage by source — per-app breakdown (CAB-1868)
-export interface ChatSourceEntry {
-  source: string;
-  tokens: number;
-  requests: number;
-}
-
-export interface ChatUsageBySource {
-  sources: ChatSourceEntry[];
-  total_tokens: number;
-  total_requests: number;
-  period_days: number;
-}
-
-// Chat Token Metering types (CAB-288)
-export interface TokenBudgetStatus {
-  user_tokens_today: number;
-  tenant_tokens_today: number;
-  daily_budget: number;
-  remaining: number;
-  budget_exceeded: boolean;
-  usage_percent: number;
-}
-
-export interface TokenUsageStats {
-  tenant_id: string;
-  period_days: number;
-  total_tokens: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_requests: number;
-  today_tokens: number;
-  top_users: { user_id: string; tokens: number }[];
-  daily_breakdown: { date: string; tokens: number }[];
-}
-
-// Chat conversation metrics (CAB-1868)
-export interface ChatConversationMetrics {
-  tenant_id: string;
-  total_conversations: number;
-  total_messages: number;
-  total_tokens: number;
-  unique_users: number;
-}
-
-export interface ModelDistributionEntry {
-  model: string;
-  conversations: number;
-}
-
-export interface ChatModelDistribution {
-  models: ModelDistributionEntry[];
-  total_conversations: number;
-}
-
-// Platform Status types (CAB-654)
-export interface ComponentStatus {
-  name: string;
-  display_name: string;
-  sync_status: string;
-  health_status: string;
-  revision: string;
-  last_sync: string | null;
-  message: string | null;
-}
-
-export interface GitOpsStatus {
-  status: string;
-  components: ComponentStatus[];
-  checked_at: string;
-}
-
-export interface PlatformEvent {
-  id: number | null;
-  component: string;
-  event_type: string;
-  status: string;
-  revision: string;
-  message: string | null;
-  timestamp: string;
-  actor: string | null;
-}
-
-export interface ExternalLinks {
-  argocd: string;
-  grafana: string;
-  prometheus: string;
-  logs: string;
-}
-
-export interface PlatformStatusResponse {
-  gitops: GitOpsStatus;
-  events: PlatformEvent[];
-  external_links: ExternalLinks;
-  timestamp: string;
-}
-
-export interface ApplicationDiffResource {
-  name: string;
-  namespace: string | null;
-  kind: string;
-  group: string | null;
-  status: string;
-  health: string | null;
-  diff: string | null;
-}
-
-export interface ApplicationDiffResponse {
-  application: string;
-  total_resources: number;
-  diff_count: number;
-  resources: ApplicationDiffResource[];
-}
-
-// LLM Usage & Cost types (CAB-1487)
-export interface LlmUsageResponse {
-  total_cost_usd: number;
-  input_tokens: number;
-  output_tokens: number;
-  avg_cost_per_request: number;
-  cache_read_cost_usd: number;
-  cache_write_cost_usd: number;
-  period: string;
-}
-
-export interface LlmTimeseriesPoint {
-  timestamp: string;
-  value: number;
-}
-
-export interface LlmTimeseriesResponse {
-  points: LlmTimeseriesPoint[];
-  period: string;
-  step: string;
-}
-
-export interface LlmProviderCostEntry {
-  provider: string;
-  model: string;
-  cost_usd: number;
-}
-
-export interface LlmProviderBreakdownResponse {
-  providers: LlmProviderCostEntry[];
-  period: string;
-}
-
-export interface LlmBudgetResponse {
-  id: string;
-  tenant_id: string;
-  monthly_limit_usd: number;
-  current_spend_usd: number;
-  remaining_usd: number;
-  usage_pct: number;
-  alert_threshold_pct: number;
-  is_over_budget: boolean;
-}
-
-// ─── Monitoring / Call Flow ───
-
-export interface MonitoringTransaction {
-  id: string;
-  trace_id: string;
-  api_name: string;
-  method: string;
-  path: string;
-  status_code: number;
-  status: string;
-  status_text: string;
-  error_source: string | null;
-  started_at: string;
-  total_duration_ms: number;
-  spans_count: number;
-  deployment_mode?: string;
-  spans?: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-  }>;
-}
-
-export interface MonitoringTransactionDetail extends MonitoringTransaction {
-  tenant_id: string | null;
-  client_ip: string | null;
-  user_id: string | null;
-  spans: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-    metadata: Record<string, unknown>;
-  }>;
-  request_headers: Record<string, string> | null;
-  response_headers: Record<string, string> | null;
-  error_message: string | null;
-  demo_mode: boolean;
-}
-
-export interface MonitoringStats {
-  total_requests: number;
-  success_count: number;
-  error_count: number;
-  timeout_count: number;
-  avg_latency_ms: number;
-  p95_latency_ms: number;
-  requests_per_minute: number;
-  by_api: Record<string, number>;
-  by_status_code: Record<string, number>;
 }
 
 export const apiService = new ApiService();

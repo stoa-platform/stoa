@@ -103,11 +103,12 @@ class GitLabService(GitProvider):
     async def connect(self) -> None:
         """Initialize GitLab connection"""
         try:
-            self._gl = gitlab.Gitlab(settings.GITLAB_URL, private_token=settings.GITLAB_TOKEN)
+            gl_cfg = settings.git.gitlab
+            self._gl = gitlab.Gitlab(gl_cfg.url, private_token=gl_cfg.token.get_secret_value())
             self._gl.auth()
 
             # Get the main APIM project
-            self._project = self._gl.projects.get(settings.GITLAB_PROJECT_ID)
+            self._project = self._gl.projects.get(gl_cfg.project_id)
 
             logger.info(f"Connected to GitLab project: {self._project.name}")
         except Exception as e:
@@ -145,7 +146,7 @@ class GitLabService(GitProvider):
     async def clone_repo(self, repo_url: str) -> Path:
         """Clone a GitLab repository to a temporary directory."""
         tmp_dir = Path(tempfile.mkdtemp(prefix="stoa-gl-"))
-        token = settings.GITLAB_TOKEN
+        token = settings.git.gitlab.token.get_secret_value()
         # Inject token into HTTPS URL for auth
         authed_url = repo_url.replace("https://", f"https://oauth2:{token}@")
         proc = await asyncio.create_subprocess_exec(

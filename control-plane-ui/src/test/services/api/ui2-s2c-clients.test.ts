@@ -86,13 +86,9 @@ describe('UI-2 S2c domain clients', () => {
       validity_days: 90,
     });
     expect(mockHttpClient.delete).toHaveBeenNthCalledWith(2, '/v1/tenants/tenant-1/ca');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      4,
-      '/v1/tenants/tenant-1/ca/certificates',
-      {
-        params: { status: 'active' },
-      }
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(4, '/v1/tenants/tenant-1/ca/certificates', {
+      params: { status: 'active' },
+    });
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(
       4,
       '/v1/tenants/tenant-1/ca/certificates/cert-1/revoke'
@@ -116,9 +112,7 @@ describe('UI-2 S2c domain clients', () => {
       .mockResolvedValueOnce({ data: adminList })
       .mockResolvedValueOnce({ data: api })
       .mockResolvedValueOnce({ data: versions });
-    mockHttpClient.post
-      .mockResolvedValueOnce({ data: api })
-      .mockResolvedValueOnce({});
+    mockHttpClient.post.mockResolvedValueOnce({ data: api }).mockResolvedValueOnce({});
     mockHttpClient.put.mockResolvedValueOnce({ data: api });
     mockHttpClient.patch.mockResolvedValueOnce({ data: audienceUpdate });
     mockHttpClient.delete.mockResolvedValueOnce({});
@@ -138,9 +132,9 @@ describe('UI-2 S2c domain clients', () => {
     ).resolves.toBe(api);
     await expect(apisClient.remove('tenant-1', 'api-1')).resolves.toBeUndefined();
     await expect(apisClient.listVersions('tenant-1', 'api-1', 50)).resolves.toBe(versions);
-    await expect(
-      apisClient.updateAudience('tenant-1', 'api-1', 'payments')
-    ).resolves.toBe(audienceUpdate);
+    await expect(apisClient.updateAudience('tenant-1', 'api-1', 'payments')).resolves.toBe(
+      audienceUpdate
+    );
     await expect(apisClient.triggerCatalogSync('tenant-1')).resolves.toBeUndefined();
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/apis', {
@@ -164,13 +158,13 @@ describe('UI-2 S2c domain clients', () => {
         params: { limit: 50 },
       }
     );
-    expect(mockHttpClient.patch).toHaveBeenCalledWith(
-      '/v1/admin/catalog/tenant-1/api-1/audience',
-      {
-        audience: 'payments',
-      }
+    expect(mockHttpClient.patch).toHaveBeenCalledWith('/v1/admin/catalog/tenant-1/api-1/audience', {
+      audience: 'payments',
+    });
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(
+      2,
+      '/v1/admin/catalog/sync/tenant/tenant-1'
     );
-    expect(mockHttpClient.post).toHaveBeenNthCalledWith(2, '/v1/admin/catalog/sync/tenant/tenant-1');
   });
 
   it('covers applicationsClient request delegation', async () => {
@@ -206,15 +200,10 @@ describe('UI-2 S2c domain clients', () => {
     expect(mockHttpClient.post).toHaveBeenCalledWith('/v1/tenants/tenant-1/applications', {
       name: 'Console',
     });
-    expect(mockHttpClient.put).toHaveBeenCalledWith(
-      '/v1/tenants/tenant-1/applications/app-1',
-      {
-        description: 'Updated',
-      }
-    );
-    expect(mockHttpClient.delete).toHaveBeenCalledWith(
-      '/v1/tenants/tenant-1/applications/app-1'
-    );
+    expect(mockHttpClient.put).toHaveBeenCalledWith('/v1/tenants/tenant-1/applications/app-1', {
+      description: 'Updated',
+    });
+    expect(mockHttpClient.delete).toHaveBeenCalledWith('/v1/tenants/tenant-1/applications/app-1');
   });
 
   it('covers consumersClient request delegation', async () => {
@@ -245,17 +234,17 @@ describe('UI-2 S2c domain clients', () => {
     await expect(
       consumersClient.rotateCertificate('tenant-1', 'consumer-1', 'cert-pem', 12)
     ).resolves.toBe(consumer);
-    await expect(
-      consumersClient.revokeCertificate('tenant-1', 'consumer-1')
-    ).resolves.toBe(consumer);
+    await expect(consumersClient.revokeCertificate('tenant-1', 'consumer-1')).resolves.toBe(
+      consumer
+    );
     await expect(consumersClient.block('tenant-1', 'consumer-1')).resolves.toBe(consumer);
     await expect(
       consumersClient.bindCertificate('tenant-1', 'consumer-1', 'cert-pem')
     ).resolves.toBe(consumer);
     await expect(consumersClient.getExpiringCertificates('tenant-1', 14)).resolves.toBe(expiring);
-    await expect(
-      consumersClient.bulkRevokeCertificates('tenant-1', ['consumer-1'])
-    ).resolves.toBe(bulkRevoke);
+    await expect(consumersClient.bulkRevokeCertificates('tenant-1', ['consumer-1'])).resolves.toBe(
+      bulkRevoke
+    );
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/consumers/tenant-1', {
       params: { page: 1, page_size: 100, environment: 'prod' },

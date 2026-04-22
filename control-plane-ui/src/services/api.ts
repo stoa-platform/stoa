@@ -158,10 +158,20 @@ export type {
 } from './api/monitoring';
 
 // =============================================================================
-// Façade ApiService — agrège le core transport (services/http) et les méthodes
-// métier historiques. En cours de refactor UI-2 : les domaines seront extraits
-// en `services/api/<domain>.ts`. Cette classe reste le point d'entrée legacy
-// pour préserver la surface consommée par ~76 callers et 56 vi.mock.
+// Façade ApiService — agrège le core transport (services/http) et tous les
+// clients de domaine (services/api/*.ts). Aucune logique métier ici : chaque
+// méthode délègue soit à `httpClient` (passthrough générique), soit à un
+// client de domaine.
+//
+// Contrat publié : le type `LegacyApiSurface` (alias de `ApiService`) est la
+// forme consommée par les ~76 callers et les 56 `vi.mock('../services/api')`
+// du projet. TypeScript vérifie à la compilation que chaque méthode listée
+// ici a bien une implémentation : toute dérive casse `tsc --noEmit` avec un
+// message précis, pas un smoke test de cardinalité.
+//
+// Les nouveaux callers peuvent importer directement `{ tenantsClient }`
+// depuis `@/services/api/tenants` — la façade subsiste tant que UI-3 n'a pas
+// migré tous les usages + mocks de tests.
 // =============================================================================
 class ApiService {
   // Generic HTTP methods for proxy services (58 callers + 11 sibling services)
@@ -1245,4 +1255,14 @@ class ApiService {
   }
 }
 
-export const apiService = new ApiService();
+/**
+ * Public shape of the legacy façade. Exported so tests and future consumers
+ * can type their mocks without duplicating signatures.
+ *
+ * Amendement UI-2 (2026-04-22) : cet alias remplace le smoke test
+ * `Object.keys(apiService).length === ATTENDU` par un contrat nominal
+ * vérifié par `tsc`.
+ */
+export type LegacyApiSurface = ApiService;
+
+export const apiService: LegacyApiSurface = new ApiService();

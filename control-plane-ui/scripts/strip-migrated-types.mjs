@@ -9,7 +9,7 @@
 //
 // DELETION CRITERIA: same as migrate-types.mjs. Sunset both scripts together
 // when CAB-2158 (UI-1-Wave2) merged AND CAB-2159 (backend BUG-1/2/4) resolved.
-// Owner of deletion: whoever closes CAB-2158.
+// Owner of deletion: whoever closes CAB-2158 — deletion is part of that PR's DoD.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import ts from 'typescript';

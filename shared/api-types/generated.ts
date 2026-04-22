@@ -8,7 +8,7 @@
  * entries (e.g. list_applications, create_budget, list_deployments) that
  * cause TS2300/TS2717 errors in `interface operations`.
  *
- * This is a backend contract bug (BUG-3 in control-plane-ui/REWRITE-BUGS.md).
+ * This is a backend contract bug (BUG-3 in control-plane-ui/rewrite-bugs.md).
  * Type IMPORTS still resolve correctly because TypeScript continues to parse
  * declarations — only error-reporting on this file is suppressed.
  *

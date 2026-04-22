@@ -5,7 +5,7 @@ Feature: Console - Admin and Observability
   I want to access admin pages and observability dashboards
   So that I can manage the platform and monitor its health.
 
-  @critical @smoke
+  @critical @smoke @regression
   Scenario: Admin accesses tenants page
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible

@@ -55,8 +55,8 @@ Given(
     if (!persona) {
       throw new Error(`Unknown persona: ${personaName}`);
     }
+    // switchPersona pre-navigates + verifies OIDC loaded when navigateUrl is passed.
     await authSession.switchPersona(personaName as PersonaKey, URLS.console);
-    await authSession.page.goto(URLS.console);
   },
 );
 
@@ -64,7 +64,6 @@ Given(
   'I am logged in to Console as {string} platform admin',
   async ({ authSession }, personaName: string) => {
     await authSession.switchPersona(personaName as PersonaKey, URLS.console);
-    await authSession.page.goto(URLS.console);
   },
 );
 

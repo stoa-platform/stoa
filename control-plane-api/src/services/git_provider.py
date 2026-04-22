@@ -229,14 +229,10 @@ class GitProvider(ABC):
         """
         import yaml
 
-        provider = getattr(settings, "GIT_PROVIDER", "gitlab").lower()
-        if provider == "github":
-            project_id = f"{getattr(settings, 'GITHUB_ORG', '')}/{getattr(settings, 'GITHUB_CATALOG_REPO', '')}"
-        else:
-            project_id = getattr(settings, "GITLAB_PROJECT_ID", None)
+        project_id = settings.git.active_catalog_project_id
         file_path = f"tenants/{tenant_id}/apis/{api_id}/overrides/{environment}.yaml"
         try:
-            content = await self.get_file_content(str(project_id), file_path)
+            content = await self.get_file_content(project_id, file_path)
             return yaml.safe_load(content)
         except FileNotFoundError:
             return None
@@ -378,15 +374,19 @@ class GitProvider(ABC):
 
 
 def git_provider_factory() -> GitProvider:
-    """Create a GitProvider instance based on GIT_PROVIDER setting.
+    """Create a GitProvider instance based on ``settings.git.provider``.
 
     Returns:
         Configured GitProvider implementation.
 
     Raises:
-        ValueError: If GIT_PROVIDER is not a supported provider.
+        ValueError: If the configured provider is not supported. Under
+            normal use the ``Literal`` type on ``GitProviderConfig.provider``
+            already rejects unsupported values at config-load time; this
+            raise is a defensive fallback for test doubles that bypass the
+            schema.
     """
-    provider = settings.GIT_PROVIDER.lower()
+    provider = settings.git.provider
 
     if provider == "gitlab":
         # Lazy import to avoid circular dependencies and
@@ -400,7 +400,7 @@ def git_provider_factory() -> GitProvider:
 
         return GitHubService()
 
-    raise ValueError(f"Unsupported GIT_PROVIDER: '{settings.GIT_PROVIDER}'. " f"Supported values: 'gitlab', 'github'.")
+    raise ValueError(f"Unsupported GIT_PROVIDER: '{provider}'. Supported values: 'gitlab', 'github'.")
 
 
 @lru_cache(maxsize=1)

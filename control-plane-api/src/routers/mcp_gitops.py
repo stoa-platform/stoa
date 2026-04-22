@@ -296,12 +296,8 @@ async def get_git_health(
         if not git.is_connected():
             await git.connect()
 
-        project_id: str | int
-        if settings.GIT_PROVIDER.lower() == "github":
-            project_id = f"{settings.GITHUB_ORG}/{settings.GITHUB_CATALOG_REPO}"
-        else:
-            project_id = settings.GITLAB_PROJECT_ID
-        repo = await git.get_repo_info(str(project_id))
+        project_id = settings.git.active_catalog_project_id
+        repo = await git.get_repo_info(project_id)
 
         return {
             "status": "healthy",

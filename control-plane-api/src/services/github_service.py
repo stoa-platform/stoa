@@ -110,9 +110,9 @@ class GitHubService(GitProvider):
         self._gh: Github | None = None
 
     async def connect(self) -> None:
-        """Initialize GitHub connection using GITHUB_TOKEN."""
+        """Initialize GitHub connection using settings.git.github.token."""
         try:
-            auth = Auth.Token(settings.GITHUB_TOKEN)
+            auth = Auth.Token(settings.git.github.token.get_secret_value())
             self._gh = Github(auth=auth)
             # Validate credentials by fetching authenticated user
             user = self._gh.get_user().login
@@ -134,7 +134,7 @@ class GitHubService(GitProvider):
     async def clone_repo(self, repo_url: str) -> Path:
         """Clone a GitHub repository to a temporary directory."""
         tmp_dir = Path(tempfile.mkdtemp(prefix="stoa-gh-"))
-        token = settings.GITHUB_TOKEN
+        token = settings.git.github.token.get_secret_value()
         # Inject token into HTTPS URL for auth
         authed_url = repo_url.replace("https://", f"https://x-access-token:{token}@")
         proc = await asyncio.create_subprocess_exec(
@@ -573,7 +573,7 @@ class GitHubService(GitProvider):
 
     def _catalog_project_id(self) -> str:
         """Return the catalog repo in org/repo format."""
-        return f"{settings.GITHUB_ORG}/{settings.GITHUB_CATALOG_REPO}"
+        return settings.git.github.catalog_project_id
 
     @staticmethod
     def _get_tenant_path(tenant_id: str) -> str:

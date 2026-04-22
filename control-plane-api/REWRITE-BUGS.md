@@ -36,11 +36,11 @@ tree = git_service._project.repository_tree(path="tenants", ref="main")
 
 ---
 
-## BUG-04 — Provider-aware logic in base ABC
+## BUG-04 — Provider-aware logic in base ABC  **[CLOSED — CAB-1889 CP-2 C.2#3]**
 
 **File** : `src/services/git_provider.py:175-194` (`get_api_override` default impl).
-**Nature** : the base class inspects `settings.GIT_PROVIDER` to pick a `project_id` format. That's leaky — the base class shouldn't know about concrete providers.
-**Fix** : push the `project_id` resolution to the subclass (each provider already has `_catalog_project_id` / `settings.GITLAB_PROJECT_ID`).
+**Nature** : the base class inspected `settings.GIT_PROVIDER` to pick a `project_id` format. That was leaky — the base class shouldn't know about concrete providers.
+**Fix (shipped)** : the ABC now reads `settings.git.active_catalog_project_id` (provider-agnostic accessor introduced by CAB-1889 CP-2 C.1). Each concrete service (`GitHubService`, `GitLabService`) continues to own its internal `_catalog_project_id` helper; the ABC no longer branches on provider identity.
 
 ---
 

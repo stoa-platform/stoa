@@ -35,9 +35,16 @@ os.environ["ENABLE_SNAPSHOT_CONSUMER"] = "false"
 # Keeps the FastAPI lifespan from spawning threads that try to reach the broker.
 os.environ["STOA_ENABLE_KAFKA_CONSUMERS"] = "false"
 
-# Explicit GIT_PROVIDER for test determinism (CAB-1890 dual-provider).
+# Explicit Git provider config for test determinism (CAB-1890 dual-provider).
 # Tests that need GIT_PROVIDER=github override this via monkeypatch.setenv().
+#
+# CAB-1889 CP-2: since _VALIDATE_GIT_CONFIG is now active, the Settings
+# instantiation crashes in ENVIRONMENT=production if the selected provider
+# lacks creds. Tests do not run under ENVIRONMENT=production, so this only
+# avoids the dev-mode warning spam during the suite.
 os.environ.setdefault("GIT_PROVIDER", "gitlab")
+os.environ.setdefault("GITLAB_TOKEN", "test-token")
+os.environ.setdefault("GITLAB_PROJECT_ID", "1")
 
 # Create mock services that will be patched into src.main
 _mock_kafka_service = MagicMock()

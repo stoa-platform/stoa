@@ -8,7 +8,7 @@ Tests: 12 test cases covering push/MR/tag events, token verification, and health
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
-
+from pydantic import SecretStr
 
 _TEST_SECRET = "test-webhook-secret"
 
@@ -105,7 +105,7 @@ class TestGitLabWebhookPush:
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings, \
              patch("src.routers.webhooks.kafka_service") as mock_kafka:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
             mock_kafka.publish = AsyncMock(return_value="evt-1")
 
             with TestClient(app_with_cpi_admin) as client:
@@ -129,7 +129,7 @@ class TestGitLabWebhookPush:
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings, \
              patch("src.routers.webhooks.kafka_service") as mock_kafka:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
             mock_kafka.publish = AsyncMock(return_value="evt-1")
 
             with TestClient(app_with_cpi_admin) as client:
@@ -149,7 +149,7 @@ class TestGitLabWebhookPush:
 
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(
@@ -166,7 +166,7 @@ class TestGitLabWebhookPush:
 
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(
@@ -187,7 +187,7 @@ class TestGitLabWebhookTokenVerification:
 
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings:
-            mock_settings.GITLAB_WEBHOOK_SECRET = "correct-secret"
+            mock_settings.git.gitlab.webhook_secret = SecretStr("correct-secret")
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(
@@ -208,7 +208,7 @@ class TestGitLabWebhookTokenVerification:
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings, \
              patch("src.routers.webhooks.kafka_service") as mock_kafka:
-            mock_settings.GITLAB_WEBHOOK_SECRET = "correct-secret"
+            mock_settings.git.gitlab.webhook_secret = SecretStr("correct-secret")
             mock_kafka.publish = AsyncMock(return_value="evt-1")
 
             with TestClient(app_with_cpi_admin) as client:
@@ -236,7 +236,7 @@ class TestGitLabWebhookMergeRequest:
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings, \
              patch("src.routers.webhooks.kafka_service") as mock_kafka:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
             mock_kafka.publish = AsyncMock(return_value="evt-1")
 
             with TestClient(app_with_cpi_admin) as client:
@@ -254,7 +254,7 @@ class TestGitLabWebhookMergeRequest:
 
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(
@@ -275,7 +275,7 @@ class TestGitLabWebhookTag:
 
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(
@@ -296,7 +296,7 @@ class TestGitLabWebhookUnsupported:
 
         with patch("src.routers.webhooks.TraceService", return_value=mock_svc), \
              patch("src.routers.webhooks.settings") as mock_settings:
-            mock_settings.GITLAB_WEBHOOK_SECRET = _TEST_SECRET
+            mock_settings.git.gitlab.webhook_secret = SecretStr(_TEST_SECRET)
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.post(

@@ -106,33 +106,17 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 	span.SetStatus(codes.Ok, "sync cycle complete")
 }
 
-// StartSync starts a background goroutine that syncs policies at the configured interval.
+// StartSync starts a background goroutine that syncs policies at the
+// configured interval. See runPolicySync in loop_sync.go for the loop body.
 func (a *Agent) StartSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg SyncConfig) {
 	if adminURL == "" {
 		log.Println("sync skipped: no gateway admin URL configured")
 		return
 	}
-
 	interval := cfg.Interval
 	if interval == 0 {
 		interval = 60 * time.Second
 	}
-
 	log.Printf("starting policy sync loop (interval=%s)", interval)
-
-	ticker := time.NewTicker(interval)
-	go func() {
-		defer ticker.Stop()
-		// Run immediately on start
-		a.RunSync(ctx, adapter, adminURL)
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("sync stopped")
-				return
-			case <-ticker.C:
-				a.RunSync(ctx, adapter, adminURL)
-			}
-		}
-	}()
+	go runPolicySync(ctx, a, adapter, adminURL, interval)
 }

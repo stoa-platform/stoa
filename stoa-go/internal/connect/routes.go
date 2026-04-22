@@ -86,34 +86,18 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 	log.Printf("route-sync: pushed %d routes to gateway", len(routes))
 }
 
-// StartRouteSync starts a background goroutine that syncs CP routes
-// to the local gateway at the configured interval.
+// StartRouteSync starts a background goroutine that polls CP routes and
+// pushes them to the local gateway at the configured interval. Used as the
+// fallback when SSE is disabled — see runRouteSyncPolling in loop_sync.go.
 func (a *Agent) StartRouteSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg RouteSyncConfig) {
 	if adminURL == "" {
 		log.Println("route-sync skipped: no gateway admin URL configured")
 		return
 	}
-
 	interval := cfg.Interval
 	if interval == 0 {
 		interval = 30 * time.Second
 	}
-
 	log.Printf("starting route sync loop (interval=%s)", interval)
-
-	ticker := time.NewTicker(interval)
-	go func() {
-		defer ticker.Stop()
-		// Run immediately on start
-		a.RunRouteSync(ctx, adapter, adminURL)
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("route-sync stopped")
-				return
-			case <-ticker.C:
-				a.RunRouteSync(ctx, adapter, adminURL)
-			}
-		}
-	}()
+	go runRouteSyncPolling(ctx, a, adapter, adminURL, interval)
 }

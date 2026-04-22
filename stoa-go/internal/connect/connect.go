@@ -8,7 +8,6 @@ package connect
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -194,40 +193,7 @@ const reRegisterThreshold = 3
 // it re-registers automatically after reRegisterThreshold consecutive 404s.
 // Stops when ctx is cancelled.
 func (a *Agent) StartHeartbeat(ctx context.Context) {
-	ticker := time.NewTicker(a.cfg.HeartbeatInterval)
-	go func() {
-		defer ticker.Stop()
-		consecutiveNotFound := 0
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("heartbeat stopped")
-				return
-			case <-ticker.C:
-				if err := a.Heartbeat(ctx); err != nil {
-					if errors.Is(err, ErrGatewayNotFound) {
-						consecutiveNotFound++
-						log.Printf("heartbeat 404 (%d/%d) — gateway not found on CP",
-							consecutiveNotFound, reRegisterThreshold)
-						if consecutiveNotFound >= reRegisterThreshold {
-							log.Println("gateway purged from CP, re-registering...")
-							a.state.ClearGatewayID()
-							if regErr := a.Register(ctx, a.healthPort); regErr != nil {
-								log.Printf("re-registration failed: %v", regErr)
-							} else {
-								log.Printf("re-registered with CP: id=%s", a.state.GatewayID())
-								consecutiveNotFound = 0
-							}
-						}
-					} else {
-						log.Printf("heartbeat error: %v", err)
-					}
-				} else {
-					consecutiveNotFound = 0
-				}
-			}
-		}
-	}()
+	go runHeartbeat(ctx, a)
 }
 
 // IsConfigured returns true if the agent has enough config to register.

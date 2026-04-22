@@ -39,9 +39,11 @@ func SSEConfigFromEnv() SSEConfig {
 	return cfg
 }
 
-// StartDeploymentStream starts an SSE listener for real-time deployment events (ADR-059).
-// On each event, it syncs the route to the local gateway and reports back via route-sync-ack.
-// On disconnect, it catches up via RunRouteSync() then resumes SSE with exponential backoff.
+// StartDeploymentStream starts an SSE listener for real-time deployment
+// events (ADR-059). On each event, it syncs the route to the local gateway
+// and reports back via route-sync-ack. On disconnect, it catches up via
+// RunRouteSync() then resumes SSE with exponential backoff. See
+// runSSEStream in loop_sse.go for the loop body.
 func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg SSEConfig) {
 	if a.state.GatewayID() == "" {
 		log.Println("sse-stream skipped: not registered with CP")
@@ -51,44 +53,13 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 		log.Println("sse-stream skipped: no gateway admin URL configured")
 		return
 	}
-
 	policy := backoffPolicy{
 		Initial:    cfg.ReconnectInterval,
 		Max:        cfg.MaxReconnectInterval,
 		Multiplier: 2.0,
 	}
 	log.Printf("starting SSE deployment stream (initial=%s max=%s)", policy.Initial, policy.Max)
-
-	go func() {
-		attempt := 0
-
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("sse-stream stopped")
-				return
-			default:
-			}
-
-			// Catch up on any missed deployments before streaming
-			a.RunRouteSync(ctx, adapter, adminURL)
-
-			err := a.streamEvents(ctx, adapter, adminURL)
-			if err != nil && ctx.Err() == nil {
-				attempt++
-				wait := policy.backoff(attempt)
-				log.Printf("sse-stream: terminal error: %v (reconnecting in %s, attempt %d)", err, wait, attempt)
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(wait):
-				}
-			} else {
-				// Reset attempt counter on clean disconnect
-				attempt = 0
-			}
-		}
-	}()
+	go runSSEStream(ctx, a, adapter, adminURL, policy)
 }
 
 // streamEvents connects to the SSE endpoint via a.sse and dispatches each

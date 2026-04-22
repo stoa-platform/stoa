@@ -35,10 +35,15 @@ jobs:
     name: Visual Regression
     runs-on: ubuntu-latest
     container:
-      # Keep this tag in sync with `e2e/package.json` `@playwright/test` version.
-      # When you bump the npm dep, bump this image — Playwright fails the run
-      # with "docker image required: vX.Y.Z-jammy" otherwise.
-      image: mcr.microsoft.com/playwright:v1.59.1-jammy
+      # IMPORTANT: tag must match the chromium bundled with `e2e/package.json`
+      # `@playwright/test`. Goldens in `e2e/golden/` were captured under
+      # chromium-1217 (Playwright 1.58.x). Bumping the npm dep without
+      # regenerating goldens triggers ~83% pixel diff. Process:
+      #   1. Bump @playwright/test in e2e/package.json
+      #   2. Bump this image to the matching v<major>.<minor>.<patch>-jammy
+      #   3. Regenerate goldens via docker (see e2e CLAUDE.md)
+      #   4. Commit goldens + lockfile + workflow in the same PR
+      image: mcr.microsoft.com/playwright:v1.58.2-jammy
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

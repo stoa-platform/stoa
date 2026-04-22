@@ -6,11 +6,59 @@ Implementations: GitLabService (existing), GitHubService (Wave 2).
 
 import asyncio
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ..config import settings
+
+
+@dataclass(frozen=True)
+class TreeEntry:
+    """A single entry in a repository tree listing."""
+
+    name: str
+    type: Literal["tree", "blob"]
+    path: str
+
+
+@dataclass(frozen=True)
+class CommitRef:
+    """Provider-agnostic commit reference."""
+
+    sha: str
+    message: str
+    author: str
+    date: str
+
+
+@dataclass(frozen=True)
+class BranchRef:
+    """Provider-agnostic branch reference."""
+
+    name: str
+    commit_sha: str
+    protected: bool
+
+
+@dataclass(frozen=True)
+class MergeRequestRef:
+    """Provider-agnostic merge request / pull request reference.
+
+    On GitHub, ``iid`` is the PR number. On GitLab, ``iid`` is the project-scoped iid.
+    """
+
+    id: int
+    iid: int
+    title: str
+    description: str
+    state: str
+    source_branch: str
+    target_branch: str
+    web_url: str
+    created_at: str
+    author: str
 
 
 class GitProvider(ABC):
@@ -264,6 +312,69 @@ class GitProvider(ABC):
         Returns:
             Commit metadata (sha, url).
         """
+
+    # ============================================================
+    # CAB-1889 CP-1: provider-agnostic surface used by routers.
+    # Operates on the provider's default catalog repository — the
+    # router never needs to know about project_id / org-repo.
+    # ============================================================
+
+    async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
+        """List immediate children of ``path`` in the catalog repo.
+
+        Returns an empty list when the path is absent. Never raises on 404.
+        """
+        raise NotImplementedError("list_tree() must be implemented by the provider")
+
+    async def read_file(self, path: str, ref: str = "main") -> str | None:
+        """Return file content from the catalog repo, or ``None`` if missing.
+
+        Unlike :meth:`get_file_content`, this method never raises FileNotFoundError.
+        """
+        raise NotImplementedError("read_file() must be implemented by the provider")
+
+    async def list_path_commits(self, path: str | None, limit: int = 20) -> list[CommitRef]:
+        """List recent commits touching ``path`` (or the whole catalog if None)."""
+        raise NotImplementedError("list_path_commits() must be implemented by the provider")
+
+    async def write_file(
+        self, path: str, content: str, commit_message: str, branch: str = "main"
+    ) -> Literal["created", "updated"]:
+        """Create-or-update a file on the catalog repo.
+
+        Returns ``"created"`` if the file did not exist before, ``"updated"`` otherwise.
+        """
+        raise NotImplementedError("write_file() must be implemented by the provider")
+
+    async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
+        """Delete a file from the catalog repo. Raises FileNotFoundError if missing."""
+        raise NotImplementedError("remove_file() must be implemented by the provider")
+
+    async def list_branches(self) -> list[BranchRef]:
+        """List branches on the catalog repo."""
+        raise NotImplementedError("list_branches() must be implemented by the provider")
+
+    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
+        """Create a branch named ``name`` pointing at ``ref`` on the catalog repo."""
+        raise NotImplementedError("create_branch() must be implemented by the provider")
+
+    async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]:
+        """List merge requests / pull requests on the catalog repo."""
+        raise NotImplementedError("list_merge_requests() must be implemented by the provider")
+
+    async def create_merge_request(
+        self,
+        title: str,
+        description: str,
+        source_branch: str,
+        target_branch: str = "main",
+    ) -> MergeRequestRef:
+        """Open a merge request / pull request on the catalog repo."""
+        raise NotImplementedError("create_merge_request() must be implemented by the provider")
+
+    async def merge_merge_request(self, iid: int) -> MergeRequestRef:
+        """Merge a merge request / pull request by its ``iid`` (GitHub: PR number)."""
+        raise NotImplementedError("merge_merge_request() must be implemented by the provider")
 
 
 def git_provider_factory() -> GitProvider:

@@ -202,15 +202,16 @@ class IAMSyncService:
 
         try:
             # List all tenants from GitOps
-            if not git_service._project:
-                result["errors"] = ["GitLab not connected"]
+            # regression for CAB-1889: use provider-agnostic list_tree, not _project
+            if not git_service.is_connected():
+                result["errors"] = ["Git provider not connected"]
                 return result
 
-            tree = git_service._project.repository_tree(path="tenants", ref="main")
+            tree = await git_service.list_tree("tenants", ref="main")
 
             for item in tree:
-                if item["type"] == "tree":
-                    tenant_id = item["name"]
+                if item.type == "tree":
+                    tenant_id = item.name
                     tenant_result = await self.sync_tenant(tenant_id)
                     result["tenants"].append(tenant_result)
                     result["total_actions"] += len(tenant_result.get("actions", []))

@@ -2,11 +2,7 @@ package connect
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -35,54 +31,10 @@ func RouteSyncConfigFromEnv() RouteSyncConfig {
 	return cfg
 }
 
-// FetchRoutes pulls the route table from the CP via GET /v1/internal/gateways/routes.
+// FetchRoutes pulls the route table from the CP, filtered by InstanceName
+// (empty = all). Thin delegator — HTTP logic lives in cpClient.FetchRoutes.
 func (a *Agent) FetchRoutes(ctx context.Context) ([]adapters.Route, error) {
-	ctx, span := a.startSpan(ctx, "stoa-connect.routes.fetch",
-		attribute.String("stoa.gateway_id", a.state.GatewayID()),
-	)
-	defer span.End()
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/routes", a.cfg.ControlPlaneURL)
-	if a.cfg.InstanceName != "" {
-		url += "?gateway_name=" + a.cfg.InstanceName
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return nil, fmt.Errorf("create routes request: %w", err)
-	}
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return nil, fmt.Errorf("routes request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("routes request failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "fetch routes rejected")
-		return nil, err
-	}
-
-	var routes []adapters.Route
-	if err := json.Unmarshal(body, &routes); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "decode failed")
-		return nil, fmt.Errorf("decode routes response: %w", err)
-	}
-
-	span.SetAttributes(attribute.Int("stoa.routes_count", len(routes)))
-	span.SetStatus(codes.Ok, "routes fetched")
-	return routes, nil
+	return a.cp.FetchRoutes(ctx, a.cfg.InstanceName)
 }
 
 // RunRouteSync performs a single route sync cycle: fetch CP routes → push to local gateway.

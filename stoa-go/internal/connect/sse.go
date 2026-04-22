@@ -114,7 +114,7 @@ func (a *Agent) streamEvents(ctx context.Context, adapter adapters.GatewayAdapte
 	req.Header.Set("Cache-Control", "no-cache")
 
 	// Use a separate client without timeout for long-lived SSE connections
-	sseClient := &http.Client{Transport: a.client.Transport}
+	sseClient := &http.Client{Transport: a.transport}
 	resp, err := sseClient.Do(req)
 	if err != nil {
 		span.RecordError(err)

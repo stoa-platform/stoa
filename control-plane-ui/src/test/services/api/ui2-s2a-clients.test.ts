@@ -101,11 +101,9 @@ describe('UI-2 S2a domain clients', () => {
     await expect(gitClient.listCommits('tenant-1', 'catalog/uac.yaml')).resolves.toBe(commits);
     await expect(gitClient.listMergeRequests('tenant-1')).resolves.toBe(mergeRequests);
 
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      1,
-      '/v1/tenants/tenant-1/git/commits',
-      { params: { path: 'catalog/uac.yaml' } }
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/git/commits', {
+      params: { path: 'catalog/uac.yaml' },
+    });
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(
       2,
       '/v1/tenants/tenant-1/git/merge-requests'
@@ -203,12 +201,12 @@ describe('UI-2 S2a domain clients', () => {
         subject_email: 'user@example.com',
       })
     ).resolves.toBe(workflowInstance);
-    await expect(
-      workflowsClient.approveStep('tenant-1', 'wf-1', { comment: 'ok' })
-    ).resolves.toBe(workflowInstance);
-    await expect(
-      workflowsClient.rejectStep('tenant-1', 'wf-1', { comment: 'nope' })
-    ).resolves.toBe(workflowInstance);
+    await expect(workflowsClient.approveStep('tenant-1', 'wf-1', { comment: 'ok' })).resolves.toBe(
+      workflowInstance
+    );
+    await expect(workflowsClient.rejectStep('tenant-1', 'wf-1', { comment: 'nope' })).resolves.toBe(
+      workflowInstance
+    );
     await expect(workflowsClient.seedTemplates('tenant-1')).resolves.toBe(seeded);
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(

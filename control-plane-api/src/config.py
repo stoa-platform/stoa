@@ -365,10 +365,23 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        """Return CORS origins as a list"""
-        if isinstance(self.CORS_ORIGINS, list):
-            return self.CORS_ORIGINS
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        """Return CORS origins as a list.
+
+        CAB-2142: strip `localhost` and `*.stoa.local` origins when
+        `ENVIRONMENT=production`. These are dev-only entries that historically
+        leaked into the prod default via the monolithic CORS_ORIGINS string,
+        widening the cross-origin attack surface on `api.gostoa.dev`.
+        Dev and staging keep the localhost entries so local clusters keep
+        working without an explicit override.
+        """
+        raw = (
+            self.CORS_ORIGINS
+            if isinstance(self.CORS_ORIGINS, list)
+            else [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        )
+        if self.ENVIRONMENT == "production":
+            return [origin for origin in raw if "localhost" not in origin and ".stoa.local" not in origin]
+        return raw
 
     @property
     def log_components_dict(self) -> dict:

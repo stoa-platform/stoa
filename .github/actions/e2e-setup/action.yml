@@ -29,17 +29,38 @@ runs:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
 
+    # `--with-deps` runs apt-get under the hood and occasionally collides with
+    # unattended-upgrades on GitHub-hosted runners (lock /var/lib/apt/lists/lock
+    # held by another process → exit 100). Retry up to 3× with backoff.
     - name: Install Playwright browsers
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: e2e
-      run: npx playwright install --with-deps chromium
+      run: |
+        for attempt in 1 2 3; do
+          if npx playwright install --with-deps chromium; then
+            exit 0
+          fi
+          echo "::warning::Playwright install attempt $attempt failed (likely apt lock contention) — retrying in 30s"
+          sleep 30
+        done
+        echo "::error::Playwright install failed after 3 attempts"
+        exit 1
 
     - name: Install Playwright deps (cached)
       if: steps.playwright-cache.outputs.cache-hit == 'true'
       shell: bash
       working-directory: e2e
-      run: npx playwright install-deps chromium
+      run: |
+        for attempt in 1 2 3; do
+          if npx playwright install-deps chromium; then
+            exit 0
+          fi
+          echo "::warning::Playwright install-deps attempt $attempt failed — retrying in 30s"
+          sleep 30
+        done
+        echo "::error::Playwright install-deps failed after 3 attempts"
+        exit 1
 
     - name: Generate BDD tests
       shell: bash

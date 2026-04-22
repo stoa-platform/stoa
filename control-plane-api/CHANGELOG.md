@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.4...control-plane-api-v1.7.0) (2026-04-22)
+
+
+### Features
+
+* **api:** demo seed fixtures (CAB-2149 a/3) ([#2466](https://github.com/stoa-platform/stoa/issues/2466)) ([1c28332](https://github.com/stoa-platform/stoa/commit/1c283329d6184347114cc66a7794f3e5eaac62a7))
+
+
+### Bug Fixes
+
+* **api:** close GitProvider leaks in iam_sync + deployment orch (CAB-1889) ([#2469](https://github.com/stoa-platform/stoa/issues/2469)) ([b6607f3](https://github.com/stoa-platform/stoa/commit/b6607f35050d38bd38605653de765640e6312d56))
+* **api:** close OpenAPI contract gaps blocking UI-1-Wave2 (CAB-2159) ([#2473](https://github.com/stoa-platform/stoa/issues/2473)) ([c6abef8](https://github.com/stoa-platform/stoa/commit/c6abef8f2cef776d09db34f8a3ea1c9628416b5d))
+
 ## [1.6.4](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.6.3...control-plane-api-v1.6.4) (2026-04-22)
 
 

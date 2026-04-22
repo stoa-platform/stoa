@@ -41,7 +41,8 @@ RESOURCE_SERVER_ID="${RESOURCE_SERVER_ID:-control-plane-api}"
 DRY_RUN="${DRY_RUN:-false}"
 
 # Clients to configure (space-separated)
-CLIENTS_TO_CONFIGURE="${CLIENTS_TO_CONFIGURE:-control-plane-ui stoa-portal}"
+# CAB-2153: include stoa-mcp-gateway so MCP tokens carry aud=control-plane-api.
+CLIENTS_TO_CONFIGURE="${CLIENTS_TO_CONFIGURE:-control-plane-ui stoa-portal stoa-mcp-gateway}"
 
 # Mapper configuration
 MAPPER_NAME="api-audience-mapper"

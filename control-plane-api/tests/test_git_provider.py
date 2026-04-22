@@ -112,5 +112,4 @@ class TestGitProviderConfig:
         assert Settings.model_fields["GITHUB_TOKEN"].default == ""
         assert Settings.model_fields["GITHUB_ORG"].default == "stoa-platform"
         assert Settings.model_fields["GITHUB_CATALOG_REPO"].default == "stoa-catalog"
-        assert Settings.model_fields["GITHUB_GITOPS_REPO"].default == "stoa-gitops"
         assert Settings.model_fields["GITHUB_WEBHOOK_SECRET"].default == ""

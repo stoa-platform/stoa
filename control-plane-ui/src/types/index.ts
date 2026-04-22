@@ -71,10 +71,7 @@ export interface APICreate {
 // (BUG-1 is now fixed in the backend: the portal router owns the canonical
 // schema name). UI narrows two nullable fields (`client_id, tenant_id`) and
 // adds a UI-only `environment` field.
-export type Application = Omit<
-  Schemas['ApplicationResponse'],
-  'client_id' | 'tenant_id'
-> & {
+export type Application = Omit<Schemas['ApplicationResponse'], 'client_id' | 'tenant_id'> & {
   /** UI assumes always set (BUG-1: backend should make it required). */
   client_id: string;
   /** UI assumes always set in the contexts we render. */

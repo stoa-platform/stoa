@@ -142,10 +142,7 @@ describe('UI-2 S3 domain clients', () => {
     expect(mockHttpClient.put).toHaveBeenCalledWith('/v1/tenants/tenant-1/chat/settings', {
       chat_portal_enabled: true,
     });
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/tenants/tenant-1/chat/usage/budget'
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/tenants/tenant-1/chat/usage/budget');
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(
       3,
       '/v1/tenants/tenant-1/chat/usage/metering',
@@ -160,20 +157,11 @@ describe('UI-2 S3 domain clients', () => {
         params: { group_by: 'source', days: 7 },
       }
     );
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      5,
-      '/v1/tenants/tenant-1/chat/usage/tenant'
-    );
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      6,
-      '/v1/tenants/tenant-1/chat/usage/models'
-    );
-    expect(mockHttpClient.post).toHaveBeenCalledWith(
-      '/v1/tenants/tenant-1/chat/conversations',
-      {
-        title: 'Runbook',
-      }
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(5, '/v1/tenants/tenant-1/chat/usage/tenant');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(6, '/v1/tenants/tenant-1/chat/usage/models');
+    expect(mockHttpClient.post).toHaveBeenCalledWith('/v1/tenants/tenant-1/chat/conversations', {
+      title: 'Runbook',
+    });
   });
 
   it('covers llmClient request delegation', async () => {
@@ -271,7 +259,9 @@ describe('UI-2 S3 domain clients', () => {
     await expect(
       monitoringClient.listTransactions(30, 'error', '24h', 'gateway', 500, '/payments')
     ).resolves.toBe(transactions);
-    await expect(monitoringClient.getTransactionDetail('txn-1')).resolves.toBe(transaction as never);
+    await expect(monitoringClient.getTransactionDetail('txn-1')).resolves.toBe(
+      transaction as never
+    );
     await expect(monitoringClient.getTransactionStats('24h')).resolves.toBe(stats);
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/monitoring/transactions', {
@@ -284,16 +274,9 @@ describe('UI-2 S3 domain clients', () => {
         route: '/payments',
       },
     });
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/monitoring/transactions/txn-1'
-    );
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      3,
-      '/v1/monitoring/transactions/stats',
-      {
-        params: { time_range: '24h' },
-      }
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/monitoring/transactions/txn-1');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(3, '/v1/monitoring/transactions/stats', {
+      params: { time_range: '24h' },
+    });
   });
 });

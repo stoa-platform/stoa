@@ -67,12 +67,12 @@ export interface APICreate {
 }
 
 // ---- Application ------------------------------------------------------------
-// Wire = `Schemas['src__routers__portal_applications__ApplicationResponse']`
-// (long Pydantic-namespaced name because BUG-1 — backend never extracted
-// a clean `ApplicationResponse` schema). UI narrows two nullable fields
-// (`client_id, tenant_id`) and adds a UI-only `environment` field.
+// Wire = `Schemas['ApplicationResponse']`
+// (BUG-1 is now fixed in the backend: the portal router owns the canonical
+// schema name). UI narrows two nullable fields (`client_id, tenant_id`) and
+// adds a UI-only `environment` field.
 export type Application = Omit<
-  Schemas['src__routers__portal_applications__ApplicationResponse'],
+  Schemas['ApplicationResponse'],
   'client_id' | 'tenant_id'
 > & {
   /** UI assumes always set (BUG-1: backend should make it required). */

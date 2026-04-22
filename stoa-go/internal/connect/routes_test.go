@@ -219,7 +219,7 @@ func TestRunRouteSyncSendsAckWithDeploymentIDs(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{}
 	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
@@ -263,7 +263,7 @@ func TestRunRouteSyncAckReportsFailedStatus(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{syncRoutesErr: fmt.Errorf("gateway unreachable")}
 	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
@@ -304,7 +304,7 @@ func TestRunRouteSyncNoAckWithoutDeploymentIDs(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{}
 	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
@@ -339,7 +339,7 @@ func TestRunRouteSyncIncludesStepsInAck(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{}
 	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")
@@ -392,7 +392,7 @@ func TestRunRouteSyncStepsShowFailure(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	adapter := &mockSyncAdapter{syncRoutesErr: fmt.Errorf("gateway unreachable")}
 	agent.RunRouteSync(context.Background(), adapter, "http://gateway:8001")

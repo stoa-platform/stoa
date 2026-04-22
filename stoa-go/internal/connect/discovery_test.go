@@ -170,7 +170,7 @@ func TestRunDiscoveryReportsToCP(t *testing.T) {
 		ControlPlaneURL: cpServer.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	// Create a mock adapter that returns test data
 	gwServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

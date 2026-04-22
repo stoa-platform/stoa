@@ -170,7 +170,7 @@ func TestHeartbeatSuccess(t *testing.T) {
 		ControlPlaneURL: server.URL,
 		GatewayAPIKey:   "hb-key",
 	})
-	agent.gatewayID = "gw-123"
+	agent.state.SetGatewayID("gw-123")
 
 	err := agent.Heartbeat(context.Background())
 	if err != nil {
@@ -196,39 +196,39 @@ func TestHeartbeatNotRegistered(t *testing.T) {
 
 func TestComputeRoutesCountEmpty(t *testing.T) {
 	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
-	if got := a.computeRoutesCount(); got != 0 {
+	if got := a.state.ComputeRoutesCount(); got != 0 {
 		t.Errorf("computeRoutesCount() = %d, want 0", got)
 	}
 }
 
 func TestComputeRoutesCountWithPaths(t *testing.T) {
 	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
-	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+	a.state.SetDiscoveredAPIs([]DiscoveredAPIPayload{
 		{Name: "petstore", Paths: []string{"/pets", "/pets/{id}"}, IsActive: true},
 		{Name: "payments", Paths: []string{"/charge"}, IsActive: true},
-	}
-	if got := a.computeRoutesCount(); got != 3 {
+	})
+	if got := a.state.ComputeRoutesCount(); got != 3 {
 		t.Errorf("computeRoutesCount() = %d, want 3", got)
 	}
 }
 
 func TestComputeRoutesCountSkipsInactive(t *testing.T) {
 	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
-	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+	a.state.SetDiscoveredAPIs([]DiscoveredAPIPayload{
 		{Name: "active", Paths: []string{"/ok"}, IsActive: true},
 		{Name: "inactive", Paths: []string{"/skip1", "/skip2"}, IsActive: false},
-	}
-	if got := a.computeRoutesCount(); got != 1 {
+	})
+	if got := a.state.ComputeRoutesCount(); got != 1 {
 		t.Errorf("computeRoutesCount() = %d, want 1", got)
 	}
 }
 
 func TestComputeRoutesCountNoPaths(t *testing.T) {
 	a := New(Config{ControlPlaneURL: "http://cp", GatewayAPIKey: "key"})
-	a.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+	a.state.SetDiscoveredAPIs([]DiscoveredAPIPayload{
 		{Name: "minimal", IsActive: true},
-	}
-	if got := a.computeRoutesCount(); got != 1 {
+	})
+	if got := a.state.ComputeRoutesCount(); got != 1 {
 		t.Errorf("computeRoutesCount() = %d, want 1 (API with no paths counts as 1)", got)
 	}
 }
@@ -248,10 +248,10 @@ func TestHeartbeatSendsRoutesCount(t *testing.T) {
 		ControlPlaneURL: server.URL,
 		GatewayAPIKey:   "key",
 	})
-	agent.gatewayID = "gw-123"
-	agent.lastDiscoveredAPIs = []DiscoveredAPIPayload{
+	agent.state.SetGatewayID("gw-123")
+	agent.state.SetDiscoveredAPIs([]DiscoveredAPIPayload{
 		{Name: "petstore", Paths: []string{"/pets", "/pets/{id}"}, IsActive: true},
-	}
+	})
 
 	err := agent.Heartbeat(context.Background())
 	if err != nil {
@@ -278,7 +278,7 @@ func TestStartHeartbeatStopsOnCancel(t *testing.T) {
 		GatewayAPIKey:     "key",
 		HeartbeatInterval: 50 * time.Millisecond,
 	})
-	agent.gatewayID = "gw-test"
+	agent.state.SetGatewayID("gw-test")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	agent.StartHeartbeat(ctx)
@@ -306,7 +306,7 @@ func TestHeartbeat404ReturnsNotFound(t *testing.T) {
 		GatewayAPIKey:   "key",
 		InstanceName:    "test-agent",
 	})
-	agent.gatewayID = "purged-id"
+	agent.state.SetGatewayID("purged-id")
 
 	err := agent.Heartbeat(context.Background())
 	if err == nil {
@@ -344,7 +344,7 @@ func TestStartHeartbeat404ReRegisters(t *testing.T) {
 		InstanceName:      "test-agent",
 		HeartbeatInterval: 20 * time.Millisecond,
 	})
-	agent.gatewayID = "old-purged-id"
+	agent.state.SetGatewayID("old-purged-id")
 	agent.healthPort = "8090"
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -358,7 +358,7 @@ func TestStartHeartbeat404ReRegisters(t *testing.T) {
 	if registerCount.Load() < 1 {
 		t.Errorf("expected at least 1 re-registration, got %d", registerCount.Load())
 	}
-	if agent.gatewayID != "new-id" {
-		t.Errorf("expected gatewayID=new-id after re-registration, got %s", agent.gatewayID)
+	if got := agent.state.GatewayID(); got != "new-id" {
+		t.Errorf("expected gatewayID=new-id after re-registration, got %s", got)
 	}
 }

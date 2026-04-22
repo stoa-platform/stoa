@@ -125,7 +125,7 @@ func TestStreamEventsParsesSyncDeployment(t *testing.T) {
 		GatewayAPIKey:   "test-key",
 		InstanceName:    "test-gw",
 	})
-	agent.gatewayID = "gw-789"
+	agent.state.SetGatewayID("gw-789")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -167,7 +167,7 @@ func TestStreamEventsIgnoresHeartbeat(t *testing.T) {
 		ControlPlaneURL: sseServer.URL,
 		GatewayAPIKey:   "test-key",
 	})
-	agent.gatewayID = "gw-1"
+	agent.state.SetGatewayID("gw-1")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -189,7 +189,7 @@ func TestStreamEventsRejectsUnauthorized(t *testing.T) {
 		ControlPlaneURL: sseServer.URL,
 		GatewayAPIKey:   "bad-key",
 	})
-	agent.gatewayID = "gw-1"
+	agent.state.SetGatewayID("gw-1")
 
 	ctx := context.Background()
 	err := agent.streamEvents(ctx, &mockSSEAdapter{}, "http://localhost:8080")
@@ -263,7 +263,7 @@ func TestSSESyncDeploymentIncludesSteps(t *testing.T) {
 		GatewayAPIKey:   "test-key",
 		InstanceName:    "test-gw",
 	})
-	agent.gatewayID = "gw-sse"
+	agent.state.SetGatewayID("gw-sse")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

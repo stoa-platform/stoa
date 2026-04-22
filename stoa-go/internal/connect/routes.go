@@ -2,11 +2,7 @@ package connect
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -35,65 +31,21 @@ func RouteSyncConfigFromEnv() RouteSyncConfig {
 	return cfg
 }
 
-// FetchRoutes pulls the route table from the CP via GET /v1/internal/gateways/routes.
+// FetchRoutes pulls the route table from the CP, filtered by InstanceName
+// (empty = all). Thin delegator — HTTP logic lives in cpClient.FetchRoutes.
 func (a *Agent) FetchRoutes(ctx context.Context) ([]adapters.Route, error) {
-	ctx, span := a.startSpan(ctx, "stoa-connect.routes.fetch",
-		attribute.String("stoa.gateway_id", a.gatewayID),
-	)
-	defer span.End()
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/routes", a.cfg.ControlPlaneURL)
-	if a.cfg.InstanceName != "" {
-		url += "?gateway_name=" + a.cfg.InstanceName
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return nil, fmt.Errorf("create routes request: %w", err)
-	}
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return nil, fmt.Errorf("routes request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("routes request failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "fetch routes rejected")
-		return nil, err
-	}
-
-	var routes []adapters.Route
-	if err := json.Unmarshal(body, &routes); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "decode failed")
-		return nil, fmt.Errorf("decode routes response: %w", err)
-	}
-
-	span.SetAttributes(attribute.Int("stoa.routes_count", len(routes)))
-	span.SetStatus(codes.Ok, "routes fetched")
-	return routes, nil
+	return a.cp.FetchRoutes(ctx, a.cfg.InstanceName)
 }
 
-// RunRouteSync performs a single route sync cycle: fetch CP routes → push to local gateway.
+// RunRouteSync performs a single route sync cycle: fetch CP routes → push
+// to local gateway via the unified routeSyncer → ack per-route results.
+// Shares the route-sync code path with the SSE deployment stream
+// (handleSyncDeployment) — see sync_route.go.
 func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.routes.sync",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
-
-	// Step: agent_received — sync cycle started
-	agentStep := newSyncStep("agent_received", "success", "")
 
 	routes, err := a.FetchRoutes(ctx)
 	if err != nil {
@@ -109,59 +61,12 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 		return
 	}
 
-	// Step: adapter_connected — gateway adapter ready
-	adapterStep := newSyncStep("adapter_connected", "success", "")
-
 	span.SetAttributes(attribute.Int("stoa.routes_count", len(routes)))
 	log.Printf("route-sync: %d routes to push", len(routes))
 
-	syncErr := adapter.SyncRoutes(ctx, adminURL, routes)
+	syncer := newRouteSyncer(adapter)
+	results, syncErr := syncer.Sync(ctx, adminURL, routes)
 
-	// Step: api_synced
-	var apiStep SyncStep
-	if syncErr != nil {
-		apiStep = newSyncStep("api_synced", "failed", syncErr.Error())
-	} else {
-		apiStep = newSyncStep("api_synced", "success", "")
-	}
-
-	steps := []SyncStep{agentStep, adapterStep, apiStep}
-
-	// Build ack results — per-route status from adapter FailedRoutes map
-	// This gives accurate results: routes that succeeded are "applied",
-	// only routes that actually failed are "failed".
-	type failedRoutesProvider interface {
-		GetFailedRoutes() map[string]string
-	}
-	failedMap := make(map[string]string)
-	if frp, ok := adapter.(failedRoutesProvider); ok {
-		failedMap = frp.GetFailedRoutes()
-	}
-
-	var results []SyncedRouteResult
-	for _, r := range routes {
-		if r.DeploymentID == "" {
-			continue // Skip routes without deployment tracking
-		}
-		result := SyncedRouteResult{
-			DeploymentID: r.DeploymentID,
-			Steps:        steps,
-			Generation:   r.Generation,
-		}
-		if routeErr, failed := failedMap[r.DeploymentID]; failed {
-			result.Status = "failed"
-			result.Error = routeErr
-		} else if syncErr != nil && len(failedMap) == 0 {
-			// Fallback: global error without per-route tracking (non-webmethods adapters)
-			result.Status = "failed"
-			result.Error = syncErr.Error()
-		} else {
-			result.Status = "applied"
-		}
-		results = append(results, result)
-	}
-
-	// Report route sync results to CP (fire-and-forget: log warning on failure)
 	if len(results) > 0 {
 		if ackErr := a.ReportRouteSyncAck(ctx, results); ackErr != nil {
 			log.Printf("route-sync: report ack error: %v", ackErr)
@@ -181,34 +86,18 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 	log.Printf("route-sync: pushed %d routes to gateway", len(routes))
 }
 
-// StartRouteSync starts a background goroutine that syncs CP routes
-// to the local gateway at the configured interval.
+// StartRouteSync starts a background goroutine that polls CP routes and
+// pushes them to the local gateway at the configured interval. Used as the
+// fallback when SSE is disabled — see runRouteSyncPolling in loop_sync.go.
 func (a *Agent) StartRouteSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg RouteSyncConfig) {
 	if adminURL == "" {
 		log.Println("route-sync skipped: no gateway admin URL configured")
 		return
 	}
-
 	interval := cfg.Interval
 	if interval == 0 {
 		interval = 30 * time.Second
 	}
-
 	log.Printf("starting route sync loop (interval=%s)", interval)
-
-	ticker := time.NewTicker(interval)
-	go func() {
-		defer ticker.Stop()
-		// Run immediately on start
-		a.RunRouteSync(ctx, adapter, adminURL)
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("route-sync stopped")
-				return
-			case <-ticker.C:
-				a.RunRouteSync(ctx, adapter, adminURL)
-			}
-		}
-	}()
+	go runRouteSyncPolling(ctx, a, adapter, adminURL, interval)
 }

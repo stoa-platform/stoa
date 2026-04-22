@@ -1,13 +1,8 @@
 package connect
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -22,247 +17,46 @@ type SyncConfig struct {
 	Interval time.Duration
 }
 
-// GatewayConfigResponse is the response from GET /v1/internal/gateways/{id}/config.
-type GatewayConfigResponse struct {
-	GatewayID          string           `json:"gateway_id"`
-	Name               string           `json:"name"`
-	Environment        string           `json:"environment"`
-	TenantID           string           `json:"tenant_id"`
-	PendingDeployments []interface{}    `json:"pending_deployments"`
-	PendingPolicies    []PendingPolicy  `json:"pending_policies"`
-}
-
-// PendingPolicy represents a policy from the CP config endpoint.
-type PendingPolicy struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name"`
-	PolicyType string                 `json:"policy_type"`
-	Config     map[string]interface{} `json:"config"`
-	Priority   int                    `json:"priority"`
-	Enabled    bool                   `json:"enabled"`
-}
-
-// SyncAckPayload is sent to POST /v1/internal/gateways/{id}/sync-ack.
-type SyncAckPayload struct {
-	SyncedPolicies []SyncedPolicyResult `json:"synced_policies"`
-	SyncTimestamp  string               `json:"sync_timestamp"`
-}
-
-// SyncedPolicyResult reports the sync result for one policy.
-type SyncedPolicyResult struct {
-	PolicyID string `json:"policy_id"`
-	Status   string `json:"status"` // "applied", "removed", "failed"
-	Error    string `json:"error,omitempty"`
-}
-
-// SyncStep records a single step in a sync pipeline for observability.
-type SyncStep struct {
-	Name        string `json:"name"`
-	Status      string `json:"status"` // "success", "failed", "skipped"
-	StartedAt   string `json:"started_at"`
-	CompletedAt string `json:"completed_at,omitempty"`
-	Detail      string `json:"detail,omitempty"`
-}
-
 // FetchConfig pulls the gateway config (policies, deployments) from the CP.
+// Thin delegator — HTTP logic lives in cpClient.FetchConfig.
 func (a *Agent) FetchConfig(ctx context.Context) (*GatewayConfigResponse, error) {
-	if a.gatewayID == "" {
-		return nil, fmt.Errorf("not registered")
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
+		return nil, ErrNotRegistered
 	}
-
-	ctx, span := a.startSpan(ctx, "stoa-connect.sync.fetch-config",
-		attribute.String("stoa.gateway_id", a.gatewayID),
-	)
-	defer span.End()
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/config", a.cfg.ControlPlaneURL, a.gatewayID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return nil, fmt.Errorf("create config request: %w", err)
-	}
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return nil, fmt.Errorf("config request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("config request failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "fetch config rejected")
-		return nil, err
-	}
-
-	var config GatewayConfigResponse
-	if err := json.Unmarshal(body, &config); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "decode failed")
-		return nil, fmt.Errorf("decode config response: %w", err)
-	}
-
-	span.SetAttributes(attribute.Int("stoa.pending_policies", len(config.PendingPolicies)))
-	span.SetStatus(codes.Ok, "config fetched")
-	return &config, nil
+	return a.cp.FetchConfig(ctx, gatewayID)
 }
 
 // ReportSyncAck sends policy sync results to the CP.
 func (a *Agent) ReportSyncAck(ctx context.Context, results []SyncedPolicyResult) error {
-	if a.gatewayID == "" {
-		return fmt.Errorf("not registered")
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
+		return ErrNotRegistered
 	}
-
-	ctx, span := a.startSpan(ctx, "stoa-connect.sync.ack",
-		attribute.String("stoa.gateway_id", a.gatewayID),
-		attribute.Int("stoa.synced_policies", len(results)),
-	)
-	defer span.End()
-
-	// Count results by status
-	var applied, removed, failed int
-	for _, r := range results {
-		switch r.Status {
-		case "applied":
-			applied++
-		case "removed":
-			removed++
-		case "failed":
-			failed++
-		}
-	}
-	span.SetAttributes(
-		attribute.Int("stoa.policies_applied", applied),
-		attribute.Int("stoa.policies_removed", removed),
-		attribute.Int("stoa.policies_failed", failed),
-	)
-
-	payload := SyncAckPayload{
+	return a.cp.ReportSyncAck(ctx, gatewayID, SyncAckPayload{
 		SyncedPolicies: results,
 		SyncTimestamp:  time.Now().UTC().Format(time.RFC3339),
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "marshal failed")
-		return fmt.Errorf("marshal sync-ack: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/sync-ack", a.cfg.ControlPlaneURL, a.gatewayID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return fmt.Errorf("create sync-ack request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return fmt.Errorf("sync-ack request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("sync-ack failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "sync-ack rejected")
-		return err
-	}
-
-	span.SetStatus(codes.Ok, "sync-ack sent")
-	return nil
-}
-
-// RouteSyncAckPayload is sent to POST /v1/internal/gateways/{id}/route-sync-ack.
-type RouteSyncAckPayload struct {
-	SyncedRoutes  []SyncedRouteResult `json:"synced_routes"`
-	SyncTimestamp string              `json:"sync_timestamp"`
-}
-
-// SyncedRouteResult reports the sync result for one route deployment.
-type SyncedRouteResult struct {
-	DeploymentID string     `json:"deployment_id"`
-	Status       string     `json:"status"` // "applied", "failed"
-	Error        string     `json:"error,omitempty"`
-	Steps        []SyncStep `json:"steps,omitempty"`
-	Generation   int        `json:"generation,omitempty"` // CAB-1950: generation that was synced
+	})
 }
 
 // ReportRouteSyncAck sends route sync results to the CP.
 func (a *Agent) ReportRouteSyncAck(ctx context.Context, results []SyncedRouteResult) error {
-	if a.gatewayID == "" {
-		return fmt.Errorf("not registered")
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
+		return ErrNotRegistered
 	}
-
-	ctx, span := a.startSpan(ctx, "stoa-connect.routes.ack",
-		attribute.String("stoa.gateway_id", a.gatewayID),
-		attribute.Int("stoa.synced_routes", len(results)),
-	)
-	defer span.End()
-
-	payload := RouteSyncAckPayload{
+	return a.cp.ReportRouteSyncAck(ctx, gatewayID, RouteSyncAckPayload{
 		SyncedRoutes:  results,
 		SyncTimestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "marshal failed")
-		return fmt.Errorf("marshal route-sync-ack: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/route-sync-ack", a.cfg.ControlPlaneURL, a.gatewayID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return fmt.Errorf("create route-sync-ack request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return fmt.Errorf("route-sync-ack request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("route-sync-ack failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "route-sync-ack rejected")
-		return err
-	}
-
-	span.SetStatus(codes.Ok, "route-sync-ack sent")
-	return nil
+	})
 }
 
-// RunSync performs a single policy sync cycle: fetch config → apply/remove → ack.
+// RunSync performs a single policy sync cycle: fetch config → dispatch via
+// policySyncer → update metrics → ack. Per-policy dispatch (OIDC vs
+// generic, apply vs remove) lives in sync_policy.go.
 func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
 	ctx, span := a.startSpan(ctx, "stoa-connect.sync",
-		attribute.String("stoa.gateway_id", a.gatewayID),
+		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
 
@@ -283,73 +77,8 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 	span.SetAttributes(attribute.Int("stoa.pending_policies", len(config.PendingPolicies)))
 	log.Printf("sync: %d policies to reconcile", len(config.PendingPolicies))
 
-	var results []SyncedPolicyResult
-
-	// Check if adapter supports OIDC operations
-	oidcAdapter, hasOIDC := adapter.(adapters.OIDCAdapter)
-
-	for _, policy := range config.PendingPolicies {
-		result := SyncedPolicyResult{PolicyID: policy.ID}
-
-		if !policy.Enabled {
-			var syncErr error
-			if policy.PolicyType == "oidc_auth_server" && hasOIDC {
-				syncErr = oidcAdapter.DeleteAuthServer(ctx, adminURL, policy.Name)
-			} else {
-				syncErr = adapter.RemovePolicy(ctx, adminURL, policy.Name, policy.PolicyType)
-			}
-			if syncErr != nil {
-				result.Status = "failed"
-				result.Error = syncErr.Error()
-				log.Printf("sync: remove policy %s failed: %v", policy.Name, syncErr)
-			} else {
-				result.Status = "removed"
-				log.Printf("sync: removed policy %s (%s)", policy.Name, policy.PolicyType)
-			}
-		} else {
-			var syncErr error
-			switch {
-			case policy.PolicyType == "oidc_auth_server" && hasOIDC:
-				syncErr = oidcAdapter.UpsertAuthServer(ctx, adminURL, adapters.AuthServerSpec{
-					Name:         policy.Name,
-					DiscoveryURL: getStringConfig(policy.Config, "discovery_url"),
-					ClientID:     getStringConfig(policy.Config, "client_id"),
-					ClientSecret: getStringConfig(policy.Config, "client_secret"),
-					Scopes:       getStringSliceConfig(policy.Config, "scopes"),
-				})
-			case policy.PolicyType == "oidc_strategy" && hasOIDC:
-				syncErr = oidcAdapter.UpsertStrategy(ctx, adminURL, adapters.StrategySpec{
-					Name:            policy.Name,
-					AuthServerAlias: getStringConfig(policy.Config, "auth_server_alias"),
-					ClientID:        getStringConfig(policy.Config, "client_id"),
-					Audience:        getStringConfig(policy.Config, "audience"),
-				})
-			case policy.PolicyType == "oidc_scope" && hasOIDC:
-				syncErr = oidcAdapter.UpsertScope(ctx, adminURL, adapters.ScopeSpec{
-					ScopeName:       getStringConfig(policy.Config, "scope_name"),
-					Audience:        getStringConfig(policy.Config, "audience"),
-					AuthServerAlias: getStringConfig(policy.Config, "auth_server_alias"),
-					KeycloakScope:   getStringConfig(policy.Config, "keycloak_scope"),
-				})
-			default:
-				action := adapters.PolicyAction{
-					Type:   policy.PolicyType,
-					Config: policy.Config,
-				}
-				syncErr = adapter.ApplyPolicy(ctx, adminURL, policy.Name, action)
-			}
-			if syncErr != nil {
-				result.Status = "failed"
-				result.Error = syncErr.Error()
-				log.Printf("sync: apply policy %s failed: %v", policy.Name, syncErr)
-			} else {
-				result.Status = "applied"
-				log.Printf("sync: applied policy %s (%s)", policy.Name, policy.PolicyType)
-			}
-		}
-
-		results = append(results, result)
-	}
+	syncer := newPolicySyncer(adapter)
+	results := syncer.SyncPolicies(ctx, adminURL, config.PendingPolicies)
 
 	// Update Prometheus metrics
 	allOk := true
@@ -377,77 +106,17 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 	span.SetStatus(codes.Ok, "sync cycle complete")
 }
 
-// StartSync starts a background goroutine that syncs policies at the configured interval.
+// StartSync starts a background goroutine that syncs policies at the
+// configured interval. See runPolicySync in loop_sync.go for the loop body.
 func (a *Agent) StartSync(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string, cfg SyncConfig) {
 	if adminURL == "" {
 		log.Println("sync skipped: no gateway admin URL configured")
 		return
 	}
-
 	interval := cfg.Interval
 	if interval == 0 {
 		interval = 60 * time.Second
 	}
-
 	log.Printf("starting policy sync loop (interval=%s)", interval)
-
-	ticker := time.NewTicker(interval)
-	go func() {
-		defer ticker.Stop()
-		// Run immediately on start
-		a.RunSync(ctx, adapter, adminURL)
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("sync stopped")
-				return
-			case <-ticker.C:
-				a.RunSync(ctx, adapter, adminURL)
-			}
-		}
-	}()
-}
-
-// newSyncStep creates a completed SyncStep with the current timestamp.
-func newSyncStep(name, status, detail string) SyncStep {
-	now := time.Now().UTC().Format(time.RFC3339)
-	return SyncStep{
-		Name:        name,
-		Status:      status,
-		StartedAt:   now,
-		CompletedAt: now,
-		Detail:      detail,
-	}
-}
-
-// getStringConfig safely extracts a string value from a config map.
-func getStringConfig(config map[string]interface{}, key string) string {
-	if v, ok := config[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-// getStringSliceConfig safely extracts a string slice from a config map.
-func getStringSliceConfig(config map[string]interface{}, key string) []string {
-	v, ok := config[key]
-	if !ok {
-		return nil
-	}
-	switch val := v.(type) {
-	case []string:
-		return val
-	case []interface{}:
-		var result []string
-		for _, item := range val {
-			if s, ok := item.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result
-	default:
-		return nil
-	}
+	go runPolicySync(ctx, a, adapter, adminURL, interval)
 }

@@ -7,12 +7,8 @@
 package connect
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -20,7 +16,6 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -74,81 +69,55 @@ func ConfigFromEnv(version string) Config {
 	return cfg
 }
 
-// RegistrationPayload is the payload sent to POST /v1/internal/gateways/register.
-type RegistrationPayload struct {
-	Hostname         string   `json:"hostname"`
-	Mode             string   `json:"mode"`
-	Version          string   `json:"version"`
-	Environment      string   `json:"environment"`
-	Capabilities     []string `json:"capabilities"`
-	AdminURL         string   `json:"admin_url"`
-	TargetGatewayURL string   `json:"target_gateway_url,omitempty"`
-	PublicURL        string   `json:"public_url,omitempty"`
-	UIURL            string   `json:"ui_url,omitempty"`
-}
-
-// RegistrationResponse is the response from the register endpoint.
-type RegistrationResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Environment string `json:"environment"`
-	Status      string `json:"status"`
-}
-
-// HeartbeatPayload is the payload sent to POST /v1/internal/gateways/{id}/heartbeat.
-type HeartbeatPayload struct {
-	UptimeSeconds  int `json:"uptime_seconds"`
-	RoutesCount    int `json:"routes_count"`
-	PoliciesCount  int `json:"policies_count"`
-	DiscoveredAPIs int `json:"discovered_apis"`
-}
-
-// DiscoveryPayload is the payload sent to POST /v1/internal/gateways/{id}/discovery.
-type DiscoveryPayload struct {
-	APIs []DiscoveredAPIPayload `json:"apis"`
-}
-
-// DiscoveredAPIPayload represents a single discovered API for the CP.
-type DiscoveredAPIPayload struct {
-	Name       string   `json:"name"`
-	Version    string   `json:"version,omitempty"`
-	BackendURL string   `json:"backend_url,omitempty"`
-	Paths      []string `json:"paths,omitempty"`
-	Methods    []string `json:"methods,omitempty"`
-	Policies   []string `json:"policies,omitempty"`
-	IsActive   bool     `json:"is_active"`
-}
-
 // Agent is the STOA Connect runtime agent.
+//
+// Mutable runtime state (gatewayID, discovered APIs) lives under Agent.state
+// behind a RWMutex — safe for concurrent access from the heartbeat, discovery,
+// sync, SSE and /health goroutines.
+//
+// Fields set once before any loop goroutine starts (cfg, cp, transport, tracer,
+// startTime; healthPort — written in the first Register call from main
+// goroutine) are kept on Agent without locking; happens-before is guaranteed
+// by the `go` statement that later launches the loops.
 type Agent struct {
-	cfg                Config
-	client             *http.Client
-	tracer             trace.Tracer
-	gatewayID          string
-	healthPort         string // stored after Register for re-registration
-	startTime          time.Time
-	lastDiscoveredAPIs []DiscoveredAPIPayload
+	cfg        Config
+	cp         *cpClient         // CP HTTP client; 7 endpoints delegated here
+	sse        *sseStream        // CP SSE transport; reconnect loop + dispatch live on Agent (for now)
+	transport  http.RoundTripper // otelhttp-wrapped; shared between cp and sse
+	tracer     trace.Tracer      // used for business spans that live on the Agent (RunSync etc.)
+	state      *agentState
+	healthPort string // set in the first Register; read from the heartbeat loop on re-register
+	startTime  time.Time
 }
 
 // New creates a new STOA Connect agent.
-// The HTTP client is wrapped with otelhttp for automatic W3C traceparent propagation.
+// The HTTP transport is wrapped with otelhttp for automatic W3C traceparent
+// propagation and is shared between the CP client (15s timeout) and the SSE
+// stream (no timeout).
 func New(cfg Config) *Agent {
+	transport := otelhttp.NewTransport(http.DefaultTransport)
 	return &Agent{
-		cfg: cfg,
-		client: &http.Client{
-			Timeout:   15 * time.Second,
-			Transport: otelhttp.NewTransport(http.DefaultTransport),
-		},
+		cfg:       cfg,
+		cp:        newCPClient(cfg.ControlPlaneURL, cfg.GatewayAPIKey, transport),
+		sse:       newSSEStream(cfg.ControlPlaneURL, cfg.GatewayAPIKey, transport),
+		transport: transport,
+		state:     newAgentState(),
 		startTime: time.Now(),
 	}
 }
 
-// SetTracer sets the OpenTelemetry tracer for the agent.
+// SetTracer sets the OpenTelemetry tracer for the agent. Propagates to the
+// CP client and SSE stream so every stoa-connect.<action> span uses the
+// same tracer.
 func (a *Agent) SetTracer(t trace.Tracer) {
 	a.tracer = t
+	a.cp.SetTracer(t)
+	a.sse.SetTracer(t)
 }
 
-// startSpan creates a new span if a tracer is configured.
+// startSpan creates a new span on the Agent's tracer if one is configured.
+// Used for orchestration-level spans (RunSync, RunRouteSync, SSE handlers);
+// transport-level spans live on the cpClient.
 func (a *Agent) startSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	if a.tracer == nil {
 		return ctx, trace.SpanFromContext(ctx)
@@ -159,15 +128,10 @@ func (a *Agent) startSpan(ctx context.Context, name string, attrs ...attribute.K
 	)
 }
 
-// Register registers this agent with the Control Plane.
-// Returns the assigned gateway ID.
+// Register registers this agent with the Control Plane and records the
+// assigned gateway ID plus the local healthPort on success (for later
+// re-registration).
 func (a *Agent) Register(ctx context.Context, healthPort string) error {
-	ctx, span := a.startSpan(ctx, "stoa-connect.register",
-		attribute.String("stoa.instance_name", a.cfg.InstanceName),
-		attribute.String("stoa.environment", a.cfg.Environment),
-	)
-	defer span.End()
-
 	payload := RegistrationPayload{
 		Hostname:         a.cfg.InstanceName,
 		Mode:             "connect",
@@ -180,175 +144,56 @@ func (a *Agent) Register(ctx context.Context, healthPort string) error {
 		UIURL:            a.cfg.UIURL,
 	}
 
-	data, err := json.Marshal(payload)
+	result, err := a.cp.Register(ctx, payload)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "marshal failed")
-		return fmt.Errorf("marshal registration: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/register", a.cfg.ControlPlaneURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return fmt.Errorf("register request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("register failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "registration rejected")
 		return err
 	}
 
-	var result RegistrationResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "decode failed")
-		return fmt.Errorf("decode registration response: %w", err)
-	}
-
-	a.gatewayID = result.ID
+	a.state.SetGatewayID(result.ID)
 	a.healthPort = healthPort
-	span.SetAttributes(attribute.String("stoa.gateway_id", result.ID))
-	span.SetStatus(codes.Ok, "registered")
 	log.Printf("registered with CP: id=%s name=%s", result.ID, result.Name)
 	return nil
 }
 
 // GatewayID returns the assigned gateway ID after registration.
 func (a *Agent) GatewayID() string {
-	return a.gatewayID
+	return a.state.GatewayID()
 }
 
-// ErrGatewayNotFound is returned when the CP responds 404 to a heartbeat,
-// indicating the gateway instance was purged and needs re-registration.
-var ErrGatewayNotFound = fmt.Errorf("gateway not found on Control Plane (purged)")
-
 // Heartbeat sends a single heartbeat to the Control Plane.
+// Returns ErrNotRegistered if called before Register, ErrGatewayNotFound if
+// the CP responds 404 (gateway purged).
 func (a *Agent) Heartbeat(ctx context.Context) error {
-	if a.gatewayID == "" {
-		return fmt.Errorf("not registered")
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
+		return ErrNotRegistered
 	}
-
-	ctx, span := a.startSpan(ctx, "stoa-connect.heartbeat",
-		attribute.String("stoa.gateway_id", a.gatewayID),
-	)
-	defer span.End()
 
 	payload := HeartbeatPayload{
 		UptimeSeconds:  int(time.Since(a.startTime).Seconds()),
-		RoutesCount:    a.computeRoutesCount(),
-		DiscoveredAPIs: len(a.lastDiscoveredAPIs),
+		RoutesCount:    a.state.ComputeRoutesCount(),
+		DiscoveredAPIs: a.state.DiscoveredAPIsCount(),
 	}
 
-	span.SetAttributes(
-		attribute.Int("stoa.uptime_seconds", payload.UptimeSeconds),
-		attribute.Int("stoa.routes_count", payload.RoutesCount),
-		attribute.Int("stoa.discovered_apis", payload.DiscoveredAPIs),
-	)
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "marshal failed")
-		return fmt.Errorf("marshal heartbeat: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/heartbeat", a.cfg.ControlPlaneURL, a.gatewayID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return fmt.Errorf("create heartbeat request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return fmt.Errorf("heartbeat request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode == http.StatusNotFound {
-		err := ErrGatewayNotFound
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "gateway purged from CP")
+	if err := a.cp.Heartbeat(ctx, gatewayID, payload); err != nil {
 		return err
 	}
-
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("heartbeat failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "heartbeat rejected")
-		return err
-	}
-
-	span.SetStatus(codes.Ok, "heartbeat sent")
 	HeartbeatsSent.Inc()
 	return nil
 }
 
+// reRegisterThreshold is the number of consecutive 404 heartbeats before the
+// agent auto-re-registers with the Control Plane. Chosen conservatively to avoid
+// thrashing on transient CP outages; do not tune without validating CP-side
+// expectations (ADR-057).
+const reRegisterThreshold = 3
+
 // StartHeartbeat starts a background goroutine that sends heartbeats
 // at the configured interval. If the CP responds 404 (gateway purged),
-// it re-registers automatically after 3 consecutive 404s.
+// it re-registers automatically after reRegisterThreshold consecutive 404s.
 // Stops when ctx is cancelled.
 func (a *Agent) StartHeartbeat(ctx context.Context) {
-	const reRegisterThreshold = 3
-	ticker := time.NewTicker(a.cfg.HeartbeatInterval)
-	go func() {
-		defer ticker.Stop()
-		consecutiveNotFound := 0
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("heartbeat stopped")
-				return
-			case <-ticker.C:
-				if err := a.Heartbeat(ctx); err != nil {
-					if errors.Is(err, ErrGatewayNotFound) {
-						consecutiveNotFound++
-						log.Printf("heartbeat 404 (%d/%d) — gateway not found on CP",
-							consecutiveNotFound, reRegisterThreshold)
-						if consecutiveNotFound >= reRegisterThreshold {
-							log.Println("gateway purged from CP, re-registering...")
-							a.gatewayID = ""
-							if regErr := a.Register(ctx, a.healthPort); regErr != nil {
-								log.Printf("re-registration failed: %v", regErr)
-							} else {
-								log.Printf("re-registered with CP: id=%s", a.gatewayID)
-								consecutiveNotFound = 0
-							}
-						}
-					} else {
-						log.Printf("heartbeat error: %v", err)
-					}
-				} else {
-					consecutiveNotFound = 0
-				}
-			}
-		}
-	}()
+	go runHeartbeat(ctx, a)
 }
 
 // IsConfigured returns true if the agent has enough config to register.
@@ -357,95 +202,15 @@ func (a *Agent) IsConfigured() bool {
 }
 
 // ReportDiscovery sends discovered APIs to the Control Plane.
-func (a *Agent) ReportDiscovery(ctx context.Context, apis interface{}) error {
-	if a.gatewayID == "" {
-		return fmt.Errorf("not registered")
+func (a *Agent) ReportDiscovery(ctx context.Context, apis []DiscoveredAPIPayload) error {
+	gatewayID := a.state.GatewayID()
+	if gatewayID == "" {
+		return ErrNotRegistered
 	}
-
-	ctx, span := a.startSpan(ctx, "stoa-connect.discovery",
-		attribute.String("stoa.gateway_id", a.gatewayID),
-	)
-	defer span.End()
-
-	payload := DiscoveryPayload{}
-	// Convert adapters.DiscoveredAPI to DiscoveredAPIPayload
-	switch v := apis.(type) {
-	case []DiscoveredAPIPayload:
-		payload.APIs = v
-	default:
-		// Marshal and re-unmarshal for type conversion
-		data, err := json.Marshal(apis)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "marshal failed")
-			return fmt.Errorf("marshal discovery apis: %w", err)
-		}
-		if err := json.Unmarshal(data, &payload.APIs); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "convert failed")
-			return fmt.Errorf("convert discovery apis: %w", err)
-		}
-	}
-
-	span.SetAttributes(attribute.Int("stoa.discovered_apis", len(payload.APIs)))
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "marshal failed")
-		return fmt.Errorf("marshal discovery payload: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/v1/internal/gateways/%s/discovery", a.cfg.ControlPlaneURL, a.gatewayID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "create request failed")
-		return fmt.Errorf("create discovery request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Key", a.cfg.GatewayAPIKey)
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "request failed")
-		return fmt.Errorf("discovery report request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("discovery report failed (%d): %s", resp.StatusCode, string(body))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "discovery rejected")
-		return err
-	}
-
-	span.SetStatus(codes.Ok, "discovery reported")
-	return nil
-}
-
-// computeRoutesCount computes the total number of routes from discovered APIs.
-// Each path on an active API counts as one route (CAB-1916).
-func (a *Agent) computeRoutesCount() int {
-	count := 0
-	for _, api := range a.lastDiscoveredAPIs {
-		if api.IsActive {
-			paths := len(api.Paths)
-			if paths == 0 {
-				// API with no explicit paths still counts as 1 route
-				paths = 1
-			}
-			count += paths
-		}
-	}
-	return count
+	return a.cp.ReportDiscovery(ctx, gatewayID, DiscoveryPayload{APIs: apis})
 }
 
 // DiscoveredAPIsCount returns the count of last discovered APIs.
 func (a *Agent) DiscoveredAPIsCount() int {
-	return len(a.lastDiscoveredAPIs)
+	return a.state.DiscoveredAPIsCount()
 }

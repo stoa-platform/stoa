@@ -92,37 +92,20 @@ func autoDetect(ctx context.Context, adminURL string, acfg adapters.AdapterConfi
 }
 
 // StartDiscovery starts a background goroutine that periodically discovers
-// APIs from the local gateway and reports them to the Control Plane.
+// APIs from the local gateway and reports them to the Control Plane. See
+// runDiscoveryLoop in loop_discovery.go for the loop body.
 func (a *Agent) StartDiscovery(ctx context.Context, dcfg DiscoveryConfig) {
 	if dcfg.GatewayAdminURL == "" {
 		log.Println("discovery skipped: STOA_GATEWAY_ADMIN_URL not set")
 		return
 	}
-
 	adapter, gwType, err := ResolveAdapter(ctx, dcfg)
 	if err != nil {
 		log.Printf("discovery setup failed: %v", err)
 		return
 	}
-
 	log.Printf("discovery started: type=%s url=%s interval=%s", gwType, dcfg.GatewayAdminURL, dcfg.Interval)
-
-	// Run immediately, then on interval
-	go func() {
-		a.runDiscovery(ctx, adapter, dcfg.GatewayAdminURL)
-
-		ticker := time.NewTicker(dcfg.Interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("discovery stopped")
-				return
-			case <-ticker.C:
-				a.runDiscovery(ctx, adapter, dcfg.GatewayAdminURL)
-			}
-		}
-	}()
+	go runDiscoveryLoop(ctx, a, adapter, dcfg.GatewayAdminURL, dcfg.Interval)
 }
 
 // runDiscovery performs a single discovery cycle.
@@ -155,10 +138,10 @@ func (a *Agent) runDiscovery(ctx context.Context, adapter adapters.GatewayAdapte
 			IsActive:   api.IsActive,
 		}
 	}
-	a.lastDiscoveredAPIs = payloads
+	a.state.SetDiscoveredAPIs(payloads)
 
 	// Report to CP if registered
-	if a.gatewayID != "" {
+	if a.state.GatewayID() != "" {
 		if err := a.ReportDiscovery(ctx, payloads); err != nil {
 			log.Printf("discovery report error: %v", err)
 		}

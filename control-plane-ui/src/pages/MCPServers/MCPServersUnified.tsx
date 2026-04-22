@@ -617,7 +617,7 @@ function CustomServersTab() {
             `${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools. ` : ''}Latency: ${result.latency_ms}ms`
           );
         } else {
-          toast.error('Connection failed', result.error);
+          toast.error('Connection failed', result.error ?? undefined);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Test failed';

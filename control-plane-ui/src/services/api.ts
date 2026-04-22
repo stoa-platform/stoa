@@ -73,6 +73,10 @@ import { webhooksClient } from './api/webhooks';
 import { credentialMappingsClient } from './api/credentialMappings';
 import { contractsClient } from './api/contracts';
 import { promotionsClient } from './api/promotions';
+import { tenantsClient } from './api/tenants';
+import { apisClient } from './api/apis';
+import { applicationsClient } from './api/applications';
+import { consumersClient } from './api/consumers';
 
 // =============================================================================
 // Façade ApiService — agrège le core transport (services/http) et les méthodes
@@ -138,27 +142,23 @@ class ApiService {
 
   // Tenants
   async getTenants(): Promise<Tenant[]> {
-    const { data } = await httpClient.get('/v1/tenants');
-    return data;
+    return tenantsClient.list();
   }
 
   async getTenant(tenantId: string): Promise<Tenant> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}`);
-    return data;
+    return tenantsClient.get(tenantId);
   }
 
   async createTenant(tenant: TenantCreate): Promise<Tenant> {
-    const { data } = await httpClient.post('/v1/tenants', tenant);
-    return data;
+    return tenantsClient.create(tenant);
   }
 
   async updateTenant(tenantId: string, tenant: Partial<TenantCreate>): Promise<Tenant> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}`, tenant);
-    return data;
+    return tenantsClient.update(tenantId, tenant);
   }
 
   async deleteTenant(tenantId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}`);
+    return tenantsClient.remove(tenantId);
   }
 
   // Environments (ADR-040)
@@ -168,36 +168,27 @@ class ApiService {
 
   // APIs
   async getApis(tenantId: string, environment?: Environment): Promise<API[]> {
-    const params: Record<string, unknown> = { page: 1, page_size: 100 };
-    if (environment) params.environment = environment;
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis`, { params });
-    return data.items ?? data;
+    return apisClient.list(tenantId, environment);
   }
 
   async getAdminApis(page = 1, pageSize = 100): Promise<API[]> {
-    const { data } = await httpClient.get('/v1/admin/catalog/apis', {
-      params: { page, page_size: pageSize },
-    });
-    return data.items ?? data;
+    return apisClient.listAdmin(page, pageSize);
   }
 
   async getApi(tenantId: string, apiId: string): Promise<API> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis/${apiId}`);
-    return data;
+    return apisClient.get(tenantId, apiId);
   }
 
   async createApi(tenantId: string, api: APICreate): Promise<API> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/apis`, api);
-    return data;
+    return apisClient.create(tenantId, api);
   }
 
   async updateApi(tenantId: string, apiId: string, api: Partial<APICreate>): Promise<API> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/apis/${apiId}`, api);
-    return data;
+    return apisClient.update(tenantId, apiId, api);
   }
 
   async deleteApi(tenantId: string, apiId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
+    return apisClient.remove(tenantId, apiId);
   }
 
   async getApiVersions(
@@ -205,10 +196,7 @@ class ApiService {
     apiId: string,
     limit = 20
   ): Promise<Schemas['APIVersionEntry'][]> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis/${apiId}/versions`, {
-      params: { limit },
-    });
-    return data;
+    return apisClient.listVersions(tenantId, apiId, limit);
   }
 
   async updateApiAudience(
@@ -216,32 +204,24 @@ class ApiService {
     apiId: string,
     audience: string
   ): Promise<{ api_id: string; tenant_id: string; audience: string; updated_by: string }> {
-    const { data } = await httpClient.patch(`/v1/admin/catalog/${tenantId}/${apiId}/audience`, {
-      audience,
-    });
-    return data;
+    return apisClient.updateAudience(tenantId, apiId, audience);
   }
 
   async triggerCatalogSync(tenantId: string): Promise<void> {
-    await httpClient.post(`/v1/admin/catalog/sync/tenant/${tenantId}`);
+    return apisClient.triggerCatalogSync(tenantId);
   }
 
   // Applications
   async getApplications(tenantId: string): Promise<Application[]> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/applications`, {
-      params: { page: 1, page_size: 100 },
-    });
-    return data.items ?? data;
+    return applicationsClient.list(tenantId);
   }
 
   async getApplication(tenantId: string, appId: string): Promise<Application> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/applications/${appId}`);
-    return data;
+    return applicationsClient.get(tenantId, appId);
   }
 
   async createApplication(tenantId: string, app: ApplicationCreate): Promise<Application> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/applications`, app);
-    return data;
+    return applicationsClient.create(tenantId, app);
   }
 
   async updateApplication(
@@ -249,39 +229,32 @@ class ApiService {
     appId: string,
     app: Partial<ApplicationCreate>
   ): Promise<Application> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/applications/${appId}`, app);
-    return data;
+    return applicationsClient.update(tenantId, appId, app);
   }
 
   async deleteApplication(tenantId: string, appId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/applications/${appId}`);
+    return applicationsClient.remove(tenantId, appId);
   }
 
   // Consumers (CAB-864 — mTLS Self-Service)
   async getConsumers(tenantId: string, environment?: string): Promise<Consumer[]> {
-    const { data } = await httpClient.get(`/v1/consumers/${tenantId}`, {
-      params: { page: 1, page_size: 100, environment },
-    });
-    return data.items ?? data;
+    return consumersClient.list(tenantId, environment);
   }
 
   async getConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.get(`/v1/consumers/${tenantId}/${consumerId}`);
-    return data;
+    return consumersClient.get(tenantId, consumerId);
   }
 
   async suspendConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/suspend`);
-    return data;
+    return consumersClient.suspend(tenantId, consumerId);
   }
 
   async activateConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/activate`);
-    return data;
+    return consumersClient.activate(tenantId, consumerId);
   }
 
   async deleteConsumer(tenantId: string, consumerId: string): Promise<void> {
-    await httpClient.delete(`/v1/consumers/${tenantId}/${consumerId}`);
+    return consumersClient.remove(tenantId, consumerId);
   }
 
   async rotateCertificate(
@@ -290,23 +263,20 @@ class ApiService {
     certificatePem: string,
     gracePeriodHours: number = 24
   ): Promise<Consumer> {
-    const { data } = await httpClient.post(
-      `/v1/consumers/${tenantId}/${consumerId}/certificate/rotate`,
-      { certificate_pem: certificatePem, grace_period_hours: gracePeriodHours }
+    return consumersClient.rotateCertificate(
+      tenantId,
+      consumerId,
+      certificatePem,
+      gracePeriodHours
     );
-    return data;
   }
 
   async revokeCertificate(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(
-      `/v1/consumers/${tenantId}/${consumerId}/certificate/revoke`
-    );
-    return data;
+    return consumersClient.revokeCertificate(tenantId, consumerId);
   }
 
   async blockConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/block`);
-    return data;
+    return consumersClient.block(tenantId, consumerId);
   }
 
   // Certificate Lifecycle (CAB-872)
@@ -315,41 +285,30 @@ class ApiService {
     consumerId: string,
     certificatePem: string
   ): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/certificate`, {
-      certificate_pem: certificatePem,
-    });
-    return data;
+    return consumersClient.bindCertificate(tenantId, consumerId, certificatePem);
   }
 
   async getExpiringCertificates(
     tenantId: string,
     days: number = 30
   ): Promise<Schemas['CertificateExpiryResponse']> {
-    const { data } = await httpClient.get(`/v1/consumers/${tenantId}/certificates/expiring`, {
-      params: { days },
-    });
-    return data;
+    return consumersClient.getExpiringCertificates(tenantId, days);
   }
 
   async bulkRevokeCertificates(
     tenantId: string,
     consumerIds: string[]
   ): Promise<Schemas['BulkRevokeResponse']> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/certificates/bulk-revoke`, {
-      consumer_ids: consumerIds,
-    });
-    return data;
+    return consumersClient.bulkRevokeCertificates(tenantId, consumerIds);
   }
 
   // Tenant CA (CAB-1787/1788 — per-tenant CA management)
   async getTenantCA(tenantId: string): Promise<TenantCAInfo> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/ca`);
-    return data;
+    return tenantsClient.getCA(tenantId);
   }
 
   async generateTenantCA(tenantId: string): Promise<TenantCAInfo> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/ca/generate`);
-    return data;
+    return tenantsClient.generateCA(tenantId);
   }
 
   async signCSR(
@@ -357,29 +316,22 @@ class ApiService {
     csrPem: string,
     validityDays: number = 365
   ): Promise<Schemas['CSRSignResponse']> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/ca/sign`, {
-      csr_pem: csrPem,
-      validity_days: validityDays,
-    });
-    return data;
+    return tenantsClient.signCSR(tenantId, csrPem, validityDays);
   }
 
   async revokeTenantCA(tenantId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/ca`);
+    return tenantsClient.revokeCA(tenantId);
   }
 
   async listIssuedCertificates(
     tenantId: string,
     status?: string
   ): Promise<IssuedCertificateListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/ca/certificates`, {
-      params: status ? { status } : undefined,
-    });
-    return data;
+    return tenantsClient.listIssuedCertificates(tenantId, status);
   }
 
   async revokeIssuedCertificate(tenantId: string, certId: string): Promise<void> {
-    await httpClient.post(`/v1/tenants/${tenantId}/ca/certificates/${certId}/revoke`);
+    return tenantsClient.revokeIssuedCertificate(tenantId, certId);
   }
 
   // Deployments (CAB-1353 lifecycle API)

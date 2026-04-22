@@ -30,11 +30,6 @@ export interface AuthSession {
   switchPersona: (personaKey: PersonaKey, navigateUrl?: string) => Promise<void>;
 }
 
-type PersistedAuthState = {
-  cookies: Parameters<BrowserContext['addCookies']>[0];
-  sessionStorage: Record<string, string>;
-};
-
 /**
  * Resolve auth state paths relative to the e2e workspace root.
  */
@@ -44,34 +39,23 @@ function resolveAuthStatePath(authStatePath: string): string {
     : path.resolve(__dirname, '..', authStatePath);
 }
 
-function loadPersistedAuthState(authStatePath: string): PersistedAuthState {
-  const resolvedPath = resolveAuthStatePath(authStatePath);
-  if (!fs.existsSync(resolvedPath)) {
-    return { cookies: [], sessionStorage: {} };
-  }
-
-  try {
-    const stateData = JSON.parse(fs.readFileSync(resolvedPath, 'utf-8'));
-    return {
-      cookies: Array.isArray(stateData.cookies) ? stateData.cookies : [],
-      sessionStorage:
-        stateData.sessionStorage && typeof stateData.sessionStorage === 'object'
-          ? stateData.sessionStorage
-          : {},
-    };
-  } catch (error) {
-    console.warn(`Failed to read auth state from ${resolvedPath}: ${String(error)}`);
-    return { cookies: [], sessionStorage: {} };
-  }
-}
-
 /**
  * Load custom sessionStorage persisted alongside Playwright's storageState.
  * Playwright restores only cookies + localStorage natively; our auth setup writes
  * OIDC sessionStorage into the same JSON file under a custom `sessionStorage` key.
  */
 function loadSessionStorageFromAuthState(authStatePath: string): Record<string, string> {
-  return loadPersistedAuthState(authStatePath).sessionStorage;
+  const resolvedPath = resolveAuthStatePath(authStatePath);
+  if (!fs.existsSync(resolvedPath)) return {};
+  try {
+    const stateData = JSON.parse(fs.readFileSync(resolvedPath, 'utf-8'));
+    return stateData.sessionStorage && typeof stateData.sessionStorage === 'object'
+      ? stateData.sessionStorage
+      : {};
+  } catch (error) {
+    console.warn(`Failed to read auth state from ${resolvedPath}: ${String(error)}`);
+    return {};
+  }
 }
 
 /**
@@ -94,6 +78,54 @@ async function installSessionStorageInitScript(
       }
     }
   }, sessionData);
+}
+
+/**
+ * Ensure the captured OIDC user is present in the page's sessionStorage after navigation.
+ * Defensive guard against the addInitScript / React-OIDC boot race that surfaced in
+ * run 24750762663 as "Login with Keycloak" on otherwise-authenticated Console tests.
+ *
+ * If the OIDC entry is missing, re-inject sessionStorage via page.evaluate and reload
+ * once. If still missing after reload, throw — the caller needs the auth gate cleared.
+ */
+async function ensureSessionStorageLoaded(
+  page: Page,
+  sessionData: Record<string, string>,
+): Promise<void> {
+  if (Object.keys(sessionData).length === 0) return;
+
+  const oidcKeys = Object.keys(sessionData).filter((k) => k.startsWith('oidc.user:'));
+  if (oidcKeys.length === 0) return;
+
+  const hasAnyOidcEntry = await page
+    .evaluate((keys: string[]) => keys.some((k) => sessionStorage.getItem(k) !== null), oidcKeys)
+    .catch(() => false);
+
+  if (hasAnyOidcEntry) return;
+
+  // Race fallback: reinject from the captured JSON blob and reload once.
+  await page
+    .evaluate((data: Record<string, string>) => {
+      for (const [k, v] of Object.entries(data)) {
+        try {
+          sessionStorage.setItem(k, v);
+        } catch {
+          // Ignore origins where sessionStorage is unavailable.
+        }
+      }
+    }, sessionData)
+    .catch(() => undefined);
+  await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => undefined);
+
+  const hasAfterReload = await page
+    .evaluate((keys: string[]) => keys.some((k) => sessionStorage.getItem(k) !== null), oidcKeys)
+    .catch(() => false);
+  if (!hasAfterReload) {
+    throw new Error(
+      '[auth-harness] OIDC sessionStorage not loaded after reinject + reload. ' +
+        'Persona auth state is missing or the browser blocked the write.',
+    );
+  }
 }
 
 async function createContextFromStorageState(
@@ -188,6 +220,16 @@ export const test = base.extend<TestFixtures>({
         contextsToClose.add(nextSession.context);
         session.page = nextSession.page;
         session.context = nextSession.context;
+
+        // Pre-navigate + verify OIDC sessionStorage loaded — this closes the
+        // addInitScript / React-OIDC boot race that otherwise surfaces as
+        // "Login with Keycloak" on authenticated Console tests.
+        if (navigateUrl) {
+          const authPath = resolveAuthStatePath(getAuthStatePath(personaKey));
+          const sessionData = loadSessionStorageFromAuthState(authPath);
+          await nextSession.page.goto(navigateUrl, { waitUntil: 'domcontentloaded' });
+          await ensureSessionStorageLoaded(nextSession.page, sessionData);
+        }
       },
     };
 

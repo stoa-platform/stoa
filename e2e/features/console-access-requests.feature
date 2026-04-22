@@ -5,7 +5,8 @@ Feature: Console - Admin Access Requests
   I want to manage enterprise access requests
   So that I can approve or reject access to the platform.
 
-  @smoke @critical
+  # regression for CAB-2147 — addInitScript/React-OIDC boot race
+  @smoke @critical @regression
   Scenario: Platform admin views Access Requests page
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible

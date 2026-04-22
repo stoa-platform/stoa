@@ -41,9 +41,9 @@ describe('UI-2 S2b domain clients', () => {
       .mockResolvedValueOnce({ data: subscription })
       .mockResolvedValueOnce({ data: bulkResult });
 
-    await expect(
-      subscriptionsClient.list('tenant-1', 'approved', 2, 50, 'prod')
-    ).resolves.toBe(list);
+    await expect(subscriptionsClient.list('tenant-1', 'approved', 2, 50, 'prod')).resolves.toBe(
+      list
+    );
     await expect(subscriptionsClient.listPending('tenant-1', 3, 25)).resolves.toBe(pending);
     await expect(subscriptionsClient.getStats('tenant-1')).resolves.toBe(stats);
     await expect(subscriptionsClient.approve('sub-1', '2026-04-30')).resolves.toBe(subscription);
@@ -125,10 +125,7 @@ describe('UI-2 S2b domain clients', () => {
     ).resolves.toBeUndefined();
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/webhooks');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/tenants/tenant-1/webhooks/wh-1'
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/tenants/tenant-1/webhooks/wh-1');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/webhooks', {
       name: 'Ops',
       url: 'https://example.com/hook',
@@ -182,13 +179,10 @@ describe('UI-2 S2b domain clients', () => {
     await expect(credentialMappingsClient.remove('tenant-1', 'map-1')).resolves.toBeUndefined();
 
     expect(mockHttpClient.get).toHaveBeenCalledWith('/v1/tenants/tenant-1/credential-mappings');
-    expect(mockHttpClient.post).toHaveBeenCalledWith(
-      '/v1/tenants/tenant-1/credential-mappings',
-      {
-        provider: 'vault',
-        remote_key: 'secret/data/foo',
-      }
-    );
+    expect(mockHttpClient.post).toHaveBeenCalledWith('/v1/tenants/tenant-1/credential-mappings', {
+      provider: 'vault',
+      remote_key: 'secret/data/foo',
+    });
     expect(mockHttpClient.put).toHaveBeenCalledWith(
       '/v1/tenants/tenant-1/credential-mappings/map-1',
       {
@@ -240,10 +234,7 @@ describe('UI-2 S2b domain clients', () => {
     ).resolves.toBeUndefined();
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/contracts');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/tenants/tenant-1/contracts/ct-1'
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/tenants/tenant-1/contracts/ct-1');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/contracts', {
       name: 'Payments',
       version: '1.0.0',
@@ -255,10 +246,7 @@ describe('UI-2 S2b domain clients', () => {
     expect(mockHttpClient.patch).toHaveBeenCalledWith('/v1/tenants/tenant-1/contracts/ct-1', {
       description: 'Updated',
     });
-    expect(mockHttpClient.delete).toHaveBeenNthCalledWith(
-      1,
-      '/v1/tenants/tenant-1/contracts/ct-1'
-    );
+    expect(mockHttpClient.delete).toHaveBeenNthCalledWith(1, '/v1/tenants/tenant-1/contracts/ct-1');
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(
       3,
       '/v1/tenants/tenant-1/contracts/ct-1/bindings'

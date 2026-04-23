@@ -133,14 +133,19 @@ class GitLabService(GitProvider):
         try:
             gl_cfg = settings.git.gitlab
 
-            def _connect() -> tuple[gitlab.Gitlab, Project]:
+            def _connect() -> tuple[gitlab.Gitlab, Project, str]:
                 client = gitlab.Gitlab(gl_cfg.url, private_token=gl_cfg.token.get_secret_value())
                 client.auth()
                 project = client.projects.get(gl_cfg.project_id)
-                return client, project
+                # Materialise the scalar inside the closure so the log
+                # line below does not trigger any lazy attribute access
+                # on the event loop.
+                return client, project, project.name
 
-            self._gl, self._project = await _gl_run(_connect, "gitlab.connect", timeout=15.0)
-            logger.info("Connected to GitLab project: %s", self._project.name)
+            self._gl, self._project, project_name = await _gl_run(
+                _connect, "gitlab.connect", timeout=15.0
+            )
+            logger.info("Connected to GitLab project: %s", project_name)
         except Exception as e:
             logger.error("Failed to connect to GitLab: %s", e)
             raise

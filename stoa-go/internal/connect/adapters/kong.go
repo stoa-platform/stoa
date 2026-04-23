@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -183,49 +184,79 @@ func (k *KongAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName 
 	return nil
 }
 
-// RemovePolicy removes a plugin from a Kong service by type.
+// RemovePolicy removes every plugin of the given type from a Kong service.
+//
+// Idempotent on 0 matches. Pre-GO-1 the loop returned after deleting the
+// first match (C.1 in BUG-REPORT-GO-1.md), leaving duplicate plugins
+// silently active on the gateway. Now all matches are deleted; a warn log
+// line fires whenever N > 1.
+//
+// Error semantics mirror webMethods.RemovePolicy:
+//   - all deletions succeed → nil (log if N > 1).
+//   - ≥ 1 deletion fails → error wrapping the last failure with an
+//     "removed X/N" prefix.
+//   - 0 matches → nil.
 func (k *KongAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error {
-	// List plugins for the service, find by name, delete by ID
 	pluginsURL := fmt.Sprintf("%s/services/%s/plugins", adminURL, apiName)
 	body, err := k.doGet(ctx, pluginsURL)
 	if err != nil {
 		return fmt.Errorf("list kong plugins: %w", err)
 	}
 
-	var plugins kongPluginsResponse
-	if err := json.Unmarshal(body, &plugins); err != nil {
-		return fmt.Errorf("decode kong plugins: %w", err)
-	}
-
-	// Find plugin ID by name from raw JSON (we need the id field)
+	// Raw map decode so we can recover both name and id fields.
 	var rawPlugins struct {
 		Data []map[string]interface{} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &rawPlugins); err != nil {
-		return fmt.Errorf("decode kong plugins raw: %w", err)
+		return fmt.Errorf("decode kong plugins: %w", err)
 	}
 
+	var ids []string
 	for _, p := range rawPlugins.Data {
 		name, _ := p["name"].(string)
 		id, _ := p["id"].(string)
 		if name == policyType && id != "" {
-			deleteURL := fmt.Sprintf("%s/plugins/%s", adminURL, id)
-			req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
-			if err != nil {
-				return err
-			}
-			k.setAuth(req)
-
-			resp, err := k.client.Do(req)
-			if err != nil {
-				return fmt.Errorf("delete kong plugin: %w", err)
-			}
-			_ = resp.Body.Close()
-			return nil
+			ids = append(ids, id)
 		}
 	}
+	if len(ids) == 0 {
+		return nil // idempotent
+	}
 
-	return nil // Plugin not found — idempotent
+	var lastErr error
+	succeeded := 0
+	for _, id := range ids {
+		deleteURL := fmt.Sprintf("%s/plugins/%s", adminURL, id)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		k.setAuth(req)
+
+		resp, err := k.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("delete kong plugin %s: %w", id, err)
+			continue
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+			lastErr = fmt.Errorf("kong plugin delete %s failed (%d)", id, resp.StatusCode)
+			continue
+		}
+		succeeded++
+	}
+
+	if len(ids) > 1 {
+		log.Printf("kong: RemovePolicy removed %d/%d duplicate plugins for service=%s type=%s",
+			succeeded, len(ids), apiName, policyType)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("kong RemovePolicy: removed %d/%d plugins for service=%s type=%s; last error: %w",
+			succeeded, len(ids), apiName, policyType, lastErr)
+	}
+	return nil
 }
 
 // SyncRoutes pushes CP routes to Kong via declarative config merge (POST /config).

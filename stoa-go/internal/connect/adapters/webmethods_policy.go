@@ -20,6 +20,19 @@ var wmPolicyTypeMapping = map[string]string{
 }
 
 // mapPolicyConfig converts STOA-format config to webMethods-specific parameters.
+//
+// The jwtPolicy and ipFilterPolicy cases were added to close GO-1 H.4
+// (BUG-REPORT-GO-1.md) — previously they fell through to the default
+// passthrough, sending STOA's raw config to webMethods which rejected with
+// 400 "invalid policy params" (direct impact on CAB-2079 Auth/RBAC for the
+// BDF demo).
+//
+// WM-10.15-HYPOTHESIS: the exact webMethods 10.15 parameter names below
+// (jwtIssuer / jwtAudience / jwksURL / requiredClaims for jwtPolicy;
+// ipFilterMode / ipList for ipFilterPolicy) are a best-effort mapping drawn
+// from webMethods doc patterns but not confirmed against a live 10.15
+// instance. MUST VALIDATE in staging before BDF demo — see ticket CAB-2161.
+// If field names differ, update the cases below and remove this comment.
 func mapPolicyConfig(wmType string, config map[string]interface{}) map[string]interface{} {
 	switch wmType {
 	case "corsPolicy":
@@ -41,9 +54,41 @@ func mapPolicyConfig(wmType string, config map[string]interface{}) map[string]in
 			"logRequestPayload":  getOrDefault(config, "logRequest", true),
 			"logResponsePayload": getOrDefault(config, "logResponse", true),
 		}
+	case "jwtPolicy":
+		// WM-10.15-HYPOTHESIS (CAB-2161) — validate in staging.
+		return map[string]interface{}{
+			"jwtIssuer":      getOrDefault(config, "issuer", ""),
+			"jwtAudience":    getOrDefault(config, "audience", ""),
+			"jwksURL":        getOrDefault(config, "jwks_url", ""),
+			"requiredClaims": getOrDefault(config, "required_claims", map[string]interface{}{}),
+		}
+	case "ipFilterPolicy":
+		// WM-10.15-HYPOTHESIS (CAB-2161) — validate in staging.
+		// mode uppercased to match the broader fixSecuritySchemeTypes
+		// convention (webMethods enum values are uppercase).
+		mode, _ := getOrDefault(config, "mode", "allow").(string)
+		return map[string]interface{}{
+			"ipFilterMode": upperASCII(mode),
+			"ipList":       getOrDefault(config, "ip_list", []interface{}{}),
+		}
 	default:
 		return config
 	}
+}
+
+// upperASCII uppercases an ASCII string without pulling in strings.ToUpper,
+// which would also touch non-ASCII code points. The enum values we care
+// about (allow/deny) are ASCII-only.
+func upperASCII(s string) string {
+	out := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		out[i] = c
+	}
+	return string(out)
 }
 
 func getOrDefault(config map[string]interface{}, key string, defaultVal interface{}) interface{} {

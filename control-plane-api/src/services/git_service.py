@@ -22,7 +22,7 @@ import re
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import gitlab
 import yaml
@@ -116,7 +116,14 @@ def _normalize_api_data(raw_data: dict) -> dict:
     return raw_data
 
 
-async def _gl_run(fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Any:
+_GLT = TypeVar("_GLT")
+
+
+async def _gl_run(
+    fn: Callable[[], _GLT],
+    op_name: str,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> _GLT:
     """Run a sync python-gitlab closure under the uniform GitLab semaphore."""
     return await run_sync(fn, semaphore=GITLAB_SEMAPHORE, timeout=timeout, op_name=op_name)
 

@@ -26,7 +26,7 @@ import re
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import yaml
 from github import Auth, Github, GithubException, InputGitTreeElement
@@ -45,22 +45,34 @@ from .git_provider import BranchRef, CommitRef, GitProvider, MergeRequestRef, Tr
 
 logger = logging.getLogger(__name__)
 
+_GHT = TypeVar("_GHT")
 
-async def _gh_read(fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Any:
+
+async def _gh_read(
+    fn: Callable[[], _GHT],
+    op_name: str,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> _GHT:
     """Run a sync PyGithub read closure under the read semaphore."""
     return await run_sync(fn, semaphore=GITHUB_READ_SEMAPHORE, timeout=timeout, op_name=op_name)
 
 
 async def _gh_contents_write(
-    fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S
-) -> Any:
+    fn: Callable[[], _GHT],
+    op_name: str,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> _GHT:
     """Run a sync PyGithub Contents-API write under the serial (1) semaphore."""
     return await run_sync(
         fn, semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name
     )
 
 
-async def _gh_meta_write(fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Any:
+async def _gh_meta_write(
+    fn: Callable[[], _GHT],
+    op_name: str,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> _GHT:
     """Run a sync PyGithub non-Contents write under the meta-write semaphore (5)."""
     return await run_sync(
         fn, semaphore=GITHUB_META_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name

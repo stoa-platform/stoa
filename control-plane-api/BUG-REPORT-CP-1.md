@@ -26,6 +26,30 @@
 > `test_regression_cp1_token_leak.py`,
 > `test_regression_cp1_webhook_auth_first.py`.
 
+> **P1 batch status (2026-04-23 pm)** — all nine P1 findings fixed on
+> branch `fix/cp-1-p1-batch` (4 atomic commits):
+>
+> | Bug | Commit | Fix |
+> |---|---|---|
+> | H.1 | `52ba19012` | webhook_dedup.py claim/process/done state machine, Idempotency-Key priority |
+> | H.2 | `4818b023a` | narrow `except FileNotFoundError` in `_sync_api_from_git`, keep provider-agnostic |
+> | H.3 | `71f646f33` | router `_map_provider_exception` → stable generic detail, no `str(e)` leak |
+> | H.4 | `71f646f33` | `delete_file` tri-state mapping: FileNotFoundError→404, TimeoutError→504, other→502 |
+> | H.5 | `71f646f33` | listing routes surface 502/504 instead of silent `[]` (get_tree keeps FNF→[]) |
+> | H.6 | `4818b023a` | `github_service.list_tree` returns `[]` on file path (no singleton blob) |
+> | H.7 | `65abd37e1` | Kafka `enable_auto_commit=False` + manual commit after handler success |
+> | H.8 | `65abd37e1` | discriminate ValueError by "already exists"/"not found" — unknown = error |
+> | H.10 | `71f646f33` | `_validate_file_path` rejects `..`, absolute, backslash, ASCII control chars |
+>
+> Regression guards: 49 new tests across
+> `test_regression_cp1_p1_service_contracts.py` (7),
+> `test_regression_cp1_p1_router_errors.py` (17),
+> `test_regression_cp1_p1_webhook_dedup.py` (18),
+> `test_regression_cp1_p1_worker_reliability.py` (7).
+>
+> **P1-adjacent bonus**: L.2 (webhook 500 leaks str(e)) closed
+> alongside H.1 in `52ba19012` — same class of bug as H.3.
+
 **Module**: CP-1 — GitProvider abstraction in `control-plane-api`
 **Path**: `control-plane-api/src/services/git_provider.py`, `git_service.py`, `github_service.py`, `src/routers/git.py`, `src/routers/webhooks.py`, `src/services/iam_sync_service.py`, `src/services/deployment_orchestration_service.py`, `src/workers/git_sync_worker.py`
 **Scope**: ~3 200 LOC across 8 files

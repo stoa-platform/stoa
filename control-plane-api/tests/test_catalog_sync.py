@@ -2,15 +2,13 @@
 import asyncio
 import logging
 import time
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.git_service import (
     GitLabService,
     _fetch_with_protection,
-    GitLabRateLimitError,
-    GITLAB_SEMAPHORE,
 )
 
 
@@ -73,27 +71,47 @@ async def test_fetch_with_protection_no_retry_on_other_errors():
 
 @pytest.mark.asyncio
 async def test_semaphore_limits_concurrency():
-    """Verify semaphore limits to 10 concurrent calls"""
-    concurrent = 0
-    max_concurrent = 0
-    sem = asyncio.Semaphore(10)
+    """Verify GITLAB_SEMAPHORE caps applicative concurrency at 10.
 
-    async def tracked_call():
-        nonlocal concurrent, max_concurrent
-        concurrent += 1
-        max_concurrent = max(max_concurrent, concurrent)
-        await asyncio.sleep(0.02)
-        concurrent -= 1
+    CP-1 (C.4): the semaphore was moved from _fetch_with_protection to
+    git_executor.run_sync so it applies UNIFORMLY across every GitLab
+    method, not only the two "parallel" fetchers. The invariant tested
+    here is the one that matters: run_sync, invoked 30x concurrently,
+    never lets more than 10 closures run in parallel.
+    """
+    import threading
+
+    from src.services import git_executor
+
+    concurrent = {"current": 0, "peak": 0}
+    lock = threading.Lock()
+
+    def tracked_sync_call():
+        with lock:
+            concurrent["current"] += 1
+            concurrent["peak"] = max(concurrent["peak"], concurrent["current"])
+        time.sleep(0.02)
+        with lock:
+            concurrent["current"] -= 1
         return "ok"
 
-    with patch("src.services.git_service.GITLAB_SEMAPHORE", sem):
-        tasks = [
-            _fetch_with_protection(tracked_call, f"call-{i}", max_retries=1)
-            for i in range(30)
-        ]
-        await asyncio.gather(*tasks)
+    # Use a fresh semaphore bound to the current loop — the module-level
+    # GITLAB_SEMAPHORE may have been acquired by an earlier test's loop.
+    fresh_sem = asyncio.Semaphore(10)
 
-    assert max_concurrent <= 10, f"Semaphore violated: {max_concurrent} concurrent"
+    tasks = [
+        git_executor.run_sync(
+            tracked_sync_call,
+            semaphore=fresh_sem,
+            op_name=f"call-{i}",
+        )
+        for i in range(30)
+    ]
+    await asyncio.gather(*tasks)
+
+    assert concurrent["peak"] <= 10, (
+        f"Semaphore violated: {concurrent['peak']} concurrent"
+    )
 
 
 @pytest.mark.asyncio

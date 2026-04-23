@@ -1,7 +1,22 @@
 """GitHub implementation of GitProvider (CAB-1890 Wave 2, CAB-2011 write methods).
 
-Uses PyGithub for API operations and subprocess git for clone.
-project_id format: "org/repo" (e.g. "stoa-platform/stoa-catalog").
+CP-1 (C.1/C.5): PyGithub is synchronous; every SDK call is routed through
+:func:`.git_executor.run_sync` so the asyncio loop stays non-blocking.
+Read calls acquire ``GITHUB_READ_SEMAPHORE`` (cap 10). Write calls on the
+Repository Contents endpoints acquire ``GITHUB_CONTENTS_WRITE_SEMAPHORE``
+(cap 1 — serial, per GitHub docs "Running this endpoint with parallel
+requests is bound to cause errors"). Non-Contents writes (pull requests,
+branches, webhooks) acquire ``GITHUB_META_WRITE_SEMAPHORE`` (cap 5).
+
+CP-1 (C.6): ``write_file`` drops the ``_file_exists`` pre-check. It calls
+``create_file`` first and falls through to ``update_file`` on the 422
+"already exists" error.
+
+Implementation rule (see git_executor.py): the ENTIRE SDK interaction —
+including iteration over PyGithub ``PaginatedList`` objects and
+``.decoded_content`` access on lazy ``ContentFile`` — must happen inside
+the closure passed to ``run_sync``. Returning a lazy object and iterating
+it after ``await`` would re-introduce the blocking sync-in-async pattern.
 """
 
 import asyncio
@@ -9,6 +24,7 @@ import json
 import logging
 import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,9 +32,38 @@ import yaml
 from github import Auth, Github, GithubException, InputGitTreeElement
 
 from ..config import settings
+from .git_executor import (
+    BATCH_TIMEOUT_S,
+    DEFAULT_TIMEOUT_S,
+    GITHUB_CONTENTS_WRITE_SEMAPHORE,
+    GITHUB_META_WRITE_SEMAPHORE,
+    GITHUB_READ_SEMAPHORE,
+    run_sync,
+)
 from .git_provider import BranchRef, CommitRef, GitProvider, MergeRequestRef, TreeEntry
 
 logger = logging.getLogger(__name__)
+
+
+async def _gh_read(fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Any:
+    """Run a sync PyGithub read closure under the read semaphore."""
+    return await run_sync(fn, semaphore=GITHUB_READ_SEMAPHORE, timeout=timeout, op_name=op_name)
+
+
+async def _gh_contents_write(
+    fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S
+) -> Any:
+    """Run a sync PyGithub Contents-API write under the serial (1) semaphore."""
+    return await run_sync(
+        fn, semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name
+    )
+
+
+async def _gh_meta_write(fn: Callable[..., Any], op_name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Any:
+    """Run a sync PyGithub non-Contents write under the meta-write semaphore (5)."""
+    return await run_sync(
+        fn, semaphore=GITHUB_META_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name
+    )
 
 
 def _normalize_api_data(raw_data: dict) -> dict:
@@ -49,7 +94,6 @@ def _normalize_api_data(raw_data: dict) -> dict:
 
 
 def _normalize_mcp_server_data(raw_data: dict, git_path: str) -> dict:
-    """Normalize MCP server YAML to the existing catalog sync format."""
     metadata = raw_data.get("metadata", {})
     spec = raw_data.get("spec", {})
     visibility = spec.get("visibility", {})
@@ -113,9 +157,13 @@ class GitHubService(GitProvider):
         """Initialize GitHub connection using settings.git.github.token."""
         try:
             auth = Auth.Token(settings.git.github.token.get_secret_value())
-            self._gh = Github(auth=auth)
-            # Validate credentials by fetching authenticated user
-            user = self._gh.get_user().login
+
+            def _connect() -> tuple[Github, str]:
+                client = Github(auth=auth)
+                login = client.get_user().login
+                return client, login
+
+            self._gh, user = await _gh_read(_connect, "github.connect", timeout=15.0)
             logger.info("Connected to GitHub as %s", user)
         except Exception as e:
             logger.error("Failed to connect to GitHub: %s", e)
@@ -132,10 +180,13 @@ class GitHubService(GitProvider):
         return self._gh is not None
 
     async def clone_repo(self, repo_url: str) -> Path:
-        """Clone a GitHub repository to a temporary directory."""
+        """Clone a GitHub repository to a temporary directory.
+
+        NOTE: token-in-URL here is the C.2 leak — patched by the
+        subsequent commit (GIT_ASKPASS helper).
+        """
         tmp_dir = Path(tempfile.mkdtemp(prefix="stoa-gh-"))
         token = settings.git.github.token.get_secret_value()
-        # Inject token into HTTPS URL for auth
         authed_url = repo_url.replace("https://", f"https://x-access-token:{token}@")
         proc = await asyncio.create_subprocess_exec(
             "git",
@@ -151,41 +202,55 @@ class GitHubService(GitProvider):
             raise RuntimeError(f"git clone failed: {stderr.decode().strip()}")
         return tmp_dir / "repo"
 
-    def _get_repo(self, project_id: str) -> Any:
-        """Get a PyGithub Repository object.
-
-        Args:
-            project_id: "org/repo" format (e.g. "stoa-platform/stoa-catalog").
-        """
+    def _require_gh(self) -> Github:
         if not self._gh:
             raise RuntimeError("GitHub not connected")
-        return self._gh.get_repo(project_id)
+        return self._gh
+
+    def _get_repo(self, project_id: str) -> Any:
+        """Return a PyGithub Repository object.
+
+        Used by tests and legacy code; call-sites that need to run inside
+        ``run_sync`` must fetch the repo inside the closure to avoid
+        reintroducing C.1 via lazy object accesses.
+        """
+        return self._require_gh().get_repo(project_id)
 
     async def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> str:
         """Retrieve raw file content from GitHub."""
-        repo = self._get_repo(project_id)
-        try:
-            content_file = repo.get_contents(file_path, ref=ref)
-            if isinstance(content_file, list):
-                raise FileNotFoundError(f"{file_path} is a directory, not a file, in {project_id}")
-            return content_file.decoded_content.decode("utf-8")
-        except GithubException as exc:
-            if exc.status == 404:
-                raise FileNotFoundError(f"{file_path} not found in project {project_id}") from exc
-            raise
+        gh = self._require_gh()
+
+        def _get() -> str:
+            repo = gh.get_repo(project_id)
+            try:
+                content_file = repo.get_contents(file_path, ref=ref)
+                if isinstance(content_file, list):
+                    raise FileNotFoundError(f"{file_path} is a directory, not a file, in {project_id}")
+                return content_file.decoded_content.decode("utf-8")
+            except GithubException as exc:
+                if exc.status == 404:
+                    raise FileNotFoundError(f"{file_path} not found in project {project_id}") from exc
+                raise
+
+        return await _gh_read(_get, "github.get_file_content")
 
     async def list_files(self, project_id: str, path: str = "", ref: str = "main") -> list[str]:
         """List files in a GitHub repository directory."""
-        repo = self._get_repo(project_id)
-        try:
-            contents = repo.get_contents(path, ref=ref)
+        gh = self._require_gh()
+
+        def _list() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(path, ref=ref)
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
             if not isinstance(contents, list):
                 contents = [contents]
             return [item.path for item in contents]
-        except GithubException as exc:
-            if exc.status == 404:
-                return []
-            raise
+
+        return await _gh_read(_list, "github.list_files")
 
     async def create_webhook(
         self,
@@ -194,56 +259,76 @@ class GitHubService(GitProvider):
         secret: str,
         events: list[str],
     ) -> dict[str, Any]:
-        """Register a webhook on a GitHub repository."""
-        repo = self._get_repo(project_id)
-        # Map generic event names to GitHub webhook events
-        event_map = {
-            "push": "push",
-            "merge_request": "pull_request",
-            "tag": "create",
-            "issues": "issues",
-        }
-        gh_events = [event_map.get(e, e) for e in events]
-        hook = repo.create_hook(
-            name="web",
-            config={"url": url, "secret": secret, "content_type": "json"},
-            events=gh_events,
-            active=True,
-        )
-        return {"id": str(hook.id), "url": hook.config["url"]}
+        """Register a webhook on a GitHub repository (non-Contents write)."""
+        gh = self._require_gh()
+
+        def _create() -> dict[str, Any]:
+            repo = gh.get_repo(project_id)
+            event_map = {
+                "push": "push",
+                "merge_request": "pull_request",
+                "tag": "create",
+                "issues": "issues",
+            }
+            gh_events = [event_map.get(e, e) for e in events]
+            hook = repo.create_hook(
+                name="web",
+                config={"url": url, "secret": secret, "content_type": "json"},
+                events=gh_events,
+                active=True,
+            )
+            return {"id": str(hook.id), "url": hook.config["url"]}
+
+        return await _gh_meta_write(_create, "github.create_webhook")
 
     async def delete_webhook(self, project_id: str, hook_id: str) -> bool:
-        """Remove a webhook from a GitHub repository."""
-        repo = self._get_repo(project_id)
-        try:
-            hook = repo.get_hook(int(hook_id))
-            hook.delete()
-            return True
-        except GithubException as exc:
-            if exc.status == 404:
-                return False
-            raise
+        """Remove a webhook from a GitHub repository (non-Contents write)."""
+        gh = self._require_gh()
+
+        def _delete() -> bool:
+            repo = gh.get_repo(project_id)
+            try:
+                hook = repo.get_hook(int(hook_id))
+                hook.delete()
+                return True
+            except GithubException as exc:
+                if exc.status == 404:
+                    return False
+                raise
+
+        return await _gh_meta_write(_delete, "github.delete_webhook")
 
     async def get_repo_info(self, project_id: str) -> dict[str, Any]:
         """Retrieve GitHub repository metadata."""
-        repo = self._get_repo(project_id)
-        return {
-            "name": repo.name,
-            "default_branch": repo.default_branch,
-            "url": repo.html_url,
-            "visibility": "private" if repo.private else "public",
-        }
+        gh = self._require_gh()
+
+        def _info() -> dict[str, Any]:
+            repo = gh.get_repo(project_id)
+            return {
+                "name": repo.name,
+                "default_branch": repo.default_branch,
+                "url": repo.html_url,
+                "visibility": "private" if repo.private else "public",
+            }
+
+        return await _gh_read(_info, "github.get_repo_info")
 
     async def get_head_commit_sha(self, ref: str = "main") -> str | None:
         """Return the HEAD commit SHA for the catalog branch."""
-        repo = self._get_repo(self._catalog_project_id())
-        try:
-            branch = repo.get_branch(ref)
-        except GithubException as exc:
-            if exc.status == 404:
-                return None
-            raise
-        return branch.commit.sha
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _head() -> str | None:
+            repo = gh.get_repo(project_id)
+            try:
+                branch = repo.get_branch(ref)
+            except GithubException as exc:
+                if exc.status == 404:
+                    return None
+                raise
+            return branch.commit.sha
+
+        return await _gh_read(_head, "github.get_head_commit_sha")
 
     async def get_tenant(self, tenant_id: str) -> dict | None:
         """Return tenant metadata from tenant.yaml if present."""
@@ -262,18 +347,22 @@ class GitHubService(GitProvider):
 
     async def list_tenants(self) -> list[str]:
         """List tenants from the catalog repository."""
-        repo = self._get_repo(self._catalog_project_id())
-        try:
-            contents = repo.get_contents("tenants", ref="main")
-        except GithubException as exc:
-            if exc.status == 404:
-                return []
-            raise
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
 
-        if not isinstance(contents, list):
-            contents = [contents]
+        def _list() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents("tenants", ref="main")
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
+            if not isinstance(contents, list):
+                contents = [contents]
+            return [item.name for item in contents if item.type == "dir"]
 
-        return [item.name for item in contents if item.type == "dir"]
+        return await _gh_read(_list, "github.list_tenants")
 
     async def get_api(self, tenant_id: str, api_name: str) -> dict | None:
         """Return normalized API metadata from api.yaml."""
@@ -294,43 +383,50 @@ class GitHubService(GitProvider):
 
     async def list_apis(self, tenant_id: str) -> list[dict]:
         """List APIs for a tenant from GitHub."""
-        repo = self._get_repo(self._catalog_project_id())
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
         base_path = f"{self._get_tenant_path(tenant_id)}/apis"
-        try:
-            contents = repo.get_contents(base_path, ref="main")
-        except GithubException as exc:
-            if exc.status == 404:
-                return []
-            raise
 
-        if not isinstance(contents, list):
-            contents = [contents]
+        def _list_names() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(base_path, ref="main")
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
+            if not isinstance(contents, list):
+                contents = [contents]
+            return [item.name for item in contents if item.type == "dir" and item.name != ".gitkeep"]
 
+        names = await _gh_read(_list_names, "github.list_apis.names")
         apis: list[dict] = []
-        for item in contents:
-            if item.type != "dir" or item.name == ".gitkeep":
-                continue
-            api = await self.get_api(tenant_id, item.name)
+        for name in names:
+            api = await self.get_api(tenant_id, name)
             if api:
                 apis.append(api)
         return apis
 
     async def list_apis_parallel(self, tenant_id: str) -> list[dict]:
         """List tenant APIs with concurrent GitHub fetches."""
-        repo = self._get_repo(self._catalog_project_id())
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
         base_path = f"{self._get_tenant_path(tenant_id)}/apis"
-        try:
-            contents = repo.get_contents(base_path, ref="main")
-        except GithubException as exc:
-            if exc.status == 404:
-                return []
-            raise
 
-        if not isinstance(contents, list):
-            contents = [contents]
+        def _list_names() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(base_path, ref="main")
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
+            if not isinstance(contents, list):
+                contents = [contents]
+            return [item.name for item in contents if item.type == "dir" and item.name != ".gitkeep"]
 
-        api_names = [item.name for item in contents if item.type == "dir" and item.name != ".gitkeep"]
-        results = await asyncio.gather(*[self.get_api(tenant_id, api_name) for api_name in api_names])
+        api_names = await _gh_read(_list_names, "github.list_apis_parallel.names")
+        results = await asyncio.gather(*[self.get_api(tenant_id, name) for name in api_names])
         return [api for api in results if api is not None]
 
     async def get_api_openapi_spec(self, tenant_id: str, api_name: str) -> dict | None:
@@ -349,7 +445,9 @@ class GitHubService(GitProvider):
                     return json.loads(content)
                 return yaml.safe_load(content)
             except (json.JSONDecodeError, yaml.YAMLError) as exc:
-                logger.error("Failed to parse OpenAPI spec for %s/%s (%s): %s", tenant_id, api_name, filename, exc)
+                logger.error(
+                    "Failed to parse OpenAPI spec for %s/%s (%s): %s", tenant_id, api_name, filename, exc
+                )
                 return None
 
         return None
@@ -365,24 +463,29 @@ class GitHubService(GitProvider):
 
     async def get_full_tree_recursive(self, path: str = "tenants") -> list[dict]:
         """Return the recursive Git tree in the GitLab-compatible shape."""
-        repo = self._get_repo(self._catalog_project_id())
-        branch = repo.get_branch("main")
-        tree = repo.get_git_tree(branch.commit.sha, recursive=True).tree
-        prefix = f"{path}/"
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
 
-        items: list[dict] = []
-        for item in tree:
-            if item.path != path and not item.path.startswith(prefix):
-                continue
-            items.append(
-                {
-                    "id": item.sha,
-                    "name": Path(item.path).name,
-                    "type": "tree" if item.type == "tree" else "blob",
-                    "path": item.path,
-                }
-            )
-        return items
+        def _tree() -> list[dict]:
+            repo = gh.get_repo(project_id)
+            branch = repo.get_branch("main")
+            tree = repo.get_git_tree(branch.commit.sha, recursive=True).tree
+            prefix = f"{path}/"
+            items: list[dict] = []
+            for item in tree:
+                if item.path != path and not item.path.startswith(prefix):
+                    continue
+                items.append(
+                    {
+                        "id": item.sha,
+                        "name": Path(item.path).name,
+                        "type": "tree" if item.type == "tree" else "blob",
+                        "path": item.path,
+                    }
+                )
+            return items
+
+        return await _gh_read(_tree, "github.get_full_tree_recursive", timeout=BATCH_TIMEOUT_S)
 
     def parse_tree_to_tenant_apis(self, tree: list[dict]) -> dict[str, list[str]]:
         """Parse a recursive tree into {tenant_id: [api_ids]}."""
@@ -419,24 +522,28 @@ class GitHubService(GitProvider):
 
     async def list_mcp_servers(self, tenant_id: str = "_platform") -> list[dict]:
         """List MCP servers for a tenant or platform scope."""
-        repo = self._get_repo(self._catalog_project_id())
-        if tenant_id == "_platform":
-            base_path = "platform/mcp-servers"
-        else:
-            base_path = f"{self._get_tenant_path(tenant_id)}/mcp-servers"
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+        base_path = (
+            "platform/mcp-servers"
+            if tenant_id == "_platform"
+            else f"{self._get_tenant_path(tenant_id)}/mcp-servers"
+        )
 
-        try:
-            contents = repo.get_contents(base_path, ref="main")
-        except GithubException as exc:
-            if exc.status == 404:
-                return []
-            raise
+        def _list_names() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(base_path, ref="main")
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
+            if not isinstance(contents, list):
+                contents = [contents]
+            return [item.name for item in contents if item.type == "dir" and item.name != ".gitkeep"]
 
-        if not isinstance(contents, list):
-            contents = [contents]
-
-        server_names = [item.name for item in contents if item.type == "dir" and item.name != ".gitkeep"]
-        results = await asyncio.gather(*[self.get_mcp_server(tenant_id, server_name) for server_name in server_names])
+        names = await _gh_read(_list_names, "github.list_mcp_servers.names")
+        results = await asyncio.gather(*[self.get_mcp_server(tenant_id, name) for name in names])
         return [server for server in results if server is not None]
 
     async def list_all_mcp_servers(self) -> list[dict]:
@@ -453,45 +560,60 @@ class GitHubService(GitProvider):
     async def create_file(
         self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
     ) -> dict[str, Any]:
-        """Create a new file in a GitHub repository."""
-        repo = self._get_repo(project_id)
-        try:
-            result = repo.create_file(file_path, commit_message, content, branch=branch)
-            return {"sha": result["commit"].sha, "url": result["commit"].html_url}
-        except GithubException as exc:
-            if exc.status == 422 and "sha" in str(exc.data).lower():
-                raise ValueError(f"File already exists: {file_path}") from exc
-            raise
+        """Create a new file in a GitHub repository (Contents API — serial)."""
+        gh = self._require_gh()
+
+        def _create() -> dict[str, Any]:
+            repo = gh.get_repo(project_id)
+            try:
+                result = repo.create_file(file_path, commit_message, content, branch=branch)
+                return {"sha": result["commit"].sha, "url": result["commit"].html_url}
+            except GithubException as exc:
+                if exc.status == 422 and "sha" in str(exc.data).lower():
+                    raise ValueError(f"File already exists: {file_path}") from exc
+                raise
+
+        return await _gh_contents_write(_create, "github.create_file")
 
     async def update_file(
         self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
     ) -> dict[str, Any]:
-        """Update an existing file in a GitHub repository."""
-        repo = self._get_repo(project_id)
-        try:
-            existing = repo.get_contents(file_path, ref=branch)
-            if isinstance(existing, list):
-                raise ValueError(f"{file_path} is a directory, not a file")
-            result = repo.update_file(file_path, commit_message, content, existing.sha, branch=branch)
-            return {"sha": result["commit"].sha, "url": result["commit"].html_url}
-        except GithubException as exc:
-            if exc.status == 404:
-                raise FileNotFoundError(f"{file_path} not found in {project_id}") from exc
-            raise
+        """Update an existing file in a GitHub repository (Contents API — serial)."""
+        gh = self._require_gh()
+
+        def _update() -> dict[str, Any]:
+            repo = gh.get_repo(project_id)
+            try:
+                existing = repo.get_contents(file_path, ref=branch)
+                if isinstance(existing, list):
+                    raise ValueError(f"{file_path} is a directory, not a file")
+                result = repo.update_file(file_path, commit_message, content, existing.sha, branch=branch)
+                return {"sha": result["commit"].sha, "url": result["commit"].html_url}
+            except GithubException as exc:
+                if exc.status == 404:
+                    raise FileNotFoundError(f"{file_path} not found in {project_id}") from exc
+                raise
+
+        return await _gh_contents_write(_update, "github.update_file")
 
     async def delete_file(self, project_id: str, file_path: str, commit_message: str, branch: str = "main") -> bool:
-        """Delete a file from a GitHub repository."""
-        repo = self._get_repo(project_id)
-        try:
-            existing = repo.get_contents(file_path, ref=branch)
-            if isinstance(existing, list):
-                raise ValueError(f"{file_path} is a directory, not a file")
-            repo.delete_file(file_path, commit_message, existing.sha, branch=branch)
-            return True
-        except GithubException as exc:
-            if exc.status == 404:
-                raise FileNotFoundError(f"{file_path} not found in {project_id}") from exc
-            raise
+        """Delete a file from a GitHub repository (Contents API — serial)."""
+        gh = self._require_gh()
+
+        def _delete() -> bool:
+            repo = gh.get_repo(project_id)
+            try:
+                existing = repo.get_contents(file_path, ref=branch)
+                if isinstance(existing, list):
+                    raise ValueError(f"{file_path} is a directory, not a file")
+                repo.delete_file(file_path, commit_message, existing.sha, branch=branch)
+                return True
+            except GithubException as exc:
+                if exc.status == 404:
+                    raise FileNotFoundError(f"{file_path} not found in {project_id}") from exc
+                raise
+
+        return await _gh_contents_write(_delete, "github.delete_file")
 
     async def batch_commit(
         self,
@@ -502,41 +624,42 @@ class GitHubService(GitProvider):
     ) -> dict[str, Any]:
         """Atomic multi-file commit via the Git Tree API.
 
-        Equivalent to GitLab's project.commits.create() with an actions array.
-        Creates a new tree with all changes and points the branch ref at it.
+        Uses the Git Data tree path (not strictly Contents), but held under
+        the Contents-write semaphore to keep a single write lane and
+        preserve the "no parallel mutations" invariant.
         """
-        repo = self._get_repo(project_id)
+        gh = self._require_gh()
 
-        # 1. Get current commit on branch
-        ref = repo.get_git_ref(f"heads/{branch}")
-        base_sha = ref.object.sha
-        base_tree = repo.get_git_tree(base_sha)
+        def _commit() -> dict[str, Any]:
+            repo = gh.get_repo(project_id)
+            ref = repo.get_git_ref(f"heads/{branch}")
+            base_sha = ref.object.sha
+            base_tree = repo.get_git_tree(base_sha)
 
-        # 2. Build tree elements from actions
-        tree_elements: list[InputGitTreeElement] = []
-        for action in actions:
-            act = action["action"]
-            path = action["file_path"]
+            tree_elements: list[InputGitTreeElement] = []
+            for action in actions:
+                act = action["action"]
+                path = action["file_path"]
+                if act in ("create", "update"):
+                    content_value = action.get("content", "")
+                    tree_elements.append(InputGitTreeElement(path, "100644", "blob", content=content_value))
+                elif act == "delete":
+                    tree_elements.append(InputGitTreeElement(path, "100644", "blob", sha=None))
+                else:
+                    raise ValueError(f"Unknown action: {act}. Must be create, update, or delete.")
 
-            if act in ("create", "update"):
-                content = action.get("content", "")
-                tree_elements.append(InputGitTreeElement(path, "100644", "blob", content=content))
-            elif act == "delete":
-                # SHA "null" + mode "000000" removes the entry from the tree
-                tree_elements.append(InputGitTreeElement(path, "100644", "blob", sha=None))
-            else:
-                raise ValueError(f"Unknown action: {act}. Must be create, update, or delete.")
+            if not tree_elements:
+                raise ValueError("No actions provided for batch commit")
 
-        if not tree_elements:
-            raise ValueError("No actions provided for batch commit")
+            new_tree = repo.create_git_tree(tree_elements, base_tree=base_tree)
+            new_commit = repo.create_git_commit(commit_message, new_tree, [repo.get_git_commit(base_sha)])
+            ref.edit(new_commit.sha)
+            logger.info(
+                "Batch commit %s on %s/%s (%d actions)", new_commit.sha[:8], project_id, branch, len(actions)
+            )
+            return {"sha": new_commit.sha, "url": new_commit.html_url}
 
-        # 3. Create new tree, commit, and update ref
-        new_tree = repo.create_git_tree(tree_elements, base_tree=base_tree)
-        new_commit = repo.create_git_commit(commit_message, new_tree, [repo.get_git_commit(base_sha)])
-        ref.edit(new_commit.sha)
-
-        logger.info("Batch commit %s on %s/%s (%d actions)", new_commit.sha[:8], project_id, branch, len(actions))
-        return {"sha": new_commit.sha, "url": new_commit.html_url}
+        return await _gh_contents_write(_commit, "github.batch_commit", timeout=BATCH_TIMEOUT_S)
 
     async def create_pull_request(
         self,
@@ -547,25 +670,26 @@ class GitHubService(GitProvider):
         actions: list[dict[str, str]],
         base: str = "main",
     ) -> dict[str, Any]:
-        """Create a branch with changes and open a pull request.
+        """Create a branch with changes and open a pull request."""
+        gh = self._require_gh()
 
-        1. Creates a new branch from base
-        2. Commits all actions to that branch via batch_commit
-        3. Opens a PR from branch → base
-        """
-        repo = self._get_repo(project_id)
+        def _create_branch() -> None:
+            repo = gh.get_repo(project_id)
+            base_ref = repo.get_git_ref(f"heads/{base}")
+            repo.create_git_ref(f"refs/heads/{branch}", base_ref.object.sha)
 
-        # Create branch from base HEAD
-        base_ref = repo.get_git_ref(f"heads/{base}")
-        repo.create_git_ref(f"refs/heads/{branch}", base_ref.object.sha)
+        await _gh_meta_write(_create_branch, "github.create_pr.branch")
 
-        # Commit changes to the new branch
+        # batch_commit acquires its own contents-write semaphore
         await self.batch_commit(project_id, actions, title, branch=branch)
 
-        # Open PR
-        pr = repo.create_pull(title=title, body=body, head=branch, base=base)
-        logger.info("Created PR #%d on %s: %s", pr.number, project_id, title)
-        return {"pr_number": pr.number, "url": pr.html_url}
+        def _open_pr() -> dict[str, Any]:
+            repo = gh.get_repo(project_id)
+            pr = repo.create_pull(title=title, body=body, head=branch, base=base)
+            logger.info("Created PR #%d on %s: %s", pr.number, project_id, title)
+            return {"pr_number": pr.number, "url": pr.html_url}
+
+        return await _gh_meta_write(_open_pr, "github.create_pr.open")
 
     # ============================================================
     # High-level catalog operations (CAB-2011)
@@ -590,7 +714,13 @@ class GitHubService(GitProvider):
         return f"tenants/{tenant_id}/mcp-servers/{server_name}"
 
     async def _file_exists(self, project_id: str, file_path: str, ref: str = "main") -> bool:
-        """Check if a file exists in the repository."""
+        """Check if a file exists in the repository.
+
+        NOTE (C.6): not used by :meth:`write_file` anymore. Retained for
+        :meth:`create_api` / :meth:`update_api` where the pre-check is
+        about producing a specific error shape to callers rather than
+        race-guarding a write.
+        """
         try:
             await self.get_file_content(project_id, file_path, ref=ref)
             return True
@@ -600,14 +730,7 @@ class GitHubService(GitProvider):
     # --- Tenant operations ---
 
     async def create_tenant_structure(self, tenant_id: str, tenant_data: dict) -> bool:
-        """Create initial tenant directory structure in GitHub.
-
-        Structure:
-        tenants/{tenant_id}/
-        ├── tenant.yaml
-        ├── apis/.gitkeep
-        └── applications/.gitkeep
-        """
+        """Create initial tenant directory structure in GitHub."""
         project_id = self._catalog_project_id()
         tenant_path = self._get_tenant_path(tenant_id)
 
@@ -656,12 +779,9 @@ class GitHubService(GitProvider):
     async def create_api(self, tenant_id: str, api_data: dict) -> str:
         """Create API definition in GitHub.
 
-        Creates:
-        tenants/{tenant_id}/apis/{api_name}/
-        ├── api.yaml
-        ├── openapi.yaml (if provided)
-        ├── overrides/{env}.yaml (if provided, CAB-2015)
-        └── policies/.gitkeep
+        The pre-existence check produces a specific ``ValueError`` shape
+        for callers; the actual race-guard is handled at the batch_commit
+        layer via the serial Contents-write semaphore.
         """
         project_id = self._catalog_project_id()
         api_name = api_data["name"]
@@ -686,7 +806,7 @@ class GitHubService(GitProvider):
 
         api_yaml = yaml.dump(api_content, default_flow_style=False, allow_unicode=True)
 
-        actions = [
+        actions: list[dict[str, Any]] = [
             {"action": "create", "file_path": f"{api_path}/api.yaml", "content": api_yaml},
             {"action": "create", "file_path": f"{api_path}/policies/.gitkeep", "content": ""},
         ]
@@ -696,7 +816,6 @@ class GitHubService(GitProvider):
                 {"action": "create", "file_path": f"{api_path}/openapi.yaml", "content": api_data["openapi_spec"]}
             )
 
-        # CAB-2015: write per-environment overrides if provided
         overrides: dict[str, dict] = api_data.get("overrides", {})
         for env_name, env_config in overrides.items():
             override_yaml = yaml.dump(env_config, default_flow_style=False, allow_unicode=True)
@@ -724,16 +843,16 @@ class GitHubService(GitProvider):
         except FileNotFoundError:
             raise FileNotFoundError(f"API '{api_name}' not found for tenant '{tenant_id}'")
 
-        # Separate overrides from base api_data
         overrides: dict[str, dict] = api_data.pop("overrides", {})
 
         current = yaml.safe_load(current_content)
         current.update(api_data)
         updated_yaml = yaml.dump(current, default_flow_style=False, allow_unicode=True)
 
-        # CAB-2015: batch base + override updates in one commit
         if overrides:
-            actions = [{"action": "update", "file_path": file_path, "content": updated_yaml}]
+            actions: list[dict[str, Any]] = [
+                {"action": "update", "file_path": file_path, "content": updated_yaml}
+            ]
             for env_name, env_config in overrides.items():
                 override_path = f"{api_path}/overrides/{env_name}.yaml"
                 override_yaml = yaml.dump(env_config, default_flow_style=False, allow_unicode=True)
@@ -750,26 +869,29 @@ class GitHubService(GitProvider):
         """Delete API directory from GitHub."""
         project_id = self._catalog_project_id()
         api_path = self._get_api_path(tenant_id, api_name)
+        gh = self._require_gh()
 
-        # List all files in the API directory via recursive tree
-        repo = self._get_repo(project_id)
-        try:
-            contents = repo.get_contents(api_path, ref="main")
-        except GithubException as exc:
-            if exc.status == 404:
-                raise FileNotFoundError(f"API '{api_name}' not found for tenant '{tenant_id}'") from exc
-            raise
+        def _collect_files() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(api_path, ref="main")
+            except GithubException as exc:
+                if exc.status == 404:
+                    raise FileNotFoundError(f"API '{api_name}' not found for tenant '{tenant_id}'") from exc
+                raise
 
-        # Flatten directory contents recursively
-        files_to_delete: list[str] = []
-        stack = contents if isinstance(contents, list) else [contents]
-        while stack:
-            item = stack.pop()
-            if item.type == "dir":
-                sub_contents = repo.get_contents(item.path, ref="main")
-                stack.extend(sub_contents if isinstance(sub_contents, list) else [sub_contents])
-            else:
-                files_to_delete.append(item.path)
+            files_to_delete: list[str] = []
+            stack = contents if isinstance(contents, list) else [contents]
+            while stack:
+                item = stack.pop()
+                if item.type == "dir":
+                    sub_contents = repo.get_contents(item.path, ref="main")
+                    stack.extend(sub_contents if isinstance(sub_contents, list) else [sub_contents])
+                else:
+                    files_to_delete.append(item.path)
+            return files_to_delete
+
+        files_to_delete = await _gh_read(_collect_files, "github.delete_api.collect", timeout=BATCH_TIMEOUT_S)
 
         if not files_to_delete:
             return True
@@ -869,24 +991,31 @@ class GitHubService(GitProvider):
         """Delete MCP server from GitHub."""
         project_id = self._catalog_project_id()
         server_path = self._get_mcp_server_path(tenant_id, server_name)
+        gh = self._require_gh()
 
-        repo = self._get_repo(project_id)
-        try:
-            contents = repo.get_contents(server_path, ref="main")
-        except GithubException as exc:
-            if exc.status == 404:
-                raise FileNotFoundError(f"MCP server '{server_name}' not found") from exc
-            raise
+        def _collect_files() -> list[str]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(server_path, ref="main")
+            except GithubException as exc:
+                if exc.status == 404:
+                    raise FileNotFoundError(f"MCP server '{server_name}' not found") from exc
+                raise
 
-        files_to_delete: list[str] = []
-        stack = contents if isinstance(contents, list) else [contents]
-        while stack:
-            item = stack.pop()
-            if item.type == "dir":
-                sub_contents = repo.get_contents(item.path, ref="main")
-                stack.extend(sub_contents if isinstance(sub_contents, list) else [sub_contents])
-            else:
-                files_to_delete.append(item.path)
+            files_to_delete: list[str] = []
+            stack = contents if isinstance(contents, list) else [contents]
+            while stack:
+                item = stack.pop()
+                if item.type == "dir":
+                    sub_contents = repo.get_contents(item.path, ref="main")
+                    stack.extend(sub_contents if isinstance(sub_contents, list) else [sub_contents])
+                else:
+                    files_to_delete.append(item.path)
+            return files_to_delete
+
+        files_to_delete = await _gh_read(
+            _collect_files, "github.delete_mcp_server.collect", timeout=BATCH_TIMEOUT_S
+        )
 
         if not files_to_delete:
             return True
@@ -899,27 +1028,32 @@ class GitHubService(GitProvider):
 
     # ============================================================
     # CAB-1889 CP-1: provider-agnostic surface (GitProvider ABC).
-    # Operates on the catalog repo resolved via _catalog_project_id().
     # ============================================================
 
     async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
-        repo = self._get_repo(self._catalog_project_id())
-        try:
-            contents = repo.get_contents(path, ref=ref)
-        except GithubException as exc:
-            if exc.status == 404:
-                return []
-            raise
-        if not isinstance(contents, list):
-            contents = [contents]
-        return [
-            TreeEntry(
-                name=item.name,
-                type="tree" if item.type == "dir" else "blob",
-                path=item.path,
-            )
-            for item in contents
-        ]
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _list() -> list[TreeEntry]:
+            repo = gh.get_repo(project_id)
+            try:
+                contents = repo.get_contents(path, ref=ref)
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
+            if not isinstance(contents, list):
+                contents = [contents]
+            return [
+                TreeEntry(
+                    name=item.name,
+                    type="tree" if item.type == "dir" else "blob",
+                    path=item.path,
+                )
+                for item in contents
+            ]
+
+        return await _gh_read(_list, "github.list_tree")
 
     async def read_file(self, path: str, ref: str = "main") -> str | None:
         try:
@@ -928,50 +1062,84 @@ class GitHubService(GitProvider):
             return None
 
     async def list_path_commits(self, path: str | None, limit: int = 20) -> list[CommitRef]:
-        repo = self._get_repo(self._catalog_project_id())
-        kwargs: dict[str, Any] = {}
-        if path:
-            kwargs["path"] = path
-        commits = repo.get_commits(**kwargs)[:limit]
-        refs: list[CommitRef] = []
-        for c in commits:
-            author = ""
-            if c.author and getattr(c.author, "login", None):
-                author = c.author.login
-            elif c.commit and c.commit.author and c.commit.author.name:
-                author = c.commit.author.name
-            date = c.commit.author.date.isoformat() if c.commit and c.commit.author and c.commit.author.date else ""
-            refs.append(CommitRef(sha=c.sha, message=c.commit.message if c.commit else "", author=author, date=date))
-        return refs
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _list() -> list[CommitRef]:
+            repo = gh.get_repo(project_id)
+            kwargs: dict[str, Any] = {}
+            if path:
+                kwargs["path"] = path
+            # PaginatedList slice + iteration happens inside the thread.
+            commits = list(repo.get_commits(**kwargs)[:limit])
+            refs: list[CommitRef] = []
+            for c in commits:
+                author = ""
+                if c.author and getattr(c.author, "login", None):
+                    author = c.author.login
+                elif c.commit and c.commit.author and c.commit.author.name:
+                    author = c.commit.author.name
+                date = (
+                    c.commit.author.date.isoformat()
+                    if c.commit and c.commit.author and c.commit.author.date
+                    else ""
+                )
+                refs.append(
+                    CommitRef(sha=c.sha, message=c.commit.message if c.commit else "", author=author, date=date)
+                )
+            return refs
+
+        return await _gh_read(_list, "github.list_path_commits")
 
     async def write_file(
         self, path: str, content: str, commit_message: str, branch: str = "main"
     ) -> Literal["created", "updated"]:
+        """CP-1 C.6: create-first, fall through to update on 'already exists'.
+
+        Closes the TOCTOU window created by the old _file_exists pre-check.
+        Does not provide full compare-and-swap — PyGithub's update_file
+        already requires the blob sha (fetched inline in update_file), so
+        the second leg is optimistic-concurrent per file.
+        """
         project_id = self._catalog_project_id()
-        if await self._file_exists(project_id, path, ref=branch):
+        try:
+            await self.create_file(project_id, path, content, commit_message, branch=branch)
+            return "created"
+        except ValueError:
             await self.update_file(project_id, path, content, commit_message, branch=branch)
             return "updated"
-        await self.create_file(project_id, path, content, commit_message, branch=branch)
-        return "created"
 
     async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
         return await self.delete_file(self._catalog_project_id(), path, commit_message, branch=branch)
 
     async def list_branches(self) -> list[BranchRef]:
-        repo = self._get_repo(self._catalog_project_id())
-        return [
-            BranchRef(name=b.name, commit_sha=b.commit.sha, protected=getattr(b, "protected", False))
-            for b in repo.get_branches()
-        ]
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _list() -> list[BranchRef]:
+            repo = gh.get_repo(project_id)
+            # PyGithub PaginatedList — materialise inside the thread.
+            return [
+                BranchRef(name=b.name, commit_sha=b.commit.sha, protected=getattr(b, "protected", False))
+                for b in repo.get_branches()
+            ]
+
+        return await _gh_read(_list, "github.list_branches")
 
     async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
-        repo = self._get_repo(self._catalog_project_id())
-        base_ref = repo.get_git_ref(f"heads/{ref}")
-        repo.create_git_ref(f"refs/heads/{name}", base_ref.object.sha)
-        branch = repo.get_branch(name)
-        return BranchRef(
-            name=branch.name, commit_sha=branch.commit.sha, protected=getattr(branch, "protected", False)
-        )
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _create() -> BranchRef:
+            repo = gh.get_repo(project_id)
+            base_ref = repo.get_git_ref(f"heads/{ref}")
+            repo.create_git_ref(f"refs/heads/{name}", base_ref.object.sha)
+            branch = repo.get_branch(name)
+            return BranchRef(
+                name=branch.name, commit_sha=branch.commit.sha, protected=getattr(branch, "protected", False)
+            )
+
+        return await _gh_meta_write(_create, "github.create_branch")
 
     @staticmethod
     def _pr_to_ref(pr: Any) -> MergeRequestRef:
@@ -995,9 +1163,16 @@ class GitHubService(GitProvider):
         return {"opened": "open", "closed": "closed", "merged": "closed", "all": "all"}.get(state, state)
 
     async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]:
-        repo = self._get_repo(self._catalog_project_id())
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
         gh_state = self._map_mr_state_to_github(state)
-        return [self._pr_to_ref(pr) for pr in repo.get_pulls(state=gh_state)]
+
+        def _list() -> list[MergeRequestRef]:
+            repo = gh.get_repo(project_id)
+            # PaginatedList iteration materialised inside the thread.
+            return [self._pr_to_ref(pr) for pr in repo.get_pulls(state=gh_state)]
+
+        return await _gh_read(_list, "github.list_merge_requests")
 
     async def create_merge_request(
         self,
@@ -1006,12 +1181,24 @@ class GitHubService(GitProvider):
         source_branch: str,
         target_branch: str = "main",
     ) -> MergeRequestRef:
-        repo = self._get_repo(self._catalog_project_id())
-        pr = repo.create_pull(title=title, body=description, head=source_branch, base=target_branch)
-        return self._pr_to_ref(pr)
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _create() -> MergeRequestRef:
+            repo = gh.get_repo(project_id)
+            pr = repo.create_pull(title=title, body=description, head=source_branch, base=target_branch)
+            return self._pr_to_ref(pr)
+
+        return await _gh_meta_write(_create, "github.create_merge_request")
 
     async def merge_merge_request(self, iid: int) -> MergeRequestRef:
-        repo = self._get_repo(self._catalog_project_id())
-        pr = repo.get_pull(iid)
-        pr.merge()
-        return self._pr_to_ref(repo.get_pull(iid))
+        gh = self._require_gh()
+        project_id = self._catalog_project_id()
+
+        def _merge() -> MergeRequestRef:
+            repo = gh.get_repo(project_id)
+            pr = repo.get_pull(iid)
+            pr.merge()
+            return self._pr_to_ref(repo.get_pull(iid))
+
+        return await _gh_meta_write(_merge, "github.merge_merge_request")

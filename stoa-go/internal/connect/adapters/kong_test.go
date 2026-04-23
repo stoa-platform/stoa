@@ -49,11 +49,17 @@ func TestKongDetectNotKong(t *testing.T) {
 	}
 }
 
+// TestKongDetectUnreachable — GO-1 M.3 behaviour flip: Detect now propagates
+// network errors (pre-M.3 it silently returned `(false, nil)` on unreachable
+// hosts, which was indistinguishable from "host up but not Kong"). The
+// autoDetect caller in connect/discovery.go already handles the error by
+// logging and trying the next gateway, so the contract for auto-detection
+// is unchanged — only the observability improved.
 func TestKongDetectUnreachable(t *testing.T) {
 	adapter := NewKongAdapter(AdapterConfig{})
 	ok, err := adapter.Detect(context.Background(), "http://127.0.0.1:1")
-	if err != nil {
-		t.Fatalf("detect should not error on unreachable, got: %v", err)
+	if err == nil {
+		t.Fatal("expected network error to be propagated after GO-1 M.3")
 	}
 	if ok {
 		t.Error("expected false for unreachable host")

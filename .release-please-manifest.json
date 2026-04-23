@@ -3,5 +3,5 @@
   "control-plane-ui": "1.5.0",
   "portal": "1.3.2",
   "stoa-gateway": "0.9.10",
-  "stoa-go": "0.3.7"
+  "stoa-go": "0.3.8"
 }

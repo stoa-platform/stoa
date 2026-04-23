@@ -176,10 +176,14 @@ func (g *GraviteeAdapter) RemovePolicy(ctx context.Context, adminURL string, api
 // Per-route failure tracking is not implemented — SyncResult.FailedRoutes is
 // always empty; callers fall back to the global error.
 //
-// TODO(GO-1 follow-up): the 409 = "accept silently" branch below mirrors the
-// wM pre-C.2 behaviour and carries the same semantic debt (ghost conflicts
-// masked as success). Left as-is because no Gravitee client is in prod yet;
-// revisit when Gravitee goes live. See C.2 in BUG-REPORT-GO-1.md.
+// Known limitation (carried over from pre-GO-1 behaviour): the 409 = "accept
+// silently" branch below mirrors the pattern that C.2 removed from the
+// webMethods adapter and carries the same semantic debt (ghost conflicts
+// masked as success). It is left as-is because no Gravitee client is in
+// production today, so ticketing it now would be speculative. To revisit
+// when Gravitee onboarding starts — raise a CAB ticket at that point and
+// apply the same re-list-and-fallback pattern used in webmethods_sync.go.
+// See BUG-REPORT-GO-1.md §C.2 for the full fix shape.
 func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) (SyncResult, error) {
 	result := SyncResult{FailedRoutes: map[string]string{}}
 	basePath := adminURL + "/management/v2/environments/DEFAULT/apis"

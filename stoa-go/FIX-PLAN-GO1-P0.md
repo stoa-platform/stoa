@@ -1,5 +1,14 @@
 # FIX-PLAN-GO1-P0
 
+> **Document status**: planning artifact for branch `fix/go-1-p0-batch`,
+> committed together with the fix for reviewer context. Lifetime: remains
+> alongside the branch through review; once the P0 batch is merged and
+> superseded by later batches (P1/P2 plans land in sibling files), this
+> document is a historical record of the decisions that shaped the first
+> three commits. To be relocated to `stoa-docs/audits/2026-04-23-go-1/`
+> alongside BUG-REPORT-GO-1.md at archival time. No dedicated Linear
+> ticket (GO-1 is the module code name used in the audit prompt).
+
 **Target branch**: `fix/go-1-p0-batch` (off `main`)
 **Commits prévus**: 3 atomiques, testables isolément, chacun avec régression guards.
 **Source de référence**: `BUG-REPORT-GO-1.md` (section Critical).

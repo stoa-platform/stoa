@@ -1,5 +1,13 @@
 # BUG-REPORT-GO-1
 
+> **Document status**: audit artifact produced for branch
+> `fix/go-1-p0-batch`. Lifetime: reviewable until the P0 + P1 + P2 batches
+> ship; then move to `stoa-docs/audits/2026-04-23-go-1/` as a permanent
+> engineering record. No dedicated Linear ticket yet (GO-1 is the module
+> code name used in the audit prompt, not a tracker ID). Owner:
+> @PotoMitan; update the "P0 batch status" table as later batches close
+> the remaining H.*/M.*/L.* findings.
+
 **Module**: GO-1 — stoa-connect webMethods adapter
 **Path**: `stoa-go/internal/connect/adapters/`
 **Scope**: 13 production files, ~2 100 LOC (after split PR #2459 `1559863bb`)

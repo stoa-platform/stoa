@@ -20,6 +20,7 @@ it after ``await`` would re-introduce the blocking sync-in-async pattern.
 """
 
 import asyncio
+import itertools
 import json
 import logging
 import re
@@ -28,8 +29,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal, TypeVar
 
+import requests.exceptions  # type: ignore[import-untyped]
 import yaml
-from github import Auth, Github, GithubException, InputGitTreeElement
+from github import Auth, BadCredentialsException, Github, GithubException, InputGitTreeElement
 
 from ..config import settings
 from .git_credentials import askpass_env, redact_token
@@ -77,6 +79,35 @@ async def _gh_meta_write(
     return await run_sync(
         fn, semaphore=GITHUB_META_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name
     )
+
+
+# CP-1 P2 (M.5): transient error classifier for connect() retries. Kept
+# at module scope so tests can monkey-patch it and so the retry policy
+# is auditable without walking the retry loop.
+_GITHUB_RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+_GITHUB_NON_RETRYABLE_STATUSES = frozenset({401, 403, 404})
+
+
+def _is_transient_github_error(exc: BaseException) -> bool:
+    """Return True when ``exc`` is worth retrying at connect-time.
+
+    Retry: network errors, asyncio/stdlib TimeoutError, GitHub HTTP errors
+    with status in {429} or 5xx. Fail fast on ``BadCredentialsException``
+    and any ``GithubException`` with status 401/403/404, plus any other
+    exception class.
+    """
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return True
+    if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        return True
+    if isinstance(exc, BadCredentialsException):
+        return False
+    if isinstance(exc, GithubException):
+        status = getattr(exc, "status", None)
+        if status in _GITHUB_NON_RETRYABLE_STATUSES:
+            return False
+        return status in _GITHUB_RETRYABLE_STATUSES
+    return False
 
 
 def _normalize_api_data(raw_data: dict) -> dict:
@@ -167,20 +198,46 @@ class GitHubService(GitProvider):
         self._gh: Github | None = None
 
     async def connect(self) -> None:
-        """Initialize GitHub connection using settings.git.github.token."""
-        try:
-            auth = Auth.Token(settings.git.github.token.get_secret_value())
+        """Initialize GitHub connection with transient-error retry (CP-1 P2 M.5).
 
-            def _connect() -> tuple[Github, str]:
-                client = Github(auth=auth)
-                login = client.get_user().login
-                return client, login
+        3 attempts, 1s then 2s backoff between retries, 15s per-attempt
+        timeout. Fails fast on credential/404 errors — retrying a 401
+        or a missing repo doesn't help.
+        """
+        auth = Auth.Token(settings.git.github.token.get_secret_value())
 
-            self._gh, user = await _gh_read(_connect, "github.connect", timeout=15.0)
-            logger.info("Connected to GitHub as %s", user)
-        except Exception as e:
-            logger.error("Failed to connect to GitHub: %s", e)
-            raise
+        def _connect() -> tuple[Github, str]:
+            client = Github(auth=auth)
+            login = client.get_user().login
+            return client, login
+
+        max_attempts = 3
+        backoffs = [1, 2]  # 3 attempts = 2 sleeps
+        last_error: BaseException | None = None
+        for attempt in range(max_attempts):
+            try:
+                self._gh, user = await _gh_read(_connect, "github.connect", timeout=15.0)
+                logger.info("Connected to GitHub as %s", user)
+                return
+            except Exception as exc:
+                last_error = exc
+                if not _is_transient_github_error(exc):
+                    logger.error("Failed to connect to GitHub (non-transient): %s", exc)
+                    raise
+                if attempt + 1 < max_attempts:
+                    delay = backoffs[attempt]
+                    logger.warning(
+                        "GitHub connect attempt %d/%d failed (transient): %s. Retrying in %ds.",
+                        attempt + 1, max_attempts, exc, delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "Failed to connect to GitHub after %d attempts: %s",
+                        max_attempts, exc,
+                    )
+        assert last_error is not None  # loop always assigns on failure
+        raise last_error
 
     async def disconnect(self) -> None:
         """Close GitHub connection."""
@@ -232,14 +289,18 @@ class GitHubService(GitProvider):
         """
         return self._require_gh().get_repo(project_id)
 
-    async def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> str:
-        """Retrieve raw file content from GitHub."""
+    async def get_file_content(self, project_id: str, file_path: str, ref: str | None = None) -> str:
+        """Retrieve raw file content from GitHub.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_ref = ref if ref is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _get() -> str:
             repo = gh.get_repo(project_id)
             try:
-                content_file = repo.get_contents(file_path, ref=ref)
+                content_file = repo.get_contents(file_path, ref=effective_ref)
                 if isinstance(content_file, list):
                     raise FileNotFoundError(f"{file_path} is a directory, not a file, in {project_id}")
                 return content_file.decoded_content.decode("utf-8")
@@ -250,14 +311,18 @@ class GitHubService(GitProvider):
 
         return await _gh_read(_get, "github.get_file_content")
 
-    async def list_files(self, project_id: str, path: str = "", ref: str = "main") -> list[str]:
-        """List files in a GitHub repository directory."""
+    async def list_files(self, project_id: str, path: str = "", ref: str | None = None) -> list[str]:
+        """List files in a GitHub repository directory.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_ref = ref if ref is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _list() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(path, ref=ref)
+                contents = repo.get_contents(path, ref=effective_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return []
@@ -329,15 +394,19 @@ class GitHubService(GitProvider):
 
         return await _gh_read(_info, "github.get_repo_info")
 
-    async def get_head_commit_sha(self, ref: str = "main") -> str | None:
-        """Return the HEAD commit SHA for the catalog branch."""
+    async def get_head_commit_sha(self, ref: str | None = None) -> str | None:
+        """Return the HEAD commit SHA for the catalog branch.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_ref = ref if ref is not None else settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _head() -> str | None:
             repo = gh.get_repo(project_id)
             try:
-                branch = repo.get_branch(ref)
+                branch = repo.get_branch(effective_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return None
@@ -363,13 +432,14 @@ class GitHubService(GitProvider):
 
     async def list_tenants(self) -> list[str]:
         """List tenants from the catalog repository."""
+        default_ref = settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _list() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents("tenants", ref="main")
+                contents = repo.get_contents("tenants", ref=default_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return []
@@ -399,6 +469,7 @@ class GitHubService(GitProvider):
 
     async def list_apis(self, tenant_id: str) -> list[dict]:
         """List APIs for a tenant from GitHub."""
+        default_ref = settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
         base_path = f"{self._get_tenant_path(tenant_id)}/apis"
@@ -406,7 +477,7 @@ class GitHubService(GitProvider):
         def _list_names() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(base_path, ref="main")
+                contents = repo.get_contents(base_path, ref=default_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return []
@@ -425,6 +496,7 @@ class GitHubService(GitProvider):
 
     async def list_apis_parallel(self, tenant_id: str) -> list[dict]:
         """List tenant APIs with concurrent GitHub fetches."""
+        default_ref = settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
         base_path = f"{self._get_tenant_path(tenant_id)}/apis"
@@ -432,7 +504,7 @@ class GitHubService(GitProvider):
         def _list_names() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(base_path, ref="main")
+                contents = repo.get_contents(base_path, ref=default_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return []
@@ -479,12 +551,13 @@ class GitHubService(GitProvider):
 
     async def get_full_tree_recursive(self, path: str = "tenants") -> list[dict]:
         """Return the recursive Git tree in the GitLab-compatible shape."""
+        default_ref = settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _tree() -> list[dict]:
             repo = gh.get_repo(project_id)
-            branch = repo.get_branch("main")
+            branch = repo.get_branch(default_ref)
             tree = repo.get_git_tree(branch.commit.sha, recursive=True).tree
             prefix = f"{path}/"
             items: list[dict] = []
@@ -546,10 +619,12 @@ class GitHubService(GitProvider):
             else f"{self._get_tenant_path(tenant_id)}/mcp-servers"
         )
 
+        default_ref = settings.git.default_branch
+
         def _list_names() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(base_path, ref="main")
+                contents = repo.get_contents(base_path, ref=default_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return []
@@ -563,26 +638,44 @@ class GitHubService(GitProvider):
         return [server for server in results if server is not None]
 
     async def list_all_mcp_servers(self) -> list[dict]:
-        """List all MCP servers across platform and tenant scopes."""
-        servers = await self.list_mcp_servers("_platform")
-        for tenant_id in await self.list_tenants():
-            servers.extend(await self.list_mcp_servers(tenant_id))
-        return servers
+        """List all MCP servers across platform and tenant scopes.
+
+        CP-1 P2 (M.6): fans out tenant listings via ``asyncio.gather`` so
+        100 tenants no longer serialise into 100 round-trips. The provider
+        semaphore ``GITHUB_READ_SEMAPHORE`` inside ``_gh_read`` keeps the
+        overall concurrency bounded.
+        """
+        platform_servers_task = asyncio.create_task(self.list_mcp_servers("_platform"))
+        tenant_ids = await self.list_tenants()
+        tenant_results = await asyncio.gather(
+            *[self.list_mcp_servers(tid) for tid in tenant_ids]
+        )
+        platform_servers = await platform_servers_task
+        return list(itertools.chain(platform_servers, *tenant_results))
 
     # ============================================================
     # Write operations (CAB-2011: GitOps source of truth)
     # ============================================================
 
     async def create_file(
-        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+        self,
+        project_id: str,
+        file_path: str,
+        content: str,
+        commit_message: str,
+        branch: str | None = None,
     ) -> dict[str, Any]:
-        """Create a new file in a GitHub repository (Contents API — serial)."""
+        """Create a new file in a GitHub repository (Contents API — serial).
+
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_branch = branch if branch is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _create() -> dict[str, Any]:
             repo = gh.get_repo(project_id)
             try:
-                result = repo.create_file(file_path, commit_message, content, branch=branch)
+                result = repo.create_file(file_path, commit_message, content, branch=effective_branch)
                 return {"sha": result["commit"].sha, "url": result["commit"].html_url}
             except GithubException as exc:
                 if exc.status == 422 and "sha" in str(exc.data).lower():
@@ -592,18 +685,29 @@ class GitHubService(GitProvider):
         return await _gh_contents_write(_create, "github.create_file")
 
     async def update_file(
-        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+        self,
+        project_id: str,
+        file_path: str,
+        content: str,
+        commit_message: str,
+        branch: str | None = None,
     ) -> dict[str, Any]:
-        """Update an existing file in a GitHub repository (Contents API — serial)."""
+        """Update an existing file in a GitHub repository (Contents API — serial).
+
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_branch = branch if branch is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _update() -> dict[str, Any]:
             repo = gh.get_repo(project_id)
             try:
-                existing = repo.get_contents(file_path, ref=branch)
+                existing = repo.get_contents(file_path, ref=effective_branch)
                 if isinstance(existing, list):
                     raise ValueError(f"{file_path} is a directory, not a file")
-                result = repo.update_file(file_path, commit_message, content, existing.sha, branch=branch)
+                result = repo.update_file(
+                    file_path, commit_message, content, existing.sha, branch=effective_branch
+                )
                 return {"sha": result["commit"].sha, "url": result["commit"].html_url}
             except GithubException as exc:
                 if exc.status == 404:
@@ -612,17 +716,27 @@ class GitHubService(GitProvider):
 
         return await _gh_contents_write(_update, "github.update_file")
 
-    async def delete_file(self, project_id: str, file_path: str, commit_message: str, branch: str = "main") -> bool:
-        """Delete a file from a GitHub repository (Contents API — serial)."""
+    async def delete_file(
+        self,
+        project_id: str,
+        file_path: str,
+        commit_message: str,
+        branch: str | None = None,
+    ) -> bool:
+        """Delete a file from a GitHub repository (Contents API — serial).
+
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_branch = branch if branch is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _delete() -> bool:
             repo = gh.get_repo(project_id)
             try:
-                existing = repo.get_contents(file_path, ref=branch)
+                existing = repo.get_contents(file_path, ref=effective_branch)
                 if isinstance(existing, list):
                     raise ValueError(f"{file_path} is a directory, not a file")
-                repo.delete_file(file_path, commit_message, existing.sha, branch=branch)
+                repo.delete_file(file_path, commit_message, existing.sha, branch=effective_branch)
                 return True
             except GithubException as exc:
                 if exc.status == 404:
@@ -636,19 +750,22 @@ class GitHubService(GitProvider):
         project_id: str,
         actions: list[dict[str, str]],
         commit_message: str,
-        branch: str = "main",
+        branch: str | None = None,
     ) -> dict[str, Any]:
         """Atomic multi-file commit via the Git Tree API.
 
         Uses the Git Data tree path (not strictly Contents), but held under
         the Contents-write semaphore to keep a single write lane and
         preserve the "no parallel mutations" invariant.
+
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
         """
+        effective_branch = branch if branch is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _commit() -> dict[str, Any]:
             repo = gh.get_repo(project_id)
-            ref = repo.get_git_ref(f"heads/{branch}")
+            ref = repo.get_git_ref(f"heads/{effective_branch}")
             base_sha = ref.object.sha
             base_tree = repo.get_git_tree(base_sha)
 
@@ -671,7 +788,8 @@ class GitHubService(GitProvider):
             new_commit = repo.create_git_commit(commit_message, new_tree, [repo.get_git_commit(base_sha)])
             ref.edit(new_commit.sha)
             logger.info(
-                "Batch commit %s on %s/%s (%d actions)", new_commit.sha[:8], project_id, branch, len(actions)
+                "Batch commit %s on %s/%s (%d actions)",
+                new_commit.sha[:8], project_id, effective_branch, len(actions),
             )
             return {"sha": new_commit.sha, "url": new_commit.html_url}
 
@@ -684,14 +802,18 @@ class GitHubService(GitProvider):
         title: str,
         body: str,
         actions: list[dict[str, str]],
-        base: str = "main",
+        base: str | None = None,
     ) -> dict[str, Any]:
-        """Create a branch with changes and open a pull request."""
+        """Create a branch with changes and open a pull request.
+
+        ``base=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_base = base if base is not None else settings.git.default_branch
         gh = self._require_gh()
 
         def _create_branch() -> None:
             repo = gh.get_repo(project_id)
-            base_ref = repo.get_git_ref(f"heads/{base}")
+            base_ref = repo.get_git_ref(f"heads/{effective_base}")
             repo.create_git_ref(f"refs/heads/{branch}", base_ref.object.sha)
 
         await _gh_meta_write(_create_branch, "github.create_pr.branch")
@@ -701,7 +823,7 @@ class GitHubService(GitProvider):
 
         def _open_pr() -> dict[str, Any]:
             repo = gh.get_repo(project_id)
-            pr = repo.create_pull(title=title, body=body, head=branch, base=base)
+            pr = repo.create_pull(title=title, body=body, head=branch, base=effective_base)
             logger.info("Created PR #%d on %s: %s", pr.number, project_id, title)
             return {"pr_number": pr.number, "url": pr.html_url}
 
@@ -729,13 +851,15 @@ class GitHubService(GitProvider):
             return f"platform/mcp-servers/{server_name}"
         return f"tenants/{tenant_id}/mcp-servers/{server_name}"
 
-    async def _file_exists(self, project_id: str, file_path: str, ref: str = "main") -> bool:
+    async def _file_exists(self, project_id: str, file_path: str, ref: str | None = None) -> bool:
         """Check if a file exists in the repository.
 
         NOTE (C.6): not used by :meth:`write_file` anymore. Retained for
         :meth:`create_api` / :meth:`update_api` where the pre-check is
         about producing a specific error shape to callers rather than
         race-guarding a write.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
         """
         try:
             await self.get_file_content(project_id, file_path, ref=ref)
@@ -883,6 +1007,7 @@ class GitHubService(GitProvider):
 
     async def delete_api(self, tenant_id: str, api_name: str) -> bool:
         """Delete API directory from GitHub."""
+        default_ref = settings.git.default_branch
         project_id = self._catalog_project_id()
         api_path = self._get_api_path(tenant_id, api_name)
         gh = self._require_gh()
@@ -890,7 +1015,7 @@ class GitHubService(GitProvider):
         def _collect_files() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(api_path, ref="main")
+                contents = repo.get_contents(api_path, ref=default_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     raise FileNotFoundError(f"API '{api_name}' not found for tenant '{tenant_id}'") from exc
@@ -901,7 +1026,7 @@ class GitHubService(GitProvider):
             while stack:
                 item = stack.pop()
                 if item.type == "dir":
-                    sub_contents = repo.get_contents(item.path, ref="main")
+                    sub_contents = repo.get_contents(item.path, ref=default_ref)
                     stack.extend(sub_contents if isinstance(sub_contents, list) else [sub_contents])
                 else:
                     files_to_delete.append(item.path)
@@ -1005,6 +1130,7 @@ class GitHubService(GitProvider):
 
     async def delete_mcp_server(self, tenant_id: str, server_name: str) -> bool:
         """Delete MCP server from GitHub."""
+        default_ref = settings.git.default_branch
         project_id = self._catalog_project_id()
         server_path = self._get_mcp_server_path(tenant_id, server_name)
         gh = self._require_gh()
@@ -1012,7 +1138,7 @@ class GitHubService(GitProvider):
         def _collect_files() -> list[str]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(server_path, ref="main")
+                contents = repo.get_contents(server_path, ref=default_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     raise FileNotFoundError(f"MCP server '{server_name}' not found") from exc
@@ -1023,7 +1149,7 @@ class GitHubService(GitProvider):
             while stack:
                 item = stack.pop()
                 if item.type == "dir":
-                    sub_contents = repo.get_contents(item.path, ref="main")
+                    sub_contents = repo.get_contents(item.path, ref=default_ref)
                     stack.extend(sub_contents if isinstance(sub_contents, list) else [sub_contents])
                 else:
                     files_to_delete.append(item.path)
@@ -1046,14 +1172,19 @@ class GitHubService(GitProvider):
     # CAB-1889 CP-1: provider-agnostic surface (GitProvider ABC).
     # ============================================================
 
-    async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
+    async def list_tree(self, path: str, ref: str | None = None) -> list[TreeEntry]:
+        """List catalog tree children.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_ref = ref if ref is not None else settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _list() -> list[TreeEntry]:
             repo = gh.get_repo(project_id)
             try:
-                contents = repo.get_contents(path, ref=ref)
+                contents = repo.get_contents(path, ref=effective_ref)
             except GithubException as exc:
                 if exc.status == 404:
                     return []
@@ -1076,7 +1207,11 @@ class GitHubService(GitProvider):
 
         return await _gh_read(_list, "github.list_tree")
 
-    async def read_file(self, path: str, ref: str = "main") -> str | None:
+    async def read_file(self, path: str, ref: str | None = None) -> str | None:
+        """Return catalog file content or ``None`` if missing.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
         try:
             return await self.get_file_content(self._catalog_project_id(), path, ref=ref)
         except FileNotFoundError:
@@ -1113,7 +1248,7 @@ class GitHubService(GitProvider):
         return await _gh_read(_list, "github.list_path_commits")
 
     async def write_file(
-        self, path: str, content: str, commit_message: str, branch: str = "main"
+        self, path: str, content: str, commit_message: str, branch: str | None = None
     ) -> Literal["created", "updated"]:
         """CP-1 C.6: create-first, fall through to update on 'already exists'.
 
@@ -1121,19 +1256,32 @@ class GitHubService(GitProvider):
         Does not provide full compare-and-swap — PyGithub's update_file
         already requires the blob sha (fetched inline in update_file), so
         the second leg is optimistic-concurrent per file.
+
+        CP-1 P2 (M.4): ``branch=None`` resolves to ``settings.git.default_branch``.
         """
+        effective_branch = branch if branch is not None else settings.git.default_branch
         project_id = self._catalog_project_id()
         try:
-            await self.create_file(project_id, path, content, commit_message, branch=branch)
+            await self.create_file(project_id, path, content, commit_message, branch=effective_branch)
             return "created"
         except ValueError:
-            await self.update_file(project_id, path, content, commit_message, branch=branch)
+            await self.update_file(project_id, path, content, commit_message, branch=effective_branch)
             return "updated"
 
-    async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
+    async def remove_file(self, path: str, commit_message: str, branch: str | None = None) -> bool:
+        """Delete a file from the catalog repo.
+
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
         return await self.delete_file(self._catalog_project_id(), path, commit_message, branch=branch)
 
     async def list_branches(self) -> list[BranchRef]:
+        """List catalog branches.
+
+        PyGithub's ``PaginatedList`` iterates transparently across pages,
+        so there's no silent truncation to guard against (unlike GitLab's
+        L.1 bug on ``project.branches.list()``). Included here for symmetry.
+        """
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
@@ -1147,13 +1295,18 @@ class GitHubService(GitProvider):
 
         return await _gh_read(_list, "github.list_branches")
 
-    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
+    async def create_branch(self, name: str, ref: str | None = None) -> BranchRef:
+        """Create a branch on the catalog repo.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_ref = ref if ref is not None else settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _create() -> BranchRef:
             repo = gh.get_repo(project_id)
-            base_ref = repo.get_git_ref(f"heads/{ref}")
+            base_ref = repo.get_git_ref(f"heads/{effective_ref}")
             repo.create_git_ref(f"refs/heads/{name}", base_ref.object.sha)
             branch = repo.get_branch(name)
             return BranchRef(
@@ -1200,25 +1353,45 @@ class GitHubService(GitProvider):
         title: str,
         description: str,
         source_branch: str,
-        target_branch: str = "main",
+        target_branch: str | None = None,
     ) -> MergeRequestRef:
+        """Open a pull request.
+
+        ``target_branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
+        effective_target = (
+            target_branch if target_branch is not None else settings.git.default_branch
+        )
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _create() -> MergeRequestRef:
             repo = gh.get_repo(project_id)
-            pr = repo.create_pull(title=title, body=description, head=source_branch, base=target_branch)
+            pr = repo.create_pull(
+                title=title, body=description, head=source_branch, base=effective_target
+            )
             return self._pr_to_ref(pr)
 
         return await _gh_meta_write(_create, "github.create_merge_request")
 
     async def merge_merge_request(self, iid: int) -> MergeRequestRef:
+        """Merge a pull request by number.
+
+        CP-1 P2 (M.2): idempotent when the PR is already merged. Short-circuits
+        **only** on ``pr.merged is True``; closed-unmerged still falls through
+        to ``pr.merge()`` so the provider error surfaces correctly. PyGithub's
+        ``PullRequest.merge()`` does not mutate the instance in place — it
+        returns a ``PullRequestMergeStatus`` — so a single re-fetch is needed
+        after a successful merge to reflect the new state.
+        """
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _merge() -> MergeRequestRef:
             repo = gh.get_repo(project_id)
             pr = repo.get_pull(iid)
+            if pr.merged:
+                return self._pr_to_ref(pr)
             pr.merge()
             return self._pr_to_ref(repo.get_pull(iid))
 

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User
 from ..auth.rbac import require_role
+from ..config import settings
 from ..database import get_db
 from ..models.traces_db import TraceStatusDB
 from ..services.trace_service import TraceService
@@ -509,7 +510,7 @@ async def create_demo_trace(
                 "fix: handle edge case in payment processing",
             ]
         ),
-        git_branch="main",
+        git_branch=settings.git.default_branch,
         git_author=random.choice(["alice", "bob", "charlie", "diana", "eve"]),
         git_author_email="dev@gostoa.dev",
         git_project=random.choice(

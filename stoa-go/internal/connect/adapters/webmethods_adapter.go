@@ -3,15 +3,22 @@ package adapters
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 )
 
 // WebMethodsAdapter implements GatewayAdapter for webMethods API Gateway (port 5555).
+//
+// Thread-safety: a single WebMethodsAdapter instance is shared by the
+// polling goroutine (RunRouteSync) and the SSE goroutine
+// (handleSyncDeployment). syncedHashes reads/writes MUST be guarded by
+// hashesMu — see C.3 in BUG-REPORT-GO-1.md.
 type WebMethodsAdapter struct {
-	client       *http.Client
-	cfg          AdapterConfig
+	client *http.Client
+	cfg    AdapterConfig
+
+	hashesMu     sync.Mutex
 	syncedHashes map[string]string // tracks last-synced SpecHash per route name
-	FailedRoutes map[string]string // deployment_id → error (populated after SyncRoutes)
 }
 
 // NewWebMethodsAdapter creates a new webMethods adapter.
@@ -20,13 +27,7 @@ func NewWebMethodsAdapter(cfg AdapterConfig) *WebMethodsAdapter {
 		client:       &http.Client{Timeout: 10 * time.Second},
 		cfg:          cfg,
 		syncedHashes: make(map[string]string),
-		FailedRoutes: make(map[string]string),
 	}
-}
-
-// GetFailedRoutes returns the per-deployment-id error map from the last SyncRoutes call.
-func (w *WebMethodsAdapter) GetFailedRoutes() map[string]string {
-	return w.FailedRoutes
 }
 
 // Detect checks if the admin URL hosts a webMethods API Gateway.

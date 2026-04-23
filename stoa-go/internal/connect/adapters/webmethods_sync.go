@@ -64,17 +64,36 @@ func parseCreateResponseID(respBody []byte) string {
 	return createResp.ID
 }
 
+// hashesGet reads syncedHashes[name] under lock.
+func (w *WebMethodsAdapter) hashesGet(name string) (string, bool) {
+	w.hashesMu.Lock()
+	defer w.hashesMu.Unlock()
+	v, ok := w.syncedHashes[name]
+	return v, ok
+}
+
+// hashesSet writes syncedHashes[name] = hash under lock.
+func (w *WebMethodsAdapter) hashesSet(name, hash string) {
+	w.hashesMu.Lock()
+	defer w.hashesMu.Unlock()
+	w.syncedHashes[name] = hash
+}
+
 // SyncRoutes pushes CP routes to webMethods via REST API import.
 // Idempotent: checks if API exists by name, uses PUT to update if so, POST only for new APIs.
 // Deactivated routes are deactivated on the gateway. Skips unchanged routes via SpecHash.
-func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+//
+// The returned SyncResult.FailedRoutes map is allocated per call and never
+// shared between goroutines, so concurrent SyncRoutes invocations (polling +
+// SSE) produce isolated results. See C.3/C.6 in BUG-REPORT-GO-1.md.
+func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) (SyncResult, error) {
+	result := SyncResult{FailedRoutes: make(map[string]string)}
+
 	existingAPIs, err := w.listAPIsIndexedByName(ctx, adminURL)
 	if err != nil {
-		return fmt.Errorf("list existing apis: %w", err)
+		return result, fmt.Errorf("list existing apis: %w", err)
 	}
 
-	// Reset per-route failure tracking
-	w.FailedRoutes = make(map[string]string)
 	var syncErrors []string
 
 	for _, route := range routes {
@@ -84,7 +103,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		if !route.Activated {
 			if existingID, exists := existingAPIs[wmName]; exists {
 				if err := w.DeactivateAPI(ctx, adminURL, existingID); err != nil {
-					return fmt.Errorf("deactivate route %s: %w", route.Name, err)
+					return result, fmt.Errorf("deactivate route %s: %w", route.Name, err)
 				}
 			}
 			continue
@@ -92,7 +111,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 
 		// SpecHash reconciliation: skip if unchanged since last sync
 		if route.SpecHash != "" {
-			if lastHash, ok := w.syncedHashes[wmName]; ok && lastHash == route.SpecHash {
+			if lastHash, ok := w.hashesGet(wmName); ok && lastHash == route.SpecHash {
 				continue
 			}
 		}
@@ -109,7 +128,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		apiPayload := buildSyncPayload(route, wmName, spec)
 		data, err := json.Marshal(apiPayload)
 		if err != nil {
-			return fmt.Errorf("marshal webmethods api: %w", err)
+			return result, fmt.Errorf("marshal webmethods api: %w", err)
 		}
 		data = fixExternalDocs(data)
 
@@ -124,14 +143,14 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 
 		req, err := http.NewRequestWithContext(ctx, method, apiURL, strings.NewReader(string(data)))
 		if err != nil {
-			return err
+			return result, err
 		}
 		req.Header.Set("Content-Type", "application/json")
 		w.setAuth(req)
 
 		resp, err := w.client.Do(req)
 		if err != nil {
-			return fmt.Errorf("sync webmethods api: %w", err)
+			return result, fmt.Errorf("sync webmethods api: %w", err)
 		}
 		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
@@ -148,7 +167,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			errMsg := fmt.Sprintf("%s: %d — %s", wmName, resp.StatusCode, detail)
 			syncErrors = append(syncErrors, errMsg)
 			if route.DeploymentID != "" {
-				w.FailedRoutes[route.DeploymentID] = fmt.Sprintf("webmethods api sync failed (%d): %s", resp.StatusCode, detail)
+				result.FailedRoutes[route.DeploymentID] = fmt.Sprintf("webmethods api sync failed (%d): %s", resp.StatusCode, detail)
 			}
 			continue
 		}
@@ -167,18 +186,18 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 		// Verify the API is actually active on webMethods
 		if apiID != "" {
 			if err := w.verifyAndActivate(ctx, adminURL, apiID, wmName); err != nil {
-				return err
+				return result, err
 			}
 		}
 
 		if route.SpecHash != "" {
-			w.syncedHashes[wmName] = route.SpecHash
+			w.hashesSet(wmName, route.SpecHash)
 		}
 	}
 
 	if len(syncErrors) > 0 {
-		return fmt.Errorf("webmethods api sync failed (%d/%d): %s", len(syncErrors), len(routes), strings.Join(syncErrors, "; "))
+		return result, fmt.Errorf("webmethods api sync failed (%d/%d): %s", len(syncErrors), len(routes), strings.Join(syncErrors, "; "))
 	}
 
-	return nil
+	return result, nil
 }

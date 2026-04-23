@@ -33,8 +33,8 @@ func (m *policyMock) RemovePolicy(ctx context.Context, adminURL, apiName, policy
 	m.removed = append(m.removed, apiName+":"+policyType)
 	return m.removeErr
 }
-func (m *policyMock) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) error {
-	return m.syncRoutesErr
+func (m *policyMock) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) (adapters.SyncResult, error) {
+	return adapters.SyncResult{FailedRoutes: map[string]string{}}, m.syncRoutesErr
 }
 func (m *policyMock) InjectCredentials(ctx context.Context, adminURL string, creds []adapters.Credential) error {
 	return m.injectCredsErr

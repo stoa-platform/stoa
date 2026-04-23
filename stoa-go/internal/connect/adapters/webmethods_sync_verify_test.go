@@ -33,7 +33,7 @@ func TestWebMethodsSyncRoutesVerifiesActiveAfterCreate(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
 	})
 	if err != nil {
@@ -74,7 +74,7 @@ func TestWebMethodsSyncRoutesActivatesIfNotActive(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
 	})
 	if err != nil {
@@ -111,7 +111,7 @@ func TestWebMethodsSyncRoutesFailsIfActivateFails(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "petstore", BackendURL: "http://example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
 	})
 	if err == nil {
@@ -122,7 +122,10 @@ func TestWebMethodsSyncRoutesFailsIfActivateFails(t *testing.T) {
 	}
 }
 
-// TestRegressionFailedRoutesTracking — CAB-1944: FailedRoutes should track per-deployment errors.
+// TestRegressionFailedRoutesTracking — CAB-1944: SyncResult.FailedRoutes
+// should track per-deployment errors. After GO-1 fix (C.3/C.6), the per-route
+// failure map is a return value, not a shared field — concurrent SyncRoutes
+// calls no longer clobber each other.
 func TestRegressionFailedRoutesTracking(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -152,7 +155,7 @@ func TestRegressionFailedRoutesTracking(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	result, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "good-route", DeploymentID: "dep-1", Activated: true},
 		{Name: "bad-route", DeploymentID: "dep-2", Activated: true},
 	})
@@ -162,11 +165,11 @@ func TestRegressionFailedRoutesTracking(t *testing.T) {
 	}
 
 	// dep-1 should NOT be in FailedRoutes (it succeeded)
-	if _, failed := adapter.FailedRoutes["dep-1"]; failed {
+	if _, failed := result.FailedRoutes["dep-1"]; failed {
 		t.Error("dep-1 should not be in FailedRoutes (it succeeded)")
 	}
 	// dep-2 should be in FailedRoutes
-	if errMsg, failed := adapter.FailedRoutes["dep-2"]; !failed {
+	if errMsg, failed := result.FailedRoutes["dep-2"]; !failed {
 		t.Error("dep-2 should be in FailedRoutes")
 	} else if !strings.Contains(errMsg, "RefProperty") {
 		t.Errorf("dep-2 error should contain RefProperty, got: %s", errMsg)

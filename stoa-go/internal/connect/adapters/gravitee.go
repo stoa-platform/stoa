@@ -172,7 +172,16 @@ func (g *GraviteeAdapter) RemovePolicy(ctx context.Context, adminURL string, api
 }
 
 // SyncRoutes pushes CP routes to Gravitee via Management API v2 (API CRUD + lifecycle).
-func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+//
+// Per-route failure tracking is not implemented — SyncResult.FailedRoutes is
+// always empty; callers fall back to the global error.
+//
+// TODO(GO-1 follow-up): the 409 = "accept silently" branch below mirrors the
+// wM pre-C.2 behaviour and carries the same semantic debt (ghost conflicts
+// masked as success). Left as-is because no Gravitee client is in prod yet;
+// revisit when Gravitee goes live. See C.2 in BUG-REPORT-GO-1.md.
+func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) (SyncResult, error) {
+	result := SyncResult{FailedRoutes: map[string]string{}}
 	basePath := adminURL + "/management/v2/environments/DEFAULT/apis"
 
 	for _, route := range routes {
@@ -211,19 +220,19 @@ func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, route
 
 		data, err := json.Marshal(apiPayload)
 		if err != nil {
-			return fmt.Errorf("marshal gravitee api: %w", err)
+			return result, fmt.Errorf("marshal gravitee api: %w", err)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, basePath, strings.NewReader(string(data)))
 		if err != nil {
-			return err
+			return result, err
 		}
 		req.Header.Set("Content-Type", "application/json")
 		g.setAuth(req)
 
 		resp, err := g.client.Do(req)
 		if err != nil {
-			return fmt.Errorf("create gravitee api: %w", err)
+			return result, fmt.Errorf("create gravitee api: %w", err)
 		}
 		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
@@ -231,12 +240,12 @@ func (g *GraviteeAdapter) SyncRoutes(ctx context.Context, adminURL string, route
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 			// 409 = already exists, acceptable
 			if resp.StatusCode != http.StatusConflict {
-				return fmt.Errorf("gravitee api create failed (%d): %s", resp.StatusCode, string(respBody))
+				return result, fmt.Errorf("gravitee api create failed (%d): %s", resp.StatusCode, string(respBody))
 			}
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 // InjectCredentials provisions applications and subscriptions on Gravitee.

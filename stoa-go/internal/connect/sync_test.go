@@ -135,9 +135,9 @@ func (m *mockSyncAdapter) RemovePolicy(ctx context.Context, adminURL string, api
 	return m.removeErr
 }
 
-func (m *mockSyncAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) error {
+func (m *mockSyncAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) (adapters.SyncResult, error) {
 	m.syncedRoutes = append(m.syncedRoutes, routes...)
-	return m.syncRoutesErr
+	return adapters.SyncResult{FailedRoutes: map[string]string{}}, m.syncRoutesErr
 }
 
 func (m *mockSyncAdapter) InjectCredentials(ctx context.Context, adminURL string, creds []adapters.Credential) error {

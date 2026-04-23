@@ -28,36 +28,69 @@ func downgradeOpenAPI31(spec []byte) []byte {
 	return openAPI31Re.ReplaceAll(spec, []byte(`"openapi": "3.0.3"`))
 }
 
-// fixExternalDocs wraps externalDocs object into an array if needed.
-// webMethods expects externalDocs as an array, but OpenAPI/Swagger specs
-// define it as a single object. This causes deserialization errors on PUT.
+// wrapExternalDocs recursively walks any JSON value and wraps every
+// externalDocs single-object occurrence into a single-element array.
+// Returns true if any wrap was performed.
+//
+// The recursion enters each map value and each array item, so nested
+// occurrences at arbitrary depth (tags[], paths[].<operation>,
+// components.schemas.<name>, Schema.properties.<field>, Schema.items,
+// Schema.{allOf|oneOf|anyOf}[*], even inside vendor extensions) are all
+// reached in one pass. Values that are already arrays, primitives, or null
+// are left untouched.
+func wrapExternalDocs(v interface{}) bool {
+	modified := false
+	switch val := v.(type) {
+	case map[string]interface{}:
+		if ed, ok := val["externalDocs"]; ok {
+			if obj, isObj := ed.(map[string]interface{}); isObj {
+				val["externalDocs"] = []interface{}{obj}
+				modified = true
+			}
+		}
+		for _, child := range val {
+			if wrapExternalDocs(child) {
+				modified = true
+			}
+		}
+	case []interface{}:
+		for _, item := range val {
+			if wrapExternalDocs(item) {
+				modified = true
+			}
+		}
+	}
+	return modified
+}
+
+// fixExternalDocs walks the full OpenAPI document and wraps every
+// externalDocs single-object occurrence into a single-element array.
+// webMethods expects externalDocs as an array at every level (root, tags[*],
+// paths[*].<operation>, components.schemas.<name>, nested Schemas via
+// allOf/oneOf/anyOf/items/properties.*/additionalProperties). OpenAPI and
+// Swagger specs default to a single object, which webMethods rejects with a
+// deserialization error on PUT.
+//
+// Closes GO-1 H.2 (BUG-REPORT-GO-1.md) — the previous implementation only
+// handled the root-level occurrence, letting FastAPI / Swaggerhub specs that
+// put externalDocs in tags[] or operations bubble up 500s on PUT.
+//
+// Malformed input (invalid JSON) is returned unchanged — defensive fallback.
+// If the walk produced no modification, the original bytes are returned to
+// preserve key ordering.
 func fixExternalDocs(spec []byte) []byte {
-	var parsed map[string]interface{}
+	var parsed interface{}
 	if err := json.Unmarshal(spec, &parsed); err != nil {
 		return spec
 	}
-
-	ed, ok := parsed["externalDocs"]
-	if !ok {
+	if !wrapExternalDocs(parsed) {
 		return spec
 	}
-
-	// If it's already an array, no fix needed
-	if _, isArray := ed.([]interface{}); isArray {
+	fixed, err := json.Marshal(parsed)
+	if err != nil {
 		return spec
 	}
-
-	// If it's an object, wrap in array
-	if obj, isObj := ed.(map[string]interface{}); isObj {
-		parsed["externalDocs"] = []interface{}{obj}
-		fixed, err := json.Marshal(parsed)
-		if err != nil {
-			return spec
-		}
-		return fixed
-	}
-
-	return spec
+	return fixed
 }
 
 // fixSecuritySchemeTypes uppercases securityScheme enum values.

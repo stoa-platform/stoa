@@ -186,7 +186,12 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			)
 			continue
 		}
-		data = fixExternalDocs(data)
+		// H.1 (GO-1): fixExternalDocs was previously applied here to `data`
+		// too, but this call was dead code — the wrapper payload has no
+		// top-level externalDocs (the spec is nested inside apiDefinition
+		// as json.RawMessage, so the Unmarshal-to-map walk never entered
+		// it). The walk at line 170 on the raw spec is the sole effective
+		// site.
 
 		// Initial method + URL selection.
 		var method, apiURL string

@@ -12,6 +12,12 @@ from ..database import get_db
 from ..models.traces_db import TraceStatusDB
 from ..services.kafka_service import Topics, kafka_service
 from ..services.trace_service import TraceService
+from ..services.webhook_dedup import (
+    DedupVerdict,
+    github_delivery_id,
+    gitlab_delivery_id,
+    webhook_dedup_cache,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +101,8 @@ async def gitlab_webhook(
     request: Request,
     x_gitlab_token: str | None = Header(None, alias="X-Gitlab-Token"),
     x_gitlab_event: str | None = Header(None, alias="X-Gitlab-Event"),
+    x_gitlab_webhook_uuid: str | None = Header(None, alias="X-Gitlab-Webhook-UUID"),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -107,6 +115,13 @@ async def gitlab_webhook(
     requests produce zero trace rows, eliminating the DoS amplification
     vector where an unauthenticated flood would burn 1 INSERT + 2 UPDATEs
     per request on the traces table.
+
+    CP-1 H.1: after auth, we claim a dedup slot keyed on Idempotency-Key
+    (preferred) or X-Gitlab-Webhook-UUID. X-Gitlab-Event-UUID is NEVER
+    used as primary key because it is shared across recursive webhooks —
+    deduping on it would drop legitimate events. The claim is released
+    on pipeline failure so the next redelivery retries cleanly instead
+    of being answered with "duplicate forever".
     """
     # CP-1 C.7 Step 1 — authenticate BEFORE any DB I/O.
     webhook_secret = settings.git.gitlab.webhook_secret.get_secret_value()
@@ -114,9 +129,34 @@ async def gitlab_webhook(
         # No trace row is written for unauthenticated requests.
         raise HTTPException(status_code=401, detail="Invalid webhook token")
 
-    # CP-1 C.7 Step 2 — only now do we parse and persist.
-    service = TraceService(db)
     event_type = x_gitlab_event or "Unknown"
+
+    # CP-1 H.1 Step 2 — dedup BEFORE DB insert / Kafka publish.
+    dedup_key = gitlab_delivery_id(idempotency_key, x_gitlab_webhook_uuid)
+    if dedup_key is None:
+        logger.warning(
+            "GitLab webhook missing Idempotency-Key and X-Gitlab-Webhook-UUID; "
+            "processing without dedup"
+        )
+    else:
+        verdict, cached = await webhook_dedup_cache.claim("gitlab", dedup_key)
+        if verdict is DedupVerdict.DUPLICATE:
+            return {
+                "status": "duplicate",
+                "event": event_type,
+                "trace_id": (cached or {}).get("trace_id", ""),
+                "duration_ms": (cached or {}).get("duration_ms"),
+                "author": (cached or {}).get("author"),
+            }
+        if verdict is DedupVerdict.IN_FLIGHT:
+            return {
+                "status": "in-flight",
+                "event": event_type,
+                "trace_id": "",
+            }
+
+    # CP-1 C.7 Step 3 — only now do we parse and persist.
+    service = TraceService(db)
     body = await request.json()
 
     # Extract Git info from payload
@@ -220,20 +260,32 @@ async def gitlab_webhook(
             f"Pipeline trace {trace.id}: {trace.status.value} in {trace.total_duration_ms}ms (author: {git_author})"
         )
 
-        return {
+        response = {
             "status": "processed",
             "event": event_type,
             "trace_id": trace.id,
             "duration_ms": trace.total_duration_ms,
             "author": git_author,
         }
+        # CP-1 H.1: promote claim → done so retries return 'duplicate'
+        # with the cached result instead of re-running the pipeline.
+        if dedup_key is not None:
+            await webhook_dedup_cache.mark_done("gitlab", dedup_key, response)
+        return response
 
     except HTTPException:
+        # CP-1 H.1: release claim so redelivery retries cleanly.
+        if dedup_key is not None:
+            await webhook_dedup_cache.release("gitlab", dedup_key)
         raise
     except Exception as e:
-        logger.error(f"Error processing GitLab webhook: {e}", exc_info=True)
+        logger.error("Error processing GitLab webhook", exc_info=True)
         await service.complete(trace, TraceStatusDB.FAILED, str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        # CP-1 H.1: release claim so redelivery retries cleanly.
+        # CP-1 H.3-adjacent: do not echo str(e) back to the sender.
+        if dedup_key is not None:
+            await webhook_dedup_cache.release("gitlab", dedup_key)
+        raise HTTPException(status_code=500, detail="Internal error processing webhook") from e
 
 
 @router.post("/github", response_model=WebhookProcessedResponse)
@@ -241,85 +293,140 @@ async def github_webhook(
     request: Request,
     x_hub_signature_256: str | None = Header(None, alias="X-Hub-Signature-256"),
     x_github_event: str | None = Header(None, alias="X-GitHub-Event"),
+    x_github_delivery: str | None = Header(None, alias="X-GitHub-Delivery"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Handle GitHub webhooks for GitOps."""
-    service = TraceService(db)
+    """Handle GitHub webhooks for GitOps.
+
+    CP-1 H.1: after signature verification, claim a dedup slot keyed on
+    X-GitHub-Delivery. Claim is released on pipeline failure so the
+    next redelivery retries cleanly.
+    """
     event_type = x_github_event or "unknown"
     raw_body = await request.body()
-    body = await request.json()
 
-    # Verify HMAC-SHA256
+    # CP-1 C.7 invariant — verify HMAC BEFORE any DB I/O or dedup state.
     if not verify_github_signature(
         raw_body, x_hub_signature_256, settings.git.github.webhook_secret.get_secret_value()
     ):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
-    # Extract git info
-    if event_type == "push":
-        git_project = body.get("repository", {}).get("full_name", "")
-        git_branch = body.get("ref", "").replace("refs/heads/", "")
-        head_commit = body.get("head_commit", {})
-        git_author = head_commit.get("author", {}).get("name", body.get("sender", {}).get("login", "unknown"))
-        git_commit_sha = head_commit.get("id")
-        git_commit_message = head_commit.get("message", "")[:200]
-    elif event_type == "pull_request":
-        pr = body.get("pull_request", {})
-        git_project = body.get("repository", {}).get("full_name", "")
-        git_branch = pr.get("head", {}).get("ref", "")
-        git_author = pr.get("user", {}).get("login", "unknown")
-        git_commit_sha = pr.get("merge_commit_sha")
-        git_commit_message = pr.get("title", "")[:200]
+    # CP-1 H.1 — dedup BEFORE DB insert / Kafka publish.
+    dedup_key = github_delivery_id(x_github_delivery)
+    if dedup_key is None:
+        logger.warning("GitHub webhook missing X-GitHub-Delivery; processing without dedup")
     else:
-        git_project = body.get("repository", {}).get("full_name", "")
-        git_branch = ""
-        git_author = body.get("sender", {}).get("login", "unknown")
-        git_commit_sha = None
-        git_commit_message = None
+        verdict, cached = await webhook_dedup_cache.claim("github", dedup_key)
+        if verdict is DedupVerdict.DUPLICATE:
+            return WebhookProcessedResponse(
+                status="duplicate",
+                event=event_type,
+                trace_id=(cached or {}).get("trace_id", ""),
+            )
+        if verdict is DedupVerdict.IN_FLIGHT:
+            return WebhookProcessedResponse(
+                status="in-flight",
+                event=event_type,
+                trace_id="",
+            )
 
-    trace = await service.create(
-        trigger_type=f"github-{event_type}",
-        trigger_source="github",
-        git_project=git_project,
-        git_branch=git_branch,
-        git_commit_sha=git_commit_sha,
-        git_commit_message=git_commit_message,
-        git_author=git_author,
-    )
+    service = TraceService(db)
+    body = await request.json()
 
-    await service.add_step(
-        trace,
-        name="webhook_received",
-        status="success",
-        duration_ms=5,
-        details={"event_type": event_type, "project": git_project, "action": body.get("action")},
-    )
+    try:
+        # Extract git info
+        if event_type == "push":
+            git_project = body.get("repository", {}).get("full_name", "")
+            git_branch = body.get("ref", "").replace("refs/heads/", "")
+            head_commit = body.get("head_commit", {})
+            git_author = head_commit.get("author", {}).get(
+                "name", body.get("sender", {}).get("login", "unknown")
+            )
+            git_commit_sha = head_commit.get("id")
+            git_commit_message = head_commit.get("message", "")[:200]
+        elif event_type == "pull_request":
+            pr = body.get("pull_request", {})
+            git_project = body.get("repository", {}).get("full_name", "")
+            git_branch = pr.get("head", {}).get("ref", "")
+            git_author = pr.get("user", {}).get("login", "unknown")
+            git_commit_sha = pr.get("merge_commit_sha")
+            git_commit_message = pr.get("title", "")[:200]
+        else:
+            git_project = body.get("repository", {}).get("full_name", "")
+            git_branch = ""
+            git_author = body.get("sender", {}).get("login", "unknown")
+            git_commit_sha = None
+            git_commit_message = None
 
-    # Dispatch to Kafka for async processing
-    if event_type == "push":
-        await kafka_service.publish(
-            topic=Topics.DEPLOY_REQUESTS,
-            event_type="sync-catalog",
-            tenant_id="all",
-            payload={"trace_id": str(trace.id), "source": "github", "project": git_project, "branch": git_branch},
-            user_id=git_author,
+        trace = await service.create(
+            trigger_type=f"github-{event_type}",
+            trigger_source="github",
+            git_project=git_project,
+            git_branch=git_branch,
+            git_commit_sha=git_commit_sha,
+            git_commit_message=git_commit_message,
+            git_author=git_author,
         )
-    elif event_type == "pull_request" and body.get("action") == "closed" and body.get("pull_request", {}).get("merged"):
-        await kafka_service.publish(
-            topic=Topics.DEPLOY_REQUESTS,
-            event_type="sync-gitops",
-            tenant_id="all",
-            payload={
-                "trace_id": str(trace.id),
-                "source": "github",
-                "project": git_project,
-                "pr_number": body["pull_request"]["number"],
-            },
-            user_id=git_author,
+
+        await service.add_step(
+            trace,
+            name="webhook_received",
+            status="success",
+            duration_ms=5,
+            details={"event_type": event_type, "project": git_project, "action": body.get("action")},
         )
 
-    await service.complete(trace, TraceStatusDB.SUCCESS, f"GitHub {event_type} processed")
-    return WebhookProcessedResponse(status="processed", event=event_type, trace_id=str(trace.id))
+        # Dispatch to Kafka for async processing
+        if event_type == "push":
+            await kafka_service.publish(
+                topic=Topics.DEPLOY_REQUESTS,
+                event_type="sync-catalog",
+                tenant_id="all",
+                payload={
+                    "trace_id": str(trace.id),
+                    "source": "github",
+                    "project": git_project,
+                    "branch": git_branch,
+                },
+                user_id=git_author,
+            )
+        elif (
+            event_type == "pull_request"
+            and body.get("action") == "closed"
+            and body.get("pull_request", {}).get("merged")
+        ):
+            await kafka_service.publish(
+                topic=Topics.DEPLOY_REQUESTS,
+                event_type="sync-gitops",
+                tenant_id="all",
+                payload={
+                    "trace_id": str(trace.id),
+                    "source": "github",
+                    "project": git_project,
+                    "pr_number": body["pull_request"]["number"],
+                },
+                user_id=git_author,
+            )
+
+        await service.complete(trace, TraceStatusDB.SUCCESS, f"GitHub {event_type} processed")
+        response = WebhookProcessedResponse(
+            status="processed", event=event_type, trace_id=str(trace.id)
+        )
+        # CP-1 H.1: promote claim → done; retries return 'duplicate'.
+        if dedup_key is not None:
+            await webhook_dedup_cache.mark_done(
+                "github", dedup_key, response.model_dump()
+            )
+        return response
+    except HTTPException:
+        if dedup_key is not None:
+            await webhook_dedup_cache.release("github", dedup_key)
+        raise
+    except Exception:
+        logger.error("Error processing GitHub webhook", exc_info=True)
+        if dedup_key is not None:
+            await webhook_dedup_cache.release("github", dedup_key)
+        raise HTTPException(status_code=500, detail="Internal error processing webhook") from None
 
 
 async def handle_push_event_traced_pg(payload: dict, trace, service: TraceService) -> dict:

@@ -196,7 +196,7 @@ case "ipFilterPolicy":
 L'audit initial ne dispose pas des docs webMethods 10.15 certifiées. Trois options :
 
 1. **Demander à @PotoMitan** de valider les noms exacts via accès au portail IBM webMethods.
-2. **Tester en staging** contre la POC BDF (vps webMethods `${WM_STAGING_URL:?set-me}`) avant merge.
+2. **Tester en staging** contre la POC client (VPS webMethods — IP in `infra-status.md` / private repo, resolved at integration time via `${WM_STAGING_URL:?set-me}`) avant merge.
 3. **Committer la meilleure hypothèse avec `// WM-10.15-HYPOTHESIS` marker** et un test d'intégration optionnel qui tape le vrai wM (skip par défaut, activable via `INTEGRATION_WM_URL`).
 
 **Recommandation** : option 3 — committer l'hypothèse avec marker explicite, **ne pas bloquer la démo sur la validation**, et convertir à la première Linear d'intégration quand Christophe aura validé. Le fallback `default: return config` actuel produit le même résultat qu'aujourd'hui (échec silencieux wM-side) — on passe donc d'un échec silencieux à un essai éclairé.

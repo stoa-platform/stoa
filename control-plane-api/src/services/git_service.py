@@ -1,4 +1,20 @@
-"""GitLab service for GitOps operations"""
+"""GitLab service for GitOps operations.
+
+CP-1 (C.1/C.4/C.5): every synchronous python-gitlab call is routed
+through :func:`.git_executor.run_sync` so the asyncio loop stays
+non-blocking and the applicative concurrency cap (``GITLAB_SEMAPHORE``)
+is enforced uniformly across all methods (not only the two callers that
+historically used ``_fetch_with_protection``).
+
+CP-1 (C.6): write paths drop the ``_file_exists`` pre-check. ``write_file``
+calls ``create_file`` first and falls through to ``update_file`` on the
+"already exists" error. GitLab's optimistic-concurrency ``last_commit_id``
+is threaded through ``update_file`` / ``delete_file`` / ``batch_commit``
+when in scope. Note that this closes the TOCTOU *existence-check* window;
+it does not provide full compare-and-swap against concurrent writers to
+the same file — full CAS would require the caller to round-trip a
+version token.
+"""
 
 import asyncio
 import logging
@@ -6,32 +22,36 @@ import re
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import gitlab
 import yaml
 from gitlab.v4.objects import Project
 
 from ..config import settings
+from .git_credentials import askpass_env, redact_token
+from .git_executor import (
+    BATCH_TIMEOUT_S,
+    DEFAULT_TIMEOUT_S,
+    GITLAB_SEMAPHORE,
+    run_sync,
+)
 from .git_provider import BranchRef, CommitRef, GitProvider, MergeRequestRef, TreeEntry
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# CAB-688: Protection for parallel GitLab calls
-# Obligation #1: Semaphore(10) max concurrent
-# Obligation #2: Retry exponential backoff on 429
-# Obligation #3: Timeout 5s per call
+# CAB-688 legacy retry wrapper — kept as a thin composition over
+# ``run_sync`` because the site-specific 429 backoff is more
+# aggressive than python-gitlab's default ``max_retries`` for the
+# two "parallel fetch" callers that historically used it.
 # ============================================================
-GITLAB_SEMAPHORE = asyncio.Semaphore(10)
 GITLAB_TIMEOUT = 5.0
 GITLAB_MAX_RETRIES = 3
 
 
 class GitLabRateLimitError(Exception):
-    """GitLab 429 rate limit exceeded"""
-
-    pass
+    """GitLab 429 rate limit exceeded."""
 
 
 async def _fetch_with_protection(
@@ -40,35 +60,39 @@ async def _fetch_with_protection(
     timeout: float = GITLAB_TIMEOUT,
     max_retries: int = GITLAB_MAX_RETRIES,
 ) -> Any:
-    """Execute GitLab call with semaphore, timeout, and retry on 429."""
-    async with GITLAB_SEMAPHORE:
-        last_error = None
-        for attempt in range(max_retries):
-            try:
-                async with asyncio.timeout(timeout):
-                    return await coro_factory()
-            except TimeoutError:
-                logger.warning(f"GitLab call '{name}' timed out (attempt {attempt + 1}/{max_retries})")
-                last_error = TimeoutError(f"{name} timed out")
-            except Exception as e:
-                if "429" in str(e) or "rate limit" in str(e).lower():
-                    wait_time = 2**attempt
-                    logger.warning(f"GitLab rate limit hit for '{name}', waiting {wait_time}s (attempt {attempt + 1})")
-                    await asyncio.sleep(wait_time)
-                    last_error = GitLabRateLimitError(str(e))
-                else:
-                    logger.error(f"GitLab call '{name}' failed: {e}")
-                    last_error = e
-                    break
-        raise last_error or Exception(f"Failed after {max_retries} attempts: {name}")
+    """Execute a coroutine with bounded retry on 429 / timeout.
+
+    ``coro_factory`` must return an awaitable (typically a GitLabService
+    method call). The method itself is expected to go through ``run_sync``
+    internally, so the applicative semaphore and offload are already
+    applied; this wrapper only adds per-site retry on 429 and timeout.
+    """
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            async with asyncio.timeout(timeout):
+                return await coro_factory()
+        except TimeoutError:
+            logger.warning("GitLab call '%s' timed out (attempt %d/%d)", name, attempt + 1, max_retries)
+            last_error = TimeoutError(f"{name} timed out")
+        except Exception as e:
+            if "429" in str(e) or "rate limit" in str(e).lower():
+                wait_time = 2**attempt
+                logger.warning("GitLab rate limit hit for '%s', waiting %ds (attempt %d)", name, wait_time, attempt + 1)
+                await asyncio.sleep(wait_time)
+                last_error = GitLabRateLimitError(str(e))
+            else:
+                logger.error("GitLab call '%s' failed: %s", name, e)
+                last_error = e
+                break
+    raise last_error or Exception(f"Failed after {max_retries} attempts: {name}")
 
 
 def _normalize_api_data(raw_data: dict) -> dict:
-    """
-    Normalize API data from GitLab YAML to standard format.
+    """Normalize API data from GitLab YAML to standard format.
+
     Supports both simple format and Kubernetes-style format (apiVersion/kind/spec).
     """
-    # If it's Kubernetes-style format
     if "apiVersion" in raw_data and "kind" in raw_data:
         metadata = raw_data.get("metadata", {})
         spec = raw_data.get("spec", {})
@@ -89,8 +113,19 @@ def _normalize_api_data(raw_data: dict) -> dict:
             },
         }
 
-    # Simple format - return as-is
     return raw_data
+
+
+_GLT = TypeVar("_GLT")
+
+
+async def _gl_run(
+    fn: Callable[[], _GLT],
+    op_name: str,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> _GLT:
+    """Run a sync python-gitlab closure under the uniform GitLab semaphore."""
+    return await run_sync(fn, semaphore=GITLAB_SEMAPHORE, timeout=timeout, op_name=op_name)
 
 
 class GitLabService(GitProvider):
@@ -101,86 +136,111 @@ class GitLabService(GitProvider):
         self._project: Project | None = None
 
     async def connect(self) -> None:
-        """Initialize GitLab connection"""
+        """Initialize GitLab connection."""
         try:
             gl_cfg = settings.git.gitlab
-            self._gl = gitlab.Gitlab(gl_cfg.url, private_token=gl_cfg.token.get_secret_value())
-            self._gl.auth()
 
-            # Get the main APIM project
-            self._project = self._gl.projects.get(gl_cfg.project_id)
+            def _connect() -> tuple[gitlab.Gitlab, Project, str]:
+                client = gitlab.Gitlab(gl_cfg.url, private_token=gl_cfg.token.get_secret_value())
+                client.auth()
+                project = client.projects.get(gl_cfg.project_id)
+                # Materialise the scalar inside the closure so the log
+                # line below does not trigger any lazy attribute access
+                # on the event loop.
+                return client, project, project.name
 
-            logger.info(f"Connected to GitLab project: {self._project.name}")
+            self._gl, self._project, project_name = await _gl_run(
+                _connect, "gitlab.connect", timeout=15.0
+            )
+            logger.info("Connected to GitLab project: %s", project_name)
         except Exception as e:
-            logger.error(f"Failed to connect to GitLab: {e}")
+            logger.error("Failed to connect to GitLab: %s", e)
             raise
 
     async def disconnect(self) -> None:
-        """Close GitLab connection"""
+        """Close GitLab connection."""
         self._gl = None
         self._project = None
 
     async def get_head_commit_sha(self, ref: str = "main") -> str | None:
         """Return the current HEAD commit SHA from GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        commits = self._project.commits.list(ref_name=ref, per_page=1)
-        if not commits:
-            return None
-        return commits[0].id
+        project = self._require_project()
+
+        def _head() -> str | None:
+            commits = project.commits.list(ref_name=ref, per_page=1)
+            if not commits:
+                return None
+            return commits[0].id
+
+        return await _gl_run(_head, "gitlab.get_head_commit_sha")
 
     async def list_tenants(self) -> list[str]:
         """List tenant IDs from the catalog repository."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        try:
-            tree = self._project.repository_tree(path="tenants", ref="main")
+        project = self._require_project()
+
+        def _list() -> list[str]:
+            try:
+                tree = project.repository_tree(path="tenants", ref="main")
+            except gitlab.exceptions.GitlabGetError:
+                return []
             return [item["name"] for item in tree if item["type"] == "tree"]
-        except gitlab.exceptions.GitlabGetError:
-            return []
+
+        return await _gl_run(_list, "gitlab.list_tenants")
 
     # ============================================================
     # GitProvider ABC implementations
     # ============================================================
 
     async def clone_repo(self, repo_url: str) -> Path:
-        """Clone a GitLab repository to a temporary directory."""
+        """Clone a GitLab repository to a temporary directory.
+
+        CP-1 C.2: the token never appears in argv. It is passed to git
+        through GIT_ASKPASS + env vars instead. ``repo_url`` must be a
+        plain HTTPS URL (no user/token prefix).
+        """
         tmp_dir = Path(tempfile.mkdtemp(prefix="stoa-gl-"))
         token = settings.git.gitlab.token.get_secret_value()
-        # Inject token into HTTPS URL for auth
-        authed_url = repo_url.replace("https://", f"https://oauth2:{token}@")
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "clone",
-            "--depth=1",
-            authed_url,
-            str(tmp_dir / "repo"),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
+        with askpass_env(username="oauth2", password=token) as env:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "clone",
+                "--depth=1",
+                repo_url,
+                str(tmp_dir / "repo"),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            _, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(f"git clone failed: {stderr.decode().strip()}")
+            safe_stderr = redact_token(stderr.decode().strip(), token)
+            raise RuntimeError(f"git clone failed: {safe_stderr}")
         return tmp_dir / "repo"
 
     async def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> str:
         """Retrieve raw file content from GitLab."""
-        if not self._gl:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id)
-        try:
-            f = project.files.get(file_path, ref=ref)
-            return f.decode().decode("utf-8")
-        except gitlab.exceptions.GitlabGetError as exc:
-            raise FileNotFoundError(f"{file_path} not found in project {project_id}") from exc
+        gl = self._require_gl()
+
+        def _get() -> str:
+            project = gl.projects.get(project_id)
+            try:
+                f = project.files.get(file_path, ref=ref)
+                return f.decode().decode("utf-8")
+            except gitlab.exceptions.GitlabGetError as exc:
+                raise FileNotFoundError(f"{file_path} not found in project {project_id}") from exc
+
+        return await _gl_run(_get, "gitlab.get_file_content")
 
     async def list_files(self, project_id: str, path: str = "", ref: str = "main") -> list[str]:
         """List files in a GitLab repository directory."""
-        if not self._gl:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id)
-        items = project.repository_tree(path=path, ref=ref, per_page=100, all=True)
-        return [item["path"] for item in items]
+        gl = self._require_gl()
+
+        def _list() -> list[str]:
+            project = gl.projects.get(project_id)
+            items = project.repository_tree(path=path, ref=ref, per_page=100, all=True)
+            return [item["path"] for item in items]
+
+        return await _gl_run(_list, "gitlab.list_files")
 
     async def create_webhook(
         self,
@@ -190,76 +250,79 @@ class GitLabService(GitProvider):
         events: list[str],
     ) -> dict[str, Any]:
         """Register a webhook on a GitLab project."""
-        if not self._gl:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id)
-        # Map generic event names to GitLab hook booleans
-        hook_data: dict[str, Any] = {"url": url, "token": secret}
-        event_map = {
-            "push": "push_events",
-            "merge_request": "merge_requests_events",
-            "tag": "tag_push_events",
-            "issues": "issues_events",
-        }
-        for event in events:
-            gl_key = event_map.get(event, f"{event}_events")
-            hook_data[gl_key] = True
-        hook = project.hooks.create(hook_data)
-        return {"id": str(hook.id), "url": hook.url}
+        gl = self._require_gl()
+
+        def _create() -> dict[str, Any]:
+            project = gl.projects.get(project_id)
+            hook_data: dict[str, Any] = {"url": url, "token": secret}
+            event_map = {
+                "push": "push_events",
+                "merge_request": "merge_requests_events",
+                "tag": "tag_push_events",
+                "issues": "issues_events",
+            }
+            for event in events:
+                gl_key = event_map.get(event, f"{event}_events")
+                hook_data[gl_key] = True
+            hook = project.hooks.create(hook_data)
+            return {"id": str(hook.id), "url": hook.url}
+
+        return await _gl_run(_create, "gitlab.create_webhook")
 
     async def delete_webhook(self, project_id: str, hook_id: str) -> bool:
         """Remove a webhook from a GitLab project."""
-        if not self._gl:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id)
-        try:
-            hook = project.hooks.get(int(hook_id))
-            hook.delete()
-            return True
-        except gitlab.exceptions.GitlabGetError:
-            return False
+        gl = self._require_gl()
+
+        def _delete() -> bool:
+            project = gl.projects.get(project_id)
+            try:
+                hook = project.hooks.get(int(hook_id))
+                hook.delete()
+                return True
+            except gitlab.exceptions.GitlabGetError:
+                return False
+
+        return await _gl_run(_delete, "gitlab.delete_webhook")
 
     async def get_repo_info(self, project_id: str) -> dict[str, Any]:
         """Retrieve GitLab project metadata."""
-        if not self._gl:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id)
-        return {
-            "name": project.name,
-            "default_branch": project.default_branch,
-            "url": project.web_url,
-            "visibility": project.visibility,
-        }
+        gl = self._require_gl()
+
+        def _info() -> dict[str, Any]:
+            project = gl.projects.get(project_id)
+            return {
+                "name": project.name,
+                "default_branch": project.default_branch,
+                "url": project.web_url,
+                "visibility": project.visibility,
+            }
+
+        return await _gl_run(_info, "gitlab.get_repo_info")
 
     # ============================================================
     # Legacy methods (used by existing callers)
     # ============================================================
 
     def _get_tenant_path(self, tenant_id: str) -> str:
-        """Get the base path for a tenant in the repo"""
         return f"tenants/{tenant_id}"
 
     def _get_api_path(self, tenant_id: str, api_name: str) -> str:
-        """Get the path for an API definition"""
         return f"{self._get_tenant_path(tenant_id)}/apis/{api_name}"
 
-    # Tenant operations
-    async def create_tenant_structure(self, tenant_id: str, tenant_data: dict) -> bool:
-        """
-        Create initial tenant directory structure in GitLab.
-
-        Structure:
-        tenants/{tenant_id}/
-        ├── tenant.yaml
-        ├── apis/
-        └── applications/
-        """
+    def _require_project(self) -> Project:
         if not self._project:
             raise RuntimeError("GitLab not connected")
+        return self._project
 
-        try:
-            # Create tenant.yaml
-            tenant_yaml = f"""# Tenant Configuration
+    def _require_gl(self) -> gitlab.Gitlab:
+        if not self._gl:
+            raise RuntimeError("GitLab not connected")
+        return self._gl
+
+    async def create_tenant_structure(self, tenant_id: str, tenant_data: dict) -> bool:
+        """Create initial tenant directory structure in GitLab."""
+        project = self._require_project()
+        tenant_yaml = f"""# Tenant Configuration
 id: {tenant_id}
 name: {tenant_data.get('name', tenant_id)}
 display_name: {tenant_data.get('display_name', tenant_id)}
@@ -272,28 +335,15 @@ settings:
     - dev
     - staging
 """
-            # Use commits API for atomic operation (single commit with all files)
-            # This prevents race conditions when creating multiple files
-            tenant_path = self._get_tenant_path(tenant_id)
-            actions = [
-                {
-                    "action": "create",
-                    "file_path": f"{tenant_path}/tenant.yaml",
-                    "content": tenant_yaml,
-                },
-                {
-                    "action": "create",
-                    "file_path": f"{tenant_path}/apis/.gitkeep",
-                    "content": "",
-                },
-                {
-                    "action": "create",
-                    "file_path": f"{tenant_path}/applications/.gitkeep",
-                    "content": "",
-                },
-            ]
+        tenant_path = self._get_tenant_path(tenant_id)
+        actions = [
+            {"action": "create", "file_path": f"{tenant_path}/tenant.yaml", "content": tenant_yaml},
+            {"action": "create", "file_path": f"{tenant_path}/apis/.gitkeep", "content": ""},
+            {"action": "create", "file_path": f"{tenant_path}/applications/.gitkeep", "content": ""},
+        ]
 
-            self._project.commits.create(
+        def _commit() -> None:
+            project.commits.create(
                 {
                     "branch": "main",
                     "commit_message": f"Create tenant {tenant_id}",
@@ -301,197 +351,194 @@ settings:
                 }
             )
 
-            logger.info(f"Created tenant structure for {tenant_id}")
+        try:
+            await _gl_run(_commit, "gitlab.create_tenant_structure", timeout=BATCH_TIMEOUT_S)
+            logger.info("Created tenant structure for %s", tenant_id)
             return True
-
         except Exception as e:
-            logger.error(f"Failed to create tenant structure: {e}")
+            logger.error("Failed to create tenant structure: %s", e)
             raise
 
     async def get_tenant(self, tenant_id: str) -> dict | None:
-        """Get tenant configuration from GitLab"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """Get tenant configuration from GitLab."""
+        project = self._require_project()
+        path = f"{self._get_tenant_path(tenant_id)}/tenant.yaml"
 
-        try:
-            file = self._project.files.get(f"{self._get_tenant_path(tenant_id)}/tenant.yaml", ref="main")
-            return yaml.safe_load(file.decode())
-        except gitlab.exceptions.GitlabGetError:
-            return None
+        def _get() -> dict | None:
+            try:
+                file = project.files.get(path, ref="main")
+                return yaml.safe_load(file.decode())
+            except gitlab.exceptions.GitlabGetError:
+                return None
+
+        return await _gl_run(_get, "gitlab.get_tenant")
 
     async def _ensure_tenant_exists(self, tenant_id: str) -> bool:
-        """Check if tenant exists, create structure if not"""
-        try:
-            self._project.files.get(f"{self._get_tenant_path(tenant_id)}/tenant.yaml", ref="main")
+        """Check if tenant exists, create structure if not."""
+        project = self._require_project()
+        path = f"{self._get_tenant_path(tenant_id)}/tenant.yaml"
+
+        def _exists() -> bool:
+            try:
+                project.files.get(path, ref="main")
+                return True
+            except gitlab.exceptions.GitlabGetError:
+                return False
+
+        if await _gl_run(_exists, "gitlab._ensure_tenant_exists"):
             return True
-        except gitlab.exceptions.GitlabGetError:
-            # Tenant doesn't exist, create minimal structure
-            logger.info(f"Tenant {tenant_id} doesn't exist, creating structure...")
-            await self.create_tenant_structure(
-                tenant_id,
-                {
-                    "name": tenant_id,
-                    "display_name": tenant_id,
-                },
-            )
-            return True
+        logger.info("Tenant %s doesn't exist, creating structure...", tenant_id)
+        await self.create_tenant_structure(
+            tenant_id,
+            {"name": tenant_id, "display_name": tenant_id},
+        )
+        return True
 
     async def _api_exists(self, tenant_id: str, api_name: str) -> bool:
-        """Check if API already exists"""
-        try:
-            self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/api.yaml", ref="main")
-            return True
-        except gitlab.exceptions.GitlabGetError:
-            return False
+        """Check if API already exists."""
+        project = self._require_project()
+        path = f"{self._get_api_path(tenant_id, api_name)}/api.yaml"
 
-    # API operations
+        def _check() -> bool:
+            try:
+                project.files.get(path, ref="main")
+                return True
+            except gitlab.exceptions.GitlabGetError:
+                return False
+
+        return await _gl_run(_check, "gitlab._api_exists")
+
     async def create_api(self, tenant_id: str, api_data: dict) -> str:
-        """
-        Create API definition in GitLab.
+        """Create API definition in GitLab.
 
-        Creates:
-        tenants/{tenant_id}/apis/{api_name}/
-        ├── api.yaml          # API metadata
-        ├── openapi.yaml      # OpenAPI specification
-        └── policies/         # Gateway policies
+        C.6: this retains its pre-check because the failure mode is
+        ``ValueError`` — the pre-check exists to return a specific error
+        shape to callers, not to race-guard a write. The TOCTOU fix for
+        writes lives in :meth:`write_file`.
         """
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-
+        project = self._require_project()
         api_name = api_data["name"]
         api_path = self._get_api_path(tenant_id, api_name)
 
-        # Ensure tenant exists
         await self._ensure_tenant_exists(tenant_id)
 
-        # Check if API already exists
         if await self._api_exists(tenant_id, api_name):
             raise ValueError(f"API '{api_name}' already exists for tenant '{tenant_id}'")
 
-        try:
-            # Create api.yaml with proper YAML escaping for description
-            api_content = {
-                "id": api_data.get("id", api_name),
-                "name": api_name,
-                "display_name": api_data.get("display_name", api_name),
-                "version": api_data.get("version", "1.0.0"),
-                "description": api_data.get("description", ""),
-                "backend_url": api_data.get("backend_url", ""),
-                "tags": api_data.get("tags", []),
-                "status": "draft",
-                "deployments": {
-                    "dev": False,
-                    "staging": False,
-                },
-            }
+        api_content = {
+            "id": api_data.get("id", api_name),
+            "name": api_name,
+            "display_name": api_data.get("display_name", api_name),
+            "version": api_data.get("version", "1.0.0"),
+            "description": api_data.get("description", ""),
+            "backend_url": api_data.get("backend_url", ""),
+            "tags": api_data.get("tags", []),
+            "status": "draft",
+            "deployments": {"dev": False, "staging": False},
+        }
 
-            api_yaml = yaml.dump(api_content, default_flow_style=False, allow_unicode=True)
+        api_yaml = yaml.dump(api_content, default_flow_style=False, allow_unicode=True)
 
-            # Use commits API to create all files in a single atomic commit
-            # This prevents race conditions when creating multiple files
-            actions = [
+        actions: list[dict[str, Any]] = [
+            {"action": "create", "file_path": f"{api_path}/api.yaml", "content": api_yaml},
+            {"action": "create", "file_path": f"{api_path}/policies/.gitkeep", "content": ""},
+        ]
+
+        if api_data.get("openapi_spec"):
+            actions.append(
                 {
                     "action": "create",
-                    "file_path": f"{api_path}/api.yaml",
-                    "content": api_yaml,
-                },
-                {
-                    "action": "create",
-                    "file_path": f"{api_path}/policies/.gitkeep",
-                    "content": "",
-                },
-            ]
-
-            # Add OpenAPI spec if provided
-            if api_data.get("openapi_spec"):
-                actions.append(
-                    {
-                        "action": "create",
-                        "file_path": f"{api_path}/openapi.yaml",
-                        "content": api_data["openapi_spec"],
-                    }
-                )
-
-            # Single atomic commit with all files
-            self._project.commits.create(
-                {
-                    "branch": "main",
-                    "commit_message": f"Create API {api_name} for tenant {tenant_id}",
-                    "actions": actions,
+                    "file_path": f"{api_path}/openapi.yaml",
+                    "content": api_data["openapi_spec"],
                 }
             )
 
-            logger.info(f"Created API {api_name} for tenant {tenant_id}")
-            return api_data.get("id", api_name)
+        def _commit() -> None:
+            try:
+                project.commits.create(
+                    {
+                        "branch": "main",
+                        "commit_message": f"Create API {api_name} for tenant {tenant_id}",
+                        "actions": actions,
+                    }
+                )
+            except gitlab.exceptions.GitlabCreateError as e:
+                if "already exists" in str(e).lower():
+                    raise ValueError(f"API '{api_name}' already exists for tenant '{tenant_id}'") from e
+                raise
 
-        except gitlab.exceptions.GitlabCreateError as e:
-            if "already exists" in str(e).lower():
-                raise ValueError(f"API '{api_name}' already exists for tenant '{tenant_id}'")
-            logger.error(f"Failed to create API: {e}")
+        try:
+            await _gl_run(_commit, "gitlab.create_api", timeout=BATCH_TIMEOUT_S)
+            logger.info("Created API %s for tenant %s", api_name, tenant_id)
+            return api_data.get("id", api_name)
+        except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Failed to create API: {e}")
+            logger.error("Failed to create API: %s", e)
             raise
 
     async def get_api(self, tenant_id: str, api_name: str) -> dict | None:
-        """Get API configuration from GitLab"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """Get API configuration from GitLab."""
+        project = self._require_project()
+        path = f"{self._get_api_path(tenant_id, api_name)}/api.yaml"
 
-        try:
-            file = self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/api.yaml", ref="main")
-            raw_data = yaml.safe_load(file.decode())
-            return _normalize_api_data(raw_data)
-        except gitlab.exceptions.GitlabGetError:
-            return None
-        except yaml.YAMLError as e:
-            logger.error(f"Failed to parse API YAML for {api_name}: {e}")
-            return None
+        def _get() -> dict | None:
+            try:
+                file = project.files.get(path, ref="main")
+                raw_data = yaml.safe_load(file.decode())
+                return _normalize_api_data(raw_data)
+            except gitlab.exceptions.GitlabGetError:
+                return None
+            except yaml.YAMLError as e:
+                logger.error("Failed to parse API YAML for %s: %s", api_name, e)
+                return None
+
+        return await _gl_run(_get, "gitlab.get_api")
 
     async def get_api_openapi_spec(self, tenant_id: str, api_name: str) -> dict | None:
-        """Get OpenAPI specification for an API from GitLab"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """Get OpenAPI specification for an API from GitLab."""
+        project = self._require_project()
+        base = self._get_api_path(tenant_id, api_name)
 
-        try:
-            # Try openapi.yaml first, then openapi.json
-            for filename in ["openapi.yaml", "openapi.yml", "openapi.json"]:
-                try:
-                    file = self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/{filename}", ref="main")
-                    content = file.decode()
-                    if filename.endswith(".json"):
-                        import json
+        def _fetch() -> dict | None:
+            try:
+                for filename in ("openapi.yaml", "openapi.yml", "openapi.json"):
+                    try:
+                        file = project.files.get(f"{base}/{filename}", ref="main")
+                        content = file.decode()
+                        if filename.endswith(".json"):
+                            import json
 
-                        return json.loads(content)
-                    else:
+                            return json.loads(content)
                         return yaml.safe_load(content)
-                except gitlab.exceptions.GitlabGetError:
-                    continue
+                    except gitlab.exceptions.GitlabGetError:
+                        continue
+                return None
+            except Exception as e:
+                logger.error("Failed to get OpenAPI spec for %s: %s", api_name, e)
+                return None
 
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get OpenAPI spec for {api_name}: {e}")
-            return None
+        return await _gl_run(_fetch, "gitlab.get_api_openapi_spec")
 
     async def list_apis(self, tenant_id: str) -> list[dict]:
-        """List all APIs for a tenant"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """List all APIs for a tenant."""
+        project = self._require_project()
+        base = f"{self._get_tenant_path(tenant_id)}/apis"
 
-        try:
-            tree = self._project.repository_tree(path=f"{self._get_tenant_path(tenant_id)}/apis", ref="main")
+        def _list_dirs() -> list[str]:
+            try:
+                tree = project.repository_tree(path=base, ref="main")
+            except gitlab.exceptions.GitlabGetError:
+                return []
+            return [item["name"] for item in tree if item["type"] == "tree" and item["name"] != ".gitkeep"]
 
-            apis = []
-            for item in tree:
-                if item["type"] == "tree" and item["name"] != ".gitkeep":
-                    api = await self.get_api(tenant_id, item["name"])
-                    if api:
-                        apis.append(api)
-
-            return apis
-
-        except gitlab.exceptions.GitlabGetError:
-            return []
+        api_dirs = await _gl_run(_list_dirs, "gitlab.list_apis.dirs")
+        apis: list[dict] = []
+        for api_name in api_dirs:
+            api = await self.get_api(tenant_id, api_name)
+            if api:
+                apis.append(api)
+        return apis
 
     # ============================================================
     # CAB-688: Parallel fetch methods
@@ -499,23 +546,26 @@ settings:
 
     async def list_apis_parallel(self, tenant_id: str) -> list[dict]:
         """List APIs for a tenant with parallel fetching (CAB-688)."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        project = self._require_project()
+        base = f"{self._get_tenant_path(tenant_id)}/apis"
 
-        try:
-            tree = self._project.repository_tree(path=f"{self._get_tenant_path(tenant_id)}/apis", ref="main")
-        except gitlab.exceptions.GitlabGetError:
-            return []
+        def _list_dirs() -> list[str]:
+            try:
+                tree = project.repository_tree(path=base, ref="main")
+            except gitlab.exceptions.GitlabGetError:
+                return []
+            return [item["name"] for item in tree if item["type"] == "tree" and item["name"] != ".gitkeep"]
 
-        api_dirs = [item["name"] for item in tree if item["type"] == "tree" and item["name"] != ".gitkeep"]
+        api_dirs = await _gl_run(_list_dirs, "gitlab.list_apis_parallel.dirs")
 
         async def fetch_api(api_id: str) -> dict | None:
             try:
                 return await _fetch_with_protection(
-                    lambda aid=api_id: self.get_api(tenant_id, aid), f"api:{tenant_id}/{api_id}"
+                    lambda aid=api_id: self.get_api(tenant_id, aid),
+                    f"api:{tenant_id}/{api_id}",
                 )
             except Exception as e:
-                logger.warning(f"Failed to fetch API {tenant_id}/{api_id}: {e}")
+                logger.warning("Failed to fetch API %s/%s: %s", tenant_id, api_id, e)
                 return None
 
         results = await asyncio.gather(*[fetch_api(aid) for aid in api_dirs])
@@ -527,11 +577,12 @@ settings:
         async def fetch_spec(api_id: str) -> tuple[str, dict | None]:
             try:
                 spec = await _fetch_with_protection(
-                    lambda aid=api_id: self.get_api_openapi_spec(tenant_id, aid), f"openapi:{tenant_id}/{api_id}"
+                    lambda aid=api_id: self.get_api_openapi_spec(tenant_id, aid),
+                    f"openapi:{tenant_id}/{api_id}",
                 )
                 return (api_id, spec)
             except Exception as e:
-                logger.warning(f"Failed to fetch OpenAPI spec {tenant_id}/{api_id}: {e}")
+                logger.warning("Failed to fetch OpenAPI spec %s/%s: %s", tenant_id, api_id, e)
                 return (api_id, None)
 
         results = await asyncio.gather(*[fetch_spec(aid) for aid in api_ids])
@@ -539,9 +590,12 @@ settings:
 
     async def get_full_tree_recursive(self, path: str = "tenants") -> list[dict]:
         """Get full repository tree in ONE call (CAB-688 obligation #5)."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        return self._project.repository_tree(path=path, ref="main", recursive=True, per_page=1000, all=True)
+        project = self._require_project()
+
+        def _tree() -> list[dict]:
+            return list(project.repository_tree(path=path, ref="main", recursive=True, per_page=1000, all=True))
+
+        return await _gl_run(_tree, "gitlab.get_full_tree_recursive", timeout=BATCH_TIMEOUT_S)
 
     def parse_tree_to_tenant_apis(self, tree: list[dict]) -> dict[str, list[str]]:
         """Parse recursive tree into {tenant_id: [api_ids]} structure."""
@@ -553,54 +607,55 @@ settings:
                 match = pattern.match(item["path"])
                 if match:
                     tenant_id, api_id = match.groups()
-                    if tenant_id not in tenant_apis:
-                        tenant_apis[tenant_id] = []
-                    tenant_apis[tenant_id].append(api_id)
+                    tenant_apis.setdefault(tenant_id, []).append(api_id)
 
         return tenant_apis
 
     async def update_api(self, tenant_id: str, api_name: str, api_data: dict) -> bool:
-        """Update API configuration in GitLab"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """Update API configuration in GitLab.
 
-        try:
-            file = self._project.files.get(f"{self._get_api_path(tenant_id, api_name)}/api.yaml", ref="main")
+        Uses ``last_commit_id`` for optimistic concurrency (GitLab server
+        rejects the save with 400 if another writer moved the pointer).
+        """
+        project = self._require_project()
+        path = f"{self._get_api_path(tenant_id, api_name)}/api.yaml"
+
+        def _update() -> None:
+            file = project.files.get(path, ref="main")
             current = yaml.safe_load(file.decode())
             current.update(api_data)
-
             file.content = yaml.dump(current, default_flow_style=False, allow_unicode=True)
-            file.save(branch="main", commit_message=f"Update API {api_name}")
+            save_kwargs: dict[str, Any] = {
+                "branch": "main",
+                "commit_message": f"Update API {api_name}",
+            }
+            last_commit_id = getattr(file, "last_commit_id", None)
+            if isinstance(last_commit_id, str) and last_commit_id:
+                save_kwargs["last_commit_id"] = last_commit_id
+            file.save(**save_kwargs)
 
-            logger.info(f"Updated API {api_name} for tenant {tenant_id}")
+        try:
+            await _gl_run(_update, "gitlab.update_api")
+            logger.info("Updated API %s for tenant %s", api_name, tenant_id)
             return True
-
         except Exception as e:
-            logger.error(f"Failed to update API: {e}")
+            logger.error("Failed to update API: %s", e)
             raise
 
     async def delete_api(self, tenant_id: str, api_name: str) -> bool:
-        """Delete API from GitLab"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """Delete API from GitLab."""
+        project = self._require_project()
+        api_path = self._get_api_path(tenant_id, api_name)
 
-        try:
-            # Delete entire API directory in a single atomic commit
-            api_path = self._get_api_path(tenant_id, api_name)
-            tree = self._project.repository_tree(path=api_path, ref="main", recursive=True)
-
-            actions = []
-            for item in tree:
-                if item["type"] == "blob":
-                    actions.append(
-                        {
-                            "action": "delete",
-                            "file_path": item["path"],
-                        }
-                    )
-
+        def _delete() -> None:
+            tree = project.repository_tree(path=api_path, ref="main", recursive=True)
+            actions = [
+                {"action": "delete", "file_path": item["path"]}
+                for item in tree
+                if item["type"] == "blob"
+            ]
             if actions:
-                self._project.commits.create(
+                project.commits.create(
                     {
                         "branch": "main",
                         "commit_message": f"Delete API {api_name}",
@@ -608,11 +663,12 @@ settings:
                     }
                 )
 
-            logger.info(f"Deleted API {api_name} for tenant {tenant_id}")
+        try:
+            await _gl_run(_delete, "gitlab.delete_api", timeout=BATCH_TIMEOUT_S)
+            logger.info("Deleted API %s for tenant %s", api_name, tenant_id)
             return True
-
         except Exception as e:
-            logger.error(f"Failed to delete API: {e}")
+            logger.error("Failed to delete API: %s", e)
             raise
 
     # ============================================================
@@ -623,45 +679,76 @@ settings:
         self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
     ) -> dict[str, Any]:
         """Create a new file in GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id) if project_id else self._project
-        try:
-            project.files.create(
-                {"file_path": file_path, "branch": branch, "content": content, "commit_message": commit_message}
-            )
-            return {"sha": "", "url": ""}
-        except gitlab.exceptions.GitlabCreateError as e:
-            if "already exists" in str(e).lower():
-                raise ValueError(f"File already exists: {file_path}") from e
-            raise
+        gl = self._require_gl()
+        fallback = self._project
+
+        def _create() -> dict[str, Any]:
+            project = gl.projects.get(project_id) if project_id else fallback
+            if project is None:
+                raise RuntimeError("GitLab not connected")
+            try:
+                project.files.create(
+                    {
+                        "file_path": file_path,
+                        "branch": branch,
+                        "content": content,
+                        "commit_message": commit_message,
+                    }
+                )
+                return {"sha": "", "url": ""}
+            except gitlab.exceptions.GitlabCreateError as e:
+                if "already exists" in str(e).lower():
+                    raise ValueError(f"File already exists: {file_path}") from e
+                raise
+
+        return await _gl_run(_create, "gitlab.create_file")
 
     async def update_file(
         self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
     ) -> dict[str, Any]:
-        """Update an existing file in GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id) if project_id else self._project
-        try:
-            f = project.files.get(file_path, ref=branch)
-            f.content = content
-            f.save(branch=branch, commit_message=commit_message)
-            return {"sha": "", "url": ""}
-        except gitlab.exceptions.GitlabGetError as e:
-            raise FileNotFoundError(f"{file_path} not found") from e
+        """Update an existing file in GitLab (uses last_commit_id)."""
+        gl = self._require_gl()
+        fallback = self._project
+
+        def _update() -> dict[str, Any]:
+            project = gl.projects.get(project_id) if project_id else fallback
+            if project is None:
+                raise RuntimeError("GitLab not connected")
+            try:
+                f = project.files.get(file_path, ref=branch)
+                f.content = content
+                save_kwargs: dict[str, Any] = {"branch": branch, "commit_message": commit_message}
+                last_commit_id = getattr(f, "last_commit_id", None)
+                if isinstance(last_commit_id, str) and last_commit_id:
+                    save_kwargs["last_commit_id"] = last_commit_id
+                f.save(**save_kwargs)
+                return {"sha": "", "url": ""}
+            except gitlab.exceptions.GitlabGetError as e:
+                raise FileNotFoundError(f"{file_path} not found") from e
+
+        return await _gl_run(_update, "gitlab.update_file")
 
     async def delete_file(self, project_id: str, file_path: str, commit_message: str, branch: str = "main") -> bool:
-        """Delete a file from GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id) if project_id else self._project
-        try:
-            f = project.files.get(file_path, ref=branch)
-            f.delete(branch=branch, commit_message=commit_message)
-            return True
-        except gitlab.exceptions.GitlabGetError as e:
-            raise FileNotFoundError(f"{file_path} not found") from e
+        """Delete a file from GitLab (uses last_commit_id)."""
+        gl = self._require_gl()
+        fallback = self._project
+
+        def _delete() -> bool:
+            project = gl.projects.get(project_id) if project_id else fallback
+            if project is None:
+                raise RuntimeError("GitLab not connected")
+            try:
+                f = project.files.get(file_path, ref=branch)
+                delete_kwargs: dict[str, Any] = {"branch": branch, "commit_message": commit_message}
+                last_commit_id = getattr(f, "last_commit_id", None)
+                if isinstance(last_commit_id, str) and last_commit_id:
+                    delete_kwargs["last_commit_id"] = last_commit_id
+                f.delete(**delete_kwargs)
+                return True
+            except gitlab.exceptions.GitlabGetError as e:
+                raise FileNotFoundError(f"{file_path} not found") from e
+
+        return await _gl_run(_delete, "gitlab.delete_file")
 
     async def batch_commit(
         self,
@@ -671,66 +758,67 @@ settings:
         branch: str = "main",
     ) -> dict[str, Any]:
         """Atomic multi-file commit via GitLab commits API."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        project = self._gl.projects.get(project_id) if project_id else self._project
-        project.commits.create({"branch": branch, "commit_message": commit_message, "actions": actions})
-        return {"sha": "", "url": ""}
+        gl = self._require_gl()
+        fallback = self._project
+
+        def _commit() -> dict[str, Any]:
+            project = gl.projects.get(project_id) if project_id else fallback
+            if project is None:
+                raise RuntimeError("GitLab not connected")
+            project.commits.create({"branch": branch, "commit_message": commit_message, "actions": actions})
+            return {"sha": "", "url": ""}
+
+        return await _gl_run(_commit, "gitlab.batch_commit", timeout=BATCH_TIMEOUT_S)
 
     # Git operations
     async def get_file(self, path: str, ref: str = "main") -> str | None:
-        """Get file content from GitLab"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """Get file content from GitLab."""
+        project = self._require_project()
 
-        try:
-            file = self._project.files.get(path, ref=ref)
-            return file.decode().decode("utf-8")
-        except gitlab.exceptions.GitlabGetError:
-            return None
+        def _get() -> str | None:
+            try:
+                file = project.files.get(path, ref=ref)
+                return file.decode().decode("utf-8")
+            except gitlab.exceptions.GitlabGetError:
+                return None
+
+        return await _gl_run(_get, "gitlab.get_file")
 
     async def list_commits(self, path: str | None = None, limit: int = 20) -> list[dict]:
-        """List commits for a path"""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        """List commits for a path."""
+        project = self._require_project()
 
-        commits = self._project.commits.list(path=path, per_page=limit)
-        return [
-            {
-                "sha": c.id,
-                "message": c.message,
-                "author": c.author_name,
-                "date": c.created_at,
-            }
-            for c in commits
-        ]
+        def _list() -> list[dict]:
+            commits = project.commits.list(path=path, per_page=limit)
+            return [
+                {
+                    "sha": c.id,
+                    "message": c.message,
+                    "author": c.author_name,
+                    "date": c.created_at,
+                }
+                for c in commits
+            ]
+
+        return await _gl_run(_list, "gitlab.list_commits")
 
     # ===========================================
     # MCP Server GitOps Operations
     # ===========================================
 
     def _get_mcp_server_path(self, tenant_id: str, server_name: str) -> str:
-        """Get the path for an MCP server definition.
-
-        Platform servers: platform/mcp-servers/{server_name}
-        Tenant servers: tenants/{tenant_id}/mcp-servers/{server_name}
-        """
+        """Get the path for an MCP server definition."""
         if tenant_id == "_platform":
             return f"platform/mcp-servers/{server_name}"
         return f"{self._get_tenant_path(tenant_id)}/mcp-servers/{server_name}"
 
     def _normalize_mcp_server_data(self, raw_data: dict, git_path: str) -> dict:
-        """
-        Normalize MCP server data from GitLab YAML to standard format.
-        Supports Kubernetes-style format (apiVersion/kind/spec).
-        """
         metadata = raw_data.get("metadata", {})
         spec = raw_data.get("spec", {})
         visibility = spec.get("visibility", {})
         subscription = spec.get("subscription", {})
         backend = spec.get("backend", {})
 
-        # Normalize tools
         tools = []
         for tool in spec.get("tools", []):
             tools.append(
@@ -779,120 +867,110 @@ settings:
 
     async def get_mcp_server(self, tenant_id: str, server_name: str) -> dict | None:
         """Get MCP server configuration from GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-
+        project = self._require_project()
         server_path = self._get_mcp_server_path(tenant_id, server_name)
 
-        try:
-            file = self._project.files.get(f"{server_path}/server.yaml", ref="main")
-            raw_data = yaml.safe_load(file.decode())
-            return self._normalize_mcp_server_data(raw_data, server_path)
-        except gitlab.exceptions.GitlabGetError:
-            return None
-        except yaml.YAMLError as e:
-            logger.error(f"Failed to parse MCP server YAML for {server_name}: {e}")
-            return None
+        def _get() -> dict | None:
+            try:
+                file = project.files.get(f"{server_path}/server.yaml", ref="main")
+                raw_data = yaml.safe_load(file.decode())
+                return self._normalize_mcp_server_data(raw_data, server_path)
+            except gitlab.exceptions.GitlabGetError:
+                return None
+            except yaml.YAMLError as e:
+                logger.error("Failed to parse MCP server YAML for %s: %s", server_name, e)
+                return None
+
+        return await _gl_run(_get, "gitlab.get_mcp_server")
 
     async def list_mcp_servers(self, tenant_id: str = "_platform") -> list[dict]:
         """List all MCP servers for a tenant or platform."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        project = self._require_project()
+        base_path = (
+            "platform/mcp-servers"
+            if tenant_id == "_platform"
+            else f"{self._get_tenant_path(tenant_id)}/mcp-servers"
+        )
 
-        # Determine base path
-        if tenant_id == "_platform":
-            base_path = "platform/mcp-servers"
-        else:
-            base_path = f"{self._get_tenant_path(tenant_id)}/mcp-servers"
+        def _list_names() -> list[str]:
+            try:
+                tree = project.repository_tree(path=base_path, ref="main")
+            except gitlab.exceptions.GitlabGetError:
+                return []
+            return [item["name"] for item in tree if item["type"] == "tree" and item["name"] != ".gitkeep"]
 
-        try:
-            tree = self._project.repository_tree(path=base_path, ref="main")
-
-            servers = []
-            for item in tree:
-                if item["type"] == "tree" and item["name"] != ".gitkeep":
-                    server = await self.get_mcp_server(tenant_id, item["name"])
-                    if server:
-                        servers.append(server)
-
-            return servers
-
-        except gitlab.exceptions.GitlabGetError:
-            return []
+        names = await _gl_run(_list_names, "gitlab.list_mcp_servers.names")
+        servers: list[dict] = []
+        for name in names:
+            server = await self.get_mcp_server(tenant_id, name)
+            if server:
+                servers.append(server)
+        return servers
 
     async def list_all_mcp_servers(self) -> list[dict]:
         """List all MCP servers across platform and all tenants."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
+        project = self._require_project()
+        all_servers: list[dict] = []
 
-        all_servers = []
-
-        # Get platform servers
         platform_servers = await self.list_mcp_servers("_platform")
         all_servers.extend(platform_servers)
 
-        # Get tenant servers
-        try:
-            tenants_tree = self._project.repository_tree(path="tenants", ref="main")
-            for tenant_item in tenants_tree:
-                if tenant_item["type"] == "tree":
-                    tenant_id = tenant_item["name"]
-                    tenant_servers = await self.list_mcp_servers(tenant_id)
-                    all_servers.extend(tenant_servers)
-        except gitlab.exceptions.GitlabGetError:
-            pass  # No tenants directory
+        def _list_tenant_ids() -> list[str]:
+            try:
+                tenants_tree = project.repository_tree(path="tenants", ref="main")
+            except gitlab.exceptions.GitlabGetError:
+                return []
+            return [item["name"] for item in tenants_tree if item["type"] == "tree"]
 
+        tenant_ids = await _gl_run(_list_tenant_ids, "gitlab.list_all_mcp_servers.tenants")
+        for tenant_id in tenant_ids:
+            tenant_servers = await self.list_mcp_servers(tenant_id)
+            all_servers.extend(tenant_servers)
         return all_servers
 
     async def create_mcp_server(self, tenant_id: str, server_data: dict) -> str:
         """Create MCP server definition in GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-
+        project = self._require_project()
         server_name = server_data["name"]
         server_path = self._get_mcp_server_path(tenant_id, server_name)
 
-        # Check if server already exists
         existing = await self.get_mcp_server(tenant_id, server_name)
         if existing:
             raise ValueError(f"MCP server '{server_name}' already exists")
 
-        try:
-            # Build YAML content in Kubernetes-style format
-            server_yaml = yaml.dump(
-                {
-                    "apiVersion": "gostoa.dev/v1",
-                    "kind": "MCPServer",
-                    "metadata": {
-                        "name": server_name,
-                        "tenant": tenant_id,
-                        "version": server_data.get("version", "1.0.0"),
-                        "labels": {
-                            "managed-by": "gitops",
-                        },
-                    },
-                    "spec": {
-                        "displayName": server_data.get("display_name", server_name),
-                        "description": server_data.get("description", ""),
-                        "icon": server_data.get("icon", ""),
-                        "category": server_data.get("category", "public"),
-                        "status": server_data.get("status", "active"),
-                        "documentationUrl": server_data.get("documentation_url", ""),
-                        "visibility": server_data.get("visibility", {"public": True}),
-                        "subscription": {
-                            "requiresApproval": server_data.get("requires_approval", False),
-                            "autoApproveRoles": server_data.get("auto_approve_roles", []),
-                            "defaultPlan": server_data.get("default_plan", "free"),
-                        },
-                        "tools": server_data.get("tools", []),
-                        "backend": server_data.get("backend", {}),
-                    },
+        server_yaml = yaml.dump(
+            {
+                "apiVersion": "gostoa.dev/v1",
+                "kind": "MCPServer",
+                "metadata": {
+                    "name": server_name,
+                    "tenant": tenant_id,
+                    "version": server_data.get("version", "1.0.0"),
+                    "labels": {"managed-by": "gitops"},
                 },
-                default_flow_style=False,
-                allow_unicode=True,
-            )
+                "spec": {
+                    "displayName": server_data.get("display_name", server_name),
+                    "description": server_data.get("description", ""),
+                    "icon": server_data.get("icon", ""),
+                    "category": server_data.get("category", "public"),
+                    "status": server_data.get("status", "active"),
+                    "documentationUrl": server_data.get("documentation_url", ""),
+                    "visibility": server_data.get("visibility", {"public": True}),
+                    "subscription": {
+                        "requiresApproval": server_data.get("requires_approval", False),
+                        "autoApproveRoles": server_data.get("auto_approve_roles", []),
+                        "defaultPlan": server_data.get("default_plan", "free"),
+                    },
+                    "tools": server_data.get("tools", []),
+                    "backend": server_data.get("backend", {}),
+                },
+            },
+            default_flow_style=False,
+            allow_unicode=True,
+        )
 
-            self._project.commits.create(
+        def _commit() -> None:
+            project.commits.create(
                 {
                     "branch": "main",
                     "commit_message": f"Create MCP server {server_name}",
@@ -906,32 +984,30 @@ settings:
                 }
             )
 
-            logger.info(f"Created MCP server {server_name}")
+        try:
+            await _gl_run(_commit, "gitlab.create_mcp_server", timeout=BATCH_TIMEOUT_S)
+            logger.info("Created MCP server %s", server_name)
             return server_name
-
         except Exception as e:
-            logger.error(f"Failed to create MCP server: {e}")
+            logger.error("Failed to create MCP server: %s", e)
             raise
 
     async def update_mcp_server(self, tenant_id: str, server_name: str, server_data: dict) -> bool:
         """Update MCP server configuration in GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-
+        project = self._require_project()
         server_path = self._get_mcp_server_path(tenant_id, server_name)
 
-        try:
-            file = self._project.files.get(f"{server_path}/server.yaml", ref="main")
+        def _update() -> None:
+            file = project.files.get(f"{server_path}/server.yaml", ref="main")
             current = yaml.safe_load(file.decode())
 
-            # Update spec fields
             if "spec" not in current:
                 current["spec"] = {}
 
             for key, value in server_data.items():
-                if key in ["display_name"]:
+                if key == "display_name":
                     current["spec"]["displayName"] = value
-                elif key in ["description", "icon", "category", "status"]:
+                elif key in ("description", "icon", "category", "status"):
                     current["spec"][key] = value
                 elif key == "documentation_url":
                     current["spec"]["documentationUrl"] = value
@@ -943,37 +1019,37 @@ settings:
                     current["spec"]["backend"] = value
 
             file.content = yaml.dump(current, default_flow_style=False, allow_unicode=True)
-            file.save(branch="main", commit_message=f"Update MCP server {server_name}")
+            save_kwargs: dict[str, Any] = {
+                "branch": "main",
+                "commit_message": f"Update MCP server {server_name}",
+            }
+            last_commit_id = getattr(file, "last_commit_id", None)
+            if isinstance(last_commit_id, str) and last_commit_id:
+                save_kwargs["last_commit_id"] = last_commit_id
+            file.save(**save_kwargs)
 
-            logger.info(f"Updated MCP server {server_name}")
+        try:
+            await _gl_run(_update, "gitlab.update_mcp_server")
+            logger.info("Updated MCP server %s", server_name)
             return True
-
         except Exception as e:
-            logger.error(f"Failed to update MCP server: {e}")
+            logger.error("Failed to update MCP server: %s", e)
             raise
 
     async def delete_mcp_server(self, tenant_id: str, server_name: str) -> bool:
         """Delete MCP server from GitLab."""
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-
+        project = self._require_project()
         server_path = self._get_mcp_server_path(tenant_id, server_name)
 
-        try:
-            tree = self._project.repository_tree(path=server_path, ref="main", recursive=True)
-
-            actions = []
-            for item in tree:
-                if item["type"] == "blob":
-                    actions.append(
-                        {
-                            "action": "delete",
-                            "file_path": item["path"],
-                        }
-                    )
-
+        def _delete() -> None:
+            tree = project.repository_tree(path=server_path, ref="main", recursive=True)
+            actions = [
+                {"action": "delete", "file_path": item["path"]}
+                for item in tree
+                if item["type"] == "blob"
+            ]
             if actions:
-                self._project.commits.create(
+                project.commits.create(
                     {
                         "branch": "main",
                         "commit_message": f"Delete MCP server {server_name}",
@@ -981,26 +1057,29 @@ settings:
                     }
                 )
 
-            logger.info(f"Deleted MCP server {server_name}")
+        try:
+            await _gl_run(_delete, "gitlab.delete_mcp_server", timeout=BATCH_TIMEOUT_S)
+            logger.info("Deleted MCP server %s", server_name)
             return True
-
         except Exception as e:
-            logger.error(f"Failed to delete MCP server: {e}")
+            logger.error("Failed to delete MCP server: %s", e)
             raise
 
     # ============================================================
     # CAB-1889 CP-1: provider-agnostic surface (GitProvider ABC).
-    # Operates on the connected catalog project (self._project).
     # ============================================================
 
     async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        try:
-            tree = self._project.repository_tree(path=path, ref=ref)
-        except gitlab.exceptions.GitlabGetError:
-            return []
-        return [TreeEntry(name=item["name"], type=item["type"], path=item["path"]) for item in tree]
+        project = self._require_project()
+
+        def _list() -> list[TreeEntry]:
+            try:
+                tree = project.repository_tree(path=path, ref=ref)
+            except gitlab.exceptions.GitlabGetError:
+                return []
+            return [TreeEntry(name=item["name"], type=item["type"], path=item["path"]) for item in tree]
+
+        return await _gl_run(_list, "gitlab.list_tree")
 
     async def read_file(self, path: str, ref: str = "main") -> str | None:
         return await self.get_file(path, ref=ref)
@@ -1012,52 +1091,60 @@ settings:
     async def write_file(
         self, path: str, content: str, commit_message: str, branch: str = "main"
     ) -> Literal["created", "updated"]:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        existing = await self.get_file(path, ref=branch)
-        if existing is not None:
-            file_obj = self._project.files.get(path, ref=branch)
-            file_obj.content = content
-            file_obj.save(branch=branch, commit_message=commit_message)
+        """CP-1 C.6: create-first, fall through to update on 'already exists'.
+
+        This closes the TOCTOU window from the prior _file_exists pre-check.
+        It does not provide full compare-and-swap — two concurrent writers
+        both hitting the 'already exists' branch can still lose one another's
+        content. update_file passes ``last_commit_id`` for GitLab-side
+        optimistic concurrency on that second step.
+        """
+        project_id = ""
+        _ = self._require_project()
+        try:
+            await self.create_file(project_id, path, content, commit_message, branch=branch)
+            return "created"
+        except ValueError:
+            await self.update_file(project_id, path, content, commit_message, branch=branch)
             return "updated"
-        self._project.files.create(
-            {
-                "file_path": path,
-                "branch": branch,
-                "content": content,
-                "commit_message": commit_message,
-            }
-        )
-        return "created"
 
     async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        self._project.files.delete(file_path=path, commit_message=commit_message, branch=branch)
-        return True
+        project = self._require_project()
+
+        def _delete() -> bool:
+            project.files.delete(file_path=path, commit_message=commit_message, branch=branch)
+            return True
+
+        return await _gl_run(_delete, "gitlab.remove_file")
 
     async def list_branches(self) -> list[BranchRef]:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        branches = self._project.branches.list()
-        return [
-            BranchRef(
+        project = self._require_project()
+
+        def _list() -> list[BranchRef]:
+            branches = project.branches.list()
+            return [
+                BranchRef(
+                    name=b.name,
+                    commit_sha=b.commit["id"] if isinstance(b.commit, dict) else str(b.commit),
+                    protected=getattr(b, "protected", False),
+                )
+                for b in branches
+            ]
+
+        return await _gl_run(_list, "gitlab.list_branches")
+
+    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
+        project = self._require_project()
+
+        def _create() -> BranchRef:
+            b = project.branches.create({"branch": name, "ref": ref})
+            return BranchRef(
                 name=b.name,
                 commit_sha=b.commit["id"] if isinstance(b.commit, dict) else str(b.commit),
                 protected=getattr(b, "protected", False),
             )
-            for b in branches
-        ]
 
-    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        b = self._project.branches.create({"branch": name, "ref": ref})
-        return BranchRef(
-            name=b.name,
-            commit_sha=b.commit["id"] if isinstance(b.commit, dict) else str(b.commit),
-            protected=getattr(b, "protected", False),
-        )
+        return await _gl_run(_create, "gitlab.create_branch")
 
     @staticmethod
     def _mr_to_ref(mr: Any) -> MergeRequestRef:
@@ -1076,10 +1163,13 @@ settings:
         )
 
     async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        mrs = self._project.mergerequests.list(state=state)
-        return [self._mr_to_ref(mr) for mr in mrs]
+        project = self._require_project()
+
+        def _list() -> list[MergeRequestRef]:
+            mrs = project.mergerequests.list(state=state)
+            return [self._mr_to_ref(mr) for mr in mrs]
+
+        return await _gl_run(_list, "gitlab.list_merge_requests")
 
     async def create_merge_request(
         self,
@@ -1088,24 +1178,30 @@ settings:
         source_branch: str,
         target_branch: str = "main",
     ) -> MergeRequestRef:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        mr = self._project.mergerequests.create(
-            {
-                "title": title,
-                "description": description,
-                "source_branch": source_branch,
-                "target_branch": target_branch,
-            }
-        )
-        return self._mr_to_ref(mr)
+        project = self._require_project()
+
+        def _create() -> MergeRequestRef:
+            mr = project.mergerequests.create(
+                {
+                    "title": title,
+                    "description": description,
+                    "source_branch": source_branch,
+                    "target_branch": target_branch,
+                }
+            )
+            return self._mr_to_ref(mr)
+
+        return await _gl_run(_create, "gitlab.create_merge_request")
 
     async def merge_merge_request(self, iid: int) -> MergeRequestRef:
-        if not self._project:
-            raise RuntimeError("GitLab not connected")
-        mr = self._project.mergerequests.get(iid)
-        mr.merge()
-        return self._mr_to_ref(mr)
+        project = self._require_project()
+
+        def _merge() -> MergeRequestRef:
+            mr = project.mergerequests.get(iid)
+            mr.merge()
+            return self._mr_to_ref(mr)
+
+        return await _gl_run(_merge, "gitlab.merge_merge_request")
 
 
 # Global instance

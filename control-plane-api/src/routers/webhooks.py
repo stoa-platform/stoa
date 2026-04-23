@@ -102,7 +102,19 @@ async def gitlab_webhook(
 
     Captures the git author (who pushed) from the GitLab payload and stores
     traces in PostgreSQL for persistent monitoring.
+
+    CP-1 C.7: token verification happens BEFORE any DB write. Rejected
+    requests produce zero trace rows, eliminating the DoS amplification
+    vector where an unauthenticated flood would burn 1 INSERT + 2 UPDATEs
+    per request on the traces table.
     """
+    # CP-1 C.7 Step 1 — authenticate BEFORE any DB I/O.
+    webhook_secret = settings.git.gitlab.webhook_secret.get_secret_value()
+    if not verify_gitlab_token(x_gitlab_token, webhook_secret):
+        # No trace row is written for unauthenticated requests.
+        raise HTTPException(status_code=401, detail="Invalid webhook token")
+
+    # CP-1 C.7 Step 2 — only now do we parse and persist.
     service = TraceService(db)
     event_type = x_gitlab_event or "Unknown"
     body = await request.json()
@@ -139,7 +151,7 @@ async def gitlab_webhook(
         git_author = body.get("user_name") or body.get("user_username", "unknown")
         git_author_email = body.get("user_email")
 
-    # Create trace in PostgreSQL with full git info
+    # Create trace in PostgreSQL with full git info (auth already verified above).
     trace = await service.create(
         trigger_type=f"gitlab-{event_type.lower().replace(' hook', '').replace(' ', '-')}",
         trigger_source="gitlab",
@@ -153,7 +165,7 @@ async def gitlab_webhook(
     )
 
     try:
-        # Step 1: Webhook Reception
+        # Step 1: Webhook Reception (auth already verified, recorded here for observability)
         await service.add_step(
             trace,
             name="webhook_received",
@@ -168,18 +180,7 @@ async def gitlab_webhook(
             },
         )
 
-        # Step 2: Token Verification (CAB-DDoS: always enforce)
-        webhook_secret = settings.git.gitlab.webhook_secret.get_secret_value()
-        if not verify_gitlab_token(x_gitlab_token, webhook_secret):
-            await service.add_step(
-                trace,
-                name="token_verification",
-                status="failed",
-                error="Invalid or missing webhook token",
-            )
-            await service.complete(trace, TraceStatusDB.FAILED, "Authentication failed: Invalid webhook token")
-            raise HTTPException(status_code=401, detail="Invalid webhook token")
-
+        # Step 2: Token verification trace (the check happened pre-trace).
         await service.add_step(
             trace,
             name="token_verification",

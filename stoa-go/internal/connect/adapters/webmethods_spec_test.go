@@ -2,35 +2,39 @@ package adapters
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
 func TestWebMethodsOpenAPI31Downgrade(t *testing.T) {
-	spec31 := []byte(`{"openapi": "3.1.0", "info": {"title": "Test"}}`)
-	result := downgradeOpenAPI31(spec31)
-	expected := `{"openapi": "3.0.3", "info": {"title": "Test"}}`
-	if string(result) != expected {
-		t.Errorf("expected %s, got %s", expected, string(result))
+	// GO-1 L.2: downgradeOpenAPI31 now parses JSON instead of regex-matching,
+	// so the output key ordering and whitespace may differ from the input.
+	// Assert on the parsed value of the `openapi` field only.
+	check := func(t *testing.T, in []byte, wantVersion string) {
+		t.Helper()
+		out := downgradeOpenAPI31(in)
+		var m map[string]interface{}
+		if err := json.Unmarshal(out, &m); err != nil {
+			t.Fatalf("parse: %v; out=%s", err, string(out))
+		}
+		if got := m["openapi"]; got != wantVersion {
+			t.Errorf("openapi: got %v, want %q", got, wantVersion)
+		}
 	}
 
-	spec311 := []byte(`{"openapi": "3.1.1", "info": {"title": "Test"}}`)
-	result311 := downgradeOpenAPI31(spec311)
-	if !strings.Contains(string(result311), `"3.0.3"`) {
-		t.Errorf("expected 3.0.3, got %s", string(result311))
-	}
-
-	spec30 := []byte(`{"openapi": "3.0.2", "info": {"title": "Test"}}`)
-	result30 := downgradeOpenAPI31(spec30)
-	if string(result30) != string(spec30) {
-		t.Errorf("expected 3.0.2 unchanged, got %s", string(result30))
-	}
+	check(t, []byte(`{"openapi": "3.1.0", "info": {"title": "Test"}}`), "3.0.3")
+	check(t, []byte(`{"openapi": "3.1.1", "info": {"title": "Test"}}`), "3.0.3")
+	check(t, []byte(`{"openapi": "3.0.2", "info": {"title": "Test"}}`), "3.0.2")
+	check(t, []byte(`{"openapi": "2.0", "info": {"title": "Test"}}`), "2.0")
 }
 
-// TestRegressionStripSwagger2ResponseRefs — CAB-1944: webMethods RefProperty crash on $ref in response schemas.
-func TestRegressionStripSwagger2ResponseRefs(t *testing.T) {
+// TestRegressionStripResponseSchemasSwagger2 — CAB-1944 regression guard:
+// webMethods RefProperty parser crashes on $ref in Swagger 2.0 response
+// schemas. Renamed from TestRegressionStripSwagger2ResponseRefs in GO-1
+// H.3 (BUG-REPORT-GO-1.md) to reflect the broader scope now that the
+// function also handles OpenAPI 3.x responses.
+func TestRegressionStripResponseSchemasSwagger2(t *testing.T) {
 	spec := []byte(`{"swagger":"2.0","paths":{"/pet/findByStatus":{"get":{"responses":{"200":{"description":"ok","schema":{"type":"array","items":{"$ref":"#/definitions/Pet"}}}}}}}}`)
-	result := stripSwagger2ResponseRefs(spec)
+	result := stripResponseSchemas(spec)
 
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(result, &parsed); err != nil {
@@ -41,15 +45,33 @@ func TestRegressionStripSwagger2ResponseRefs(t *testing.T) {
 	get := paths["/pet/findByStatus"].(map[string]interface{})["get"].(map[string]interface{})
 	resp200 := get["responses"].(map[string]interface{})["200"].(map[string]interface{})
 	if _, hasSchema := resp200["schema"]; hasSchema {
-		t.Error("schema with $ref should have been stripped")
+		t.Error("Swagger 2.0 response schema should have been stripped")
 	}
 }
 
-func TestRegressionStripSwagger2ResponseRefsNoOpOpenAPI3(t *testing.T) {
-	// No-op for OpenAPI 3.x specs
+// TestRegressionStripResponseSchemasOpenAPI3 — CAB-1944 / GO-1 H.3: the
+// function now strips OpenAPI 3.x content schemas too. Pre-H.3 this was
+// asserted as a no-op (function covered only Swagger 2.0), but webMethods
+// 10.15 RefProperty crashes on $ref in 3.x response content schemas the
+// same way.
+func TestRegressionStripResponseSchemasOpenAPI3(t *testing.T) {
 	spec := []byte(`{"openapi":"3.0.0","paths":{"/pet":{"get":{"responses":{"200":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Pet"}}}}}}}}}`)
-	result := stripSwagger2ResponseRefs(spec)
-	if string(result) != string(spec) {
-		t.Error("should not modify OpenAPI 3.x specs")
+	result := stripResponseSchemas(spec)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(result, &parsed); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	paths := parsed["paths"].(map[string]interface{})
+	get := paths["/pet"].(map[string]interface{})["get"].(map[string]interface{})
+	resp200 := get["responses"].(map[string]interface{})["200"].(map[string]interface{})
+	content, ok := resp200["content"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("content missing: %v", resp200)
+	}
+	mt := content["application/json"].(map[string]interface{})
+	if _, hasSchema := mt["schema"]; hasSchema {
+		t.Error("OpenAPI 3.x response content schema should have been stripped")
 	}
 }

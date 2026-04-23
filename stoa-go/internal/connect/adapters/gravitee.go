@@ -25,6 +25,11 @@ func NewGraviteeAdapter(cfg AdapterConfig) *GraviteeAdapter {
 }
 
 // Detect checks if the admin URL hosts a Gravitee Management API.
+//
+// GO-1 M.3: network errors are now propagated instead of silently
+// returning (false, nil). See webmethods_adapter.go Detect for the
+// rationale — autoDetect already logs err and continues to the next
+// gateway candidate.
 func (g *GraviteeAdapter) Detect(ctx context.Context, adminURL string) (bool, error) {
 	url := adminURL + "/management/v2/organizations/DEFAULT"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -35,7 +40,7 @@ func (g *GraviteeAdapter) Detect(ctx context.Context, adminURL string) (bool, er
 
 	resp, err := g.client.Do(req)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 

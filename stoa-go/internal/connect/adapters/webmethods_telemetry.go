@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -40,10 +41,13 @@ func NormalizeEvent(raw wmTransactionalEvent) TelemetryEvent {
 }
 
 // parseEpochMillis parses a string epoch timestamp in milliseconds.
+//
+// GO-1 M.4: switched from fmt.Sscanf (which accepts partial parses — e.g.
+// "123abc" returned 123, nil) to strconv.ParseInt, which rejects any
+// non-decimal suffix. Prevents silently truncated timestamps from ending
+// up horodated at epoch 0 in downstream dashboards.
 func parseEpochMillis(s string) (int64, error) {
-	var ms int64
-	_, err := fmt.Sscanf(s, "%d", &ms)
-	return ms, err
+	return strconv.ParseInt(s, 10, 64)
 }
 
 // SubscribeTelemetry creates a push subscription on webMethods to receive transactional events.

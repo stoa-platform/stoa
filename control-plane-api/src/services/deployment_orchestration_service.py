@@ -112,16 +112,26 @@ class DeploymentOrchestrationService:
 
             sync_svc = CatalogSyncService(self.db, git_service, enable_gateway_reconciliation=False)
 
-            import contextlib
-
+            # CP-1 H.2: catch only FileNotFoundError (missing spec / missing
+            # head commit are expected "None" outcomes). Any transient
+            # provider failure (TimeoutError, rate-limit, auth error, etc.)
+            # propagates to the outer except, which short-circuits the
+            # upsert — better to refuse syncing than to persist a corrupt
+            # catalog row with silently-None fields. Stays provider-agnostic
+            # on purpose: do NOT import PyGithub / python-gitlab exceptions
+            # in this layer (CAB-1889 GitProvider abstraction invariant).
             openapi_spec = None
-            with contextlib.suppress(Exception):
+            try:
                 openapi_spec = await git_service.get_api_openapi_spec(tenant_id, api_id)
+            except FileNotFoundError:
+                logger.debug("No OpenAPI spec for API '%s/%s' — syncing without spec", tenant_id, api_id)
 
             commit_sha: str | None = None
-            with contextlib.suppress(Exception):
+            try:
                 # regression for CAB-1889: use provider-agnostic ABC, not _project
                 commit_sha = await git_service.get_head_commit_sha(ref="main")
+            except FileNotFoundError:
+                logger.debug("No head commit available for API '%s/%s' sync", tenant_id, api_id)
 
             await sync_svc._upsert_api(tenant_id, api_id, api_data, openapi_spec, commit_sha)
             await self.db.commit()

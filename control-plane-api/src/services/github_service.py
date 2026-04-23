@@ -1058,8 +1058,13 @@ class GitHubService(GitProvider):
                 if exc.status == 404:
                     return []
                 raise
+            # CP-1 H.6: GitHub's "Get repository content" returns a single
+            # ContentFile for file paths and a list for directories. The
+            # GitProvider contract is "enumerate children" — a file has no
+            # children, so normalise to [] instead of propagating a singleton
+            # blob. Matches python-gitlab behaviour on file paths.
             if not isinstance(contents, list):
-                contents = [contents]
+                return []
             return [
                 TreeEntry(
                     name=item.name,

@@ -1,7 +1,9 @@
 # BUG-REPORT-CP-1
 
 > **CP-1 CLOSED (2026-04-23 pm)** — 21 findings / 21 fixed (6 P0 + 9 P1 +
-> 5 P2 + L.2 already-closed in P1). Final commit: `fix/cp-1-p2-batch`.
+> 5 P2 + L.2 already-closed in P1). P0 landed as PR #2496
+> (squash `4ed80850b`), P1 as PR #2499 (squash `b58bdca40`), P2 on
+> `fix/cp-1-p2-batch` rebased on top of origin/main.
 > All three regression-guard invariants hold:
 >
 > - `grep -rn "self\._project\." src/ --include="*.py"` → 0 (CP-1 P0 C.1)

@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// openAPI31Re matches OpenAPI 3.1.x version strings.
-var openAPI31Re = regexp.MustCompile(`"openapi"\s*:\s*"3\.1\.\d+"`)
-
 // wmNameRe captures characters that webMethods rejects in apiName.
 // webMethods only accepts alphanumeric, hyphens, underscores, and dots.
 var wmNameRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
@@ -19,13 +16,40 @@ func sanitizeWMName(name string) string {
 	return wmNameRe.ReplaceAllString(name, "-")
 }
 
+// safeMarshal re-encodes parsed JSON and returns the bytes only when they
+// round-trip to valid JSON. Any failure (marshal error, invalid bytes) falls
+// back to the original spec. Closes GO-1 H.5 — previously each transform
+// silently returned its own Marshal output even if malformed, leaving a
+// potentially corrupt payload to be sent to webMethods as-is.
+func safeMarshal(orig []byte, parsed interface{}) []byte {
+	fixed, err := json.Marshal(parsed)
+	if err != nil {
+		return orig
+	}
+	if !json.Valid(fixed) {
+		return orig
+	}
+	return fixed
+}
+
 // downgradeOpenAPI31 rewrites an OpenAPI 3.1.x spec to 3.0.3.
 // webMethods only accepts OpenAPI 3.0.x.
+//
+// Closes GO-1 L.2 — the previous implementation used a regexp scan on the
+// raw bytes, which could false-match any string value that happened to
+// contain `"openapi": "3.1.x"` (example metadata, docs strings). Now the
+// version is read from the decoded `openapi` top-level field only.
 func downgradeOpenAPI31(spec []byte) []byte {
-	if !openAPI31Re.Match(spec) {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(spec, &parsed); err != nil {
 		return spec
 	}
-	return openAPI31Re.ReplaceAll(spec, []byte(`"openapi": "3.0.3"`))
+	v, ok := parsed["openapi"].(string)
+	if !ok || !strings.HasPrefix(v, "3.1.") {
+		return spec
+	}
+	parsed["openapi"] = "3.0.3"
+	return safeMarshal(spec, parsed)
 }
 
 // wrapExternalDocs recursively walks any JSON value and wraps every
@@ -86,16 +110,17 @@ func fixExternalDocs(spec []byte) []byte {
 	if !wrapExternalDocs(parsed) {
 		return spec
 	}
-	fixed, err := json.Marshal(parsed)
-	if err != nil {
-		return spec
-	}
-	return fixed
+	return safeMarshal(spec, parsed)
 }
 
 // fixSecuritySchemeTypes uppercases securityScheme enum values.
-// webMethods expects OAUTH2/HTTP/APIKEY/OPENIDCONNECT and HEADER/QUERY/COOKIE,
-// but OpenAPI specs use lowercase: oauth2, http, apiKey, header, query.
+// webMethods expects OAUTH2/HTTP/APIKEY/OPENIDCONNECT, HEADER/QUERY/COOKIE,
+// and BASIC/BEARER/DIGEST for http schemes — OpenAPI specs use lowercase
+// (oauth2, http, apiKey, header, query, bearer, basic).
+//
+// GO-1 M.2: the `scheme` field (for type=http) is now uppercased too. Without
+// it, `{"type":"http","scheme":"bearer"}` became `{"type":"HTTP","scheme":"bearer"}`
+// which webMethods partially rejects.
 func fixSecuritySchemeTypes(spec []byte) []byte {
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(spec, &parsed); err != nil {
@@ -117,7 +142,8 @@ func fixSecuritySchemeTypes(spec []byte) []byte {
 		if !ok {
 			continue
 		}
-		for _, field := range []string{"type", "in"} {
+		// "scheme" added in GO-1 M.2 (http bearerFormat / basic).
+		for _, field := range []string{"type", "in", "scheme"} {
 			if val, ok := scheme[field].(string); ok {
 				upper := strings.ToUpper(val)
 				if upper != val {
@@ -132,21 +158,27 @@ func fixSecuritySchemeTypes(spec []byte) []byte {
 	if !modified {
 		return spec
 	}
-
-	fixed, err := json.Marshal(parsed)
-	if err != nil {
-		return spec
-	}
-	return fixed
+	return safeMarshal(spec, parsed)
 }
 
-// stripSwagger2ResponseRefs removes $ref from response schemas in Swagger 2.0 specs.
-// webMethods 10.15 RefProperty parser crashes on $ref inside response schema objects
-// (e.g. {"schema":{"$ref":"#/definitions/Pet"}}). We strip the schema entirely since
-// webMethods doesn't use response schemas for routing — it only needs paths + methods.
-func stripSwagger2ResponseRefs(spec []byte) []byte {
-	if !bytes.Contains(spec, []byte(`"swagger"`)) {
-		return spec // Not Swagger 2.0
+// stripResponseSchemas removes schema bodies from response objects in both
+// Swagger 2.0 and OpenAPI 3.x specs. webMethods 10.15 RefProperty parser
+// crashes on $ref inside response schema objects (and on other complex
+// schema constructs). Response schemas aren't needed for gateway routing,
+// so we delete them wholesale.
+//
+// Covered sites:
+//   - Swagger 2.0: paths[*].<method>.responses.<code>.schema
+//   - OpenAPI 3.x: paths[*].<method>.responses.<code>.content.<mime>.schema
+//
+// Closes GO-1 H.3 — the pre-fix function (stripSwagger2ResponseRefs) only
+// covered the 2.0 shape, so a 3.x spec with $ref in response content still
+// crashed webMethods with the same pattern. Renamed to reflect the wider
+// scope.
+func stripResponseSchemas(spec []byte) []byte {
+	// Cheap gate: skip if neither openapi nor swagger marker is present.
+	if !bytes.Contains(spec, []byte(`"openapi"`)) && !bytes.Contains(spec, []byte(`"swagger"`)) {
+		return spec
 	}
 
 	var parsed map[string]interface{}
@@ -179,15 +211,26 @@ func stripSwagger2ResponseRefs(spec []byte) []byte {
 				if !ok {
 					continue
 				}
-				// Strip ALL response schemas — webMethods RefProperty parser
-				// crashes on $ref, additionalProperties, and other complex
-				// schema constructs during PUT. Response schemas aren't needed
-				// for gateway routing.
+				// Swagger 2.0 shape.
 				if _, hasSchema := r["schema"]; hasSchema {
 					delete(r, "schema")
-					responses[code] = r
 					modified = true
 				}
+				// OpenAPI 3.x shape.
+				if content, ok := r["content"].(map[string]interface{}); ok {
+					for mime, mediaType := range content {
+						mt, ok := mediaType.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						if _, hasSchema := mt["schema"]; hasSchema {
+							delete(mt, "schema")
+							content[mime] = mt
+							modified = true
+						}
+					}
+				}
+				responses[code] = r
 			}
 		}
 	}
@@ -195,10 +238,5 @@ func stripSwagger2ResponseRefs(spec []byte) []byte {
 	if !modified {
 		return spec
 	}
-
-	fixed, err := json.Marshal(parsed)
-	if err != nil {
-		return spec
-	}
-	return fixed
+	return safeMarshal(spec, parsed)
 }

@@ -142,8 +142,22 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 
 	var syncErrors []string
 
+	// L.1 (GO-1): sanitizeWMName can collapse two distinct route names
+	// (e.g. "foo/bar" and "foo bar") to the same webMethods apiName.
+	// Silent collision means the second route's PUT overwrites the first's
+	// definition on the gateway with no error surface. Log a warning when
+	// a collision is detected so operators can investigate. Non-blocking:
+	// the existing overwrite semantics are preserved (scope of P2 cleanup
+	// is "make observable", not "harden with new errors").
+	nameCollisions := make(map[string]string)
+
 	for _, route := range routes {
 		wmName := sanitizeWMName("stoa-" + route.Name)
+		if prev, collision := nameCollisions[wmName]; collision && prev != route.Name {
+			log.Printf("warn: webmethods sanitizeWMName collision — routes %q and %q both map to %q; later PUT will overwrite earlier",
+				prev, route.Name, wmName)
+		}
+		nameCollisions[wmName] = route.Name
 
 		// Deactivated route: deactivate on gateway if it exists.
 		// C.5: deactivate failure is tracked, not returned — the batch continues.
@@ -173,7 +187,7 @@ func (w *WebMethodsAdapter) SyncRoutes(ctx context.Context, adminURL string, rou
 			spec = downgradeOpenAPI31(spec)
 			spec = fixExternalDocs(spec)
 			spec = fixSecuritySchemeTypes(spec)
-			spec = stripSwagger2ResponseRefs(spec)
+			spec = stripResponseSchemas(spec)
 		}
 
 		apiPayload := buildSyncPayload(route, wmName, spec)

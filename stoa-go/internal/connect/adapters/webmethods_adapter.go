@@ -31,6 +31,13 @@ func NewWebMethodsAdapter(cfg AdapterConfig) *WebMethodsAdapter {
 }
 
 // Detect checks if the admin URL hosts a webMethods API Gateway.
+//
+// GO-1 M.3: network errors are now propagated to the caller instead of
+// silently returning (false, nil). autoDetect (internal/connect/discovery.go)
+// already logs and skips to the next adapter when err is non-nil, so the
+// auto-detection contract stays "try next gateway on unreachable" — but
+// now the error is visible in logs instead of indistinguishable from
+// "reachable but not webMethods".
 func (w *WebMethodsAdapter) Detect(ctx context.Context, adminURL string) (bool, error) {
 	url := adminURL + "/rest/apigateway/health"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -41,7 +48,7 @@ func (w *WebMethodsAdapter) Detect(ctx context.Context, adminURL string) (bool, 
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 

@@ -27,6 +27,10 @@ func NewKongAdapter(cfg AdapterConfig) *KongAdapter {
 
 // Detect checks if the admin URL hosts a Kong gateway.
 // Kong's root endpoint returns {"tagline":"Welcome to kong"}.
+//
+// GO-1 M.3: network errors are now propagated instead of silently
+// returning (false, nil). See webmethods_adapter.go Detect for the
+// rationale — autoDetect treats err as "skip to next gateway" already.
 func (k *KongAdapter) Detect(ctx context.Context, adminURL string) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, adminURL+"/", nil)
 	if err != nil {
@@ -36,7 +40,7 @@ func (k *KongAdapter) Detect(ctx context.Context, adminURL string) (bool, error)
 
 	resp, err := k.client.Do(req)
 	if err != nil {
-		return false, nil // Not reachable = not Kong
+		return false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 

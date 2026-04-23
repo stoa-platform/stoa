@@ -157,12 +157,23 @@ def test_tree_success():
     assert len(resp.json()["items"]) == 2
 
 
-def test_tree_empty():
-    mock_git = _make_mock_git(list_tree=AsyncMock(side_effect=Exception("not found")))
+def test_tree_empty_on_missing_path():
+    # CP-1 H.5: get_tree is the ONLY listing route that keeps
+    # FileNotFoundError → []. Missing path in the tree = legitimate
+    # empty enumeration.
+    mock_git = _make_mock_git(list_tree=AsyncMock(side_effect=FileNotFoundError("no such path")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.get(f"{BASE}/tree")
     assert resp.status_code == 200
     assert resp.json()["items"] == []
+
+
+def test_tree_provider_failure_returns_502():
+    # CP-1 H.5: non-FileNotFoundError must surface as 502, not silent [].
+    mock_git = _make_mock_git(list_tree=AsyncMock(side_effect=Exception("gitlab down")))
+    client = TestClient(_build_test_app(mock_git=mock_git))
+    resp = client.get(f"{BASE}/tree")
+    assert resp.status_code == 502
 
 
 # ---- Merge Requests ----
@@ -333,78 +344,86 @@ def test_create_branch_503_when_disconnected():
 # ---- Exception / error fallback paths ----
 
 
-def test_list_commits_exception_returns_empty():
-    mock_git = _make_mock_git(list_path_commits=AsyncMock(side_effect=Exception("gitlab timeout")))
+def test_list_commits_exception_returns_502():
+    # CP-1 H.5: provider failure surfaces as 502, not silent [].
+    mock_git = _make_mock_git(list_path_commits=AsyncMock(side_effect=Exception("gitlab down")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.get(f"{BASE}/commits")
-    assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.status_code == 502
+    assert "Upstream provider error" in resp.json()["detail"]
 
 
-def test_create_file_exception_returns_500():
+def test_create_file_exception_returns_502():
+    # CP-1 H.3: generic detail, no str(e) leak. Status 502 (upstream error).
     mock_git = _make_mock_git(write_file=AsyncMock(side_effect=Exception("write failed")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.post(f"{BASE}/files/new.yaml", json={"content": "x"})
-    assert resp.status_code == 500
-    assert "Failed to save file" in resp.json()["detail"]
+    assert resp.status_code == 502
+    assert "write failed" not in resp.json()["detail"]
+    assert "save file" in resp.json()["detail"]
 
 
-def test_update_file_exception_returns_500():
+def test_update_file_exception_returns_502():
     mock_git = _make_mock_git(write_file=AsyncMock(side_effect=Exception("save failed")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.post(f"{BASE}/files/existing.yaml", json={"content": "new"})
-    assert resp.status_code == 500
+    assert resp.status_code == 502
 
 
-def test_delete_file_exception_returns_404():
-    mock_git = _make_mock_git(remove_file=AsyncMock(side_effect=Exception("not found")))
+def test_delete_file_not_found_returns_404():
+    # CP-1 H.4: FileNotFoundError → 404 (expected path).
+    mock_git = _make_mock_git(remove_file=AsyncMock(side_effect=FileNotFoundError("missing")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.delete(f"{BASE}/files/missing.yaml")
     assert resp.status_code == 404
-    assert "File not found" in resp.json()["detail"]
 
 
-def test_list_merge_requests_exception_returns_empty():
+def test_delete_file_exception_returns_502():
+    # CP-1 H.4: generic provider exception no longer masquerades as 404.
+    mock_git = _make_mock_git(remove_file=AsyncMock(side_effect=Exception("provider 500")))
+    client = TestClient(_build_test_app(mock_git=mock_git))
+    resp = client.delete(f"{BASE}/files/some.yaml")
+    assert resp.status_code == 502
+
+
+def test_list_merge_requests_exception_returns_502():
     mock_git = _make_mock_git(list_merge_requests=AsyncMock(side_effect=Exception("gitlab error")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.get(f"{BASE}/merge-requests")
-    assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.status_code == 502
 
 
-def test_create_merge_request_exception_returns_500():
+def test_create_merge_request_exception_returns_502():
     mock_git = _make_mock_git(create_merge_request=AsyncMock(side_effect=Exception("create failed")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.post(
         f"{BASE}/merge-requests",
         json={"title": "T", "description": "D", "source_branch": "feat/x", "target_branch": "main"},
     )
-    assert resp.status_code == 500
-    assert "Failed to create merge request" in resp.json()["detail"]
+    assert resp.status_code == 502
+    assert "create failed" not in resp.json()["detail"]
 
 
-def test_merge_merge_request_exception_returns_500():
+def test_merge_merge_request_exception_returns_502():
     mock_git = _make_mock_git(merge_merge_request=AsyncMock(side_effect=Exception("merge failed")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.post(f"{BASE}/merge-requests/1/merge")
-    assert resp.status_code == 500
-    assert "Failed to merge" in resp.json()["detail"]
+    assert resp.status_code == 502
 
 
-def test_list_branches_exception_returns_empty():
+def test_list_branches_exception_returns_502():
     mock_git = _make_mock_git(list_branches=AsyncMock(side_effect=Exception("gitlab error")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.get(f"{BASE}/branches")
-    assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.status_code == 502
 
 
-def test_create_branch_exception_returns_500():
+def test_create_branch_exception_returns_502():
     mock_git = _make_mock_git(create_branch=AsyncMock(side_effect=Exception("create failed")))
     client = TestClient(_build_test_app(mock_git=mock_git))
     resp = client.post(f"{BASE}/branches", json={"name": "feat/err", "ref": "main"})
-    assert resp.status_code == 500
-    assert "Failed to create branch" in resp.json()["detail"]
+    assert resp.status_code == 502
+    assert "create failed" not in resp.json()["detail"]
 
 
 # ---- Additional edge cases ----

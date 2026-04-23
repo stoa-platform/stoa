@@ -80,20 +80,27 @@ class TestDisconnect:
 class TestCloneRepo:
     @pytest.mark.asyncio
     async def test_clone_repo_success(self, service):
+        """CP-1 C.2: token must NOT be in argv (GIT_ASKPASS handles auth)."""
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate.return_value = (b"", b"")
 
+        repo_url = "https://github.com/stoa-platform/stoa-catalog.git"
         with patch("src.services.github_service.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
-            result = await service.clone_repo("https://github.com/stoa-platform/stoa-catalog.git")
+            result = await service.clone_repo(repo_url)
 
             assert isinstance(result, Path)
             args = mock_exec.call_args[0]
+            env = mock_exec.call_args[1].get("env", {})
             assert args[0] == "git"
             assert args[1] == "clone"
             assert "--depth=1" in args
-            # Token injected into URL
-            assert "x-access-token:" in args[3]
+            # URL is passed verbatim — no token injection.
+            assert repo_url in args
+            # Token travels via env, not argv.
+            assert "x-access-token:" not in " ".join(str(a) for a in args)
+            assert env.get("GIT_ASKPASS")
+            assert env.get("STOA_GIT_USERNAME") == "x-access-token"
 
     @pytest.mark.asyncio
     async def test_clone_repo_failure_raises(self, service):

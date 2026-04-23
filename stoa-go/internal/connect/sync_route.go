@@ -42,11 +42,11 @@ func newRouteSyncer(adapter adapters.GatewayAdapter) *routeSyncer {
 //   - Steps attached to each result: agent_received, adapter_connected,
 //     api_synced (with the adapter's actual outcome + error detail).
 //   - Per-route status resolution priority:
-//     1. adapter-reported per-route failure (failedRoutesProvider) →
+//     1. adapter reported the route in SyncResult.FailedRoutes →
 //     status=failed with the adapter's own error string.
-//     2. adapter returned a global error AND no per-route map → all
-//     routes get status=failed with the global error (fallback for
-//     adapters like kong/gravitee that don't track per-route).
+//     2. adapter returned a global error AND no per-route entry → all
+//     remaining routes get status=failed with the global error
+//     (fallback for adapters like kong/gravitee that don't track per-route).
 //     3. otherwise → status=applied.
 func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapters.Route) ([]SyncedRouteResult, error) {
 	if len(routes) == 0 {
@@ -59,7 +59,7 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 	agentStep := newSyncStep("agent_received", "success", "")
 	adapterStep := newSyncStep("adapter_connected", "success", "")
 
-	syncErr := s.adapter.SyncRoutes(ctx, adminURL, routes)
+	syncOutcome, syncErr := s.adapter.SyncRoutes(ctx, adminURL, routes)
 
 	var apiStep SyncStep
 	if syncErr != nil {
@@ -69,7 +69,7 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 	}
 	steps := []SyncStep{agentStep, adapterStep, apiStep}
 
-	failedMap := failedRoutesFromAdapter(s.adapter)
+	failedMap := syncOutcome.FailedRoutes
 
 	var results []SyncedRouteResult
 	for _, r := range routes {
@@ -95,19 +95,4 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 	}
 
 	return results, syncErr
-}
-
-// failedRoutesFromAdapter encapsulates the type-assertion against the
-// adapter-optional per-route error interface. Kept local to package connect
-// (not exported from adapters/) to contain GO-2 scope — only webmethods
-// implements it today. Documented debt; GO-3 may promote to a proper
-// interface on GatewayAdapter.
-func failedRoutesFromAdapter(adapter adapters.GatewayAdapter) map[string]string {
-	type failedRoutesProvider interface {
-		GetFailedRoutes() map[string]string
-	}
-	if frp, ok := adapter.(failedRoutesProvider); ok {
-		return frp.GetFailedRoutes()
-	}
-	return map[string]string{}
 }

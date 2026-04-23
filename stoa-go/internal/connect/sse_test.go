@@ -21,11 +21,11 @@ type mockSSEAdapter struct {
 	syncErr error
 }
 
-func (m *mockSSEAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) error {
+func (m *mockSSEAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) (adapters.SyncResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.synced = append(m.synced, routes)
-	return m.syncErr
+	return adapters.SyncResult{FailedRoutes: map[string]string{}}, m.syncErr
 }
 
 func (m *mockSSEAdapter) Detect(ctx context.Context, adminURL string) (bool, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -183,54 +184,90 @@ func (k *KongAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName 
 	return nil
 }
 
-// RemovePolicy removes a plugin from a Kong service by type.
+// RemovePolicy removes every plugin of the given type from a Kong service.
+//
+// Idempotent on 0 matches. Pre-GO-1 the loop returned after deleting the
+// first match (C.1 in BUG-REPORT-GO-1.md), leaving duplicate plugins
+// silently active on the gateway. Now all matches are deleted; a warn log
+// line fires whenever N > 1.
+//
+// Error semantics mirror webMethods.RemovePolicy:
+//   - all deletions succeed → nil (log if N > 1).
+//   - ≥ 1 deletion fails → error wrapping the last failure with an
+//     "removed X/N" prefix.
+//   - 0 matches → nil.
 func (k *KongAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error {
-	// List plugins for the service, find by name, delete by ID
 	pluginsURL := fmt.Sprintf("%s/services/%s/plugins", adminURL, apiName)
 	body, err := k.doGet(ctx, pluginsURL)
 	if err != nil {
 		return fmt.Errorf("list kong plugins: %w", err)
 	}
 
-	var plugins kongPluginsResponse
-	if err := json.Unmarshal(body, &plugins); err != nil {
-		return fmt.Errorf("decode kong plugins: %w", err)
-	}
-
-	// Find plugin ID by name from raw JSON (we need the id field)
+	// Raw map decode so we can recover both name and id fields.
 	var rawPlugins struct {
 		Data []map[string]interface{} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &rawPlugins); err != nil {
-		return fmt.Errorf("decode kong plugins raw: %w", err)
+		return fmt.Errorf("decode kong plugins: %w", err)
 	}
 
+	var ids []string
 	for _, p := range rawPlugins.Data {
 		name, _ := p["name"].(string)
 		id, _ := p["id"].(string)
 		if name == policyType && id != "" {
-			deleteURL := fmt.Sprintf("%s/plugins/%s", adminURL, id)
-			req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
-			if err != nil {
-				return err
-			}
-			k.setAuth(req)
-
-			resp, err := k.client.Do(req)
-			if err != nil {
-				return fmt.Errorf("delete kong plugin: %w", err)
-			}
-			_ = resp.Body.Close()
-			return nil
+			ids = append(ids, id)
 		}
 	}
+	if len(ids) == 0 {
+		return nil // idempotent
+	}
 
-	return nil // Plugin not found — idempotent
+	var lastErr error
+	succeeded := 0
+	for _, id := range ids {
+		deleteURL := fmt.Sprintf("%s/plugins/%s", adminURL, id)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		k.setAuth(req)
+
+		resp, err := k.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("delete kong plugin %s: %w", id, err)
+			continue
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+			lastErr = fmt.Errorf("kong plugin delete %s failed (%d)", id, resp.StatusCode)
+			continue
+		}
+		succeeded++
+	}
+
+	if len(ids) > 1 {
+		log.Printf("kong: RemovePolicy removed %d/%d duplicate plugins for service=%s type=%s",
+			succeeded, len(ids), apiName, policyType)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("kong RemovePolicy: removed %d/%d plugins for service=%s type=%s; last error: %w",
+			succeeded, len(ids), apiName, policyType, lastErr)
+	}
+	return nil
 }
 
 // SyncRoutes pushes CP routes to Kong via declarative config merge (POST /config).
 // Kong DB-less mode: GET current state → merge stoa-managed services/routes → POST /config.
-func (k *KongAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) error {
+//
+// Kong's declarative reload is atomic (all-or-nothing). Per-route failure
+// tracking is therefore unavailable, and SyncResult.FailedRoutes is always
+// empty — callers must consult the returned error for a global signal.
+func (k *KongAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []Route) (SyncResult, error) {
+	result := SyncResult{FailedRoutes: map[string]string{}}
+
 	// 1. Get current declarative config
 	configBody, err := k.doGet(ctx, adminURL+"/config")
 	if err != nil {
@@ -240,7 +277,7 @@ func (k *KongAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []
 
 	var currentConfig map[string]interface{}
 	if err := json.Unmarshal(configBody, &currentConfig); err != nil {
-		return fmt.Errorf("decode kong config: %w", err)
+		return result, fmt.Errorf("decode kong config: %w", err)
 	}
 
 	// 2. Build new services/routes from CP routes, keeping non-stoa services
@@ -315,32 +352,33 @@ func (k *KongAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []
 
 	data, err := json.Marshal(newConfig)
 	if err != nil {
-		return fmt.Errorf("marshal kong config: %w", err)
+		return result, fmt.Errorf("marshal kong config: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, adminURL+"/config", strings.NewReader(string(data)))
 	if err != nil {
-		return err
+		return result, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	k.setAuth(req)
 
 	resp, err := k.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("post kong config: %w", err)
+		return result, fmt.Errorf("post kong config: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("kong config reload failed (%d): %s", resp.StatusCode, string(body))
+		return result, fmt.Errorf("kong config reload failed (%d): %s", resp.StatusCode, string(body))
 	}
 
-	return nil
+	return result, nil
 }
 
 // syncRoutesPerService falls back to per-service CRUD when /config is not available.
-func (k *KongAdapter) syncRoutesPerService(ctx context.Context, adminURL string, routes []Route) error {
+func (k *KongAdapter) syncRoutesPerService(ctx context.Context, adminURL string, routes []Route) (SyncResult, error) {
+	result := SyncResult{FailedRoutes: map[string]string{}}
 	for _, route := range routes {
 		if !route.Activated {
 			continue
@@ -353,24 +391,24 @@ func (k *KongAdapter) syncRoutesPerService(ctx context.Context, adminURL string,
 		}
 		data, err := json.Marshal(svcPayload)
 		if err != nil {
-			return fmt.Errorf("marshal service: %w", err)
+			return result, fmt.Errorf("marshal service: %w", err)
 		}
 
 		svcURL := fmt.Sprintf("%s/services/stoa-%s", adminURL, route.Name)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut, svcURL, strings.NewReader(string(data)))
 		if err != nil {
-			return err
+			return result, err
 		}
 		req.Header.Set("Content-Type", "application/json")
 		k.setAuth(req)
 
 		resp, err := k.client.Do(req)
 		if err != nil {
-			return fmt.Errorf("upsert kong service: %w", err)
+			return result, fmt.Errorf("upsert kong service: %w", err)
 		}
 		_ = resp.Body.Close()
 	}
-	return nil
+	return result, nil
 }
 
 func containsTag(tags []interface{}, target string) bool {

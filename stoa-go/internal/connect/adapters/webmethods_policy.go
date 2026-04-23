@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -140,9 +141,21 @@ func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, ap
 	return nil
 }
 
-// RemovePolicy removes a policy action from a webMethods API by type.
-// Flow: resolve API ID → list policy actions for API → find by type → DELETE.
-// Idempotent: returns nil if the policy does not exist.
+// RemovePolicy removes every policy action of the given type from a webMethods
+// API. Flow: resolve API ID → list policy actions for API → DELETE all matches.
+//
+// Idempotent on 0 matches (returns nil). When multiple matches exist — a
+// symptom of a prior apply race, a crashed apply that left an orphan, or an
+// upgrade that re-created the policy under a different name — every match is
+// deleted and the count is logged. Pre-GO-1, only the first match was removed
+// (C.1 in BUG-REPORT-GO-1.md), leaving the rest silently active on the
+// gateway.
+//
+// Error semantics:
+//   - N matches, all deleted successfully → nil (log at N > 1).
+//   - N matches, M ≥ 1 deletions failed → error wrapping the last failure,
+//     with an "removed X/N" prefix so ops can gauge impact.
+//   - 0 matches → nil (caller treats as already-removed).
 func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error {
 	apiID, err := w.resolveAPIID(ctx, adminURL, apiName)
 	if err != nil {
@@ -167,27 +180,48 @@ func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, a
 		return fmt.Errorf("decode policy actions: %w", err)
 	}
 
+	var matches []wmPolicyAction
 	for _, p := range policies.PolicyActions {
 		if p.TemplateKey == wmType || p.TemplateKey == policyType {
-			deleteURL := fmt.Sprintf("%s/rest/apigateway/policyActions/%s", adminURL, p.ID)
-			req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
-			if err != nil {
-				return err
-			}
-			w.setAuth(req)
-
-			resp, err := w.client.Do(req)
-			if err != nil {
-				return fmt.Errorf("delete webmethods policy: %w", err)
-			}
-			_ = resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-				return fmt.Errorf("webmethods policy delete failed (%d)", resp.StatusCode)
-			}
-			return nil
+			matches = append(matches, p)
 		}
 	}
+	if len(matches) == 0 {
+		return nil // idempotent
+	}
 
+	var lastErr error
+	succeeded := 0
+	for _, p := range matches {
+		deleteURL := fmt.Sprintf("%s/rest/apigateway/policyActions/%s", adminURL, p.ID)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		w.setAuth(req)
+
+		resp, err := w.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("delete webmethods policy %s: %w", p.ID, err)
+			continue
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+			lastErr = fmt.Errorf("webmethods policy delete %s failed (%d)", p.ID, resp.StatusCode)
+			continue
+		}
+		succeeded++
+	}
+
+	if len(matches) > 1 {
+		log.Printf("webmethods: RemovePolicy removed %d/%d duplicate policy actions for API=%s type=%s",
+			succeeded, len(matches), apiName, policyType)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("webmethods RemovePolicy: removed %d/%d policies for API=%s type=%s; last error: %w",
+			succeeded, len(matches), apiName, policyType, lastErr)
+	}
 	return nil
 }

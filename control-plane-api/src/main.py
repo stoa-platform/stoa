@@ -4,6 +4,7 @@ FastAPI backend with RBAC, GitOps, and Kafka integration
 """
 
 import asyncio
+import logging as _stdlib_logging
 import os
 from contextlib import asynccontextmanager, suppress
 
@@ -19,6 +20,7 @@ from starlette.responses import Response
 from .config import settings
 from .consumers.deployment_consumer import deployment_consumer
 from .consumers.promotion_deploy_consumer import promotion_deploy_consumer
+from .core.secret_redactor import SecretRedactor
 from .features.error_snapshots import (
     add_error_snapshot_middleware,
     connect_error_snapshots,
@@ -151,6 +153,12 @@ def custom_generate_unique_id(route):
 
 # Configure structured logging (CAB-281)
 configure_logging()
+
+# CP-1 C.2 defense-in-depth: redact provider PATs from log records.
+# Installed at the root logger so every handler (stdout, files, Sentry,
+# OTLP) sees the redacted form regardless of where a token might leak in.
+_stdlib_logging.getLogger().addFilter(SecretRedactor())
+
 logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)

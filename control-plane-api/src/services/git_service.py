@@ -29,6 +29,7 @@ import yaml
 from gitlab.v4.objects import Project
 
 from ..config import settings
+from .git_credentials import askpass_env, redact_token
 from .git_executor import (
     BATCH_TIMEOUT_S,
     DEFAULT_TIMEOUT_S,
@@ -181,24 +182,27 @@ class GitLabService(GitProvider):
     async def clone_repo(self, repo_url: str) -> Path:
         """Clone a GitLab repository to a temporary directory.
 
-        NOTE: token-in-URL here is the C.2 leak — patched by the
-        subsequent commit (GIT_ASKPASS helper).
+        CP-1 C.2: the token never appears in argv. It is passed to git
+        through GIT_ASKPASS + env vars instead. ``repo_url`` must be a
+        plain HTTPS URL (no user/token prefix).
         """
         tmp_dir = Path(tempfile.mkdtemp(prefix="stoa-gl-"))
         token = settings.git.gitlab.token.get_secret_value()
-        authed_url = repo_url.replace("https://", f"https://oauth2:{token}@")
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "clone",
-            "--depth=1",
-            authed_url,
-            str(tmp_dir / "repo"),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
+        with askpass_env(username="oauth2", password=token) as env:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "clone",
+                "--depth=1",
+                repo_url,
+                str(tmp_dir / "repo"),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            _, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(f"git clone failed: {stderr.decode().strip()}")
+            safe_stderr = redact_token(stderr.decode().strip(), token)
+            raise RuntimeError(f"git clone failed: {safe_stderr}")
         return tmp_dir / "repo"
 
     async def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> str:

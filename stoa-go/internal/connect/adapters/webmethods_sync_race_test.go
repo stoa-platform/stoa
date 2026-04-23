@@ -1,3 +1,8 @@
+// regression for CAB-1944 (GO-1 audit C.3 / C.6): per-call SyncResult
+// replaces the mutable FailedRoutes field on WebMethodsAdapter; syncedHashes
+// is mutex-guarded. Without these tests, the concurrent polling + SSE paths
+// race on the shared adapter and produce `concurrent map read/write` panics
+// and mis-acked routes (see BUG-REPORT-GO-1.md).
 package adapters
 
 import (

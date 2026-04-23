@@ -1,3 +1,7 @@
+// regression for CAB-1944 (GO-1 audit C.2 / C.4 / C.5): harden
+// SyncRoutes against 409 conflicts (POST→re-list→PUT fallback, PUT 409
+// tracked) and prevent single-route failures (deactivate / verifyActivate)
+// from halting the batch. See BUG-REPORT-GO-1.md.
 package adapters
 
 import (

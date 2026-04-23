@@ -1,3 +1,8 @@
+// regression for CAB-1944 (GO-1 audit C.1): RemovePolicy must delete every
+// matching policy action / plugin, not just the first match. Pre-fix, a
+// duplicate left over from a crashed apply or an upgrade stayed silently
+// active on the gateway despite STOA believing the policy was removed —
+// a security-functional divergence. Same fix applied to Kong.
 package adapters
 
 import (

@@ -51,6 +51,19 @@ GIT_SYNC_RETRIES_TOTAL = Counter(
 CONSUMER_GROUP = "git-sync-worker"
 DEFAULT_RETRY_DELAYS = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s
 
+# CP-1 H.7: upper bound on how long the consumer thread waits for the
+# async handler to complete before declaring failure. 60 s is 2x the
+# provider HTTP timeout (DEFAULT_TIMEOUT_S=30 in services/git_executor.py)
+# so a handler that waits on a normal timeout can still finish. Past 60 s
+# we treat it as failure and do NOT commit — Kafka will redeliver.
+HANDLER_RESULT_TIMEOUT_S = 60.0
+
+# CP-1 H.8: substrings that classify a ValueError as an expected
+# idempotent outcome (not an error). Anything else is treated as a real
+# failure so a functional bug (e.g. batch_commit("unknown action")) is
+# not silently counted as success in GIT_SYNC_TOTAL.
+_IDEMPOTENT_VALUE_ERROR_SUBSTRINGS = ("already exists", "not found")
+
 
 class GitSyncWorker:
     """Async Git sync worker — commits API CRUD changes to stoa-catalog.
@@ -141,13 +154,29 @@ class GitSyncWorker:
                 self._consumer.close()
 
     def _create_consumer(self) -> KafkaConsumer | None:
-        """Create Kafka consumer for API lifecycle events."""
+        """Create Kafka consumer for API lifecycle events.
+
+        CP-1 H.7: enable_auto_commit is now False. Offsets are committed
+        synchronously from _dispatch_event AFTER the async handler
+        completes successfully. Previously auto-commit could advance the
+        offset before the handler ran, losing the event if the worker
+        crashed in between.
+
+        Known follow-up (not in P1 scope): handle on_partitions_revoked
+        during rebalance. Between future.result() success and
+        consumer.commit(), a rebalance can reassign the partition and
+        cause the next consumer to re-read the offset — a duplicate
+        delivery. Current handlers are idempotent by design (create →
+        'already exists' path, treated as success via H.8 discriminator),
+        so this is acceptable for P1. Upgrade to a ConsumerRebalance
+        Listener when this worker scales past one replica.
+        """
         try:
             kafka_config: dict = {
                 "bootstrap_servers": settings.KAFKA_BOOTSTRAP_SERVERS.split(","),
                 "group_id": self.GROUP,
                 "auto_offset_reset": "latest",
-                "enable_auto_commit": True,
+                "enable_auto_commit": False,  # CP-1 H.7: manual commit after success
                 "value_deserializer": lambda m: json.loads(m.decode("utf-8")),
             }
 
@@ -168,24 +197,56 @@ class GitSyncWorker:
             return None
 
     def _dispatch_event(self, message) -> None:
-        """Dispatch Kafka message to async handler via event loop."""
+        """Dispatch Kafka message to async handler and commit on success.
+
+        CP-1 H.7: this method now blocks the consumer thread on the
+        handler future before committing the offset. Under the prior
+        fire-and-forget callback pattern combined with
+        enable_auto_commit=True the offset could advance before the
+        async handler ran, losing events on crash. Serialising per
+        message trades throughput for at-least-once durability, which
+        is the right tradeoff for a low-volume catalog-write worker.
+        """
+        if not self._loop or self._consumer is None:
+            return
         try:
-            if self._loop:
-                future = asyncio.run_coroutine_threadsafe(
-                    self._handle_event(message.value),
-                    self._loop,
+            future = asyncio.run_coroutine_threadsafe(
+                self._handle_event(message.value),
+                self._loop,
+            )
+            try:
+                future.result(timeout=HANDLER_RESULT_TIMEOUT_S)
+            except TimeoutError:
+                # Do NOT commit — Kafka will redeliver. We also cancel
+                # the still-running coroutine so the event loop is not
+                # poisoned by a growing backlog of stuck tasks.
+                future.cancel()
+                logger.error(
+                    "Git sync handler exceeded %.0fs; offset NOT committed, "
+                    "event will be redelivered",
+                    HANDLER_RESULT_TIMEOUT_S,
                 )
-                future.add_done_callback(self._event_callback)
+                return
+            except Exception as e:
+                logger.error("Git sync event handling failed: %s", e, exc_info=True)
+                return
+
+            # Handler succeeded — commit the offset so this message is
+            # not re-delivered.
+            try:
+                self._consumer.commit()
+            except Exception as e:
+                # Commit failure means the message will be redelivered.
+                # Handlers are idempotent (create → "already exists"
+                # path is classified as success by H.8 discriminator),
+                # so this is recoverable.
+                logger.error(
+                    "Git sync offset commit failed (message will be redelivered): %s",
+                    e,
+                    exc_info=True,
+                )
         except Exception as e:
             logger.error("Failed to dispatch git sync event: %s", e, exc_info=True)
-
-    @staticmethod
-    def _event_callback(future) -> None:
-        """Log exceptions from async event handling."""
-        try:
-            future.result()
-        except Exception as e:
-            logger.error("Git sync event handling failed: %s", e, exc_info=True)
 
     # ── Event handling ─────────────────────────────────────────────────
 
@@ -240,10 +301,33 @@ class GitSyncWorker:
                 return  # Success
 
             except ValueError as e:
-                # Idempotency: "already exists" or "not found" — not retriable
-                GIT_SYNC_TOTAL.labels(status="success", operation=operation).inc()
-                logger.info("Git sync %s skipped (idempotent): %s", event_type, e)
-                return
+                # CP-1 H.8: not every ValueError is an idempotent
+                # outcome. Discriminate by message: "already exists" /
+                # "not found" are real idempotency signals, anything
+                # else (e.g. batch_commit("unknown action") raising
+                # ValueError) is a genuine failure. The prior blanket
+                # success classification biased GIT_SYNC_TOTAL metrics
+                # and hid functional bugs.
+                msg = str(e).lower()
+                if any(s in msg for s in _IDEMPOTENT_VALUE_ERROR_SUBSTRINGS):
+                    GIT_SYNC_TOTAL.labels(status="success", operation=operation).inc()
+                    logger.info("Git sync %s skipped (idempotent): %s", event_type, e)
+                    return
+                # Fall through to the retry path: treat as real error.
+                last_error = e
+                if attempt < len(self._retry_delays):
+                    delay = self._retry_delays[attempt]
+                    GIT_SYNC_RETRIES_TOTAL.inc()
+                    logger.warning(
+                        "Git sync %s ValueError (unknown; attempt %d/%d), retrying in %ds: %s",
+                        event_type,
+                        attempt + 1,
+                        max_attempts,
+                        delay,
+                        e,
+                    )
+                    await asyncio.sleep(delay)
+                continue
 
             except Exception as e:
                 last_error = e

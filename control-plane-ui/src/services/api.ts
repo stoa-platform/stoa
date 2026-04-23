@@ -68,12 +68,110 @@ import { sessionClient } from './api/session';
 import { adminClient } from './api/admin';
 import { toolPermissionsClient } from './api/toolPermissions';
 import { workflowsClient } from './api/workflows';
+import { subscriptionsClient } from './api/subscriptions';
+import { webhooksClient } from './api/webhooks';
+import { credentialMappingsClient } from './api/credentialMappings';
+import { contractsClient } from './api/contracts';
+import { promotionsClient } from './api/promotions';
+import { tenantsClient } from './api/tenants';
+import { apisClient } from './api/apis';
+import { applicationsClient } from './api/applications';
+import { consumersClient } from './api/consumers';
+import { deploymentsClient } from './api/deployments';
+import { tracesClient } from './api/traces';
+import { gatewaysClient } from './api/gateways';
+import { gatewayDeploymentsClient } from './api/gatewayDeployments';
+import { platformClient } from './api/platform';
+import { chatClient } from './api/chat';
+import { llmClient } from './api/llm';
+import { monitoringClient } from './api/monitoring';
+
+// Imports internes des types co-localisés (nécessaires pour les signatures de
+// la classe ApiService ci-dessous). Ré-exports publics : voir en bas de fichier.
+import type {
+  OperationsMetrics,
+  BusinessMetrics,
+  TopAPI,
+  ComponentStatus,
+  PlatformEvent,
+  PlatformStatusResponse,
+  ApplicationDiffResponse,
+} from './api/platform';
+import type {
+  TenantChatSettings,
+  ChatUsageBySource,
+  TokenBudgetStatus,
+  TokenUsageStats,
+  ChatConversationMetrics,
+  ChatModelDistribution,
+} from './api/chat';
+import type {
+  LlmUsageResponse,
+  LlmTimeseriesResponse,
+  LlmProviderBreakdownResponse,
+  LlmBudgetResponse,
+} from './api/llm';
+import type {
+  MonitoringTransaction,
+  MonitoringTransactionDetail,
+  MonitoringStats,
+} from './api/monitoring';
+
+// ── Type re-exports (historiquement inline en bas de api.ts) ─────────────────
+// Ces types sont désormais co-localisés avec leur client de domaine.
+// On ré-exporte par sous-chemin explicite (pas de api/index.ts — collision
+// de résolution avec le fichier api.ts, cf. REWRITE-PLAN § C).
+export type {
+  OperationsMetrics,
+  BusinessMetrics,
+  TopAPI,
+  ComponentStatus,
+  GitOpsStatus,
+  PlatformEvent,
+  ExternalLinks,
+  PlatformStatusResponse,
+  ApplicationDiffResource,
+  ApplicationDiffResponse,
+} from './api/platform';
+export type {
+  TenantChatSettings,
+  ChatSourceEntry,
+  ChatUsageBySource,
+  TokenBudgetStatus,
+  TokenUsageStats,
+  ChatConversationMetrics,
+  ModelDistributionEntry,
+  ChatModelDistribution,
+} from './api/chat';
+export type {
+  LlmUsageResponse,
+  LlmTimeseriesPoint,
+  LlmTimeseriesResponse,
+  LlmProviderCostEntry,
+  LlmProviderBreakdownResponse,
+  LlmBudgetResponse,
+} from './api/llm';
+export type {
+  MonitoringTransaction,
+  MonitoringTransactionDetail,
+  MonitoringStats,
+} from './api/monitoring';
 
 // =============================================================================
-// Façade ApiService — agrège le core transport (services/http) et les méthodes
-// métier historiques. En cours de refactor UI-2 : les domaines seront extraits
-// en `services/api/<domain>.ts`. Cette classe reste le point d'entrée legacy
-// pour préserver la surface consommée par ~76 callers et 56 vi.mock.
+// Façade ApiService — agrège le core transport (services/http) et tous les
+// clients de domaine (services/api/*.ts). Aucune logique métier ici : chaque
+// méthode délègue soit à `httpClient` (passthrough générique), soit à un
+// client de domaine.
+//
+// Contrat publié : le type `LegacyApiSurface` (alias de `ApiService`) est la
+// forme consommée par les ~76 callers et les 56 `vi.mock('../services/api')`
+// du projet. TypeScript vérifie à la compilation que chaque méthode listée
+// ici a bien une implémentation : toute dérive casse `tsc --noEmit` avec un
+// message précis, pas un smoke test de cardinalité.
+//
+// Les nouveaux callers peuvent importer directement `{ tenantsClient }`
+// depuis `@/services/api/tenants` — la façade subsiste tant que UI-3 n'a pas
+// migré tous les usages + mocks de tests.
 // =============================================================================
 class ApiService {
   // Generic HTTP methods for proxy services (58 callers + 11 sibling services)
@@ -133,27 +231,23 @@ class ApiService {
 
   // Tenants
   async getTenants(): Promise<Tenant[]> {
-    const { data } = await httpClient.get('/v1/tenants');
-    return data;
+    return tenantsClient.list();
   }
 
   async getTenant(tenantId: string): Promise<Tenant> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}`);
-    return data;
+    return tenantsClient.get(tenantId);
   }
 
   async createTenant(tenant: TenantCreate): Promise<Tenant> {
-    const { data } = await httpClient.post('/v1/tenants', tenant);
-    return data;
+    return tenantsClient.create(tenant);
   }
 
   async updateTenant(tenantId: string, tenant: Partial<TenantCreate>): Promise<Tenant> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}`, tenant);
-    return data;
+    return tenantsClient.update(tenantId, tenant);
   }
 
   async deleteTenant(tenantId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}`);
+    return tenantsClient.remove(tenantId);
   }
 
   // Environments (ADR-040)
@@ -163,36 +257,27 @@ class ApiService {
 
   // APIs
   async getApis(tenantId: string, environment?: Environment): Promise<API[]> {
-    const params: Record<string, unknown> = { page: 1, page_size: 100 };
-    if (environment) params.environment = environment;
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis`, { params });
-    return data.items ?? data;
+    return apisClient.list(tenantId, environment);
   }
 
   async getAdminApis(page = 1, pageSize = 100): Promise<API[]> {
-    const { data } = await httpClient.get('/v1/admin/catalog/apis', {
-      params: { page, page_size: pageSize },
-    });
-    return data.items ?? data;
+    return apisClient.listAdmin(page, pageSize);
   }
 
   async getApi(tenantId: string, apiId: string): Promise<API> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis/${apiId}`);
-    return data;
+    return apisClient.get(tenantId, apiId);
   }
 
   async createApi(tenantId: string, api: APICreate): Promise<API> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/apis`, api);
-    return data;
+    return apisClient.create(tenantId, api);
   }
 
   async updateApi(tenantId: string, apiId: string, api: Partial<APICreate>): Promise<API> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/apis/${apiId}`, api);
-    return data;
+    return apisClient.update(tenantId, apiId, api);
   }
 
   async deleteApi(tenantId: string, apiId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
+    return apisClient.remove(tenantId, apiId);
   }
 
   async getApiVersions(
@@ -200,10 +285,7 @@ class ApiService {
     apiId: string,
     limit = 20
   ): Promise<Schemas['APIVersionEntry'][]> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis/${apiId}/versions`, {
-      params: { limit },
-    });
-    return data;
+    return apisClient.listVersions(tenantId, apiId, limit);
   }
 
   async updateApiAudience(
@@ -211,32 +293,24 @@ class ApiService {
     apiId: string,
     audience: string
   ): Promise<{ api_id: string; tenant_id: string; audience: string; updated_by: string }> {
-    const { data } = await httpClient.patch(`/v1/admin/catalog/${tenantId}/${apiId}/audience`, {
-      audience,
-    });
-    return data;
+    return apisClient.updateAudience(tenantId, apiId, audience);
   }
 
   async triggerCatalogSync(tenantId: string): Promise<void> {
-    await httpClient.post(`/v1/admin/catalog/sync/tenant/${tenantId}`);
+    return apisClient.triggerCatalogSync(tenantId);
   }
 
   // Applications
   async getApplications(tenantId: string): Promise<Application[]> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/applications`, {
-      params: { page: 1, page_size: 100 },
-    });
-    return data.items ?? data;
+    return applicationsClient.list(tenantId);
   }
 
   async getApplication(tenantId: string, appId: string): Promise<Application> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/applications/${appId}`);
-    return data;
+    return applicationsClient.get(tenantId, appId);
   }
 
   async createApplication(tenantId: string, app: ApplicationCreate): Promise<Application> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/applications`, app);
-    return data;
+    return applicationsClient.create(tenantId, app);
   }
 
   async updateApplication(
@@ -244,39 +318,32 @@ class ApiService {
     appId: string,
     app: Partial<ApplicationCreate>
   ): Promise<Application> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/applications/${appId}`, app);
-    return data;
+    return applicationsClient.update(tenantId, appId, app);
   }
 
   async deleteApplication(tenantId: string, appId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/applications/${appId}`);
+    return applicationsClient.remove(tenantId, appId);
   }
 
   // Consumers (CAB-864 — mTLS Self-Service)
   async getConsumers(tenantId: string, environment?: string): Promise<Consumer[]> {
-    const { data } = await httpClient.get(`/v1/consumers/${tenantId}`, {
-      params: { page: 1, page_size: 100, environment },
-    });
-    return data.items ?? data;
+    return consumersClient.list(tenantId, environment);
   }
 
   async getConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.get(`/v1/consumers/${tenantId}/${consumerId}`);
-    return data;
+    return consumersClient.get(tenantId, consumerId);
   }
 
   async suspendConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/suspend`);
-    return data;
+    return consumersClient.suspend(tenantId, consumerId);
   }
 
   async activateConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/activate`);
-    return data;
+    return consumersClient.activate(tenantId, consumerId);
   }
 
   async deleteConsumer(tenantId: string, consumerId: string): Promise<void> {
-    await httpClient.delete(`/v1/consumers/${tenantId}/${consumerId}`);
+    return consumersClient.remove(tenantId, consumerId);
   }
 
   async rotateCertificate(
@@ -285,23 +352,20 @@ class ApiService {
     certificatePem: string,
     gracePeriodHours: number = 24
   ): Promise<Consumer> {
-    const { data } = await httpClient.post(
-      `/v1/consumers/${tenantId}/${consumerId}/certificate/rotate`,
-      { certificate_pem: certificatePem, grace_period_hours: gracePeriodHours }
+    return consumersClient.rotateCertificate(
+      tenantId,
+      consumerId,
+      certificatePem,
+      gracePeriodHours
     );
-    return data;
   }
 
   async revokeCertificate(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(
-      `/v1/consumers/${tenantId}/${consumerId}/certificate/revoke`
-    );
-    return data;
+    return consumersClient.revokeCertificate(tenantId, consumerId);
   }
 
   async blockConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/block`);
-    return data;
+    return consumersClient.block(tenantId, consumerId);
   }
 
   // Certificate Lifecycle (CAB-872)
@@ -310,41 +374,30 @@ class ApiService {
     consumerId: string,
     certificatePem: string
   ): Promise<Consumer> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/${consumerId}/certificate`, {
-      certificate_pem: certificatePem,
-    });
-    return data;
+    return consumersClient.bindCertificate(tenantId, consumerId, certificatePem);
   }
 
   async getExpiringCertificates(
     tenantId: string,
     days: number = 30
   ): Promise<Schemas['CertificateExpiryResponse']> {
-    const { data } = await httpClient.get(`/v1/consumers/${tenantId}/certificates/expiring`, {
-      params: { days },
-    });
-    return data;
+    return consumersClient.getExpiringCertificates(tenantId, days);
   }
 
   async bulkRevokeCertificates(
     tenantId: string,
     consumerIds: string[]
   ): Promise<Schemas['BulkRevokeResponse']> {
-    const { data } = await httpClient.post(`/v1/consumers/${tenantId}/certificates/bulk-revoke`, {
-      consumer_ids: consumerIds,
-    });
-    return data;
+    return consumersClient.bulkRevokeCertificates(tenantId, consumerIds);
   }
 
   // Tenant CA (CAB-1787/1788 — per-tenant CA management)
   async getTenantCA(tenantId: string): Promise<TenantCAInfo> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/ca`);
-    return data;
+    return tenantsClient.getCA(tenantId);
   }
 
   async generateTenantCA(tenantId: string): Promise<TenantCAInfo> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/ca/generate`);
-    return data;
+    return tenantsClient.generateCA(tenantId);
   }
 
   async signCSR(
@@ -352,29 +405,22 @@ class ApiService {
     csrPem: string,
     validityDays: number = 365
   ): Promise<Schemas['CSRSignResponse']> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/ca/sign`, {
-      csr_pem: csrPem,
-      validity_days: validityDays,
-    });
-    return data;
+    return tenantsClient.signCSR(tenantId, csrPem, validityDays);
   }
 
   async revokeTenantCA(tenantId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/ca`);
+    return tenantsClient.revokeCA(tenantId);
   }
 
   async listIssuedCertificates(
     tenantId: string,
     status?: string
   ): Promise<IssuedCertificateListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/ca/certificates`, {
-      params: status ? { status } : undefined,
-    });
-    return data;
+    return tenantsClient.listIssuedCertificates(tenantId, status);
   }
 
   async revokeIssuedCertificate(tenantId: string, certId: string): Promise<void> {
-    await httpClient.post(`/v1/tenants/${tenantId}/ca/certificates/${certId}/revoke`);
+    return tenantsClient.revokeIssuedCertificate(tenantId, certId);
   }
 
   // Deployments (CAB-1353 lifecycle API)
@@ -388,18 +434,15 @@ class ApiService {
       page_size?: number;
     }
   ): Promise<DeploymentListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/deployments`, { params });
-    return data;
+    return deploymentsClient.list(tenantId, params);
   }
 
   async getDeployment(tenantId: string, deploymentId: string): Promise<Deployment> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/deployments/${deploymentId}`);
-    return data;
+    return deploymentsClient.get(tenantId, deploymentId);
   }
 
   async createDeployment(tenantId: string, request: DeploymentCreate): Promise<Deployment> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/deployments`, request);
-    return data;
+    return deploymentsClient.create(tenantId, request);
   }
 
   async rollbackDeployment(
@@ -407,11 +450,7 @@ class ApiService {
     deploymentId: string,
     targetVersion?: string
   ): Promise<Deployment> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/deployments/${deploymentId}/rollback`,
-      { target_version: targetVersion }
-    );
-    return data;
+    return deploymentsClient.rollback(tenantId, deploymentId, targetVersion);
   }
 
   async getDeploymentLogs(
@@ -420,11 +459,7 @@ class ApiService {
     afterSeq: number = 0,
     limit: number = 200
   ): Promise<DeploymentLogListResponse> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/deployments/${deploymentId}/logs`,
-      { params: { after_seq: afterSeq, limit } }
-    );
-    return data;
+    return deploymentsClient.getLogs(tenantId, deploymentId, afterSeq, limit);
   }
 
   // ── Promotions (CAB-1706) ──────────────────────────────────────────────────
@@ -439,13 +474,11 @@ class ApiService {
       page_size?: number;
     }
   ): Promise<PromotionListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/promotions`, { params });
-    return data;
+    return promotionsClient.list(tenantId, params);
   }
 
   async getPromotion(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/promotions/${promotionId}`);
-    return data;
+    return promotionsClient.get(tenantId, promotionId);
   }
 
   async createPromotion(
@@ -453,22 +486,15 @@ class ApiService {
     apiId: string,
     request: Schemas['PromotionCreate']
   ): Promise<Promotion> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/promotions/${apiId}`, request);
-    return data;
+    return promotionsClient.create(tenantId, apiId, request);
   }
 
   async approvePromotion(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/promotions/${promotionId}/approve`
-    );
-    return data;
+    return promotionsClient.approve(tenantId, promotionId);
   }
 
   async completePromotion(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/promotions/${promotionId}/complete`
-    );
-    return data;
+    return promotionsClient.complete(tenantId, promotionId);
   }
 
   async rollbackPromotion(
@@ -476,19 +502,14 @@ class ApiService {
     promotionId: string,
     request: Schemas['PromotionRollbackRequest']
   ): Promise<Promotion> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/promotions/${promotionId}/rollback`,
-      request
-    );
-    return data;
+    return promotionsClient.rollback(tenantId, promotionId, request);
   }
 
   async getPromotionDiff(
     tenantId: string,
     promotionId: string
   ): Promise<Schemas['PromotionDiffResponse']> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/promotions/${promotionId}/diff`);
-    return data;
+    return promotionsClient.getDiff(tenantId, promotionId);
   }
 
   // ── Environment Status ────────────────────────────────────────────────────
@@ -497,10 +518,7 @@ class ApiService {
     tenantId: string,
     environment: string
   ): Promise<EnvironmentStatusResponse> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/deployments/environments/${environment}/status`
-    );
-    return data;
+    return deploymentsClient.getEnvironmentStatus(tenantId, environment);
   }
 
   // Git
@@ -524,89 +542,57 @@ class ApiService {
     status?: string,
     environment?: string
   ): Promise<{ traces: TraceSummary[]; total: number }> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const params: Record<string, any> = {};
-    if (limit) params.limit = limit;
-    if (tenantId) params.tenant_id = tenantId;
-    if (status) params.status = status;
-    if (environment) params.environment = environment;
-    const { data } = await httpClient.get('/v1/traces', { params });
-    return data;
+    return tracesClient.list(limit, tenantId, status, environment);
   }
 
   async getTrace(traceId: string): Promise<PipelineTrace> {
-    const { data } = await httpClient.get(`/v1/traces/${traceId}`);
-    return data;
+    return tracesClient.get(traceId);
   }
 
   async getTraceTimeline(traceId: string): Promise<TraceTimeline> {
-    const { data } = await httpClient.get(`/v1/traces/${traceId}/timeline`);
-    return data;
+    return tracesClient.getTimeline(traceId);
   }
 
   async getTraceStats(): Promise<TraceStats> {
-    const { data } = await httpClient.get('/v1/traces/stats');
-    return data;
+    return tracesClient.getStats();
   }
 
   async getLiveTraces(): Promise<{ traces: PipelineTrace[]; count: number }> {
-    const { data } = await httpClient.get('/v1/traces/live');
-    return data;
+    return tracesClient.listLive();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getAiSessionStats(days?: number, worker?: string): Promise<any> {
-    const params: Record<string, string | number> = {};
-    if (days) params.days = days;
-    if (worker) params.worker = worker;
-    const { data } = await httpClient.get('/v1/traces/stats/ai-sessions', { params });
-    return data;
+    return tracesClient.getAiSessionStats(days, worker);
   }
 
   async exportAiSessionsCsv(days?: number, worker?: string): Promise<Blob> {
-    const params: Record<string, string | number> = {};
-    if (days) params.days = days;
-    if (worker) params.worker = worker;
-    const { data } = await httpClient.get('/v1/traces/export/ai-sessions', {
-      params,
-      responseType: 'blob',
-    });
-    return data;
+    return tracesClient.exportAiSessionsCsv(days, worker);
   }
 
   // Platform Status (CAB-654)
   async getPlatformStatus(): Promise<PlatformStatusResponse> {
-    const { data } = await httpClient.get('/v1/platform/status');
-    return data;
+    return platformClient.getStatus();
   }
 
   async getPlatformComponents(): Promise<ComponentStatus[]> {
-    const { data } = await httpClient.get('/v1/platform/components');
-    return data;
+    return platformClient.listComponents();
   }
 
   async getComponentStatus(name: string): Promise<ComponentStatus> {
-    const { data } = await httpClient.get(`/v1/platform/components/${name}`);
-    return data;
+    return platformClient.getComponent(name);
   }
 
   async syncPlatformComponent(name: string): Promise<{ message: string; operation: string }> {
-    const { data } = await httpClient.post(`/v1/platform/components/${name}/sync`);
-    return data;
+    return platformClient.syncComponent(name);
   }
 
   async getComponentDiff(name: string): Promise<ApplicationDiffResponse> {
-    const { data } = await httpClient.get(`/v1/platform/components/${name}/diff`);
-    return data;
+    return platformClient.getComponentDiff(name);
   }
 
   async getPlatformEvents(component?: string, limit?: number): Promise<PlatformEvent[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const params: Record<string, any> = {};
-    if (component) params.component = component;
-    if (limit) params.limit = limit;
-    const { data } = await httpClient.get('/v1/platform/events', { params });
-    return data;
+    return platformClient.listEvents(component, limit);
   }
 
   // Admin Prospects (CAB-911)
@@ -660,48 +646,41 @@ class ApiService {
     page_size?: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
-    const { data } = await httpClient.get('/v1/admin/gateways', { params });
-    return data;
+    return gatewaysClient.listInstances(params);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayInstance(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/gateways/${id}`);
-    return data;
+    return gatewaysClient.getInstance(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayTools(id: string): Promise<any[]> {
-    const { data } = await httpClient.get(`/v1/admin/gateways/${id}/tools`);
-    return data;
+    return gatewaysClient.listTools(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createGatewayInstance(payload: any): Promise<any> {
-    const { data } = await httpClient.post('/v1/admin/gateways', payload);
-    return data;
+    return gatewaysClient.createInstance(payload);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async updateGatewayInstance(id: string, payload: any): Promise<any> {
-    const { data } = await httpClient.put(`/v1/admin/gateways/${id}`, payload);
-    return data;
+    return gatewaysClient.updateInstance(id, payload);
   }
 
   async deleteGatewayInstance(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/gateways/${id}`);
+    return gatewaysClient.removeInstance(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async restoreGatewayInstance(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/gateways/${id}/restore`);
-    return data;
+    return gatewaysClient.restoreInstance(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async checkGatewayHealth(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/gateways/${id}/health`);
-    return data;
+    return gatewaysClient.checkHealth(id);
   }
 
   async getGatewayModeStats(): Promise<{
@@ -714,15 +693,13 @@ class ApiService {
     }>;
     total_gateways: number;
   }> {
-    const { data } = await httpClient.get('/v1/admin/gateways/modes/stats');
-    return data;
+    return gatewaysClient.getModeStats();
   }
 
   // Gateway Deployments
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getDeploymentStatusSummary(): Promise<any> {
-    const { data } = await httpClient.get('/v1/admin/deployments/status');
-    return data;
+    return gatewayDeploymentsClient.getStatusSummary();
   }
 
   async getGatewayDeployments(params?: {
@@ -734,14 +711,12 @@ class ApiService {
     page_size?: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
-    const { data } = await httpClient.get('/v1/admin/deployments', { params });
-    return data;
+    return gatewayDeploymentsClient.list(params);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayDeployment(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/deployments/${id}`);
-    return data;
+    return gatewayDeploymentsClient.get(id);
   }
 
   async deployApiToGateways(payload: {
@@ -749,18 +724,16 @@ class ApiService {
     gateway_instance_ids: string[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<any[]> {
-    const { data } = await httpClient.post('/v1/admin/deployments', payload);
-    return data;
+    return gatewayDeploymentsClient.deployApiToGateways(payload);
   }
 
   async undeployFromGateway(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/deployments/${id}`);
+    return gatewayDeploymentsClient.undeploy(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async forceSyncDeployment(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/deployments/${id}/sync`);
-    return data;
+    return gatewayDeploymentsClient.forceSync(id);
   }
 
   async testDeployment(id: string): Promise<{
@@ -771,15 +744,13 @@ class ApiService {
     gateway_url?: string;
     path?: string;
   }> {
-    const { data } = await httpClient.post(`/v1/admin/deployments/${id}/test`);
-    return data;
+    return gatewayDeploymentsClient.test(id);
   }
 
   async getCatalogEntries(): Promise<
     { id: string; api_name: string; tenant_id: string; version: string }[]
   > {
-    const { data } = await httpClient.get('/v1/admin/deployments/catalog-entries');
-    return data;
+    return gatewayDeploymentsClient.listCatalogEntries();
   }
 
   // API Deployment Orchestration (CAB-1888)
@@ -794,10 +765,7 @@ class ApiService {
       promotion_status: string;
     }[];
   }> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/apis/${apiId}/deployable-environments`
-    );
-    return data;
+    return deploymentsClient.getDeployableEnvironments(tenantId, apiId);
   }
 
   async deployApiToEnv(
@@ -805,8 +773,7 @@ class ApiService {
     apiId: string,
     payload: { environment: string; gateway_ids?: string[] }
   ): Promise<{ deployed: number; environment: string; deployment_ids: string[] }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/apis/${apiId}/deploy`, payload);
-    return data;
+    return deploymentsClient.deployApiToEnv(tenantId, apiId, payload);
   }
 
   async getApiGatewayAssignments(
@@ -815,11 +782,7 @@ class ApiService {
     environment?: string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ items: any[]; total: number }> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
-      { params: environment ? { environment } : {} }
-    );
-    return data;
+    return deploymentsClient.getApiGatewayAssignments(tenantId, apiId, environment);
   }
 
   async createApiGatewayAssignment(
@@ -828,11 +791,7 @@ class ApiService {
     payload: { gateway_id: string; environment: string; auto_deploy: boolean }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
-      payload
-    );
-    return data;
+    return deploymentsClient.createApiGatewayAssignment(tenantId, apiId, payload);
   }
 
   async deleteApiGatewayAssignment(
@@ -840,9 +799,7 @@ class ApiService {
     apiId: string,
     assignmentId: string
   ): Promise<void> {
-    await httpClient.delete(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments/${assignmentId}`
-    );
+    return deploymentsClient.deleteApiGatewayAssignment(tenantId, apiId, assignmentId);
   }
 
   // =========================================================================
@@ -851,28 +808,22 @@ class ApiService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayAggregatedMetrics(): Promise<any> {
-    const { data } = await httpClient.get('/v1/admin/gateways/metrics');
-    return data;
+    return gatewaysClient.getAggregatedMetrics();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGuardrailsEvents(limit = 20): Promise<any> {
-    const { data } = await httpClient.get(
-      `/v1/admin/gateways/metrics/guardrails/events?limit=${limit}`
-    );
-    return data;
+    return gatewaysClient.getGuardrailsEvents(limit);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayHealthSummary(): Promise<any> {
-    const { data } = await httpClient.get('/v1/admin/gateways/health-summary');
-    return data;
+    return gatewaysClient.getHealthSummary();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayInstanceMetrics(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/gateways/${id}/metrics`);
-    return data;
+    return gatewaysClient.getInstanceMetrics(id);
   }
 
   // =========================================================================
@@ -881,34 +832,30 @@ class ApiService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGatewayPolicies(params?: { tenant_id?: string; environment?: string }): Promise<any[]> {
-    const { data } = await httpClient.get('/v1/admin/policies', { params });
-    return data;
+    return gatewaysClient.listPolicies(params);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createGatewayPolicy(payload: any): Promise<any> {
-    const { data } = await httpClient.post('/v1/admin/policies', payload);
-    return data;
+    return gatewaysClient.createPolicy(payload);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async updateGatewayPolicy(id: string, payload: any): Promise<any> {
-    const { data } = await httpClient.put(`/v1/admin/policies/${id}`, payload);
-    return data;
+    return gatewaysClient.updatePolicy(id, payload);
   }
 
   async deleteGatewayPolicy(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/policies/${id}`);
+    return gatewaysClient.removePolicy(id);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createPolicyBinding(payload: any): Promise<any> {
-    const { data } = await httpClient.post('/v1/admin/policies/bindings', payload);
-    return data;
+    return gatewaysClient.createPolicyBinding(payload);
   }
 
   async deletePolicyBinding(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/policies/bindings/${id}`);
+    return gatewaysClient.removePolicyBinding(id);
   }
 
   // =========================================================================
@@ -916,8 +863,7 @@ class ApiService {
   // =========================================================================
 
   async getOperationsMetrics(): Promise<OperationsMetrics> {
-    const { data } = await httpClient.get('/v1/operations/metrics');
-    return data;
+    return platformClient.getOperationsMetrics();
   }
 
   // =========================================================================
@@ -925,13 +871,11 @@ class ApiService {
   // =========================================================================
 
   async getBusinessMetrics(): Promise<BusinessMetrics> {
-    const { data } = await httpClient.get('/v1/business/metrics');
-    return data;
+    return platformClient.getBusinessMetrics();
   }
 
   async getTopAPIs(limit = 10): Promise<TopAPI[]> {
-    const { data } = await httpClient.get(`/v1/business/top-apis?limit=${limit}`);
-    return data;
+    return platformClient.getTopAPIs(limit);
   }
 
   // Workflow Engine methods (CAB-593)
@@ -1013,29 +957,23 @@ class ApiService {
 
   // Chat Settings (CAB-1852)
   async getChatSettings(tenantId: string): Promise<TenantChatSettings> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/settings`);
-    return data;
+    return chatClient.getSettings(tenantId);
   }
 
   async updateChatSettings(
     tenantId: string,
     settings: Partial<TenantChatSettings>
   ): Promise<TenantChatSettings> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/chat/settings`, settings);
-    return data;
+    return chatClient.updateSettings(tenantId, settings);
   }
 
   // Chat Token Metering (CAB-288)
   async getChatBudgetStatus(tenantId: string): Promise<TokenBudgetStatus> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/budget`);
-    return data;
+    return chatClient.getBudgetStatus(tenantId);
   }
 
   async getChatUsageStats(tenantId: string, days = 30): Promise<TokenUsageStats> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/metering`, {
-      params: { days },
-    });
-    return data;
+    return chatClient.getUsageStats(tenantId, days);
   }
 
   // Chat Usage by source — per-app breakdown (CAB-1868)
@@ -1043,32 +981,24 @@ class ApiService {
     tenantId: string,
     params: { group_by?: string; days?: number } = {}
   ): Promise<ChatUsageBySource> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/tenant`, {
-      params: { group_by: 'source', ...params },
-    });
-    return data;
+    return chatClient.getUsageBySource(tenantId, params);
   }
 
   // Chat conversation metrics — tenant-level aggregates (CAB-1868)
   async getChatConversationMetrics(tenantId: string): Promise<ChatConversationMetrics> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/tenant`);
-    return data;
+    return chatClient.getConversationMetrics(tenantId);
   }
 
   // Chat model distribution — conversations per model (CAB-1868)
   async getChatModelDistribution(tenantId: string): Promise<ChatModelDistribution> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/models`);
-    return data;
+    return chatClient.getModelDistribution(tenantId);
   }
 
   async createChatConversation(
     tenantId: string,
     title = 'New conversation'
   ): Promise<{ id: string }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/chat/conversations`, {
-      title,
-    });
-    return data;
+    return chatClient.createConversation(tenantId, title);
   }
 
   // =========================================================================
@@ -1113,43 +1043,32 @@ class ApiService {
     tenantId: string,
     period: 'hour' | 'day' | 'week' | 'month' = 'month'
   ): Promise<LlmUsageResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage`, {
-      params: { period },
-    });
-    return data;
+    return llmClient.getUsage(tenantId, period);
   }
 
   async getLlmTimeseries(
     tenantId: string,
     period: 'hour' | 'day' | 'week' | 'month' = 'week'
   ): Promise<LlmTimeseriesResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage/timeseries`, {
-      params: { period },
-    });
-    return data;
+    return llmClient.getTimeseries(tenantId, period);
   }
 
   async getLlmProviderBreakdown(
     tenantId: string,
     period: 'hour' | 'day' | 'week' | 'month' = 'month'
   ): Promise<LlmProviderBreakdownResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage/providers`, {
-      params: { period },
-    });
-    return data;
+    return llmClient.getProviderBreakdown(tenantId, period);
   }
 
   async getLlmBudget(tenantId: string): Promise<LlmBudgetResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/budget`);
-    return data;
+    return llmClient.getBudget(tenantId);
   }
 
   async updateLlmBudget(
     tenantId: string,
     update: { monthly_limit_usd?: number; alert_threshold_pct?: number }
   ): Promise<LlmBudgetResponse> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/llm/budget`, update);
-    return data;
+    return llmClient.updateBudget(tenantId, update);
   }
 
   // ============== Subscription Management (CAB-1635) ==============
@@ -1161,10 +1080,7 @@ class ApiService {
     pageSize = 20,
     environment?: string
   ): Promise<SubscriptionListResponse> {
-    const { data } = await httpClient.get(`/v1/subscriptions/tenant/${tenantId}`, {
-      params: { status, page, page_size: pageSize, environment },
-    });
-    return data;
+    return subscriptionsClient.list(tenantId, status, page, pageSize, environment);
   }
 
   async getPendingSubscriptions(
@@ -1172,51 +1088,39 @@ class ApiService {
     page = 1,
     pageSize = 20
   ): Promise<SubscriptionListResponse> {
-    const { data } = await httpClient.get(`/v1/subscriptions/tenant/${tenantId}/pending`, {
-      params: { page, page_size: pageSize },
-    });
-    return data;
+    return subscriptionsClient.listPending(tenantId, page, pageSize);
   }
 
   async getSubscriptionStats(tenantId: string): Promise<SubscriptionStats> {
-    const { data } = await httpClient.get(`/v1/subscriptions/tenant/${tenantId}/stats`);
-    return data;
+    return subscriptionsClient.getStats(tenantId);
   }
 
   async approveSubscription(id: string, expiresAt?: string): Promise<Subscription> {
-    const { data } = await httpClient.post(`/v1/subscriptions/${id}/approve`, {
-      expires_at: expiresAt || null,
-    });
-    return data;
+    return subscriptionsClient.approve(id, expiresAt);
   }
 
   async rejectSubscription(id: string, reason: string): Promise<Subscription> {
-    const { data } = await httpClient.post(`/v1/subscriptions/${id}/reject`, { reason });
-    return data;
+    return subscriptionsClient.reject(id, reason);
   }
 
   async bulkSubscriptionAction(
     payload: Schemas['BulkSubscriptionAction']
   ): Promise<Schemas['BulkActionResult']> {
-    const { data } = await httpClient.post('/v1/subscriptions/bulk', payload);
-    return data;
+    return subscriptionsClient.bulkAction(payload);
   }
 
   // ============ Webhook Management (CAB-1647) ============
 
   async getWebhooks(tenantId: string): Promise<WebhookListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/webhooks`);
-    return data;
+    return webhooksClient.list(tenantId);
   }
 
   async getWebhook(tenantId: string, webhookId: string): Promise<TenantWebhook> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
-    return data;
+    return webhooksClient.get(tenantId, webhookId);
   }
 
   async createWebhook(tenantId: string, payload: Schemas['WebhookCreate']): Promise<TenantWebhook> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/webhooks`, payload);
-    return data;
+    return webhooksClient.create(tenantId, payload);
   }
 
   async updateWebhook(
@@ -1224,22 +1128,15 @@ class ApiService {
     webhookId: string,
     payload: Schemas['WebhookUpdate']
   ): Promise<TenantWebhook> {
-    const { data } = await httpClient.patch(
-      `/v1/tenants/${tenantId}/webhooks/${webhookId}`,
-      payload
-    );
-    return data;
+    return webhooksClient.update(tenantId, webhookId, payload);
   }
 
   async deleteWebhook(tenantId: string, webhookId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/webhooks/${webhookId}`);
+    return webhooksClient.remove(tenantId, webhookId);
   }
 
   async testWebhook(tenantId: string, webhookId: string): Promise<Schemas['WebhookTestResponse']> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/webhooks/${webhookId}/test`, {
-      event_type: 'subscription.created',
-    });
-    return data;
+    return webhooksClient.test(tenantId, webhookId);
   }
 
   async getWebhookDeliveries(
@@ -1247,11 +1144,7 @@ class ApiService {
     webhookId: string,
     limit = 50
   ): Promise<WebhookDeliveryListResponse> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries`,
-      { params: { limit } }
-    );
-    return data;
+    return webhooksClient.listDeliveries(tenantId, webhookId, limit);
   }
 
   async retryWebhookDelivery(
@@ -1259,24 +1152,20 @@ class ApiService {
     webhookId: string,
     deliveryId: string
   ): Promise<void> {
-    await httpClient.post(
-      `/v1/tenants/${tenantId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`
-    );
+    return webhooksClient.retryDelivery(tenantId, webhookId, deliveryId);
   }
 
   // ============ Credential Mappings (CAB-1648) ============
 
   async getCredentialMappings(tenantId: string): Promise<CredentialMappingListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/credential-mappings`);
-    return data;
+    return credentialMappingsClient.list(tenantId);
   }
 
   async createCredentialMapping(
     tenantId: string,
     payload: Schemas['CredentialMappingCreate']
   ): Promise<CredentialMapping> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/credential-mappings`, payload);
-    return data;
+    return credentialMappingsClient.create(tenantId, payload);
   }
 
   async updateCredentialMapping(
@@ -1284,39 +1173,29 @@ class ApiService {
     mappingId: string,
     payload: Schemas['CredentialMappingUpdate']
   ): Promise<CredentialMapping> {
-    const { data } = await httpClient.put(
-      `/v1/tenants/${tenantId}/credential-mappings/${mappingId}`,
-      payload
-    );
-    return data;
+    return credentialMappingsClient.update(tenantId, mappingId, payload);
   }
 
   async deleteCredentialMapping(tenantId: string, mappingId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/credential-mappings/${mappingId}`);
+    return credentialMappingsClient.remove(tenantId, mappingId);
   }
 
   // ============ Contracts / UAC (CAB-1649) ============
 
   async getContracts(tenantId: string): Promise<ContractListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/contracts`);
-    return data;
+    return contractsClient.list(tenantId);
   }
 
   async getContract(tenantId: string, contractId: string): Promise<Contract> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/contracts/${contractId}`);
-    return data;
+    return contractsClient.get(tenantId, contractId);
   }
 
   async createContract(tenantId: string, payload: ContractCreate): Promise<Contract> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/contracts`, payload);
-    return data;
+    return contractsClient.create(tenantId, payload);
   }
 
   async publishContract(tenantId: string, contractId: string): Promise<PublishContractResponse> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/publish`
-    );
-    return data;
+    return contractsClient.publish(tenantId, contractId);
   }
 
   async updateContract(
@@ -1324,22 +1203,15 @@ class ApiService {
     contractId: string,
     payload: Schemas['ContractUpdate']
   ): Promise<Contract> {
-    const { data } = await httpClient.patch(
-      `/v1/tenants/${tenantId}/contracts/${contractId}`,
-      payload
-    );
-    return data;
+    return contractsClient.update(tenantId, contractId, payload);
   }
 
   async deleteContract(tenantId: string, contractId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+    return contractsClient.remove(tenantId, contractId);
   }
 
   async getContractBindings(tenantId: string, contractId: string): Promise<ProtocolBinding[]> {
-    const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`
-    );
-    return data;
+    return contractsClient.listBindings(tenantId, contractId);
   }
 
   async enableBinding(
@@ -1347,15 +1219,11 @@ class ApiService {
     contractId: string,
     protocol: string
   ): Promise<ProtocolBinding> {
-    const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`,
-      { protocol }
-    );
-    return data;
+    return contractsClient.enableBinding(tenantId, contractId, protocol);
   }
 
   async disableBinding(tenantId: string, contractId: string, protocol: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/contracts/${contractId}/bindings/${protocol}`);
+    return contractsClient.disableBinding(tenantId, contractId, protocol);
   }
 
   // ============ Monitoring / Call Flow (CAB-1869) ============
@@ -1368,272 +1236,33 @@ class ApiService {
     statusCode?: number,
     route?: string
   ): Promise<{ transactions: MonitoringTransaction[] }> {
-    const params: Record<string, string | number> = { limit };
-    if (status) params.status = status;
-    if (timeRange) params.time_range = timeRange;
-    if (serviceType) params.service_type = serviceType;
-    if (statusCode) params.status_code = statusCode;
-    if (route) params.route = route;
-    const { data } = await httpClient.get('/v1/monitoring/transactions', { params });
-    return data;
+    return monitoringClient.listTransactions(
+      limit,
+      status,
+      timeRange,
+      serviceType,
+      statusCode,
+      route
+    );
   }
 
   async getTransactionDetail(transactionId: string): Promise<MonitoringTransactionDetail> {
-    const { data } = await httpClient.get(`/v1/monitoring/transactions/${transactionId}`);
-    return data;
+    return monitoringClient.getTransactionDetail(transactionId);
   }
 
   async getTransactionStats(timeRange?: string): Promise<MonitoringStats> {
-    const params: Record<string, string> = {};
-    if (timeRange) params.time_range = timeRange;
-    const { data } = await httpClient.get('/v1/monitoring/transactions/stats', { params });
-    return data;
+    return monitoringClient.getTransactionStats(timeRange);
   }
 }
 
-// Operations metrics types (CAB-Observability)
-export interface OperationsMetrics {
-  error_rate: number;
-  p95_latency_ms: number;
-  requests_per_minute: number;
-  active_alerts: number;
-  uptime: number;
-}
+/**
+ * Public shape of the legacy façade. Exported so tests and future consumers
+ * can type their mocks without duplicating signatures.
+ *
+ * Amendement UI-2 (2026-04-22) : cet alias remplace le smoke test
+ * `Object.keys(apiService).length === ATTENDU` par un contrat nominal
+ * vérifié par `tsc`.
+ */
+export type LegacyApiSurface = ApiService;
 
-// Business metrics types (CAB-Observability)
-export interface BusinessMetrics {
-  active_tenants: number;
-  new_tenants_30d: number;
-  tenant_growth: number;
-  apdex_score: number;
-  total_tokens: number;
-  total_calls: number;
-}
-
-export interface TopAPI {
-  tool_name: string;
-  display_name: string;
-  calls: number;
-}
-
-// Chat Settings types (CAB-1852)
-export interface TenantChatSettings {
-  chat_console_enabled: boolean;
-  chat_portal_enabled: boolean;
-  chat_daily_budget: number;
-}
-
-// Chat Usage by source — per-app breakdown (CAB-1868)
-export interface ChatSourceEntry {
-  source: string;
-  tokens: number;
-  requests: number;
-}
-
-export interface ChatUsageBySource {
-  sources: ChatSourceEntry[];
-  total_tokens: number;
-  total_requests: number;
-  period_days: number;
-}
-
-// Chat Token Metering types (CAB-288)
-export interface TokenBudgetStatus {
-  user_tokens_today: number;
-  tenant_tokens_today: number;
-  daily_budget: number;
-  remaining: number;
-  budget_exceeded: boolean;
-  usage_percent: number;
-}
-
-export interface TokenUsageStats {
-  tenant_id: string;
-  period_days: number;
-  total_tokens: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_requests: number;
-  today_tokens: number;
-  top_users: { user_id: string; tokens: number }[];
-  daily_breakdown: { date: string; tokens: number }[];
-}
-
-// Chat conversation metrics (CAB-1868)
-export interface ChatConversationMetrics {
-  tenant_id: string;
-  total_conversations: number;
-  total_messages: number;
-  total_tokens: number;
-  unique_users: number;
-}
-
-export interface ModelDistributionEntry {
-  model: string;
-  conversations: number;
-}
-
-export interface ChatModelDistribution {
-  models: ModelDistributionEntry[];
-  total_conversations: number;
-}
-
-// Platform Status types (CAB-654)
-export interface ComponentStatus {
-  name: string;
-  display_name: string;
-  sync_status: string;
-  health_status: string;
-  revision: string;
-  last_sync: string | null;
-  message: string | null;
-}
-
-export interface GitOpsStatus {
-  status: string;
-  components: ComponentStatus[];
-  checked_at: string;
-}
-
-export interface PlatformEvent {
-  id: number | null;
-  component: string;
-  event_type: string;
-  status: string;
-  revision: string;
-  message: string | null;
-  timestamp: string;
-  actor: string | null;
-}
-
-export interface ExternalLinks {
-  argocd: string;
-  grafana: string;
-  prometheus: string;
-  logs: string;
-}
-
-export interface PlatformStatusResponse {
-  gitops: GitOpsStatus;
-  events: PlatformEvent[];
-  external_links: ExternalLinks;
-  timestamp: string;
-}
-
-export interface ApplicationDiffResource {
-  name: string;
-  namespace: string | null;
-  kind: string;
-  group: string | null;
-  status: string;
-  health: string | null;
-  diff: string | null;
-}
-
-export interface ApplicationDiffResponse {
-  application: string;
-  total_resources: number;
-  diff_count: number;
-  resources: ApplicationDiffResource[];
-}
-
-// LLM Usage & Cost types (CAB-1487)
-export interface LlmUsageResponse {
-  total_cost_usd: number;
-  input_tokens: number;
-  output_tokens: number;
-  avg_cost_per_request: number;
-  cache_read_cost_usd: number;
-  cache_write_cost_usd: number;
-  period: string;
-}
-
-export interface LlmTimeseriesPoint {
-  timestamp: string;
-  value: number;
-}
-
-export interface LlmTimeseriesResponse {
-  points: LlmTimeseriesPoint[];
-  period: string;
-  step: string;
-}
-
-export interface LlmProviderCostEntry {
-  provider: string;
-  model: string;
-  cost_usd: number;
-}
-
-export interface LlmProviderBreakdownResponse {
-  providers: LlmProviderCostEntry[];
-  period: string;
-}
-
-export interface LlmBudgetResponse {
-  id: string;
-  tenant_id: string;
-  monthly_limit_usd: number;
-  current_spend_usd: number;
-  remaining_usd: number;
-  usage_pct: number;
-  alert_threshold_pct: number;
-  is_over_budget: boolean;
-}
-
-// ─── Monitoring / Call Flow ───
-
-export interface MonitoringTransaction {
-  id: string;
-  trace_id: string;
-  api_name: string;
-  method: string;
-  path: string;
-  status_code: number;
-  status: string;
-  status_text: string;
-  error_source: string | null;
-  started_at: string;
-  total_duration_ms: number;
-  spans_count: number;
-  deployment_mode?: string;
-  spans?: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-  }>;
-}
-
-export interface MonitoringTransactionDetail extends MonitoringTransaction {
-  tenant_id: string | null;
-  client_ip: string | null;
-  user_id: string | null;
-  spans: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-    metadata: Record<string, unknown>;
-  }>;
-  request_headers: Record<string, string> | null;
-  response_headers: Record<string, string> | null;
-  error_message: string | null;
-  demo_mode: boolean;
-}
-
-export interface MonitoringStats {
-  total_requests: number;
-  success_count: number;
-  error_count: number;
-  timeout_count: number;
-  avg_latency_ms: number;
-  p95_latency_ms: number;
-  requests_per_minute: number;
-  by_api: Record<string, number>;
-  by_status_code: Record<string, number>;
-}
-
-export const apiService = new ApiService();
+export const apiService: LegacyApiSurface = new ApiService();

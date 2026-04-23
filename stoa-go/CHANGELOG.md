@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.8](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.7...stoa-go-v0.3.8) (2026-04-23)
+
+
+### Bug Fixes
+
+* **stoa-go:** close GO-1 P0 — 6 critical webMethods adapter bugs ([#2492](https://github.com/stoa-platform/stoa/issues/2492)) ([afaef4b](https://github.com/stoa-platform/stoa/commit/afaef4bf9ef2148efe129de31fd2bab72fa640ed))
+* **stoa-go:** GO-1 P1 — externalDocs walk + jwt/ipFilter mapping ([#2494](https://github.com/stoa-platform/stoa/issues/2494)) ([d9f9089](https://github.com/stoa-platform/stoa/commit/d9f90895b3866610e40241d2e08e4878b72718b0))
+* **stoa-go:** GO-1 P2 — defensive hardening + cleanup (7 bugs) ([#2495](https://github.com/stoa-platform/stoa/issues/2495)) ([f9542cf](https://github.com/stoa-platform/stoa/commit/f9542cf6738ae2cfadd8cd6bdd9045f38047d318))
+
 ## [0.3.7](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.6...stoa-go-v0.3.7) (2026-04-19)
 
 

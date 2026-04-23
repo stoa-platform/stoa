@@ -48,6 +48,20 @@ type Credential struct {
 	Secret     string `json:"secret,omitempty"`
 }
 
+// SyncResult carries the per-call outcome of GatewayAdapter.SyncRoutes.
+// FailedRoutes maps a deployment_id to its per-route error message for routes
+// that the adapter could identify as failing individually. Routes that
+// succeeded are absent from the map. Adapters that do not track per-route
+// failures (e.g. Kong batch /config reload, Gravitee stub) return an empty
+// map and rely on the accompanying error for a global signal.
+//
+// A fresh FailedRoutes map is allocated per SyncRoutes call — never shared
+// between goroutines. This closes the C.3/C.6 race that existed when the
+// map was a mutable field on WebMethodsAdapter.
+type SyncResult struct {
+	FailedRoutes map[string]string
+}
+
 // GatewayAdapter defines the interface for gateway-specific operations.
 type GatewayAdapter interface {
 	// Detect checks if the admin URL hosts this gateway type.
@@ -62,8 +76,11 @@ type GatewayAdapter interface {
 	// RemovePolicy removes a policy from the gateway for a specific API.
 	RemovePolicy(ctx context.Context, adminURL string, apiName string, policyType string) error
 
-	// SyncRoutes pushes CP routes to the local gateway.
-	SyncRoutes(ctx context.Context, adminURL string, routes []Route) error
+	// SyncRoutes pushes CP routes to the local gateway. The returned
+	// SyncResult is always valid (never nil map) regardless of error: it
+	// carries whatever per-route status the adapter was able to record
+	// before returning. Callers must consult both values.
+	SyncRoutes(ctx context.Context, adminURL string, routes []Route) (SyncResult, error)
 
 	// InjectCredentials provisions consumer credentials on the local gateway.
 	InjectCredentials(ctx context.Context, adminURL string, creds []Credential) error

@@ -9,12 +9,12 @@ import (
 )
 
 // routeSyncMock is a GatewayAdapter stub for routeSyncer tests. syncRoutesErr
-// is returned from SyncRoutes; if failedRoutes is non-nil, routeSyncMock
-// also implements the adapter-local failedRoutesProvider interface.
+// is returned from SyncRoutes; failedRoutes is returned verbatim as the
+// SyncResult.FailedRoutes map (nil → empty map).
 type routeSyncMock struct {
 	capturedRoutes []adapters.Route
 	syncRoutesErr  error
-	failedRoutes   map[string]string // if nil, provider interface not satisfied
+	failedRoutes   map[string]string
 }
 
 func (m *routeSyncMock) Detect(ctx context.Context, adminURL string) (bool, error) {
@@ -29,22 +29,16 @@ func (m *routeSyncMock) ApplyPolicy(ctx context.Context, adminURL, apiName strin
 func (m *routeSyncMock) RemovePolicy(ctx context.Context, adminURL, apiName, policyType string) error {
 	return nil
 }
-func (m *routeSyncMock) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) error {
+func (m *routeSyncMock) SyncRoutes(ctx context.Context, adminURL string, routes []adapters.Route) (adapters.SyncResult, error) {
 	m.capturedRoutes = append(m.capturedRoutes, routes...)
-	return m.syncRoutesErr
+	failed := m.failedRoutes
+	if failed == nil {
+		failed = map[string]string{}
+	}
+	return adapters.SyncResult{FailedRoutes: failed}, m.syncRoutesErr
 }
 func (m *routeSyncMock) InjectCredentials(ctx context.Context, adminURL string, creds []adapters.Credential) error {
 	return nil
-}
-
-// routeSyncMockWithFailed wraps routeSyncMock and additionally implements
-// the failedRoutesProvider interface used by routeSyncer.
-type routeSyncMockWithFailed struct {
-	routeSyncMock
-}
-
-func (m *routeSyncMockWithFailed) GetFailedRoutes() map[string]string {
-	return m.failedRoutes
 }
 
 func TestRouteSyncerAppliedBatch(t *testing.T) {
@@ -77,8 +71,8 @@ func TestRouteSyncerAppliedBatch(t *testing.T) {
 }
 
 func TestRouteSyncerGlobalErrorFanOut(t *testing.T) {
-	// Adapter without failedRoutesProvider (e.g. kong/gravitee). Global
-	// sync error should fan out to all routes with status=failed.
+	// Adapter without per-route FailedRoutes entries (e.g. kong/gravitee).
+	// Global sync error should fan out to all routes with status=failed.
 	sentinel := errors.New("gateway unreachable")
 	m := &routeSyncMock{syncRoutesErr: sentinel}
 	s := newRouteSyncer(m)
@@ -102,11 +96,12 @@ func TestRouteSyncerGlobalErrorFanOut(t *testing.T) {
 }
 
 func TestRouteSyncerPerRouteFailure(t *testing.T) {
-	// Adapter WITH failedRoutesProvider (webmethods-style). Only dep-2 fails.
-	m := &routeSyncMockWithFailed{
-		routeSyncMock: routeSyncMock{syncRoutesErr: errors.New("partial failure")},
+	// Adapter reports dep-2 in FailedRoutes (webmethods-style). dep-1
+	// should be classified applied, dep-2 failed.
+	m := &routeSyncMock{
+		syncRoutesErr: errors.New("partial failure"),
+		failedRoutes:  map[string]string{"dep-2": "route conflict"},
 	}
-	m.failedRoutes = map[string]string{"dep-2": "route conflict"}
 	s := newRouteSyncer(m)
 
 	routes := []adapters.Route{

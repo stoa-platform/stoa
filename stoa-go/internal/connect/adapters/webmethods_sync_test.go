@@ -34,7 +34,7 @@ func TestWebMethodsSyncRoutes(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "petstore", BackendURL: "http://petstore.example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
 	})
 	if err != nil {
@@ -73,7 +73,7 @@ func TestWebMethodsSyncRoutesIdempotent(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "admin"})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "petstore", BackendURL: "http://petstore.example.com", PathPrefix: "/pets", Methods: []string{"GET"}, Activated: true},
 	})
 	if err != nil {
@@ -108,7 +108,7 @@ func TestWebMethodsSyncRoutesSkipInactive(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "active-route", BackendURL: "http://example.com", PathPrefix: "/a", Methods: []string{"GET"}, Activated: true},
 		{Name: "inactive-route", BackendURL: "http://example.com", PathPrefix: "/b", Methods: []string{"GET"}, Activated: false},
 	})
@@ -147,7 +147,7 @@ func TestWebMethodsSyncRoutesSpecHashSkip(t *testing.T) {
 	}
 
 	// First sync: should create
-	if err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
+	if _, err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
 		t.Fatalf("first sync error: %v", err)
 	}
 	if syncCount != 1 {
@@ -156,7 +156,7 @@ func TestWebMethodsSyncRoutesSpecHashSkip(t *testing.T) {
 
 	// Second sync with same hash: should skip
 	syncCount = 0
-	if err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
+	if _, err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
 		t.Fatalf("second sync error: %v", err)
 	}
 	if syncCount != 0 {
@@ -166,7 +166,7 @@ func TestWebMethodsSyncRoutesSpecHashSkip(t *testing.T) {
 	// Third sync with different hash: should sync again
 	routes[0].SpecHash = "def456"
 	syncCount = 0
-	if err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
+	if _, err := adapter.SyncRoutes(context.Background(), server.URL, routes); err != nil {
 		t.Fatalf("third sync error: %v", err)
 	}
 	if syncCount != 1 {
@@ -203,7 +203,7 @@ func TestWebMethodsSyncRoutesWithDeactivation(t *testing.T) {
 	defer server.Close()
 
 	adapter := NewWebMethodsAdapter(AdapterConfig{Username: "admin", Password: "manage"})
-	err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
+	_, err := adapter.SyncRoutes(context.Background(), server.URL, []Route{
 		{Name: "old-route", BackendURL: "http://example.com", PathPrefix: "/old", Methods: []string{"GET"}, Activated: false},
 		{Name: "new-route", BackendURL: "http://example.com", PathPrefix: "/new", Methods: []string{"POST"}, Activated: true},
 	})

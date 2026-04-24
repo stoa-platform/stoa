@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.12](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.11...stoa-gateway-v0.9.12) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** GW-1 P1 — admin input validation + OAuth2 URL parsing ([#2504](https://github.com/stoa-platform/stoa/issues/2504)) ([8401481](https://github.com/stoa-platform/stoa/commit/8401481e24ab5fbc76a64cf5f0845769c5591d79))
+* **gateway:** GW-1 P1 — tactical admin audit log middleware ([#2506](https://github.com/stoa-platform/stoa/issues/2506)) ([5442a44](https://github.com/stoa-platform/stoa/commit/5442a443b904e64c6a6d38ac346c5846a043b313))
+
 ## [0.9.11](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.10...stoa-gateway-v0.9.11) (2026-04-24)
 
 

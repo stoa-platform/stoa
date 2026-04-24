@@ -34,6 +34,7 @@ mod mtls;
 mod policies;
 mod quotas;
 mod reload;
+mod router;
 mod sessions;
 mod skills;
 mod tracing;
@@ -70,6 +71,7 @@ pub use mtls::{mtls_config, mtls_stats};
 pub use policies::{delete_policy, list_policies, upsert_policy};
 pub use quotas::{get_consumer_quota, list_quotas, reset_consumer_quota};
 pub use reload::{reload_routes_from_cp, routes_reload};
+pub(crate) use router::build_admin_router;
 pub use sessions::{session_stats, SessionStatsResponse};
 pub use skills::{
     skills_delete, skills_delete_by_id, skills_get_by_id, skills_health, skills_health_all,

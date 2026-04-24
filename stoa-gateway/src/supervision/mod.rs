@@ -57,9 +57,16 @@ impl SupervisionTier {
         }
     }
 
-    /// Parse from the config default tier string.
-    pub fn from_config_default(value: &str) -> Self {
-        Self::from_header(value).unwrap_or(Self::Autopilot)
+    /// Map the typed config default (`SupervisionDefaultTier`) to the runtime
+    /// `SupervisionTier`. 1:1 mapping — strict parsing at `Config::load()`
+    /// already rejected anything outside the documented set.
+    pub fn from_config_default(value: crate::config::SupervisionDefaultTier) -> Self {
+        use crate::config::SupervisionDefaultTier as C;
+        match value {
+            C::Autopilot => Self::Autopilot,
+            C::Copilot => Self::CoPilot,
+            C::Command => Self::Command,
+        }
     }
 }
 
@@ -125,7 +132,7 @@ pub async fn supervision_middleware(
         .and_then(|v| v.to_str().ok())
         .and_then(SupervisionTier::from_header)
         .unwrap_or_else(|| {
-            SupervisionTier::from_config_default(&state.config.supervision_default_tier)
+            SupervisionTier::from_config_default(state.config.supervision_default_tier)
         });
 
     let method = request.method().clone();
@@ -242,17 +249,20 @@ mod tests {
     fn create_test_state(enabled: bool) -> AppState {
         let config = Config {
             supervision_enabled: enabled,
-            supervision_default_tier: "autopilot".to_string(),
+            supervision_default_tier: crate::config::SupervisionDefaultTier::Autopilot,
             supervision_webhook_url: None,
             ..Config::default()
         };
         AppState::new(config)
     }
 
-    fn create_test_state_with_tier(enabled: bool, default_tier: &str) -> AppState {
+    fn create_test_state_with_tier(
+        enabled: bool,
+        default_tier: crate::config::SupervisionDefaultTier,
+    ) -> AppState {
         let config = Config {
             supervision_enabled: enabled,
-            supervision_default_tier: default_tier.to_string(),
+            supervision_default_tier: default_tier,
             supervision_webhook_url: None,
             ..Config::default()
         };
@@ -319,10 +329,22 @@ mod tests {
     }
 
     #[test]
-    fn test_tier_from_config_default_fallback() {
+    fn test_tier_from_config_default_maps_all_variants() {
+        // CAB-2165 Bundle 1: input is now a typed enum, so invalid strings
+        // cannot reach this function — strict parsing rejects them at
+        // Config::load() time. Verify the 1:1 mapping instead.
+        use crate::config::SupervisionDefaultTier as C;
         assert_eq!(
-            SupervisionTier::from_config_default("invalid"),
+            SupervisionTier::from_config_default(C::Autopilot),
             SupervisionTier::Autopilot
+        );
+        assert_eq!(
+            SupervisionTier::from_config_default(C::Copilot),
+            SupervisionTier::CoPilot
+        );
+        assert_eq!(
+            SupervisionTier::from_config_default(C::Command),
+            SupervisionTier::Command
         );
     }
 
@@ -509,7 +531,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_header_with_command_default_blocks_post() {
-        let state = create_test_state_with_tier(true, "command");
+        let state =
+            create_test_state_with_tier(true, crate::config::SupervisionDefaultTier::Command);
         let router = build_test_router(state);
 
         // POST without header, but default_tier = command → blocked
@@ -525,7 +548,8 @@ mod tests {
     #[tokio::test]
     async fn test_header_overrides_default_tier() {
         // Default is command, but header says autopilot → should pass
-        let state = create_test_state_with_tier(true, "command");
+        let state =
+            create_test_state_with_tier(true, crate::config::SupervisionDefaultTier::Command);
         let router = build_test_router(state);
 
         let request = Request::builder()

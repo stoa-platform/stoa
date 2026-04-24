@@ -180,6 +180,20 @@ impl Config {
             tracing::warn!("No JWT_SECRET or KEYCLOAK_URL - auth will be limited");
         }
 
+        // CAB-2165 Bundle 2 / P2-11 GW-2 defense-in-depth: warn when a
+        // filesystem path field resolves outside canonical STOA prefixes
+        // (/etc/stoa, /var/stoa, /opt/stoa). Never rejects — operator keeps
+        // control; the warning surfaces typos and misconfigured mounts.
+        if let Some(ref p) = self.policy_path {
+            super::path_safety::warn_if_unsafe("policy_path", p);
+        }
+        if let Some(ref p) = self.ip_blocklist_file {
+            super::path_safety::warn_if_unsafe("ip_blocklist_file", p);
+        }
+        if let Some(ref p) = self.prompt_cache_watch_dir {
+            super::path_safety::warn_if_unsafe("prompt_cache_watch_dir", p);
+        }
+
         Ok(())
     }
 }
@@ -223,11 +237,19 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
     fn test_load_with_defaults() {
-        // This should work even without any config file or env vars
-        std::env::remove_var("STOA_PORT");
-        let config = Config::load().expect("Should load defaults");
-        assert_eq!(config.port, 8080);
+        // Wrap in figment::Jail so this test takes the same global LOCK as
+        // the enum env-var tests below (CAB-2165 Bundle 1). Without it, a
+        // parallel Jail test that sets `STOA_GIT_PROVIDER=bitbucket` can
+        // leak into this test's `Config::load()` call and trip the strict
+        // enum parser.
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            let config = Config::load().expect("Should load defaults");
+            assert_eq!(config.port, 8080);
+            Ok(())
+        });
     }
 
     #[test]
@@ -348,5 +370,66 @@ mod tests {
             ..Config::default()
         };
         config.validate().expect("positive finite must validate");
+    }
+
+    // CAB-2165 Bundle 1: verify that env vars pick up the enum deserialization
+    // path too, not just YAML. `figment::Jail` provides a hermetic env scope so
+    // these tests don't race with others that `set_var`/`remove_var` globally.
+
+    #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
+    fn env_var_sets_git_provider_to_github() {
+        use figment::providers::{Env, Serialized};
+        use figment::{Figment, Jail};
+
+        Jail::expect_with(|jail| {
+            jail.set_env("STOA_GIT_PROVIDER", "github");
+            let figment = Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(Env::prefixed("STOA_").split("__"));
+            let cfg: Config = figment.extract()?;
+            assert_eq!(cfg.git_provider, super::super::GitProvider::Github);
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
+    fn env_var_sets_environment_to_prod() {
+        use figment::providers::{Env, Serialized};
+        use figment::{Figment, Jail};
+
+        Jail::expect_with(|jail| {
+            jail.set_env("STOA_ENVIRONMENT", "prod");
+            let figment = Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(Env::prefixed("STOA_").split("__"));
+            let cfg: Config = figment.extract()?;
+            assert_eq!(cfg.environment, super::super::Environment::Prod);
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
+    fn env_var_rejects_unknown_git_provider() {
+        use figment::providers::{Env, Serialized};
+        use figment::{Figment, Jail};
+
+        Jail::expect_with(|jail| {
+            jail.set_env("STOA_GIT_PROVIDER", "bitbucket");
+            let figment = Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(Env::prefixed("STOA_").split("__"));
+            let err = figment
+                .extract::<Config>()
+                .expect_err("unknown variant must not deserialize");
+            let msg = format!("{err:?}");
+            assert!(
+                msg.contains("unknown variant") || msg.contains("bitbucket"),
+                "error should surface the rejected value: {msg}"
+            );
+            Ok(())
+        });
     }
 }

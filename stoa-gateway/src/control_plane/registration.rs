@@ -167,7 +167,7 @@ impl GatewayRegistrar {
             hostname: hostname.clone(),
             mode: mode.clone(),
             version: env!("CARGO_PKG_VERSION").to_string(),
-            environment: config.environment.clone(),
+            environment: config.environment.to_string(),
             capabilities,
             admin_url: config
                 .advertise_url

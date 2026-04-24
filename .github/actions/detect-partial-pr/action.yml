@@ -1,0 +1,97 @@
+name: 'Detect Partial-Success PR'
+description: >-
+  Locate a PR opened by the AI-Factory run for the given issue, with a
+  false-positive guard on the PR branch/title. Phase 2b of CI-1 rewrite
+  (CI-1-REWRITE-PLAN.md C.6).
+
+inputs:
+  issue-number:
+    description: 'GitHub issue number driving the run.'
+    required: true
+  ticket-id:
+    description: >-
+      Linear ticket id (e.g. CAB-1234). Tightens the search when set.
+      Auto-extracted from `issue-title`/`issue-body` when empty.
+    required: false
+    default: ''
+  issue-title:
+    description: 'Used for ticket-id auto-extraction when ticket-id is empty.'
+    required: false
+    default: ''
+  issue-body:
+    description: 'Used for ticket-id auto-extraction when ticket-id is empty.'
+    required: false
+    default: ''
+  github-token:
+    description: 'Token for gh CLI (needs pull-requests:read).'
+    required: true
+
+outputs:
+  pr-found:
+    description: '"true" if a matching PR was found, "false" otherwise.'
+    value: ${{ steps.detect.outputs.pr-found }}
+  pr-num:
+    description: 'PR number (empty when pr-found != true).'
+    value: ${{ steps.detect.outputs.pr-num }}
+  pr-url:
+    description: 'PR URL (empty when pr-found != true).'
+    value: ${{ steps.detect.outputs.pr-url }}
+  pr-state:
+    description: 'PR state: OPEN | MERGED | CLOSED (empty when pr-found != true).'
+    value: ${{ steps.detect.outputs.pr-state }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect PR for issue
+      id: detect
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ISSUE_TITLE: ${{ inputs.issue-title }}
+        ISSUE_BODY: ${{ inputs.issue-body }}
+        TICKET_ID_INPUT: ${{ inputs.ticket-id }}
+      run: |
+        set -uo pipefail
+        source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+
+        TICKET_ID="$TICKET_ID_INPUT"
+        if [ -z "$TICKET_ID" ]; then
+          TICKET_ID=$(extract_ticket_id "$ISSUE_TITLE $ISSUE_BODY")
+        fi
+
+        ARGS=( --issue-number "${{ inputs.issue-number }}" )
+        if [ -n "$TICKET_ID" ]; then
+          ARGS+=( --ticket-id "$TICKET_ID" )
+        fi
+
+        RAW=$(python3 "${GITHUB_WORKSPACE}/scripts/ci/detect_pr_for_issue.py" "${ARGS[@]}")
+        SCRIPT_EXIT=$?
+        if [ $SCRIPT_EXIT -ne 0 ]; then
+          echo "::warning::detect_pr_for_issue.py exited $SCRIPT_EXIT — treating as no PR"
+          {
+            echo "pr-found=false"
+            echo "pr-num="
+            echo "pr-url="
+            echo "pr-state="
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        FOUND=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print("true" if d.get("pr_found") else "false")')
+        NUM=$(printf   '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("pr_num") or "")')
+        URL=$(printf   '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("pr_url") or "")')
+        STATE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("pr_state") or "")')
+
+        {
+          echo "pr-found=${FOUND}"
+          echo "pr-num=${NUM}"
+          echo "pr-url=${URL}"
+          echo "pr-state=${STATE}"
+        } >> "$GITHUB_OUTPUT"
+
+        if [ "$FOUND" = "true" ]; then
+          echo "::notice::PR #${NUM} (${STATE}) matched issue #${{ inputs.issue-number }}"
+        else
+          echo "::notice::no PR matched issue #${{ inputs.issue-number }}"
+        fi

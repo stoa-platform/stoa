@@ -1,0 +1,109 @@
+name: 'HEGEMON State Push'
+description: >-
+  Push a session / milestone / cleanup event to the HEGEMON PocketBase
+  state store. Phase 2b of CI-1 rewrite (CI-1-REWRITE-PLAN.md C.7).
+  Wraps three push_state_* functions of ai-factory-notify.sh with a
+  single `action` selector.
+
+inputs:
+  action:
+    description: 'State event: `session-start` | `milestone` | `cleanup`.'
+    required: true
+  instance:
+    description: 'Opaque instance id (e.g. l1-impl-${GITHUB_RUN_ID}).'
+    required: true
+  ticket:
+    description: 'Linear ticket id. Required for session-start and milestone.'
+    required: false
+    default: ''
+  step:
+    description: >-
+      Event label: for `session-start`, the session step (`implementing`
+      etc.); for `milestone`, the milestone name (`impl-started`,
+      `impl-success`, etc.). Ignored for `cleanup`.
+    required: false
+    default: ''
+  branch:
+    description: 'Git branch, optional (session-start only).'
+    required: false
+    default: ''
+  pr-num:
+    description: 'PR number, optional (milestone / session-start).'
+    required: false
+    default: ''
+  sha:
+    description: 'Commit SHA, optional (milestone only).'
+    required: false
+    default: ''
+  detail:
+    description: 'Free-form detail string, optional (milestone only).'
+    required: false
+    default: ''
+  role:
+    description: 'Role tag, optional (session-start only).'
+    required: false
+    default: 'ci'
+  source-tag:
+    description: 'Source-of-event tag, optional (session-start only).'
+    required: false
+    default: 'gha'
+  hegemon-url:
+    description: 'HEGEMON PocketBase URL.'
+    required: true
+  hegemon-email:
+    description: 'HEGEMON PocketBase user.'
+    required: true
+  hegemon-password:
+    description: 'HEGEMON PocketBase password.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Push HEGEMON state
+      shell: bash
+      continue-on-error: true
+      env:
+        HEGEMON_REMOTE_URL: ${{ inputs.hegemon-url }}
+        HEGEMON_REMOTE_EMAIL: ${{ inputs.hegemon-email }}
+        HEGEMON_REMOTE_PASSWORD: ${{ inputs.hegemon-password }}
+      run: |
+        set -uo pipefail
+        source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+
+        case "${{ inputs.action }}" in
+          session-start)
+            if [ -z "${{ inputs.step }}" ]; then
+              echo "::warning::hegemon-state-push: session-start requires `step` — skipping"
+              exit 0
+            fi
+            push_state_session \
+              "${{ inputs.instance }}" \
+              "${{ inputs.step }}" \
+              "${{ inputs.ticket }}" \
+              "${{ inputs.branch }}" \
+              "${{ inputs.pr-num }}" \
+              "${{ inputs.role }}" \
+              "${{ inputs.source-tag }}"
+            ;;
+          milestone)
+            if [ -z "${{ inputs.ticket }}" ] || [ -z "${{ inputs.step }}" ]; then
+              echo "::warning::hegemon-state-push: milestone requires ticket + step — skipping"
+              exit 0
+            fi
+            push_state_milestone \
+              "${{ inputs.ticket }}" \
+              "${{ inputs.step }}" \
+              "${{ inputs.instance }}" \
+              "${{ inputs.pr-num }}" \
+              "${{ inputs.sha }}" \
+              "${{ inputs.detail }}"
+            ;;
+          cleanup)
+            push_state_cleanup "${{ inputs.instance }}"
+            ;;
+          *)
+            echo "::error::hegemon-state-push: unknown action '${{ inputs.action }}' (expected session-start|milestone|cleanup)"
+            exit 1
+            ;;
+        esac

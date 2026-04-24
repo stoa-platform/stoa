@@ -1,19 +1,19 @@
-# CI-1 Phase 2b dispatch stub.
+# CI-1 Phase 2b smoke-test workflow.
 #
-# This file exists on main only to register the workflow id so that
-# `gh workflow run claude-issue-to-pr-v2.yml --ref <feature-branch>`
-# can find and dispatch the real implementation that lives on the
-# feature branch (`refactor/ci-1-phase-2b-composites` at time of
-# writing).
+# This is the v2 clone of claude-issue-to-pr.yml, wired to the composite
+# actions produced in Phase 2b and the scripts produced in Phase 2a. It
+# triggers ONLY on workflow_dispatch to keep the legacy workflow as the
+# production source of truth until Phase 2d. Concurrency group is also
+# isolated so a manual v2 run cannot cancel a legacy run.
 #
-# GitHub Actions requires workflow_dispatch files to be present on the
-# repository's default branch for `gh workflow run` (and the REST
-# /actions/workflows/:id/dispatches endpoint) to resolve the workflow
-# id. See the note in `.github/CI-1-REWRITE-PLAN.md §F.2`.
-#
-# Phase 2d of the CI-1 rewrite will REPLACE this stub with the real
-# orchestrator. Do not delete + recreate: keep the same file name so
-# the workflow id remains stable.
+# Kill-switch: `DISABLE_L1_V2_SMOKE` repo variable (off by default).
+# Phase 2b intentionally does NOT reuse `DISABLE_L1_IMPLEMENT` — that
+# variable is the L1 prod kill-switch and is set to `true` in prod
+# today, which would block every manual smoke run. Since v2 in Phase
+# 2b is dispatch-only and cannot auto-fire, guarding against accidental
+# production impact is handled by the dispatch itself, not a shared
+# prod kill-switch. Phase 2d will restore `DISABLE_L1_IMPLEMENT` as
+# the guard when event triggers return.
 
 name: Claude Code Issue-to-PR v2 (Phase 2b smoke)
 
@@ -30,29 +30,515 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: ci-v2-issue-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
 
 jobs:
-  stub:
+  prepare:
+    if: vars.DISABLE_L1_V2_SMOKE != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 3
+    outputs:
+      title: ${{ steps.fetch.outputs.title }}
+      body: ${{ steps.fetch.outputs.body }}
+      url: ${{ steps.fetch.outputs.url }}
+      number: ${{ inputs.issue_number }}
+      ticket-id: ${{ steps.fetch.outputs.ticket-id }}
     steps:
-      - name: Explain that this is a stub
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Fetch issue data
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Workflow_dispatch inputs are user-controlled — route through
+          # env so the shell handles any metacharacter safely.
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
-          echo "::notice::This is the CI-1 Phase 2b dispatch stub on main."
-          echo "::notice::It intentionally does no work. Its only purpose is to"
-          echo "::notice::register the workflow id so that a dispatch against a"
-          echo "::notice::feature branch can resolve."
-          echo ""
-          echo "To dispatch the REAL Phase 2b workflow, run:"
-          echo "  gh workflow run claude-issue-to-pr-v2.yml \\"
-          echo "    --ref refactor/ci-1-phase-2b-composites \\"
-          echo "    -f issue_number=<N> -f run_implement=<true|false>"
-          echo ""
-          echo "Phase 2d will replace this stub with the real orchestrator"
-          echo "at the same path, preserving the workflow id."
-          echo ""
-          echo "Received inputs:"
-          echo "  issue_number=${{ inputs.issue_number }}"
-          echo "  run_implement=${{ inputs.run_implement }}"
+          set -uo pipefail
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          RAW=$(gh issue view "$ISSUE_NUMBER" --json title,body,url)
+          TITLE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["title"])')
+          URL=$(printf   '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["url"])')
+          BODY=$(printf  '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["body"] or "")')
+          TICKET=$(extract_ticket_id "$TITLE $BODY")
+
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "ticket-id=${TICKET}" >> "$GITHUB_OUTPUT"
+
+          # Multi-line body via heredoc delimiter.
+          {
+            echo "body<<CI1_BODY_EOF"
+            printf '%s\n' "$BODY"
+            echo "CI1_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::prepared issue #${ISSUE_NUMBER} ticket=${TICKET:-none}"
+
+  council-validate:
+    needs: prepare
+    if: vars.DISABLE_L1_V2_SMOKE != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      score: ${{ steps.council.outputs.score }}
+      verdict: ${{ steps.council.outputs.verdict }}
+      mode: ${{ steps.council.outputs.mode }}
+      estimate-points: ${{ steps.council.outputs.estimate-points }}
+      outcome: ${{ steps.council.outputs.outcome }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: ./.github/actions/label-guard
+        id: guard
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: council-validated
+          github-token: ${{ github.token }}
+
+      - uses: ./.github/actions/council-run
+        if: steps.guard.outputs.already-set != 'true'
+        id: council
+        with:
+          stage: s1
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-6
+          max-turns: '5'
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            You are the STOA Council Gate (Stage 1 — Ticket Pertinence).
+            Read the issue description and run a 4-persona Council validation
+            (Chucky, OSS Killer, Archi, Better Call Saul).
+
+            Issue title: ${{ needs.prepare.outputs.title }}
+            Issue body: ${{ needs.prepare.outputs.body }}
+
+            Follow the Council format from .claude/skills/council/SKILL.md.
+            Score each persona /10, compute the average.
+
+            Then post a structured comment on this issue with:
+            1. The full Council report (4 personas, scores, verdicts)
+            2. The global verdict (Go/Fix/Redo) and average score
+            3. Ship/Show/Ask classification
+
+            End the comment with:
+            ---
+            **Council Score: X.XX/10 — [Go|Fix|Redo]**
+            Comment `/go` to approve and start plan validation (Stage 2).
+
+            IMPORTANT: Do NOT implement anything yet. Only validate the ticket pertinence.
+
+      - name: Apply council-validated label
+        if: steps.council.outputs.outcome == 'success' || steps.guard.outputs.already-set == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          ensure_label "council-validated" "0e8a16" "Council validation passed"
+          add_label "$ISSUE_NUMBER" "council-validated"
+
+      - name: Apply ship-fast-path label
+        if: steps.council.outputs.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          MODE: ${{ steps.council.outputs.mode }}
+          ESTIMATE: ${{ steps.council.outputs.estimate-points }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          if [ "$MODE" = "ship" ] && [ "${ESTIMATE:-0}" -gt 0 ] && [ "${ESTIMATE:-0}" -le 5 ]; then
+            ensure_label "ship-fast-path" "d4c5f9" "Ship fast-path: skip Stage 2"
+            add_label "$ISSUE_NUMBER" "ship-fast-path"
+            echo "::notice::ship fast-path label applied (mode=${MODE} estimate=${ESTIMATE}pt)"
+          else
+            echo "::notice::regular path (mode=${MODE} estimate=${ESTIMATE}pt)"
+          fi
+
+      - uses: ./.github/actions/council-sync-linear
+        if: steps.council.outputs.outcome == 'success'
+        with:
+          ticket-id: ${{ needs.prepare.outputs.ticket-id }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-body: ${{ needs.prepare.outputs.body }}
+          namespace: ticket
+          score: ${{ steps.council.outputs.score }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          linear-api-key: ${{ secrets.LINEAR_API_KEY }}
+
+      - uses: ./.github/actions/council-notify-slack
+        if: always() && steps.guard.outputs.already-set != 'true'
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('#{0}', needs.prepare.outputs.number) }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-url: ${{ needs.prepare.outputs.url }}
+          issue-number: ${{ needs.prepare.outputs.number }}
+          score: ${{ steps.council.outputs.score }}
+          verdict: ${{ steps.council.outputs.verdict }}
+          mode: ${{ steps.council.outputs.mode }}
+          slack-webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack-channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          pushgateway-url: ${{ vars.PUSHGATEWAY_URL }}
+          pushgateway-auth: ${{ secrets.PUSHGATEWAY_AUTH }}
+
+      - uses: ./.github/actions/write-summary
+        if: always()
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('issue-{0}', needs.prepare.outputs.number) }}
+          outcome: ${{ steps.council.outputs.outcome || 'skipped' }}
+          stage: council-s1
+
+  plan-validate:
+    needs: [prepare, council-validate]
+    if: vars.DISABLE_L1_V2_SMOKE != 'true' && needs.council-validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      score: ${{ steps.plan.outputs.score }}
+      outcome: ${{ steps.plan.outputs.outcome }}
+      ship-fast-path: ${{ steps.fast-path.outputs.already-set }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: ./.github/actions/label-guard
+        id: guard
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: plan-validated
+          github-token: ${{ github.token }}
+
+      - uses: ./.github/actions/label-guard
+        id: fast-path
+        if: steps.guard.outputs.already-set != 'true'
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: ship-fast-path
+          github-token: ${{ github.token }}
+
+      - name: Apply plan-validated via ship fast-path
+        if: steps.fast-path.outputs.already-set == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
+          add_label "$ISSUE_NUMBER" "plan-validated"
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation."
+
+      - uses: ./.github/actions/council-run
+        id: plan
+        if: steps.guard.outputs.already-set != 'true' && steps.fast-path.outputs.already-set != 'true'
+        with:
+          stage: s2
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-6
+          max-turns: '10'
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            You are running Stage 2 Council Plan Validation for issue #${{ needs.prepare.outputs.number }}.
+
+            Issue title: ${{ needs.prepare.outputs.title }}
+            Issue body: ${{ needs.prepare.outputs.body }}
+
+            Stage 1 Council has already validated this ticket (pertinence check passed).
+            Now run Stage 2: validate the IMPLEMENTATION PLAN.
+
+            Steps:
+            1. Read the issue description and the Stage 1 Council comment on this issue
+            2. Write a detailed implementation plan (files to modify, steps, LOC estimate)
+            3. Run 4-persona Council validation on THE PLAN (not the ticket):
+               - Chucky: Are risks documented? Edge cases covered by tests?
+               - OSS Killer: LOC justified? Delivers announced value? ROI of dev effort?
+               - Archi 50x50: Right level of abstraction? Existing patterns respected? Breaking changes?
+               - Better Call Saul: No secrets hardcoded in plan? GDPR/DORA impacts noted?
+            4. Score each persona /10, compute average
+            5. Post a structured comment on this issue with the plan + Stage 2 scores
+
+            Format the comment:
+            ## Stage 2: Plan Validation
+            ### Implementation Plan
+            <detailed plan with files, steps, LOC>
+            ### Stage 2 Council
+            | Persona | Score | Verdict |
+            |---------|-------|---------|
+            | Chucky | X/10 | Go/Fix/Redo |
+            | OSS Killer | X/10 | Go/Fix/Redo |
+            | Archi 50x50 | X/10 | Go/Fix/Redo |
+            | Better Call Saul | X/10 | Go/Fix/Redo |
+            ---
+            **Plan Score: X.XX/10 — [Go|Fix|Redo]**
+            Comment `/go-plan` to start implementation.
+
+            IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
+
+      - name: Apply plan-validated label
+        if: steps.plan.outputs.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
+          add_label "$ISSUE_NUMBER" "plan-validated"
+
+      - uses: ./.github/actions/council-sync-linear
+        if: steps.plan.outputs.outcome == 'success'
+        with:
+          ticket-id: ${{ needs.prepare.outputs.ticket-id }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-body: ${{ needs.prepare.outputs.body }}
+          namespace: plan
+          score: ${{ steps.plan.outputs.score }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          linear-api-key: ${{ secrets.LINEAR_API_KEY }}
+
+      - name: Slack Plan Validation (inline — uses notify_plan signature)
+        if: always() && steps.guard.outputs.already-set != 'true' && steps.fast-path.outputs.already-set != 'true'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          # Route untrusted issue data through env rather than direct
+          # ${{ … }} interpolation — CodeQL flags the direct form as a
+          # code-injection surface since workflow_dispatch inputs are
+          # user-controlled.
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          ISSUE_TITLE: ${{ needs.prepare.outputs.title }}
+          ISSUE_URL: ${{ needs.prepare.outputs.url }}
+          PLAN_OUTCOME: ${{ steps.plan.outputs.outcome || 'skipped' }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+          PLAN_TS=$(notify_plan \
+            "$ISSUE_NUMBER" \
+            "$ISSUE_TITLE" \
+            "$ISSUE_URL" \
+            "$PLAN_OUTCOME")
+          _react_slack "white_check_mark" "$PLAN_TS" || true
+
+      - uses: ./.github/actions/write-summary
+        if: always()
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('issue-{0}', needs.prepare.outputs.number) }}
+          outcome: ${{ steps.plan.outputs.outcome || 'skipped' }}
+          stage: council-s2
+
+  implement:
+    needs: [prepare, plan-validate]
+    if: >
+      vars.DISABLE_L1_V2_SMOKE != 'true' &&
+      inputs.run_implement == true &&
+      needs.plan-validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HEGEMON_INSTANCE: l1-v2-impl-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: ./.github/actions/wait-for-label
+        id: wait
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: plan-validated
+          max-attempts: '10'
+          interval-seconds: '30'
+          fallback-comment-pattern: 'Plan Score'
+          github-token: ${{ github.token }}
+
+      - name: Abort if no plan validation
+        if: steps.wait.outputs.validated != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first to trigger plan validation, then \`/go-plan\` after it passes."
+          exit 1
+
+      - name: Route model
+        id: route
+        if: steps.wait.outputs.validated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLAUDE_DEFAULT_MODEL: ${{ vars.CLAUDE_DEFAULT_MODEL }}
+          # User-controlled text via env (CodeQL code-injection guard).
+          ISSUE_BODY: ${{ needs.prepare.outputs.body }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ai-ops/model-router.sh"
+          ESTIMATE=$(extract_estimate "$ISSUE_BODY")
+          MODE=$(extract_mode "$ISSUE_BODY")
+          if [ "${ESTIMATE:-0}" = "0" ]; then
+            COMMENTS=$(gh issue view "$ISSUE_NUMBER" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+            ESTIMATE=$(extract_estimate "$COMMENTS")
+          fi
+          ROUTE=$(route_model "$ESTIMATE" "$MODE")
+          echo "model=$(echo "$ROUTE" | cut -d'|' -f1)" >> "$GITHUB_OUTPUT"
+          echo "turns=$(echo "$ROUTE" | cut -d'|' -f2)" >> "$GITHUB_OUTPUT"
+          echo "::notice::implement routing estimate=${ESTIMATE} mode=${MODE} -> ${ROUTE}"
+
+      - name: Record start time
+        if: steps.wait.outputs.validated == 'true'
+        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/hegemon-state-push
+        if: steps.wait.outputs.validated == 'true'
+        with:
+          action: session-start
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          ticket: ${{ needs.prepare.outputs.ticket-id }}
+          step: implementing
+          role: ci-l1
+          source-tag: gha
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - uses: ./.github/actions/hegemon-state-push
+        if: steps.wait.outputs.validated == 'true'
+        with:
+          action: milestone
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          ticket: ${{ needs.prepare.outputs.ticket-id }}
+          step: impl-started
+          detail: 'L1 Issue-to-PR v2'
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - name: Run implementation
+        id: implement
+        if: steps.wait.outputs.validated == 'true'
+        continue-on-error: true
+        # Pinned to the v1 tag's commit (same SHA as council-run composite).
+        uses: anthropics/claude-code-action@e58dfa55559035499a4982426bb73605e8b5ad8e  # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            Implement the feature described in issue #${{ needs.prepare.outputs.number }}.
+
+            Issue title: ${{ needs.prepare.outputs.title }}
+            Issue body:
+            ${{ needs.prepare.outputs.body }}
+
+            Read the Stage 2 plan validation comment (posted earlier on this issue).
+            Follow the implementation plan from the Stage 2 comment.
+            Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
+
+            Steps:
+            1. Create a feature branch: feat/issue-${{ needs.prepare.outputs.number }}-<slug>
+            2. For feat() and fix() changes: write FAILING tests FIRST that assert the expected behavior
+            3. Implement the code to make the tests pass
+            4. For fix() PRs: include a regression test (test_regression_* / regression/*.test.ts / fn regression_*)
+            5. Run quality gates (lint, test, format)
+            6. Commit with conventional messages
+            7. Create a PR referencing the issue
+
+            Use Ship/Show/Ask classification from the Council comment.
+            If Ship or Show: merge after CI green.
+            If Ask: leave PR open for human review.
+
+            IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
+
+      - uses: ./.github/actions/detect-partial-pr
+        id: detect
+        if: always() && steps.wait.outputs.validated == 'true'
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          ticket-id: ${{ needs.prepare.outputs.ticket-id }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-body: ${{ needs.prepare.outputs.body }}
+          github-token: ${{ github.token }}
+
+      - name: Slack Implementation Result (inline — notify_implement signature)
+        if: always() && steps.wait.outputs.validated == 'true'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
+          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          # Route every workflow-controlled value through env so the
+          # shell expands via `"$VAR"` instead of literal substitution.
+          # Applies even to numeric / bot-generated values for uniformity
+          # (and so CodeQL doesn't have to second-guess which is which).
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          TICKET_ID_RAW: ${{ needs.prepare.outputs.ticket-id }}
+          STATUS: ${{ steps.implement.outcome }}
+          PR_FOUND: ${{ steps.detect.outputs.pr-found }}
+          PR_NUM: ${{ steps.detect.outputs.pr-num }}
+          PR_URL: ${{ steps.detect.outputs.pr-url }}
+          MODEL: ${{ steps.route.outputs.model }}
+          TURNS: ${{ steps.route.outputs.turns }}
+        run: |
+          source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+          TICKET="${TICKET_ID_RAW:-issue-${ISSUE_NUMBER}}"
+          DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
+
+          if [ "$STATUS" = "success" ]; then
+            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR v2" "$DURATION")
+            linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR v2" "$DURATION" || true
+            push_metrics_implement "issue-to-pr-v2" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$TURNS" || true
+            _react_slack "tada" "$IMPL_TS" || true
+          elif [ "$STATUS" = "failure" ] && [ "$PR_FOUND" = "true" ]; then
+            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "$ISSUE_NUMBER" "L1 Issue-to-PR v2 (max_turns)" "$DURATION")
+            push_metrics_implement "issue-to-pr-v2" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$TURNS" || true
+            _react_slack "rocket" "$IMPL_TS" || true
+          elif [ "$STATUS" = "failure" ]; then
+            IMPL_TS=$(notify_error "claude-issue-to-pr-v2" "implement" "$TICKET" "" "$DURATION")
+            push_metrics_error "issue-to-pr-v2" "implement" "$TICKET" || true
+            _react_slack "x" "$IMPL_TS" || true
+          fi
+
+      - uses: ./.github/actions/hegemon-state-push
+        if: always() && steps.wait.outputs.validated == 'true'
+        with:
+          action: milestone
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          ticket: ${{ needs.prepare.outputs.ticket-id }}
+          step: impl-${{ steps.implement.outcome || 'skipped' }}
+          pr-num: ${{ steps.detect.outputs.pr-num }}
+          detail: 'L1 Issue-to-PR v2'
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - uses: ./.github/actions/hegemon-state-push
+        if: always()
+        with:
+          action: cleanup
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - uses: ./.github/actions/write-summary
+        if: always()
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('issue-{0}', needs.prepare.outputs.number) }}
+          outcome: ${{ steps.implement.outcome || 'skipped' }}
+          stage: L1-implement
+          model: ${{ steps.route.outputs.model }}

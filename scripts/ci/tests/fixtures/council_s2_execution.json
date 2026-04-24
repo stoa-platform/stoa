@@ -1,0 +1,13 @@
+[
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {
+          "type": "text",
+          "text": "## Stage 2: Plan Validation\n\n### Implementation Plan\nFiles: foo.py, bar.py. Estimated LOC: ~180.\n\n### Stage 2 Council\n| Persona | Score | Verdict |\n|---------|-------|---------|\n| Chucky | 7/10 | Fix |\n| OSS Killer | 8/10 | Go |\n| Archi | 7/10 | Fix |\n| Saul | 8/10 | Go |\n\n---\n**Plan Score: 7.50/10 — Fix**\nClassification: Show\nComment `/go-plan` to start implementation.\n"
+        }
+      ]
+    }
+  }
+]

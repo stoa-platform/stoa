@@ -1,0 +1,39 @@
+name: 'Label Guard'
+description: >-
+  Check if a GitHub issue already carries a label. Used to make a workflow
+  step idempotent — skip work if the label is already present. Phase 2b
+  of CI-1 rewrite (CI-1-REWRITE-PLAN.md C.1).
+
+inputs:
+  issue-number:
+    description: 'GitHub issue number to inspect.'
+    required: true
+  label-name:
+    description: 'Label name to check for (exact, case-sensitive, full-line match).'
+    required: true
+  github-token:
+    description: 'Token used by gh (needs issues:read on the target repo).'
+    required: true
+
+outputs:
+  already-set:
+    description: '"true" if the label is already on the issue, "false" otherwise.'
+    value: ${{ steps.check.outputs.already-set }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check label presence
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+        if has_label "${{ inputs.issue-number }}" "${{ inputs.label-name }}"; then
+          echo "already-set=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::label '${{ inputs.label-name }}' already present on issue #${{ inputs.issue-number }}"
+        else
+          echo "already-set=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::label '${{ inputs.label-name }}' not yet on issue #${{ inputs.issue-number }}"
+        fi

@@ -1,0 +1,13 @@
+[
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Council verdict follows.\n\n```json\n{\"score\": 8.75, \"verdict\": \"go\", \"mode\": \"ship\", \"estimate_points\": 3}\n```\n\n**Council Score: 8.75/10 — Go**\n"
+        }
+      ]
+    }
+  }
+]

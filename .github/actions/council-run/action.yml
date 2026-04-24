@@ -1,0 +1,120 @@
+name: 'Run Council (S1 or S2)'
+description: >-
+  Invoke anthropics/claude-code-action with a Council prompt and parse
+  its execution output into structured score/verdict/mode/estimate
+  fields. Preserves the legacy `continue-on-error: true` so partial
+  success (max_turns, etc.) still produces parsable output. Phase 2b
+  of CI-1 rewrite (CI-1-REWRITE-PLAN.md C.3).
+
+inputs:
+  stage:
+    description: 'Council stage: `s1` (pertinence) or `s2` (plan).'
+    required: true
+  prompt:
+    description: 'Full Council prompt passed to claude-code-action.'
+    required: true
+  anthropic-api-key:
+    description: 'Anthropic API key.'
+    required: true
+  model:
+    description: 'Claude model id.'
+    required: false
+    default: 'claude-sonnet-4-6'
+  max-turns:
+    description: 'Turn budget passed to claude-code-action.'
+    required: false
+    default: '5'
+  allowed-tools:
+    description: 'Comma-separated list of Claude tools permitted for the run.'
+    required: false
+    default: 'Bash,Read,Glob,Grep'
+  fallback-comment-file:
+    description: >-
+      Optional path to a markdown file whose body is parsed if the
+      execution output is missing or yields no score (legacy behaviour).
+    required: false
+    default: ''
+
+outputs:
+  outcome:
+    description: 'Outcome of the inner claude-code-action step (success | failure).'
+    value: ${{ steps.claude.outcome }}
+  execution-file:
+    description: 'Path to the raw execution output JSON (useful for downstream logging).'
+    value: ${{ steps.resolve-exec.outputs.path }}
+  score:
+    description: 'Council score (float as string, empty on missing).'
+    value: ${{ steps.parse.outputs.score }}
+  verdict:
+    description: 'Verdict derived from score: go | fix | redo | "".'
+    value: ${{ steps.parse.outputs.verdict }}
+  mode:
+    description: 'Ship/Show/Ask classification (ship | show | ask).'
+    value: ${{ steps.parse.outputs.mode }}
+  estimate-points:
+    description: 'Estimate in points (int as string, "0" on missing).'
+    value: ${{ steps.parse.outputs.estimate-points }}
+  source:
+    description: 'Parsing source: structured_json | regex | fallback.'
+    value: ${{ steps.parse.outputs.source }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Claude Council action
+      id: claude
+      continue-on-error: true
+      # Pinned to the v1 tag's referenced commit (resolved via
+      # `gh api repos/anthropics/claude-code-action/git/ref/tags/v1`).
+      uses: anthropics/claude-code-action@e58dfa55559035499a4982426bb73605e8b5ad8e  # v1
+      with:
+        anthropic_api_key: ${{ inputs.anthropic-api-key }}
+        prompt: ${{ inputs.prompt }}
+        claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max-turns }} --allowedTools ${{ inputs.allowed-tools }}"
+
+    - name: Resolve execution file
+      id: resolve-exec
+      if: always()
+      shell: bash
+      env:
+        REPORTED_PATH: ${{ steps.claude.outputs.execution_file }}
+      run: |
+        PATH_VAL="${REPORTED_PATH:-/home/runner/work/_temp/claude-execution-output.json}"
+        echo "path=${PATH_VAL}" >> "$GITHUB_OUTPUT"
+        if [ -f "$PATH_VAL" ]; then
+          echo "::notice::council-run: execution file = $PATH_VAL ($(wc -c <"$PATH_VAL" | tr -d ' ') bytes)"
+        else
+          echo "::warning::council-run: execution file not found at $PATH_VAL"
+        fi
+
+    - name: Parse Council report
+      id: parse
+      if: always()
+      shell: bash
+      run: |
+        set -uo pipefail
+        EXEC_FILE="${{ steps.resolve-exec.outputs.path }}"
+        ARGS=( --execution-file "$EXEC_FILE" --stage "${{ inputs.stage }}" )
+        if [ -n "${{ inputs.fallback-comment-file }}" ]; then
+          ARGS+=( --fallback-comment "${{ inputs.fallback-comment-file }}" )
+        fi
+
+        # Run the parser; exit 1 is acceptable (no score + no fallback):
+        # we still want to emit empty outputs.
+        RAW=$(python3 "${GITHUB_WORKSPACE}/scripts/ci/parse_council_report.py" "${ARGS[@]}" || echo '{"score":null,"verdict":null,"mode":"ask","estimate_points":0,"source":"regex"}')
+
+        SCORE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); s=d.get("score"); print("" if s is None else s)')
+        VERDICT=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("verdict") or "")')
+        MODE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("mode") or "ask")')
+        ESTIMATE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("estimate_points") or 0)')
+        SOURCE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("source") or "")')
+
+        {
+          echo "score=${SCORE}"
+          echo "verdict=${VERDICT}"
+          echo "mode=${MODE}"
+          echo "estimate-points=${ESTIMATE}"
+          echo "source=${SOURCE}"
+        } >> "$GITHUB_OUTPUT"
+
+        echo "::notice::council-run parsed: score=${SCORE:-?} verdict=${VERDICT:-?} mode=${MODE} estimate=${ESTIMATE} (source=${SOURCE})"

@@ -166,15 +166,39 @@ kill -HUP $(pgrep stoa-gateway)
 | `cargo build --release` | emballage image démo |
 | `make build-stoactl` | emballage CLI démo |
 
-## 9. Intégration CI (future, out-of-scope v1)
+## 9. Intégration CI observationnelle
 
-Placeholder : une fois le smoke stable, ajouter un workflow `.github/workflows/demo-smoke.yml` qui :
-- Boot docker-compose minimal
-- Exécute `demo-smoke-test.sh`
-- Upload `specs/demo-readiness-report.md` mis à jour en artifact
-- Fail le build si exit != 0
+Le workflow `.github/workflows/demo-smoke.yml` est volontairement
+**observationnel** tant que le smoke réel n'a pas produit au moins un
+`REAL_PASS — DEMO READY` local.
 
-À NE PAS faire tant que le smoke n'est pas `REAL_PASS` au moins une fois en local.
+À chaque PR, il exécute :
+
+```bash
+bash -n scripts/demo-smoke-test.sh
+./scripts/demo-smoke-test.sh --no-observability-ui
+```
+
+Il publie dans `$GITHUB_STEP_SUMMARY` :
+- le code de sortie de `bash -n`
+- le code de sortie du smoke réel
+- la ligne `Verdict: ...`
+- le dernier blocker `[FAIL] ...`
+- les 80 dernières lignes du log
+
+Il upload aussi les logs en artifact `demo-smoke-*`.
+
+Tant que `DEMO_SMOKE_BLOCKING` vaut `false` (défaut), un verdict
+`FAIL — DEMO NOT READY` ne fait **pas** échouer le job GitHub. Le résultat
+sert à observer le prochain blocker réel sans bloquer la cadence des PR IA.
+
+Passage en gate bloquant, uniquement après premier `REAL_PASS` local :
+
+```text
+GitHub variable DEMO_SMOKE_BLOCKING=true
+```
+
+ou lancement manuel du workflow avec `blocking=true`.
 
 ## 10. Démo client/prospect
 

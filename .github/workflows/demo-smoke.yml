@@ -1,0 +1,105 @@
+name: Demo Smoke Observation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      blocking:
+        description: "Fail the job when the demo smoke fails"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+jobs:
+  demo-smoke:
+    name: Demo Smoke (observation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEMO_SMOKE_BLOCKING: ${{ inputs.blocking || vars.DEMO_SMOKE_BLOCKING || 'false' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Run demo smoke in observation mode
+        id: smoke
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          mkdir -p artifacts/demo-smoke
+          SYNTAX_LOG="artifacts/demo-smoke/bash-n.log"
+          SMOKE_LOG="artifacts/demo-smoke/demo-smoke.log"
+          TAIL_LOG="artifacts/demo-smoke/demo-smoke-tail.log"
+
+          echo "## Demo Smoke Observation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Blocking mode | \`${DEMO_SMOKE_BLOCKING}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Command | \`./scripts/demo-smoke-test.sh --no-observability-ui\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          bash -n scripts/demo-smoke-test.sh >"$SYNTAX_LOG" 2>&1
+          SYNTAX_EXIT=$?
+
+          set +e
+          ./scripts/demo-smoke-test.sh --no-observability-ui >"$SMOKE_LOG" 2>&1
+          SMOKE_EXIT=$?
+          set -e
+
+          tail -n 80 "$SMOKE_LOG" > "$TAIL_LOG"
+          VERDICT="$(grep -E 'Verdict:' "$SMOKE_LOG" | tail -1 | sed 's/^[[:space:]]*//')"
+          BLOCKER="$(grep -E '\[FAIL\]' "$SMOKE_LOG" | tail -1 | sed 's/^[[:space:]]*//')"
+          VERDICT="${VERDICT:-Verdict: UNKNOWN}"
+          BLOCKER="${BLOCKER:-No [FAIL] line found in log tail}"
+
+          echo "syntax_exit=$SYNTAX_EXIT" >> "$GITHUB_OUTPUT"
+          echo "smoke_exit=$SMOKE_EXIT" >> "$GITHUB_OUTPUT"
+          {
+            echo "verdict<<EOF"
+            echo "$VERDICT"
+            echo "EOF"
+            echo "blocker<<EOF"
+            echo "$BLOCKER"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "| bash -n exit | \`${SYNTAX_EXIT}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| smoke exit | \`${SMOKE_EXIT}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| verdict | \`${VERDICT}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| blocker | \`${BLOCKER}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Last 80 Log Lines" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat "$TAIL_LOG" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$DEMO_SMOKE_BLOCKING" == "true" ]]; then
+            if [[ "$SYNTAX_EXIT" -ne 0 || "$SMOKE_EXIT" -ne 0 ]]; then
+              echo "::error::Demo smoke blocking mode failed (bash-n=${SYNTAX_EXIT}, smoke=${SMOKE_EXIT})"
+              exit 1
+            fi
+          fi
+
+          if [[ "$SMOKE_EXIT" -ne 0 ]]; then
+            echo "::notice::Demo smoke is observation-only for now: ${VERDICT}; blocker=${BLOCKER}; exit=${SMOKE_EXIT}"
+          fi
+
+      - name: Upload demo smoke logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: demo-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/demo-smoke/
+          retention-days: 7

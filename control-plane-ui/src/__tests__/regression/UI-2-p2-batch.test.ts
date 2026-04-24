@@ -28,9 +28,7 @@ const { mockOpenEventStream } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/http', async () => {
-  const actual = await vi.importActual<typeof import('../../services/http')>(
-    '../../services/http'
-  );
+  const actual = await vi.importActual<typeof import('../../services/http')>('../../services/http');
   return {
     ...actual,
     openEventStream: mockOpenEventStream,
@@ -57,7 +55,11 @@ describe('regression/UI-2 — P2 batch contract invariants', () => {
     });
     streams = [];
     mockOpenEventStream.mockImplementation(
-      (_tenantId: string, _eventTypes: string[] | undefined, handlers: SseHandlers): SseConnection => {
+      (
+        _tenantId: string,
+        _eventTypes: string[] | undefined,
+        handlers: SseHandlers
+      ): SseConnection => {
         const close = vi.fn();
         streams.push({ handlers, close });
         return { close };

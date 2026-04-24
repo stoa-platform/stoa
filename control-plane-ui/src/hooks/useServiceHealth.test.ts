@@ -215,9 +215,7 @@ describe('useServiceHealth', () => {
           })
       );
 
-      const { result, unmount } = renderHook(() =>
-        useServiceHealth('https://example.com/health')
-      );
+      const { result, unmount } = renderHook(() => useServiceHealth('https://example.com/health'));
       expect(result.current.status).toBe('checking');
 
       // Unmount before fetch completes.
@@ -246,9 +244,7 @@ describe('useServiceHealth', () => {
           })
       );
 
-      const { result } = renderHook(() =>
-        useServiceHealth('https://example.com/health')
-      );
+      const { result } = renderHook(() => useServiceHealth('https://example.com/health'));
       expect(result.current.status).toBe('checking');
 
       // Advance past the 5s timeout — controller.abort() fires, fetch

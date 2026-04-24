@@ -29,13 +29,16 @@ describe('installRequestInterceptor (P2-1)', () => {
   });
 
   it('calls applyFriendlyErrorMessage on AxiosError in the request error path', async () => {
-    const instance = makeInstance(async (config) => ({
-      data: {},
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    }) as AxiosResponse);
+    const instance = makeInstance(
+      async (config) =>
+        ({
+          data: {},
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config,
+        }) as AxiosResponse
+    );
 
     // Inject an AxiosError by registering a second request interceptor that
     // throws before the actual network call. The installed interceptor's
@@ -52,13 +55,16 @@ describe('installRequestInterceptor (P2-1)', () => {
   });
 
   it('does not call applyFriendlyErrorMessage on non-AxiosError throws', async () => {
-    const instance = makeInstance(async (config) => ({
-      data: {},
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    }) as AxiosResponse);
+    const instance = makeInstance(
+      async (config) =>
+        ({
+          data: {},
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config,
+        }) as AxiosResponse
+    );
 
     instance.interceptors.request.use(() => {
       throw new Error('plain non-axios throw');

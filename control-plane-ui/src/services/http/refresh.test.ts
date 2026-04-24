@@ -279,7 +279,8 @@ describe('refreshAuthTokenWithTimeout — helper exposed for SSE (C4)', () => {
     // and the same string is replayed verbatim.
     expect(observedBodies.length).toBe(2);
     expect(observedBodies[0]).toBe(observedBodies[1]);
-    const asString = typeof observedBodies[0] === 'string' ? observedBodies[0] : JSON.stringify(observedBodies[0]);
+    const asString =
+      typeof observedBodies[0] === 'string' ? observedBodies[0] : JSON.stringify(observedBodies[0]);
     expect(JSON.parse(asString)).toEqual(body);
   });
 });

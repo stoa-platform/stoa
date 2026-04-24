@@ -15,10 +15,7 @@ interface UseEventsOptions {
 // unknown types are dropped rather than forwarded to callers.
 function isValidEvent(x: unknown): x is Event {
   return (
-    !!x &&
-    typeof x === 'object' &&
-    'type' in x &&
-    typeof (x as { type: unknown }).type === 'string'
+    !!x && typeof x === 'object' && 'type' in x && typeof (x as { type: unknown }).type === 'string'
   );
 }
 

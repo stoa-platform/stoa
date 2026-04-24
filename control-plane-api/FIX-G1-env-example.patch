@@ -1,0 +1,25 @@
+--- a/control-plane-api/.env.example
++++ b/control-plane-api/.env.example
+@@ -78,7 +78,20 @@
+ # GRAFANA_URL=https://grafana.gostoa.dev
+ # PROMETHEUS_URL=https://prometheus.gostoa.dev
+
+-# ── GitLab (optional, for UAC catalog sync) ──────────────────────────────────
++# ── Git Provider (UAC catalog sync) — CAB-1889 CP-2 ──────────────────────────
++# The control plane persists its UAC catalog on either GitHub or GitLab.
++# Pick one via GIT_PROVIDER, then populate only the matching block.
++# In ENVIRONMENT=production, startup fails fast on missing/inconsistent creds.
++# GIT_PROVIDER=github              # github | gitlab (case-insensitive)
++# GIT_DEFAULT_BRANCH=main
++
++# ── GitHub block (active when GIT_PROVIDER=github) ─────────────────
++# GITHUB_TOKEN=
++# GITHUB_ORG=stoa-platform
++# GITHUB_CATALOG_REPO=stoa-catalog
++# GITHUB_WEBHOOK_SECRET=
++
++# ── GitLab block (active when GIT_PROVIDER=gitlab) ─────────────────
+ # GITLAB_URL=https://gitlab.com
+ # GITLAB_TOKEN=
+ # GITLAB_PROJECT_ID=
++# GITLAB_WEBHOOK_SECRET=

@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from src.config import GitHubConfig, GitLabConfig, GitProviderConfig
 from src.services.git_provider import GitProvider, git_provider_factory
@@ -109,10 +109,55 @@ class TestGitProviderConfig:
         assert field.default == "github"
 
     def test_github_config_defaults(self):
-        """GitHub config fields must have sensible defaults."""
+        """GitHub config fields must have sensible defaults.
+
+        CAB-1889 CP-2 B-1: GITHUB_TOKEN and GITHUB_WEBHOOK_SECRET are
+        ``SecretStr`` on the flat ingress (not plain ``str``), so the
+        default compares via ``.get_secret_value()``.
+        """
         from src.config import Settings
 
-        assert Settings.model_fields["GITHUB_TOKEN"].default == ""
+        assert Settings.model_fields["GITHUB_TOKEN"].default.get_secret_value() == ""
         assert Settings.model_fields["GITHUB_ORG"].default == "stoa-platform"
         assert Settings.model_fields["GITHUB_CATALOG_REPO"].default == "stoa-catalog"
-        assert Settings.model_fields["GITHUB_WEBHOOK_SECRET"].default == ""
+        assert Settings.model_fields["GITHUB_WEBHOOK_SECRET"].default.get_secret_value() == ""
+
+
+class TestSubModelsRejectUnknownKwargs:
+    """CAB-1889 CP-2 I-1: ``extra="forbid"`` on GitHubConfig / GitLabConfig /
+    GitProviderConfig prevents the class of silent typo drops that let the
+    CP-1 token-leak fixture pass a non-existent ``catalog_project_id=``
+    kwarg unnoticed. Each test supplies a complete valid payload and adds
+    one extra key so the failure is unambiguously about ``extra_forbidden``,
+    not ``missing``.
+    """
+
+    def test_github_config_rejects_unknown_kwargs(self):
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            GitHubConfig(
+                token=SecretStr("x"),
+                org="org",
+                catalog_repo="catalog",
+                webhook_secret=SecretStr("y"),
+                tokne=SecretStr("z"),  # typo
+            )
+
+    def test_gitlab_config_rejects_unknown_kwargs(self):
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            GitLabConfig(
+                url="https://gitlab.com",
+                token=SecretStr("x"),
+                project_id="1",
+                webhook_secret=SecretStr("y"),
+                tokne=SecretStr("z"),  # typo
+            )
+
+    def test_git_provider_config_rejects_unknown_kwargs(self):
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            GitProviderConfig(
+                provider="github",
+                github=GitHubConfig(),
+                gitlab=GitLabConfig(),
+                default_branch="main",
+                bogus_field="nope",  # unknown
+            )

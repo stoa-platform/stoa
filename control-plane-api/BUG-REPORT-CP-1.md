@@ -1,5 +1,30 @@
 # BUG-REPORT-CP-1
 
+> **CP-1 CLOSED (2026-04-23 pm)** — 21 findings / 21 fixed (6 P0 + 9 P1 +
+> 5 P2 + L.2 already-closed in P1). P0 landed as PR #2496
+> (squash `4ed80850b`), P1 as PR #2499 (squash `b58bdca40`), P2 on
+> `fix/cp-1-p2-batch` rebased on top of origin/main.
+> All three regression-guard invariants hold:
+>
+> - `grep -rn "self\._project\." src/ --include="*.py"` → 0 (CP-1 P0 C.1)
+> - `grep -rn "contextlib.suppress(Exception)"` inside `_sync_api_from_git`
+>   → 0 (CP-1 P1 H.2; the one remaining match is an unrelated
+>   `adapter.disconnect()` cleanup in `deploy_api_to_env`)
+> - `grep -rn 'ref="main"\|branch="main"'` across provider services and
+>   ancillary catalog callers → 0 (CP-1 P2 M.4)
+>
+> Regression tests: 88 across 9 files
+> (`test_regression_cp1_sync_in_async.py`,
+> `test_regression_cp1_token_leak.py`,
+> `test_regression_cp1_webhook_auth_first.py`,
+> `test_regression_cp1_p1_service_contracts.py`,
+> `test_regression_cp1_p1_router_errors.py`,
+> `test_regression_cp1_p1_webhook_dedup.py`,
+> `test_regression_cp1_p1_worker_reliability.py`, plus 5 P2 files listed
+> below).
+>
+> Archive path: `stoa-docs/audits/2026-04-23-cp-1/` (post-merge).
+
 > **Document status**: audit artifact produced post-rewrite of CP-1
 > (GitProvider abstraction, CAB-1889). **Revision 2** (2026-04-23 pm) —
 > incorporates editorial feedback on provider-library defaults (PyGithub
@@ -49,6 +74,30 @@
 >
 > **P1-adjacent bonus**: L.2 (webhook 500 leaks str(e)) closed
 > alongside H.1 in `52ba19012` — same class of bug as H.3.
+
+> **P2 batch status (2026-04-23 pm)** — all 5 P2 findings fixed on branch
+> `fix/cp-1-p2-batch` (1 atomic commit):
+>
+> | Bug | Fix |
+> |---|---|
+> | M.2 | `merge_merge_request` short-circuits on `pr.merged` / `mr.state=="merged"` only; closed-unmerged still raises. No double-fetch on idempotent path (GitHub), reuse mutated MR on GitLab. |
+> | M.4 | New `settings.git.default_branch` (env `GIT_DEFAULT_BRANCH`, default `"main"`). Provider method signatures switched to `ref: str \| None = None` / `branch: str \| None = None` with resolution at the method boundary. 50+ internal `"main"` literals swept. Ancillary callers (`iam_sync`, `deployment_orchestration`, `routers/traces`) drop explicit refs. |
+> | M.5 | `connect()` retries transient failures (network, `TimeoutError`, 5xx, 429) with **3 attempts / 2 sleeps (1s → 2s)**, 15s per-attempt timeout. Fails fast on 401/403 and other non-transient errors. Helpers `_is_transient_gitlab_error` / `_is_transient_github_error` at module scope. |
+> | M.6 | `list_all_mcp_servers` fans out per-tenant listings via `asyncio.gather` on both providers; platform-scope fetch runs concurrently with the tenant enumeration. Provider semaphores (`GITLAB_SEMAPHORE` / `GITHUB_READ_SEMAPHORE`) keep the overall concurrency bounded. |
+> | L.1 | GitLab `list_branches` and `list_merge_requests` pass `get_all=True`; `list_commits` uses `iterator=True` + `per_page=min(limit,100)` + `itertools.islice(..., limit)` so the `limit` contract survives while full pagination is restored. |
+>
+> Regression guards: 10 new tests across
+> `test_regression_cp1_p2_merge_idempotent.py` (2),
+> `test_regression_cp1_p2_default_branch.py` (2),
+> `test_regression_cp1_p2_connect_retry.py` (2),
+> `test_regression_cp1_p2_list_all_mcp_gathered.py` (2),
+> `test_regression_cp1_p2_gitlab_pagination.py` (2).
+>
+> Also updated `test_regression_cab_1889_external_git_leaks.py`,
+> `test_git_service.py::TestListCommits`,
+> `test_deployment_orchestration_service.py::TestRegressionCab1889`,
+> `test_iam_sync_service.py::TestRegressionCab1889` to assert the new
+> "caller drops explicit ref" contract.
 
 **Module**: CP-1 — GitProvider abstraction in `control-plane-api`
 **Path**: `control-plane-api/src/services/git_provider.py`, `git_service.py`, `github_service.py`, `src/routers/git.py`, `src/routers/webhooks.py`, `src/services/iam_sync_service.py`, `src/services/deployment_orchestration_service.py`, `src/workers/git_sync_worker.py`

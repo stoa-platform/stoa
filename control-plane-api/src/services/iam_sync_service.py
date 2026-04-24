@@ -207,7 +207,9 @@ class IAMSyncService:
                 result["errors"] = ["Git provider not connected"]
                 return result
 
-            tree = await git_service.list_tree("tenants", ref="main")
+            # CP-1 P2 (M.4): drop explicit ref so list_tree resolves
+            # to settings.git.default_branch.
+            tree = await git_service.list_tree("tenants")
 
             for item in tree:
                 if item.type == "tree":

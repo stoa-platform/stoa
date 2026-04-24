@@ -88,13 +88,14 @@ class GitProvider(ABC):
         """
 
     @abstractmethod
-    async def get_file_content(self, project_id: str, file_path: str, ref: str = "main") -> str:
+    async def get_file_content(self, project_id: str, file_path: str, ref: str | None = None) -> str:
         """Retrieve raw file content from a repository.
 
         Args:
             project_id: Provider-specific project identifier.
             file_path: Path to the file within the repository.
-            ref: Branch, tag, or commit SHA. Defaults to "main".
+            ref: Branch, tag, or commit SHA. ``None`` resolves to
+                ``settings.git.default_branch`` (CP-1 P2 M.4).
 
         Returns:
             Raw file content as string.
@@ -104,13 +105,14 @@ class GitProvider(ABC):
         """
 
     @abstractmethod
-    async def list_files(self, project_id: str, path: str = "", ref: str = "main") -> list[str]:
+    async def list_files(self, project_id: str, path: str = "", ref: str | None = None) -> list[str]:
         """List files in a repository directory.
 
         Args:
             project_id: Provider-specific project identifier.
             path: Directory path within the repository. Empty for root.
-            ref: Branch, tag, or commit SHA. Defaults to "main".
+            ref: Branch, tag, or commit SHA. ``None`` resolves to
+                ``settings.git.default_branch`` (CP-1 P2 M.4).
 
         Returns:
             List of file paths relative to the repository root.
@@ -165,7 +167,12 @@ class GitProvider(ABC):
 
     @abstractmethod
     async def create_file(
-        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+        self,
+        project_id: str,
+        file_path: str,
+        content: str,
+        commit_message: str,
+        branch: str | None = None,
     ) -> dict[str, Any]:
         """Create a new file in the repository.
 
@@ -174,7 +181,8 @@ class GitProvider(ABC):
             file_path: Path for the new file.
             content: File content.
             commit_message: Git commit message.
-            branch: Target branch. Defaults to "main".
+            branch: Target branch. ``None`` resolves to
+                ``settings.git.default_branch`` (CP-1 P2 M.4).
 
         Returns:
             Commit metadata (sha, url).
@@ -185,7 +193,12 @@ class GitProvider(ABC):
 
     @abstractmethod
     async def update_file(
-        self, project_id: str, file_path: str, content: str, commit_message: str, branch: str = "main"
+        self,
+        project_id: str,
+        file_path: str,
+        content: str,
+        commit_message: str,
+        branch: str | None = None,
     ) -> dict[str, Any]:
         """Update an existing file in the repository.
 
@@ -194,7 +207,8 @@ class GitProvider(ABC):
             file_path: Path to the existing file.
             content: New file content.
             commit_message: Git commit message.
-            branch: Target branch. Defaults to "main".
+            branch: Target branch. ``None`` resolves to
+                ``settings.git.default_branch`` (CP-1 P2 M.4).
 
         Returns:
             Commit metadata (sha, url).
@@ -204,14 +218,21 @@ class GitProvider(ABC):
         """
 
     @abstractmethod
-    async def delete_file(self, project_id: str, file_path: str, commit_message: str, branch: str = "main") -> bool:
+    async def delete_file(
+        self,
+        project_id: str,
+        file_path: str,
+        commit_message: str,
+        branch: str | None = None,
+    ) -> bool:
         """Delete a file from the repository.
 
         Args:
             project_id: Provider-specific project identifier.
             file_path: Path to the file to delete.
             commit_message: Git commit message.
-            branch: Target branch. Defaults to "main".
+            branch: Target branch. ``None`` resolves to
+                ``settings.git.default_branch`` (CP-1 P2 M.4).
 
         Returns:
             True if deleted.
@@ -241,8 +262,11 @@ class GitProvider(ABC):
         """Return True when the provider client is initialized."""
         return bool(getattr(self, "_project", None) or getattr(self, "_gh", None))
 
-    async def get_head_commit_sha(self, ref: str = "main") -> str | None:
-        """Return the current HEAD commit SHA for the provider's catalog repo."""
+    async def get_head_commit_sha(self, ref: str | None = None) -> str | None:
+        """Return the current HEAD commit SHA for the provider's catalog repo.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
         raise NotImplementedError("get_head_commit_sha() must be implemented by the provider")
 
     async def get_tenant(self, tenant_id: str) -> dict | None:
@@ -292,7 +316,7 @@ class GitProvider(ABC):
         project_id: str,
         actions: list[dict[str, str]],
         commit_message: str,
-        branch: str = "main",
+        branch: str | None = None,
     ) -> dict[str, Any]:
         """Create an atomic commit with multiple file operations.
 
@@ -303,7 +327,8 @@ class GitProvider(ABC):
                 - file_path: Path within the repository
                 - content: File content (required for create/update)
             commit_message: Git commit message.
-            branch: Target branch. Defaults to "main".
+            branch: Target branch. ``None`` resolves to
+                ``settings.git.default_branch`` (CP-1 P2 M.4).
 
         Returns:
             Commit metadata (sha, url).
@@ -315,17 +340,19 @@ class GitProvider(ABC):
     # router never needs to know about project_id / org-repo.
     # ============================================================
 
-    async def list_tree(self, path: str, ref: str = "main") -> list[TreeEntry]:
+    async def list_tree(self, path: str, ref: str | None = None) -> list[TreeEntry]:
         """List immediate children of ``path`` in the catalog repo.
 
         Returns an empty list when the path is absent. Never raises on 404.
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
         """
         raise NotImplementedError("list_tree() must be implemented by the provider")
 
-    async def read_file(self, path: str, ref: str = "main") -> str | None:
+    async def read_file(self, path: str, ref: str | None = None) -> str | None:
         """Return file content from the catalog repo, or ``None`` if missing.
 
         Unlike :meth:`get_file_content`, this method never raises FileNotFoundError.
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
         """
         raise NotImplementedError("read_file() must be implemented by the provider")
 
@@ -334,24 +361,31 @@ class GitProvider(ABC):
         raise NotImplementedError("list_path_commits() must be implemented by the provider")
 
     async def write_file(
-        self, path: str, content: str, commit_message: str, branch: str = "main"
+        self, path: str, content: str, commit_message: str, branch: str | None = None
     ) -> Literal["created", "updated"]:
         """Create-or-update a file on the catalog repo.
 
         Returns ``"created"`` if the file did not exist before, ``"updated"`` otherwise.
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
         """
         raise NotImplementedError("write_file() must be implemented by the provider")
 
-    async def remove_file(self, path: str, commit_message: str, branch: str = "main") -> bool:
-        """Delete a file from the catalog repo. Raises FileNotFoundError if missing."""
+    async def remove_file(self, path: str, commit_message: str, branch: str | None = None) -> bool:
+        """Delete a file from the catalog repo. Raises FileNotFoundError if missing.
+
+        ``branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
         raise NotImplementedError("remove_file() must be implemented by the provider")
 
     async def list_branches(self) -> list[BranchRef]:
         """List branches on the catalog repo."""
         raise NotImplementedError("list_branches() must be implemented by the provider")
 
-    async def create_branch(self, name: str, ref: str = "main") -> BranchRef:
-        """Create a branch named ``name`` pointing at ``ref`` on the catalog repo."""
+    async def create_branch(self, name: str, ref: str | None = None) -> BranchRef:
+        """Create a branch named ``name`` pointing at ``ref`` on the catalog repo.
+
+        ``ref=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
         raise NotImplementedError("create_branch() must be implemented by the provider")
 
     async def list_merge_requests(self, state: str = "opened") -> list[MergeRequestRef]:
@@ -363,9 +397,12 @@ class GitProvider(ABC):
         title: str,
         description: str,
         source_branch: str,
-        target_branch: str = "main",
+        target_branch: str | None = None,
     ) -> MergeRequestRef:
-        """Open a merge request / pull request on the catalog repo."""
+        """Open a merge request / pull request on the catalog repo.
+
+        ``target_branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
+        """
         raise NotImplementedError("create_merge_request() must be implemented by the provider")
 
     async def merge_merge_request(self, iid: int) -> MergeRequestRef:

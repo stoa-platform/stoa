@@ -980,10 +980,18 @@ class TestListCommits:
         assert result[0]["author"] == "Alice"
 
     async def test_default_limit_is_twenty(self):
+        """CP-1 P2 L.1: list_commits now uses iterator=True + islice.
+
+        The call must pass ``iterator=True`` and ``per_page=min(limit,100)=20``
+        so paginated truncation is fixed, while ``islice`` caps the returned
+        list at the caller's ``limit``.
+        """
         svc = _connected_service()
-        svc._project.commits.list.return_value = []
+        svc._project.commits.list.side_effect = lambda **_: iter([])
         await svc.list_commits()
-        svc._project.commits.list.assert_called_once_with(path=None, per_page=20)
+        svc._project.commits.list.assert_called_once_with(
+            path=None, per_page=20, iterator=True
+        )
 
 
 # ─────────────────────────────────────────────

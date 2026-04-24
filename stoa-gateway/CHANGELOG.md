@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.13](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.12...stoa-gateway-v0.9.13) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** GW-1 P1 — skills health endpoints stop creating state on read ([#2508](https://github.com/stoa-platform/stoa/issues/2508)) ([775d6cb](https://github.com/stoa-platform/stoa/commit/775d6cbdb032440c319748fa2dd46100f9a520ee))
+
 ## [0.9.12](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.11...stoa-gateway-v0.9.12) (2026-04-24)
 
 

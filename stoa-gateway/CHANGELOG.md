@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.15](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.14...stoa-gateway-v0.9.15) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** close GW-2 bug hunt batch — 10 config hardening items ([#2523](https://github.com/stoa-platform/stoa/issues/2523)) ([5d0af28](https://github.com/stoa-platform/stoa/commit/5d0af28dd3898f8d8507db2282b6a23dd31cdb84))
+
 ## [0.9.14](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.13...stoa-gateway-v0.9.14) (2026-04-24)
 
 

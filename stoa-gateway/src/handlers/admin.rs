@@ -21,6 +21,7 @@
 //! `state.rs` remain stable.
 
 mod apis;
+mod audit;
 mod auth;
 mod cache;
 mod circuit_breaker;
@@ -39,6 +40,7 @@ mod tracing;
 mod validation;
 
 pub use apis::{delete_api, get_api, list_apis, upsert_api};
+pub use audit::admin_audit_log;
 pub use auth::{admin_auth, admin_rate_limit};
 pub use cache::{
     cache_clear, cache_stats, prompt_cache_get, prompt_cache_invalidate, prompt_cache_load,

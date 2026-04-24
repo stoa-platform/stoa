@@ -6,6 +6,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 
 export interface SkillEntry {
   key: string;
@@ -62,10 +63,13 @@ class SkillsService {
 
   /**
    * Delete a skill by key.
-   * Endpoint: DELETE /v1/gateway/admin/skills?key=X
+   * Endpoint: DELETE /v1/gateway/admin/skills/:key
+   *
+   * The gateway previously exposed a query-string variant
+   * (?key=X) that was deprecated in GW-1 P2-3 with Sunset 2026-10-24.
    */
   async deleteSkill(key: string): Promise<void> {
-    await apiService.delete(`/v1/gateway/admin/skills?key=${encodeURIComponent(key)}`);
+    await apiService.delete(path('v1', 'gateway', 'admin', 'skills', key));
   }
 
   /**

@@ -38,7 +38,7 @@ mod skills;
 mod tracing;
 
 pub use apis::{delete_api, get_api, list_apis, upsert_api};
-pub use auth::admin_auth;
+pub use auth::{admin_auth, admin_rate_limit};
 pub use cache::{
     cache_clear, cache_stats, prompt_cache_get, prompt_cache_invalidate, prompt_cache_load,
     prompt_cache_patterns, prompt_cache_stats, CacheStatsResponse, PromptCacheLoadEntry,

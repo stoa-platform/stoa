@@ -237,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
     fn test_load_with_defaults() {
         // Wrap in figment::Jail so this test takes the same global LOCK as
         // the enum env-var tests below (CAB-2165 Bundle 1). Without it, a
@@ -376,6 +377,7 @@ mod tests {
     // these tests don't race with others that `set_var`/`remove_var` globally.
 
     #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
     fn env_var_sets_git_provider_to_github() {
         use figment::providers::{Env, Serialized};
         use figment::{Figment, Jail};
@@ -392,6 +394,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
     fn env_var_sets_environment_to_prod() {
         use figment::providers::{Env, Serialized};
         use figment::{Figment, Jail};
@@ -408,6 +411,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
     fn env_var_rejects_unknown_git_provider() {
         use figment::providers::{Env, Serialized};
         use figment::{Figment, Jail};

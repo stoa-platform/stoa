@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.4](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.3...control-plane-ui-v1.5.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui:** close CAB-2164 UI-3 cleanup — zombies doc + any hardening ([#2527](https://github.com/stoa-platform/stoa/issues/2527)) ([31f00b7](https://github.com/stoa-platform/stoa/commit/31f00b79d4254fd3ae1d3e7a65e90399d22c7bfe))
+
 ## [1.5.3](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.2...control-plane-ui-v1.5.3) (2026-04-24)
 
 

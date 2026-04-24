@@ -69,8 +69,14 @@ wait_for_label() {
 
         if [ -n "$fallback_pattern" ]; then
             local count
-            count=$("$GH" issue view "$issue_num" --json comments \
-                --jq "[.comments[].body | select(contains(\"${fallback_pattern}\"))] | length" \
+            # Pipe gh's raw JSON to external jq with --arg so the pattern
+            # is bound as a string variable rather than interpolated
+            # into the filter body (Council S3 finding A2: bash string
+            # interpolation into a jq filter is a jq-injection surface
+            # if the pattern ever carries quotes or special chars).
+            count=$("$GH" issue view "$issue_num" --json comments 2>/dev/null \
+                | jq --arg p "$fallback_pattern" \
+                    '[.comments[].body | select(contains($p))] | length' \
                 2>/dev/null || echo 0)
             if [ "${count:-0}" -gt 0 ] 2>/dev/null; then
                 echo "fallback comment '${fallback_pattern}' found on issue $issue_num (attempt ${attempt}/${max_attempts})"

@@ -108,13 +108,13 @@ def test_timeout_when_label_never_appears(tmp_path):
 
 
 def test_fallback_comment_pattern_triggers_success(tmp_path):
-    # labels call returns empty; comments call returns length > 0
+    # labels call returns empty; comments call returns JSON piped to jq
     result = _run_script(
         ["42", "plan-validated", "3", "0", "Plan Score"],
         tmp_path,
         fake_gh_body='''
         if [[ "$*" == *comments* ]]; then
-            echo "1"
+            echo '{"comments":[{"body":"Plan Score: 8.0/10 — Go"}]}'
             exit 0
         fi
         exit 0  # labels path returns empty
@@ -123,6 +123,27 @@ def test_fallback_comment_pattern_triggers_success(tmp_path):
     assert result.returncode == 0
     assert "fallback comment 'Plan Score' found" in result.stdout
     assert "validated=true" in result.stdout
+
+
+def test_fallback_rejects_jq_injection(tmp_path):
+    # Pattern containing a double-quote would have broken the legacy
+    # bash interpolation into the jq filter (A2). With --arg binding,
+    # the pattern is treated as a string and contains() returns false.
+    result = _run_script(
+        ["42", "plan-validated", "2", "0", '"); system("rm -rf /"); //'],
+        tmp_path,
+        fake_gh_body='''
+        if [[ "$*" == *comments* ]]; then
+            echo '{"comments":[{"body":"Plan Score: 8.0/10"}]}'
+            exit 0
+        fi
+        exit 0
+        ''',
+    )
+    # The injection attempt is benign: jq filter stays intact, pattern
+    # doesn't match the comment body, script times out normally.
+    assert result.returncode == 1
+    assert "validated=false" in result.stdout
 
 
 def test_fallback_not_used_when_pattern_empty(tmp_path):

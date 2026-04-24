@@ -21,13 +21,20 @@ from __future__ import annotations
 import argparse
 import sys
 
+# Shared Council score thresholds. The legacy workflow hardcoded these as
+# `>= 8.0` and `>= 6.0` in bash bc comparisons at 5 different sites; the
+# Phase 2a extraction imports them from here to keep a single source of
+# truth (Council S3 pre-push gate finding D2).
+SCORE_GO = 8.0
+SCORE_FIX = 6.0
+
 
 def map_score(score: float, namespace: str) -> str:
     if namespace not in ("ticket", "plan"):
         raise ValueError(f"namespace must be 'ticket' or 'plan', got {namespace!r}")
-    if score >= 8.0:
+    if score >= SCORE_GO:
         verdict = "go"
-    elif score >= 6.0:
+    elif score >= SCORE_FIX:
         verdict = "fix"
     else:
         verdict = "redo"

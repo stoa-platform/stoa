@@ -31,6 +31,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from map_score_to_label import SCORE_FIX, SCORE_GO
+
+# Defensive cap on execution file size. The file is produced by
+# anthropics/claude-code-action on the runner, not by user input, so a
+# multi-megabyte blob would signal a pathological Claude output rather
+# than an attack. We refuse to parse it and exit loudly (Council S3
+# pre-push gate finding A3 — loud error over silent truncation per
+# reviewer).
+MAX_EXECUTION_BYTES = 10 * 1024 * 1024
+
 _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 _MODE_EXPLICIT_RE = re.compile(
     r"ship\s*/\s*show\s*/\s*ask\s*:?\s*(ship|show|ask)",
@@ -158,9 +168,9 @@ def _extract_estimate_points(text: str) -> int:
 def _derive_verdict(score: float | None) -> str | None:
     if score is None:
         return None
-    if score >= 8.0:
+    if score >= SCORE_GO:
         return "go"
-    if score >= 6.0:
+    if score >= SCORE_FIX:
         return "fix"
     return "redo"
 
@@ -252,12 +262,42 @@ def _read_execution_text(path: Path) -> tuple[str, bool]:
     return _concat_assistant_text(data), True
 
 
+def _empty_result() -> dict[str, Any]:
+    return {
+        "score": None,
+        "verdict": None,
+        "mode": "ask",
+        "estimate_points": 0,
+        "source": "regex",
+    }
+
+
 def run(
     execution_file: Path,
     stage: str,
     fallback_comment: Path | None,
     strict: bool,
 ) -> tuple[int, dict[str, Any]]:
+    # Loud pre-flight on file size: refuse to parse a pathological blob
+    # instead of silently truncating or OOM-ing on the runner.
+    if execution_file.exists():
+        try:
+            actual_size = execution_file.stat().st_size
+        except OSError as exc:
+            print(
+                f"error: could not stat execution file {execution_file}: {exc}",
+                file=sys.stderr,
+            )
+            return 2, _empty_result()
+        if actual_size > MAX_EXECUTION_BYTES:
+            print(
+                f"error: execution file {execution_file} is {actual_size} bytes, "
+                f"exceeds {MAX_EXECUTION_BYTES}-byte limit — possible pathological "
+                f"Claude output; refusing to parse",
+                file=sys.stderr,
+            )
+            return 2, _empty_result()
+
     text, exec_existed = _read_execution_text(execution_file)
 
     if text:

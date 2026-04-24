@@ -121,6 +121,20 @@ def test_parse_structured_json_overrides_regex():
     assert result["estimate_points"] == 3
 
 
+def test_run_oversize_execution_file_refuses_loudly(tmp_path, capsys):
+    import os
+
+    big = tmp_path / "huge.json"
+    big.write_text("[]")
+    os.truncate(big, 10 * 1024 * 1024 + 1)
+    code, result = run(big, "s1", fallback_comment=None, strict=False)
+    assert code == 2
+    assert result["score"] is None
+    err = capsys.readouterr().err
+    assert "exceeds" in err
+    assert "pathological" in err
+
+
 def test_run_missing_exec_file_returns_error(tmp_path):
     missing = tmp_path / "nope.json"
     code, result = run(missing, "s1", fallback_comment=None, strict=False)

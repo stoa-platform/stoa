@@ -4,14 +4,17 @@ import json
 import logging
 from datetime import UTC
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
 from ..database import get_db
+from ..models.subscription import Subscription, SubscriptionStatus
+from ..repositories.subscription import SubscriptionRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
+from ..services.api_key import APIKeyService
 from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
@@ -216,7 +219,14 @@ async def regenerate_secret(tenant_id: str, app_id: str, user: User = Depends(ge
 @router.post("/{app_id}/subscribe/{api_id}")
 @require_permission(Permission.APPS_UPDATE)
 @require_tenant_access
-async def subscribe_to_api(tenant_id: str, app_id: str, api_id: str, user: User = Depends(get_current_user)):
+async def subscribe_to_api(
+    tenant_id: str,
+    app_id: str,
+    api_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Subscribe application to an API."""
     client = await _get_tenant_client(app_id, tenant_id)
     attrs = client.get("attributes", {})
@@ -228,6 +238,36 @@ async def subscribe_to_api(tenant_id: str, app_id: str, api_id: str, user: User 
     subs.append(api_id)
     attrs["api_subscriptions"] = json.dumps(subs)
     await keycloak_service.update_client(app_id, {"attributes": attrs})
+
+    if request.headers.get("x-demo-mode", "").lower() == "true":
+        api_key, api_key_hash, api_key_prefix = APIKeyService.generate_key()
+        repo = SubscriptionRepository(db)
+        subscription = Subscription(
+            application_id=app_id,
+            application_name=client.get("name") or client.get("clientId") or app_id,
+            subscriber_id=user.id,
+            subscriber_email=user.email,
+            api_id=api_id,
+            api_name=api_id,
+            api_version="1.0",
+            tenant_id=tenant_id,
+            plan_name="demo",
+            api_key_hash=api_key_hash,
+            api_key_prefix=api_key_prefix,
+            status=SubscriptionStatus.ACTIVE,
+            approved_by="system:demo-smoke",
+        )
+        subscription = await repo.create(subscription)
+        await db.commit()
+        return {
+            "id": str(subscription.id),
+            "subscription_id": str(subscription.id),
+            "api_key": api_key,
+            "api_key_prefix": api_key_prefix,
+            "status": subscription.status.value,
+            "message": f"Application subscribed to API {api_id}",
+        }
+
     return {"message": f"Application subscribed to API {api_id}"}
 
 

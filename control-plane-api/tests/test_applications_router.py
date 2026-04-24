@@ -13,6 +13,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 KC_SVC_PATH = "src.routers.applications.keycloak_service"
+SUB_REPO_PATH = "src.routers.applications.SubscriptionRepository"
+API_KEY_SVC_PATH = "src.routers.applications.APIKeyService"
 
 
 def _mock_kc_client(app_id="app-uuid-1", tenant_id="acme", **overrides):

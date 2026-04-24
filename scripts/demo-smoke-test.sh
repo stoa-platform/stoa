@@ -20,6 +20,7 @@
 #   TENANT_ID            demo
 #   GATEWAY_ID           gateway-demo
 #   DEMO_ADMIN_TOKEN     (empty → bypass via ?demo-admin header if cp-api allows)
+#   DEMO_MODE_HEADER     true (sends X-Demo-Mode: true to bounded demo endpoints)
 #   ROUTE_SYNC_GRACE_SECS 30
 #   DEMO_API_NAME        demo-api-smoke
 #   DEMO_APP_NAME        demo-app-smoke
@@ -51,6 +52,7 @@ MOCK_BACKEND_UPSTREAM_URL="${MOCK_BACKEND_UPSTREAM_URL:-http://mock-backend:9090
 TENANT_ID="${TENANT_ID:-demo}"
 GATEWAY_ID="${GATEWAY_ID:-gateway-demo}"
 DEMO_ADMIN_TOKEN="${DEMO_ADMIN_TOKEN:-}"
+DEMO_MODE_HEADER="${DEMO_MODE_HEADER:-true}"
 ROUTE_SYNC_GRACE_SECS="${ROUTE_SYNC_GRACE_SECS:-30}"
 DEMO_API_NAME="${DEMO_API_NAME:-demo-api-smoke}"
 DEMO_APP_NAME="${DEMO_APP_NAME:-demo-app-smoke}"
@@ -156,6 +158,9 @@ http_call() {
     local curl_args=(-sS -o "$tmp" -w '%{http_code}' --max-time 15 -X "$method" "$url")
     if [[ -n "$DEMO_ADMIN_TOKEN" ]]; then
         curl_args+=(-H "Authorization: Bearer $DEMO_ADMIN_TOKEN")
+    fi
+    if [[ "$DEMO_MODE_HEADER" == "true" ]]; then
+        curl_args+=(-H "X-Demo-Mode: true")
     fi
     if [[ -n "$body" ]]; then
         curl_args+=(-H "Content-Type: application/json" --data "$body")

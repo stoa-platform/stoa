@@ -1,0 +1,4 @@
+# Minimal config — just overrides a few root fields, everything else defaults.
+port: 9090
+host: "127.0.0.1"
+log_level: "debug"

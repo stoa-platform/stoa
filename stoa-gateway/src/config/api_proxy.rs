@@ -10,17 +10,19 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiProxyConfig {
     /// Master switch: enable the `/apis/{backend}/*` proxy router.
-    /// Env: STOA_API_PROXY_ENABLED
+    /// Env: STOA_API_PROXY__ENABLED
     #[serde(default)]
     pub enabled: bool,
 
     /// Require OAuth2 authentication for all API proxy requests.
     /// When false, accepts unauthenticated requests (dev mode only).
-    /// Env: STOA_API_PROXY_REQUIRE_AUTH
+    /// Env: STOA_API_PROXY__REQUIRE_AUTH
     #[serde(default = "default_api_proxy_require_auth")]
     pub require_auth: bool,
 
     /// Per-backend configurations, keyed by backend name (e.g., "linear", "github").
+    /// Env: STOA_API_PROXY__BACKENDS__<NAME>__<FIELD> (triple level = double-underscore
+    /// between each segment: backends, the backend name, and the field).
     #[serde(default)]
     pub backends: HashMap<String, ProxyBackendConfig>,
 }
@@ -63,7 +65,7 @@ pub struct ProxyBackendConfig {
     pub timeout_secs: u64,
 
     /// Enable circuit breaker for this backend.
-    #[serde(default = "default_circuit_breaker_enabled")]
+    #[serde(default = "crate::config::defaults::default_true")]
     pub circuit_breaker_enabled: bool,
 
     /// Enable direct fallback when gateway is down (critical backends only).
@@ -90,10 +92,6 @@ fn default_proxy_backend_header() -> String {
 
 fn default_proxy_backend_timeout_secs() -> u64 {
     30
-}
-
-fn default_circuit_breaker_enabled() -> bool {
-    true
 }
 
 #[cfg(test)]

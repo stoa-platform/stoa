@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.2...control-plane-api-v1.8.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** make AT-0 health probes observable ([#2541](https://github.com/stoa-platform/stoa/issues/2541)) ([90ef5a7](https://github.com/stoa-platform/stoa/commit/90ef5a7deafdaa2aed8117427ae27282b9902b9f))
+
 ## [1.8.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.1...control-plane-api-v1.8.2) (2026-04-24)
 
 

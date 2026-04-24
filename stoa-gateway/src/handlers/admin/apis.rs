@@ -36,22 +36,20 @@ pub async fn upsert_api(
         tid,
     );
 
-    // Reject empty or blank required fields
-    if route.name.trim().is_empty() {
-        warn!(api_id = %api_id, "Admin API rejected: empty name");
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "name must not be empty"})),
-        )
-            .into_response();
+    // GW-1 P1-6: reject empty/blank required identifier fields in one pass.
+    // `methods` stays permissive — the struct doc treats empty as "all methods".
+    let mut errors: Vec<String> = Vec::new();
+    super::validation::require_non_empty("id", &route.id, &mut errors);
+    super::validation::require_non_empty("name", &route.name, &mut errors);
+    super::validation::require_non_empty("tenant_id", &route.tenant_id, &mut errors);
+    super::validation::require_non_empty("path_prefix", &route.path_prefix, &mut errors);
+    super::validation::require_non_empty("backend_url", &route.backend_url, &mut errors);
+    if !route.path_prefix.trim().is_empty() && !route.path_prefix.starts_with('/') {
+        errors.push("path_prefix must start with '/'".to_string());
     }
-    if route.backend_url.trim().is_empty() {
-        warn!(api_id = %api_id, "Admin API rejected: empty backend_url");
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "backend_url must not be empty"})),
-        )
-            .into_response();
+    if !errors.is_empty() {
+        warn!(api_id = %api_id, ?errors, "Admin API rejected: validation failed");
+        return super::validation::validation_error_response(errors);
     }
 
     // SSRF pre-check: block private/internal IPs at registration time,
@@ -358,5 +356,108 @@ mod tests {
             .unwrap();
         let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(data.len(), 0);
+    }
+
+    // ─── GW-1 P1-6 regression: required fields on upsert_api ──────────
+
+    async fn post_and_read_errors(
+        app: axum::Router,
+        body: serde_json::Value,
+    ) -> (StatusCode, Vec<String>) {
+        let response = app
+            .oneshot(auth_json_req("POST", "/apis", body))
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let errors = json["errors"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        (status, errors)
+    }
+
+    fn valid_api_payload() -> serde_json::Value {
+        serde_json::json!({
+            "id": "r1",
+            "name": "payments",
+            "tenant_id": "acme",
+            "path_prefix": "/apis/acme/payments",
+            "backend_url": "https://backend.test",
+            "methods": ["GET"],
+            "spec_hash": "h",
+            "activated": true
+        })
+    }
+
+    #[tokio::test]
+    async fn test_upsert_api_rejects_empty_id() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let mut p = valid_api_payload();
+        p["id"] = serde_json::json!("");
+        let (status, errors) = post_and_read_errors(app, p).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(
+            errors.iter().any(|e| e.contains("id")),
+            "errors = {:?}",
+            errors
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upsert_api_rejects_empty_tenant_id() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let mut p = valid_api_payload();
+        p["tenant_id"] = serde_json::json!("");
+        let (status, errors) = post_and_read_errors(app, p).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(errors.iter().any(|e| e.contains("tenant_id")));
+    }
+
+    #[tokio::test]
+    async fn test_upsert_api_rejects_path_prefix_without_leading_slash() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let mut p = valid_api_payload();
+        p["path_prefix"] = serde_json::json!("apis/acme/payments");
+        let (status, errors) = post_and_read_errors(app, p).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(errors.iter().any(|e| e.contains("path_prefix")));
+    }
+
+    #[tokio::test]
+    async fn test_upsert_api_reports_all_missing_fields_at_once() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let p = serde_json::json!({
+            "id": "",
+            "name": "",
+            "tenant_id": "",
+            "path_prefix": "",
+            "backend_url": "",
+            "methods": [],
+            "spec_hash": "",
+            "activated": true
+        });
+        let (status, errors) = post_and_read_errors(app, p).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        // All five required identifier fields reported in one batch.
+        for field in ["id", "name", "tenant_id", "path_prefix", "backend_url"] {
+            assert!(
+                errors.iter().any(|e| e.contains(field)),
+                "missing error for {} in {:?}",
+                field,
+                errors
+            );
+        }
     }
 }

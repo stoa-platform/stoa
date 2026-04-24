@@ -64,19 +64,32 @@ runs:
       id: notify
       shell: bash
       env:
+        # Secrets via with: -> env:. Untrusted inputs (ticket, titles,
+        # URLs from the GitHub issue) also go through env: so the shell
+        # `"$VAR"` expansion handles metacharacters safely. Never
+        # interpolate `${{ inputs.* }}` directly inside the script body —
+        # CodeQL flags those as code-injection surfaces because inputs
+        # on workflow_dispatch are user-controlled.
         SLACK_WEBHOOK: ${{ inputs.slack-webhook }}
         SLACK_BOT_TOKEN: ${{ inputs.slack-bot-token }}
         SLACK_CHANNEL_ID: ${{ inputs.slack-channel-id }}
         PUSHGATEWAY_URL: ${{ inputs.pushgateway-url }}
         PUSHGATEWAY_AUTH: ${{ inputs.pushgateway-auth }}
+        INPUT_TICKET: ${{ inputs.ticket }}
+        INPUT_ISSUE_TITLE: ${{ inputs.issue-title }}
+        INPUT_ISSUE_URL: ${{ inputs.issue-url }}
+        INPUT_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        INPUT_SCORE: ${{ inputs.score }}
+        INPUT_VERDICT: ${{ inputs.verdict }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_WORKFLOW_LABEL: ${{ inputs.workflow-label }}
       run: |
         set -uo pipefail
         source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
 
         # Render score/verdict the way the legacy did: "?" when missing,
         # title-case verdict for the Slack card, lower-case for the metric.
-        RAW_VERDICT="${{ inputs.verdict }}"
-        LC_VERDICT=$(printf '%s' "$RAW_VERDICT" | tr '[:upper:]' '[:lower:]')
+        LC_VERDICT=$(printf '%s' "$INPUT_VERDICT" | tr '[:upper:]' '[:lower:]')
         case "$LC_VERDICT" in
           go)   DISPLAY_VERDICT="Go" ;;
           fix)  DISPLAY_VERDICT="Fix" ;;
@@ -84,24 +97,23 @@ runs:
           *)    DISPLAY_VERDICT="Go"; LC_VERDICT="go" ;;
         esac
 
-        RAW_SCORE="${{ inputs.score }}"
-        DISPLAY_SCORE="${RAW_SCORE:-?}"
-        METRIC_SCORE="${RAW_SCORE:-0}"
+        DISPLAY_SCORE="${INPUT_SCORE:-?}"
+        METRIC_SCORE="${INPUT_SCORE:-0}"
 
         COUNCIL_TS=$(notify_council \
-          "${{ inputs.ticket }}" \
-          "${{ inputs.issue-title }}" \
+          "$INPUT_TICKET" \
+          "$INPUT_ISSUE_TITLE" \
           "$DISPLAY_SCORE" \
           "$DISPLAY_VERDICT" \
-          "${{ inputs.issue-url }}" \
-          "${{ inputs.issue-number }}" \
-          "${{ inputs.mode }}")
+          "$INPUT_ISSUE_URL" \
+          "$INPUT_ISSUE_NUMBER" \
+          "$INPUT_MODE")
 
         _react_slack "mag" "$COUNCIL_TS" || true
 
         push_metrics_council \
-          "${{ inputs.workflow-label }}" \
-          "${{ inputs.ticket }}" \
+          "$INPUT_WORKFLOW_LABEL" \
+          "$INPUT_TICKET" \
           "$METRIC_SCORE" \
           "$LC_VERDICT" || true
 

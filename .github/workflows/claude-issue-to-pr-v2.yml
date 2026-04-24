@@ -58,10 +58,13 @@ jobs:
         id: fetch
         env:
           GH_TOKEN: ${{ github.token }}
+          # Workflow_dispatch inputs are user-controlled — route through
+          # env so the shell handles any metacharacter safely.
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -uo pipefail
           source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
-          RAW=$(gh issue view "${{ inputs.issue_number }}" --json title,body,url)
+          RAW=$(gh issue view "$ISSUE_NUMBER" --json title,body,url)
           TITLE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["title"])')
           URL=$(printf   '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["url"])')
           BODY=$(printf  '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["body"] or "")')
@@ -78,7 +81,7 @@ jobs:
             echo "CI1_BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
-          echo "::notice::prepared issue #${{ inputs.issue_number }} ticket=${TICKET:-none}"
+          echo "::notice::prepared issue #${ISSUE_NUMBER} ticket=${TICKET:-none}"
 
   council-validate:
     needs: prepare
@@ -140,22 +143,24 @@ jobs:
         if: steps.council.outputs.outcome == 'success' || steps.guard.outputs.already-set == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
           ensure_label "council-validated" "0e8a16" "Council validation passed"
-          add_label "${{ needs.prepare.outputs.number }}" "council-validated"
+          add_label "$ISSUE_NUMBER" "council-validated"
 
       - name: Apply ship-fast-path label
         if: steps.council.outputs.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          MODE: ${{ steps.council.outputs.mode }}
+          ESTIMATE: ${{ steps.council.outputs.estimate-points }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
-          MODE="${{ steps.council.outputs.mode }}"
-          ESTIMATE="${{ steps.council.outputs.estimate-points }}"
           if [ "$MODE" = "ship" ] && [ "${ESTIMATE:-0}" -gt 0 ] && [ "${ESTIMATE:-0}" -le 5 ]; then
             ensure_label "ship-fast-path" "d4c5f9" "Ship fast-path: skip Stage 2"
-            add_label "${{ needs.prepare.outputs.number }}" "ship-fast-path"
+            add_label "$ISSUE_NUMBER" "ship-fast-path"
             echo "::notice::ship fast-path label applied (mode=${MODE} estimate=${ESTIMATE}pt)"
           else
             echo "::notice::regular path (mode=${MODE} estimate=${ESTIMATE}pt)"
@@ -226,11 +231,12 @@ jobs:
         if: steps.fast-path.outputs.already-set == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
           ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
-          add_label "${{ needs.prepare.outputs.number }}" "plan-validated"
-          gh issue comment "${{ needs.prepare.outputs.number }}" \
+          add_label "$ISSUE_NUMBER" "plan-validated"
+          gh issue comment "$ISSUE_NUMBER" \
             --body "Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation."
 
       - uses: ./.github/actions/council-run
@@ -286,10 +292,11 @@ jobs:
         if: steps.plan.outputs.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
           ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
-          add_label "${{ needs.prepare.outputs.number }}" "plan-validated"
+          add_label "$ISSUE_NUMBER" "plan-validated"
 
       - uses: ./.github/actions/council-sync-linear
         if: steps.plan.outputs.outcome == 'success'
@@ -308,13 +315,21 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          # Route untrusted issue data through env rather than direct
+          # ${{ … }} interpolation — CodeQL flags the direct form as a
+          # code-injection surface since workflow_dispatch inputs are
+          # user-controlled.
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          ISSUE_TITLE: ${{ needs.prepare.outputs.title }}
+          ISSUE_URL: ${{ needs.prepare.outputs.url }}
+          PLAN_OUTCOME: ${{ steps.plan.outputs.outcome || 'skipped' }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
           PLAN_TS=$(notify_plan \
-            "${{ needs.prepare.outputs.number }}" \
-            "${{ needs.prepare.outputs.title }}" \
-            "${{ needs.prepare.outputs.url }}" \
-            "${{ steps.plan.outputs.outcome || 'skipped' }}")
+            "$ISSUE_NUMBER" \
+            "$ISSUE_TITLE" \
+            "$ISSUE_URL" \
+            "$PLAN_OUTCOME")
           _react_slack "white_check_mark" "$PLAN_TS" || true
 
       - uses: ./.github/actions/write-summary
@@ -351,8 +366,9 @@ jobs:
         if: steps.wait.outputs.validated != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          gh issue comment "${{ needs.prepare.outputs.number }}" \
+          gh issue comment "$ISSUE_NUMBER" \
             --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first to trigger plan validation, then \`/go-plan\` after it passes."
           exit 1
 
@@ -362,13 +378,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CLAUDE_DEFAULT_MODEL: ${{ vars.CLAUDE_DEFAULT_MODEL }}
+          # User-controlled text via env (CodeQL code-injection guard).
+          ISSUE_BODY: ${{ needs.prepare.outputs.body }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ai-ops/model-router.sh"
-          ISSUE_BODY='${{ needs.prepare.outputs.body }}'
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
           MODE=$(extract_mode "$ISSUE_BODY")
           if [ "${ESTIMATE:-0}" = "0" ]; then
-            COMMENTS=$(gh issue view "${{ needs.prepare.outputs.number }}" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+            COMMENTS=$(gh issue view "$ISSUE_NUMBER" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
             ESTIMATE=$(extract_estimate "$COMMENTS")
           fi
           ROUTE=$(route_model "$ESTIMATE" "$MODE")
@@ -463,25 +481,30 @@ jobs:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
+          # Route every workflow-controlled value through env so the
+          # shell expands via `"$VAR"` instead of literal substitution.
+          # Applies even to numeric / bot-generated values for uniformity
+          # (and so CodeQL doesn't have to second-guess which is which).
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          TICKET_ID_RAW: ${{ needs.prepare.outputs.ticket-id }}
+          STATUS: ${{ steps.implement.outcome }}
+          PR_FOUND: ${{ steps.detect.outputs.pr-found }}
+          PR_NUM: ${{ steps.detect.outputs.pr-num }}
+          PR_URL: ${{ steps.detect.outputs.pr-url }}
+          MODEL: ${{ steps.route.outputs.model }}
+          TURNS: ${{ steps.route.outputs.turns }}
         run: |
           source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
-          TICKET="${{ needs.prepare.outputs.ticket-id }}"
-          TICKET="${TICKET:-issue-${{ needs.prepare.outputs.number }}}"
-          STATUS="${{ steps.implement.outcome }}"
-          PR_FOUND="${{ steps.detect.outputs.pr-found }}"
-          PR_NUM="${{ steps.detect.outputs.pr-num }}"
-          PR_URL="${{ steps.detect.outputs.pr-url }}"
+          TICKET="${TICKET_ID_RAW:-issue-${ISSUE_NUMBER}}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
-          MODEL="${{ steps.route.outputs.model }}"
-          TURNS="${{ steps.route.outputs.turns }}"
 
           if [ "$STATUS" = "success" ]; then
-            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "${{ needs.prepare.outputs.number }}" "L1 Issue-to-PR v2" "$DURATION")
+            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR v2" "$DURATION")
             linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR v2" "$DURATION" || true
             push_metrics_implement "issue-to-pr-v2" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$TURNS" || true
             _react_slack "tada" "$IMPL_TS" || true
           elif [ "$STATUS" = "failure" ] && [ "$PR_FOUND" = "true" ]; then
-            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "${{ needs.prepare.outputs.number }}" "L1 Issue-to-PR v2 (max_turns)" "$DURATION")
+            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "$ISSUE_NUMBER" "L1 Issue-to-PR v2 (max_turns)" "$DURATION")
             push_metrics_implement "issue-to-pr-v2" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$TURNS" || true
             _react_slack "rocket" "$IMPL_TS" || true
           elif [ "$STATUS" = "failure" ]; then

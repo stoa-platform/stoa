@@ -15,6 +15,17 @@
  *
  * Consequence: two tabs can briefly hold divergent tokens until each
  * tab's next 401 → refresh cycle. Acceptable under the audit.
+ *
+ * P2-7 (WONT-FIX): the getters, setters, enqueueRefresh and
+ * drainRefreshQueue exports below are internals for files under
+ * `src/services/http/` and the `services/api.ts` façade.
+ * **Do not import them from consumer code** (pages, hooks, contexts).
+ * Use the `apiService` façade for auth state mutations. Enforcement is
+ * done at lint level via `no-restricted-imports` in `.eslintrc.cjs`
+ * (see the P2-7 override for alias-aware glob patterns).
+ * A runtime refactor (namespace class or IIFE closure) was considered but
+ * rejected for a P2 — the risk of introducing a bug on the critical auth
+ * path outweighs the encapsulation gain that the lint rule already buys.
  */
 export type TokenRefresher = () => Promise<string | null>;
 

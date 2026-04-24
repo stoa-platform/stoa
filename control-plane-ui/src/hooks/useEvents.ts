@@ -10,6 +10,18 @@ interface UseEventsOptions {
   enabled?: boolean;
 }
 
+// P2-8: minimal runtime shape guard on parsed SSE payloads. We vouch only
+// for a string `type` field here; the switch below narrows further, and
+// unknown types are dropped rather than forwarded to callers.
+function isValidEvent(x: unknown): x is Event {
+  return (
+    !!x &&
+    typeof x === 'object' &&
+    'type' in x &&
+    typeof (x as { type: unknown }).type === 'string'
+  );
+}
+
 export function useEvents({ tenantId, eventTypes, onEvent, enabled = true }: UseEventsOptions) {
   const queryClient = useQueryClient();
   const connectionRef = useRef<SseConnection | null>(null);
@@ -29,35 +41,54 @@ export function useEvents({ tenantId, eventTypes, onEvent, enabled = true }: Use
   const handleEvent = useCallback(
     (event: SseEvent) => {
       try {
-        const data = JSON.parse(event.data) as Event;
+        const parsed: unknown = JSON.parse(event.data);
+        // P2-8: minimal type guard. We only vouch for `type: string`; the
+        // caller's `onEvent` is invoked only for whitelisted event types,
+        // so an unknown payload shape can't propagate past this boundary.
+        if (!isValidEvent(parsed)) {
+          if (import.meta.env.DEV) {
+            // P2-9: gate residual diagnostic behind DEV to avoid leaking
+            // parser state to end-user browser consoles in prod.
+            console.warn('SSE: dropped event with unexpected shape', parsed);
+          }
+          return;
+        }
 
-        onEvent?.(data);
-
-        switch (data.type) {
+        switch (parsed.type) {
           case 'api-created':
           case 'api-updated':
           case 'api-deleted':
+            onEvent?.(parsed);
             queryClient.invalidateQueries({ queryKey: ['apis', tenantId] });
             break;
           case 'deploy-started':
           case 'deploy-progress':
           case 'deploy-success':
           case 'deploy-failed':
+            onEvent?.(parsed);
             queryClient.invalidateQueries({ queryKey: ['deployments', tenantId] });
             queryClient.invalidateQueries({ queryKey: ['apis', tenantId] });
             break;
           case 'app-created':
           case 'app-updated':
           case 'app-deleted':
+            onEvent?.(parsed);
             queryClient.invalidateQueries({ queryKey: ['applications', tenantId] });
             break;
           case 'tenant-created':
           case 'tenant-updated':
+            onEvent?.(parsed);
             queryClient.invalidateQueries({ queryKey: ['tenants'] });
             break;
+          default:
+            // Unknown event type — drop silently (or log in DEV).
+            if (import.meta.env.DEV) {
+              console.warn('SSE: dropped unknown event type', parsed.type);
+            }
         }
       } catch (error) {
-        console.error('Failed to parse event:', error);
+        // P2-9: parse failure is diagnostic only, silence in prod.
+        if (import.meta.env.DEV) console.error('Failed to parse event:', error);
       }
     },
     [queryClient, tenantId, onEvent]

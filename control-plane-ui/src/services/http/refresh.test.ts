@@ -251,4 +251,35 @@ describe('refreshAuthTokenWithTimeout — helper exposed for SSE (C4)', () => {
     expect(refresher).toHaveBeenCalledTimes(1);
     expect(getAuthToken()).toBe('new-token');
   });
+
+  // P2-2 WONT-FIX lock: retry replays the same AxiosRequestConfig reference
+  // without clone. With Axios defaults, already-serialized JSON data is stable
+  // across replay — this test guards against a future change where a custom
+  // transformRequest would accidentally double-encode the payload.
+  it('retry does not double-encode default JSON body (P2-2 WONT-FIX)', async () => {
+    const refresher = vi.fn<TokenRefresher>(async () => 'new-token');
+    setTokenRefresher(refresher);
+
+    const observedBodies: unknown[] = [];
+    let call = 0;
+    const instance = makeInstance(async (config) => {
+      observedBodies.push(config.data);
+      call++;
+      if (call === 1) return fail(config, 401);
+      return ok(config, { ok: true });
+    });
+
+    const body = { foo: 1, bar: 'baz' };
+    const res = await instance.post('/v1/thing', body);
+    expect(res.data).toEqual({ ok: true });
+    expect(refresher).toHaveBeenCalledTimes(1);
+
+    // Both calls saw the same serialized body (stable JSON string, not
+    // double-encoded). With axios defaults, transformRequest serializes once
+    // and the same string is replayed verbatim.
+    expect(observedBodies.length).toBe(2);
+    expect(observedBodies[0]).toBe(observedBodies[1]);
+    const asString = typeof observedBodies[0] === 'string' ? observedBodies[0] : JSON.stringify(observedBodies[0]);
+    expect(JSON.parse(asString)).toEqual(body);
+  });
 });

@@ -20,7 +20,19 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isReady: boolean; // Token is set and ready for API calls
-  accessToken: string | null; // Raw Keycloak JWT for Grafana iframe auth
+  /**
+   * Raw Keycloak JWT exposed on the context by design — consumers MUST be
+   * in the allowlist below. Adding new consumers requires a security review
+   * (track token leak surface).
+   *
+   * Known consumers (2026-04-24):
+   * - src/pages/GrafanaEmbed.tsx (Grafana iframe auth injection)
+   *
+   * P2-4 (WONT-FIX, documented): the long-term fix is a backend-signed URL
+   * flow (tracked separately); until then keep the surface minimal and
+   * document every new reader.
+   */
+  accessToken: string | null;
   login: () => void;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
@@ -103,7 +115,9 @@ function extractUserFromToken(oidcUser: any): User | null {
       };
       roles = payload.realm_access?.roles || [];
     } catch (e) {
-      console.warn('Failed to decode access_token for roles', e);
+      // P2-9: silence residual diagnostic in prod to avoid leaking parser
+      // state to browser consoles of end users.
+      if (import.meta.env.DEV) console.warn('Failed to decode access_token for roles', e);
     }
   }
 

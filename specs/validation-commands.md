@@ -34,7 +34,7 @@ Variables d'environnement (defaults documentés dans le script) :
 | `MOCK_BACKEND_UPSTREAM_URL` | `http://mock-backend:9090` | Mock HTTP backend vu par la gateway en compose |
 | `DEMO_GATEWAY_PATH` | `/apis/${DEMO_API_NAME}/get` | Chemin gateway canonique AT-4 |
 | `TENANT_ID` | `demo` (slug, résolu en UUID par cp-api) | Tenant démo |
-| `DEMO_ADMIN_TOKEN` | vide | JWT admin pour écrire côté cp-api. Si vide, le script passe en `STOA_DISABLE_AUTH=true` mode (dev only) |
+| `DEMO_ADMIN_TOKEN` | vide | JWT admin pour écrire côté cp-api. Si vide, le compose démo doit activer `STOA_DISABLE_AUTH=true` (dev only, requiert `X-Demo-Mode: true`, interdit en prod) |
 | `ROUTE_SYNC_GRACE_SECS` | `30` | Délai d'attente pour route visible en gateway après AT-2 |
 | `OBS_VISIBILITY_CHECK` | `auto` | Lance AT-5b nice-to-have (`off` pour désactiver) |
 | `GRAFANA_URL` | `http://localhost:3001` | Grafana local pour vérifier health + datasources |
@@ -50,6 +50,7 @@ Variables d'environnement (defaults documentés dans le script) :
 POSTGRES_PASSWORD=stoa KEYCLOAK_ADMIN_PASSWORD=admin \
 OPENSEARCH_ADMIN_PASSWORD=admin OPENSEARCH_DASHBOARDS_PASSWORD=admin \
 OPENSEARCH_LOGWRITER_PASSWORD=admin OPENSEARCH_OIDC_CLIENT_SECRET=x \
+STOA_DISABLE_AUTH=true \
 docker compose -f deploy/docker-compose/docker-compose.yml --profile demo up --build -d \
     postgres keycloak control-plane-api stoa-gateway mock-backend
 

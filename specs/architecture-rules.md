@@ -32,6 +32,14 @@ Tout composant non présent dans ce diagramme (Portal, Console UI, Kafka, OpenSe
 
 ### 2.1 HTTP endpoints cp-api (URL + method + status code + shape minimal)
 
+Auth démo provider/runtime :
+
+- Auth réelle : JWT Keycloak valide via `Authorization: Bearer`.
+- Bypass démo/dev borné : `STOA_DISABLE_AUTH=true` côté cp-api **et** header
+  `X-Demo-Mode: true` sur la requête.
+- `STOA_DISABLE_AUTH=true` est interdit en `ENVIRONMENT=production` et doit
+  faire échouer le boot cp-api.
+
 | Endpoint | Method | Status OK | Champs min réponse |
 |----------|--------|-----------|--------------------|
 | `/v1/tenants/{tid}/apis` | POST | 201 | `id`, `name` |

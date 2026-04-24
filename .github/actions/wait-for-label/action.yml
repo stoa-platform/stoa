@@ -1,0 +1,52 @@
+name: 'Wait for Label'
+description: >-
+  Poll a GitHub issue until a label appears, with optional comment
+  fallback. Phase 2b of CI-1 rewrite (CI-1-REWRITE-PLAN.md C.2).
+  Implements the 5-minute race-protection window the `implement` job
+  uses before giving up on Stage 2 plan validation.
+
+inputs:
+  issue-number:
+    description: 'GitHub issue number to poll.'
+    required: true
+  label-name:
+    description: 'Label that must appear for the wait to succeed.'
+    required: true
+  max-attempts:
+    description: 'Maximum number of polling attempts.'
+    required: false
+    default: '10'
+  interval-seconds:
+    description: 'Seconds to sleep between attempts.'
+    required: false
+    default: '30'
+  fallback-comment-pattern:
+    description: >-
+      Optional substring to look for in comment bodies. If any comment
+      contains it, the wait succeeds even if the label is still absent.
+    required: false
+    default: ''
+  github-token:
+    description: 'Token for gh CLI (needs issues:read).'
+    required: true
+
+outputs:
+  validated:
+    description: '"true" if the label (or fallback comment) appeared in time, "false" otherwise.'
+    value: ${{ steps.wait.outputs.validated }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Poll for label
+      id: wait
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        "${GITHUB_WORKSPACE}/scripts/ci/wait_for_label.sh" \
+          "${{ inputs.issue-number }}" \
+          "${{ inputs.label-name }}" \
+          "${{ inputs.max-attempts }}" \
+          "${{ inputs.interval-seconds }}" \
+          "${{ inputs.fallback-comment-pattern }}" || true

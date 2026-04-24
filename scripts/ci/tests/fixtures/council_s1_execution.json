@@ -1,0 +1,14 @@
+[
+  {"type": "system", "message": {"content": "setup"}},
+  {
+    "type": "assistant",
+    "message": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Running Council S1 validation...\n\n| Persona | Score | Verdict |\n|---------|-------|---------|\n| Chucky | 8/10 | Go |\n| OSS Killer | 8/10 | Go |\n| Archi | 9/10 | Go |\n| Saul | 7/10 | Fix |\n\n---\n**Council Score: 8.00/10 — Go**\nShip/Show/Ask: Ship\nEstimate: 5 pts\nComment `/go` to approve.\n"
+        }
+      ]
+    }
+  }
+]

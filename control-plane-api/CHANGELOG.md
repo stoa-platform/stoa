@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.0...control-plane-api-v1.8.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* **cp-1:** close 5 P2 cleanup findings (CP-1 CLOSED) ([#2500](https://github.com/stoa-platform/stoa/issues/2500)) ([48360db](https://github.com/stoa-platform/stoa/commit/48360dbb851d49a7bb971a3a4cabb134eb9623f7))
+* **cp-api:** close CP-1 P0 batch on git provider rewrite ([#2496](https://github.com/stoa-platform/stoa/issues/2496)) ([4ed8085](https://github.com/stoa-platform/stoa/commit/4ed80850b066a160e2b3fe501db9efa497599728))
+* **cp-api:** close CP-1 P1 hardening batch ([#2499](https://github.com/stoa-platform/stoa/issues/2499)) ([b58bdca](https://github.com/stoa-platform/stoa/commit/b58bdca4084c31458ec29a11ae8b6939ff3d88b8))
+
 ## [1.8.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.7.0...control-plane-api-v1.8.0) (2026-04-22)
 
 

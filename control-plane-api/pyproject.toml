@@ -185,7 +185,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if typing.TYPE_CHECKING:",
 ]
-fail_under = 60  # Temporarily lowered: CAB-1951 Phase 2 (mechanical test deletion). Restored in Phase 3.
+fail_under = 70
 show_missing = true
 skip_covered = true
 

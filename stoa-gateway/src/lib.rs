@@ -235,6 +235,8 @@ pub fn build_router(state: AppState) -> Router {
             "/a2a/agents/:name",
             get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
         )
+        // CAB-1722: API proxy backends admin (moved here for admin_auth coverage — GW-1 P0-2)
+        .route("/api-proxy/backends", get(list_api_proxy_backends))
         // CAB-1828: Route hot-reload
         .route("/routes/reload", post(admin::routes_reload))
         // CAB-1645: Error snapshot capture
@@ -249,9 +251,19 @@ pub fn build_router(state: AppState) -> Router {
         // CAB-1848: eBPF kernel policy sync
         .route("/ebpf/sync", post(ebpf::ebpf_sync))
         .route("/ebpf/status", get(ebpf::ebpf_status))
+        // GW-1 P0-1 / P1-3-lite: bearer check runs in constant time but
+        // the compare itself is fast — without a rate-limit gate, a remote
+        // peer can still probe it as fast as the network allows. Cap
+        // requests per peer IP BEFORE the auth check. Middleware order:
+        // outermost (executes first) → innermost. `admin_auth` is added
+        // last so `admin_rate_limit` wraps it.
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            admin::admin_rate_limit,
         ));
 
     // Common routes for all modes: health, metrics, admin
@@ -371,7 +383,8 @@ pub fn build_router(state: AppState) -> Router {
                 // Separate from /mcp/* and /apis/* (dynamic proxy routes).
                 // Uses catch-all since axum doesn't allow {param}/{*rest}.
                 .route("/proxy/*path", axum::routing::any(api_proxy_handler))
-                .route("/admin/api-proxy/backends", get(list_api_proxy_backends))
+                // `/admin/api-proxy/backends` lives inside `admin_router` (see above)
+                // so it inherits the admin_auth middleware — GW-1 P0-2.
                 // CAB-1713/1714: HEGEMON dispatch endpoints
                 .route("/hegemon/dispatch", post(hegemon::dispatch::dispatch_job))
                 .route(

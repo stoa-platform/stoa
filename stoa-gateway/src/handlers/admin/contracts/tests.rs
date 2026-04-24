@@ -559,7 +559,7 @@ mod transactional {
 
     // ── P1-1: upsert_contract_rest_bind_failure_does_not_persist_contract ─
     #[tokio::test]
-    async fn test_upsert_rest_bind_failure_does_not_persist() {
+    async fn regression_upsert_rest_bind_failure_does_not_persist() {
         let registry = Arc::new(ContractRegistry::new());
         let binders = MockBinders {
             rest_bind: Err("forced rest failure".into()),
@@ -773,7 +773,7 @@ mod transactional {
     //       so the rollback's bind_rest call also logs a warn — but the
     //       test's job is to verify the *attempt*, not the binder's health.
     #[tokio::test]
-    async fn test_upsert_existing_contract_rest_bind_failure_restores_previous_bindings() {
+    async fn regression_upsert_existing_contract_rest_bind_failure_restores_previous_bindings() {
         let registry = Arc::new(ContractRegistry::new());
         // Seed with the "old" version of the contract.
         let mut old = valid_contract("orders", "acme");
@@ -866,7 +866,7 @@ mod transactional {
     // indeterminate by construction, so we document it explicitly rather
     // than reporting false success.
     #[tokio::test]
-    async fn test_delete_contract_mcp_unbind_failure_restores_rest_bindings_or_reports_partial_state(
+    async fn regression_delete_contract_mcp_unbind_failure_restores_rest_bindings_or_reports_partial_state(
     ) {
         let registry = Arc::new(ContractRegistry::new());
         registry.upsert(valid_contract("orders", "acme"));

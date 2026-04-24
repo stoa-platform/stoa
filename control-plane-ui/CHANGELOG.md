@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.0...control-plane-ui-v1.5.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui-2:** close 10 P0 critical bugs (refresh token cascade + SSE + fetch bypass + path encoding) ([#2514](https://github.com/stoa-platform/stoa/issues/2514)) ([5247f22](https://github.com/stoa-platform/stoa/commit/5247f22c51a405693a7f58f44fa041e46ce91e3d))
+
 ## [1.5.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.4.2...control-plane-ui-v1.5.0) (2026-04-22)
 
 

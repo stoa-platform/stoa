@@ -22,13 +22,50 @@ jobs:
   demo-smoke:
     name: Demo Smoke (observation)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     env:
       DEMO_SMOKE_BLOCKING: ${{ inputs.blocking || vars.DEMO_SMOKE_BLOCKING || 'false' }}
+      POSTGRES_PASSWORD: stoa
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      OPENSEARCH_ADMIN_PASSWORD: admin
+      OPENSEARCH_DASHBOARDS_PASSWORD: admin
+      OPENSEARCH_LOGWRITER_PASSWORD: admin
+      OPENSEARCH_OIDC_CLIENT_SECRET: x
+      GATEWAY_URL: http://localhost:8081
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Boot demo smoke stack
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker compose -f deploy/docker-compose/docker-compose.yml --profile demo up --build -d \
+            postgres keycloak control-plane-api stoa-gateway mock-backend
+
+          for url in \
+            "http://localhost:8000/health" \
+            "http://localhost:8081/health" \
+            "http://localhost:9090/ping"
+          do
+            ok=0
+            for attempt in {1..90}; do
+              code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || echo 000)"
+              if [[ "$code" == "200" ]]; then
+                ok=1
+                break
+              fi
+              echo "waiting for $url (attempt $attempt/90, code=$code)"
+              sleep 5
+            done
+            if [[ "$ok" != "1" ]]; then
+              echo "::warning::Demo stack readiness probe did not reach 200 for $url"
+            fi
+          done
+
+          docker compose -f deploy/docker-compose/docker-compose.yml --profile demo ps
 
       - name: Run demo smoke in observation mode
         id: smoke
@@ -47,6 +84,7 @@ jobs:
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Blocking mode | \`${DEMO_SMOKE_BLOCKING}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Command | \`./scripts/demo-smoke-test.sh --no-observability-ui\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GATEWAY_URL | \`${GATEWAY_URL}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           bash -n scripts/demo-smoke-test.sh >"$SYNTAX_LOG" 2>&1
@@ -103,3 +141,16 @@ jobs:
           name: demo-smoke-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/demo-smoke/
           retention-days: 7
+
+      - name: Dump demo stack logs
+        if: always()
+        shell: bash
+        run: |
+          docker compose -f deploy/docker-compose/docker-compose.yml --profile demo logs --tail=120 \
+            control-plane-api stoa-gateway mock-backend || true
+
+      - name: Stop demo smoke stack
+        if: always()
+        shell: bash
+        run: |
+          docker compose -f deploy/docker-compose/docker-compose.yml --profile demo down -v --remove-orphans

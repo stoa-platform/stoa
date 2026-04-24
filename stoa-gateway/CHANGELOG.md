@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.14](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.13...stoa-gateway-v0.9.14) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** GW-1 P2 batch — 8 admin cleanup items (GW-1 CLOSED) ([#2512](https://github.com/stoa-platform/stoa/issues/2512)) ([0fe3465](https://github.com/stoa-platform/stoa/commit/0fe3465c1361e2fa6b65820477040d4f0b1b2f5e))
+
 ## [0.9.13](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.12...stoa-gateway-v0.9.13) (2026-04-24)
 
 

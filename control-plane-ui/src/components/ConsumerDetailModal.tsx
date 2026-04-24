@@ -6,6 +6,7 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { CertificateHealthBadge } from './CertificateHealthBadge';
 import type { Consumer, CertificateStatus } from '../types';
+import { normalizeCertificateStatus } from '../types';
 
 const certStatusStyles: Record<CertificateStatus, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -112,7 +113,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
   }, [tenantId, consumer, pemValue, toast, invalidate, onClose]);
 
   const hasCert = !!consumer.certificate_fingerprint;
-  const certStatus = consumer.certificate_status as CertificateStatus | undefined;
+  const certStatus = normalizeCertificateStatus(consumer.certificate_status);
   const canBind = !hasCert || certStatus === 'revoked' || certStatus === 'expired';
 
   return (

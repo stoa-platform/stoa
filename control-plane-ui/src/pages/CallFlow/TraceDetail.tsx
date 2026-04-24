@@ -17,49 +17,29 @@ import { StatCard } from '@stoa/shared/components/StatCard';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 
 // ─── Types ───
+// Canonical: `Schemas['TransactionDetailWithDemoResponse']` from the backend
+// OpenAPI snapshot (see services/api/monitoring.ts).
 
-interface TransactionSpan {
-  name: string;
-  service: string;
-  start_offset_ms: number;
-  duration_ms: number;
-  status: string;
-  metadata: Record<string, unknown>;
-}
+import type { Schemas } from '@stoa/shared/api-types';
+import type { MonitoringTransactionDetail } from '../../services/api/monitoring';
 
-interface TransactionDetail {
-  id: string;
-  trace_id: string;
-  api_name: string;
-  tenant_id: string | null;
-  method: string;
-  path: string;
-  status_code: number;
-  status: string;
-  status_text: string;
-  error_source: string | null;
-  client_ip: string | null;
-  user_id: string | null;
-  started_at: string;
-  total_duration_ms: number;
-  spans: TransactionSpan[];
-  request_headers: Record<string, string> | null;
-  response_headers: Record<string, string> | null;
-  error_message: string | null;
-}
+type TransactionDetail = MonitoringTransactionDetail;
+type TransactionSpan = Schemas['TransactionSpan'];
 
 // ─── Helpers ───
 
 const SENSITIVE_HEADERS = ['authorization', 'cookie', 'x-api-key', 'set-cookie'];
 
-function redactHeaders(headers: Record<string, string> | null): Record<string, string> {
+function redactHeaders(
+  headers: Record<string, unknown> | null | undefined
+): Record<string, string> {
   if (!headers) return {};
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     if (SENSITIVE_HEADERS.includes(key.toLowerCase())) {
       result[key] = '••••••••';
     } else {
-      result[key] = value;
+      result[key] = typeof value === 'string' ? value : String(value);
     }
   }
   return result;
@@ -128,8 +108,7 @@ import { apiService } from '../../services/api';
 
 async function fetchTraceDetail(traceId: string): Promise<TransactionDetail | null> {
   try {
-    const data = await apiService.getTransactionDetail(traceId);
-    return data as unknown as TransactionDetail;
+    return await apiService.getTransactionDetail(traceId);
   } catch {
     return null;
   }

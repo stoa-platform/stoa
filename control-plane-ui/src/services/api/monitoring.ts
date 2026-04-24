@@ -1,7 +1,13 @@
+import type { Schemas } from '@stoa/shared/api-types';
 import { httpClient, path } from '../http';
 
 // ── Monitoring / Call flow (CAB-1869) ────────────────────────────────────────
 
+// Detail view: canonicalized on the backend schema. The list endpoint shape
+// is not yet extracted as a dedicated backend schema — `MonitoringTransaction`
+// stays a local summary until backend exposes `TransactionListItem`.
+// DRIFT: monitoring transaction list response is not yet a dedicated
+// backend schema. Keep this summary shape local.
 export interface MonitoringTransaction {
   id: string;
   trace_id: string;
@@ -25,23 +31,7 @@ export interface MonitoringTransaction {
   }>;
 }
 
-export interface MonitoringTransactionDetail extends MonitoringTransaction {
-  tenant_id: string | null;
-  client_ip: string | null;
-  user_id: string | null;
-  spans: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-    metadata: Record<string, unknown>;
-  }>;
-  request_headers: Record<string, string> | null;
-  response_headers: Record<string, string> | null;
-  error_message: string | null;
-  demo_mode: boolean;
-}
+export type MonitoringTransactionDetail = Schemas['TransactionDetailWithDemoResponse'];
 
 export interface MonitoringStats {
   total_requests: number;

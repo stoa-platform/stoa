@@ -6,7 +6,8 @@ import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import type { Consumer, CertificateStatus } from '../types';
+import type { Consumer } from '../types';
+import { normalizeCertificateStatus } from '../types';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
@@ -508,7 +509,7 @@ export function Consumers() {
                     {consumer.certificate_fingerprint ? (
                       <div className="flex items-center gap-2">
                         <CertificateHealthBadge
-                          status={consumer.certificate_status as CertificateStatus}
+                          status={normalizeCertificateStatus(consumer.certificate_status)}
                           notAfter={consumer.certificate_not_after}
                         />
                         <span className="font-mono text-xs text-neutral-400 dark:text-neutral-500">
@@ -589,7 +590,7 @@ export function Consumers() {
               {consumer.certificate_fingerprint && (
                 <div className="flex items-center gap-2">
                   <CertificateHealthBadge
-                    status={consumer.certificate_status as CertificateStatus}
+                    status={normalizeCertificateStatus(consumer.certificate_status)}
                     notAfter={consumer.certificate_not_after}
                   />
                   <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">

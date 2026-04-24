@@ -30,6 +30,7 @@ export function useServiceHealth(url: string): UseServiceHealthResult {
 
       if (isSameOrigin) {
         // Same-origin: follow redirects to detect auth redirect chains
+        // eslint-disable-next-line no-restricted-globals -- liveness probe, no Bearer needed; auth handled via redirect detection
         const response = await fetch(url, {
           method: 'HEAD',
           signal: controller.signal,
@@ -58,6 +59,7 @@ export function useServiceHealth(url: string): UseServiceHealthResult {
         }
       } else {
         // Cross-origin: no-cors mode, opaque response means reachable
+        // eslint-disable-next-line no-restricted-globals -- cross-origin probe, no-cors mode; Bearer token not applicable
         const response = await fetch(url, {
           method: 'HEAD',
           signal: controller.signal,

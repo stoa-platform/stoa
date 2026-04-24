@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-import { useAuth } from '../contexts/AuthContext';
+import { httpClient } from '../services/http';
 
 // CAB-2029: Route through authenticated API proxy instead of unauthenticated nginx pass-through
 const PROMETHEUS_BASE = '/api/v1/metrics';
+const PROMETHEUS_TIMEOUT_MS = 10_000;
 
 interface PrometheusResult {
   metric: Record<string, string>;
@@ -33,18 +34,14 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
-  const { accessToken } = useAuth();
 
   const fetchQuery = useCallback(async () => {
-    if (!accessToken) return;
+    if (!query) return;
     try {
-      const url = `${PROMETHEUS_BASE}/query?query=${encodeURIComponent(query)}`;
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(10_000),
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const { data: json } = await httpClient.get<PrometheusResponse>(`${PROMETHEUS_BASE}/query`, {
+        params: { query },
+        timeout: PROMETHEUS_TIMEOUT_MS,
       });
-      if (!response.ok) throw new Error(`Prometheus returned ${response.status}`);
-      const json: PrometheusResponse = await response.json();
       if (mountedRef.current) {
         setData(json.data.result);
         setError(null);
@@ -57,11 +54,11 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [query, accessToken]);
+  }, [query]);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (query && accessToken) fetchQuery();
+    if (query) fetchQuery();
     if (refreshInterval > 0) {
       const interval = setInterval(fetchQuery, refreshInterval);
       return () => {
@@ -72,7 +69,7 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchQuery, refreshInterval, query, accessToken]);
+  }, [fetchQuery, refreshInterval, query]);
 
   return { data, loading, error, refetch: fetchQuery };
 }
@@ -90,20 +87,19 @@ export function usePrometheusRange(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
-  const { accessToken } = useAuth();
 
   const fetchRange = useCallback(async () => {
-    if (!accessToken) return;
+    if (!query) return;
     try {
       const end = Math.floor(Date.now() / 1000);
       const start = end - durationSeconds;
-      const url = `${PROMETHEUS_BASE}/query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&step=${step}`;
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(10_000),
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) throw new Error(`Prometheus returned ${response.status}`);
-      const json: PrometheusResponse = await response.json();
+      const { data: json } = await httpClient.get<PrometheusResponse>(
+        `${PROMETHEUS_BASE}/query_range`,
+        {
+          params: { query, start, end, step },
+          timeout: PROMETHEUS_TIMEOUT_MS,
+        }
+      );
       if (mountedRef.current) {
         const points: TimeSeriesPoint[] =
           json.data.result[0]?.values?.map(([ts, val]) => ({
@@ -121,11 +117,11 @@ export function usePrometheusRange(
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [query, durationSeconds, step, accessToken]);
+  }, [query, durationSeconds, step]);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (query && accessToken) fetchRange();
+    if (query) fetchRange();
     if (refreshInterval > 0) {
       const interval = setInterval(fetchRange, refreshInterval);
       return () => {
@@ -136,7 +132,7 @@ export function usePrometheusRange(
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchRange, refreshInterval, query, accessToken]);
+  }, [fetchRange, refreshInterval, query]);
 
   return { data, loading, error, refetch: fetchRange };
 }

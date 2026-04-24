@@ -21,12 +21,16 @@ permissions:
 
 jobs:
   # ==========================================================================
-  # 1. Verify Signed Commits (warning only)
+  # 1. Verify Signed Commits (warning only — Gate 6A policy)
   # ==========================================================================
+  # Policy: bots exempt; human commits before baseline grandfathered; human
+  # commits at/after baseline must be GPG-signed (warning only at Gate 6A).
+  # Baseline and exemption rules live in .github/scripts/check-signed-commits.py.
+  # Gate 6B will flip continue-on-error off after a stabilization window.
   verify-signatures:
     name: Verify Signed Commits
     runs-on: ubuntu-latest
-    continue-on-error: true # Warning only
+    continue-on-error: true # Warning only (Gate 6A)
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -34,43 +38,38 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Self-test signed-commits checker
+        run: python3 .github/scripts/check-signed-commits.py --self-test
+
       - name: Verify commit signatures
+        shell: bash
         run: |
-          echo "## Commit Signature Verification" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          UNSIGNED=0
-          TOTAL=0
-
+          set -u
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
             if git cat-file -e "$BASE_SHA" 2>/dev/null && git cat-file -e "$HEAD_SHA" 2>/dev/null; then
-              COMMITS=$(git log --format="%H" "${BASE_SHA}..${HEAD_SHA}")
+              mapfile -t COMMITS < <(git log --format='%H' "${BASE_SHA}..${HEAD_SHA}")
             else
               echo "::warning::Could not resolve PR commit range, falling back to last 10 commits"
-              COMMITS=$(git log --format="%H" -10)
+              mapfile -t COMMITS < <(git log --format='%H' -10)
             fi
           else
-            COMMITS=$(git log --format="%H" -10)
+            mapfile -t COMMITS < <(git log --format='%H' -10)
           fi
 
-          for COMMIT in $COMMITS; do
-            TOTAL=$((TOTAL + 1))
-            if git verify-commit "$COMMIT" 2>/dev/null; then
-              echo "| \`${COMMIT:0:8}\` | :white_check_mark: Signed |" >> $GITHUB_STEP_SUMMARY
-            else
-              UNSIGNED=$((UNSIGNED + 1))
-              echo "| \`${COMMIT:0:8}\` | :warning: Unsigned |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**$UNSIGNED/$TOTAL commits unsigned**" >> $GITHUB_STEP_SUMMARY
-
-          if [ "$UNSIGNED" -gt 0 ]; then
-            echo "::warning::$UNSIGNED out of $TOTAL commits are not signed"
+          if [ "${#COMMITS[@]}" -eq 0 ]; then
+            {
+              echo "## Commit Signature Verification"
+              echo ""
+              echo "_No commits in range._"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+
+          python3 .github/scripts/check-signed-commits.py \
+            --summary-file "$GITHUB_STEP_SUMMARY" \
+            "${COMMITS[@]}"
 
   # ==========================================================================
   # 2. License Compliance (Trivy SPDX)

@@ -40,6 +40,7 @@ uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
 rand = "0.10"                                # Thread-local PRNG for traceparent (perf)
 socket2 = "0.6"                             # TCP backlog tuning (perf)
 urlencoding = "2"                           # URL encoding for query params
+url = "2"                                    # URL parsing (admin input validation — GW-1 P1-9)
 
 # === NEW - Phase 3: Auth ===
 moka = { version = "0.12", features = ["sync", "future"] }  # API key + JWKS cache
@@ -122,4 +123,3 @@ harness = false
 [[bench]]
 name = "proxy_bench"
 harness = false
-

@@ -4,16 +4,7 @@ import { apiService } from '../../services/api';
 import { SubNav } from '../../components/SubNav';
 import { gatewayTabs } from '../../components/subNavGroups';
 import { RefreshCw, Shield, Lock, Key, Users, AlertTriangle } from 'lucide-react';
-
-interface GatewayInstance {
-  id: string;
-  name: string;
-  display_name?: string;
-  gateway_type: string;
-  mode?: string;
-  status: string;
-  capabilities?: string[];
-}
+import type { GatewayInstance } from '../../types';
 
 interface SecurityMetrics {
   gateway_health: {

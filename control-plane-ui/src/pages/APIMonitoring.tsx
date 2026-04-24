@@ -567,8 +567,7 @@ export function APIMonitoring() {
       setStats(statsResult.value.data);
     }
 
-    const allFailed =
-      txnResult.status === 'rejected' && statsResult.status === 'rejected';
+    const allFailed = txnResult.status === 'rejected' && statsResult.status === 'rejected';
     if (allFailed) {
       setError('Transaction monitoring is unavailable');
     } else {

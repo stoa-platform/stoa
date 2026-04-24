@@ -81,10 +81,7 @@ export function ApiDeploymentsDashboard() {
       console.error('Failed to load deployment summary:', summaryResult.reason);
     }
 
-    if (
-      deploymentsResult.status === 'rejected' &&
-      summaryResult.status === 'rejected'
-    ) {
+    if (deploymentsResult.status === 'rejected' && summaryResult.status === 'rejected') {
       const err = deploymentsResult.reason;
       const message = err instanceof Error ? err.message : 'Failed to load deployments';
       setError(message);

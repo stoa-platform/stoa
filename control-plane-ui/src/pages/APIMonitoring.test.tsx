@@ -145,9 +145,7 @@ describe('APIMonitoring', () => {
     expect(await screen.findByText(/trace-1/)).toBeInTheDocument();
     // No global error banner — the dashboard is only partially degraded,
     // not wholly unavailable.
-    expect(
-      screen.queryByText('Transaction monitoring is unavailable'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Transaction monitoring is unavailable')).not.toBeInTheDocument();
   });
 
   it('renders stats cards when API data loads successfully', async () => {

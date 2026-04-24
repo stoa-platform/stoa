@@ -22,7 +22,7 @@ describe('decodeJwtPayload (P1-5 — base64url + UTF-8)', () => {
     expect(payload.realm_access.roles).toEqual(['viewer']);
   });
 
-  it("handles payloads that contain base64url-specific chars (`-` and `_` via `>?` input)", () => {
+  it('handles payloads that contain base64url-specific chars (`-` and `_` via `>?` input)', () => {
     // Payload forcing `-` and `_` in the base64url encoding comes from
     // bytes that standard base64 encodes with `+` / `/`.
     // '\x3e\x3f' → standard b64 'Pj8' (no + or /), '\xfb\xef' → '++/' (close).

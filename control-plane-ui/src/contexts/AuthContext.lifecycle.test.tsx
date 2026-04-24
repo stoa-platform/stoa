@@ -17,9 +17,7 @@ const { mockOidcState, setTokenRefresher, getMeState } = vi.hoisted(() => {
     mockOidcState: state,
     setTokenRefresher: vi.fn(),
     getMeState: {
-      resolver: null as
-        | ((v: { role_display_names?: Record<string, string> }) => void)
-        | null,
+      resolver: null as ((v: { role_display_names?: Record<string, string> }) => void) | null,
     },
   };
 });
@@ -39,7 +37,7 @@ vi.mock('../services/api', () => ({
       () =>
         new Promise((resolve) => {
           getMeState.resolver = resolve as typeof getMeState.resolver;
-        }),
+        })
     ),
   },
 }));
@@ -95,7 +93,7 @@ describe('AuthContext lifecycle — getMe() after unmount (P1-6)', () => {
     });
 
     const unmountedWarning = consoleError.mock.calls.find((args) =>
-      String(args[0]).includes('setState'),
+      String(args[0]).includes('setState')
     );
     expect(unmountedWarning).toBeUndefined();
     consoleError.mockRestore();

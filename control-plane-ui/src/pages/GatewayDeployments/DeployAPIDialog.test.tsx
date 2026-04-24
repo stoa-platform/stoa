@@ -12,9 +12,7 @@ const mockGetCatalogEntries = vi
     { id: 'cat-1', api_name: 'Payment API', tenant_id: 'oasis-gunters', version: '1.0.0' },
   ]);
 
-const mockGetTenants = vi
-  .fn()
-  .mockResolvedValue([{ id: 'oasis-gunters', name: 'Oasis Gunters' }]);
+const mockGetTenants = vi.fn().mockResolvedValue([{ id: 'oasis-gunters', name: 'Oasis Gunters' }]);
 
 const mockGetGatewayInstances = vi.fn().mockResolvedValue({
   items: [

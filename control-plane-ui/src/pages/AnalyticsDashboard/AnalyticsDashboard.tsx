@@ -175,10 +175,7 @@ export function AnalyticsDashboard() {
       console.error('Failed to load error taxonomy:', taxonomyResult.reason);
     }
 
-    if (
-      apisResult.status === 'rejected' &&
-      taxonomyResult.status === 'rejected'
-    ) {
+    if (apisResult.status === 'rejected' && taxonomyResult.status === 'rejected') {
       const axiosErr = apisResult.reason as { response?: { data?: { detail?: string } } };
       setError(axiosErr.response?.data?.detail || 'Failed to load analytics');
     } else {

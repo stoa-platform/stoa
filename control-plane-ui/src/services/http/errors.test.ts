@@ -4,8 +4,7 @@ import { applyFriendlyErrorMessage } from './errors';
 import { markRedirecting, resetRedirecting } from './redirect';
 
 vi.mock('@stoa/shared/utils', () => ({
-  getFriendlyErrorMessage: (_err: unknown, fallback: string) =>
-    `friendly: ${fallback}`,
+  getFriendlyErrorMessage: (_err: unknown, fallback: string) => `friendly: ${fallback}`,
 }));
 
 describe('applyFriendlyErrorMessage (P1-16 — redirect flag gate)', () => {

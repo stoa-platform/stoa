@@ -68,10 +68,7 @@ export function GatewayDeploymentsDashboard() {
         console.error('Failed to load deployment summary:', summaryResult.reason);
       }
 
-      if (
-        deploymentsResult.status === 'rejected' &&
-        summaryResult.status === 'rejected'
-      ) {
+      if (deploymentsResult.status === 'rejected' && summaryResult.status === 'rejected') {
         const reason: any = deploymentsResult.reason;
         setError(reason?.response?.data?.detail || 'Failed to load deployments');
       } else {

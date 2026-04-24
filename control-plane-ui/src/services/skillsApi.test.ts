@@ -37,7 +37,7 @@ describe('skillsApi.deleteSkill (P1-4 — REST path migration)', () => {
     await skillsService.deleteSkill('weird key/with#chars?');
 
     expect(mockApiService.delete).toHaveBeenCalledWith(
-      '/v1/gateway/admin/skills/weird%20key%2Fwith%23chars%3F',
+      '/v1/gateway/admin/skills/weird%20key%2Fwith%23chars%3F'
     );
   });
 });

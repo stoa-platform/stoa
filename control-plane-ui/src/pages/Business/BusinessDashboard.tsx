@@ -255,8 +255,7 @@ export function BusinessDashboard() {
       const modeStats = modeStatsResult.status === 'fulfilled' ? modeStatsResult.value : null;
       const businessMetrics =
         businessMetricsResult.status === 'fulfilled' ? businessMetricsResult.value : null;
-      const topAPIsData =
-        topAPIsResult.status === 'fulfilled' ? topAPIsResult.value : [];
+      const topAPIsData = topAPIsResult.status === 'fulfilled' ? topAPIsResult.value : [];
 
       // Business metrics from API (with fallback defaults)
       if (businessMetrics) {

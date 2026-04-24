@@ -22,7 +22,5 @@ export function extractList<T>(data: unknown, label: string): T[] {
   ) {
     return (data as { items: T[] }).items;
   }
-  throw new Error(
-    `Unexpected ${label} response shape: expected array or { items: [...] }`,
-  );
+  throw new Error(`Unexpected ${label} response shape: expected array or { items: [...] }`);
 }

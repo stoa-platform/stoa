@@ -125,7 +125,7 @@ export function DriftDetection() {
     }
 
     const allFailed = [gatewaysResult, driftedResult, errorResult, summaryResult].every(
-      (r) => r.status === 'rejected',
+      (r) => r.status === 'rejected'
     );
     if (allFailed) {
       const err = gatewaysResult.status === 'rejected' ? gatewaysResult.reason : undefined;

@@ -50,7 +50,7 @@ describe('List shape guard (P1-8 — extractList replaces silent fallback)', () 
     it('throws on unexpected shape', async () => {
       mockHttpClient.get.mockResolvedValueOnce({ data: { page: 1 } });
       await expect(applicationsClient.list('tenant-1')).rejects.toThrowError(
-        /applications response shape/,
+        /applications response shape/
       );
     });
   });
@@ -59,7 +59,7 @@ describe('List shape guard (P1-8 — extractList replaces silent fallback)', () 
     it('throws on unexpected shape', async () => {
       mockHttpClient.get.mockResolvedValueOnce({ data: { page: 1 } });
       await expect(consumersClient.list('tenant-1')).rejects.toThrowError(
-        /consumers response shape/,
+        /consumers response shape/
       );
     });
   });

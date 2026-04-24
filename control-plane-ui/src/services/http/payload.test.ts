@@ -23,7 +23,7 @@ describe('extractList (P1-8 — shape guard)', () => {
 
   it('throws with label on an unexpected object shape (no items, not array)', () => {
     expect(() => extractList({ total: 5, page: 1 }, 'apis')).toThrowError(
-      /Unexpected apis response shape/,
+      /Unexpected apis response shape/
     );
   });
 

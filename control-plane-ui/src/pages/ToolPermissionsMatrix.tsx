@@ -76,13 +76,15 @@ export function ToolPermissionsMatrix() {
       // permissions matrix. Rejected slices are dropped; the matrix renders
       // with the subset of servers that responded.
       const results = await Promise.allSettled(
-        servers.map((s) => externalMcpServersService.getServer(s.id)),
+        servers.map((s) => externalMcpServersService.getServer(s.id))
       );
       return results
         .filter(
-          (r): r is PromiseFulfilledResult<
+          (
+            r
+          ): r is PromiseFulfilledResult<
             Awaited<ReturnType<typeof externalMcpServersService.getServer>>
-          > => r.status === 'fulfilled',
+          > => r.status === 'fulfilled'
         )
         .map((r) => r.value);
     },

@@ -32,7 +32,7 @@ export function decodeJwtPayload(token: string): unknown {
  */
 export function isMcpCallbackPath(
   pathname: string,
-  baseUrl: string = import.meta.env.BASE_URL || '/',
+  baseUrl: string = import.meta.env.BASE_URL || '/'
 ): boolean {
   const base = baseUrl.replace(/\/+$/, '');
   const target = `${base}/mcp-connectors/callback`;

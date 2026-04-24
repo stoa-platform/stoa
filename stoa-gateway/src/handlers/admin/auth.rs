@@ -240,8 +240,8 @@ mod tests {
     // and asserts anonymous requests get 401.
     #[tokio::test]
     async fn test_api_proxy_backends_behind_admin_auth_401_anon() {
-        use axum::{middleware, routing::get as axum_get, Router};
         use crate::proxy::list_api_proxy_backends;
+        use axum::{middleware, routing::get as axum_get, Router};
 
         let state = create_test_state(Some("secret"));
         let router: Router = Router::new()
@@ -267,8 +267,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_api_proxy_backends_behind_admin_auth_200_with_token() {
-        use axum::{middleware, routing::get as axum_get, Router};
         use crate::proxy::list_api_proxy_backends;
+        use axum::{middleware, routing::get as axum_get, Router};
 
         let state = create_test_state(Some("secret"));
         let router: Router = Router::new()
@@ -296,8 +296,8 @@ mod tests {
     // bucket is exhausted, so byte-by-byte probing stays bounded.
     #[tokio::test]
     async fn test_admin_rate_limit_returns_429_once_bucket_is_full() {
-        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use axum::{extract::ConnectInfo, middleware, routing::get as axum_get, Router};
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
         // Low bucket so the test runs fast (2 requests/60s).
         let mut config = crate::config::Config {
@@ -321,13 +321,19 @@ mod tests {
 
         // 2 allowed requests.
         for _ in 0..2 {
-            let mut req = Request::builder().uri("/health").body(Body::empty()).unwrap();
+            let mut req = Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap();
             req.extensions_mut().insert(ConnectInfo(peer));
             let resp = router.clone().oneshot(req).await.unwrap();
             assert_eq!(resp.status(), StatusCode::OK);
         }
         // 3rd must be throttled.
-        let mut req = Request::builder().uri("/health").body(Body::empty()).unwrap();
+        let mut req = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
         req.extensions_mut().insert(ConnectInfo(peer));
         let resp = router.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);

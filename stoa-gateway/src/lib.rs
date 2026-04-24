@@ -251,9 +251,19 @@ pub fn build_router(state: AppState) -> Router {
         // CAB-1848: eBPF kernel policy sync
         .route("/ebpf/sync", post(ebpf::ebpf_sync))
         .route("/ebpf/status", get(ebpf::ebpf_status))
+        // GW-1 P0-1 / P1-3-lite: bearer check runs in constant time but
+        // the compare itself is fast — without a rate-limit gate, a remote
+        // peer can still probe it as fast as the network allows. Cap
+        // requests per peer IP BEFORE the auth check. Middleware order:
+        // outermost (executes first) → innermost. `admin_auth` is added
+        // last so `admin_rate_limit` wraps it.
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            admin::admin_rate_limit,
         ));
 
     // Common routes for all modes: health, metrics, admin

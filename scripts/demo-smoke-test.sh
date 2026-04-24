@@ -16,6 +16,7 @@
 #   GATEWAY_URL          http://localhost:8080
 #   MOCK_BACKEND_URL     http://localhost:9090
 #   MOCK_BACKEND_UPSTREAM_URL http://mock-backend:9090
+#   DEMO_GATEWAY_PATH    /apis/${DEMO_API_NAME}/get
 #   TENANT_ID            demo
 #   GATEWAY_ID           gateway-demo
 #   DEMO_ADMIN_TOKEN     (empty → bypass via ?demo-admin header if cp-api allows)
@@ -53,6 +54,7 @@ DEMO_ADMIN_TOKEN="${DEMO_ADMIN_TOKEN:-}"
 ROUTE_SYNC_GRACE_SECS="${ROUTE_SYNC_GRACE_SECS:-30}"
 DEMO_API_NAME="${DEMO_API_NAME:-demo-api-smoke}"
 DEMO_APP_NAME="${DEMO_APP_NAME:-demo-app-smoke}"
+DEMO_GATEWAY_PATH="${DEMO_GATEWAY_PATH:-/apis/${DEMO_API_NAME}/get}"
 MOCK_MODE="${MOCK_MODE:-none}"     # none | all | auto (auto is treated as none)
 DRY_RUN_CONTRACT="${DRY_RUN_CONTRACT:-0}"
 OBS_VISIBILITY_CHECK="${OBS_VISIBILITY_CHECK:-auto}" # auto | off
@@ -422,45 +424,35 @@ at4_gateway_call() {
         return 1
     fi
 
-    # Probe a few common proxy URL shapes (the exact routing depends on gateway config)
+    # Canonical demo gateway mapping (B3): one official path, no shape probing.
     local hdr_file body_file
     hdr_file="$(mktemp)"; body_file="$(mktemp)"
     local attempt=0 status=""
-    local proxy_paths=(
-        "/proxy/${DEMO_API_NAME}/get"
-        "/proxy/${DEMO_API_NAME}/ping"
-        "/proxy/demo/${DEMO_API_NAME}/get"
-        "/api/${DEMO_API_NAME}/get"
-    )
-
-    for p in "${proxy_paths[@]}"; do
-        attempt=0
-        while [[ $attempt -lt 5 ]]; do
-            status="$(
-                curl -sS -o "$body_file" -D "$hdr_file" -w '%{http_code}' --max-time 10 \
-                     -H "X-Api-Key: ${API_KEY}" \
-                     "${GATEWAY_URL}${p}" 2>/dev/null || echo 000
-            )"
-            if [[ "$status" == "200" ]]; then break 2; fi
-            attempt=$((attempt + 1))
-            sleep 2
-        done
+    while [[ $attempt -lt 5 ]]; do
+        status="$(
+            curl -sS -o "$body_file" -D "$hdr_file" -w '%{http_code}' --max-time 10 \
+                 -H "X-Api-Key: ${API_KEY}" \
+                 "${GATEWAY_URL}${DEMO_GATEWAY_PATH}" 2>/dev/null || echo 000
+        )"
+        if [[ "$status" == "200" ]]; then break; fi
+        attempt=$((attempt + 1))
+        sleep 2
     done
 
     if [[ "$status" == "200" ]]; then
         LAST_REQUEST_ID="$(grep -i '^x-stoa-request-id:' "$hdr_file" | awk '{print $2}' | tr -d '\r' || true)"
-        record "AT-4" "PASS" "HTTP 200, request_id=${LAST_REQUEST_ID:-n/a}"
+        record "AT-4" "PASS" "HTTP 200 on ${DEMO_GATEWAY_PATH}, request_id=${LAST_REQUEST_ID:-n/a}"
         rm -f "$hdr_file" "$body_file"
         return 0
     fi
 
     if mock_allowed; then
-        record "AT-4" "MOCK" "no proxy path returned 200 (tried ${#proxy_paths[@]} shapes, last=${status}). Gateway route exposure needs spec confirmation."
+        record "AT-4" "MOCK" "canonical gateway path ${DEMO_GATEWAY_PATH} returned ${status}"
         rm -f "$hdr_file" "$body_file"
         return 0
     fi
 
-    record "AT-4" "FAIL" "all proxy paths failed, last status=${status}"
+    record "AT-4" "FAIL" "canonical gateway path ${DEMO_GATEWAY_PATH} returned ${status}"
     rm -f "$hdr_file" "$body_file"
     return 1
 }

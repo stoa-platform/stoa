@@ -7,10 +7,10 @@
 
 ## 1. Résumé exécutif (10 lignes)
 
-1. Les briques démo existent toutes en code : cp-api (routes apis/apps/subs/deployments présentes), stoa-gateway (`/proxy/*path`, `/health`, `/metrics`), stoactl (apply/get/subscription).
+1. Les briques démo existent toutes en code : cp-api (routes apis/apps/subs/deployments présentes), stoa-gateway (`/apis/{api_name}/{*path}`, `/health`, `/metrics`), stoactl (apply/get/subscription).
 2. Il n'y a **aucun test bout-en-bout** qui exerce les 5 étapes dans l'ordre sur la même instance. Le rewrite a recertifié chaque brique isolément.
 3. Les rewrites actifs (GW-1 closed, GW-2 open, GO-2 validated) respectent leurs contrats internes mais aucun garde-fou démo ne protège le chemin vertical.
-4. La route proxy gateway (`/proxy/*path`) existe mais le mapping `api_name → proxy path` n'est pas documenté côté cp-api / gateway (3 shapes probables, testés par fallback).
+4. La route proxy gateway canonique est figée pour la démo : `GET /apis/{api_name}/get`. Le smoke ne probe plus plusieurs shapes.
 5. Le seed existe (`make seed-dev`), mais un tenant `demo` minimal dédié smoke n'est pas garanti reproductible.
 6. La métrique Prometheus attendue (`proxy_requests_total` ou `mcp_tool_calls_total`) est présente en code gateway mais son nom exact + labels ne sont pas figés dans un contrat testé ; OTEL/Grafana/Console/Portal sont maintenant cadrés en AT-5b nice-to-have.
 7. L'auth API key (header `X-Api-Key`) existe gateway-side ; le retour `api_key` cleartext par la création subscription cp-api est probablement déjà masqué (best practice), ce qui casse la démo self-contained.
@@ -31,7 +31,7 @@
 ### 2.2 Côté gateway
 - `Router::new()` dans `src/lib.rs` :
   - `/health`, `/health/ready`, `/health/live`, `/ready`, `/metrics`
-  - `/proxy/*path` (ligne 214 `lib.rs`) — catch-all proxy
+  - `/apis/{api_name}/{*path}` — fallback dynamique gateway via `RouteRegistry`
   - Mode edge-mcp par défaut (ADR-024)
 - Instrumentation `tracing-subscriber` JSON par ligne (via CLAUDE.md gateway)
 - Prometheus metrics registry (`src/metrics.rs`)
@@ -61,8 +61,8 @@ P0 ne sont pas fermés, mais il devient la référence pour toute PR touchant
 Portal, signup, prospects, subscriptions UX ou usage client.
 
 ### 3.1 Contrats figés non documentés
-- Aucun fichier n'affirme que `/proxy/*path` est la surface démo officielle (`architecture-rules.md` §2.2 comble le gap)
-- Mapping `api.name` ou `route_prefix` → path proxy pas évident. `demo-smoke-test.sh` probe 4 shapes par fallback.
+- `architecture-rules.md` §2.2 affirme que `/apis/{api_name}/{*path}` est la surface démo officielle.
+- `demo-smoke-test.sh` utilise un seul chemin canonique: `/apis/${DEMO_API_NAME}/get`.
 - Format Prometheus attendu (`proxy_requests_total`) pas testé en intégration — probable drift silencieux si renommé
 
 ### 3.2 Seed démo reproductible
@@ -83,11 +83,13 @@ Le smoke sépare cette URL de probe locale de `MOCK_BACKEND_UPSTREAM_URL`,
 qui vaut `http://mock-backend:9090` en compose pour que la gateway ne cible
 pas `localhost` depuis son propre conteneur.
 Ce point ferme B2 pour AT-0. AT-4 peut maintenant cibler un backend local
-déterministe dès que B3 expose le mapping gateway et B1 fournit une clé
+déterministe dès que B1 fournit une clé
 exploitable.
 
-### 3.5 Chemin proxy gateway pas exposé via cp-api
-La création d'API dans cp-api ne semble pas retourner l'URL gateway où elle est joignable (à confirmer — le champ `gateway_route_url` n'apparaît pas dans les routes vues). Gap : le client démo doit pouvoir lire "mon API est à `{GATEWAY_URL}/proxy/<slug>`".
+### 3.5 Chemin proxy gateway figé
+Le chemin gateway démo est canonique : `{GATEWAY_URL}/apis/{api_name}/get`.
+`api_name` désigne le slug retourné par `POST /v1/tenants/{tid}/apis`
+(`demo-api-smoke` par défaut). Le smoke utilise ce chemin unique.
 
 ### 3.6 Auth bypass dev non documenté
 Le script smoke autorise `DEMO_ADMIN_TOKEN=""` en fallback, mais aucune variable `STOA_DISABLE_AUTH` ou flag équivalent n'est documenté côté cp-api. Probable que la démo échoue silencieusement en 401/403 sur AT-1 sans JWT Keycloak valide.
@@ -101,7 +103,7 @@ Polling 30s par défaut dans stoa-connect → AT-2 peut timeout. Mitigation dans
 |---|---------|----------|----------------|---------------|
 | B1 | Pas d'accès cleartext à `api_key` après création subscription | P0 | AT-3 → AT-4 | cp-api (1 PR) |
 | B2 | Mock backend non seedé dans docker-compose | P0 | AT-0, AT-4 | **DONE** — `mock-backend` compose |
-| B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | gateway (spec ADR si inconnu) |
+| B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | **DONE** — `/apis/{api_name}/get` |
 | B4 | Auth dev-bypass cp-api non documenté | P1 | AT-1, AT-2, AT-3 | cp-api (flag `.env.demo`) |
 | B5 | Seed profile `demo-smoke` minimal absent | P1 | AT-0 | cp-api/scripts/seeder |
 | B6 | Métriques Prometheus noms non figés par test | P2 | AT-5 | gateway (test regression) |
@@ -118,7 +120,7 @@ Pour débloquer rapidement la validation du contrat sans confondre script OK et 
 | `./scripts/demo-smoke-test.sh --dry-run-contract` | Tous | permanent | Valide le contrat/script, verdict `CONTRACT_DRY_RUN`, jamais `DEMO READY` |
 | `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | B1/B2/B3 | jusqu'aux fixes | Valide le chemin mocké, verdict `MOCK_PASS`, jamais `DEMO READY` |
 | Démarrer `mock-backend` via compose seul (`docker compose ... up -d mock-backend`) | B2 | jusqu'à stack complète | Service sous profil `demo`; ne pas exposer Prometheus sur le même port pendant ce smoke |
-| Probe 4 shapes proxy dans le script, 1 seul doit répondre 200 | B3 | 1 semaine | Fragile, réduit la confiance |
+| `DEMO_GATEWAY_PATH` override local | B3 | debug uniquement | Toute démo officielle doit revenir à `/apis/{api_name}/get` |
 | `DEMO_ADMIN_TOKEN` extrait via `stoactl auth login demo-admin` puis injecté | B4 | 1 jour | Couplage Keycloak |
 | Script seed inline dans `demo-smoke-test.sh` qui crée tenant + gateway si absent | B5 | 1 jour | Pas idempotent si collisions |
 | Check "au moins un counter `*_total`" sans figer nom | B6 | jusqu'à B6 | Drift silencieux toléré |

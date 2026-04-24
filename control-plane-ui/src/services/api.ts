@@ -60,7 +60,6 @@ import {
   getAuthToken as getAuthTokenCore,
   clearAuthToken as clearAuthTokenCore,
   setTokenRefresher as setTokenRefresherCore,
-  createEventSource as createEventSourceCore,
   type TokenRefresher,
 } from './http';
 import { gitClient } from './api/git';
@@ -528,10 +527,7 @@ class ApiService {
     return gitClient.listMergeRequests(tenantId);
   }
 
-  // SSE Events — délègue au helper du core transport
-  createEventSource(tenantId: string, eventTypes?: string[]): EventSource {
-    return createEventSourceCore(tenantId, eventTypes);
-  }
+  // SSE Events — callers migrated to openEventStream from services/http (C4).
 
   // Pipeline Traces
   async getTraces(

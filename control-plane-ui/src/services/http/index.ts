@@ -20,4 +20,10 @@ export { refreshAuthTokenWithTimeout } from './refresh';
 
 export { path } from './path';
 
-export { createEventSource } from './sse';
+export {
+  createEventSource,
+  openEventStream,
+  type SseConnection,
+  type SseEvent,
+  type SseHandlers,
+} from './sse';

@@ -11,8 +11,8 @@
 ```
 CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 ┌────────────────────────────┐           ┌──────────────────────┐
-│ Portal  Console  API  Auth │  ←sync→   │ MCP GW  webMethods   │
-│ (React) (React) (Py) (KC) │           │ (Py)    Kong/Envoy   │
+│ Portal  Console  API  Auth │  ←sync→   │ STOA GW webMethods   │
+│ (React) (React) (Py) (KC) │           │ (Rust)  Kong/Envoy   │
 └────────────────────────────┘           └──────────────────────┘
 ```
 
@@ -21,10 +21,10 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 | Component | Tech | Path |
 |-----------|------|------|
 | Control Plane API | Python 3.11, FastAPI, SQLAlchemy | `control-plane-api/` |
-| Console UI | React 18, TypeScript, Keycloak-js | `control-plane-ui/` |
+| Console UI | React 19, TypeScript, Keycloak-js | `control-plane-ui/` |
 | Developer Portal | React, Vite, TypeScript | `portal/` |
 | STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
-| STOA Go (stoactl + stoa-connect) | Go 1.22, Cobra, keyring | `stoa-go/` |
+| STOA Go (stoactl + stoa-connect) | Go 1.25, Cobra, keyring | `stoa-go/` |
 | CLI (legacy) | Python, Typer, Rich | `cli/` |
 | E2E Tests | Playwright, BDD, Gherkin | `e2e/` |
 | Helm Chart | Helm 3 | `charts/stoa-platform/` |
@@ -53,11 +53,13 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 
 | Tool | Version | Components |
 |------|---------|------------|
-| Python | 3.11 | control-plane-api, mcp-gateway, cli |
+| Python | 3.11 | control-plane-api, cli |
 | Python | 3.12 | landing-api |
 | Node | 20 | portal, control-plane-ui |
-| Go | 1.22 | stoa-go (stoactl, stoa-connect) |
+| Go | 1.25 | stoa-go (stoactl, stoa-connect) |
 | Rust | stable | stoa-gateway |
+
+> Historical note: the Python `mcp-gateway/` service was retired in Feb 2026 and superseded by `stoa-gateway/` (Rust). References below are historical unless tagged otherwise.
 
 ## Session Workflow
 
@@ -168,7 +170,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - PR > 300 LOC interdit. Split en micro-PRs.
 - `fix()` sans test de régression = bloqué (regression-guard.yml).
 - Test-first par défaut pour `feat()` et `fix()`. Tests qui échouent AVANT le code.
-- Coverage: cp-api ≥70%, mcp-gateway ≥40%. Jamais descendre.
+- Coverage: cp-api ≥70%. Jamais descendre. (Historical: retired `mcp-gateway` target was ≥40%; stoa-gateway has its own coverage gate defined in `stoa-gateway/CLAUDE.md`.)
 - Ne jamais mocker la boundary sous test (httpx.MockTransport, MSW, pas AsyncMock).
 
 ### Rewrite vs Patch (context rot mitigation)
@@ -201,7 +203,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 
 ### Documentation
 - Docs user-facing → `stoa-docs`. Runbooks/ops-only → `stoa/docs/`.
-- ADR numbers: stoa-docs owns. Next = ADR-061.
+- ADR numbers are owned by stoa-docs. Check the ADR index (`stoa-docs/docs/architecture/adr/`) before creating a new ADR.
 - Jamais dupliquer un guide entre stoa et stoa-docs.
 
 ### Outillage

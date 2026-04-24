@@ -1,220 +1,41 @@
 # AGENTS.md — STOA Platform
 
-## Project
-**STOA Platform** — "The European Agent Gateway"
-- API Management AI-Native Open Source (Apache 2.0)
-- Kill feature: UAC (Universal API Contract) — "Define Once, Expose Everywhere"
-- Legacy-to-MCP Bridge: connect traditional APIs to AI agents
+This repo uses `CLAUDE.md` as the canonical AI agent contract. `AGENTS.md` exists
+as the cross-agent entry point for any AI coding assistant (Claude Code, Codex,
+Cursor, Aider, etc.).
 
-## Architecture
+## Contract
+
+AI agents working in this repository must:
+
+1. Read `CLAUDE.md` at the repo root for project rules, architecture, runtime
+   versions, workflow, and GO/NOGO gates. It is the single source of truth —
+   this file does not duplicate its content to avoid drift.
+2. Read the component-scoped `CLAUDE.md` inside the directory you are editing
+   (e.g. `stoa-gateway/CLAUDE.md`, `control-plane-api/CLAUDE.md`,
+   `control-plane-ui/CLAUDE.md`) when touching that service.
+3. Load `.claude/docs/<topic>.md` on demand when a rule in `CLAUDE.md`
+   references it. These docs are protocols, examples, and gotcha tables —
+   never auto-loaded, only pulled in when the topic is in scope.
+4. Follow the same rules regardless of the tool brand. The `.claude/` storage
+   path is a naming convention, not a tool lock-in; any AI agent is expected
+   to honor the rules defined there.
+
+## Architecture (quick reference)
 
 ```
 CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 ┌────────────────────────────┐           ┌──────────────────────┐
-│ Portal  Console  API  Auth │  ←sync→   │ MCP GW  webMethods   │
-│ (React) (React) (Py) (KC) │           │ (Py)    Kong/Envoy   │
+│ Portal  Console  API  Auth │  ←sync→   │ STOA GW webMethods   │
+│ (React) (React) (Py) (KC) │           │ (Rust)  Kong/Envoy   │
 └────────────────────────────┘           └──────────────────────┘
 ```
 
-## Components
+For component paths, runtime versions, RBAC roles, rules, skills, and repo
+map, see `CLAUDE.md`.
 
-| Component | Tech | Path |
-|-----------|------|------|
-| Control Plane API | Python 3.11, FastAPI, SQLAlchemy | `control-plane-api/` |
-| Console UI | React 18, TypeScript, Keycloak-js | `control-plane-ui/` |
-| Developer Portal | React, Vite, TypeScript | `portal/` |
-| STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
-| STOA Go (stoactl + stoa-connect) | Go 1.22, Cobra, keyring | `stoa-go/` |
-| CLI (legacy) | Python, Typer, Rich | `cli/` |
-| E2E Tests | Playwright, BDD, Gherkin | `e2e/` |
-| Helm Chart | Helm 3 | `charts/stoa-platform/` |
+## Historical note
 
-Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024) — edge-mcp (current), sidecar (Q2), proxy (Q3), shadow (deferred).
-STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-connect = VPS agent bridging third-party gateways to Control Plane.
-
-## RBAC Roles
-- **cpi-admin**: Full platform (stoa:admin)
-- **tenant-admin**: Own tenant (stoa:write, stoa:read)
-- **devops**: Deploy/promote (stoa:write, stoa:read)
-- **viewer**: Read-only (stoa:read)
-
-## Key URLs
-| Service | URL |
-|---------|-----|
-| Console | https://console.gostoa.dev |
-| Portal | https://portal.gostoa.dev |
-| API | https://api.gostoa.dev |
-| MCP Gateway | https://mcp.gostoa.dev |
-| Auth (Keycloak) | https://auth.gostoa.dev |
-| Docs | https://docs.gostoa.dev |
-| Vault | https://vault.gostoa.dev |
-
-## Runtime Versions
-
-| Tool | Version | Components |
-|------|---------|------------|
-| Python | 3.11 | control-plane-api, mcp-gateway, cli |
-| Python | 3.12 | landing-api |
-| Node | 20 | portal, control-plane-ui |
-| Go | 1.22 | stoa-go (stoactl, stoa-connect) |
-| Rust | stable | stoa-gateway |
-
-## Session Workflow
-
-1. Read `memory.md` for current state
-2. Read `plan.md` for priorities
-3. **1 thing at a time** — never mix feature + refactor + fix
-4. **Never code without a validated plan**
-5. Update `memory.md` before ending session
-6. Commit often with conventional messages
-
-## AI Factory
-
-### Subagents (`.Codex/agents/`)
-| Agent | Specialite | Mode |
-|-------|-----------|------|
-| `security-reviewer` | OWASP, secrets, RBAC, deps vulns | Read-only (plan) |
-| `test-writer` | vitest, pytest, Playwright BDD | Full access |
-| `k8s-ops` | K8s debug, Helm, nginx, rollout | Read-only (plan) |
-| `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
-| `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
-| `verify-app` | Post-deploy SRE verification (9 checks) | Read-only (plan) |
-| `competitive-analyst` | AI coding tools competitive intelligence | Read-only (plan) |
-
-### MCP Integrations (Codex.ai Native)
-| Service | Use For | Key Actions |
-|---------|---------|-------------|
-| **Linear** | Ticket lifecycle | `get_issue` (DoD), `update_issue` (Done), `create_comment` (PR link) |
-| **Cloudflare** | DNS, Workers, KV | `search_cloudflare_documentation` |
-| **Vercel** | stoa-web/docs deploys | `list_deployments`, `get_deployment_build_logs` |
-| **Notion** | Knowledge search | `notion-search`, `notion-fetch` |
-| **n8n** | Workflow automation | `execute_workflow` |
-
-Full reference on-demand: `.Codex/docs/mcp-integrations.md`
-
-### Quand lire `.Codex/docs/`
-
-`AGENTS.md` (racine + par service) = décisions GO/NOGO auto-chargées. `.Codex/docs/<topic>.md` = protocoles détaillés, exemples, tables de gotchas — **jamais auto-chargés**.
-
-Lire `docs/<topic>.md` quand:
-- Tu touches un domaine spécifique (ex: modifier le gateway → lire `code-style-rust.md` + `mcp-oauth.md`)
-- Un AGENTS.md référence explicitement un fichier docs/
-- Tu écris un skill/command qui automatise un protocole (crash-recovery, council-s3, phase-ownership)
-- Une règle AGENTS.md mentionne un seuil sans le détailler
-
-**Règle**: décisions binaires → AGENTS.md. Protocoles, exemples, tables → `.Codex/docs/`. Jamais dupliquer.
-
-### Skills (`.Codex/skills/`)
-- 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
-- 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
-- 3 MCP-powered: `/council` (4-persona validation → Linear), `/sync-plan` (plan.md ↔ Linear), `/decompose` (MEGA → component-scoped sub-issues + DAG)
-- 5 ops: `/analytics` (5 data sources, 12 queries), `/competitive-watch` (veille L1-L3), `/ci-fix` (auto-fix CI), `/carto` (platform service catalog + drift detection), `/impact` (reverse dependency analysis + blast radius)
-- 2 sprint: `/fill-cycle` (capacity gap analysis), `/generate-backlog` (MEGA backlog generation)
-- 1 visibility: `/roadmap` (strategic progress snapshot — themes, milestones, velocity)
-
-### Slash Commands (`.Codex/commands/`)
-- `/status` — quick project snapshot (git, PRs, CI, pods, tokens)
-- `/deploy-check` — post-merge CD verification
-- `/token-report` — 7-day token cost analysis
-- `/benchmark-competitors` — quarterly competitive benchmark (9-dimension matrix)
-
-### Agent Teams (experimental)
-Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
-
-### Parallel Sessions (git worktrees)
-Named worktrees in `.Codex/worktrees/` for concurrent Codex sessions:
-```bash
-za   # analysis worktree (read-only exploration)
-zf   # feature session (main repo)
-zh   # hotfix worktree (ephemeral, from main)
-```
-
-## Context Compiler (obligatoire)
-
-> **CI Automation**: Context packs are generated automatically by CI workflows.
-> Manual execution is still available but no longer required for tickets going through the L3 pipeline.
-> See `docs/CONTEXT-COMPILER.md` for full integration documentation.
-
-### CI Integration (automatic)
-
-| Hook | Workflow | Trigger | What |
-|------|----------|---------|------|
-| Pre-coding | `Codex-linear-dispatch.yml` | `/go` on ticket | Generates context pack, alerts on CRITICAL |
-| Post-merge | `context-compiler-learn.yml` | Push to main | Compares predicted vs actual, enriches DB |
-| Weekly | `Codex-self-improve.yml` | Friday 18:00 UTC | Co-change discovery, dashboard, doc regen |
-
-Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all hooks.
-
-### Manual usage
-- `docs/scripts/build-context.sh --component X --intent "..."` ou `--ticket CAB-XXXX`
-- Lire le context pack dans `docs/context-packs/` avant de coder.
-- Impact >= HIGH (16+) → Council obligatoire. CRITICAL (31+) → review Christophe.
-- Legacy: `impact-check.sh`, `contract-check.sh`, `dashboard.sh`. DB: `docs/stoa-impact.db`.
-
-## Règles
-
-Règles binaires GO/NOGO. Détail on-demand dans `.Codex/docs/<rule>.md`.
-
-### Workflow & Sessions
-- 1 MEGA par session. `/clear` entre chaque.
-- `memory.md` mis à jour AVANT chaque `/clear` ou fin de session.
-- Jamais coder sans plan validé. "Tant que j'y suis" interdit.
-- Session-End State Lint (5 checks) obligatoire avant SESSION-END.
-- Context budget: délégation à 60%, `/compact` à 80%, arrêt à 90%.
-
-### Qualité & CI
-- CI rouge sur `main` = P0 absolu. Rien ne merge, rien ne démarre.
-- Pre-push hook (Gate 1) obligatoire. `--no-verify` interdit sauf urgence explicite.
-- PR > 300 LOC interdit. Split en micro-PRs.
-- `fix()` sans test de régression = bloqué (regression-guard.yml).
-- Test-first par défaut pour `feat()` et `fix()`. Tests qui échouent AVANT le code.
-- Coverage: cp-api ≥70%, mcp-gateway ≥40%. Jamais descendre.
-- Ne jamais mocker la boundary sous test (httpx.MockTransport, MSW, pas AsyncMock).
-
-### Git & Merge
-- Toujours `--squash` + `--delete-branch`. Jamais push direct sur `main`.
-- `--force`, `git reset --hard`, suppression branche tiers = demander avant.
-- Conventional commits obligatoires. Ticket ID sur 1er commit.
-- Évidence archive obligatoire après Playwright: `docs/audits/<date>-<topic>/`.
-
-### Council & MEGA
-- Impact Score ≥ HIGH (16+) → Council obligatoire avant code.
-- Council S1/S2/S3: seuil ≥ 8.0/10. <8 = rework, pas de contournement.
-- MEGA jamais marqué Done directement. Toujours `/verify-mega` (5 gates).
-- Sub-ticket Done sans comment "PR #N" = gate 1 échoue.
-- **Decision Challenge Gate** (HLFH-wide) avant exécution d'un plan matchant ≥1 trigger: (a) temps Codex > 5h, (b) impact business direct (GTM/pricing/positioning/contenu stratégique/partenariat/roadmap lourde), (c) irréversible (données/contrats/branding). Rappeler le gate et exiger contre-analyse d'un challenger externe non-aligné (GPT ou autre, PAS Codex). Framework + logs: `stoa-docs/HEGEMON/DECISION_GATE.md`.
-- **Plan validation workflow** (convention, pas de hook): plan taggé `triggers: [...]` → fichier canonique dans `docs/plans/YYYY-MM-DD-<slug>.md` avec frontmatter `validation_status: draft|challenged|validated|rejected`. Verdict du challenger lié dans `docs/decisions/YYYY-MM-DD-<slug>.md` (`plan_ref` + `verdict`). **Pas d'exécution tant que `validation_status != validated`**. Templates: `docs/plans/_template.md`, `docs/decisions/_template-plan-validation.md`. Exemple canonique: `docs/plans/2026-04-19-dev-tools-gateway.md` (rejected, log #7).
-
-### Sécurité
-- NEVER reset/change/rotate password ou credential. Human-only.
-- NEVER `terraform destroy`, suppression cluster, topic Kafka prod sans confirmation.
-- NEVER hardcode secrets. Vault (`hcvault.gostoa.dev`) = source of truth.
-- Secrets K8s YAML: `REPLACE_FROM_VAULT` placeholder, jamais valeur réelle.
-- Fichiers interdits en commit: `.env*`, `*.pem`, `*.key`, `*.tfvars`, `*credentials*`.
-
-### Documentation
-- Docs user-facing → `stoa-docs`. Runbooks/ops-only → `stoa/docs/`.
-- ADR numbers: stoa-docs owns. Next = ADR-061.
-- Jamais dupliquer un guide entre stoa et stoa-docs.
-
-### Outillage
-- stoactl > curl/bash. Lire `.Codex/context/cli-reference.md` avant de scanner src/.
-- Linear MCP = state changes. Local files = context. Batch reads, minimize writes.
-- Context7 avant de deviner une API de lib.
-
-### Phase Ownership (multi-instance)
-- Claim via `.Codex/claims/<ID>.json` + `mkdir` atomic lock.
-- End-to-end ownership: qui claim finit la phase.
-- Claim stale = 2h sans activité → auto-release.
-
-## Repos
-
-| Repo | Stack | URL | Visibility |
-|------|-------|-----|------------|
-| stoa | Python + React + Rust | github.com/stoa-platform/stoa | Public |
-| stoa-strategy | Markdown + Prompts | github.com/PotoMitan/stoa-strategy | **Private** (client data, pricing, GTM) |
-| stoa-infra | Terraform + Ansible + Helm | github.com/PotoMitan/stoa-infra | Private |
-| stoa-docs | Docusaurus | github.com/stoa-platform/stoa-docs | Public |
-| stoa-web | Astro | github.com/stoa-platform/stoa-web | Public |
-| stoa-quickstart | Docker Compose | github.com/stoa-platform/stoa-quickstart | Public |
-| stoactl | Go + Cobra | github.com/stoa-platform/stoactl | Public |
+The Python `mcp-gateway/` service was retired in Feb 2026 and superseded by
+`stoa-gateway/` (Rust). Any reference to `mcp-gateway` in older docs or
+comments is historical.

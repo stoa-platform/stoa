@@ -75,12 +75,12 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 **Given** AT-1 PASS
 **When**:
 1. `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications` avec `{"name": "demo-app"}`  → récupérer `APP_ID`
-2. `POST ${API_URL}/v1/subscriptions` avec `{"application_id": "${APP_ID}", "api_id": "${API_ID}", "plan": "free"}`
+2. `POST ${API_URL}/v1/subscriptions` ou `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications/${APP_ID}/subscribe/${API_ID}` avec `X-Demo-Mode: true`
 3. Alternative single-shot : `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications/${APP_ID}/subscribe/${API_ID}`
 
 **Then**:
 - HTTP 201 sur subscription
-- Réponse contient `api_key` (cleartext, one-time) **OU** `api_key_prefix` + déclenchement key-rotation dans la réponse
+- Réponse contient `api_key` (cleartext, one-time) en mode `X-Demo-Mode: true`
 - `status: active`
 
 **Exit code**: 0 si clé API récupérée et non-vide, 1 sinon.

@@ -38,7 +38,7 @@ Tout composant non présent dans ce diagramme (Portal, Console UI, Kafka, OpenSe
 | `/v1/tenants/{tid}/apis` | GET | 200 | `items[]` avec `id`, `name` |
 | `/v1/tenants/{tid}/apis/{id}` | GET | 200 | `id`, `name`, `backend_url` |
 | `/v1/tenants/{tid}/applications` | POST | 201 | `id`, `name` |
-| `/v1/tenants/{tid}/applications/{id}/subscribe/{api_id}` | POST | 201 | `subscription_id`, `api_key` ou `api_key_prefix` |
+| `/v1/tenants/{tid}/applications/{id}/subscribe/{api_id}` | POST | 200 | `subscription_id`, `api_key`, `api_key_prefix` en mode `X-Demo-Mode: true`; sinon message historique |
 | `/v1/subscriptions` | POST | 201 | `id`, `api_key` ou `api_key_prefix`, `status="active"` |
 | `/v1/tenants/{tid}/deployments` | POST | 201 | `id`, `status` |
 | `/v1/internal/gateways/routes?gateway_name=X` | GET | 200 | liste de routes avec `api_id`, `path` |
@@ -105,6 +105,7 @@ réels. Renommer/supprimer un champ consommé par le smoke sans compatibilité A
 ### 2.7 Auth modèle démo
 
 - **Un seul mode supporté côté démo**: API key via header `X-Api-Key: stoa_<prefix>_<secret>`
+- Le cleartext de cette clé n'est retourné qu'une fois, sur une souscription créée avec `X-Demo-Mode: true`.
 - JWT/OAuth reste dispo mais pas dans le smoke path
 - mTLS, DPoP, sender-constraint: hors périmètre démo
 

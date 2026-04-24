@@ -23,7 +23,7 @@ Chaque étape du scénario démo (`demo-scope.md` §2) a un test d'acceptance bi
 Avant lancement, ces ressources doivent exister (seed minimal) :
 
 - Base cp-api démarrée (port 8000) avec healthz 200
-- Gateway démarrée (port 8080) avec healthz 200
+- Gateway démarrée (port 8081 avec le compose démo, ou `GATEWAY_URL` explicite en mode natif) avec healthz 200
 - Un tenant `demo` (UUID déterministe) en DB
 - Un backend HTTP mock démarré (port 9090) qui répond `200 {"ok":true}` sur `GET /ping`
 - **[MOCK OK]** `GIT_SYNC_ON_WRITE=false` — le sync vers `stoa-catalog` est désactivé pour la démo

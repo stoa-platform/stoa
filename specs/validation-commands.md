@@ -29,7 +29,7 @@ Variables d'environnement (defaults documentés dans le script) :
 | Var | Default | Description |
 |-----|---------|-------------|
 | `API_URL` | `http://localhost:8000` | Base URL cp-api |
-| `GATEWAY_URL` | `http://localhost:8080` | Base URL stoa-gateway |
+| `GATEWAY_URL` | `http://localhost:8081` | Base URL stoa-gateway exposée par le compose démo |
 | `MOCK_BACKEND_URL` | `http://localhost:9090` | Mock HTTP backend vu par le poste dev pour AT-0 |
 | `MOCK_BACKEND_UPSTREAM_URL` | `http://mock-backend:9090` | Mock HTTP backend vu par la gateway en compose |
 | `DEMO_GATEWAY_PATH` | `/apis/${DEMO_API_NAME}/get` | Chemin gateway canonique AT-4 |
@@ -47,7 +47,10 @@ Variables d'environnement (defaults documentés dans le script) :
 ### Option A — docker-compose (recommandé)
 ```bash
 # Stack minimale: postgres, keycloak, cp-api, gateway, mock-backend
-docker compose -f deploy/docker-compose/docker-compose.yml up -d \
+POSTGRES_PASSWORD=stoa KEYCLOAK_ADMIN_PASSWORD=admin \
+OPENSEARCH_ADMIN_PASSWORD=admin OPENSEARCH_DASHBOARDS_PASSWORD=admin \
+OPENSEARCH_LOGWRITER_PASSWORD=admin OPENSEARCH_OIDC_CLIENT_SECRET=x \
+docker compose -f deploy/docker-compose/docker-compose.yml --profile demo up --build -d \
     postgres keycloak control-plane-api stoa-gateway mock-backend
 
 # Attendre healthy
@@ -64,6 +67,7 @@ make run-api             # cp-api sur :8000
 
 # Terminal 2
 make run-gateway         # stoa-gateway sur :8080
+export GATEWAY_URL=http://localhost:8080
 
 # Terminal 3 (backend mock only, if compose is not used)
 docker compose -f deploy/docker-compose/docker-compose.yml up -d mock-backend
@@ -131,9 +135,9 @@ psql $DATABASE_URL -c "SELECT count(*) FROM apis WHERE tenant_id='${TENANT_ID}';
 psql $DATABASE_URL -c "SELECT status, count(*) FROM subscriptions GROUP BY status;"
 
 # Route table live gateway
-curl -s http://localhost:8080/admin/routes | jq .      # si admin API exposée
+curl -s http://localhost:8081/admin/routes | jq .      # si admin API exposée
 curl -s http://localhost:8000/v1/internal/gateways/routes?gateway_name=demo | jq .
-curl -sI http://localhost:8080/apis/demo-api-smoke/get
+curl -sI http://localhost:8081/apis/demo-api-smoke/get
 
 # Logs gateway corrélés à un request_id
 docker logs stoa-gateway 2>&1 | grep "request_id=${REQUEST_ID}"
@@ -172,7 +176,8 @@ Le workflow `.github/workflows/demo-smoke.yml` est volontairement
 **observationnel** tant que le smoke réel n'a pas produit au moins un
 `REAL_PASS — DEMO READY` local.
 
-À chaque PR, il exécute :
+À chaque PR, il build et démarre d'abord la stack minimale démo via
+`deploy/docker-compose/docker-compose.yml --profile demo up --build`, puis il exécute :
 
 ```bash
 bash -n scripts/demo-smoke-test.sh

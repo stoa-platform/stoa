@@ -13,7 +13,7 @@
 #
 # Env vars (with defaults):
 #   API_URL              http://localhost:8000
-#   GATEWAY_URL          http://localhost:8080
+#   GATEWAY_URL          http://localhost:8081
 #   MOCK_BACKEND_URL     http://localhost:9090
 #   MOCK_BACKEND_UPSTREAM_URL http://mock-backend:9090
 #   DEMO_GATEWAY_PATH    /apis/${DEMO_API_NAME}/get
@@ -46,7 +46,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ── Config ───────────────────────────────────────────────────────────────────
 API_URL="${API_URL:-http://localhost:8000}"
-GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
+GATEWAY_URL="${GATEWAY_URL:-http://localhost:8081}"
 MOCK_BACKEND_URL="${MOCK_BACKEND_URL:-http://localhost:9090}"
 MOCK_BACKEND_UPSTREAM_URL="${MOCK_BACKEND_UPSTREAM_URL:-http://mock-backend:9090}"
 TENANT_ID="${TENANT_ID:-demo}"

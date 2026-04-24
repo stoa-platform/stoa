@@ -238,10 +238,17 @@ mod tests {
 
     #[test]
     fn test_load_with_defaults() {
-        // This should work even without any config file or env vars
-        std::env::remove_var("STOA_PORT");
-        let config = Config::load().expect("Should load defaults");
-        assert_eq!(config.port, 8080);
+        // Wrap in figment::Jail so this test takes the same global LOCK as
+        // the enum env-var tests below (CAB-2165 Bundle 1). Without it, a
+        // parallel Jail test that sets `STOA_GIT_PROVIDER=bitbucket` can
+        // leak into this test's `Config::load()` call and trip the strict
+        // enum parser.
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            let config = Config::load().expect("Should load defaults");
+            assert_eq!(config.port, 8080);
+            Ok(())
+        });
     }
 
     #[test]

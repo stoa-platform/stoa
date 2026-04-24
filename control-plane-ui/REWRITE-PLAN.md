@@ -53,6 +53,10 @@ Source : `src/services/api.ts` (1732 LOC, classe `ApiService` avec 170 méthodes
 
 **Action** : **préserver dans leurs clients respectifs** (rewrite ≠ cleanup). Candidats suppression UI-3/audit ultérieur. Noter dans `REWRITE-BUGS.md`.
 
+> **Suivi** : zombies + typesafety tracés dans
+> [CAB-2164 UI-3 Cleanup](https://linear.app/hlfh-workspace/issue/CAB-2164).
+> Cf. `control-plane-ui/REWRITE-BUGS.md` §A pour le détail par client.
+
 ### A.3 Types inline en bas de `api.ts` (lignes 1487-1719)
 
 **27 interfaces exportées** (comptage `grep -cE "^export interface" src/services/api.ts`) :

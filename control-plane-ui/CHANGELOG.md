@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.2...control-plane-ui-v1.5.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui-1:** close UI-1 Wave 1 bug hunt batch (8 items) ([#2525](https://github.com/stoa-platform/stoa/issues/2525)) ([83abcf7](https://github.com/stoa-platform/stoa/commit/83abcf7a28cb797800f875853fda27a49a00e372))
+
 ## [1.5.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.1...control-plane-ui-v1.5.2) (2026-04-24)
 
 

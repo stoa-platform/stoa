@@ -85,6 +85,16 @@ pub async fn skills_upsert(
 ) -> impl IntoResponse {
     use crate::skills::resolver::{SkillScope, StoredSkill};
 
+    // GW-1 P1-6: require identifying fields so empty `key` doesn't
+    // silently overwrite the sentinel "" entry.
+    let mut errors: Vec<String> = Vec::new();
+    super::validation::require_non_empty("key", &payload.key, &mut errors);
+    super::validation::require_non_empty("name", &payload.name, &mut errors);
+    super::validation::require_non_empty("tenant_id", &payload.tenant_id, &mut errors);
+    if !errors.is_empty() {
+        return super::validation::validation_error_response(errors);
+    }
+
     let scope = match SkillScope::from_crd(&payload.scope) {
         Some(s) => s,
         None => {
@@ -153,6 +163,17 @@ pub async fn skills_sync(
 
     let mut skills = Vec::with_capacity(payload.len());
     for item in payload {
+        // GW-1 P1-6: reject the whole batch if any item has an empty
+        // identifier. `sync` is all-or-nothing: partial validation would
+        // leave the resolver in an inconsistent state.
+        let mut errors: Vec<String> = Vec::new();
+        super::validation::require_non_empty("key", &item.key, &mut errors);
+        super::validation::require_non_empty("name", &item.name, &mut errors);
+        super::validation::require_non_empty("tenant_id", &item.tenant_id, &mut errors);
+        if !errors.is_empty() {
+            return super::validation::validation_error_response(errors);
+        }
+
         let scope = match SkillScope::from_crd(&item.scope) {
             Some(s) => s,
             None => {
@@ -209,6 +230,15 @@ pub async fn skills_update(
             Json(serde_json::json!({"error": "skill not found", "key": id})),
         )
             .into_response();
+    }
+
+    // GW-1 P1-6: same field validation as upsert — empty name/tenant_id
+    // would corrupt the stored row even though the path id is non-empty.
+    let mut errors: Vec<String> = Vec::new();
+    super::validation::require_non_empty("name", &payload.name, &mut errors);
+    super::validation::require_non_empty("tenant_id", &payload.tenant_id, &mut errors);
+    if !errors.is_empty() {
+        return super::validation::validation_error_response(errors);
     }
 
     let scope = match SkillScope::from_crd(&payload.scope) {
@@ -311,4 +341,208 @@ pub struct SkillUpsertPayload {
 #[derive(Deserialize)]
 pub struct SkillDeleteParams {
     pub key: String,
+}
+
+#[cfg(test)]
+mod tests {
+    //! GW-1 P1-6 regression tests for skills upsert / sync / update.
+    //!
+    //! `test_helpers::build_full_admin_router` does not wire the
+    //! `/skills/*` routes (tracked as GW-1 P2-test-1), so these tests
+    //! build a minimal router in-line for each handler under test.
+
+    use axum::{body::Body, http::Request, middleware, routing::post, Router};
+    use tower::ServiceExt;
+
+    use super::{skills_sync, skills_update, skills_upsert};
+    use crate::handlers::admin::admin_auth;
+    use crate::handlers::admin::test_helpers::create_test_state;
+
+    fn router_with_route(
+        state: crate::state::AppState,
+        path: &str,
+        method_router: axum::routing::MethodRouter<crate::state::AppState>,
+    ) -> Router {
+        Router::new()
+            .route(path, method_router)
+            .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
+            .with_state(state)
+    }
+
+    async fn post_and_read(
+        app: Router,
+        path: &str,
+        body: serde_json::Value,
+    ) -> (axum::http::StatusCode, Vec<String>) {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .header("Authorization", "Bearer secret")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+        let errors = json["errors"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        (status, errors)
+    }
+
+    fn valid_skill_payload() -> serde_json::Value {
+        serde_json::json!({
+            "key": "acme/my-skill",
+            "name": "my-skill",
+            "description": null,
+            "tenant_id": "acme",
+            "scope": "tenant",
+            "priority": 50,
+            "instructions": "do things",
+            "tool_ref": null,
+            "user_ref": null,
+            "enabled": true
+        })
+    }
+
+    #[tokio::test]
+    async fn test_skills_upsert_rejects_empty_identifier_fields() {
+        let state = create_test_state(Some("secret"));
+        let app = router_with_route(state, "/skills", post(skills_upsert));
+        let mut p = valid_skill_payload();
+        p["key"] = serde_json::json!("");
+        p["name"] = serde_json::json!("");
+        p["tenant_id"] = serde_json::json!("");
+        let (status, errors) = post_and_read(app, "/skills", p).await;
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        for field in ["key", "name", "tenant_id"] {
+            assert!(
+                errors.iter().any(|e| e.contains(field)),
+                "missing error for {} in {:?}",
+                field,
+                errors
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_skills_upsert_accepts_valid_payload() {
+        let state = create_test_state(Some("secret"));
+        let app = router_with_route(state, "/skills", post(skills_upsert));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/skills")
+                    .header("Authorization", "Bearer secret")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&valid_skill_payload()).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+    }
+
+    // GW-1 P1-6: `skills_sync` is all-or-nothing; a single invalid item
+    // aborts the whole batch without mutating the resolver.
+    #[tokio::test]
+    async fn test_skills_sync_rejects_batch_with_one_invalid_item() {
+        let state = create_test_state(Some("secret"));
+        let app = router_with_route(state.clone(), "/skills/sync", post(skills_sync));
+
+        let payload = serde_json::json!([
+            valid_skill_payload(),
+            {
+                "key": "",
+                "name": "",
+                "tenant_id": "",
+                "scope": "tenant",
+                "enabled": true
+            }
+        ]);
+        let (status, errors) = post_and_read(app, "/skills/sync", payload).await;
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert!(errors.iter().any(|e| e.contains("key")));
+        // Resolver was never called because we rejected mid-loop.
+        assert_eq!(state.skill_resolver.skill_count(), 0);
+    }
+
+    // GW-1 P1-6: PUT /skills/:id requires the body to carry a non-empty
+    // name / tenant_id even though the :id in the URL is always present.
+    #[tokio::test]
+    async fn test_skills_update_rejects_empty_body_fields() {
+        use axum::routing::put;
+
+        let state = create_test_state(Some("secret"));
+        // Pre-seed an existing skill so the handler doesn't early-return 404.
+        use crate::skills::resolver::{SkillScope, StoredSkill};
+        state.skill_resolver.upsert(StoredSkill {
+            key: "acme/my-skill".into(),
+            name: "my-skill".into(),
+            description: None,
+            tenant_id: "acme".into(),
+            scope: SkillScope::Tenant,
+            priority: 50,
+            instructions: None,
+            tool_ref: None,
+            user_ref: None,
+            enabled: true,
+        });
+
+        let app = Router::new()
+            .route("/skills/:id", put(skills_update))
+            .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
+            .with_state(state);
+
+        let body = serde_json::json!({
+            "key": "acme/my-skill",
+            "name": "",
+            "tenant_id": "",
+            "scope": "tenant",
+            "enabled": true
+        });
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/skills/acme%2Fmy-skill")
+                    .header("Authorization", "Bearer secret")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let errors: Vec<String> = json["errors"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(errors.iter().any(|e| e.contains("name")));
+        assert!(errors.iter().any(|e| e.contains("tenant_id")));
+    }
 }

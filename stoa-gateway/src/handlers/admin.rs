@@ -37,6 +37,7 @@ mod reload;
 mod sessions;
 mod skills;
 mod tracing;
+mod validation;
 
 pub use apis::{delete_api, get_api, list_apis, upsert_api};
 pub use audit::admin_audit_log;

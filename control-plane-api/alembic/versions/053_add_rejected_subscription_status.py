@@ -15,6 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)")
+
     # Add 'rejected' value to the subscriptionstatus enum
     op.execute("COMMIT")
     op.execute("ALTER TYPE subscriptionstatus ADD VALUE IF NOT EXISTS 'rejected'")

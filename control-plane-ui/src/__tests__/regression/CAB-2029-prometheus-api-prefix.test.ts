@@ -4,9 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { usePrometheusQuery, usePrometheusRange } from '../../hooks/usePrometheus';
 
 vi.mock('../../services/http', async () => {
-  const actual = await vi.importActual<typeof import('../../services/http')>(
-    '../../services/http'
-  );
+  const actual = await vi.importActual<typeof import('../../services/http')>('../../services/http');
   return {
     ...actual,
     httpClient: {

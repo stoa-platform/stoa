@@ -18,7 +18,7 @@
                           │  stoa-gateway    │       ┌───────────────┐
   client démo ────HTTP───►│  (Rust, Axum)    ├──────►│  mock-backend │
   + X-Api-Key             │  port 8080       │       │  (httpbin)    │
-                          │  /proxy/*path    │       │  port 9090    │
+                          │  /apis/*path     │       │  port 9090    │
                           └──────┬───────────┘       └───────────────┘
                                  │
                                  ▼
@@ -50,7 +50,7 @@ Tout composant non présent dans ce diagramme (Portal, Console UI, Kafka, OpenSe
 |----------|--------|-----------|---------------|
 | `/health` | GET | 200 | body indifférent |
 | `/metrics` | GET | 200 | format Prometheus text |
-| `/proxy/{route_prefix}/{*path}` | GET/POST/… | 200/…  | proxy vers backend configuré, header `X-Stoa-Request-Id` en réponse, vérifie `X-Api-Key` (ou `Authorization: Bearer`) |
+| `/apis/{api_name}/{*path}` | GET/POST/… | 200/…  | chemin gateway canonique démo. `api_name` est le slug retourné par `POST /v1/tenants/{tid}/apis`; proxy vers backend configuré, header `X-Stoa-Request-Id` en réponse, vérifie `X-Api-Key` (ou `Authorization: Bearer`) |
 
 ### 2.3 Format métriques Prometheus
 
@@ -129,7 +129,7 @@ réels. Renommer/supprimer un champ consommé par le smoke sans compatibilité A
 - "J'ajoute un middleware obligatoire qui exige X" où X n'est pas seedé dans la démo → STOP.
 - "Je remplace `X-Api-Key` par un JWT obligatoire" → STOP, casse AT-4.
 - "Je change le format Prometheus pour OpenMetrics+labels différents" → STOP, casse AT-5.
-- "Je mets la route `/proxy/*path` sous un feature flag" → STOP.
+- "Je mets la route `/apis/{api_name}/{*path}` sous un feature flag" → STOP.
 
 ## 6. Escalade
 

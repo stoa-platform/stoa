@@ -32,6 +32,7 @@ Variables d'environnement (defaults documentés dans le script) :
 | `GATEWAY_URL` | `http://localhost:8080` | Base URL stoa-gateway |
 | `MOCK_BACKEND_URL` | `http://localhost:9090` | Mock HTTP backend vu par le poste dev pour AT-0 |
 | `MOCK_BACKEND_UPSTREAM_URL` | `http://mock-backend:9090` | Mock HTTP backend vu par la gateway en compose |
+| `DEMO_GATEWAY_PATH` | `/apis/${DEMO_API_NAME}/get` | Chemin gateway canonique AT-4 |
 | `TENANT_ID` | `demo` (slug, résolu en UUID par cp-api) | Tenant démo |
 | `DEMO_ADMIN_TOKEN` | vide | JWT admin pour écrire côté cp-api. Si vide, le script passe en `STOA_DISABLE_AUTH=true` mode (dev only) |
 | `ROUTE_SYNC_GRACE_SECS` | `30` | Délai d'attente pour route visible en gateway après AT-2 |
@@ -132,6 +133,7 @@ psql $DATABASE_URL -c "SELECT status, count(*) FROM subscriptions GROUP BY statu
 # Route table live gateway
 curl -s http://localhost:8080/admin/routes | jq .      # si admin API exposée
 curl -s http://localhost:8000/v1/internal/gateways/routes?gateway_name=demo | jq .
+curl -sI http://localhost:8080/apis/demo-api-smoke/get
 
 # Logs gateway corrélés à un request_id
 docker logs stoa-gateway 2>&1 | grep "request_id=${REQUEST_ID}"

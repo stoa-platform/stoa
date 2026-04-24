@@ -18,7 +18,7 @@ Ce scope fige ce chemin. Tant qu'il n'est pas vert bout-en-bout, **aucune autre 
 | 1 | Déclarer une API | cp-api + DB | `POST /v1/tenants/{t}/apis` (ou `stoactl apply -f api.yaml`) | API visible dans `GET /v1/tenants/{t}/apis` |
 | 2 | Provisionner la route gateway | cp-api + stoa-gateway | `POST /v1/tenants/{t}/deployments` → gateway polling `GET /v1/internal/gateways/routes` OU `stoa-connect` SSE `GET /v1/internal/gateways/{id}/events` | Route active dans la table gateway (log `Route table reloaded` + réponse non-404 au step 4) |
 | 3 | Créer une souscription applicative | cp-api | `POST /v1/tenants/{t}/applications` + `POST /v1/subscriptions` (ou `POST /applications/{id}/subscribe/{api_id}`) | Subscription `active`, clé API retournée (préfixe visible) |
-| 4 | Appeler l'API via la gateway | stoa-gateway | `GET {GATEWAY_URL}/proxy/<route>` avec header `X-Api-Key: ${KEY}` (ou JWT OAuth) | HTTP 2xx, payload backend |
+| 4 | Appeler l'API via la gateway | stoa-gateway | `GET {GATEWAY_URL}/apis/{api_name}/get` avec header `X-Api-Key: ${KEY}` (ou JWT OAuth) | HTTP 2xx, payload backend |
 | 5 | Preuve observable | stoa-gateway + cp-api | `GET {GATEWAY_URL}/metrics` + logs JSON stdout | Compteur Prometheus incrémenté (`proxy_requests_total` ou `mcp_tool_calls_total`) + ligne log corrélée (request_id, tenant, route) |
 | 5b | Visibilité observabilité (nice-to-have) | Grafana + Console + Portal | Grafana datasource/dashboard, Console `/monitoring`, Portal `/usage` ou dashboard embarqué | La même activité démo est visible dans au moins une surface UI si la stack observabilité est démarrée |
 
@@ -26,7 +26,7 @@ Ce scope fige ce chemin. Tant qu'il n'est pas vert bout-en-bout, **aucune autre 
 
 **Binaires**:
 - `control-plane-api` (FastAPI) — endpoints listés §2
-- `stoa-gateway` (Rust) — routes `/proxy/*path`, `/health`, `/metrics`
+- `stoa-gateway` (Rust) — routes `/apis/{api_name}/{*path}`, `/health`, `/metrics`
 - `stoactl` (Go) — sous-commandes `apply`, `get`, `subscription`, `auth login` seulement
 
 **Backend cible pour l'appel démo**: un mock HTTP (ex. `mock-backends/` ou `httpbin` en conteneur) qui répond 200 JSON. Pas de backend externe réseau.
@@ -85,7 +85,7 @@ signifient seulement que le contrat ou le chemin mocké est cohérent.
 Voir `rewrite-guardrails.md` §Contrats figés:
 - Compatibilité DB consommée par le smoke (`apis`, `applications`, `subscriptions`, `deployments`, `api_keys`)
 - Endpoints listés §2 (URL + status codes + shape minimal de réponse)
-- Route `/proxy/*path` gateway + comportement auth-header
+- Route `/apis/{api_name}/{*path}` gateway + comportement auth-header
 - Format métrique Prometheus (nom `_total`, labels `tenant`, `api`, `method`, `status`)
 
 Tout autre aspect peut bouger.

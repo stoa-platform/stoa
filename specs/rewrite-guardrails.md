@@ -23,7 +23,7 @@ Les éléments suivants sont **figés** : toute modification demande Council 8/1
 ### 2.1 Contrats code (tests de régression à écrire si absents)
 - Schéma URL des endpoints listés dans `architecture-rules.md` §2.1
 - Format métriques Prometheus `proxy_requests_total` / `mcp_tool_calls_total`
-- Header `X-Api-Key` accepté par gateway `/proxy/*path`
+- Header `X-Api-Key` accepté par gateway `/apis/{api_name}/{*path}`
 - Header de réponse `X-Stoa-Request-Id` injecté par gateway
 - Datasources Grafana `prometheus`, `loki`, `opensearch-traces`, `tempo` si la stack observabilité est touchée
 - Compatibilité DB consommée par le smoke (§2.6 de `architecture-rules.md`)
@@ -42,7 +42,7 @@ Les éléments suivants sont **figés** : toute modification demande Council 8/1
 
 ### 3.1 GW-* (stoa-gateway Rust)
 - GW-2 (split `config.rs`) : OK car plan respecte §1 amendement 1 (façade conservée, contrat TOML/env intact). **Autoriser** tant que `cargo test` vert + `insta` snapshot `Config::default()` inchangé.
-- Tout GW-3+ doit commencer par : "ce changement affecte-t-il `/proxy/*path`, `/health`, `/metrics`, `X-Api-Key` handling ?" → si oui, Council obligatoire.
+- Tout GW-3+ doit commencer par : "ce changement affecte-t-il `/apis/{api_name}/{*path}`, `/health`, `/metrics`, `X-Api-Key` handling ?" → si oui, Council obligatoire.
 - Feature flags Cargo : démo tourne en build **default**. Pas de dépendance runtime à `kafka` ou `k8s` dans le chemin démo.
 
 ### 3.2 GO-* (stoa-go / stoactl + stoa-connect)

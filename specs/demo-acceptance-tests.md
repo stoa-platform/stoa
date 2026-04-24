@@ -88,9 +88,10 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 ## AT-4 — Appeler l'API via la gateway
 
 **Given** AT-2 PASS ET AT-3 PASS, `API_KEY` connu
-**When**: `GET ${GATEWAY_URL}/proxy/demo-api/ping -H "X-Api-Key: ${API_KEY}"`
+**When**: `GET ${GATEWAY_URL}/apis/${DEMO_API_NAME}/get -H "X-Api-Key: ${API_KEY}"`
 
-(URL exacte du proxy dépend du routing — peut être `/proxy/{route_prefix}/ping` selon la config ; la spec figée dans `architecture-rules.md` §2)
+Chemin canonique figé: `/apis/{api_name}/{*path}`. Le smoke ne probe plus
+plusieurs shapes.
 
 **Then**:
 - HTTP 200

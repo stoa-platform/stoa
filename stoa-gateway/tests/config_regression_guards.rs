@@ -41,7 +41,7 @@ fn clear_stoa_env() {
 // ----- P0-1: env var split --------------------------------------------------
 
 #[test]
-fn test_env_var_nested_mtls_double_underscore_activates_nested_field() {
+fn regression_nested_mtls_double_underscore_activates_nested_field() {
     let _g = env_lock();
     clear_stoa_env();
     // Default MUST be disabled so we see the env flip take effect.
@@ -59,7 +59,7 @@ fn test_env_var_nested_mtls_double_underscore_activates_nested_field() {
 }
 
 #[test]
-fn test_nested_single_underscore_env_remains_ignored_for_backward_compat() {
+fn regression_nested_single_underscore_env_remains_ignored_for_backward_compat() {
     // Ensures the single-underscore form (historical k8s manifest pattern)
     // stays a no-op so migrating operators are never surprised by a sudden
     // feature flip on redeploy.
@@ -199,7 +199,7 @@ fn fresh_config_with_sentinel() -> Config {
 }
 
 #[test]
-fn test_debug_does_not_leak_secrets() {
+fn regression_debug_does_not_leak_secrets() {
     let config = fresh_config_with_sentinel();
     let rendered = format!("{:?}", config);
     assert!(
@@ -266,7 +266,7 @@ fn test_fixture_minimal_parses() {
 }
 
 #[test]
-fn test_fixture_production_parses_and_validates() {
+fn regression_fixture_production_parses_and_validates() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/config_production.yaml");
     let raw = std::fs::read_to_string(&path).expect("read production fixture");

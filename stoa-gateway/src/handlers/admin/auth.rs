@@ -239,7 +239,7 @@ mod tests {
     // endpoint with the same auth layer as the production admin_router
     // and asserts anonymous requests get 401.
     #[tokio::test]
-    async fn test_api_proxy_backends_behind_admin_auth_401_anon() {
+    async fn regression_api_proxy_backends_behind_admin_auth_401_anon() {
         use crate::proxy::list_api_proxy_backends;
         use axum::{middleware, routing::get as axum_get, Router};
 
@@ -295,7 +295,7 @@ mod tests {
     // GW-1 P1-3-lite: per-IP pre-auth rate-limit must reject once the
     // bucket is exhausted, so byte-by-byte probing stays bounded.
     #[tokio::test]
-    async fn test_admin_rate_limit_returns_429_once_bucket_is_full() {
+    async fn regression_admin_rate_limit_returns_429_once_bucket_is_full() {
         use axum::{extract::ConnectInfo, middleware, routing::get as axum_get, Router};
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 

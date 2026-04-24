@@ -150,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn test_client_messages_are_static_and_non_leaky() {
+    fn regression_reload_client_messages_are_static_and_non_leaky() {
         // None of the generic messages should reveal reqwest/serde/DNS internals.
         for msg in [
             ReloadError::NotConfigured.client_message(),

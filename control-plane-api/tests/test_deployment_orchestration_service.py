@@ -374,7 +374,9 @@ class TestRegressionCab1889:
             await svc._sync_api_from_git("acme", "payments")
 
             mock_git.is_connected.assert_called()
-            mock_git.get_head_commit_sha.assert_awaited_once_with(ref="main")
+            # CP-1 P2 M.4: caller drops explicit ref so the provider resolves
+            # it from ``settings.git.default_branch``.
+            mock_git.get_head_commit_sha.assert_awaited_once_with()
             # _project must never be touched — if it is, this attribute access would work on MagicMock
             # so we assert that only the interface methods were called.
             assert not any(

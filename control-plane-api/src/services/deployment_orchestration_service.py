@@ -129,7 +129,9 @@ class DeploymentOrchestrationService:
             commit_sha: str | None = None
             try:
                 # regression for CAB-1889: use provider-agnostic ABC, not _project
-                commit_sha = await git_service.get_head_commit_sha(ref="main")
+                # CP-1 P2 (M.4): drop explicit ref so it resolves to
+                # settings.git.default_branch.
+                commit_sha = await git_service.get_head_commit_sha()
             except FileNotFoundError:
                 logger.debug("No head commit available for API '%s/%s' sync", tenant_id, api_id)
 

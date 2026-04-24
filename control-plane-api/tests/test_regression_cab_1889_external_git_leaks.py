@@ -23,7 +23,10 @@ async def test_regression_cab_1889_iam_sync_uses_provider_tree_listing():
         await svc.sync_all_tenants()
 
     mock_git.is_connected.assert_called_once_with()
-    mock_git.list_tree.assert_awaited_once_with("tenants", ref="main")
+    # CP-1 P2 M.4: the caller drops the explicit ref so list_tree resolves
+    # to settings.git.default_branch inside the provider. The important
+    # invariant is that the ABC is used (no _project leakage).
+    mock_git.list_tree.assert_awaited_once_with("tenants")
     svc.sync_tenant.assert_awaited_once_with("acme")
     assert not any("_project" in str(call) for call in mock_git.mock_calls), (
         f"_project leaked into calls: {mock_git.mock_calls}"
@@ -54,7 +57,10 @@ async def test_regression_cab_1889_deployment_sync_uses_provider_head_lookup():
         await svc._sync_api_from_git("acme", "payments")
 
     mock_git.is_connected.assert_called_once_with()
-    mock_git.get_head_commit_sha.assert_awaited_once_with(ref="main")
+    # CP-1 P2 M.4: the caller drops the explicit ref so get_head_commit_sha
+    # resolves to settings.git.default_branch inside the provider. The
+    # important invariant is that the ABC is used (no _project leakage).
+    mock_git.get_head_commit_sha.assert_awaited_once_with()
     assert not any("_project" in str(call) for call in mock_git.mock_calls), (
         f"_project leaked into calls: {mock_git.mock_calls}"
     )

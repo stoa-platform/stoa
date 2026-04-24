@@ -71,6 +71,11 @@ class GitProviderConfig(BaseModel):
     provider: Literal["github", "gitlab"] = "github"
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     gitlab: GitLabConfig = Field(default_factory=GitLabConfig)
+    # CP-1 P2 (M.4): catalog repo default branch. Provider-agnostic because
+    # the catalog is a single repo regardless of provider. Hydrated from
+    # ``GIT_DEFAULT_BRANCH`` env var; keep ``"main"`` as the default so
+    # omitted config is a no-op.
+    default_branch: str = "main"
 
     @property
     def active_catalog_project_id(self) -> str:
@@ -142,6 +147,8 @@ class Settings(BaseSettings):
     GITLAB_TOKEN: str = Field(default="", exclude=True)
     GITLAB_PROJECT_ID: str = Field(default="", exclude=True)
     GITLAB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
+    # CP-1 P2 (M.4): catalog repo default branch, provider-agnostic.
+    GIT_DEFAULT_BRANCH: str = Field(default="main", exclude=True)
 
     # ── Git Provider — single source of truth for consumers ──────────────
     git: GitProviderConfig = Field(default_factory=GitProviderConfig)
@@ -477,6 +484,7 @@ class Settings(BaseSettings):
                 project_id=self.GITLAB_PROJECT_ID,
                 webhook_secret=SecretStr(self.GITLAB_WEBHOOK_SECRET),
             ),
+            default_branch=self.GIT_DEFAULT_BRANCH or "main",
         )
 
         # Step 2 — validation (gated; flipped in C.3).

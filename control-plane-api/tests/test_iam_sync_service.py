@@ -644,7 +644,9 @@ class TestRegressionCab1889:
             mock_git.list_tree = AsyncMock(return_value=[])
             await svc.sync_all_tenants()
             mock_git.is_connected.assert_called()
-            mock_git.list_tree.assert_awaited_once_with("tenants", ref="main")
+            # CP-1 P2 M.4: caller drops explicit ref so the provider resolves
+            # it from ``settings.git.default_branch``.
+            mock_git.list_tree.assert_awaited_once_with("tenants")
 
 
 class TestHandleTenantEventUserRemovedNoEmail:

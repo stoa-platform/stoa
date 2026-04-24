@@ -1,4 +1,4 @@
-import { httpClient, path } from '../http';
+import { httpClient, path, extractList } from '../http';
 import type { Schemas } from '@stoa/shared/api-types';
 import type { Consumer } from '../../types';
 
@@ -7,7 +7,7 @@ export const consumersClient = {
     const { data } = await httpClient.get(path('v1', 'consumers', tenantId), {
       params: { page: 1, page_size: 100, environment },
     });
-    return data.items ?? data;
+    return extractList<Consumer>(data, 'consumers');
   },
 
   async get(tenantId: string, consumerId: string): Promise<Consumer> {

@@ -12,6 +12,8 @@ import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
 import { apiService } from '../services/api';
+import { markRedirecting, resetRedirecting } from '../services/http/redirect';
+import { decodeJwtPayload, isMcpCallbackPath } from './auth-helpers';
 
 interface AuthContextType {
   user: User | null;
@@ -96,7 +98,9 @@ function extractUserFromToken(oidcUser: any): User | null {
   let roles: string[] = [];
   if (oidcUser.access_token) {
     try {
-      const payload = JSON.parse(atob(oidcUser.access_token.split('.')[1]));
+      const payload = decodeJwtPayload(oidcUser.access_token) as {
+        realm_access?: { roles?: string[] };
+      };
       roles = payload.realm_access?.roles || [];
     } catch (e) {
       console.warn('Failed to decode access_token for roles', e);
@@ -132,6 +136,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
   const prevTokenRef = useRef<string | null>(null);
+  // P1-6: guard setState after unmount (HMR, logout+remount, etc.).
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (oidc.user) {
@@ -153,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         apiService
           .getMe()
           .then((me) => {
+            if (!mountedRef.current) return; // P1-6
             if (me.role_display_names) {
               setUser((prev) =>
                 prev ? { ...prev, role_display_names: me.role_display_names } : prev
@@ -173,31 +186,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [oidc.user, queryClient]);
 
-  // CAB-1122: Register token refresher for 401 auto-retry
+  // CAB-1122: Register token refresher for 401 auto-retry.
+  // P1-7: depend on the two stable function refs, not the whole `oidc`
+  // object (react-oidc-context returns a new object on most renders).
+  // P1-16: mark the redirect in flight so applyFriendlyErrorMessage does
+  // not flash a tech error between `signinRedirect()` and the actual
+  // browser navigation; reset the flag if the redirect itself throws so
+  // we never stay in "silence forever" mode.
+  const { signinSilent, signinRedirect } = oidc;
   useEffect(() => {
     apiService.setTokenRefresher(async () => {
+      const redirectToLogin = async () => {
+        markRedirecting();
+        try {
+          await signinRedirect();
+        } catch (err) {
+          resetRedirecting();
+          throw err;
+        }
+      };
       try {
-        const renewed = await oidc.signinSilent();
+        const renewed = await signinSilent();
         if (renewed?.access_token) {
           return renewed.access_token;
         }
         // Silent renew succeeded but no token — session expired
-        oidc.signinRedirect();
+        await redirectToLogin();
         return null;
       } catch {
-        oidc.signinRedirect();
+        await redirectToLogin();
         return null;
       }
     });
-  }, [oidc]);
+  }, [signinSilent, signinRedirect]);
 
-  // Auto-login if we have auth params in URL (callback from Keycloak)
-  // Skip on /mcp-connectors/callback — those code/state params are from the MCP
-  // provider (e.g. Linear), not Keycloak. Without this check, oidc-client-ts
-  // misinterprets the MCP OAuth callback as a Keycloak callback and redirects to login.
+  // Auto-login if we have auth params in URL (callback from Keycloak).
+  // Skip on /mcp-connectors/callback — those code/state params are from
+  // the MCP provider (e.g. Linear), not Keycloak. Without this check,
+  // oidc-client-ts misinterprets the MCP OAuth callback as a Keycloak
+  // callback and redirects to login (P1-15: basePath-robust).
   useEffect(() => {
-    const isMcpCallback = window.location.pathname.startsWith('/mcp-connectors/callback');
-    if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams() && !isMcpCallback) {
+    if (
+      !oidc.isAuthenticated &&
+      !oidc.isLoading &&
+      hasAuthParams() &&
+      !isMcpCallbackPath(window.location.pathname)
+    ) {
       oidc.signinRedirect();
     }
   }, [oidc.isAuthenticated, oidc.isLoading, oidc]);

@@ -385,18 +385,22 @@ function PipelineTracesTab() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const loadData = useCallback(async () => {
-    try {
-      const [tracesData, statsData] = await Promise.all([
-        apiService.getTraces(50, undefined, undefined, activeEnvironment),
-        apiService.getTraceStats(),
-      ]);
-      setTraces(tracesData.traces);
-      setStats(statsData);
-    } catch (error) {
-      console.error('Failed to load monitoring data:', error);
-    } finally {
-      setLoading(false);
+    // P1-1: allSettled preserves the other slice when one endpoint fails.
+    const [tracesResult, statsResult] = await Promise.allSettled([
+      apiService.getTraces(50, undefined, undefined, activeEnvironment),
+      apiService.getTraceStats(),
+    ]);
+    if (tracesResult.status === 'fulfilled') {
+      setTraces(tracesResult.value.traces);
+    } else {
+      console.error('Failed to load traces:', tracesResult.reason);
     }
+    if (statsResult.status === 'fulfilled') {
+      setStats(statsResult.value);
+    } else {
+      console.error('Failed to load trace stats:', statsResult.reason);
+    }
+    setLoading(false);
   }, [activeEnvironment]);
 
   useEffect(() => {

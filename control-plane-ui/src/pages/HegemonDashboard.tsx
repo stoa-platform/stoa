@@ -444,18 +444,22 @@ export function HegemonDashboard() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    try {
-      const [statsData, tracesData] = await Promise.all([
-        apiService.getAiSessionStats(days),
-        apiService.getTraces(50, 'hegemon'),
-      ]);
-      setStats(statsData);
-      setSessions(tracesData.traces);
-    } catch (err) {
-      console.error('Failed to fetch hegemon data:', err);
-    } finally {
-      setLoading(false);
+    // P1-1: allSettled, update per-slice; on rejection keep prior state.
+    const [statsResult, tracesResult] = await Promise.allSettled([
+      apiService.getAiSessionStats(days),
+      apiService.getTraces(50, 'hegemon'),
+    ]);
+    if (statsResult.status === 'fulfilled') {
+      setStats(statsResult.value);
+    } else {
+      console.error('Failed to fetch hegemon AI session stats:', statsResult.reason);
     }
+    if (tracesResult.status === 'fulfilled') {
+      setSessions(tracesResult.value.traces);
+    } else {
+      console.error('Failed to fetch hegemon traces:', tracesResult.reason);
+    }
+    setLoading(false);
   }, [days]);
 
   useEffect(() => {

@@ -82,9 +82,10 @@ export const gatewaysClient = {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getGuardrailsEvents(limit = 20): Promise<any> {
-    const { data } = await httpClient.get(
-      `/v1/admin/gateways/metrics/guardrails/events?limit=${limit}`
-    );
+    // P1-11 residu: use axios params option rather than inline template string.
+    const { data } = await httpClient.get('/v1/admin/gateways/metrics/guardrails/events', {
+      params: { limit },
+    });
     return data;
   },
 

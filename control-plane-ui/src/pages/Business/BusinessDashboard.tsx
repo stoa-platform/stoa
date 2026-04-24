@@ -243,12 +243,19 @@ export function BusinessDashboard() {
     if (!isAdmin) return;
 
     try {
-      // Fetch all data in parallel
-      const [modeStats, businessMetrics, topAPIsData] = await Promise.all([
-        apiService.getGatewayModeStats().catch(() => null),
-        apiService.getBusinessMetrics().catch(() => null),
-        apiService.getTopAPIs(8).catch(() => []),
+      // P1-1: allSettled — each endpoint independent, partial failure
+      // leaves the other slices' data intact (prior per-promise `.catch`
+      // already did this, but allSettled expresses the intent clearly and
+      // protects against any other throw in the chain).
+      const [modeStatsResult, businessMetricsResult, topAPIsResult] = await Promise.allSettled([
+        apiService.getGatewayModeStats(),
+        apiService.getBusinessMetrics(),
+        apiService.getTopAPIs(8),
       ]);
+      const modeStats = modeStatsResult.status === 'fulfilled' ? modeStatsResult.value : null;
+      const businessMetrics =
+        businessMetricsResult.status === 'fulfilled' ? businessMetricsResult.value : null;
+      const topAPIsData = topAPIsResult.status === 'fulfilled' ? topAPIsResult.value : [];
 
       // Business metrics from API (with fallback defaults)
       if (businessMetrics) {

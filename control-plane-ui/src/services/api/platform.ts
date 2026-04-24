@@ -117,8 +117,9 @@ export const platformClient = {
   async listEvents(component?: string, limit?: number): Promise<PlatformEvent[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const params: Record<string, any> = {};
-    if (component) params.component = component;
-    if (limit) params.limit = limit;
+    // P1-14: != null preserves 0 (valid limit value) and blocks explicit null
+    if (component != null) params.component = component;
+    if (limit != null) params.limit = limit;
     const { data } = await httpClient.get('/v1/platform/events', { params });
     return data;
   },
@@ -136,7 +137,10 @@ export const platformClient = {
   },
 
   async getTopAPIs(limit = 10): Promise<TopAPI[]> {
-    const { data } = await httpClient.get(`/v1/business/top-apis?limit=${limit}`);
+    // P1-11 residu: use axios params option rather than inline template string.
+    const { data } = await httpClient.get('/v1/business/top-apis', {
+      params: { limit },
+    });
     return data;
   },
 };

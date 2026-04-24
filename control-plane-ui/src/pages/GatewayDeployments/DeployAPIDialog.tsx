@@ -54,26 +54,39 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
   // Load tenants and gateways on mount
   useEffect(() => {
     async function loadData() {
-      try {
-        const [tenantList, gwResult] = await Promise.all([
-          apiService.getTenants(),
-          apiService.getGatewayInstances({ page_size: 100 }),
-        ]);
+      // P1-1: allSettled — tenants and gateways are independent; partial
+      // failure should not leave the dialog completely unusable.
+      const [tenantResult, gwResult] = await Promise.allSettled([
+        apiService.getTenants(),
+        apiService.getGatewayInstances({ page_size: 100 }),
+      ]);
+      let tenantList: Awaited<ReturnType<typeof apiService.getTenants>> | undefined;
+      if (tenantResult.status === 'fulfilled') {
+        tenantList = tenantResult.value;
         setTenants(tenantList);
-        setGateways(gwResult.items);
+      } else {
+        console.error('Failed to load tenants:', tenantResult.reason);
+      }
+      if (gwResult.status === 'fulfilled') {
+        setGateways(gwResult.value.items);
+      } else {
+        console.error('Failed to load gateway instances:', gwResult.reason);
+      }
 
-        // Auto-select first tenant (or preselected)
+      // Auto-select first tenant (or preselected)
+      if (tenantList) {
         if (preselectedApiKey) {
           const [tenantId] = preselectedApiKey.split(':');
           setSelectedTenant(tenantId);
         } else if (tenantList.length > 0) {
           setSelectedTenant(tenantList[0].id);
         }
-      } catch {
-        setError('Failed to load data');
-      } finally {
-        setLoading(false);
       }
+
+      if (tenantResult.status === 'rejected' && gwResult.status === 'rejected') {
+        setError('Failed to load data');
+      }
+      setLoading(false);
     }
     loadData();
   }, [preselectedApiKey]);

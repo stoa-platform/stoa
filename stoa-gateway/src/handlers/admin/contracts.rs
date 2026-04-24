@@ -1,23 +1,111 @@
 //! UAC contract CRUD admin endpoints (CAB-1299).
+//!
+//! GW-1 P1-1 / P1-2 / P2-2: contract mutations are transactional
+//! across three stores (contract registry, REST route registry, MCP
+//! tool registry). The previous implementation persisted the contract
+//! *before* the binders ran, so a binder failure left the registry
+//! claiming routes/tools that did not exist. This module now enforces:
+//!
+//! - **upsert**: *bind-first*. Only commit to `contract_registry` once
+//!   both REST and MCP binds have succeeded. On failure, best-effort
+//!   unbind of the partial artefacts is attempted and the handler
+//!   returns `500`.
+//! - **delete**: *unbind-first*. Only remove from `contract_registry`
+//!   once both unbinds have succeeded. On failure, the contract stays
+//!   in the registry and the handler returns `500`.
+//! - **counts**: `routes_generated` / `tools_generated` come from the
+//!   real `BindingOutput` length, never from `contract.endpoints.len()`.
+//!
+//! The `ContractBinders` trait is a local abstraction used to inject
+//! test doubles; the production path wraps `RestBinder` + `McpBinder`
+//! via `RealBinders`.
 
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     Json,
 };
 use tracing::warn;
 
 use crate::state::AppState;
-use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, ProtocolBinder};
+use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, BindingOutput, ProtocolBinder};
+use crate::uac::registry::ContractRegistry;
 use crate::uac::UacContractSpec;
 
-/// POST /admin/contracts — register or update a UAC contract
+/// Local abstraction over the REST + MCP binders so the handler logic
+/// can be tested with injected failures.
+#[async_trait]
+pub(crate) trait ContractBinders: Send + Sync {
+    async fn bind_rest(&self, contract: &UacContractSpec) -> Result<usize, String>;
+    async fn bind_mcp(&self, contract: &UacContractSpec) -> Result<usize, String>;
+    async fn unbind_rest(&self, key: &str) -> Result<usize, String>;
+    async fn unbind_mcp(&self, key: &str) -> Result<usize, String>;
+}
+
+/// Production impl backed by the real binders.
+pub(crate) struct RealBinders {
+    rest: RestBinder,
+    mcp: McpBinder,
+}
+
+impl RealBinders {
+    pub(crate) fn from_state(state: &AppState) -> Self {
+        Self {
+            rest: RestBinder::new(state.route_registry.clone()),
+            mcp: McpBinder::new(state.tool_registry.clone()),
+        }
+    }
+}
+
+#[async_trait]
+impl ContractBinders for RealBinders {
+    async fn bind_rest(&self, contract: &UacContractSpec) -> Result<usize, String> {
+        match self.rest.bind(contract).await? {
+            BindingOutput::Routes(r) => Ok(r.len()),
+            BindingOutput::Tools(_) => Err("REST binder returned Tools output".into()),
+        }
+    }
+    async fn bind_mcp(&self, contract: &UacContractSpec) -> Result<usize, String> {
+        match self.mcp.bind(contract).await? {
+            BindingOutput::Tools(t) => Ok(t.len()),
+            BindingOutput::Routes(_) => Err("MCP binder returned Routes output".into()),
+        }
+    }
+    async fn unbind_rest(&self, key: &str) -> Result<usize, String> {
+        self.rest.unbind(key).await
+    }
+    async fn unbind_mcp(&self, key: &str) -> Result<usize, String> {
+        self.mcp.unbind(key).await
+    }
+}
+
+/// POST /admin/contracts — register or update a UAC contract.
 pub async fn upsert_contract(
     State(state): State<AppState>,
-    Json(mut contract): Json<UacContractSpec>,
-) -> impl IntoResponse {
-    // Normalize endpoint shorthand: merge `method` into `methods` if provided
+    Json(contract): Json<UacContractSpec>,
+) -> Response {
+    let binders = RealBinders::from_state(&state);
+    perform_upsert(
+        state.contract_registry.clone(),
+        &binders,
+        state.config.llm_enabled,
+        contract,
+    )
+    .await
+}
+
+/// Transactional upsert — extracted so tests can inject `ContractBinders`.
+pub(crate) async fn perform_upsert(
+    registry: Arc<ContractRegistry>,
+    binders: &dyn ContractBinders,
+    llm_enabled: bool,
+    mut contract: UacContractSpec,
+) -> Response {
+    // Normalize endpoint shorthand: merge `method` into `methods` if provided.
     for ep in &mut contract.endpoints {
         if let Some(method) = ep.method.take() {
             if ep.methods.is_empty() {
@@ -26,7 +114,7 @@ pub async fn upsert_contract(
         }
     }
 
-    // Validate the contract
+    // Validate the contract.
     let errors = contract.validate();
     if !errors.is_empty() {
         return (
@@ -36,12 +124,11 @@ pub async fn upsert_contract(
             .into_response();
     }
 
-    // Ensure required_policies are up to date with classification
     contract.refresh_policies();
 
-    // Expand LLM capabilities into synthetic endpoints (CAB-709)
+    // Expand LLM capabilities into synthetic endpoints (CAB-709).
     let llm_capabilities = if let Some(ref llm_config) = contract.llm_config {
-        if state.config.llm_enabled {
+        if llm_enabled {
             let synthetic = llm_config.expand_endpoints();
             let count = synthetic.len();
             contract.endpoints.extend(synthetic);
@@ -58,28 +145,56 @@ pub async fn upsert_contract(
         .key
         .clone()
         .unwrap_or_else(|| format!("{}:{}", contract.tenant_id, contract.name));
-    let existed = state.contract_registry.upsert(contract.clone()).is_some();
 
-    // Auto-generate REST routes from contract (CAB-1299 PR3)
-    let rest_binder = RestBinder::new(state.route_registry.clone());
-    let routes_count = match rest_binder.bind(&contract).await {
-        Ok(_) => contract.endpoints.len(),
+    // Snapshot the previous contract (if this is an update) so any binder
+    // failure after bind_rest has started mutating the route/tool registries
+    // can be rolled back to the old state. `bind_rest` and `bind_mcp` both
+    // remove existing artefacts for the contract_key *before* installing
+    // new ones — without this snapshot, a post-remove failure would leave
+    // partial/empty bindings for a contract that still lives in the
+    // registry (GW-1 P1-1 update-case extension).
+    let previous = registry.get(&key);
+
+    // ── bind-first ────────────────────────────────────────────
+    let routes_count = match binders.bind_rest(&contract).await {
+        Ok(n) => n,
         Err(e) => {
-            warn!(error = %e, contract = %key, "REST binder failed");
-            0
+            warn!(error = %e, contract = %key, "REST bind failed; contract NOT persisted");
+            // Restore the previous contract's bindings if this was an update.
+            // On a create, there's nothing to restore — the REST registry
+            // is still whatever state bind_rest left it in (today: no
+            // mutation before the Err return; defensively: restore_to_nothing
+            // via best-effort unbind).
+            if let Some(ref old) = previous {
+                restore_previous_bindings(binders, old, &key).await;
+            } else if let Err(rb) = binders.unbind_rest(&key).await {
+                warn!(error = %rb, contract = %key, "REST bind cleanup after failure also failed");
+            }
+            return binder_failure_response(&key, "REST", &e);
         }
     };
 
-    // Auto-generate MCP tools from contract (CAB-1299 PR4)
-    let mcp_binder = McpBinder::new(state.tool_registry.clone());
-    let tools_count = match mcp_binder.bind(&contract).await {
-        Ok(_) => contract.endpoints.len(),
+    let tools_count = match binders.bind_mcp(&contract).await {
+        Ok(n) => n,
         Err(e) => {
-            warn!(error = %e, contract = %key, "MCP binder failed");
-            0
+            warn!(error = %e, contract = %key, "MCP bind failed; rolling back bindings");
+            if let Some(ref old) = previous {
+                // Update case: restore the previous contract's REST + MCP
+                // bindings so the registry stays consistent with the artefact
+                // stores. Best-effort — failures are logged, response is 500.
+                restore_previous_bindings(binders, old, &key).await;
+            } else {
+                // Create case: unbind the REST routes we just registered.
+                if let Err(rb) = binders.unbind_rest(&key).await {
+                    warn!(error = %rb, contract = %key, "REST rollback unbind also failed");
+                }
+            }
+            return binder_failure_response(&key, "MCP", &e);
         }
     };
 
+    // ── commit ────────────────────────────────────────────────
+    let existed = registry.upsert(contract).is_some();
     let status = if existed {
         StatusCode::OK
     } else {
@@ -98,12 +213,12 @@ pub async fn upsert_contract(
         .into_response()
 }
 
-/// GET /admin/contracts — list all UAC contracts
+/// GET /admin/contracts — list all UAC contracts.
 pub async fn list_contracts(State(state): State<AppState>) -> Json<Vec<UacContractSpec>> {
     Json(state.contract_registry.list())
 }
 
-/// GET /admin/contracts/:key — get a single UAC contract by key (tenant_id:name)
+/// GET /admin/contracts/:key — get a single UAC contract by key.
 pub async fn get_contract(
     State(state): State<AppState>,
     Path(key): Path<String>,
@@ -114,35 +229,103 @@ pub async fn get_contract(
     }
 }
 
-/// DELETE /admin/contracts/:key — remove a UAC contract by key (tenant_id:name)
+/// DELETE /admin/contracts/:key — remove a UAC contract.
 ///
-/// Cascade-deletes all REST routes generated from this contract.
-pub async fn delete_contract(
-    State(state): State<AppState>,
-    Path(key): Path<String>,
-) -> impl IntoResponse {
-    match state.contract_registry.remove(&key) {
-        Some(_) => {
-            // Cascade-delete generated routes (CAB-1299 PR3)
-            let rest_binder = RestBinder::new(state.route_registry.clone());
-            let routes_removed = rest_binder.unbind(&key).await.unwrap_or(0);
+/// Cascade-unbinds REST routes and MCP tools **before** removing the
+/// contract from the registry. If either unbind fails, the registry is
+/// left untouched and the caller receives a `500` — prevents orphaned
+/// routes/tools persisting after the contract disappears.
+pub async fn delete_contract(State(state): State<AppState>, Path(key): Path<String>) -> Response {
+    let binders = RealBinders::from_state(&state);
+    perform_delete(state.contract_registry.clone(), &binders, key).await
+}
 
-            // Cascade-delete generated MCP tools (CAB-1299 PR4)
-            let mcp_binder = McpBinder::new(state.tool_registry.clone());
-            let tools_removed = mcp_binder.unbind(&key).await.unwrap_or(0);
+/// Transactional delete — extracted for testing.
+pub(crate) async fn perform_delete(
+    registry: Arc<ContractRegistry>,
+    binders: &dyn ContractBinders,
+    key: String,
+) -> Response {
+    // Snapshot the contract up-front: if `unbind_mcp` fails after
+    // `unbind_rest` succeeded, we need the contract spec in hand to
+    // restore REST bindings (GW-1 P1-2 partial-state extension).
+    let old_contract = match registry.get(&key) {
+        Some(c) => c,
+        None => return (StatusCode::NOT_FOUND, "Contract not found").into_response(),
+    };
 
-            (
-                StatusCode::OK,
-                Json(serde_json::json!({
-                    "status": "deleted",
-                    "routes_removed": routes_removed,
-                    "tools_removed": tools_removed,
-                })),
-            )
-                .into_response()
+    // ── unbind-first ──────────────────────────────────────────
+    let routes_removed = match binders.unbind_rest(&key).await {
+        Ok(n) => n,
+        Err(e) => {
+            warn!(error = %e, contract = %key, "REST unbind failed; contract NOT removed");
+            return binder_failure_response(&key, "REST", &e);
         }
-        None => (StatusCode::NOT_FOUND, "Contract not found").into_response(),
+    };
+
+    let tools_removed = match binders.unbind_mcp(&key).await {
+        Ok(n) => n,
+        Err(e) => {
+            warn!(
+                error = %e,
+                contract = %key,
+                "MCP unbind failed; restoring REST routes and leaving contract in registry"
+            );
+            // Best-effort restore of the REST routes we just removed so
+            // the registry+REST view stays consistent. MCP state is
+            // indeterminate (the unbind failure means we can't predict
+            // what's there) — the caller sees 500 and can retry.
+            if let Err(rb) = binders.bind_rest(&old_contract).await {
+                warn!(error = %rb, contract = %key, "REST rollback bind(old) also failed");
+            }
+            return binder_failure_response(&key, "MCP", &e);
+        }
+    };
+
+    // ── commit ────────────────────────────────────────────────
+    registry.remove(&key);
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "deleted",
+            "routes_removed": routes_removed,
+            "tools_removed": tools_removed,
+        })),
+    )
+        .into_response()
+}
+
+/// Best-effort rollback that reinstalls the previous contract's REST
+/// routes and MCP tools. Used when an upsert's binder step fails on a
+/// contract that already existed. Each sub-step is independent and
+/// failures are only logged — the caller still returns 500 to the
+/// client, so partial restore is surfaced via server-side traces
+/// rather than a divergent response shape.
+async fn restore_previous_bindings(
+    binders: &dyn ContractBinders,
+    old: &UacContractSpec,
+    key: &str,
+) {
+    if let Err(e) = binders.bind_rest(old).await {
+        warn!(error = %e, contract = %key, "REST rollback bind(old) failed");
     }
+    if let Err(e) = binders.bind_mcp(old).await {
+        warn!(error = %e, contract = %key, "MCP rollback bind(old) failed");
+    }
+}
+
+fn binder_failure_response(key: &str, which: &str, _err: &str) -> Response {
+    // Client message is deliberately generic; full error is already in
+    // `tracing::warn!` server-side (see callers).
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({
+            "status": "error",
+            "message": format!("{} binder failed", which),
+            "key": key,
+        })),
+    )
+        .into_response()
 }
 
 #[cfg(test)]

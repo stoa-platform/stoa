@@ -304,7 +304,7 @@ mod tests {
     // grow the internal maps. This is what stops `/admin/skills/:id/health`
     // from being a memory-growth vector when probed with random IDs.
     #[test]
-    fn test_stats_opt_unknown_key_returns_none_and_does_not_create_state() {
+    fn regression_stats_opt_unknown_key_returns_none_and_does_not_create_state() {
         let tracker = SkillHealthTracker::new(default_config());
         assert!(tracker.stats_opt("ns/ghost").is_none());
 

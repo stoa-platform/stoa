@@ -421,7 +421,7 @@ mod tests {
 
     // Primary P1-5 regression: unknown skill → 404, no counters/CB created.
     #[tokio::test]
-    async fn test_skills_health_returns_404_for_unknown_skill_and_does_not_grow_state() {
+    async fn regression_skills_health_returns_404_for_unknown_skill_and_does_not_grow_state() {
         let state = create_test_state(Some("secret"));
         let app = router_with_health(state.clone());
 

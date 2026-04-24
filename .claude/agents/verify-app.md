@@ -100,4 +100,4 @@ Produire un rapport structure:
 - Ne JAMAIS modifier le code ou l'infra — rapport uniquement
 - Si kubectl n'est pas accessible, signaler et continuer les checks HTTP
 - Timeout 10s par curl (ajouter `--max-time 10`)
-- Referer aux regles `.claude/rules/ci-quality-gates.md` et `.claude/rules/k8s-deploy.md`
+- Referer aux regles `.claude/docs/ci-quality-gates.md` et `.claude/docs/k8s-deploy.md`

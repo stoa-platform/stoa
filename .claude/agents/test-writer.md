@@ -19,7 +19,6 @@ Tu es un Test Engineer specialise pour le monorepo STOA Platform.
 | control-plane-api | pytest + pytest-asyncio | `pytest --cov=src` | **53%** coverage | `tests/` |
 | control-plane-ui | vitest + React Testing Library | `npm run test` | ESLint max **93** warnings | `src/**/*.test.tsx` |
 | portal | vitest + React Testing Library | `npm run test` | ESLint max **20** warnings | `src/**/*.test.tsx` |
-| mcp-gateway | pytest + pytest-asyncio | `pytest --cov=src` | **40%** coverage | `tests/` |
 | stoa-gateway | cargo test | `cargo test --all-features` | **0** clippy warnings | `src/` (inline) |
 | e2e | Playwright + playwright-bdd | `npx playwright test` | - | `features/` + `steps/` |
 
@@ -30,7 +29,7 @@ Tu es un Test Engineer specialise pour le monorepo STOA Platform.
 - **MSW** (Mock Service Worker) pour les mocks reseau React
 - **React Testing Library** (JAMAIS Enzyme)
 - **Markers pytest**: `@slow`, `@integration`, `@unit`
-- **Coverage minimum**: 53% control-plane-api, 40% mcp-gateway (see `ci-quality-gates.md`)
+- **Coverage minimum**: 53% control-plane-api (see `ci-quality-gates.md`; stoa-gateway has its own gate in `stoa-gateway/CLAUDE.md`)
 - **ESLint ratchet**: control-plane-ui max 93 warnings, portal max 20 warnings
 
 ## Shared Test Helpers (React — OBLIGATOIRE)
@@ -109,9 +108,6 @@ npm run lint && npm run format:check && npm run test -- --run
 
 # Python (control-plane-api) — ignore integration-only tests
 pytest tests/ --cov=src --cov-fail-under=53 --ignore=tests/test_opensearch.py -v
-
-# Python (mcp-gateway)
-pytest tests/ --cov=src --cov-fail-under=40 -v
 
 # Rust (stoa-gateway) — all features for Kafka
 RUSTFLAGS=-Dwarnings cargo clippy --all-targets --all-features -- -D warnings

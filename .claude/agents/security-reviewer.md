@@ -91,4 +91,4 @@ Produire un rapport structure:
 - Un seul P0 suffit pour verdict "Fix"
 - Ne JAMAIS modifier le code — produire uniquement un rapport
 - Citer le fichier et la ligne pour chaque finding
-- Referer aux regles `.claude/rules/security.md`, `.claude/rules/k8s-deploy.md`, et `.claude/rules/secrets-management.md`
+- Referer aux regles `.claude/docs/security-foundation.md`, `.claude/docs/k8s-deploy.md`, et `.claude/docs/secrets-management.md`

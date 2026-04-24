@@ -27,7 +27,7 @@ npm run lint && npm run format:check
 
 ## Conventions
 - Functional components + hooks (no class components)
-- React 18, TypeScript strict
+- React 19, TypeScript strict
 - Keycloak-js for auth
 - vitest (NOT Jest) for testing
 - Node 20 required

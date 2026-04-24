@@ -25,7 +25,7 @@ Tu es un Content Compliance Reviewer specialise dans la verification du contenu 
 
 ## Reference
 
-Toujours consulter `.claude/rules/content-compliance.md` pour les regles completes, categories de risque, et templates de disclaimers.
+Toujours consulter `.claude/docs/content-compliance.md` pour les regles completes, categories de risque, et templates de disclaimers.
 
 ## Workflow
 
@@ -141,6 +141,6 @@ Produire un rapport structure:
 - Plus de 3 P0 ou un P0 structurel (approche fondamentalement risquee) = "Refaire"
 - Ne JAMAIS modifier le contenu — produire uniquement un rapport
 - Citer le fichier et la ligne pour chaque finding
-- Referer aux regles `.claude/rules/content-compliance.md` pour les categories et templates
+- Referer aux regles `.claude/docs/content-compliance.md` pour les categories et templates
 - En cas de doute sur un finding, classifier au niveau superieur (P2 → P1, P1 → P0)
 - Les disclaimers sont obligatoires, pas optionnels — absence = P1

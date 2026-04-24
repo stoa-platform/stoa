@@ -17,7 +17,10 @@ export const toolPermissionsClient = {
     tenantId: string,
     body: Schemas['TenantToolPermissionCreate']
   ): Promise<TenantToolPermission> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'tool-permissions'), body);
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'tool-permissions'),
+      body
+    );
     return data;
   },
 

@@ -38,13 +38,10 @@ export function usePrometheusQuery(query: string, refreshInterval = 15_000) {
   const fetchQuery = useCallback(async () => {
     if (!query) return;
     try {
-      const { data: json } = await httpClient.get<PrometheusResponse>(
-        `${PROMETHEUS_BASE}/query`,
-        {
-          params: { query },
-          timeout: PROMETHEUS_TIMEOUT_MS,
-        }
-      );
+      const { data: json } = await httpClient.get<PrometheusResponse>(`${PROMETHEUS_BASE}/query`, {
+        params: { query },
+        timeout: PROMETHEUS_TIMEOUT_MS,
+      });
       if (mountedRef.current) {
         setData(json.data.result);
         setError(null);

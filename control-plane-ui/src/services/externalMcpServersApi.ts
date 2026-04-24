@@ -75,7 +75,10 @@ class ExternalMCPServersService {
     serverId: string,
     update: ExternalMCPServerUpdate
   ): Promise<ExternalMCPServer> {
-    const { data } = await apiService.put(path('v1', 'admin', 'external-mcp-servers', serverId), update);
+    const { data } = await apiService.put(
+      path('v1', 'admin', 'external-mcp-servers', serverId),
+      update
+    );
     return data;
   }
 
@@ -107,7 +110,9 @@ class ExternalMCPServersService {
    * Endpoint: POST /v1/admin/external-mcp-servers/{id}/sync-tools
    */
   async syncTools(serverId: string): Promise<Schemas['SyncToolsResponse']> {
-    const { data } = await apiService.post(path('v1', 'admin', 'external-mcp-servers', serverId, 'sync-tools'));
+    const { data } = await apiService.post(
+      path('v1', 'admin', 'external-mcp-servers', serverId, 'sync-tools')
+    );
     return data;
   }
 

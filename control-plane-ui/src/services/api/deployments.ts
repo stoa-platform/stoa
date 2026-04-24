@@ -19,12 +19,16 @@ export const deploymentsClient = {
       page_size?: number;
     }
   ): Promise<DeploymentListResponse> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'deployments'), { params });
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'deployments'), {
+      params,
+    });
     return data;
   },
 
   async get(tenantId: string, deploymentId: string): Promise<Deployment> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'deployments', deploymentId));
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'deployments', deploymentId)
+    );
     return data;
   },
 
@@ -91,7 +95,10 @@ export const deploymentsClient = {
     apiId: string,
     payload: { environment: string; gateway_ids?: string[] }
   ): Promise<{ deployed: number; environment: string; deployment_ids: string[] }> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'apis', apiId, 'deploy'), payload);
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'deploy'),
+      payload
+    );
     return data;
   },
 

@@ -41,9 +41,12 @@ export const apisClient = {
     apiId: string,
     limit = 20
   ): Promise<Schemas['APIVersionEntry'][]> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'apis', apiId, 'versions'), {
-      params: { limit },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'versions'),
+      {
+        params: { limit },
+      }
+    );
     return data;
   },
 
@@ -52,9 +55,12 @@ export const apisClient = {
     apiId: string,
     audience: string
   ): Promise<{ api_id: string; tenant_id: string; audience: string; updated_by: string }> {
-    const { data } = await httpClient.patch(path('v1', 'admin', 'catalog', tenantId, apiId, 'audience'), {
-      audience,
-    });
+    const { data } = await httpClient.patch(
+      path('v1', 'admin', 'catalog', tenantId, apiId, 'audience'),
+      {
+        audience,
+      }
+    );
     return data;
   },
 

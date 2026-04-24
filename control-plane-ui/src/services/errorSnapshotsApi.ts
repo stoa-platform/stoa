@@ -86,10 +86,13 @@ class ErrorSnapshotsService {
     status: SnapshotResolutionStatus,
     notes?: string
   ): Promise<ErrorSnapshotDetail> {
-    const { data } = await apiService.patch<ErrorSnapshotDetail>(path('v1', 'snapshots', snapshotId), {
-      resolution_status: status,
-      resolution_notes: notes,
-    });
+    const { data } = await apiService.patch<ErrorSnapshotDetail>(
+      path('v1', 'snapshots', snapshotId),
+      {
+        resolution_status: status,
+        resolution_notes: notes,
+      }
+    );
     return data;
   }
 

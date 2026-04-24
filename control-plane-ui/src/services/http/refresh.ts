@@ -19,10 +19,7 @@ function currentTimeoutMs(): number {
   return typeof fromConfig === 'number' && fromConfig > 0 ? fromConfig : 30_000;
 }
 
-function refreshWithTimeout(
-  refresher: TokenRefresher,
-  timeoutMs?: number
-): Promise<string | null> {
+function refreshWithTimeout(refresher: TokenRefresher, timeoutMs?: number): Promise<string | null> {
   const effectiveTimeout = timeoutMs ?? currentTimeoutMs();
   let timer: ReturnType<typeof setTimeout> | undefined;
 

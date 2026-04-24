@@ -11,9 +11,8 @@ const { mockHttpClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../services/http', async () => {
-  const actual = await vi.importActual<typeof import('../../../services/http')>(
-    '../../../services/http'
-  );
+  const actual =
+    await vi.importActual<typeof import('../../../services/http')>('../../../services/http');
   return {
     ...actual,
     httpClient: mockHttpClient,
@@ -314,9 +313,6 @@ describe('UI-2 S2c domain clients', () => {
     await apisClient.get('t?id', 'api#1');
 
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/tenants/a%2Fb');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      2,
-      '/v1/tenants/t%3Fid/apis/api%231'
-    );
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/tenants/t%3Fid/apis/api%231');
   });
 });

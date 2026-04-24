@@ -17,9 +17,12 @@ export const subscriptionsClient = {
   },
 
   async listPending(tenantId: string, page = 1, pageSize = 20): Promise<SubscriptionListResponse> {
-    const { data } = await httpClient.get(path('v1', 'subscriptions', 'tenant', tenantId, 'pending'), {
-      params: { page, page_size: pageSize },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'subscriptions', 'tenant', tenantId, 'pending'),
+      {
+        params: { page, page_size: pageSize },
+      }
+    );
     return data;
   },
 

@@ -16,12 +16,16 @@ export const consumersClient = {
   },
 
   async suspend(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(path('v1', 'consumers', tenantId, consumerId, 'suspend'));
+    const { data } = await httpClient.post(
+      path('v1', 'consumers', tenantId, consumerId, 'suspend')
+    );
     return data;
   },
 
   async activate(tenantId: string, consumerId: string): Promise<Consumer> {
-    const { data } = await httpClient.post(path('v1', 'consumers', tenantId, consumerId, 'activate'));
+    const { data } = await httpClient.post(
+      path('v1', 'consumers', tenantId, consumerId, 'activate')
+    );
     return data;
   },
 
@@ -60,9 +64,12 @@ export const consumersClient = {
     consumerId: string,
     certificatePem: string
   ): Promise<Consumer> {
-    const { data } = await httpClient.post(path('v1', 'consumers', tenantId, consumerId, 'certificate'), {
-      certificate_pem: certificatePem,
-    });
+    const { data } = await httpClient.post(
+      path('v1', 'consumers', tenantId, consumerId, 'certificate'),
+      {
+        certificate_pem: certificatePem,
+      }
+    );
     return data;
   },
 
@@ -70,9 +77,12 @@ export const consumersClient = {
     tenantId: string,
     days: number = 30
   ): Promise<Schemas['CertificateExpiryResponse']> {
-    const { data } = await httpClient.get(path('v1', 'consumers', tenantId, 'certificates', 'expiring'), {
-      params: { days },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'consumers', tenantId, 'certificates', 'expiring'),
+      {
+        params: { days },
+      }
+    );
     return data;
   },
 
@@ -80,9 +90,12 @@ export const consumersClient = {
     tenantId: string,
     consumerIds: string[]
   ): Promise<Schemas['BulkRevokeResponse']> {
-    const { data } = await httpClient.post(path('v1', 'consumers', tenantId, 'certificates', 'bulk-revoke'), {
-      consumer_ids: consumerIds,
-    });
+    const { data } = await httpClient.post(
+      path('v1', 'consumers', tenantId, 'certificates', 'bulk-revoke'),
+      {
+        consumer_ids: consumerIds,
+      }
+    );
     return data;
   },
 };

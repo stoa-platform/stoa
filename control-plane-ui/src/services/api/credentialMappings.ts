@@ -12,7 +12,10 @@ export const credentialMappingsClient = {
     tenantId: string,
     payload: Schemas['CredentialMappingCreate']
   ): Promise<CredentialMapping> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'credential-mappings'), payload);
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'credential-mappings'),
+      payload
+    );
     return data;
   },
 

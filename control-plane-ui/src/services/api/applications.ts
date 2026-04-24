@@ -24,7 +24,10 @@ export const applicationsClient = {
     appId: string,
     patch: Partial<ApplicationCreate>
   ): Promise<Application> {
-    const { data } = await httpClient.put(path('v1', 'tenants', tenantId, 'applications', appId), patch);
+    const { data } = await httpClient.put(
+      path('v1', 'tenants', tenantId, 'applications', appId),
+      patch
+    );
     return data;
   },
 

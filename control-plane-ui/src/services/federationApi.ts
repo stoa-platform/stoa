@@ -29,7 +29,9 @@ class FederationService {
    * Endpoint: GET /v1/tenants/{tenant_id}/federation/accounts
    */
   async listMasterAccounts(tenantId: string): Promise<MasterAccountListResponse> {
-    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'federation', 'accounts'));
+    const { data } = await apiService.get(
+      path('v1', 'tenants', tenantId, 'federation', 'accounts')
+    );
     return data;
   }
 
@@ -38,7 +40,9 @@ class FederationService {
    * Endpoint: GET /v1/tenants/{tenant_id}/federation/accounts/{id}
    */
   async getMasterAccount(tenantId: string, id: string): Promise<MasterAccount> {
-    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'federation', 'accounts', id));
+    const { data } = await apiService.get(
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', id)
+    );
     return data;
   }
 
@@ -50,7 +54,10 @@ class FederationService {
     tenantId: string,
     payload: Schemas['MasterAccountCreate']
   ): Promise<MasterAccount> {
-    const { data } = await apiService.post(path('v1', 'tenants', tenantId, 'federation', 'accounts'), payload);
+    const { data } = await apiService.post(
+      path('v1', 'tenants', tenantId, 'federation', 'accounts'),
+      payload
+    );
     return data;
   }
 
@@ -115,7 +122,17 @@ class FederationService {
    */
   async revokeSubAccount(tenantId: string, masterId: string, subId: string): Promise<SubAccount> {
     const { data } = await apiService.post(
-      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts', subId, 'revoke')
+      path(
+        'v1',
+        'tenants',
+        tenantId,
+        'federation',
+        'accounts',
+        masterId,
+        'sub-accounts',
+        subId,
+        'revoke'
+      )
     );
     return data;
   }
@@ -134,7 +151,17 @@ class FederationService {
     subId: string
   ): Promise<ToolAllowListResponse> {
     const { data } = await apiService.get(
-      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts', subId, 'tools')
+      path(
+        'v1',
+        'tenants',
+        tenantId,
+        'federation',
+        'accounts',
+        masterId,
+        'sub-accounts',
+        subId,
+        'tools'
+      )
     );
     return data;
   }
@@ -150,7 +177,17 @@ class FederationService {
     tools: string[]
   ): Promise<ToolAllowListResponse> {
     const { data } = await apiService.put(
-      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts', subId, 'tools'),
+      path(
+        'v1',
+        'tenants',
+        tenantId,
+        'federation',
+        'accounts',
+        masterId,
+        'sub-accounts',
+        subId,
+        'tools'
+      ),
       { allowed_tools: tools }
     );
     return data;

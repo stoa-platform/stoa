@@ -58,7 +58,9 @@ export interface ConnectivityResult {
 // --- API Functions ---
 
 export async function runDiagnostic(gatewayId: string): Promise<DiagnosticReport> {
-  const { data } = await apiService.get<DiagnosticReport>(path('v1', 'admin', 'diagnostics', gatewayId));
+  const { data } = await apiService.get<DiagnosticReport>(
+    path('v1', 'admin', 'diagnostics', gatewayId)
+  );
   return data;
 }
 

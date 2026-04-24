@@ -23,9 +23,7 @@ const PROM_RESPONSE = {
     status: 'success',
     data: {
       resultType: 'vector',
-      result: [
-        { metric: { name: 'up' }, value: [1234567890, '1'] as [number, string] },
-      ],
+      result: [{ metric: { name: 'up' }, value: [1234567890, '1'] as [number, string] }],
     },
   },
 };
@@ -38,10 +36,7 @@ const RANGE_RESPONSE = {
       result: [
         {
           metric: {},
-          values: [
-            [1000, '1'] as [number, string],
-            [1010, '2'] as [number, string],
-          ],
+          values: [[1000, '1'] as [number, string], [1010, '2'] as [number, string]],
         },
       ],
     },

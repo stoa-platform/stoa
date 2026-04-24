@@ -122,10 +122,13 @@ describe('useEvents', () => {
 
   // Rev1 LOCK — P0-8 eventTypes stability
   it('stable across re-renders when eventTypes content unchanged (P0-8)', () => {
-    const { rerender } = renderHook(({ types }) => useEvents({ tenantId: 't1', eventTypes: types }), {
-      wrapper: createWrapper(),
-      initialProps: { types: ['a', 'b'] },
-    });
+    const { rerender } = renderHook(
+      ({ types }) => useEvents({ tenantId: 't1', eventTypes: types }),
+      {
+        wrapper: createWrapper(),
+        initialProps: { types: ['a', 'b'] },
+      }
+    );
 
     // Re-render with a NEW array instance of the same content.
     rerender({ types: ['a', 'b'] });
@@ -136,10 +139,13 @@ describe('useEvents', () => {
   });
 
   it('re-opens stream when eventTypes content changes', () => {
-    const { rerender } = renderHook(({ types }) => useEvents({ tenantId: 't1', eventTypes: types }), {
-      wrapper: createWrapper(),
-      initialProps: { types: ['a', 'b'] },
-    });
+    const { rerender } = renderHook(
+      ({ types }) => useEvents({ tenantId: 't1', eventTypes: types }),
+      {
+        wrapper: createWrapper(),
+        initialProps: { types: ['a', 'b'] },
+      }
+    );
 
     rerender({ types: ['a', 'b', 'c'] });
 
@@ -183,7 +189,11 @@ describe('useEvents', () => {
     const onEvent = vi.fn();
     renderHook(() => useEvents({ tenantId: 't1', onEvent }), { wrapper: createWrapper() });
 
-    const sseEvent: SseEvent = { data: JSON.stringify({ type: 'api-created' }), event: 'message', id: '1' };
+    const sseEvent: SseEvent = {
+      data: JSON.stringify({ type: 'api-created' }),
+      event: 'message',
+      id: '1',
+    };
     act(() => {
       streams[0].handlers.onMessage(sseEvent);
     });

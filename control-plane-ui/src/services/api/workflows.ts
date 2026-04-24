@@ -10,7 +10,9 @@ import type {
 
 export const workflowsClient = {
   async listTemplates(tenantId: string): Promise<WorkflowTemplateListResponse> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'workflows', 'templates'));
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'workflows', 'templates')
+    );
     return data;
   },
 
@@ -18,7 +20,10 @@ export const workflowsClient = {
     tenantId: string,
     payload: WorkflowTemplateCreate
   ): Promise<WorkflowTemplate> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'workflows', 'templates'), payload);
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'workflows', 'templates'),
+      payload
+    );
     return data;
   },
 
@@ -42,9 +47,12 @@ export const workflowsClient = {
     tenantId: string,
     params?: { status?: string; skip?: number; limit?: number }
   ): Promise<WorkflowListResponse> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'workflows', 'instances'), {
-      params,
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'workflows', 'instances'),
+      {
+        params,
+      }
+    );
     return data;
   },
 
@@ -52,7 +60,10 @@ export const workflowsClient = {
     tenantId: string,
     payload: { template_id: string; subject_id: string; subject_email: string }
   ): Promise<WorkflowInstance> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'workflows', 'instances'), payload);
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'workflows', 'instances'),
+      payload
+    );
     return data;
   },
 
@@ -81,7 +92,9 @@ export const workflowsClient = {
   },
 
   async seedTemplates(tenantId: string): Promise<{ message: string }> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'workflows', 'templates', 'seed'));
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'workflows', 'templates', 'seed')
+    );
     return data;
   },
 };

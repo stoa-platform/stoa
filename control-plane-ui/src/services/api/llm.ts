@@ -59,9 +59,12 @@ export const llmClient = {
     tenantId: string,
     period: LlmPeriod = 'week'
   ): Promise<LlmTimeseriesResponse> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'llm', 'usage', 'timeseries'), {
-      params: { period },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'llm', 'usage', 'timeseries'),
+      {
+        params: { period },
+      }
+    );
     return data;
   },
 
@@ -69,9 +72,12 @@ export const llmClient = {
     tenantId: string,
     period: LlmPeriod = 'month'
   ): Promise<LlmProviderBreakdownResponse> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'llm', 'usage', 'providers'), {
-      params: { period },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'llm', 'usage', 'providers'),
+      {
+        params: { period },
+      }
+    );
     return data;
   },
 

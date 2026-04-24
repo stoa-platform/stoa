@@ -35,9 +35,12 @@ export const webhooksClient = {
   },
 
   async test(tenantId: string, webhookId: string): Promise<Schemas['WebhookTestResponse']> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'webhooks', webhookId, 'test'), {
-      event_type: 'subscription.created',
-    });
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'webhooks', webhookId, 'test'),
+      {
+        event_type: 'subscription.created',
+      }
+    );
     return data;
   },
 

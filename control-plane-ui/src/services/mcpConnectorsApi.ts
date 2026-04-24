@@ -38,7 +38,10 @@ class MCPConnectorsService {
       client_secret?: string;
     }
   ): Promise<Schemas['AuthorizeResponse']> {
-    const { data } = await apiService.post(path('v1', 'admin', 'mcp-connectors', slug, 'authorize'), body);
+    const { data } = await apiService.post(
+      path('v1', 'admin', 'mcp-connectors', slug, 'authorize'),
+      body
+    );
     return data;
   }
 
@@ -75,7 +78,10 @@ class MCPConnectorsService {
       confirm?: boolean;
     }
   ): Promise<Schemas['PromoteResponse']> {
-    const { data } = await apiService.post(path('v1', 'admin', 'mcp-connectors', slug, 'promote'), body);
+    const { data } = await apiService.post(
+      path('v1', 'admin', 'mcp-connectors', slug, 'promote'),
+      body
+    );
     return data;
   }
 }

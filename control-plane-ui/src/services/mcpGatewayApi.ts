@@ -133,7 +133,10 @@ class MCPToolsService {
     subscriptionId: string,
     update: Partial<ToolSubscriptionCreate>
   ): Promise<ToolSubscription> {
-    const { data } = await apiService.patch(path('v1', 'mcp', 'subscriptions', subscriptionId), update);
+    const { data } = await apiService.patch(
+      path('v1', 'mcp', 'subscriptions', subscriptionId),
+      update
+    );
     return data;
   }
 
@@ -202,7 +205,6 @@ class MCPToolsService {
     const { data } = await apiService.get('/health');
     return data;
   }
-
 }
 
 // Export singleton instance

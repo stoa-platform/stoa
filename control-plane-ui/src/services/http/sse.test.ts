@@ -45,7 +45,10 @@ afterEach(() => {
 function lastInit() {
   const call = mockFetchEventSource.mock.calls[0];
   expect(call).toBeTruthy();
-  return { url: call[0] as string, init: call[1] as Parameters<typeof import('@microsoft/fetch-event-source').fetchEventSource>[1] };
+  return {
+    url: call[0] as string,
+    init: call[1] as Parameters<typeof import('@microsoft/fetch-event-source').fetchEventSource>[1],
+  };
 }
 
 describe('openEventStream — authFetch', () => {

@@ -13,12 +13,16 @@ export const promotionsClient = {
       page_size?: number;
     }
   ): Promise<PromotionListResponse> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'promotions'), { params });
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'promotions'), {
+      params,
+    });
     return data;
   },
 
   async get(tenantId: string, promotionId: string): Promise<Promotion> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'promotions', promotionId));
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'promotions', promotionId)
+    );
     return data;
   },
 
@@ -27,7 +31,10 @@ export const promotionsClient = {
     apiId: string,
     request: Schemas['PromotionCreate']
   ): Promise<Promotion> {
-    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'promotions', apiId), request);
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'promotions', apiId),
+      request
+    );
     return data;
   },
 
@@ -58,7 +65,9 @@ export const promotionsClient = {
   },
 
   async getDiff(tenantId: string, promotionId: string): Promise<Schemas['PromotionDiffResponse']> {
-    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'promotions', promotionId, 'diff'));
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'promotions', promotionId, 'diff')
+    );
     return data;
   },
 };

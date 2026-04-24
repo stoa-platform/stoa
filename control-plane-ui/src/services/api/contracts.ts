@@ -67,6 +67,8 @@ export const contractsClient = {
   },
 
   async disableBinding(tenantId: string, contractId: string, protocol: string): Promise<void> {
-    await httpClient.delete(path('v1', 'tenants', tenantId, 'contracts', contractId, 'bindings', protocol));
+    await httpClient.delete(
+      path('v1', 'tenants', tenantId, 'contracts', contractId, 'bindings', protocol)
+    );
   },
 };

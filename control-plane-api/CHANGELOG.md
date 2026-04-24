@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.4](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.3...control-plane-api-v1.8.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* **api:** prevent GET /v1/admin/gateways 500 on enum drift (CAB-2169) ([#2544](https://github.com/stoa-platform/stoa/issues/2544)) ([6719957](https://github.com/stoa-platform/stoa/commit/671995743105d8c4cf0b3f41c70b242de84fc976))
+
 ## [1.8.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.2...control-plane-api-v1.8.3) (2026-04-24)
 
 

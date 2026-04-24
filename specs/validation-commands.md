@@ -30,7 +30,8 @@ Variables d'environnement (defaults documentés dans le script) :
 |-----|---------|-------------|
 | `API_URL` | `http://localhost:8000` | Base URL cp-api |
 | `GATEWAY_URL` | `http://localhost:8080` | Base URL stoa-gateway |
-| `MOCK_BACKEND_URL` | `http://localhost:9090` | Mock HTTP backend |
+| `MOCK_BACKEND_URL` | `http://localhost:9090` | Mock HTTP backend vu par le poste dev pour AT-0 |
+| `MOCK_BACKEND_UPSTREAM_URL` | `http://mock-backend:9090` | Mock HTTP backend vu par la gateway en compose |
 | `TENANT_ID` | `demo` (slug, résolu en UUID par cp-api) | Tenant démo |
 | `DEMO_ADMIN_TOKEN` | vide | JWT admin pour écrire côté cp-api. Si vide, le script passe en `STOA_DISABLE_AUTH=true` mode (dev only) |
 | `ROUTE_SYNC_GRACE_SECS` | `30` | Délai d'attente pour route visible en gateway après AT-2 |
@@ -63,8 +64,9 @@ make run-api             # cp-api sur :8000
 # Terminal 2
 make run-gateway         # stoa-gateway sur :8080
 
-# Terminal 3 (backend mock)
-docker run --rm -p 9090:80 kennethreitz/httpbin
+# Terminal 3 (backend mock only, if compose is not used)
+docker compose -f deploy/docker-compose/docker-compose.yml up -d mock-backend
+export MOCK_BACKEND_UPSTREAM_URL=http://localhost:9090
 ```
 
 ## 3. Lint (pré-conditions PR démo-ready)

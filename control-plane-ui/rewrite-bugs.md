@@ -9,6 +9,22 @@
 >
 > **Blocks**: CAB-2158 (UI-1-Wave2 remaining migration) and, indirectly,
 > CAB-2160 (UI-1-polish adapter pattern).
+>
+> **Status digest (UI-1 W1 bug-hunt batch, 2026-04-24)**:
+> - BUG-1 **RÉSOLU** backend (CAB-2159 merged 2026-04-22, commit c6abef8f2).
+>   UI alias migrated to honest `client_id: string | null` + guarded call sites.
+> - BUG-2 **RÉSOLU** backend (same PR). UI keeps only a minimal `visibility`
+>   narrowing because the backend schema declares `Record<string, unknown>`.
+> - BUG-3 **STILL OPEN (worse)** — 16+ duplicate `operationId` in the current
+>   snapshot (vs 11 originally reported). `// @ts-nocheck` still required.
+> - BUG-4 **PARTIEL** — `audience`, `created_at`, `updated_at` are in the
+>   schema. `status: string` remains un-typed (no literal union); `openapi_spec`
+>   stays on a separate endpoint by design.
+> - BUG-5 **DESIGN SHIFT** — backend public schema `RoleDetail.permissions` is
+>   now `string[]` (plain strings), but `AdminRoles.tsx` consumes the richer
+>   `role.permissions[].name/description` from a distinct `/v1/admin/roles`
+>   endpoint not exposed in the public OpenAPI snapshot. UI `RolePermission`
+>   type is NOT dead.
 
 ---
 

@@ -194,7 +194,7 @@ export function Applications() {
           app.name.toLowerCase().includes(searchLower) ||
           (app.display_name || '').toLowerCase().includes(searchLower) ||
           (app.description || '').toLowerCase().includes(searchLower) ||
-          app.client_id.toLowerCase().includes(searchLower)
+          (app.client_id ?? '').toLowerCase().includes(searchLower)
       );
     }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.11](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.10...stoa-gateway-v0.9.11) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** GW-1 P0 batch — constant-time admin auth + route orphan + reload leak + admin rate-limit ([#2501](https://github.com/stoa-platform/stoa/issues/2501)) ([0efc78f](https://github.com/stoa-platform/stoa/commit/0efc78f4a48753e3a38e63d9af935c7bb7493b3e))
+* **gateway:** GW-1 P1 — contract consistency (bind-first upsert / unbind-first delete) ([#2502](https://github.com/stoa-platform/stoa/issues/2502)) ([23d9f72](https://github.com/stoa-platform/stoa/commit/23d9f72a707ccb84d330099d6407c4c9d598fc84))
+
 ## [0.9.10](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.9...stoa-gateway-v0.9.10) (2026-04-20)
 
 

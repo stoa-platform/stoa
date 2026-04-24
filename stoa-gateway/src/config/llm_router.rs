@@ -8,17 +8,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmRouterConfig {
     /// Enable the LLM provider router (default: false).
-    /// Env: STOA_LLM_ROUTER_ENABLED
+    /// Env: STOA_LLM_ROUTER__ENABLED
     #[serde(default)]
     pub enabled: bool,
 
     /// Default routing strategy.
-    /// Env: STOA_LLM_ROUTER_DEFAULT_STRATEGY
+    /// Env: STOA_LLM_ROUTER__DEFAULT_STRATEGY
     #[serde(default)]
     pub default_strategy: crate::llm::RoutingStrategy,
 
     /// Budget limit in USD per billing window. 0 = no limit.
-    /// Env: STOA_LLM_ROUTER_BUDGET_LIMIT_USD
+    /// Env: STOA_LLM_ROUTER__BUDGET_LIMIT_USD
     #[serde(default)]
     pub budget_limit_usd: f64,
 

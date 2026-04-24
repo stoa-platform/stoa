@@ -1,6 +1,7 @@
 //! mTLS configuration (CAB-864).
 //!
-//! All fields are configurable via STOA_MTLS_* environment variables.
+//! All fields are configurable via `STOA_MTLS__*` environment variables
+//! (double underscore separates the nested path `mtls` from the field name).
 //! Default: disabled (zero overhead when not enabled).
 
 use serde::{Deserialize, Serialize};
@@ -8,57 +9,65 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MtlsConfig {
     /// Enable mTLS header extraction and validation
-    /// Env: STOA_MTLS_ENABLED
+    /// Env: STOA_MTLS__ENABLED
     #[serde(default)]
     pub enabled: bool,
 
     /// Require certificate-token binding (cnf claim)
-    /// Env: STOA_MTLS_REQUIRE_BINDING
+    /// Env: STOA_MTLS__REQUIRE_BINDING
     #[serde(default = "default_require_binding")]
     pub require_binding: bool,
 
     /// Trusted proxy CIDRs (F5 IPs). If empty, all sources accepted.
-    /// Env: STOA_MTLS_TRUSTED_PROXIES (comma-separated CIDRs)
-    #[serde(default)]
+    /// Env: STOA_MTLS__TRUSTED_PROXIES (comma-separated CIDRs or JSON array)
+    #[serde(default, deserialize_with = "super::deserializers::string_list")]
     pub trusted_proxies: Vec<String>,
 
     /// Allowed certificate issuers (DN strings). If empty, all issuers accepted.
-    /// Env: STOA_MTLS_ALLOWED_ISSUERS (comma-separated DNs)
-    #[serde(default)]
+    /// Env: STOA_MTLS__ALLOWED_ISSUERS (comma-separated DNs or JSON array)
+    #[serde(default, deserialize_with = "super::deserializers::string_list")]
     pub allowed_issuers: Vec<String>,
 
     /// Routes that require mTLS (glob patterns). If empty, mTLS is optional on all routes.
-    /// Env: STOA_MTLS_REQUIRED_ROUTES (comma-separated patterns)
-    #[serde(default)]
+    /// Env: STOA_MTLS__REQUIRED_ROUTES (comma-separated patterns or JSON array)
+    #[serde(default, deserialize_with = "super::deserializers::string_list")]
     pub required_routes: Vec<String>,
 
     /// Extract tenant from certificate Subject DN (OU field)
-    /// Env: STOA_MTLS_TENANT_FROM_DN
+    /// Env: STOA_MTLS__TENANT_FROM_DN
     #[serde(default = "default_tenant_from_dn")]
     pub tenant_from_dn: bool,
 
     // Header name overrides (for different TLS terminators)
+    /// Env: STOA_MTLS__HEADER_VERIFY
     #[serde(default = "default_mtls_header_verify")]
     pub header_verify: String,
 
+    /// Env: STOA_MTLS__HEADER_FINGERPRINT
     #[serde(default = "default_mtls_header_fingerprint")]
     pub header_fingerprint: String,
 
+    /// Env: STOA_MTLS__HEADER_SUBJECT_DN
     #[serde(default = "default_mtls_header_subject_dn")]
     pub header_subject_dn: String,
 
+    /// Env: STOA_MTLS__HEADER_ISSUER_DN
     #[serde(default = "default_mtls_header_issuer_dn")]
     pub header_issuer_dn: String,
 
+    /// Env: STOA_MTLS__HEADER_SERIAL
     #[serde(default = "default_mtls_header_serial")]
     pub header_serial: String,
 
+    /// Env: STOA_MTLS__HEADER_NOT_BEFORE
     #[serde(default = "default_mtls_header_not_before")]
     pub header_not_before: String,
 
+    /// Env: STOA_MTLS__HEADER_NOT_AFTER
     #[serde(default = "default_mtls_header_not_after")]
     pub header_not_after: String,
 
+    /// Env: STOA_MTLS__HEADER_CERT
     #[serde(default = "default_mtls_header_cert")]
     pub header_cert: String,
 }

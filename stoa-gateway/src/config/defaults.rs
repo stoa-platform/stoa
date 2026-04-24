@@ -270,6 +270,22 @@ pub(super) fn default_git_provider() -> String {
     "gitlab".to_string() // backward compatible default
 }
 
+pub(super) fn default_rate_limit_default() -> Option<usize> {
+    Some(1000)
+}
+
+pub(super) fn default_rate_limit_window_seconds() -> Option<u64> {
+    Some(60)
+}
+
+pub(super) fn default_log_level() -> Option<String> {
+    Some("info".to_string())
+}
+
+pub(super) fn default_log_format() -> Option<String> {
+    Some("json".to_string())
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {

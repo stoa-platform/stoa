@@ -13,17 +13,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SenderConstraintConfig {
     /// Enable the unified sender-constraint middleware.
-    /// Env: STOA_SENDER_CONSTRAINT_ENABLED
+    /// Env: STOA_SENDER_CONSTRAINT__ENABLED
     #[serde(default)]
     pub enabled: bool,
 
     /// Require DPoP proof when cnf.jkt is present in the token.
-    /// Env: STOA_SENDER_CONSTRAINT_DPOP_REQUIRED
+    /// Env: STOA_SENDER_CONSTRAINT__DPOP_REQUIRED
     #[serde(default)]
     pub dpop_required: bool,
 
     /// Require mTLS binding when cnf.x5t#S256 is present in the token.
-    /// Env: STOA_SENDER_CONSTRAINT_MTLS_REQUIRED
+    /// Env: STOA_SENDER_CONSTRAINT__MTLS_REQUIRED
     #[serde(default)]
     pub mtls_required: bool,
 }

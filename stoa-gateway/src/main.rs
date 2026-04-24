@@ -20,7 +20,7 @@ use stoa_gateway::state::AppState;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration first (needed for OTel endpoint)
     let config = Config::load()?;
-    config.validate();
+    config.validate()?;
 
     // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);

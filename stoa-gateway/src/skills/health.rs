@@ -87,6 +87,13 @@ impl SkillHealthTracker {
     }
 
     /// Get health stats for a specific skill.
+    ///
+    /// Creates counters and a circuit breaker for `skill_key` if they
+    /// don't yet exist — this is appropriate on *record* paths
+    /// (`record_success` / `record_failure` / `allow_execution`) where
+    /// we are about to track state anyway. For a pure read from an
+    /// admin endpoint, prefer [`Self::stats_opt`] to avoid unbounded
+    /// registry growth on unknown keys (GW-1 P1-5).
     pub fn stats(&self, skill_key: &str) -> SkillHealthStats {
         let counters = self.get_counters(skill_key);
         let successes = counters.successes.load(Ordering::Relaxed);
@@ -109,6 +116,57 @@ impl SkillHealthTracker {
             total_calls: total,
             success_rate,
         }
+    }
+
+    /// Peek-only version of [`Self::stats`] — returns `Some` if counters
+    /// or a circuit breaker already exist for `skill_key`, and `None`
+    /// otherwise. Never inserts anything into the internal maps.
+    ///
+    /// Admin endpoints use this to surface "skill exists but never
+    /// called yet" as a distinct shape (zero counts, closed CB) from
+    /// "skill is unknown" (404) without the old `stats()` side effect
+    /// of synthesising a fake-positive entry for every probed key.
+    pub fn stats_opt(&self, skill_key: &str) -> Option<SkillHealthStats> {
+        let counters_snapshot = {
+            let counters = self.counters.read();
+            counters.get(skill_key).cloned()
+        };
+        let cb = self.circuit_breakers.get(skill_key);
+
+        if counters_snapshot.is_none() && cb.is_none() {
+            return None;
+        }
+
+        let (successes, failures) = counters_snapshot
+            .as_ref()
+            .map(|c| {
+                (
+                    c.successes.load(Ordering::Relaxed),
+                    c.failures.load(Ordering::Relaxed),
+                )
+            })
+            .unwrap_or((0, 0));
+        let total = successes + failures;
+        let success_rate = if total > 0 {
+            successes as f64 / total as f64
+        } else {
+            1.0
+        };
+
+        // If we have counters but no CB (unreachable today, record paths
+        // always create both), default to "closed" for the state string.
+        let circuit_state = cb
+            .map(|c| c.state().to_string())
+            .unwrap_or_else(|| "closed".to_string());
+
+        Some(SkillHealthStats {
+            skill_key: skill_key.to_string(),
+            success_count: successes,
+            failure_count: failures,
+            circuit_state,
+            total_calls: total,
+            success_rate,
+        })
     }
 
     /// Get health stats for all tracked skills.
@@ -238,5 +296,49 @@ mod tests {
         assert_eq!(tracker.stats("ns/a").failure_count, 0);
         assert_eq!(tracker.stats("ns/b").success_count, 0);
         assert_eq!(tracker.stats("ns/b").failure_count, 1);
+    }
+
+    // ── GW-1 P1-5: stats_opt peek-only semantics ──────────────────────
+
+    // Core invariant: calling `stats_opt` for an unknown key must not
+    // grow the internal maps. This is what stops `/admin/skills/:id/health`
+    // from being a memory-growth vector when probed with random IDs.
+    #[test]
+    fn test_stats_opt_unknown_key_returns_none_and_does_not_create_state() {
+        let tracker = SkillHealthTracker::new(default_config());
+        assert!(tracker.stats_opt("ns/ghost").is_none());
+
+        // Second probe also returns None — state was not inserted by the first.
+        assert!(tracker.stats_opt("ns/ghost").is_none());
+
+        // `stats_all` enumerates the tracked set; must still be empty.
+        assert!(tracker.stats_all().is_empty());
+    }
+
+    #[test]
+    fn test_stats_opt_returns_some_after_record() {
+        let tracker = SkillHealthTracker::new(default_config());
+        tracker.record_success("ns/seen");
+        let stats = tracker
+            .stats_opt("ns/seen")
+            .expect("record path should populate");
+        assert_eq!(stats.success_count, 1);
+        assert_eq!(stats.failure_count, 0);
+    }
+
+    // After `record_*`, repeated `stats_opt` reads are idempotent — they
+    // don't touch counters or CB, so the tracked set stays at exactly
+    // the keys that have been recorded.
+    #[test]
+    fn test_stats_opt_reads_are_idempotent() {
+        let tracker = SkillHealthTracker::new(default_config());
+        tracker.record_failure("ns/only-one");
+        for _ in 0..50 {
+            let _ = tracker.stats_opt("ns/only-one");
+            let _ = tracker.stats_opt("ns/never-heard-of-this");
+        }
+        let all = tracker.stats_all();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].skill_key, "ns/only-one");
     }
 }

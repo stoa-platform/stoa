@@ -106,26 +106,29 @@ export function GatewayObservabilityDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      // Fetch gateway metrics and APDEX in parallel
-      const [gatewayMetrics, businessMetrics] = await Promise.all([
-        apiService.getGatewayAggregatedMetrics(),
-        apiService.getBusinessMetrics().catch(() => null),
-      ]);
+    // P1-1: allSettled — gatewayMetrics is primary, APDEX is auxiliary.
+    // Partial failure leaves the other slice's data intact.
+    const [metricsResult, businessResult] = await Promise.allSettled([
+      apiService.getGatewayAggregatedMetrics(),
+      apiService.getBusinessMetrics(),
+    ]);
 
-      setMetrics(gatewayMetrics);
-
-      // Update APDEX score from business metrics if available
-      if (businessMetrics?.apdex_score) {
-        setApdexScore(businessMetrics.apdex_score);
-      }
-
-      setError(null);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load metrics');
-    } finally {
-      setLoading(false);
+    if (metricsResult.status === 'fulfilled') {
+      setMetrics(metricsResult.value);
+    } else {
+      console.error('Failed to load gateway aggregated metrics:', metricsResult.reason);
     }
+    if (businessResult.status === 'fulfilled' && businessResult.value?.apdex_score) {
+      setApdexScore(businessResult.value.apdex_score);
+    }
+
+    if (metricsResult.status === 'rejected') {
+      const reason: any = metricsResult.reason;
+      setError(reason?.response?.data?.detail || 'Failed to load metrics');
+    } else {
+      setError(null);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

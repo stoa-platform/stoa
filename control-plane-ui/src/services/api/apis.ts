@@ -1,20 +1,21 @@
-import { httpClient, path } from '../http';
+import { httpClient, path, extractList } from '../http';
 import type { Schemas } from '@stoa/shared/api-types';
 import type { API, APICreate, Environment } from '../../types';
 
 export const apisClient = {
   async list(tenantId: string, environment?: Environment): Promise<API[]> {
     const params: Record<string, unknown> = { page: 1, page_size: 100 };
-    if (environment) params.environment = environment;
+    // P1-14: != null keeps legitimate '' / 0 values
+    if (environment != null) params.environment = environment;
     const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'apis'), { params });
-    return data.items ?? data;
+    return extractList<API>(data, 'apis');
   },
 
   async listAdmin(page = 1, pageSize = 100): Promise<API[]> {
     const { data } = await httpClient.get('/v1/admin/catalog/apis', {
       params: { page, page_size: pageSize },
     });
-    return data.items ?? data;
+    return extractList<API>(data, 'admin catalog apis');
   },
 
   async get(tenantId: string, apiId: string): Promise<API> {

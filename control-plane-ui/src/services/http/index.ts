@@ -20,6 +20,8 @@ export { refreshAuthTokenWithTimeout } from './refresh';
 
 export { path } from './path';
 
+export { extractList } from './payload';
+
 export {
   createEventSource,
   openEventStream,

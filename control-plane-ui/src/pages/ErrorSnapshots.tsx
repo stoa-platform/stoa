@@ -558,19 +558,28 @@ export function ErrorSnapshots() {
         path_contains: searchQuery || undefined,
       };
 
-      const [snapshotsData, statsData, filtersData] = await Promise.all([
+      // P1-1: allSettled, update per-slice; on rejection keep prior state.
+      const [snapshotsResult, statsResult, filtersResult] = await Promise.allSettled([
         errorSnapshotsService.getSnapshots(activeFilters, page, pageSize),
         errorSnapshotsService.getStats(),
         availableFilters ? Promise.resolve(availableFilters) : errorSnapshotsService.getFilters(),
       ]);
-      setSnapshots(snapshotsData.items);
-      setTotal(snapshotsData.total);
-      setStats(statsData);
-      if (!availableFilters) {
-        setAvailableFilters(filtersData);
+      if (snapshotsResult.status === 'fulfilled') {
+        setSnapshots(snapshotsResult.value.items);
+        setTotal(snapshotsResult.value.total);
+      } else {
+        console.error('Failed to load error snapshots:', snapshotsResult.reason);
       }
-    } catch (error) {
-      console.error('Failed to load error snapshots:', error);
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value);
+      } else {
+        console.error('Failed to load error snapshot stats:', statsResult.reason);
+      }
+      if (!availableFilters && filtersResult.status === 'fulfilled') {
+        setAvailableFilters(filtersResult.value);
+      } else if (filtersResult.status === 'rejected') {
+        console.error('Failed to load error snapshot filters:', filtersResult.reason);
+      }
     } finally {
       setLoading(false);
     }

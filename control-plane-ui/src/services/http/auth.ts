@@ -1,3 +1,21 @@
+/**
+ * Auth token state for the HTTP layer.
+ *
+ * Module-scope storage is **intentional** and paired with the Keycloak
+ * `sessionStorage` store wired in `src/main.tsx`. This means each browser
+ * tab keeps its own token and performs its own silent renew — tabs do
+ * NOT share refreshed tokens via BroadcastChannel or `storage` events.
+ *
+ * Rationale (P1-3, WONT-FIX by design): sessionStorage-per-tab bounds the
+ * XSS blast radius — a script exfiltrating localStorage would leak all
+ * live sessions at once; sessionStorage isolates one tab at a time.
+ * Cross-tab token sync would partially re-open that surface and is not
+ * worth the complexity for the UX gain (each tab refreshes naturally on
+ * its own 401).
+ *
+ * Consequence: two tabs can briefly hold divergent tokens until each
+ * tab's next 401 → refresh cycle. Acceptable under the audit.
+ */
 export type TokenRefresher = () => Promise<string | null>;
 
 type QueueItem = {

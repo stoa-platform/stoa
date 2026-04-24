@@ -1,4 +1,4 @@
-import { httpClient, path } from '../http';
+import { httpClient, path, extractList } from '../http';
 import type { Application, ApplicationCreate } from '../../types';
 
 export const applicationsClient = {
@@ -6,7 +6,7 @@ export const applicationsClient = {
     const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'applications'), {
       params: { page: 1, page_size: 100 },
     });
-    return data.items ?? data;
+    return extractList<Application>(data, 'applications');
   },
 
   async get(tenantId: string, appId: string): Promise<Application> {

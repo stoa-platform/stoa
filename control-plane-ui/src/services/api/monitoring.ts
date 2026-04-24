@@ -64,12 +64,15 @@ export const monitoringClient = {
     statusCode?: number,
     route?: string
   ): Promise<{ transactions: MonitoringTransaction[] }> {
+    // P1-14: `!= null` keeps `0` (valid for numeric params) and blocks a
+    // caller that explicitly passed `null`. `if (x)` would drop `0` and
+    // `''` alike — not what we want for numeric-or-string params.
     const params: Record<string, string | number> = { limit };
-    if (status) params.status = status;
-    if (timeRange) params.time_range = timeRange;
-    if (serviceType) params.service_type = serviceType;
-    if (statusCode) params.status_code = statusCode;
-    if (route) params.route = route;
+    if (status != null) params.status = status;
+    if (timeRange != null) params.time_range = timeRange;
+    if (serviceType != null) params.service_type = serviceType;
+    if (statusCode != null) params.status_code = statusCode;
+    if (route != null) params.route = route;
     const { data } = await httpClient.get('/v1/monitoring/transactions', { params });
     return data;
   },
@@ -81,7 +84,7 @@ export const monitoringClient = {
 
   async getTransactionStats(timeRange?: string): Promise<MonitoringStats> {
     const params: Record<string, string> = {};
-    if (timeRange) params.time_range = timeRange;
+    if (timeRange != null) params.time_range = timeRange;
     const { data } = await httpClient.get('/v1/monitoring/transactions/stats', { params });
     return data;
   },

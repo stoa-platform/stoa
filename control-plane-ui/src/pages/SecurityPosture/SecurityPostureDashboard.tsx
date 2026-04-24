@@ -211,68 +211,74 @@ export function SecurityPostureDashboard() {
   const mountedRef = useRef(true);
 
   const loadData = useCallback(async () => {
-    try {
-      const [findingsRes, securityRes, driftRes, tokenBindingRes, scansRes] = await Promise.all([
-        apiService
-          .get<{
-            findings: Array<{
-              id: string;
-              severity: SeverityLevel;
-              rule_name: string;
-              description: string | null;
-              resource_name: string | null;
-              created_at: string;
-              status: string;
-              scanner: string;
-            }>;
-            total: number;
-          }>(`/v1/security/${tenantId}/findings`)
-          .catch(() => ({ data: { findings: [], total: 0 } })),
-        apiService
-          .get<{
-            events: SecurityEvent[];
-            summary: Record<string, number>;
-          }>(`/v1/audit/${tenantId}/security`)
-          .catch(() => ({ data: { events: [], summary: {} } })),
-        apiService
-          .get<{
-            items: DriftItem[];
-            total: number;
-          }>('/v1/admin/governance/drift')
-          .catch(() => ({ data: { items: [], total: 0 } })),
-        apiService
-          .get<TokenBindingStatus>(`/v1/security/${tenantId}/token-binding`)
-          .catch(() => ({ data: null as TokenBindingStatus | null })),
-        apiService
-          .get<{ scans: SecurityScan[] }>(`/v1/security/${tenantId}/scans`)
-          .catch(() => ({ data: { scans: [] } })),
+    // P1-1: allSettled per-slice (the pre-existing per-promise `.catch`
+    // already returned defaults, so we now use allSettled for consistency
+    // and to cover any non-axios throw in the chain).
+    const [findingsResult, securityResult, driftResult, tokenBindingResult, scansResult] =
+      await Promise.allSettled([
+        apiService.get<{
+          findings: Array<{
+            id: string;
+            severity: SeverityLevel;
+            rule_name: string;
+            description: string | null;
+            resource_name: string | null;
+            created_at: string;
+            status: string;
+            scanner: string;
+          }>;
+          total: number;
+        }>(`/v1/security/${tenantId}/findings`),
+        apiService.get<{
+          events: SecurityEvent[];
+          summary: Record<string, number>;
+        }>(`/v1/audit/${tenantId}/security`),
+        apiService.get<{
+          items: DriftItem[];
+          total: number;
+        }>('/v1/admin/governance/drift'),
+        apiService.get<TokenBindingStatus>(`/v1/security/${tenantId}/token-binding`),
+        apiService.get<{ scans: SecurityScan[] }>(`/v1/security/${tenantId}/scans`),
       ]);
 
-      // Use real findings from /v1/security/{tenant}/findings endpoint
-      const realFindings: SecurityFinding[] = (findingsRes.data.findings || []).map((f) => ({
-        id: f.id,
-        category: f.scanner,
-        severity: f.severity,
-        title: f.rule_name,
-        description: f.description || 'No description',
-        resource: f.resource_name || tenantId,
-        detected_at: f.created_at,
-        status: f.status === 'resolved' ? ('resolved' as const) : ('open' as const),
-      }));
+    if (!mountedRef.current) return;
 
-      if (!mountedRef.current) return;
+    if (findingsResult.status === 'fulfilled') {
+      const realFindings: SecurityFinding[] = (findingsResult.value.data.findings || []).map(
+        (f) => ({
+          id: f.id,
+          category: f.scanner,
+          severity: f.severity,
+          title: f.rule_name,
+          description: f.description || 'No description',
+          resource: f.resource_name || tenantId,
+          detected_at: f.created_at,
+          status: f.status === 'resolved' ? ('resolved' as const) : ('open' as const),
+        })
+      );
       setFindings(realFindings);
-      setEvents(securityRes.data.events);
-      setDriftItems(driftRes.data.items || []);
-      setTokenBinding(tokenBindingRes.data);
-      setScans(scansRes.data.scans || []);
-      setError(null);
-    } catch (err: any) {
-      if (!mountedRef.current) return;
-      setError(err.response?.data?.detail || 'Failed to load security data');
-    } finally {
-      if (mountedRef.current) setLoading(false);
+    } else {
+      console.error('Failed to load security findings:', findingsResult.reason);
     }
+    if (securityResult.status === 'fulfilled') setEvents(securityResult.value.data.events);
+    if (driftResult.status === 'fulfilled') setDriftItems(driftResult.value.data.items || []);
+    if (tokenBindingResult.status === 'fulfilled') setTokenBinding(tokenBindingResult.value.data);
+    if (scansResult.status === 'fulfilled') setScans(scansResult.value.data.scans || []);
+
+    const allFailed = [
+      findingsResult,
+      securityResult,
+      driftResult,
+      tokenBindingResult,
+      scansResult,
+    ].every((r) => r.status === 'rejected');
+    if (allFailed) {
+      const err: any = findingsResult.status === 'rejected' ? findingsResult.reason : null;
+      setError(err?.response?.data?.detail || 'Failed to load security data');
+    } else {
+      setError(null);
+    }
+    if (mountedRef.current) setLoading(false);
   }, [tenantId]);
 
   useEffect(() => {

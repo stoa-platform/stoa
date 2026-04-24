@@ -112,6 +112,42 @@ describe('APIMonitoring', () => {
     expect(await screen.findByText('Transaction monitoring is unavailable')).toBeInTheDocument();
   });
 
+  it('P1-1: transactions still render when /stats fails (allSettled, no clobber)', async () => {
+    // Regression: prior Promise.all + catch path wiped transactions to []
+    // whenever any sibling endpoint failed, hiding valid data from the user.
+    const transactions = [
+      {
+        id: 't-1',
+        trace_id: 'trace-1',
+        api_name: 'Payment API',
+        method: 'POST',
+        path: '/pay',
+        status_code: 200,
+        status: 'success',
+        status_text: 'OK',
+        error_source: null,
+        started_at: new Date().toISOString(),
+        total_duration_ms: 42,
+        spans_count: 3,
+      },
+    ];
+    mockApiGet.mockImplementation((url: string) => {
+      if (url.includes('/stats')) {
+        return Promise.reject(new Error('Stats endpoint 500'));
+      }
+      return Promise.resolve({ data: { transactions, demo_mode: false } });
+    });
+    renderAPIMonitoring();
+
+    // Assert via the trace_id in the row (unique) — Payment API itself
+    // appears twice (filter dropdown + row), but trace_id-derived UI only
+    // appears when the fulfilled transactions slice rendered.
+    expect(await screen.findByText(/trace-1/)).toBeInTheDocument();
+    // No global error banner — the dashboard is only partially degraded,
+    // not wholly unavailable.
+    expect(screen.queryByText('Transaction monitoring is unavailable')).not.toBeInTheDocument();
+  });
+
   it('renders stats cards when API data loads successfully', async () => {
     mockApiGet.mockImplementation((url: string) => {
       if (url.includes('/stats')) {

@@ -49,17 +49,31 @@ export function GatewayDeploymentsDashboard() {
       if (statusFilter) params.sync_status = statusFilter;
       if (activeEnvironment) params.environment = activeEnvironment;
 
-      const [deploymentsResult, summaryResult] = await Promise.all([
+      // P1-1: allSettled — preserve deployments list on a transient stats
+      // failure (and vice versa) instead of showing a blank dashboard.
+      const [deploymentsResult, summaryResult] = await Promise.allSettled([
         apiService.getGatewayDeployments(params),
         apiService.getDeploymentStatusSummary(),
       ]);
 
-      setDeployments(deploymentsResult.items);
-      setTotal(deploymentsResult.total);
-      setSummary(summaryResult);
-      setError(null);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load deployments');
+      if (deploymentsResult.status === 'fulfilled') {
+        setDeployments(deploymentsResult.value.items);
+        setTotal(deploymentsResult.value.total);
+      } else {
+        console.error('Failed to load gateway deployments:', deploymentsResult.reason);
+      }
+      if (summaryResult.status === 'fulfilled') {
+        setSummary(summaryResult.value);
+      } else {
+        console.error('Failed to load deployment summary:', summaryResult.reason);
+      }
+
+      if (deploymentsResult.status === 'rejected' && summaryResult.status === 'rejected') {
+        const reason: any = deploymentsResult.reason;
+        setError(reason?.response?.data?.detail || 'Failed to load deployments');
+      } else {
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }

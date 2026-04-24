@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { onCLS, onLCP, onINP } from 'web-vitals';
 import App from './App';
 import { config } from './config';
+import { isMcpCallbackPath } from './contexts/auth-helpers';
 import './index.css';
 
 // Log Core Web Vitals in dev mode
@@ -50,7 +51,8 @@ const oidcConfig = {
   // Skip automatic signin callback processing on MCP connector OAuth callback.
   // Without this, oidc-client-ts detects the provider's code/state params and tries
   // to exchange them with Keycloak (which fails, causing a redirect to login).
-  skipSigninCallback: window.location.pathname.startsWith('/mcp-connectors/callback'),
+  // P1-15: basePath-robust + exact-match (avoids `/mcp-connectors/callback-evil`).
+  skipSigninCallback: isMcpCallbackPath(window.location.pathname),
 };
 
 function render() {

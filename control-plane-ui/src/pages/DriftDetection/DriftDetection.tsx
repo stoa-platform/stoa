@@ -87,36 +87,56 @@ export function DriftDetection() {
   const isAdmin = hasRole('cpi-admin');
 
   const loadData = useCallback(async () => {
-    try {
-      // Fetch all gateways regardless of environment (consistent with Registry/Overview)
-      const typeParam = gatewayTypeFilter ? { gateway_type: gatewayTypeFilter } : {};
-      const [gatewaysResult, driftedResult, errorResult, summaryResult] = await Promise.all([
-        apiService.getGatewayInstances({ page_size: 100 }),
-        apiService.getGatewayDeployments({
-          sync_status: 'drifted',
-          page_size: 100,
-          ...typeParam,
-        }),
-        apiService.getGatewayDeployments({
-          sync_status: 'error',
-          page_size: 100,
-          ...typeParam,
-        }),
-        apiService.getDeploymentStatusSummary(),
-      ]);
+    // Fetch all gateways regardless of environment (consistent with Registry/Overview)
+    const typeParam = gatewayTypeFilter ? { gateway_type: gatewayTypeFilter } : {};
+    // P1-1: allSettled across 4 slices — we merge drifted+error lists but each
+    // one's failure must not wipe the other displayed data.
+    const [gatewaysResult, driftedResult, errorResult, summaryResult] = await Promise.allSettled([
+      apiService.getGatewayInstances({ page_size: 100 }),
+      apiService.getGatewayDeployments({
+        sync_status: 'drifted',
+        page_size: 100,
+        ...typeParam,
+      }),
+      apiService.getGatewayDeployments({
+        sync_status: 'error',
+        page_size: 100,
+        ...typeParam,
+      }),
+      apiService.getDeploymentStatusSummary(),
+    ]);
 
-      setGateways(gatewaysResult.items);
-      setDriftedDeployments([...driftedResult.items, ...errorResult.items]);
-      setSummary(summaryResult);
-      setError(null);
-    } catch (err: unknown) {
+    if (gatewaysResult.status === 'fulfilled') {
+      setGateways(gatewaysResult.value.items);
+    } else {
+      console.error('Failed to load gateway instances:', gatewaysResult.reason);
+    }
+    // Merge drifted + error only if at least one succeeded; preserve prior
+    // list otherwise.
+    if (driftedResult.status === 'fulfilled' || errorResult.status === 'fulfilled') {
+      const drifted = driftedResult.status === 'fulfilled' ? driftedResult.value.items : [];
+      const errored = errorResult.status === 'fulfilled' ? errorResult.value.items : [];
+      setDriftedDeployments([...drifted, ...errored]);
+    }
+    if (summaryResult.status === 'fulfilled') {
+      setSummary(summaryResult.value);
+    } else {
+      console.error('Failed to load drift summary:', summaryResult.reason);
+    }
+
+    const allFailed = [gatewaysResult, driftedResult, errorResult, summaryResult].every(
+      (r) => r.status === 'rejected'
+    );
+    if (allFailed) {
+      const err = gatewaysResult.status === 'rejected' ? gatewaysResult.reason : undefined;
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load drift data';
       setError(msg);
-    } finally {
-      setLoading(false);
+    } else {
+      setError(null);
     }
+    setLoading(false);
   }, [gatewayTypeFilter]);
 
   useEffect(() => {

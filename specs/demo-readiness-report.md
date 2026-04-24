@@ -1,0 +1,154 @@
+# STOA Demo — Readiness Report
+
+> **Date**: 2026-04-24
+> **Scope**: Évaluation du chemin démo minimal (`demo-scope.md` §2) versus état réel du monorepo.
+> **Méthode**: inspection statique repo + revue `REWRITE-PLAN.md` actifs (GW-2, GO-2) + mapping endpoints cp-api et gateway.
+> **Script de référence**: `scripts/demo-smoke-test.sh`
+
+## 1. Résumé exécutif (10 lignes)
+
+1. Les briques démo existent toutes en code : cp-api (routes apis/apps/subs/deployments présentes), stoa-gateway (`/proxy/*path`, `/health`, `/metrics`), stoactl (apply/get/subscription).
+2. Il n'y a **aucun test bout-en-bout** qui exerce les 5 étapes dans l'ordre sur la même instance. Le rewrite a recertifié chaque brique isolément.
+3. Les rewrites actifs (GW-1 closed, GW-2 open, GO-2 validated) respectent leurs contrats internes mais aucun garde-fou démo ne protège le chemin vertical.
+4. La route proxy gateway (`/proxy/*path`) existe mais le mapping `api_name → proxy path` n'est pas documenté côté cp-api / gateway (3 shapes probables, testés par fallback).
+5. Le seed existe (`make seed-dev`), mais un tenant `demo` minimal dédié smoke n'est pas garanti reproductible.
+6. La métrique Prometheus attendue (`proxy_requests_total` ou `mcp_tool_calls_total`) est présente en code gateway mais son nom exact + labels ne sont pas figés dans un contrat testé ; OTEL/Grafana/Console/Portal sont maintenant cadrés en AT-5b nice-to-have.
+7. L'auth API key (header `X-Api-Key`) existe gateway-side ; le retour `api_key` cleartext par la création subscription cp-api est probablement déjà masqué (best practice), ce qui casse la démo self-contained.
+8. La stack docker-compose pré-existe (`deploy/docker-compose/docker-compose.yml`) mais son suffisance pour le smoke n'est pas validée (mock-backend non-confirmé).
+9. Les specs `/specs/*.md` créés + `scripts/demo-smoke-test.sh` donnent un contrat exécutable avec verdicts non ambigus (`REAL_PASS`, `CONTRACT_DRY_RUN`, `MOCK_PASS`, `FAIL`). **Aucun run réel n'a encore été tenté**.
+10. Verdict préliminaire : **FAIL attendu en premier run** sur AT-2/AT-3/AT-4. Plan "démo-first" actionnable immédiat ci-dessous.
+
+## 2. Ce qui marche déjà (inspection statique)
+
+### 2.1 Côté cp-api
+- `POST /v1/tenants/{tid}/apis` — endpoint + tests unitaires présents (`control-plane-api/src/routers/apis.py`)
+- `POST /v1/tenants/{tid}/applications` + `POST /applications/{id}/subscribe/{api_id}` — endpoint + tests
+- `POST /v1/subscriptions` + logique clé API (`generate_key`, prefix) — fichier `subscriptions.py` complet
+- `POST /v1/tenants/{tid}/deployments` — endpoint + schéma `DeploymentResponse`
+- `GET /v1/internal/gateways/routes?gateway_name=X` — endpoint polling disponible
+- `/health` sur cp-api — reconnu par scripts existants (smoke-test.sh)
+
+### 2.2 Côté gateway
+- `Router::new()` dans `src/lib.rs` :
+  - `/health`, `/health/ready`, `/health/live`, `/ready`, `/metrics`
+  - `/proxy/*path` (ligne 214 `lib.rs`) — catch-all proxy
+  - Mode edge-mcp par défaut (ADR-024)
+- Instrumentation `tracing-subscriber` JSON par ligne (via CLAUDE.md gateway)
+- Prometheus metrics registry (`src/metrics.rs`)
+- Stack observabilité compose existante : Grafana, Prometheus, Loki, Data Prepper, OpenSearch, Tempo. Les datasources `OpenSearch Traces` et `Tempo` sont requises pour rendre OTEL visible dans Grafana.
+- SIGHUP handler pour hot-reload routes depuis cp-api
+
+### 2.3 Côté stoactl
+- Commandes requises démo disponibles : `auth login`, `apply`, `get`, `subscription`, `gateway`, `deploy`
+- Client HTTP `pkg/client/client.go` avec sous-clients catalog, audit, quota
+
+### 2.4 Outils périphériques
+- `Makefile` racine : `run-api`, `run-gateway`, `seed-dev`, `lint-*`, `test-*`
+- `scripts/smoke-test.sh` (CAB-1043) — gate smoke niveau 1 basé sur URLs publiques (portal.gostoa.dev etc.) ; **pas adapté au chemin démo local** mais bon template
+- `deploy/docker-compose/docker-compose.yml` — stack locale pré-existante
+
+## 3. Ce qui manque (gap analysis)
+
+### 3.0 Démo client/prospect séparée du smoke provider
+
+Le parcours client/prospect n'était pas couvert par le contrat initial. Il est
+maintenant cadré dans `specs/client-prospect-demo-scope.md` avec CPD-0..CPD-10.
+Ce parcours couvre signup, Portal onboarding, catalogue, subscription, premier
+appel, usage client, monitoring opérateur et dashboard prospects.
+
+Il reste non bloquant pour `demo-smoke-test.sh` tant que les blockers provider
+P0 ne sont pas fermés, mais il devient la référence pour toute PR touchant
+Portal, signup, prospects, subscriptions UX ou usage client.
+
+### 3.1 Contrats figés non documentés
+- Aucun fichier n'affirme que `/proxy/*path` est la surface démo officielle (`architecture-rules.md` §2.2 comble le gap)
+- Mapping `api.name` ou `route_prefix` → path proxy pas évident. `demo-smoke-test.sh` probe 4 shapes par fallback.
+- Format Prometheus attendu (`proxy_requests_total`) pas testé en intégration — probable drift silencieux si renommé
+
+### 3.2 Seed démo reproductible
+- `make seed-dev` seed un profile plus large que démo minimale. Besoin d'un profile `demo-smoke` qui seed UNIQUEMENT :
+  - tenant `demo` avec UUID déterministe
+  - gateway instance `gateway-demo` enregistrée
+  - clé admin jetable `DEMO_ADMIN_TOKEN`
+
+### 3.3 Accès clé API en cleartext (bloquant AT-3 → AT-4)
+Le fichier `subscriptions.py` génère `new_api_key, new_api_key_hash, new_api_key_prefix`. La bonne pratique sécurité retourne uniquement le préfixe, rendant la clé cleartext inutilisable après création. Si c'est le cas, **AT-4 ne peut pas utiliser l'output de AT-3** sans fallback.
+
+Solution démo-first : retourner cleartext **une seule fois** dans la réponse de `POST /subscriptions` quand `X-Demo-Mode: true` (feature flag démo) ou via endpoint dédié `POST /subscriptions/{id}/reveal-key` (one-shot, jetable).
+
+### 3.4 Mock backend manquant dans la stack démo
+`MOCK_BACKEND_URL=http://localhost:9090` n'est pas garanti présent dans docker-compose.yml. Solution : ajouter un service `mock-backend: image: kennethreitz/httpbin:latest` dans un `docker-compose.demo.yml` dédié.
+
+### 3.5 Chemin proxy gateway pas exposé via cp-api
+La création d'API dans cp-api ne semble pas retourner l'URL gateway où elle est joignable (à confirmer — le champ `gateway_route_url` n'apparaît pas dans les routes vues). Gap : le client démo doit pouvoir lire "mon API est à `{GATEWAY_URL}/proxy/<slug>`".
+
+### 3.6 Auth bypass dev non documenté
+Le script smoke autorise `DEMO_ADMIN_TOKEN=""` en fallback, mais aucune variable `STOA_DISABLE_AUTH` ou flag équivalent n'est documenté côté cp-api. Probable que la démo échoue silencieusement en 401/403 sur AT-1 sans JWT Keycloak valide.
+
+### 3.7 Route-sync latence
+Polling 30s par défaut dans stoa-connect → AT-2 peut timeout. Mitigation dans script : `ROUTE_SYNC_GRACE_SECS=30` + probe explicite de `GET /v1/internal/gateways/routes`. En prod démo, ajouter un `POST /internal/gateways/{id}/trigger-sync` dédié ferait gagner du temps.
+
+## 4. Blockers réels (à résoudre avant smoke `REAL_PASS`)
+
+| # | Blocker | Sévérité | Étape impactée | Owner suggéré |
+|---|---------|----------|----------------|---------------|
+| B1 | Pas d'accès cleartext à `api_key` après création subscription | P0 | AT-3 → AT-4 | cp-api (1 PR) |
+| B2 | Mock backend non seedé dans docker-compose | P0 | AT-0, AT-4 | deploy (1 PR) |
+| B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | gateway (spec ADR si inconnu) |
+| B4 | Auth dev-bypass cp-api non documenté | P1 | AT-1, AT-2, AT-3 | cp-api (flag `.env.demo`) |
+| B5 | Seed profile `demo-smoke` minimal absent | P1 | AT-0 | cp-api/scripts/seeder |
+| B6 | Métriques Prometheus noms non figés par test | P2 | AT-5 | gateway (test regression) |
+| B7 | Route-sync 30s est lent pour une démo live | P2 | AT-2 | stoa-connect (trigger endpoint) |
+| B8 | OTEL visible en UI non prouvé automatiquement | P3 | AT-5b | observability/ui (nice-to-have) |
+| C-B1 | Démo client/prospect non automatisée (seed + UI + conversion) | P1 | CPD-0..CPD-10 | portal/console/cp-api |
+
+## 5. Contournements acceptables pendant le rewrite
+
+Pour débloquer rapidement la validation du contrat sans confondre script OK et démo prête :
+
+| Contournement | Cible | Durée | Risque |
+|---------------|-------|-------|--------|
+| `./scripts/demo-smoke-test.sh --dry-run-contract` | Tous | permanent | Valide le contrat/script, verdict `CONTRACT_DRY_RUN`, jamais `DEMO READY` |
+| `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | B1/B2/B3 | jusqu'aux fixes | Valide le chemin mocké, verdict `MOCK_PASS`, jamais `DEMO READY` |
+| Démarrer `mock-backend` en shell séparé (`docker run kennethreitz/httpbin`) | B2 | 1 jour | `make` targets absents |
+| Probe 4 shapes proxy dans le script, 1 seul doit répondre 200 | B3 | 1 semaine | Fragile, réduit la confiance |
+| `DEMO_ADMIN_TOKEN` extrait via `stoactl auth login demo-admin` puis injecté | B4 | 1 jour | Couplage Keycloak |
+| Script seed inline dans `demo-smoke-test.sh` qui crée tenant + gateway si absent | B5 | 1 jour | Pas idempotent si collisions |
+| Check "au moins un counter `*_total`" sans figer nom | B6 | jusqu'à B6 | Drift silencieux toléré |
+
+Ces contournements **sont figés dans le script**, mais ils ne produisent jamais
+`REAL_PASS`. À chaque blocker fermé, on resserre la vérification.
+
+## 6. Prochaine PR prioritaire
+
+**PR `chore(demo): add demo-first scaffolding`** — PR de cadrage demo-first :
+
+1. Commit 1 — specs+script : ce batch de fichiers `/specs/*.md` + `/scripts/demo-smoke-test.sh` (créé dans cette session)
+2. Commit 2 — `deploy/docker-compose/docker-compose.demo.yml` : extension de `docker-compose.yml` qui ajoute `mock-backend` (httpbin) sur port 9090 + `.env.demo` avec defaults documentés
+3. Commit 3 — `Makefile` targets : `demo-up`, `demo-down`, `demo-smoke` (le dernier wrappe `./scripts/demo-smoke-test.sh`)
+
+Cette PR **ne touche aucun code applicatif**. Elle pose uniquement le contrat. Après merge : premier run en local → identifier lequel des B1..B7 déclenche en pratique → PR ciblée B1 en priorité (plus grand impact AT-3/AT-4).
+
+## 7. Verdict GO / NO-GO rewrite
+
+**GO** sur la poursuite du rewrite actuel, **sous les 4 conditions**:
+
+1. La PR prioritaire §6 est mergée dans la semaine (contrat démo actif en repo)
+2. Chaque PR rewrite en cours (GW-2, GO-2, CP-*) ajoute la section "Demo impact" dans sa description (cf. `rewrite-guardrails.md` §4)
+3. Dès le 1er run smoke `REAL_PASS` localement, `scripts/demo-smoke-test.sh` est ajouté en CI (workflow `.github/workflows/demo-smoke.yml`) avec `docker-compose.demo.yml` comme stack de test
+4. Le parcours client/prospect a au minimum un seed idempotent + une checklist CPD-0..CPD-10 exécutable manuellement avant toute démo commerciale
+
+**NO-GO** si :
+
+- Aucune PR rewrite ne documente son "demo impact" dans les 7 jours → les rewrites avancent hors radar démo
+- Un blocker P0 (B1, B2, B3) reste ouvert > 10 jours → indiquerait que la démo n'est pas priorité réelle
+- Une régression AT-1..AT-5 est observée sans rollback immédiat
+- Un `MOCK_PASS` ou `CONTRACT_DRY_RUN` est présenté comme `DEMO READY`
+
+**Recommandation opérationnelle** : **GO conditionnel**. Le rewrite est qualitatif (plans GW-2/GO-2 rigoureux), mais il s'exécute sans contrat démo vérifiable. Les fichiers `/specs/` + `scripts/demo-smoke-test.sh` posés aujourd'hui sont le minimum pour transformer le rewrite en livraison démo-first.
+
+## 8. Historique
+
+| Date | Version | Auteur | Delta |
+|------|---------|--------|-------|
+| 2026-04-24 | v1.0 | Claude (session `/demo-scope`) | Création initiale, 7 blockers identifiés, verdict GO conditionnel |

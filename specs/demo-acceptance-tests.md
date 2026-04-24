@@ -39,6 +39,7 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 ```json
 {
   "name": "demo-api",
+  "display_name": "demo-api",
   "version": "1.0.0",
   "protocol": "http",
   "backend_url": "http://mock-backend:9090",

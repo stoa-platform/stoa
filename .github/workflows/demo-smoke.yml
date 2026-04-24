@@ -31,6 +31,7 @@ jobs:
       OPENSEARCH_DASHBOARDS_PASSWORD: admin
       OPENSEARCH_LOGWRITER_PASSWORD: admin
       OPENSEARCH_OIDC_CLIENT_SECRET: x
+      STOA_DISABLE_AUTH: "true"
       GATEWAY_URL: http://localhost:8081
 
     steps:

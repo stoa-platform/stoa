@@ -55,6 +55,34 @@ class User(BaseModel):
     tenant_id: str | None = None
 
 
+def _demo_auth_bypass_enabled(request: Request) -> bool:
+    return bool(getattr(settings, "STOA_DISABLE_AUTH", False)) and request.headers.get("X-Demo-Mode", "").lower() == "true"
+
+
+def _demo_bypass_user(request: Request) -> User:
+    user = User(
+        id="demo-dev-bypass",
+        email="demo-dev-bypass@stoa.local",
+        username="demo-dev-bypass",
+        roles=["cpi-admin"],
+        tenant_id=None,
+    )
+    bind_request_context(user_id=user.id, tenant_id=user.tenant_id)
+    request.state.user = {
+        "sub": user.id,
+        "email": user.email,
+        "name": user.username,
+        "tenant_id": user.tenant_id,
+    }
+    logger.warning(
+        "Demo/dev auth bypass accepted",
+        path=request.url.path,
+        method=request.method,
+        environment=settings.ENVIRONMENT,
+    )
+    return user
+
+
 async def get_keycloak_public_key() -> str:
     """Fetch Keycloak realm public key, cached in-memory for 5 minutes."""
     url = _kc_public_key_url()
@@ -83,6 +111,9 @@ async def get_current_user(
 
     Supports service-to-service auth via X-Operator-Key header (ADR-042).
     """
+    if _demo_auth_bypass_enabled(request):
+        return _demo_bypass_user(request)
+
     # Service-to-service auth for internal operators (ADR-042)
     operator_key = request.headers.get("X-Operator-Key")
     if operator_key and operator_key in settings.gateway_api_keys_list:

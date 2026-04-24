@@ -223,6 +223,7 @@ at1_declare_api() {
     body="$(cat <<JSON
 {
   "name": "${DEMO_API_NAME}",
+  "display_name": "${DEMO_API_NAME}",
   "version": "1.0.0",
   "protocol": "http",
   "backend_url": "${MOCK_BACKEND_UPSTREAM_URL}",

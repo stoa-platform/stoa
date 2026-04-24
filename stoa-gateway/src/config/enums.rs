@@ -174,10 +174,11 @@ mod tests {
     }
 
     #[test]
-    fn git_provider_rejects_unknown_value() {
+    fn regression_cab_2165_git_provider_rejects_unknown_value() {
+        // Regression for CAB-2165 Bundle 1 / P2-9 GW-2.
         // Replaces the legacy test_git_provider_unknown_value_treated_as_gitlab
         // anti-pattern: strict parsing now surfaces typos instead of silently
-        // falling through to the default (CAB-2165 Bundle 1 / P2-9 GW-2).
+        // falling through to the default.
         let err = serde_json::from_str::<GitProvider>("\"bitbucket\"")
             .expect_err("unknown variant should not deserialize");
         let msg = err.to_string();

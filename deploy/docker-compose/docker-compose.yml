@@ -202,6 +202,8 @@ services:
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required (set in .env or Vault)}
+      # Demo/dev only: requires X-Demo-Mode: true on each request and is rejected in production.
+      STOA_DISABLE_AUTH: "${STOA_DISABLE_AUTH:-false}"
       # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100

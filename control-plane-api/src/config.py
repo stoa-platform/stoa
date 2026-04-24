@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "control-plane-api"
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_VERIFY_SSL: bool = True
+    # Demo/dev-only bypass for executable smoke tests. This is rejected at
+    # startup in production and still requires X-Demo-Mode: true per request.
+    STOA_DISABLE_AUTH: bool = False
 
     @property
     def keycloak_internal_url(self) -> str:
@@ -609,6 +612,22 @@ class Settings(BaseSettings):
             joined,
             self.ENVIRONMENT,
         )
+        return self
+
+    @model_validator(mode="after")
+    def _gate_auth_bypass_in_prod(self) -> "Settings":
+        """Fail fast if the demo/dev auth bypass is enabled in production."""
+        if self.ENVIRONMENT == "production" and self.STOA_DISABLE_AUTH:
+            raise ValueError(
+                "Refusing to boot: STOA_DISABLE_AUTH=true while ENVIRONMENT=production. "
+                "This bypass is demo/dev only and must never be deployed to prod."
+            )
+        if self.STOA_DISABLE_AUTH:
+            _logger.warning(
+                "STOA_DISABLE_AUTH=true (ENVIRONMENT=%s). Auth bypass is demo/dev only "
+                "and is honored only when requests send X-Demo-Mode: true.",
+                self.ENVIRONMENT,
+            )
         return self
 
     class Config:

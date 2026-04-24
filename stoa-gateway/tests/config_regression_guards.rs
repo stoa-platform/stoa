@@ -260,7 +260,7 @@ fn test_fixture_minimal_parses() {
     let cfg: Config = serde_yaml::from_str(&raw).expect("parse minimal fixture");
     assert_eq!(cfg.port, 9090);
     assert_eq!(cfg.host, "127.0.0.1");
-    assert_eq!(cfg.log_level.as_deref(), Some("debug"));
+    assert_eq!(cfg.log_level, Some(stoa_gateway::config::LogLevel::Debug));
     // Unset fields keep their Config::default() value.
     assert!(cfg.rate_limit_default.is_some(), "default propagates");
 }

@@ -37,7 +37,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResp
         contracts_count: state.contract_registry.count(),
         skills_count: state.skill_resolver.skill_count(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
-        git_provider: state.config.git_provider.clone(),
+        git_provider: state.config.git_provider.to_string(),
     })
 }
 
@@ -116,7 +116,7 @@ mod tests {
     async fn test_admin_health_reports_github_provider() {
         let config = Config {
             admin_api_token: Some("secret".into()),
-            git_provider: "github".into(),
+            git_provider: crate::config::GitProvider::Github,
             ..Config::default()
         };
         let state = AppState::new(config);

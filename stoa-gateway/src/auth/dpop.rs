@@ -35,32 +35,43 @@ use crate::metrics;
 // =============================================================================
 
 /// DPoP configuration.
+///
+/// All fields are configurable via `STOA_DPOP__*` environment variables
+/// (note the **double underscore** between the prefix and the field — required
+/// by the nested-struct env-var mapping installed in `src/config/loader.rs`).
+/// Single-underscore forms (`STOA_DPOP_ENABLED`) are silently ignored.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DpopConfig {
-    /// Enable DPoP validation (default: false — opt-in)
+    /// Enable DPoP validation (default: false — opt-in).
+    /// Env: STOA_DPOP__ENABLED
     #[serde(default)]
     pub enabled: bool,
 
     /// Require DPoP proof on all token-authenticated requests.
     /// When false, DPoP is optional (opportunistic binding).
+    /// Env: STOA_DPOP__REQUIRED
     #[serde(default)]
     pub required: bool,
 
     /// Maximum age of DPoP proof in seconds (default: 300 = 5 min).
     /// Proofs with `iat` older than this are rejected.
+    /// Env: STOA_DPOP__MAX_AGE_SECS
     #[serde(default = "default_max_age_secs")]
     pub max_age_secs: u64,
 
     /// Maximum clock skew tolerance in seconds (default: 30).
+    /// Env: STOA_DPOP__CLOCK_SKEW_SECS
     #[serde(default = "default_clock_skew_secs")]
     pub clock_skew_secs: u64,
 
     /// JTI cache TTL in seconds (for replay prevention). Default: 600 = 10 min.
     /// Should be >= 2 * max_age_secs to catch all replays.
+    /// Env: STOA_DPOP__JTI_CACHE_TTL_SECS
     #[serde(default = "default_jti_cache_ttl_secs")]
     pub jti_cache_ttl_secs: u64,
 
     /// Maximum JTI cache entries (default: 100_000).
+    /// Env: STOA_DPOP__JTI_CACHE_MAX
     #[serde(default = "default_jti_cache_max")]
     pub jti_cache_max: u64,
 }

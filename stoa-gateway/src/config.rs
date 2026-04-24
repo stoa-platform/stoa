@@ -13,15 +13,21 @@ use crate::mode::GatewayMode;
 mod api_proxy;
 mod defaults;
 mod deserializers;
+mod enums;
 mod expansion;
 mod federation;
 mod llm_router;
 mod loader;
 mod mtls;
+mod path_safety;
 mod redact;
 mod sender_constraint;
 
 pub use api_proxy::{ApiProxyConfig, ProxyBackendConfig};
+pub use enums::{
+    Environment, GitProvider, LlmProxyProvider, LogFormat, LogLevel, ShadowCaptureSource,
+    SupervisionDefaultTier,
+};
 pub use expansion::ExpansionMode;
 pub use federation::FederationUpstreamConfig;
 pub use llm_router::LlmRouterConfig;
@@ -136,10 +142,11 @@ pub struct Config {
     #[serde(default)]
     pub github_webhook_secret: Option<String>,
 
-    /// Git provider selector for UAC sync: "gitlab" (default) or "github".
+    /// Git provider selector for UAC sync: `gitlab` (default) or `github`.
+    /// Strict parsing — unknown values fail `Config::load()`.
     /// Env: GIT_PROVIDER / STOA_GIT_PROVIDER
     #[serde(default = "default_git_provider")]
-    pub git_provider: String,
+    pub git_provider: GitProvider,
 
     // === Rate Limiting ===
     #[serde(default = "default_rate_limit_default")]
@@ -184,11 +191,15 @@ pub struct Config {
     pub policy_enabled: bool,
 
     // === Observability ===
+    /// Informational log level (tracing itself is driven by `RUST_LOG`).
+    /// Env: STOA_LOG_LEVEL (values: trace | debug | info | warn | error)
     #[serde(default = "default_log_level")]
-    pub log_level: Option<String>,
+    pub log_level: Option<LogLevel>,
 
+    /// Informational log format hint.
+    /// Env: STOA_LOG_FORMAT (values: json | pretty | compact)
     #[serde(default = "default_log_format")]
-    pub log_format: Option<String>,
+    pub log_format: Option<LogFormat>,
 
     #[serde(default)]
     pub otel_endpoint: Option<String>,
@@ -244,10 +255,10 @@ pub struct Config {
     pub attestation_interval: u64,
 
     // === Shadow Mode ===
-    /// Traffic capture source for shadow mode
-    /// Env: STOA_SHADOW_CAPTURE_SOURCE (inline, envoy-tap, port-mirror, kafka)
+    /// Traffic capture source for shadow mode.
+    /// Env: STOA_SHADOW_CAPTURE_SOURCE (values: inline | envoy-tap | port-mirror | kafka)
     #[serde(default)]
-    pub shadow_capture_source: Option<String>,
+    pub shadow_capture_source: Option<ShadowCaptureSource>,
 
     /// Minimum samples before generating UAC
     /// Env: STOA_SHADOW_MIN_SAMPLES
@@ -260,10 +271,11 @@ pub struct Config {
     pub shadow_gitlab_project: Option<String>,
 
     // === Auto-Registration (ADR-028) ===
-    /// Environment identifier for registration (dev, staging, prod)
+    /// Environment identifier for registration (canonical: dev | staging | prod).
+    /// Strict parsing — unknown values fail `Config::load()`.
     /// Env: STOA_ENVIRONMENT
     #[serde(default = "default_environment")]
-    pub environment: String,
+    pub environment: Environment,
 
     /// Enable auto-registration with Control Plane on startup
     /// Env: STOA_AUTO_REGISTER
@@ -649,10 +661,12 @@ pub struct Config {
     pub supervision_webhook_url: Option<String>,
 
     /// Default supervision tier when X-Hegemon-Supervision header is absent.
-    /// Values: "autopilot" (default), "copilot", "command".
+    /// Canonical values: `autopilot` (default), `copilot`, `command`.
+    /// Accepts `co-pilot` as a deprecated alias for parity with
+    /// `SupervisionTier::from_header`.
     /// Env: STOA_SUPERVISION_DEFAULT_TIER
     #[serde(default = "default_supervision_tier")]
-    pub supervision_default_tier: String,
+    pub supervision_default_tier: SupervisionDefaultTier,
 
     // === LLM Proxy (CAB-1568: STOA Dogfood) ===
     /// Enable the LLM API proxy (passthrough to upstream LLM provider).
@@ -680,11 +694,12 @@ pub struct Config {
     #[serde(default)]
     pub llm_proxy_metering_url: Option<String>,
 
-    /// Default LLM proxy provider format: "anthropic" | "mistral" | "openai".
-    /// Controls header injection and response parsing for the default upstream.
+    /// Default LLM proxy provider format (canonical: `anthropic` | `mistral`
+    /// | `openai`). Controls header injection and response parsing for the
+    /// default upstream.
     /// Env: STOA_LLM_PROXY_PROVIDER
     #[serde(default)]
-    pub llm_proxy_provider: Option<String>,
+    pub llm_proxy_provider: Option<LlmProxyProvider>,
 
     /// API key for Mistral upstream (when provider=mistral or for /v1/chat/completions).
     /// Env: STOA_LLM_PROXY_MISTRAL_API_KEY

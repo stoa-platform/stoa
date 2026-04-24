@@ -1,8 +1,8 @@
 # BUG-REPORT-GW-2 — Gateway Rust config (src/config/*)
 
 > **MODULE GW-2 CLOSED** (fixes on `fix/gw-2-bug-hunt-batch`).
-> **10 fixed** in-commit · **2 deferred → GW-3** (P2-9, P2-11) · **2 backlog** (P3-13, P3-14).
-> Status per finding called out inline below (`FIXED`, `DEFERRED → GW-3`, `BACKLOG`).
+> **10 fixed** in-commit · **2 fixed in GW-3 cleanup** (P2-9, P2-11 — CAB-2165 on `fix/cab-2165-gw-3-cleanup`) · **2 backlog** (P3-13, P3-14).
+> Status per finding called out inline below (`FIXED`, `FIXED (CAB-2165)`, `BACKLOG`).
 > Retrospective pointer: [`REWRITE-BUGS.md`](./REWRITE-BUGS.md).
 
 > Audit fonctionnel post-rewrite GW-2 (split `src/config.rs` 1973 LOC → 9 sous-modules + façade 828 LOC).
@@ -275,7 +275,7 @@ La Phase 2 a préféré une fn locale. Pas d'impact fonctionnel (même valeur), 
 
 ---
 
-### P2-9 — `git_provider: String` accepte n'importe quoi, fallthrough silencieux — **DEFERRED → GW-3**
+### P2-9 — `git_provider: String` accepte n'importe quoi, fallthrough silencieux — **FIXED (CAB-2165 Bundle 1, commit e059e0c92)**
 **Catégorie** : A (pas d'enum, typage trop permissif)
 **Fichier** : `src/config.rs:132–133`, test `src/config/tests.rs:200–209`.
 
@@ -327,7 +327,7 @@ Pas de bug catastrophique (pas de crash, pas d'allocation illimitée), juste un 
 
 ---
 
-### P2-11 — Pas de validation de path sur `policy_path`, `ip_blocklist_file`, `prompt_cache_watch_dir` — **DEFERRED → GW-3**
+### P2-11 — Pas de validation de path sur `policy_path`, `ip_blocklist_file`, `prompt_cache_watch_dir` — **FIXED (CAB-2165 Bundle 2, commit d430d1215)**
 **Catégorie** : D (path traversal via config — théorique, scope opérateur)
 **Fichier** : `src/config.rs:170` (`policy_path`), `785–786` (`ip_blocklist_file`), `580–581` (`prompt_cache_watch_dir`).
 

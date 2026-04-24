@@ -13,7 +13,7 @@
 4. La route proxy gateway canonique est figée pour la démo : `GET /apis/{api_name}/get`. Le smoke ne probe plus plusieurs shapes.
 5. Le seed existe (`make seed-dev`), mais un tenant `demo` minimal dédié smoke n'est pas garanti reproductible.
 6. La métrique Prometheus attendue (`proxy_requests_total` ou `mcp_tool_calls_total`) est présente en code gateway mais son nom exact + labels ne sont pas figés dans un contrat testé ; OTEL/Grafana/Console/Portal sont maintenant cadrés en AT-5b nice-to-have.
-7. L'auth API key (header `X-Api-Key`) existe gateway-side ; le retour `api_key` cleartext par la création subscription cp-api est probablement déjà masqué (best practice), ce qui casse la démo self-contained.
+7. L'auth API key (header `X-Api-Key`) existe gateway-side ; B1 borne maintenant le retour `api_key` cleartext au mode explicite `X-Demo-Mode: true`.
 8. La stack docker-compose pré-existe (`deploy/docker-compose/docker-compose.yml`) mais son suffisance pour le smoke n'est pas validée (mock-backend non-confirmé).
 9. Les specs `/specs/*.md` créés + `scripts/demo-smoke-test.sh` donnent un contrat exécutable avec verdicts non ambigus (`REAL_PASS`, `CONTRACT_DRY_RUN`, `MOCK_PASS`, `FAIL`). **Aucun run réel n'a encore été tenté**.
 10. Verdict préliminaire : **FAIL attendu en premier run** sur AT-2/AT-3/AT-4. Plan "démo-first" actionnable immédiat ci-dessous.
@@ -71,10 +71,8 @@ Portal, signup, prospects, subscriptions UX ou usage client.
   - gateway instance `gateway-demo` enregistrée
   - clé admin jetable `DEMO_ADMIN_TOKEN`
 
-### 3.3 Accès clé API en cleartext (bloquant AT-3 → AT-4)
-Le fichier `subscriptions.py` génère `new_api_key, new_api_key_hash, new_api_key_prefix`. La bonne pratique sécurité retourne uniquement le préfixe, rendant la clé cleartext inutilisable après création. Si c'est le cas, **AT-4 ne peut pas utiliser l'output de AT-3** sans fallback.
-
-Solution démo-first : retourner cleartext **une seule fois** dans la réponse de `POST /subscriptions` quand `X-Demo-Mode: true` (feature flag démo) ou via endpoint dédié `POST /subscriptions/{id}/reveal-key` (one-shot, jetable).
+### 3.3 Accès clé API en cleartext (B1 traité)
+Le smoke envoie `X-Demo-Mode: true`. Dans ce mode borné, `POST /v1/tenants/{tenant_id}/applications/{app_id}/subscribe/{api_id}` crée une subscription active avec hash stocké et retourne `api_key` cleartext une seule fois dans la réponse. Sans ce header, le comportement historique reste inchangé.
 
 ### 3.4 Mock backend stable dans la stack démo
 `MOCK_BACKEND_URL=http://localhost:9090` est fourni par le service compose
@@ -83,7 +81,7 @@ Le smoke sépare cette URL de probe locale de `MOCK_BACKEND_UPSTREAM_URL`,
 qui vaut `http://mock-backend:9090` en compose pour que la gateway ne cible
 pas `localhost` depuis son propre conteneur.
 Ce point ferme B2 pour AT-0. AT-4 peut maintenant cibler un backend local
-déterministe dès que B1 fournit une clé
+déterministe dès que la stack locale dépasse AT-0/AT-2
 exploitable.
 
 ### 3.5 Chemin proxy gateway figé
@@ -101,7 +99,7 @@ Polling 30s par défaut dans stoa-connect → AT-2 peut timeout. Mitigation dans
 
 | # | Blocker | Sévérité | Étape impactée | Owner suggéré |
 |---|---------|----------|----------------|---------------|
-| B1 | Pas d'accès cleartext à `api_key` après création subscription | P0 | AT-3 → AT-4 | cp-api (1 PR) |
+| B1 | Clé API cleartext exposée une seule fois en mode `X-Demo-Mode: true` | DONE | AT-3 → AT-4 | cp-api PR B1 |
 | B2 | Mock backend non seedé dans docker-compose | P0 | AT-0, AT-4 | **DONE** — `mock-backend` compose |
 | B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | **DONE** — `/apis/{api_name}/get` |
 | B4 | Auth dev-bypass cp-api non documenté | P1 | AT-1, AT-2, AT-3 | cp-api (flag `.env.demo`) |
@@ -118,7 +116,7 @@ Pour débloquer rapidement la validation du contrat sans confondre script OK et 
 | Contournement | Cible | Durée | Risque |
 |---------------|-------|-------|--------|
 | `./scripts/demo-smoke-test.sh --dry-run-contract` | Tous | permanent | Valide le contrat/script, verdict `CONTRACT_DRY_RUN`, jamais `DEMO READY` |
-| `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | B1/B2/B3 | jusqu'aux fixes | Valide le chemin mocké, verdict `MOCK_PASS`, jamais `DEMO READY` |
+| `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | stack absente | usage local | Valide le chemin mocké, verdict `MOCK_PASS`, jamais `DEMO READY` |
 | Démarrer `mock-backend` via compose seul (`docker compose ... up -d mock-backend`) | B2 | jusqu'à stack complète | Service sous profil `demo`; ne pas exposer Prometheus sur le même port pendant ce smoke |
 | `DEMO_GATEWAY_PATH` override local | B3 | debug uniquement | Toute démo officielle doit revenir à `/apis/{api_name}/get` |
 | `DEMO_ADMIN_TOKEN` extrait via `stoactl auth login demo-admin` puis injecté | B4 | 1 jour | Couplage Keycloak |
@@ -136,7 +134,7 @@ Ces contournements **sont figés dans le script**, mais ils ne produisent jamais
 2. Commit 2 — `deploy/docker-compose/docker-compose.demo.yml` : extension de `docker-compose.yml` qui ajoute `mock-backend` (httpbin) sur port 9090 + `.env.demo` avec defaults documentés
 3. Commit 3 — `Makefile` targets : `demo-up`, `demo-down`, `demo-smoke` (le dernier wrappe `./scripts/demo-smoke-test.sh`)
 
-Cette PR **ne touche aucun code applicatif**. Elle pose uniquement le contrat. Après merge : premier run en local → identifier lequel des B1..B7 déclenche en pratique → PR ciblée B1 en priorité (plus grand impact AT-3/AT-4).
+La PR de cadrage posait le contrat sans code applicatif. B1 est maintenant traité par une PR ciblée cp-api + smoke, sans refonte sécurité ni lifecycle complet.
 
 ## 7. Verdict GO / NO-GO rewrite
 
@@ -150,7 +148,7 @@ Cette PR **ne touche aucun code applicatif**. Elle pose uniquement le contrat. A
 **NO-GO** si :
 
 - Aucune PR rewrite ne documente son "demo impact" dans les 7 jours → les rewrites avancent hors radar démo
-- Un blocker P0 (B1, B2, B3) reste ouvert > 10 jours → indiquerait que la démo n'est pas priorité réelle
+- Un nouveau blocker P0 sur AT-3/AT-4 reste ouvert > 10 jours → indiquerait que la démo n'est pas priorité réelle
 - Une régression AT-1..AT-5 est observée sans rollback immédiat
 - Un `MOCK_PASS` ou `CONTRACT_DRY_RUN` est présenté comme `DEMO READY`
 

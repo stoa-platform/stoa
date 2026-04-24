@@ -15,6 +15,7 @@
 #   API_URL              http://localhost:8000
 #   GATEWAY_URL          http://localhost:8080
 #   MOCK_BACKEND_URL     http://localhost:9090
+#   MOCK_BACKEND_UPSTREAM_URL http://mock-backend:9090
 #   TENANT_ID            demo
 #   GATEWAY_ID           gateway-demo
 #   DEMO_ADMIN_TOKEN     (empty → bypass via ?demo-admin header if cp-api allows)
@@ -45,6 +46,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 API_URL="${API_URL:-http://localhost:8000}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 MOCK_BACKEND_URL="${MOCK_BACKEND_URL:-http://localhost:9090}"
+MOCK_BACKEND_UPSTREAM_URL="${MOCK_BACKEND_UPSTREAM_URL:-http://mock-backend:9090}"
 TENANT_ID="${TENANT_ID:-demo}"
 GATEWAY_ID="${GATEWAY_ID:-gateway-demo}"
 DEMO_ADMIN_TOKEN="${DEMO_ADMIN_TOKEN:-}"
@@ -186,12 +188,9 @@ at0_preconditions() {
     fi
 
     # mock backend
-    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MOCK_BACKEND_URL}/" 2>/dev/null || echo 000)"
-    if [[ "$code" != "200" && "$code" != "404" ]]; then
-        # httpbin returns 404 on / but 200 on /get; accept non-000
-        if [[ "$code" == "000" ]]; then
-            ok=0; detail="${detail}mock=unreachable "
-        fi
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "${MOCK_BACKEND_URL}/ping" 2>/dev/null || echo 000)"
+    if [[ "$code" != "200" ]]; then
+        ok=0; detail="${detail}mock=${code} "
     fi
 
     if [[ "$ok" == "1" ]]; then
@@ -219,7 +218,7 @@ at1_declare_api() {
   "name": "${DEMO_API_NAME}",
   "version": "1.0.0",
   "protocol": "http",
-  "backend_url": "${MOCK_BACKEND_URL}",
+  "backend_url": "${MOCK_BACKEND_UPSTREAM_URL}",
   "paths": [{"path": "/get", "methods": ["GET"]}]
 }
 JSON

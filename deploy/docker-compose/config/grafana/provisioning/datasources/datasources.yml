@@ -54,3 +54,44 @@ datasources:
       basicAuthPassword: "${OPENSEARCH_PASSWORD:-admin}"
     basicAuth: true
     basicAuthUser: "${OPENSEARCH_USER:-admin}"
+
+  # ---------------------------------------------------------------------------
+  # OpenSearch - OTEL Traces
+  # ---------------------------------------------------------------------------
+  - name: OpenSearch Traces
+    type: grafana-opensearch-datasource
+    uid: opensearch-traces
+    access: proxy
+    url: https://opensearch:9200
+    editable: false
+    jsonData:
+      database: "otel-v1-apm-span-*"
+      flavor: opensearch
+      version: "2.11.0"
+      pplEnabled: true
+      timeField: "@timestamp"
+      tlsSkipVerify: true
+      logMessageField: name
+      logLevelField: status.code
+    secureJsonData:
+      basicAuthPassword: "${OPENSEARCH_PASSWORD:-admin}"
+    basicAuth: true
+    basicAuthUser: "${OPENSEARCH_USER:-admin}"
+
+  # ---------------------------------------------------------------------------
+  # Tempo - Distributed Traces
+  # ---------------------------------------------------------------------------
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      httpMethod: GET
+      serviceMap:
+        datasourceUid: prometheus
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        filterBySpanID: false

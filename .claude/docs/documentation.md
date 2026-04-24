@@ -71,7 +71,7 @@ Is it user-facing (customers, developers, partners)?
 | E2E Testing | `docs/E2E-TESTING.md` | Code-coupled, changes with tests |
 | GitOps Setup | `docs/GITOPS-SETUP.md` | Ops-specific, infra-coupled |
 | Secrets Rotation | `docs/SECRETS-ROTATION.md` | Ops procedures, sensitive |
-| AI Factory | `.claude/rules/`, `.claude/agents/` | Claude Code config |
+| AI Factory | `.claude/docs/`, `.claude/agents/`, `.claude/skills/` | Claude Code config |
 | Memory | `memory.md` | Session state, ephemeral |
 | Archive | `docs/archive/` | Historical, internal |
 

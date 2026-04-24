@@ -106,6 +106,12 @@ pub async fn skills_upsert(
         }
     };
 
+    // GW-1 P2-4: align with other admin upserts (apis, policies, credentials,
+    // contracts) — 201 CREATED on a brand-new key, 200 OK on an update.
+    // Probe with a read before the write so we return the right status
+    // without changing the resolver's upsert signature.
+    let existed = state.skill_resolver.get(&payload.key).is_some();
+
     let skill = StoredSkill {
         key: payload.key.clone(),
         name: payload.name,
@@ -120,11 +126,12 @@ pub async fn skills_upsert(
     };
 
     state.skill_resolver.upsert(skill);
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({"key": payload.key})),
-    )
-        .into_response()
+    let status = if existed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    (status, Json(serde_json::json!({"key": payload.key}))).into_response()
 }
 
 /// GET /admin/skills/:id — get a single skill by key (CAB-1542)
@@ -203,16 +210,58 @@ pub async fn skills_sync(
     (StatusCode::OK, Json(serde_json::json!({"synced": count}))).into_response()
 }
 
-/// DELETE /admin/skills?key=X — remove a skill by key (CAB-1366, legacy)
+/// DELETE /admin/skills?key=X — remove a skill by key (CAB-1366, legacy).
+///
+/// GW-1 P2-3: this query-param form is superseded by
+/// `DELETE /admin/skills/:id` and will be removed on **2026-10-24**.
+/// Responses carry:
+/// - `Deprecation: @1776988800` — RFC 9745 structured date for
+///   2026-04-24 00:00 UTC, the moment this endpoint became deprecated.
+/// - `Sunset: Sat, 24 Oct 2026 23:59:59 GMT` — RFC 8594 HTTP-date for
+///   the scheduled removal.
+/// - `Link: </admin/skills/{id}>; rel="successor-version"` — pointer to
+///   the replacement route.
+///
+/// The Rust handler itself is intentionally **not** annotated with the
+/// `#[deprecated]` attribute: the router still references it, and the
+/// `-D warnings` clippy gate would flip that into a build failure.
 pub async fn skills_delete(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<SkillDeleteParams>,
 ) -> impl IntoResponse {
-    if state.skill_resolver.remove(&params.key) {
+    ::tracing::warn!(
+        deprecated_endpoint = "skills_delete_by_query",
+        replacement = "DELETE /admin/skills/{id}",
+        sunset = "2026-10-24",
+        key = %params.key,
+        "Legacy admin endpoint hit — migrate before Sunset",
+    );
+
+    let status = if state.skill_resolver.remove(&params.key) {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
-    }
+    };
+
+    let mut response = status.into_response();
+    let headers = response.headers_mut();
+    // `Deprecation` — RFC 9745 structured date. `@<epoch>` marks the
+    // moment the endpoint became deprecated.
+    headers.insert(
+        axum::http::HeaderName::from_static("deprecation"),
+        axum::http::HeaderValue::from_static("@1776988800"),
+    );
+    // `Sunset` — RFC 8594 HTTP-date for removal.
+    headers.insert(
+        axum::http::HeaderName::from_static("sunset"),
+        axum::http::HeaderValue::from_static("Sat, 24 Oct 2026 23:59:59 GMT"),
+    );
+    // `Link` — RFC 8288 relation pointing at the successor route.
+    headers.insert(
+        axum::http::header::LINK,
+        axum::http::HeaderValue::from_static("</admin/skills/{id}>; rel=\"successor-version\""),
+    );
+    response
 }
 
 /// PUT /admin/skills/:id — update an existing skill (CAB-1551)
@@ -409,7 +458,8 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        skills_health, skills_health_reset, skills_sync, skills_update, skills_upsert,
+        skills_delete, skills_health, skills_health_reset, skills_sync, skills_update,
+        skills_upsert,
     };
     use crate::handlers::admin::admin_auth;
     use crate::handlers::admin::test_helpers::create_test_state;
@@ -546,7 +596,9 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        // GW-1 P2-4: new key → 201 CREATED (200 OK is the update case,
+        // covered by `test_skills_upsert_returns_201_on_new_and_200_on_update`).
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
@@ -730,5 +782,109 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["circuit_state"], "closed");
         assert_eq!(json["noop"], true);
+    }
+
+    // GW-1 P2-4: new skill → 201 CREATED, re-upsert of the same key → 200 OK.
+    #[tokio::test]
+    async fn test_skills_upsert_returns_201_on_new_and_200_on_update() {
+        let state = create_test_state(Some("secret"));
+        let app = router_with_route(state, "/skills", post(skills_upsert));
+
+        let first = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/skills")
+                    .header("Authorization", "Bearer secret")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&valid_skill_payload()).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(first.status(), StatusCode::CREATED);
+
+        let second = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/skills")
+                    .header("Authorization", "Bearer secret")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&valid_skill_payload()).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(second.status(), StatusCode::OK);
+    }
+
+    // GW-1 P2-3: legacy `?key=` delete returns 204 with Deprecation/Sunset
+    // headers announcing the 2026-10-24 removal + a successor-version Link
+    // pointing at the replacement `:id` route.
+    #[tokio::test]
+    async fn regression_skills_delete_legacy_sets_deprecation_headers() {
+        let state = create_test_state(Some("secret"));
+        seed_skill(&state, "acme/doomed");
+        let app = Router::new()
+            .route("/skills", axum::routing::delete(skills_delete))
+            .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
+            .with_state(state);
+
+        let response = app
+            .oneshot(auth_req("DELETE", "/skills?key=acme%2Fdoomed"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let headers = response.headers();
+        assert_eq!(
+            headers.get("deprecation").and_then(|v| v.to_str().ok()),
+            Some("@1776988800"),
+            "Deprecation must be an RFC 9745 structured date, not a boolean"
+        );
+        assert_eq!(
+            headers.get("sunset").and_then(|v| v.to_str().ok()),
+            Some("Sat, 24 Oct 2026 23:59:59 GMT")
+        );
+        let link = headers
+            .get(axum::http::header::LINK)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        assert!(
+            link.contains("rel=\"successor-version\""),
+            "Link header must advertise successor-version, got {:?}",
+            link
+        );
+        assert!(
+            link.contains("/admin/skills/{id}"),
+            "Link header must point at the replacement route, got {:?}",
+            link
+        );
+    }
+
+    // Missing key on the legacy endpoint still carries the deprecation
+    // markers — a 404 hint must not silence the Sunset notice.
+    #[tokio::test]
+    async fn test_skills_delete_legacy_404_still_advertises_deprecation() {
+        let state = create_test_state(Some("secret"));
+        let app = Router::new()
+            .route("/skills", axum::routing::delete(skills_delete))
+            .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
+            .with_state(state);
+
+        let response = app
+            .oneshot(auth_req("DELETE", "/skills?key=ghost"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(response.headers().contains_key("deprecation"));
+        assert!(response.headers().contains_key("sunset"));
     }
 }

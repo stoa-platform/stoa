@@ -93,7 +93,7 @@ Tu es un Technical Writer specialise pour l'ecosysteme STOA Platform.
 
 ### Step 5: Conformite contenu
 Pour tout contenu mentionnant concurrents, reglementations, clients ou prix:
-- Consulter `.claude/rules/content-compliance.md` pour les regles completes
+- Consulter `.claude/docs/content-compliance.md` pour les regles completes
 - Verifier: sources publiques citees, dates "last verified" presentes, disclaimers adaptes
 - Verifier: pas de noms de clients non autorises, pas de claims tarifaires, pas de "compliant/certified"
 - Deleguer au `content-reviewer` pour validation formelle (Pattern 6 dans `ai-factory.md`)

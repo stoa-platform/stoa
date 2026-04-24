@@ -1,3 +1,5 @@
+> **Historical prompt (retired):** references to React 18 / Python MCP Gateway below reflect the old context from the CAB-1105 delivery window and must not be used as current architecture guidance. Current stack: React 19, Rust `stoa-gateway/`. See `CLAUDE.md`.
+
 CAB-1105 Phase 9: Gateway Mode Dashboard — UI pour les 4 modes gateway.
 
 Branch: `feat/cab-1105-mode-dashboard` (creer depuis main, APRES merge de feat/cab-1105-kill-python)

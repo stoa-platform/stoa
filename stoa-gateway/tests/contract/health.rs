@@ -35,5 +35,8 @@ async fn test_admin_health_shape() {
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     insta::assert_json_snapshot!("admin-health", json, {
         ".version" => "[version]",
+        // GW-1 P2-1: `uptime_seconds` is monotonic; redact so the
+        // snapshot stays reproducible across runs.
+        ".uptime_seconds" => "[uptime]",
     });
 }

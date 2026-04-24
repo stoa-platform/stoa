@@ -122,8 +122,8 @@ Example: `2026-02-12T14-30-task-traceability.json`
   "steps_completed": ["branch", "code", "quality-gate", "pr", "ci"],
   "steps_remaining": ["merge", "verify-cd", "cleanup"],
   "context": {
-    "component": "rules",
-    "files_modified": [".claude/rules/ai-workflow.md", ".claude/rules/session-startup.md"],
+    "component": "docs",
+    "files_modified": [".claude/docs/ai-workflow.md", ".claude/docs/session-startup.md"],
     "notes": "CI green, ready to merge"
   },
   "progress": {

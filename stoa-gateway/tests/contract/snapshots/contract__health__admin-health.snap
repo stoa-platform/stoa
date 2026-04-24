@@ -4,9 +4,12 @@ assertion_line: 36
 expression: json
 ---
 {
+  "contracts_count": 0,
   "git_provider": "gitlab",
   "policies_count": 0,
   "routes_count": 0,
+  "skills_count": 0,
   "status": "ok",
+  "uptime_seconds": "[uptime]",
   "version": "[version]"
 }

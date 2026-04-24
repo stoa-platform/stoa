@@ -79,7 +79,7 @@ kubectl get events -n stoa-system --sort-by='.lastTimestamp' | tail -30
 | `nginx 502/503` | Backend DNS non resolu | `kubectl logs` nginx container |
 
 ### Step 3: Croiser avec les regles
-Lire `.claude/rules/k8s-deploy.md` et verifier chaque point de la checklist.
+Lire `.claude/docs/k8s-deploy.md` et verifier chaque point de la checklist.
 
 ### Step 4: Rapport
 ```markdown
@@ -135,7 +135,7 @@ kubectl get clustersecretstore vault-backend
 ```
 
 ESO sync interval: default 1h (configurable in Helm values `externalSecret.refreshInterval`).
-Vault paths: see `.claude/rules/secrets-management.md`.
+Vault paths: see `.claude/docs/secrets-management.md`.
 
 ## Regles
 - Ne JAMAIS appliquer de changements (`kubectl apply`, `helm upgrade`) — rapport uniquement

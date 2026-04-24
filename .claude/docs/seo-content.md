@@ -43,7 +43,7 @@ Tags: `release, announcement, feature, security, breaking-change, mcp, community
 | Pillar | Hub | Spokes |
 |--------|-----|--------|
 | API Gateway Migration | `api-gateway-migration-guide-2026` | 8 (webMethods, MuleSoft, DataPower, Apigee, Kong, Axway, WSO2, Layer7) |
-| MCP & AI Agents | `what-is-mcp-gateway` | 3 published + 2 TODO |
+| MCP & AI Agents | `what-is-mcp-gateway` (legacy slug — kept for SEO, superseded at the product level by `stoa-gateway`) | 3 published + 2 TODO |
 | Open Source API Mgmt | `open-source-api-gateway-2026` | 7 (sovereignty, DORA, multi-tenant, Apache-2, API keys, security, GitOps) |
 
 Rules: every spoke links to hub, every hub links to all spokes, cross-pillar encouraged, never guess links (verify with `npm run build`).

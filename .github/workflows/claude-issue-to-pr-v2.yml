@@ -1,0 +1,58 @@
+# CI-1 Phase 2b dispatch stub.
+#
+# This file exists on main only to register the workflow id so that
+# `gh workflow run claude-issue-to-pr-v2.yml --ref <feature-branch>`
+# can find and dispatch the real implementation that lives on the
+# feature branch (`refactor/ci-1-phase-2b-composites` at time of
+# writing).
+#
+# GitHub Actions requires workflow_dispatch files to be present on the
+# repository's default branch for `gh workflow run` (and the REST
+# /actions/workflows/:id/dispatches endpoint) to resolve the workflow
+# id. See the note in `.github/CI-1-REWRITE-PLAN.md §F.2`.
+#
+# Phase 2d of the CI-1 rewrite will REPLACE this stub with the real
+# orchestrator. Do not delete + recreate: keep the same file name so
+# the workflow id remains stable.
+
+name: Claude Code Issue-to-PR v2 (Phase 2b smoke)
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Existing issue number to process end-to-end.'
+        required: true
+        type: string
+      run_implement:
+        description: 'Run the implement stage? (default false — smoke the Council path first).'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  stub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Explain that this is a stub
+        run: |
+          echo "::notice::This is the CI-1 Phase 2b dispatch stub on main."
+          echo "::notice::It intentionally does no work. Its only purpose is to"
+          echo "::notice::register the workflow id so that a dispatch against a"
+          echo "::notice::feature branch can resolve."
+          echo ""
+          echo "To dispatch the REAL Phase 2b workflow, run:"
+          echo "  gh workflow run claude-issue-to-pr-v2.yml \\"
+          echo "    --ref refactor/ci-1-phase-2b-composites \\"
+          echo "    -f issue_number=<N> -f run_implement=<true|false>"
+          echo ""
+          echo "Phase 2d will replace this stub with the real orchestrator"
+          echo "at the same path, preserving the workflow id."
+          echo ""
+          echo "Received inputs:"
+          echo "  issue_number=${{ inputs.issue_number }}"
+          echo "  run_implement=${{ inputs.run_implement }}"

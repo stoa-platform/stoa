@@ -415,6 +415,14 @@ impl CircuitBreakerRegistry {
         cb
     }
 
+    /// Peek an existing circuit breaker by name without creating one if it
+    /// is absent. Unlike [`Self::get_or_create`], this is a pure read —
+    /// callers that only want to inspect state (admin endpoints, health
+    /// snapshots) must use this to avoid unbounded registry growth.
+    pub fn get(&self, name: &str) -> Option<Arc<CircuitBreaker>> {
+        self.breakers.read().get(name).cloned()
+    }
+
     /// Check if the circuit breaker for the given name is open (fast-failing).
     ///
     /// Returns false if no circuit breaker exists for the name (optimistic).

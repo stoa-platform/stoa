@@ -9,7 +9,7 @@ globs: "control-plane-api/**,cli/**"
 ## Tools: ruff + black + isort + mypy
 
 ## Line Length
-- **100**: mcp-gateway, landing-api, cli
+- **100**: landing-api, cli
 - **120**: control-plane-api
 
 ## Ruff

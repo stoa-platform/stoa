@@ -12,7 +12,6 @@ globs: "**/tests/**,**/test_*,**/*.test.*,**/*.spec.*,e2e/**"
 | Component | Framework | Coverage | Run Command |
 |-----------|-----------|----------|-------------|
 | control-plane-api | pytest + pytest-asyncio (auto) | **70%** | `pytest --cov=src --cov-fail-under=70 --ignore=tests/test_opensearch.py -q` |
-| mcp-gateway | pytest | **40%** | `pytest --cov=src --cov-fail-under=40 -q` |
 | control-plane-ui | vitest + RTL | ESLint <100 warnings | `npm run test -- --run` |
 | portal | vitest + RTL | ESLint 0 warnings | `npm run test -- --run` |
 | stoa-gateway | cargo test | Zero clippy warnings | `cargo test --all-features` |

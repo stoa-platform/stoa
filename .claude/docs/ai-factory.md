@@ -23,7 +23,7 @@ globs: ".claude/agents/**,.claude/skills/**"
 
 ## MCP Integrations (Claude.ai Native)
 
-Full reference: `.claude/rules/mcp-integrations.md`
+Full reference: `.claude/docs/mcp-integrations.md`
 
 | Service | Key Actions | When |
 |---------|-------------|------|

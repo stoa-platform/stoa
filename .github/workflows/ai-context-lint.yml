@@ -1,0 +1,30 @@
+name: AI Context Lint
+
+on:
+  pull_request:
+    paths:
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - "README.md"
+      - ".claude/**"
+      - "scripts/ai_context_lint.py"
+      - ".github/workflows/ai-context-lint.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - "README.md"
+      - ".claude/**"
+      - "scripts/ai_context_lint.py"
+      - ".github/workflows/ai-context-lint.yml"
+
+jobs:
+  ai-context-lint:
+    name: AI Context Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run AI context lint
+        run: python3 scripts/ai_context_lint.py

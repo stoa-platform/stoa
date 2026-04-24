@@ -60,7 +60,7 @@ Agents MUST NEVER autonomously reset, change, or rotate any password or credenti
 - Sensitive AI Factory prompts (`.claude/prompts/*.txt` — blocked by .gitignore)
 
 ### Allowed in public repo
-- Code, tests, CI/CD, .claude/rules/agents/skills, legal templates with `[PLACEHOLDER]`
+- Code, tests, CI/CD, `.claude/docs/`, `.claude/agents/`, `.claude/skills/`, legal templates with `[PLACEHOLDER]`
 - `.claude/prompts/*.md` (tracked, non-sensitive)
 
 ### Code names for public references

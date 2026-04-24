@@ -2,7 +2,7 @@
 
 ---
 description: AI Factory cost controls, model routing, autonomous levels, Council gate, and token observatory
-globs: ".github/workflows/**,.claude/rules/**,.claude/hooks/**"
+globs: ".github/workflows/**,.claude/docs/**,.claude/hooks/**"
 ---
 
 # AI Factory — Cost Model & Autonomous Levels
@@ -23,7 +23,7 @@ Kill-switches via GitHub repo variables. No single master switch (intentional).
 
 ## Hardening (H24)
 
-Safety: `continue-on-error: true`, fallback comments, diff truncation (500 lines), Council gate, Ask mode for `.claude/rules/`, timeouts (15-60 min), concurrency groups.
+Safety: `continue-on-error: true`, fallback comments, diff truncation (500 lines), Council gate, Ask mode for `.claude/docs/` (superseded `.claude/rules/`), timeouts (15-60 min), concurrency groups.
 
 ### Council Label State Machine
 `[no labels] → council-validated (S1) → ship-fast-path (optional, ≤5pts) → plan-validated (S2)`

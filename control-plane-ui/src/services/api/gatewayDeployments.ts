@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 
 // Admin-level gateway deployments — typed loosely (any) for parity with
 // the pre-UI-2 surface. Strict typing to be addressed with Schemas when
@@ -26,7 +26,7 @@ export const gatewayDeploymentsClient = {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async get(id: string): Promise<any> {
-    const { data } = await httpClient.get(`/v1/admin/deployments/${id}`);
+    const { data } = await httpClient.get(path('v1', 'admin', 'deployments', id));
     return data;
   },
 
@@ -40,12 +40,12 @@ export const gatewayDeploymentsClient = {
   },
 
   async undeploy(id: string): Promise<void> {
-    await httpClient.delete(`/v1/admin/deployments/${id}`);
+    await httpClient.delete(path('v1', 'admin', 'deployments', id));
   },
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async forceSync(id: string): Promise<any> {
-    const { data } = await httpClient.post(`/v1/admin/deployments/${id}/sync`);
+    const { data } = await httpClient.post(path('v1', 'admin', 'deployments', id, 'sync'));
     return data;
   },
 
@@ -57,7 +57,7 @@ export const gatewayDeploymentsClient = {
     gateway_url?: string;
     path?: string;
   }> {
-    const { data } = await httpClient.post(`/v1/admin/deployments/${id}/test`);
+    const { data } = await httpClient.post(path('v1', 'admin', 'deployments', id, 'test'));
     return data;
   },
 

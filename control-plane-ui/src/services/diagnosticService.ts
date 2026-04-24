@@ -1,4 +1,5 @@
 import { apiService } from './api';
+import { path } from './http';
 
 // --- Types ---
 
@@ -57,13 +58,15 @@ export interface ConnectivityResult {
 // --- API Functions ---
 
 export async function runDiagnostic(gatewayId: string): Promise<DiagnosticReport> {
-  const { data } = await apiService.get<DiagnosticReport>(`/v1/admin/diagnostics/${gatewayId}`);
+  const { data } = await apiService.get<DiagnosticReport>(
+    path('v1', 'admin', 'diagnostics', gatewayId)
+  );
   return data;
 }
 
 export async function checkConnectivity(gatewayId: string): Promise<ConnectivityResult> {
   const { data } = await apiService.get<ConnectivityResult>(
-    `/v1/admin/diagnostics/${gatewayId}/connectivity`
+    path('v1', 'admin', 'diagnostics', gatewayId, 'connectivity')
   );
   return data;
 }
@@ -73,7 +76,7 @@ export async function getDiagnosticHistory(
   limit = 20
 ): Promise<DiagnosticReport[]> {
   const { data } = await apiService.get<DiagnosticReport[]>(
-    `/v1/admin/diagnostics/${gatewayId}/history`,
+    path('v1', 'admin', 'diagnostics', gatewayId, 'history'),
     { params: { limit } }
   );
   return data;

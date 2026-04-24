@@ -1,5 +1,121 @@
-import { describe, it, expect } from 'vitest';
-import { scalarValue, groupByLabel } from './usePrometheus';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { scalarValue, groupByLabel, usePrometheusQuery, usePrometheusRange } from './usePrometheus';
+
+// P0-7 regression lock: hooks must route through httpClient so that
+// the refresh interceptor sees Prometheus 401s. Mock the shared
+// httpClient instance — any reversion to fetch() will fail these tests.
+vi.mock('../services/http', async () => {
+  const actual = await vi.importActual<typeof import('../services/http')>('../services/http');
+  return {
+    ...actual,
+    httpClient: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  };
+});
+
+const PROM_RESPONSE = {
+  data: {
+    status: 'success',
+    data: {
+      resultType: 'vector',
+      result: [{ metric: { name: 'up' }, value: [1234567890, '1'] as [number, string] }],
+    },
+  },
+};
+
+const RANGE_RESPONSE = {
+  data: {
+    status: 'success',
+    data: {
+      resultType: 'matrix',
+      result: [
+        {
+          metric: {},
+          values: [[1000, '1'] as [number, string], [1010, '2'] as [number, string]],
+        },
+      ],
+    },
+  },
+};
+
+describe('usePrometheus hooks — P0-7 regression lock', () => {
+  beforeEach(async () => {
+    const { httpClient } = await import('../services/http');
+    (httpClient.get as ReturnType<typeof vi.fn>).mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('usePrometheusQuery calls httpClient.get, not fetch()', async () => {
+    const { httpClient } = await import('../services/http');
+    (httpClient.get as ReturnType<typeof vi.fn>).mockResolvedValue(PROM_RESPONSE);
+
+    renderHook(() => usePrometheusQuery('up', 0));
+
+    await waitFor(() => {
+      expect(httpClient.get).toHaveBeenCalled();
+    });
+    const [url, opts] = (httpClient.get as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('/api/v1/metrics/query');
+    expect(opts).toMatchObject({ params: { query: 'up' }, timeout: 10_000 });
+  });
+
+  it('usePrometheusRange calls httpClient.get with correct params', async () => {
+    const { httpClient } = await import('../services/http');
+    (httpClient.get as ReturnType<typeof vi.fn>).mockResolvedValue(RANGE_RESPONSE);
+
+    renderHook(() => usePrometheusRange('up', 60, '15s', 0));
+
+    await waitFor(() => {
+      expect(httpClient.get).toHaveBeenCalled();
+    });
+    const [url, opts] = (httpClient.get as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('/api/v1/metrics/query_range');
+    expect(opts.params).toMatchObject({ query: 'up', step: '15s' });
+    expect(typeof opts.params.start).toBe('number');
+    expect(typeof opts.params.end).toBe('number');
+    expect(opts.timeout).toBe(10_000);
+  });
+
+  it('usePrometheusQuery surfaces axios error (refresh path is exercised by the shared interceptor)', async () => {
+    const { httpClient } = await import('../services/http');
+    (httpClient.get as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Request failed with status code 401')
+    );
+
+    const { result } = renderHook(() => usePrometheusQuery('up', 0));
+
+    await waitFor(() => {
+      expect(result.current.error).not.toBeNull();
+    });
+    // The hook does not retry; the shared httpClient interceptor handles 401
+    // transparently. On a real 401, httpClient.get would resolve with retried
+    // response. This test just locks that no extra logic bypasses it.
+    expect(result.current.data).toBeNull();
+  });
+
+  it('usePrometheus timeout goes through axios not AbortSignal', async () => {
+    const { httpClient } = await import('../services/http');
+    (httpClient.get as ReturnType<typeof vi.fn>).mockResolvedValue(PROM_RESPONSE);
+
+    renderHook(() => usePrometheusQuery('up', 0));
+
+    await waitFor(() => {
+      expect(httpClient.get).toHaveBeenCalled();
+    });
+    const [, opts] = (httpClient.get as ReturnType<typeof vi.fn>).mock.calls[0];
+    // Axios timeout (number, ms), not an AbortSignal.
+    expect(opts.timeout).toBe(10_000);
+    expect(opts.signal).toBeUndefined();
+  });
+});
 
 // Only test the pure utility functions - hook testing is complex with async/intervals
 // The hooks are tested indirectly via the dashboard component tests

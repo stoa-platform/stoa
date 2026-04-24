@@ -1,6 +1,6 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { apiService } from '../services/api';
+import { openEventStream, type SseConnection, type SseEvent } from '../services/http';
 import type { Event } from '../types';
 
 interface UseEventsOptions {
@@ -12,17 +12,27 @@ interface UseEventsOptions {
 
 export function useEvents({ tenantId, eventTypes, onEvent, enabled = true }: UseEventsOptions) {
   const queryClient = useQueryClient();
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const connectionRef = useRef<SseConnection | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastError, setLastError] = useState<unknown>(null);
+
+  // P0-8: stabilize eventTypes identity across renders when content is
+  // unchanged. JSON.stringify is robust even if event types contained commas
+  // (join(',') would collide on a=['x,y'] vs a=['x','y']).
+  const eventTypesKey = useMemo(() => JSON.stringify(eventTypes ?? []), [eventTypes]);
+  const stableEventTypes = useMemo(
+    () => eventTypes ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional content-based stabilization
+    [eventTypesKey]
+  );
 
   const handleEvent = useCallback(
-    (event: MessageEvent) => {
+    (event: SseEvent) => {
       try {
         const data = JSON.parse(event.data) as Event;
 
-        // Call custom handler
         onEvent?.(data);
 
-        // Invalidate relevant queries based on event type
         switch (data.type) {
           case 'api-created':
           case 'api-updated':
@@ -56,24 +66,29 @@ export function useEvents({ tenantId, eventTypes, onEvent, enabled = true }: Use
   useEffect(() => {
     if (!enabled || !tenantId) return;
 
-    // Create EventSource connection
-    const eventSource = apiService.createEventSource(tenantId, eventTypes);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onmessage = handleEvent;
-
-    eventSource.onerror = (error) => {
-      console.error('EventSource error:', error);
-      // EventSource will automatically reconnect
-    };
+    const connection = openEventStream(tenantId, stableEventTypes, {
+      onOpen: () => {
+        setIsConnected(true);
+        setLastError(null);
+      },
+      onMessage: handleEvent,
+      onError: (err) => {
+        setIsConnected(false);
+        setLastError(err);
+      },
+    });
+    connectionRef.current = connection;
 
     return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
+      connection.close();
+      connectionRef.current = null;
+      setIsConnected(false);
     };
-  }, [tenantId, eventTypes, enabled, handleEvent]);
+  }, [tenantId, enabled, handleEvent, stableEventTypes]);
 
   return {
-    close: () => eventSourceRef.current?.close(),
+    close: () => connectionRef.current?.close(),
+    isConnected,
+    lastError,
   };
 }

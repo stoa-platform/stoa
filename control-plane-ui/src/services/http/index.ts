@@ -16,4 +16,14 @@ export {
   type TokenRefresher,
 } from './auth';
 
-export { createEventSource } from './sse';
+export { refreshAuthTokenWithTimeout } from './refresh';
+
+export { path } from './path';
+
+export {
+  createEventSource,
+  openEventStream,
+  type SseConnection,
+  type SseEvent,
+  type SseHandlers,
+} from './sse';

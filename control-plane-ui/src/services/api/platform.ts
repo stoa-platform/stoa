@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 
 // ── Platform Status (CAB-654) ────────────────────────────────────────────────
 
@@ -100,17 +100,17 @@ export const platformClient = {
   },
 
   async getComponent(name: string): Promise<ComponentStatus> {
-    const { data } = await httpClient.get(`/v1/platform/components/${name}`);
+    const { data } = await httpClient.get(path('v1', 'platform', 'components', name));
     return data;
   },
 
   async syncComponent(name: string): Promise<{ message: string; operation: string }> {
-    const { data } = await httpClient.post(`/v1/platform/components/${name}/sync`);
+    const { data } = await httpClient.post(path('v1', 'platform', 'components', name, 'sync'));
     return data;
   },
 
   async getComponentDiff(name: string): Promise<ApplicationDiffResponse> {
-    const { data } = await httpClient.get(`/v1/platform/components/${name}/diff`);
+    const { data } = await httpClient.get(path('v1', 'platform', 'components', name, 'diff'));
     return data;
   },
 

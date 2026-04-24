@@ -70,6 +70,11 @@ export const config = {
     timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 30000,
   },
 
+  // Auth — cross-cutting knobs for token refresh behavior
+  auth: {
+    refreshTimeoutMs: Number(import.meta.env.VITE_AUTH_REFRESH_TIMEOUT_MS) || 30_000,
+  },
+
   // Keycloak Configuration
   keycloak: {
     url: env('VITE_KEYCLOAK_URL', `https://auth.${BASE_DOMAIN}`),

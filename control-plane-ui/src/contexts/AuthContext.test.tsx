@@ -30,16 +30,8 @@ vi.mock('../services/api', () => ({
   },
 }));
 
-vi.mock('../services/mcpGatewayApi', () => ({
-  mcpGatewayService: {
-    setAuthToken: vi.fn(),
-    clearAuthToken: vi.fn(),
-  },
-}));
-
 import { AuthProvider, useAuth } from './AuthContext';
 import { apiService } from '../services/api';
-import { mcpGatewayService } from '../services/mcpGatewayApi';
 
 function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -117,7 +109,6 @@ describe('AuthContext', () => {
     renderHook(() => useAuth(), { wrapper: createWrapper() });
 
     expect(apiService.setAuthToken).toHaveBeenCalled();
-    expect(mcpGatewayService.setAuthToken).toHaveBeenCalled();
   });
 
   it('clears auth token when user is null', () => {
@@ -127,7 +118,6 @@ describe('AuthContext', () => {
     renderHook(() => useAuth(), { wrapper: createWrapper() });
 
     expect(apiService.clearAuthToken).toHaveBeenCalled();
-    expect(mcpGatewayService.clearAuthToken).toHaveBeenCalled();
   });
 
   it('hasPermission returns true for cpi-admin with tenants:create', () => {

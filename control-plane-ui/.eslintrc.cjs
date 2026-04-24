@@ -44,5 +44,22 @@ module.exports = {
         ],
       },
     },
+    {
+      // UI-2 P0-7: hooks that make authenticated HTTP calls must route through
+      // httpClient so the refresh interceptor handles 401s. Legitimate
+      // unauthenticated use (health probes, cross-origin no-cors) requires
+      // an explicit eslint-disable-next-line with justification.
+      files: ['src/hooks/**/*.ts', 'src/hooks/**/*.tsx'],
+      rules: {
+        'no-restricted-globals': [
+          'error',
+          {
+            name: 'fetch',
+            message:
+              'Use httpClient from services/http for authenticated requests. If legitimate unauthenticated usage (health probes), add eslint-disable-next-line with justification.',
+          },
+        ],
+      },
+    },
   ],
 }

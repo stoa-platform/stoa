@@ -6,6 +6,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 
 export interface ProxyBackendResponse {
   id: string;
@@ -54,7 +55,7 @@ class ProxyBackendService {
   }
 
   async healthCheck(backendId: string): Promise<ProxyBackendHealthStatus> {
-    const { data } = await apiService.get(`/v1/proxy-backends/${backendId}/health`);
+    const { data } = await apiService.get(path('v1', 'proxy-backends', backendId, 'health'));
     return data;
   }
 }

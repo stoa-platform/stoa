@@ -6,6 +6,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 import type {
   ExternalMCPServer,
   ExternalMCPServerDetail,
@@ -53,7 +54,7 @@ class ExternalMCPServersService {
    * Endpoint: GET /v1/admin/external-mcp-servers/{id}
    */
   async getServer(serverId: string): Promise<ExternalMCPServerDetail> {
-    const { data } = await apiService.get(`/v1/admin/external-mcp-servers/${serverId}`);
+    const { data } = await apiService.get(path('v1', 'admin', 'external-mcp-servers', serverId));
     return data;
   }
 
@@ -74,7 +75,10 @@ class ExternalMCPServersService {
     serverId: string,
     update: ExternalMCPServerUpdate
   ): Promise<ExternalMCPServer> {
-    const { data } = await apiService.put(`/v1/admin/external-mcp-servers/${serverId}`, update);
+    const { data } = await apiService.put(
+      path('v1', 'admin', 'external-mcp-servers', serverId),
+      update
+    );
     return data;
   }
 
@@ -83,7 +87,7 @@ class ExternalMCPServersService {
    * Endpoint: DELETE /v1/admin/external-mcp-servers/{id}
    */
   async deleteServer(serverId: string): Promise<void> {
-    await apiService.delete(`/v1/admin/external-mcp-servers/${serverId}`);
+    await apiService.delete(path('v1', 'admin', 'external-mcp-servers', serverId));
   }
 
   // ==========================================================================
@@ -96,7 +100,7 @@ class ExternalMCPServersService {
    */
   async testConnection(serverId: string): Promise<Schemas['TestConnectionResponse']> {
     const { data } = await apiService.post(
-      `/v1/admin/external-mcp-servers/${serverId}/test-connection`
+      path('v1', 'admin', 'external-mcp-servers', serverId, 'test-connection')
     );
     return data;
   }
@@ -106,7 +110,9 @@ class ExternalMCPServersService {
    * Endpoint: POST /v1/admin/external-mcp-servers/{id}/sync-tools
    */
   async syncTools(serverId: string): Promise<Schemas['SyncToolsResponse']> {
-    const { data } = await apiService.post(`/v1/admin/external-mcp-servers/${serverId}/sync-tools`);
+    const { data } = await apiService.post(
+      path('v1', 'admin', 'external-mcp-servers', serverId, 'sync-tools')
+    );
     return data;
   }
 
@@ -120,7 +126,7 @@ class ExternalMCPServersService {
    */
   async getToolsSummary(serverId: string): Promise<ToolsObservabilityResponse> {
     const { data } = await apiService.get(
-      `/v1/admin/external-mcp-servers/${serverId}/tools-summary`
+      path('v1', 'admin', 'external-mcp-servers', serverId, 'tools-summary')
     );
     return data;
   }
@@ -139,7 +145,7 @@ class ExternalMCPServersService {
     update: { enabled: boolean }
   ): Promise<ExternalMCPServerTool> {
     const { data } = await apiService.patch(
-      `/v1/admin/external-mcp-servers/${serverId}/tools/${toolId}`,
+      path('v1', 'admin', 'external-mcp-servers', serverId, 'tools', toolId),
       update
     );
     return data;

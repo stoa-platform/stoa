@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 
 // ── Chat Settings (CAB-1852) ─────────────────────────────────────────────────
 
@@ -68,7 +68,7 @@ export interface ChatModelDistribution {
 
 export const chatClient = {
   async getSettings(tenantId: string): Promise<TenantChatSettings> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/settings`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'chat', 'settings'));
     return data;
   },
 
@@ -76,19 +76,27 @@ export const chatClient = {
     tenantId: string,
     settings: Partial<TenantChatSettings>
   ): Promise<TenantChatSettings> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/chat/settings`, settings);
+    const { data } = await httpClient.put(
+      path('v1', 'tenants', tenantId, 'chat', 'settings'),
+      settings
+    );
     return data;
   },
 
   async getBudgetStatus(tenantId: string): Promise<TokenBudgetStatus> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/budget`);
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'chat', 'usage', 'budget')
+    );
     return data;
   },
 
   async getUsageStats(tenantId: string, days = 30): Promise<TokenUsageStats> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/metering`, {
-      params: { days },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'chat', 'usage', 'metering'),
+      {
+        params: { days },
+      }
+    );
     return data;
   },
 
@@ -96,26 +104,36 @@ export const chatClient = {
     tenantId: string,
     params: { group_by?: string; days?: number } = {}
   ): Promise<ChatUsageBySource> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/tenant`, {
-      params: { group_by: 'source', ...params },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'chat', 'usage', 'tenant'),
+      {
+        params: { group_by: 'source', ...params },
+      }
+    );
     return data;
   },
 
   async getConversationMetrics(tenantId: string): Promise<ChatConversationMetrics> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/tenant`);
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'chat', 'usage', 'tenant')
+    );
     return data;
   },
 
   async getModelDistribution(tenantId: string): Promise<ChatModelDistribution> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/chat/usage/models`);
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'chat', 'usage', 'models')
+    );
     return data;
   },
 
   async createConversation(tenantId: string, title = 'New conversation'): Promise<{ id: string }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/chat/conversations`, {
-      title,
-    });
+    const { data } = await httpClient.post(
+      path('v1', 'tenants', tenantId, 'chat', 'conversations'),
+      {
+        title,
+      }
+    );
     return data;
   },
 };

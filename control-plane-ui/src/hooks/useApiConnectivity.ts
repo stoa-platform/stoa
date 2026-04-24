@@ -14,6 +14,7 @@ export function useApiConnectivity(): UseApiConnectivityResult {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['api-connectivity'],
     queryFn: async () => {
+      // eslint-disable-next-line no-restricted-globals -- /health is unauthenticated by design; no Bearer token needed
       const response = await fetch(`${config.api.baseUrl}/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),

@@ -79,7 +79,7 @@ PR sans cette section = NO-GO automatique si touche un composant listé §2.
 3. **Refactor d'architecture** non cité dans un REWRITE-PLAN.md validé → stop.
 4. **"Tant que j'y suis..."** → stop. 1 PR = 1 intention.
 5. **Suppression d'un endpoint ou colonne** listé §2 → Council + ADR + période de dépréciation.
-6. **Changement de port démo** (8000, 8080, 9090) → casse smoke, stop.
+6. **Changement de port démo** (8000, 8081, 9090) → casse smoke, stop.
 
 ## 6. Exceptions tolérées (pas de Council)
 

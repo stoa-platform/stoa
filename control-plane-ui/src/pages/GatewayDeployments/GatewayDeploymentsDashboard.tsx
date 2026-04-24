@@ -268,10 +268,10 @@ export function GatewayDeploymentsDashboard() {
                   <td className="px-6 py-4">
                     <div>
                       <p className="text-sm font-medium text-neutral-900 dark:text-white">
-                        {(dep.desired_state as any)?.api_name || dep.api_catalog_id.slice(0, 8)}
+                        {dep.desired_state.api_name || dep.api_catalog_id.slice(0, 8)}
                       </p>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {(dep.desired_state as any)?.tenant_id || '-'}
+                        {dep.desired_state.tenant_id || '-'}
                       </p>
                     </div>
                   </td>
@@ -307,7 +307,7 @@ export function GatewayDeploymentsDashboard() {
                         Sync
                       </button>
                       <button
-                        onClick={() => handleUndeploy(dep.id, (dep.desired_state as any)?.api_name)}
+                        onClick={() => handleUndeploy(dep.id, dep.desired_state.api_name)}
                         disabled={actionLoading === dep.id}
                         className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
                         title="Undeploy"

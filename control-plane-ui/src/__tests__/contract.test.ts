@@ -44,11 +44,15 @@ function getRequiredProperties(schemaName: string): string[] {
  *
  * Note: TS uses snake_case (matching the API JSON responses directly).
  */
+// TS types are erased at runtime, so we cannot introspect keys with `keyof`.
+// Lists below must stay aligned with `src/types/index.ts` — full coverage of
+// every backend `required[]` field is asserted below (no min() cap).
 const CONSOLE_TYPE_MAPPINGS: Record<string, string[]> = {
-  // TenantResponse → Tenant
+  // TenantResponse → Tenant (UI alias = Schemas['TenantResponse'])
   TenantResponse: ['id', 'name', 'display_name', 'status', 'created_at', 'updated_at'],
 
-  // GatewayInstanceResponse → GatewayInstance
+  // GatewayInstanceResponse → GatewayInstance (UI alias post-P2-A, only
+  // `visibility` narrowed to `{ tenant_ids: string[] } | null`).
   GatewayInstanceResponse: [
     'id',
     'name',
@@ -60,6 +64,7 @@ const CONSOLE_TYPE_MAPPINGS: Record<string, string[]> = {
     'auth_config',
     'status',
     'last_health_check',
+    'health_details',
     'capabilities',
     'version',
     'tags',
@@ -80,6 +85,7 @@ const CONSOLE_TYPE_MAPPINGS: Record<string, string[]> = {
     'display_name',
     'description',
     'category',
+    'visibility',
     'status',
     'created_at',
     'updated_at',
@@ -105,11 +111,24 @@ describe('OpenAPI Contract — Console UI', () => {
       expect(missing).toEqual([]);
     });
 
-    it(`should have required properties covered by TS type`, () => {
+    it(`should have ALL required properties covered by TS type`, () => {
       const required = getRequiredProperties(schemaName);
-      const covered = tsProperties.filter((p) => required.includes(p));
-      // At least half of required fields should be in the TS type
-      expect(covered.length).toBeGreaterThanOrEqual(Math.min(required.length, 3));
+      const missing = required.filter((r) => !tsProperties.includes(r));
+      // Full coverage — UI-1 W1 P2-B tightening. Any new backend required
+      // field MUST be added to CONSOLE_TYPE_MAPPINGS in the same PR.
+      expect(missing).toEqual([]);
+    });
+
+    it(`surfaces backend-only properties the TS type ignores (soft warn)`, () => {
+      const apiProps = getSchemaProperties(schemaName);
+      const apiOnly = apiProps.filter((p) => !tsProperties.includes(p));
+      if (apiOnly.length > 0) {
+        console.warn(
+          `[contract drift] ${schemaName}: TS does not declare backend props: ${apiOnly.join(', ')}`
+        );
+      }
+      // Assertion is soft: surface the gap in test logs, do not block CI.
+      expect(true).toBe(true);
     });
   });
 

@@ -120,7 +120,7 @@ mod tests {
     // `starts_with("https://")` would accept "https://foo\nHost: evil";
     // `Url::parse` rejects it.
     #[test]
-    fn test_require_https_url_rejects_crlf_injection() {
+    fn regression_require_https_url_rejects_crlf_injection() {
         let mut errors = Vec::new();
         require_https_url("token_url", "https://foo\r\nHost: evil", &mut errors);
         assert_eq!(errors.len(), 1);

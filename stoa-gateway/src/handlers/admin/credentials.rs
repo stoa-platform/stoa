@@ -359,7 +359,7 @@ mod tests {
     // time, whereas the old `starts_with` check accepted the leading
     // `https://` prefix and let the rest through to reqwest.
     #[tokio::test]
-    async fn test_backend_credential_oauth2_rejects_crlf_injection_in_token_url() {
+    async fn regression_backend_credential_oauth2_rejects_crlf_injection_in_token_url() {
         let state = create_test_state(Some("secret"));
         let app = build_full_admin_router(state);
         let cred = serde_json::json!({

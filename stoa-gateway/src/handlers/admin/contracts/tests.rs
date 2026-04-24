@@ -684,6 +684,11 @@ mod transactional {
     }
 
     // ── P1-2: delete_contract_mcp_unbind_failure_does_not_delete ────────
+    //
+    // Asserts the core invariant (registry still holds the contract) and
+    // that the handler doesn't silently declare success. The specific
+    // rollback sequence is covered in more detail by
+    // `test_delete_contract_mcp_unbind_failure_restores_rest_bindings_or_reports_partial_state`.
     #[tokio::test]
     async fn test_delete_mcp_unbind_failure_does_not_remove_contract() {
         let registry = Arc::new(ContractRegistry::new());
@@ -709,8 +714,10 @@ mod transactional {
         assert_eq!(registry.count(), 1);
         assert!(registry.get("acme:orders").is_some());
 
+        // Both unbinds attempted in the right order; rollback path is
+        // asserted in detail by the dedicated restore-rollback test.
         let calls = binders.call_log();
-        assert_eq!(calls, vec!["unbind_rest", "unbind_mcp"]);
+        assert_eq!(&calls[..2], &["unbind_rest", "unbind_mcp"]);
     }
 
     // ── Happy delete through the transactional path ─────────────────────
@@ -747,5 +754,151 @@ mod transactional {
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
         assert!(binders.call_log().is_empty());
+    }
+
+    // =========================================================================
+    // GW-1 P1-1 / P1-2 update-case rollback (post-review patch on #2502)
+    //
+    // The CREATE-case tests above establish that new contracts aren't persisted
+    // if the binders fail. These UPDATE-case tests establish the stronger
+    // invariant that a binder failure on an *existing* contract restores the
+    // previous bindings, so registry + REST + MCP stay consistent.
+    // =========================================================================
+
+    // ── upsert_existing_contract_rest_failure_restores_previous_bindings ──
+    //
+    // Setup: pre-seeded registry with an "old" contract.
+    // Flow: bind_rest(new) fails → handler calls bind_rest(old) + bind_mcp(old)
+    //       as rollback. The mock returns Err for bind_rest on *every* call,
+    //       so the rollback's bind_rest call also logs a warn — but the
+    //       test's job is to verify the *attempt*, not the binder's health.
+    #[tokio::test]
+    async fn test_upsert_existing_contract_rest_bind_failure_restores_previous_bindings() {
+        let registry = Arc::new(ContractRegistry::new());
+        // Seed with the "old" version of the contract.
+        let mut old = valid_contract("orders", "acme");
+        old.version = "1.0.0".into();
+        registry.upsert(old);
+
+        let binders = MockBinders {
+            rest_bind: Err("forced rest failure".into()),
+            mcp_bind: Ok(5),
+            rest_unbind: Ok(0),
+            mcp_unbind: Ok(0),
+            calls: Arc::new(Mutex::new(vec![])),
+        };
+
+        // Attempt to upsert a "new" version.
+        let mut new = valid_contract("orders", "acme");
+        new.version = "2.0.0".into();
+        let resp = perform_upsert(registry.clone(), &binders, false, new)
+            .await
+            .into_response();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        // Invariant: the OLD contract is still the one in the registry —
+        // the new upsert did not commit, and the rollback was attempted.
+        assert_eq!(registry.count(), 1);
+        let persisted = registry.get("acme:orders").expect("old contract kept");
+        assert_eq!(persisted.version, "1.0.0");
+
+        // Call log: bind_rest (new, fails) → bind_rest (old, rollback) →
+        //           bind_mcp (old, rollback). No bind_mcp on new.
+        assert_eq!(
+            binders.call_log(),
+            vec!["bind_rest", "bind_rest", "bind_mcp"]
+        );
+    }
+
+    // ── upsert_existing_contract_mcp_failure_restores_previous_bindings ──
+    //
+    // Flow: bind_rest(new) OK → bind_mcp(new) fails → handler tries
+    //       bind_rest(old) + bind_mcp(old) as rollback rather than just
+    //       unbind_rest (which would leave the contract_registry's "old"
+    //       row with no REST/MCP artefacts).
+    #[tokio::test]
+    async fn test_upsert_existing_contract_mcp_bind_failure_restores_previous_bindings() {
+        let registry = Arc::new(ContractRegistry::new());
+        let mut old = valid_contract("orders", "acme");
+        old.version = "1.0.0".into();
+        registry.upsert(old);
+
+        let binders = MockBinders {
+            rest_bind: Ok(7),
+            mcp_bind: Err("forced mcp failure".into()),
+            rest_unbind: Ok(0),
+            mcp_unbind: Ok(0),
+            calls: Arc::new(Mutex::new(vec![])),
+        };
+
+        let mut new = valid_contract("orders", "acme");
+        new.version = "2.0.0".into();
+        let resp = perform_upsert(registry.clone(), &binders, false, new)
+            .await
+            .into_response();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        // Old contract still in registry, unchanged.
+        let persisted = registry.get("acme:orders").expect("old contract kept");
+        assert_eq!(persisted.version, "1.0.0");
+
+        // Call log: new path attempted (bind_rest OK, bind_mcp fails),
+        // then rollback restores (bind_rest old, bind_mcp old).
+        // Crucially: NO unbind_rest — on an update we restore rather than
+        // wipe, because wiping would leave the old contract with no artefacts.
+        let calls = binders.call_log();
+        assert_eq!(
+            calls,
+            vec!["bind_rest", "bind_mcp", "bind_rest", "bind_mcp"],
+            "expected restore sequence, got {:?}",
+            calls
+        );
+        assert!(!calls.contains(&"unbind_rest"));
+    }
+
+    // ── delete_contract_mcp_unbind_failure_restores_rest_bindings_or_reports_partial_state ──
+    //
+    // Flow: unbind_rest(key) OK (REST routes gone) → unbind_mcp(key) fails.
+    // Handler attempts bind_rest(old_contract) to restore REST routes, then
+    // returns 500 and leaves the contract in the registry. MCP state is
+    // indeterminate by construction, so we document it explicitly rather
+    // than reporting false success.
+    #[tokio::test]
+    async fn test_delete_contract_mcp_unbind_failure_restores_rest_bindings_or_reports_partial_state(
+    ) {
+        let registry = Arc::new(ContractRegistry::new());
+        registry.upsert(valid_contract("orders", "acme"));
+
+        let binders = MockBinders {
+            rest_bind: Ok(1),
+            mcp_bind: Ok(0),
+            rest_unbind: Ok(1),
+            mcp_unbind: Err("forced mcp unbind failure".into()),
+            calls: Arc::new(Mutex::new(vec![])),
+        };
+
+        let resp = perform_delete(registry.clone(), &binders, "acme:orders".into())
+            .await
+            .into_response();
+
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let json = read_body_json(resp).await;
+        assert!(json["message"].as_str().unwrap().contains("MCP"));
+
+        // Invariant: contract stays in registry (we could not fully delete).
+        assert_eq!(registry.count(), 1);
+        assert!(registry.get("acme:orders").is_some());
+
+        // Call log: unbind_rest (OK) → unbind_mcp (fails) → bind_rest(old)
+        // as best-effort REST restore.
+        let calls = binders.call_log();
+        assert_eq!(
+            calls,
+            vec!["unbind_rest", "unbind_mcp", "bind_rest"],
+            "expected REST restore after MCP unbind failure, got {:?}",
+            calls
+        );
     }
 }

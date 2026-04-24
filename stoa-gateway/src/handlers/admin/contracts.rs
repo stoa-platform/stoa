@@ -146,12 +146,30 @@ pub(crate) async fn perform_upsert(
         .clone()
         .unwrap_or_else(|| format!("{}:{}", contract.tenant_id, contract.name));
 
+    // Snapshot the previous contract (if this is an update) so any binder
+    // failure after bind_rest has started mutating the route/tool registries
+    // can be rolled back to the old state. `bind_rest` and `bind_mcp` both
+    // remove existing artefacts for the contract_key *before* installing
+    // new ones — without this snapshot, a post-remove failure would leave
+    // partial/empty bindings for a contract that still lives in the
+    // registry (GW-1 P1-1 update-case extension).
+    let previous = registry.get(&key);
+
     // ── bind-first ────────────────────────────────────────────
     let routes_count = match binders.bind_rest(&contract).await {
         Ok(n) => n,
         Err(e) => {
             warn!(error = %e, contract = %key, "REST bind failed; contract NOT persisted");
-            // No partial state to clean: bind_rest failed before registering any route.
+            // Restore the previous contract's bindings if this was an update.
+            // On a create, there's nothing to restore — the REST registry
+            // is still whatever state bind_rest left it in (today: no
+            // mutation before the Err return; defensively: restore_to_nothing
+            // via best-effort unbind).
+            if let Some(ref old) = previous {
+                restore_previous_bindings(binders, old, &key).await;
+            } else if let Err(rb) = binders.unbind_rest(&key).await {
+                warn!(error = %rb, contract = %key, "REST bind cleanup after failure also failed");
+            }
             return binder_failure_response(&key, "REST", &e);
         }
     };
@@ -159,10 +177,17 @@ pub(crate) async fn perform_upsert(
     let tools_count = match binders.bind_mcp(&contract).await {
         Ok(n) => n,
         Err(e) => {
-            warn!(error = %e, contract = %key, "MCP bind failed; rolling back REST routes");
-            // Best-effort rollback of the REST routes we just registered.
-            if let Err(rb) = binders.unbind_rest(&key).await {
-                warn!(error = %rb, contract = %key, "REST rollback unbind also failed");
+            warn!(error = %e, contract = %key, "MCP bind failed; rolling back bindings");
+            if let Some(ref old) = previous {
+                // Update case: restore the previous contract's REST + MCP
+                // bindings so the registry stays consistent with the artefact
+                // stores. Best-effort — failures are logged, response is 500.
+                restore_previous_bindings(binders, old, &key).await;
+            } else {
+                // Create case: unbind the REST routes we just registered.
+                if let Err(rb) = binders.unbind_rest(&key).await {
+                    warn!(error = %rb, contract = %key, "REST rollback unbind also failed");
+                }
             }
             return binder_failure_response(&key, "MCP", &e);
         }
@@ -221,9 +246,13 @@ pub(crate) async fn perform_delete(
     binders: &dyn ContractBinders,
     key: String,
 ) -> Response {
-    if registry.get(&key).is_none() {
-        return (StatusCode::NOT_FOUND, "Contract not found").into_response();
-    }
+    // Snapshot the contract up-front: if `unbind_mcp` fails after
+    // `unbind_rest` succeeded, we need the contract spec in hand to
+    // restore REST bindings (GW-1 P1-2 partial-state extension).
+    let old_contract = match registry.get(&key) {
+        Some(c) => c,
+        None => return (StatusCode::NOT_FOUND, "Contract not found").into_response(),
+    };
 
     // ── unbind-first ──────────────────────────────────────────
     let routes_removed = match binders.unbind_rest(&key).await {
@@ -237,8 +266,18 @@ pub(crate) async fn perform_delete(
     let tools_removed = match binders.unbind_mcp(&key).await {
         Ok(n) => n,
         Err(e) => {
-            warn!(error = %e, contract = %key, "MCP unbind failed; contract NOT removed");
-            // REST routes are already gone; best we can do is surface the error.
+            warn!(
+                error = %e,
+                contract = %key,
+                "MCP unbind failed; restoring REST routes and leaving contract in registry"
+            );
+            // Best-effort restore of the REST routes we just removed so
+            // the registry+REST view stays consistent. MCP state is
+            // indeterminate (the unbind failure means we can't predict
+            // what's there) — the caller sees 500 and can retry.
+            if let Err(rb) = binders.bind_rest(&old_contract).await {
+                warn!(error = %rb, contract = %key, "REST rollback bind(old) also failed");
+            }
             return binder_failure_response(&key, "MCP", &e);
         }
     };
@@ -254,6 +293,25 @@ pub(crate) async fn perform_delete(
         })),
     )
         .into_response()
+}
+
+/// Best-effort rollback that reinstalls the previous contract's REST
+/// routes and MCP tools. Used when an upsert's binder step fails on a
+/// contract that already existed. Each sub-step is independent and
+/// failures are only logged — the caller still returns 500 to the
+/// client, so partial restore is surfaced via server-side traces
+/// rather than a divergent response shape.
+async fn restore_previous_bindings(
+    binders: &dyn ContractBinders,
+    old: &UacContractSpec,
+    key: &str,
+) {
+    if let Err(e) = binders.bind_rest(old).await {
+        warn!(error = %e, contract = %key, "REST rollback bind(old) failed");
+    }
+    if let Err(e) = binders.bind_mcp(old).await {
+        warn!(error = %e, contract = %key, "MCP rollback bind(old) failed");
+    }
 }
 
 fn binder_failure_response(key: &str, which: &str, _err: &str) -> Response {

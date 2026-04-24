@@ -27,42 +27,37 @@ pub async fn upsert_backend_credential(
     State(state): State<AppState>,
     Json(cred): Json<BackendCredential>,
 ) -> impl IntoResponse {
-    // Validate OAuth2 credentials: require config, HTTPS, and SSRF check
+    // GW-1 P1-6 + P1-9: require identifier fields + parse OAuth2 URL so
+    // the HTTPS check is case-insensitive and rejects CRLF-injection.
+    let mut errors: Vec<String> = Vec::new();
+    super::validation::require_non_empty("route_id", &cred.route_id, &mut errors);
+    super::validation::require_non_empty("header_name", &cred.header_name, &mut errors);
+    super::validation::require_non_empty("header_value", &cred.header_value, &mut errors);
+
     if cred.auth_type == AuthType::OAuth2ClientCredentials {
         match &cred.oauth2 {
             None => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(serde_json::json!({
-                        "status": "error",
-                        "message": "oauth2 config required for auth_type oauth2_client_credentials"
-                    })),
-                )
-                    .into_response();
+                errors.push(
+                    "oauth2 config required for auth_type oauth2_client_credentials".to_string(),
+                );
             }
             Some(oauth2) => {
-                if !oauth2.token_url.starts_with("https://") {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(serde_json::json!({
-                            "status": "error",
-                            "message": "oauth2 token_url must use HTTPS"
-                        })),
-                    )
-                        .into_response();
-                }
-                if is_blocked_url(&oauth2.token_url) {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(serde_json::json!({
-                            "status": "error",
-                            "message": "oauth2 token_url is blocked (SSRF protection)"
-                        })),
-                    )
-                        .into_response();
+                super::validation::require_https_url(
+                    "oauth2.token_url",
+                    &oauth2.token_url,
+                    &mut errors,
+                );
+                if errors.iter().all(|e| !e.starts_with("oauth2.token_url"))
+                    && is_blocked_url(&oauth2.token_url)
+                {
+                    errors.push("oauth2.token_url is blocked (SSRF protection)".to_string());
                 }
             }
         }
+    }
+
+    if !errors.is_empty() {
+        return super::validation::validation_error_response(errors);
     }
 
     let route_id = cred.route_id.clone();
@@ -110,6 +105,18 @@ pub async fn upsert_consumer_credential(
     State(state): State<AppState>,
     Json(cred): Json<ConsumerCredential>,
 ) -> impl IntoResponse {
+    // GW-1 P1-6: consumer credentials had zero validation — any empty
+    // field collided at key `("", "")` in the store and injected an
+    // empty header at proxy time.
+    let mut errors: Vec<String> = Vec::new();
+    super::validation::require_non_empty("route_id", &cred.route_id, &mut errors);
+    super::validation::require_non_empty("consumer_id", &cred.consumer_id, &mut errors);
+    super::validation::require_non_empty("header_name", &cred.header_name, &mut errors);
+    super::validation::require_non_empty("header_value", &cred.header_value, &mut errors);
+    if !errors.is_empty() {
+        return super::validation::validation_error_response(errors);
+    }
+
     let route_id = cred.route_id.clone();
     let consumer_id = cred.consumer_id.clone();
     let existed = state.consumer_credential_store.upsert(cred).is_some();
@@ -252,5 +259,169 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // ─── GW-1 P1-6 / P1-9 regression: credential validation ───────────
+
+    async fn post_errors(
+        app: axum::Router,
+        path: &str,
+        body: serde_json::Value,
+    ) -> (StatusCode, Vec<String>) {
+        let response = app
+            .oneshot(auth_json_req("POST", path, body))
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let errors = json["errors"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        (status, errors)
+    }
+
+    #[tokio::test]
+    async fn test_backend_credential_rejects_empty_identifier_fields() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let cred = serde_json::json!({
+            "route_id": "",
+            "auth_type": "bearer",
+            "header_name": "",
+            "header_value": ""
+        });
+        let (status, errors) = post_errors(app, "/backend-credentials", cred).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        for field in ["route_id", "header_name", "header_value"] {
+            assert!(
+                errors.iter().any(|e| e.contains(field)),
+                "missing error for {} in {:?}",
+                field,
+                errors
+            );
+        }
+    }
+
+    // GW-1 P1-9: uppercase `HTTPS://` was rejected by the old prefix
+    // check but is a valid URL; `url::Url::parse` lowercases the scheme
+    // so the credential now persists.
+    #[tokio::test]
+    async fn test_backend_credential_oauth2_accepts_uppercase_https_scheme() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let cred = serde_json::json!({
+            "route_id": "r1",
+            "auth_type": "oauth2_client_credentials",
+            "header_name": "Authorization",
+            "header_value": "",
+            "oauth2": {
+                "token_url": "HTTPS://oauth.example.com/token",
+                "client_id": "cid",
+                "client_secret": "sec"
+            }
+        });
+        let response = app
+            .oneshot(auth_json_req("POST", "/backend-credentials", cred))
+            .await
+            .unwrap();
+        // `header_value` is empty → still BAD_REQUEST, but we want to see
+        // the URL validation does NOT complain about scheme case.
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let err_strs: Vec<String> = json["errors"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(
+            !err_strs.iter().any(|e| e.starts_with("oauth2.token_url")),
+            "uppercase HTTPS should parse cleanly, but got token_url errors: {:?}",
+            err_strs
+        );
+    }
+
+    // GW-1 P1-9: CRLF-injection in the token_url is rejected at parse
+    // time, whereas the old `starts_with` check accepted the leading
+    // `https://` prefix and let the rest through to reqwest.
+    #[tokio::test]
+    async fn test_backend_credential_oauth2_rejects_crlf_injection_in_token_url() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let cred = serde_json::json!({
+            "route_id": "r1",
+            "auth_type": "oauth2_client_credentials",
+            "header_name": "Authorization",
+            "header_value": "placeholder",
+            "oauth2": {
+                "token_url": "https://foo\r\nHost: evil",
+                "client_id": "cid",
+                "client_secret": "sec"
+            }
+        });
+        let (status, errors) = post_errors(app, "/backend-credentials", cred).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(
+            errors.iter().any(|e| e.contains("oauth2.token_url")),
+            "expected CRLF to trip token_url validator, got {:?}",
+            errors
+        );
+    }
+
+    #[tokio::test]
+    async fn test_backend_credential_oauth2_rejects_http_scheme() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let cred = serde_json::json!({
+            "route_id": "r1",
+            "auth_type": "oauth2_client_credentials",
+            "header_name": "Authorization",
+            "header_value": "placeholder",
+            "oauth2": {
+                "token_url": "http://plain.example.com/token",
+                "client_id": "cid",
+                "client_secret": "sec"
+            }
+        });
+        let (status, errors) = post_errors(app, "/backend-credentials", cred).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(errors.iter().any(|e| e.contains("oauth2.token_url")));
+    }
+
+    #[tokio::test]
+    async fn test_consumer_credential_rejects_empty_identifier_fields() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let cred = serde_json::json!({
+            "route_id": "",
+            "consumer_id": "",
+            "auth_type": "bearer",
+            "header_name": "",
+            "header_value": ""
+        });
+        let (status, errors) = post_errors(app, "/consumer-credentials", cred).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        for field in ["route_id", "consumer_id", "header_name", "header_value"] {
+            assert!(
+                errors.iter().any(|e| e.contains(field)),
+                "missing error for {} in {:?}",
+                field,
+                errors
+            );
+        }
     }
 }

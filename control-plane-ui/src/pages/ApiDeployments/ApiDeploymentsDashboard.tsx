@@ -5,9 +5,10 @@
  * Replaces the gateway-scoped view with an API-centric deployment view.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { RefreshCw, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useEnvironment } from '../../contexts/EnvironmentContext';
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { DeployAPIDialog } from '../GatewayDeployments/DeployAPIDialog';
@@ -21,9 +22,12 @@ import { SubNav } from '../../components/SubNav';
 import { apiDeploymentTabs } from '../../components/subNavGroups';
 import type { GatewayDeployment } from '../../types';
 import type { Schemas } from '@stoa/shared/api-types';
+import { getEnvLabel, normalizeEnvironment } from '@stoa/shared/constants/environments';
+import type { CanonicalEnvironment } from '@stoa/shared/constants/environments';
 
 const PAGE_SIZE = 20;
 const AUTO_REFRESH_INTERVAL = 30_000;
+type EnvironmentFilter = '' | 'dev' | 'staging' | 'production';
 
 const statusFilterOptions = [
   { value: '', label: 'All Statuses' },
@@ -35,15 +39,28 @@ const statusFilterOptions = [
   { value: 'deleting', label: 'Deleting' },
 ];
 
-const envFilterOptions = [
-  { value: '', label: 'All Environments' },
-  { value: 'dev', label: 'Development' },
-  { value: 'staging', label: 'Staging' },
-  { value: 'production', label: 'Production' },
-];
+function toApiEnvironment(env: string): Exclude<EnvironmentFilter, ''> {
+  const canonical = normalizeEnvironment(env);
+  if (canonical === 'development') return 'dev';
+  return canonical;
+}
+
+function toContextEnvironment(env: string): 'dev' | 'staging' | 'prod' {
+  const canonical = normalizeEnvironment(env);
+  if (canonical === 'production') return 'prod';
+  if (canonical === 'staging') return 'staging';
+  return 'dev';
+}
+
+function canonicalSortValue(env: CanonicalEnvironment): number {
+  if (env === 'development') return 0;
+  if (env === 'staging') return 1;
+  return 2;
+}
 
 export function ApiDeploymentsDashboard() {
   const { isReady } = useAuth();
+  const { activeEnvironment, environments, switchEnvironment } = useEnvironment();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<GatewayDeployment[]>([]);
@@ -51,14 +68,42 @@ export function ApiDeploymentsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
-  const [envFilter, setEnvFilter] = useState('');
+  const [envFilter, setEnvFilter] = useState<EnvironmentFilter>(
+    toApiEnvironment(activeEnvironment)
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [selectedDeployment, setSelectedDeployment] = useState<GatewayDeployment | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const latestLoadRef = useRef(0);
+
+  const envFilterOptions = useMemo(() => {
+    const seen = new Set<CanonicalEnvironment>();
+    const options = environments
+      .map((env) => normalizeEnvironment(env.name))
+      .filter((env) => {
+        if (seen.has(env)) return false;
+        seen.add(env);
+        return true;
+      })
+      .sort((a, b) => canonicalSortValue(a) - canonicalSortValue(b))
+      .map((env) => ({
+        value: toApiEnvironment(env),
+        label: getEnvLabel(env),
+      }));
+
+    return [{ value: '', label: 'All Environments' }, ...options];
+  }, [environments]);
+
+  useEffect(() => {
+    setEnvFilter(toApiEnvironment(activeEnvironment));
+    setCurrentPage(1);
+  }, [activeEnvironment]);
 
   const loadData = useCallback(async () => {
+    const requestId = latestLoadRef.current + 1;
+    latestLoadRef.current = requestId;
     const params: Record<string, string | number> = { page: currentPage, page_size: PAGE_SIZE };
     if (statusFilter) params.sync_status = statusFilter;
     if (envFilter) params.environment = envFilter;
@@ -68,6 +113,8 @@ export function ApiDeploymentsDashboard() {
       apiService.getGatewayDeployments(params),
       apiService.getDeploymentStatusSummary(),
     ]);
+
+    if (requestId !== latestLoadRef.current) return;
 
     if (deploymentsResult.status === 'fulfilled') {
       setDeployments(deploymentsResult.value.items);
@@ -186,8 +233,10 @@ export function ApiDeploymentsDashboard() {
         <select
           value={envFilter}
           onChange={(e) => {
-            setEnvFilter(e.target.value);
+            const nextEnv = e.target.value as EnvironmentFilter;
+            setEnvFilter(nextEnv);
             setCurrentPage(1);
+            if (nextEnv) switchEnvironment(toContextEnvironment(nextEnv));
           }}
           className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white"
         >

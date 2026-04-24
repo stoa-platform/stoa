@@ -1,13 +1,17 @@
 """Pydantic schemas for gateway instance and deployment endpoints."""
 
+import logging
 from datetime import datetime
-from typing import Literal
+from typing import Literal, get_args
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+logger = logging.getLogger(__name__)
+
 # CAB-2159 BUG-2 — narrowed enums so the UI can branch on exact values rather
 # than carrying wire/UI adapter casts. Keep synchronized with:
+#   - src/models/gateway_instance.py:GatewayType (regression: test_gateway_type_literal_matches_orm)
 #   - src/models/gateway_instance.py:GatewayInstanceStatus
 #   - src/models/gateway_instance.py:source column
 #   - ADR-024 (Gateway 4-mode split)
@@ -16,6 +20,8 @@ GatewayTypeLiteral = Literal[
     "kong",
     "apigee",
     "aws_apigateway",
+    "azure_apim",
+    "gravitee",
     "stoa",
     "stoa_edge_mcp",
     "stoa_sidecar",
@@ -118,6 +124,38 @@ class GatewayInstanceResponse(BaseModel):
         if not isinstance(v, list):
             return [str(v)]
         return list(v)
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def coerce_mode(cls, v: object) -> str | None:
+        """Coerce unknown ``mode`` values to ``None`` instead of 500ing the response.
+
+        ``mode`` is a free-form ``String(50)`` on the ORM (`models/gateway_instance.py:105`),
+        so drift between stored values and the Literal whitelist is possible. A bad row
+        must not nuke the whole list endpoint — log + return ``None`` so the UI can
+        surface the other gateways.
+        """
+        if v is None or v == "":
+            return None
+        if v in get_args(GatewayModeLiteral):
+            return v  # type: ignore[return-value]
+        logger.warning("Unknown gateway mode %r — coerced to None. Update GatewayModeLiteral if this is valid.", v)
+        return None
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def coerce_source(cls, v: object) -> str:
+        """Coerce unknown ``source`` values to ``"manual"`` instead of 500ing.
+
+        ``source`` is a free-form ``String(50)`` on the ORM with a ``self_register``
+        default. Unknown values (drift, manual inserts) fall back to ``"manual"``.
+        """
+        if v in get_args(GatewaySourceLiteral):
+            return v  # type: ignore[return-value]
+        logger.warning(
+            "Unknown gateway source %r — coerced to 'manual'. Update GatewaySourceLiteral if this is valid.", v
+        )
+        return "manual"
 
 
 class GatewayHealthCheckResponse(BaseModel):

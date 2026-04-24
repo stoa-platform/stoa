@@ -578,3 +578,80 @@ class TestGatewayInstancesRouter:
         assert "gw-public" in names
         assert "gw-acme" in names
         assert "gw-other" not in names
+
+
+class TestGatewayLiteralDriftGuard(TestGatewayInstancesRouter):
+    """Regression guards against schema-vs-ORM enum drift.
+
+    Origin: prod 500 on ``GET /v1/admin/gateways`` when a row's ``gateway_type`` was
+    outside ``GatewayTypeLiteral`` (CAB-2159 narrowed the Literal and missed
+    ``azure_apim`` + ``gravitee``). Response-validation raised, FastAPI returned 500.
+    """
+
+    def test_gateway_type_literal_covers_every_orm_enum_value(self):
+        """Every ORM ``GatewayType`` value must be accepted by ``GatewayTypeLiteral``."""
+        from typing import get_args
+
+        from src.models.gateway_instance import GatewayType
+        from src.schemas.gateway import GatewayTypeLiteral
+
+        orm_values = {t.value for t in GatewayType}
+        literal_values = set(get_args(GatewayTypeLiteral))
+        missing = orm_values - literal_values
+        assert not missing, (
+            f"GatewayTypeLiteral missing ORM values {missing}. "
+            "Any gateway row with one of these types would 500 the list endpoint."
+        )
+
+    def test_gateway_status_literal_covers_every_orm_enum_value(self):
+        """Every ORM ``GatewayInstanceStatus`` value must be accepted by ``GatewayStatusLiteral``."""
+        from typing import get_args
+
+        from src.models.gateway_instance import GatewayInstanceStatus
+        from src.schemas.gateway import GatewayStatusLiteral
+
+        orm_values = {s.value for s in GatewayInstanceStatus}
+        literal_values = set(get_args(GatewayStatusLiteral))
+        missing = orm_values - literal_values
+        assert not missing, f"GatewayStatusLiteral missing ORM values {missing}."
+
+    def test_list_gateways_succeeds_for_every_orm_gateway_type(self, app_with_cpi_admin, mock_db_session):
+        """GET / must 200 for every ``GatewayType`` — prevents a re-run of the prod 500."""
+        from src.models.gateway_instance import GatewayType
+
+        mocks = [self._mock_gateway_instance(name=f"gw-{t.value}", gateway_type=t.value) for t in GatewayType]
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.list = AsyncMock(return_value=(mocks, len(mocks)))
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get("/v1/admin/gateways")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["total"] == len(mocks)
+
+    def test_list_gateways_coerces_unknown_mode_to_none(self, app_with_cpi_admin, mock_db_session):
+        """An unknown ``mode`` value must not 500 — coerced to ``None`` with a warning."""
+        gw = self._mock_gateway_instance(mode="some-future-mode")
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.list = AsyncMock(return_value=([gw], 1))
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get("/v1/admin/gateways")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["items"][0]["mode"] is None
+
+    def test_list_gateways_coerces_unknown_source_to_manual(self, app_with_cpi_admin, mock_db_session):
+        """An unknown ``source`` value must not 500 — coerced to ``"manual"`` with a warning."""
+        gw = self._mock_gateway_instance(source="legacy_importer")
+
+        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
+            MockSvc.return_value.list = AsyncMock(return_value=([gw], 1))
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get("/v1/admin/gateways")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["items"][0]["source"] == "manual"

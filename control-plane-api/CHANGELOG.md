@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.5](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.4...control-plane-api-v1.8.5) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** add bounded auth bypass for smoke ([#2546](https://github.com/stoa-platform/stoa/issues/2546)) ([1e55659](https://github.com/stoa-platform/stoa/commit/1e55659546aeab2ed59abed985138b126fcc09b2))
+
 ## [1.8.4](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.3...control-plane-api-v1.8.4) (2026-04-24)
 
 

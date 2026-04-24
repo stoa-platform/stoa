@@ -10,9 +10,15 @@ const { mockHttpClient } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../../services/http', () => ({
-  httpClient: mockHttpClient,
-}));
+vi.mock('../../../services/http', async () => {
+  const actual = await vi.importActual<typeof import('../../../services/http')>(
+    '../../../services/http'
+  );
+  return {
+    ...actual,
+    httpClient: mockHttpClient,
+  };
+});
 
 import { tenantsClient } from '../../../services/api/tenants';
 import { apisClient } from '../../../services/api/apis';
@@ -295,6 +301,22 @@ describe('UI-2 S2c domain clients', () => {
       {
         consumer_ids: ['consumer-1'],
       }
+    );
+  });
+
+  // P0-6 regression lock — tenant/api IDs with special characters must be
+  // URL-encoded by the path() helper before hitting httpClient.
+  it('encodes special characters in path segments (P0-6)', async () => {
+    mockHttpClient.get.mockResolvedValueOnce({ data: { id: 'x' } });
+    mockHttpClient.get.mockResolvedValueOnce({ data: { id: 'x' } });
+
+    await tenantsClient.get('a/b');
+    await apisClient.get('t?id', 'api#1');
+
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(1, '/v1/tenants/a%2Fb');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(
+      2,
+      '/v1/tenants/t%3Fid/apis/api%231'
     );
   });
 });

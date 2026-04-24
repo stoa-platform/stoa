@@ -18,4 +18,6 @@ export {
 
 export { refreshAuthTokenWithTimeout } from './refresh';
 
+export { path } from './path';
+
 export { createEventSource } from './sse';

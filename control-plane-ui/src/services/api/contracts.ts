@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type { Schemas } from '@stoa/shared/api-types';
 import type {
   Contract,
@@ -10,23 +10,23 @@ import type {
 
 export const contractsClient = {
   async list(tenantId: string): Promise<ContractListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/contracts`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'contracts'));
     return data;
   },
 
   async get(tenantId: string, contractId: string): Promise<Contract> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'contracts', contractId));
     return data;
   },
 
   async create(tenantId: string, payload: ContractCreate): Promise<Contract> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/contracts`, payload);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'contracts'), payload);
     return data;
   },
 
   async publish(tenantId: string, contractId: string): Promise<PublishContractResponse> {
     const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/publish`
+      path('v1', 'tenants', tenantId, 'contracts', contractId, 'publish')
     );
     return data;
   },
@@ -37,19 +37,19 @@ export const contractsClient = {
     payload: Schemas['ContractUpdate']
   ): Promise<Contract> {
     const { data } = await httpClient.patch(
-      `/v1/tenants/${tenantId}/contracts/${contractId}`,
+      path('v1', 'tenants', tenantId, 'contracts', contractId),
       payload
     );
     return data;
   },
 
   async remove(tenantId: string, contractId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/contracts/${contractId}`);
+    await httpClient.delete(path('v1', 'tenants', tenantId, 'contracts', contractId));
   },
 
   async listBindings(tenantId: string, contractId: string): Promise<ProtocolBinding[]> {
     const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`
+      path('v1', 'tenants', tenantId, 'contracts', contractId, 'bindings')
     );
     return data;
   },
@@ -60,13 +60,13 @@ export const contractsClient = {
     protocol: string
   ): Promise<ProtocolBinding> {
     const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/contracts/${contractId}/bindings`,
+      path('v1', 'tenants', tenantId, 'contracts', contractId, 'bindings'),
       { protocol }
     );
     return data;
   },
 
   async disableBinding(tenantId: string, contractId: string, protocol: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/contracts/${contractId}/bindings/${protocol}`);
+    await httpClient.delete(path('v1', 'tenants', tenantId, 'contracts', contractId, 'bindings', protocol));
   },
 };

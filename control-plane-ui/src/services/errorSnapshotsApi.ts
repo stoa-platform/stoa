@@ -8,6 +8,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 import type {
   ErrorSnapshotDetail,
   ErrorSnapshotStats,
@@ -50,7 +51,7 @@ class ErrorSnapshotsService {
    * Get a single error snapshot by ID
    */
   async getSnapshot(snapshotId: string): Promise<ErrorSnapshotDetail> {
-    const { data } = await apiService.get<ErrorSnapshotDetail>(`/v1/snapshots/${snapshotId}`);
+    const { data } = await apiService.get<ErrorSnapshotDetail>(path('v1', 'snapshots', snapshotId));
     return data;
   }
 
@@ -85,7 +86,7 @@ class ErrorSnapshotsService {
     status: SnapshotResolutionStatus,
     notes?: string
   ): Promise<ErrorSnapshotDetail> {
-    const { data } = await apiService.patch<ErrorSnapshotDetail>(`/v1/snapshots/${snapshotId}`, {
+    const { data } = await apiService.patch<ErrorSnapshotDetail>(path('v1', 'snapshots', snapshotId), {
       resolution_status: status,
       resolution_notes: notes,
     });
@@ -96,7 +97,7 @@ class ErrorSnapshotsService {
    * Delete an error snapshot
    */
   async deleteSnapshot(snapshotId: string): Promise<void> {
-    await apiService.delete(`/v1/snapshots/${snapshotId}`);
+    await apiService.delete(path('v1', 'snapshots', snapshotId));
   }
 
   /**
@@ -104,7 +105,7 @@ class ErrorSnapshotsService {
    */
   async generateReplay(snapshotId: string): Promise<{ curl_command: string; warning?: string }> {
     const { data } = await apiService.post<{ curl_command: string; warning?: string }>(
-      `/v1/snapshots/${snapshotId}/replay`
+      path('v1', 'snapshots', snapshotId, 'replay')
     );
     return data;
   }

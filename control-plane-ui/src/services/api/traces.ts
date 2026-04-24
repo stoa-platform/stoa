@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type { PipelineTrace, TraceStats, TraceSummary, TraceTimeline } from '../../types';
 
 export const tracesClient = {
@@ -19,12 +19,12 @@ export const tracesClient = {
   },
 
   async get(traceId: string): Promise<PipelineTrace> {
-    const { data } = await httpClient.get(`/v1/traces/${traceId}`);
+    const { data } = await httpClient.get(path('v1', 'traces', traceId));
     return data;
   },
 
   async getTimeline(traceId: string): Promise<TraceTimeline> {
-    const { data } = await httpClient.get(`/v1/traces/${traceId}/timeline`);
+    const { data } = await httpClient.get(path('v1', 'traces', traceId, 'timeline'));
     return data;
   },
 

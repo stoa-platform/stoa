@@ -1,7 +1,10 @@
 import { config } from '../../config';
+import { path } from './path';
 
 export function createEventSource(tenantId: string, eventTypes?: string[]): EventSource {
-  const params = eventTypes ? `?event_types=${eventTypes.join(',')}` : '';
-  const url = `${config.api.baseUrl}/v1/events/stream/${tenantId}${params}`;
+  const search = new URLSearchParams();
+  if (eventTypes?.length) search.set('event_types', eventTypes.join(','));
+  const qs = search.toString();
+  const url = `${config.api.baseUrl}${path('v1', 'events', 'stream', tenantId)}${qs ? '?' + qs : ''}`;
   return new EventSource(url);
 }

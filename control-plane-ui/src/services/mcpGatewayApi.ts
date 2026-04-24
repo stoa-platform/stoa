@@ -13,6 +13,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 import type {
   MCPTool,
   ListToolsResponse,
@@ -60,7 +61,7 @@ class MCPToolsService {
    * Endpoint: GET /v1/mcp/tools/{name}
    */
   async getTool(toolName: string): Promise<MCPTool> {
-    const { data } = await apiService.get(`/v1/mcp/tools/${encodeURIComponent(toolName)}`);
+    const { data } = await apiService.get(path('v1', 'mcp', 'tools', toolName));
     return data;
   }
 
@@ -72,7 +73,7 @@ class MCPToolsService {
     name: string;
     inputSchema: MCPTool['inputSchema'];
   }> {
-    const { data } = await apiService.get(`/v1/mcp/tools/${encodeURIComponent(toolName)}/schema`);
+    const { data } = await apiService.get(path('v1', 'mcp', 'tools', toolName, 'schema'));
     return data;
   }
 
@@ -121,7 +122,7 @@ class MCPToolsService {
    * Endpoint: DELETE /v1/mcp/subscriptions/{id}
    */
   async unsubscribeTool(subscriptionId: string): Promise<void> {
-    await apiService.delete(`/v1/mcp/subscriptions/${subscriptionId}`);
+    await apiService.delete(path('v1', 'mcp', 'subscriptions', subscriptionId));
   }
 
   /**
@@ -132,7 +133,7 @@ class MCPToolsService {
     subscriptionId: string,
     update: Partial<ToolSubscriptionCreate>
   ): Promise<ToolSubscription> {
-    const { data } = await apiService.patch(`/v1/mcp/subscriptions/${subscriptionId}`, update);
+    const { data } = await apiService.patch(path('v1', 'mcp', 'subscriptions', subscriptionId), update);
     return data;
   }
 
@@ -164,7 +165,7 @@ class MCPToolsService {
       endDate?: string;
     }
   ): Promise<ToolUsageSummary> {
-    const { data } = await apiService.get(`/v1/usage/tools/${encodeURIComponent(toolName)}`, {
+    const { data } = await apiService.get(path('v1', 'usage', 'tools', toolName), {
       params,
     });
     return data;

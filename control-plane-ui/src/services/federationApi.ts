@@ -5,6 +5,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 import type {
   MasterAccount,
   MasterAccountUpdate,
@@ -28,7 +29,7 @@ class FederationService {
    * Endpoint: GET /v1/tenants/{tenant_id}/federation/accounts
    */
   async listMasterAccounts(tenantId: string): Promise<MasterAccountListResponse> {
-    const { data } = await apiService.get(`/v1/tenants/${tenantId}/federation/accounts`);
+    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'federation', 'accounts'));
     return data;
   }
 
@@ -37,7 +38,7 @@ class FederationService {
    * Endpoint: GET /v1/tenants/{tenant_id}/federation/accounts/{id}
    */
   async getMasterAccount(tenantId: string, id: string): Promise<MasterAccount> {
-    const { data } = await apiService.get(`/v1/tenants/${tenantId}/federation/accounts/${id}`);
+    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'federation', 'accounts', id));
     return data;
   }
 
@@ -49,7 +50,7 @@ class FederationService {
     tenantId: string,
     payload: Schemas['MasterAccountCreate']
   ): Promise<MasterAccount> {
-    const { data } = await apiService.post(`/v1/tenants/${tenantId}/federation/accounts`, payload);
+    const { data } = await apiService.post(path('v1', 'tenants', tenantId, 'federation', 'accounts'), payload);
     return data;
   }
 
@@ -63,7 +64,7 @@ class FederationService {
     payload: MasterAccountUpdate
   ): Promise<MasterAccount> {
     const { data } = await apiService.patch(
-      `/v1/tenants/${tenantId}/federation/accounts/${id}`,
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', id),
       payload
     );
     return data;
@@ -74,7 +75,7 @@ class FederationService {
    * Endpoint: DELETE /v1/tenants/{tenant_id}/federation/accounts/{id}
    */
   async deleteMasterAccount(tenantId: string, id: string): Promise<void> {
-    await apiService.delete(`/v1/tenants/${tenantId}/federation/accounts/${id}`);
+    await apiService.delete(path('v1', 'tenants', tenantId, 'federation', 'accounts', id));
   }
 
   // ==========================================================================
@@ -87,7 +88,7 @@ class FederationService {
    */
   async listSubAccounts(tenantId: string, masterId: string): Promise<SubAccountListResponse> {
     const { data } = await apiService.get(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/sub-accounts`
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts')
     );
     return data;
   }
@@ -102,7 +103,7 @@ class FederationService {
     payload: SubAccountCreate
   ): Promise<SubAccountCreatedResponse> {
     const { data } = await apiService.post(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/sub-accounts`,
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts'),
       payload
     );
     return data;
@@ -114,7 +115,7 @@ class FederationService {
    */
   async revokeSubAccount(tenantId: string, masterId: string, subId: string): Promise<SubAccount> {
     const { data } = await apiService.post(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/sub-accounts/${subId}/revoke`
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts', subId, 'revoke')
     );
     return data;
   }
@@ -133,7 +134,7 @@ class FederationService {
     subId: string
   ): Promise<ToolAllowListResponse> {
     const { data } = await apiService.get(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/sub-accounts/${subId}/tools`
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts', subId, 'tools')
     );
     return data;
   }
@@ -149,7 +150,7 @@ class FederationService {
     tools: string[]
   ): Promise<ToolAllowListResponse> {
     const { data } = await apiService.put(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/sub-accounts/${subId}/tools`,
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'sub-accounts', subId, 'tools'),
       { allowed_tools: tools }
     );
     return data;
@@ -164,7 +165,7 @@ class FederationService {
    */
   async getUsage(tenantId: string, masterId: string, days = 7): Promise<UsageResponse> {
     const { data } = await apiService.get(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/usage`,
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'usage'),
       { params: { days } }
     );
     return data;
@@ -179,7 +180,7 @@ class FederationService {
     masterId: string
   ): Promise<Schemas['FederationBulkRevokeResponse']> {
     const { data } = await apiService.post(
-      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/bulk-revoke`
+      path('v1', 'tenants', tenantId, 'federation', 'accounts', masterId, 'bulk-revoke')
     );
     return data;
   }

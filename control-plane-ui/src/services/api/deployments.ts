@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type {
   Deployment,
   DeploymentCreate,
@@ -19,17 +19,17 @@ export const deploymentsClient = {
       page_size?: number;
     }
   ): Promise<DeploymentListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/deployments`, { params });
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'deployments'), { params });
     return data;
   },
 
   async get(tenantId: string, deploymentId: string): Promise<Deployment> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/deployments/${deploymentId}`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'deployments', deploymentId));
     return data;
   },
 
   async create(tenantId: string, request: DeploymentCreate): Promise<Deployment> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/deployments`, request);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'deployments'), request);
     return data;
   },
 
@@ -39,7 +39,7 @@ export const deploymentsClient = {
     targetVersion?: string
   ): Promise<Deployment> {
     const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/deployments/${deploymentId}/rollback`,
+      path('v1', 'tenants', tenantId, 'deployments', deploymentId, 'rollback'),
       { target_version: targetVersion }
     );
     return data;
@@ -52,7 +52,7 @@ export const deploymentsClient = {
     limit: number = 200
   ): Promise<DeploymentLogListResponse> {
     const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/deployments/${deploymentId}/logs`,
+      path('v1', 'tenants', tenantId, 'deployments', deploymentId, 'logs'),
       { params: { after_seq: afterSeq, limit } }
     );
     return data;
@@ -64,7 +64,7 @@ export const deploymentsClient = {
     environment: string
   ): Promise<EnvironmentStatusResponse> {
     const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/deployments/environments/${environment}/status`
+      path('v1', 'tenants', tenantId, 'deployments', 'environments', environment, 'status')
     );
     return data;
   },
@@ -81,7 +81,7 @@ export const deploymentsClient = {
     }[];
   }> {
     const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/apis/${apiId}/deployable-environments`
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'deployable-environments')
     );
     return data;
   },
@@ -91,7 +91,7 @@ export const deploymentsClient = {
     apiId: string,
     payload: { environment: string; gateway_ids?: string[] }
   ): Promise<{ deployed: number; environment: string; deployment_ids: string[] }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/apis/${apiId}/deploy`, payload);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'apis', apiId, 'deploy'), payload);
     return data;
   },
 
@@ -102,7 +102,7 @@ export const deploymentsClient = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ items: any[]; total: number }> {
     const { data } = await httpClient.get(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'gateway-assignments'),
       { params: environment ? { environment } : {} }
     );
     return data;
@@ -115,7 +115,7 @@ export const deploymentsClient = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments`,
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'gateway-assignments'),
       payload
     );
     return data;
@@ -127,7 +127,7 @@ export const deploymentsClient = {
     assignmentId: string
   ): Promise<void> {
     await httpClient.delete(
-      `/v1/tenants/${tenantId}/apis/${apiId}/gateway-assignments/${assignmentId}`
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'gateway-assignments', assignmentId)
     );
   },
 };

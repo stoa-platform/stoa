@@ -10,9 +10,15 @@ const { mockHttpClient } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../../services/http', () => ({
-  httpClient: mockHttpClient,
-}));
+vi.mock('../../../services/http', async () => {
+  const actual = await vi.importActual<typeof import('../../../services/http')>(
+    '../../../services/http'
+  );
+  return {
+    ...actual,
+    httpClient: mockHttpClient,
+  };
+});
 
 import { deploymentsClient } from '../../../services/api/deployments';
 import { tracesClient } from '../../../services/api/traces';

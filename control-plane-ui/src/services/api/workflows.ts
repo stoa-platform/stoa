@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type {
   WorkflowInstance,
   WorkflowListResponse,
@@ -10,7 +10,7 @@ import type {
 
 export const workflowsClient = {
   async listTemplates(tenantId: string): Promise<WorkflowTemplateListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/workflows/templates`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'workflows', 'templates'));
     return data;
   },
 
@@ -18,7 +18,7 @@ export const workflowsClient = {
     tenantId: string,
     payload: WorkflowTemplateCreate
   ): Promise<WorkflowTemplate> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/workflows/templates`, payload);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'workflows', 'templates'), payload);
     return data;
   },
 
@@ -28,21 +28,21 @@ export const workflowsClient = {
     payload: WorkflowTemplateUpdate
   ): Promise<WorkflowTemplate> {
     const { data } = await httpClient.put(
-      `/v1/tenants/${tenantId}/workflows/templates/${templateId}`,
+      path('v1', 'tenants', tenantId, 'workflows', 'templates', templateId),
       payload
     );
     return data;
   },
 
   async deleteTemplate(tenantId: string, templateId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/workflows/templates/${templateId}`);
+    await httpClient.delete(path('v1', 'tenants', tenantId, 'workflows', 'templates', templateId));
   },
 
   async listInstances(
     tenantId: string,
     params?: { status?: string; skip?: number; limit?: number }
   ): Promise<WorkflowListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/workflows/instances`, {
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'workflows', 'instances'), {
       params,
     });
     return data;
@@ -52,7 +52,7 @@ export const workflowsClient = {
     tenantId: string,
     payload: { template_id: string; subject_id: string; subject_email: string }
   ): Promise<WorkflowInstance> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/workflows/instances`, payload);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'workflows', 'instances'), payload);
     return data;
   },
 
@@ -62,7 +62,7 @@ export const workflowsClient = {
     payload: { comment?: string }
   ): Promise<WorkflowInstance> {
     const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/workflows/instances/${instanceId}/approve`,
+      path('v1', 'tenants', tenantId, 'workflows', 'instances', instanceId, 'approve'),
       payload
     );
     return data;
@@ -74,14 +74,14 @@ export const workflowsClient = {
     payload: { comment?: string }
   ): Promise<WorkflowInstance> {
     const { data } = await httpClient.post(
-      `/v1/tenants/${tenantId}/workflows/instances/${instanceId}/reject`,
+      path('v1', 'tenants', tenantId, 'workflows', 'instances', instanceId, 'reject'),
       payload
     );
     return data;
   },
 
   async seedTemplates(tenantId: string): Promise<{ message: string }> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/workflows/templates/seed`);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'workflows', 'templates', 'seed'));
     return data;
   },
 };

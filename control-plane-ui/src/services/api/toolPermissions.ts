@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type { Schemas } from '@stoa/shared/api-types';
 import type { TenantToolPermission, TenantToolPermissionListResponse } from '../../types';
 
@@ -7,7 +7,7 @@ export const toolPermissionsClient = {
     tenantId: string,
     params?: { mcp_server_id?: string; page?: number; page_size?: number }
   ): Promise<TenantToolPermissionListResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/tool-permissions`, {
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'tool-permissions'), {
       params: { ...params, page_size: params?.page_size ?? 100 },
     });
     return data;
@@ -17,11 +17,11 @@ export const toolPermissionsClient = {
     tenantId: string,
     body: Schemas['TenantToolPermissionCreate']
   ): Promise<TenantToolPermission> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/tool-permissions`, body);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'tool-permissions'), body);
     return data;
   },
 
   async remove(tenantId: string, permissionId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/tool-permissions/${permissionId}`);
+    await httpClient.delete(path('v1', 'tenants', tenantId, 'tool-permissions', permissionId));
   },
 };

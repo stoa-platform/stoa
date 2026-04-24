@@ -235,6 +235,8 @@ pub fn build_router(state: AppState) -> Router {
             "/a2a/agents/:name",
             get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
         )
+        // CAB-1722: API proxy backends admin (moved here for admin_auth coverage — GW-1 P0-2)
+        .route("/api-proxy/backends", get(list_api_proxy_backends))
         // CAB-1828: Route hot-reload
         .route("/routes/reload", post(admin::routes_reload))
         // CAB-1645: Error snapshot capture
@@ -371,7 +373,8 @@ pub fn build_router(state: AppState) -> Router {
                 // Separate from /mcp/* and /apis/* (dynamic proxy routes).
                 // Uses catch-all since axum doesn't allow {param}/{*rest}.
                 .route("/proxy/*path", axum::routing::any(api_proxy_handler))
-                .route("/admin/api-proxy/backends", get(list_api_proxy_backends))
+                // `/admin/api-proxy/backends` lives inside `admin_router` (see above)
+                // so it inherits the admin_auth middleware — GW-1 P0-2.
                 // CAB-1713/1714: HEGEMON dispatch endpoints
                 .route("/hegemon/dispatch", post(hegemon::dispatch::dispatch_job))
                 .route(

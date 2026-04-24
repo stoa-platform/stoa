@@ -183,6 +183,64 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
+    // GW-1 P0-2 regression: /admin/api-proxy/backends must live behind
+    // admin_auth (previously orphaned on edge_base). This builds the
+    // endpoint with the same auth layer as the production admin_router
+    // and asserts anonymous requests get 401.
+    #[tokio::test]
+    async fn test_api_proxy_backends_behind_admin_auth_401_anon() {
+        use axum::{middleware, routing::get as axum_get, Router};
+        use crate::proxy::list_api_proxy_backends;
+
+        let state = create_test_state(Some("secret"));
+        let router: Router = Router::new()
+            .route("/api-proxy/backends", axum_get(list_api_proxy_backends))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                super::admin_auth,
+            ))
+            .with_state(state);
+
+        // Anonymous request (no Authorization header) must be rejected.
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api-proxy/backends")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_api_proxy_backends_behind_admin_auth_200_with_token() {
+        use axum::{middleware, routing::get as axum_get, Router};
+        use crate::proxy::list_api_proxy_backends;
+
+        let state = create_test_state(Some("secret"));
+        let router: Router = Router::new()
+            .route("/api-proxy/backends", axum_get(list_api_proxy_backends))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                super::admin_auth,
+            ))
+            .with_state(state);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api-proxy/backends")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
     #[tokio::test]
     async fn test_admin_auth_empty_configured_token() {
         let state = create_test_state(Some(""));

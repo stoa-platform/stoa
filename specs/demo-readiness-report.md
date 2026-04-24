@@ -76,8 +76,15 @@ Le fichier `subscriptions.py` génère `new_api_key, new_api_key_hash, new_api_k
 
 Solution démo-first : retourner cleartext **une seule fois** dans la réponse de `POST /subscriptions` quand `X-Demo-Mode: true` (feature flag démo) ou via endpoint dédié `POST /subscriptions/{id}/reveal-key` (one-shot, jetable).
 
-### 3.4 Mock backend manquant dans la stack démo
-`MOCK_BACKEND_URL=http://localhost:9090` n'est pas garanti présent dans docker-compose.yml. Solution : ajouter un service `mock-backend: image: kennethreitz/httpbin:latest` dans un `docker-compose.demo.yml` dédié.
+### 3.4 Mock backend stable dans la stack démo
+`MOCK_BACKEND_URL=http://localhost:9090` est fourni par le service compose
+`mock-backend`, qui expose `/ping` et `/get` en JSON stable avec `ok:true`.
+Le smoke sépare cette URL de probe locale de `MOCK_BACKEND_UPSTREAM_URL`,
+qui vaut `http://mock-backend:9090` en compose pour que la gateway ne cible
+pas `localhost` depuis son propre conteneur.
+Ce point ferme B2 pour AT-0. AT-4 peut maintenant cibler un backend local
+déterministe dès que B3 expose le mapping gateway et B1 fournit une clé
+exploitable.
 
 ### 3.5 Chemin proxy gateway pas exposé via cp-api
 La création d'API dans cp-api ne semble pas retourner l'URL gateway où elle est joignable (à confirmer — le champ `gateway_route_url` n'apparaît pas dans les routes vues). Gap : le client démo doit pouvoir lire "mon API est à `{GATEWAY_URL}/proxy/<slug>`".
@@ -93,7 +100,7 @@ Polling 30s par défaut dans stoa-connect → AT-2 peut timeout. Mitigation dans
 | # | Blocker | Sévérité | Étape impactée | Owner suggéré |
 |---|---------|----------|----------------|---------------|
 | B1 | Pas d'accès cleartext à `api_key` après création subscription | P0 | AT-3 → AT-4 | cp-api (1 PR) |
-| B2 | Mock backend non seedé dans docker-compose | P0 | AT-0, AT-4 | deploy (1 PR) |
+| B2 | Mock backend non seedé dans docker-compose | P0 | AT-0, AT-4 | **DONE** — `mock-backend` compose |
 | B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | gateway (spec ADR si inconnu) |
 | B4 | Auth dev-bypass cp-api non documenté | P1 | AT-1, AT-2, AT-3 | cp-api (flag `.env.demo`) |
 | B5 | Seed profile `demo-smoke` minimal absent | P1 | AT-0 | cp-api/scripts/seeder |
@@ -110,7 +117,7 @@ Pour débloquer rapidement la validation du contrat sans confondre script OK et 
 |---------------|-------|-------|--------|
 | `./scripts/demo-smoke-test.sh --dry-run-contract` | Tous | permanent | Valide le contrat/script, verdict `CONTRACT_DRY_RUN`, jamais `DEMO READY` |
 | `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | B1/B2/B3 | jusqu'aux fixes | Valide le chemin mocké, verdict `MOCK_PASS`, jamais `DEMO READY` |
-| Démarrer `mock-backend` en shell séparé (`docker run kennethreitz/httpbin`) | B2 | 1 jour | `make` targets absents |
+| Démarrer `mock-backend` via compose seul (`docker compose ... up -d mock-backend`) | B2 | jusqu'à stack complète | Service sous profil `demo`; ne pas exposer Prometheus sur le même port pendant ce smoke |
 | Probe 4 shapes proxy dans le script, 1 seul doit répondre 200 | B3 | 1 semaine | Fragile, réduit la confiance |
 | `DEMO_ADMIN_TOKEN` extrait via `stoactl auth login demo-admin` puis injecté | B4 | 1 jour | Couplage Keycloak |
 | Script seed inline dans `demo-smoke-test.sh` qui crée tenant + gateway si absent | B5 | 1 jour | Pas idempotent si collisions |

@@ -6,6 +6,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 import type { ConnectorCatalogResponse } from '../types';
 import type { Schemas } from '@stoa/shared/api-types';
 
@@ -37,7 +38,10 @@ class MCPConnectorsService {
       client_secret?: string;
     }
   ): Promise<Schemas['AuthorizeResponse']> {
-    const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/authorize`, body);
+    const { data } = await apiService.post(
+      path('v1', 'admin', 'mcp-connectors', slug, 'authorize'),
+      body
+    );
     return data;
   }
 
@@ -59,7 +63,7 @@ class MCPConnectorsService {
    */
   async disconnect(slug: string, tenantId?: string): Promise<void> {
     const params = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
-    await apiService.delete(`/v1/admin/mcp-connectors/${slug}/disconnect${params}`);
+    await apiService.delete(path('v1', 'admin', 'mcp-connectors', slug, 'disconnect') + params);
   }
 
   /**
@@ -74,7 +78,10 @@ class MCPConnectorsService {
       confirm?: boolean;
     }
   ): Promise<Schemas['PromoteResponse']> {
-    const { data } = await apiService.post(`/v1/admin/mcp-connectors/${slug}/promote`, body);
+    const { data } = await apiService.post(
+      path('v1', 'admin', 'mcp-connectors', slug, 'promote'),
+      body
+    );
     return data;
   }
 }

@@ -28,11 +28,12 @@ import type { GatewayInstance } from '../../types';
 
 interface DiscoveredAPI {
   name: string;
-  description?: string;
-  version?: string;
-  backend_url?: string;
-  inputSchema?: Record<string, unknown>;
-  annotations?: Record<string, unknown>;
+  description?: string | null;
+  version?: string | null;
+  backend_url?: string | null;
+  inputSchema?: Record<string, unknown> | null;
+  annotations?: Record<string, unknown> | null;
+  [key: string]: unknown;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -344,19 +345,21 @@ export function GatewayDetail() {
                 </tr>
               </thead>
               <tbody>
-                {deployments.map((d: Record<string, unknown>) => (
-                  <tr key={d.id as string} className="border-b border-gray-50 hover:bg-gray-50">
+                {deployments.map((d) => (
+                  <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="py-2.5 font-medium text-gray-900">
-                      {(d.api_name as string) || (d.api_catalog_id as string)}
+                      {(d.desired_state?.api_name as string | undefined) || d.api_catalog_id}
                     </td>
-                    <td className="py-2.5 text-gray-500">{(d.api_version as string) || '-'}</td>
+                    <td className="py-2.5 text-gray-500">
+                      {(d.desired_state?.api_version as string | undefined) || '-'}
+                    </td>
                     <td className="py-2.5">
-                      <SyncBadge status={(d.sync_status as string) || 'pending'} />
+                      <SyncBadge status={d.sync_status || 'pending'} />
                     </td>
-                    <td className="py-2.5 text-gray-500">{d.environment as string}</td>
+                    <td className="py-2.5 text-gray-500">{d.gateway_environment || '-'}</td>
                     {canWrite && (
                       <td className="py-2.5">
-                        <ForceSyncButton deploymentId={d.id as string} />
+                        <ForceSyncButton deploymentId={d.id} />
                       </td>
                     )}
                   </tr>

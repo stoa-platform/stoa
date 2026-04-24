@@ -252,11 +252,43 @@ pub async fn skills_delete_by_id(
 }
 
 /// GET /admin/skills/:id/health — skill health + circuit breaker status (CAB-1551)
+///
+/// GW-1 P1-5: this used to call `state.skill_health.stats(&id)` which
+/// *creates* counters + a circuit breaker for any probed key, giving an
+/// unbounded memory growth vector and returning a fake-positive
+/// `success_rate: 1.0` / `closed` for skills that don't exist. Now we
+/// 404 when the resolver has no skill under `id`, and use
+/// `SkillHealthTracker::stats_opt` to read without mutating. Known
+/// skills that have never been called get an honest zero-stats shape.
 pub async fn skills_health(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    Json(state.skill_health.stats(&id))
+    use crate::skills::health::SkillHealthStats;
+
+    if state.skill_resolver.get(&id).is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "skill not found", "key": id})),
+        )
+            .into_response();
+    }
+
+    // Skill exists: return whatever has been recorded so far. A missing
+    // stats entry (skill never executed) is honestly reported as zero
+    // counts and a "closed" CB, without inserting anything.
+    let stats = state
+        .skill_health
+        .stats_opt(&id)
+        .unwrap_or(SkillHealthStats {
+            skill_key: id.clone(),
+            success_count: 0,
+            failure_count: 0,
+            circuit_state: "closed".to_string(),
+            total_calls: 0,
+            success_rate: 1.0,
+        });
+    Json(stats).into_response()
 }
 
 /// GET /admin/skills/health — health stats for all tracked skills (CAB-1551)
@@ -265,18 +297,34 @@ pub async fn skills_health_all(State(state): State<AppState>) -> impl IntoRespon
 }
 
 /// POST /admin/skills/:id/health/reset — reset circuit breaker for a skill (CAB-1551)
+///
+/// GW-1 P1-5: symmetric with `skills_health`, we 404 for unknown skills
+/// up-front so admins can distinguish "no such skill" (resolver miss)
+/// from "skill exists but has no CB to reset yet" (never called).
 pub async fn skills_health_reset(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
+    if state.skill_resolver.get(&id).is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "skill not found", "key": id})),
+        )
+            .into_response();
+    }
+
     if state.skill_health.reset_circuit_breaker(&id) {
         Json(serde_json::json!({"key": id, "circuit_state": "closed"})).into_response()
     } else {
-        (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "no circuit breaker found", "key": id})),
-        )
-            .into_response()
+        // Skill exists per the resolver, but it has no circuit breaker
+        // because nothing has been recorded yet. Still a clean 200 — the
+        // caller's intent (ensure the CB is closed) is satisfied.
+        Json(serde_json::json!({
+            "key": id,
+            "circuit_state": "closed",
+            "noop": true,
+        }))
+        .into_response()
     }
 }
 
@@ -311,4 +359,169 @@ pub struct SkillUpsertPayload {
 #[derive(Deserialize)]
 pub struct SkillDeleteParams {
     pub key: String,
+}
+
+#[cfg(test)]
+mod tests {
+    //! GW-1 P1-5: `GET /admin/skills/:id/health` and `POST
+    //! /admin/skills/:id/health/reset` must 404 for unknown skills and
+    //! must not create counters / circuit breakers as a side effect of
+    //! a read.
+    //!
+    //! `test_helpers::build_full_admin_router` does not wire the
+    //! `/skills/*` routes (tracked as GW-1 P2-test-1), so these tests
+    //! build a minimal inline router per scenario.
+
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+        middleware,
+        routing::{get, post},
+        Router,
+    };
+    use tower::ServiceExt;
+
+    use super::{skills_health, skills_health_reset};
+    use crate::handlers::admin::admin_auth;
+    use crate::handlers::admin::test_helpers::create_test_state;
+    use crate::skills::resolver::{SkillScope, StoredSkill};
+    use crate::state::AppState;
+
+    fn seed_skill(state: &AppState, key: &str) {
+        state.skill_resolver.upsert(StoredSkill {
+            key: key.to_string(),
+            name: "seeded".into(),
+            description: None,
+            tenant_id: "acme".into(),
+            scope: SkillScope::Tenant,
+            priority: 50,
+            instructions: None,
+            tool_ref: None,
+            user_ref: None,
+            enabled: true,
+        });
+    }
+
+    fn router_with_health(state: AppState) -> Router {
+        Router::new()
+            .route("/skills/:id/health", get(skills_health))
+            .route("/skills/:id/health/reset", post(skills_health_reset))
+            .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
+            .with_state(state)
+    }
+
+    fn auth_req(method: &str, uri: &str) -> Request<Body> {
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("Authorization", "Bearer secret")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    // Primary P1-5 regression: unknown skill → 404, no counters/CB created.
+    #[tokio::test]
+    async fn test_skills_health_returns_404_for_unknown_skill_and_does_not_grow_state() {
+        let state = create_test_state(Some("secret"));
+        let app = router_with_health(state.clone());
+
+        // Hit the endpoint 100 times with distinct UUID-ish keys.
+        for i in 0..100 {
+            let resp = app
+                .clone()
+                .oneshot(auth_req("GET", &format!("/skills/ghost-{}/health", i)))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        }
+
+        // Tracker must still be empty — no side-effect insertions.
+        assert!(state.skill_health.stats_all().is_empty());
+    }
+
+    // A known skill with no recorded calls yet: 200 OK with honest zero
+    // counts, still no side-effect insertion.
+    #[tokio::test]
+    async fn test_skills_health_returns_zero_stats_for_known_skill_without_growing_state() {
+        let state = create_test_state(Some("secret"));
+        seed_skill(&state, "acme/seen");
+        let app = router_with_health(state.clone());
+
+        let resp = app
+            .oneshot(auth_req("GET", "/skills/acme%2Fseen/health"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["success_count"], 0);
+        assert_eq!(json["failure_count"], 0);
+        assert_eq!(json["circuit_state"], "closed");
+
+        // Read did not insert anything — tracker still reports empty.
+        assert!(state.skill_health.stats_all().is_empty());
+    }
+
+    // After a real record, the health read must reflect the recorded
+    // counts. Covers the "skill exists AND has history" path.
+    #[tokio::test]
+    async fn test_skills_health_reports_recorded_counts_for_known_skill() {
+        let state = create_test_state(Some("secret"));
+        seed_skill(&state, "acme/busy");
+        state.skill_health.record_success("acme/busy");
+        state.skill_health.record_success("acme/busy");
+        state.skill_health.record_failure("acme/busy");
+        let app = router_with_health(state);
+
+        let resp = app
+            .oneshot(auth_req("GET", "/skills/acme%2Fbusy/health"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["success_count"], 2);
+        assert_eq!(json["failure_count"], 1);
+        assert_eq!(json["total_calls"], 3);
+    }
+
+    // /health/reset on an unknown skill → 404 AND no side effect.
+    #[tokio::test]
+    async fn test_skills_health_reset_returns_404_for_unknown_skill() {
+        let state = create_test_state(Some("secret"));
+        let app = router_with_health(state.clone());
+
+        let resp = app
+            .oneshot(auth_req("POST", "/skills/ghost/health/reset"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert!(state.skill_health.stats_all().is_empty());
+    }
+
+    // /health/reset on a known skill with no prior call → 200 with noop=true.
+    // Distinguishes "skill unknown" from "skill has no CB yet"
+    // without exposing the implementation detail to the client.
+    #[tokio::test]
+    async fn test_skills_health_reset_noop_on_known_skill_without_prior_call() {
+        let state = create_test_state(Some("secret"));
+        seed_skill(&state, "acme/untouched");
+        let app = router_with_health(state);
+
+        let resp = app
+            .oneshot(auth_req("POST", "/skills/acme%2Funtouched/health/reset"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["circuit_state"], "closed");
+        assert_eq!(json["noop"], true);
+    }
 }

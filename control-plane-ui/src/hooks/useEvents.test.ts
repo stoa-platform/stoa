@@ -200,4 +200,52 @@ describe('useEvents', () => {
 
     expect(onEvent).toHaveBeenCalledWith({ type: 'api-created' });
   });
+
+  // P2-8: type guard drops malformed events (no `type` field) and unknown
+  // event types without invoking onEvent or queryClient invalidation.
+  describe('P2-8 schema hardening', () => {
+    it('drops event missing type field without invoking onEvent', () => {
+      const onEvent = vi.fn();
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderHook(() => useEvents({ tenantId: 't1', onEvent }), { wrapper: createWrapper() });
+
+      // Payload without `type`.
+      act(() => {
+        streams[0].handlers.onMessage({ data: JSON.stringify({ foo: 'bar' }) } as SseEvent);
+      });
+
+      expect(onEvent).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('drops event with non-string type without invoking onEvent', () => {
+      const onEvent = vi.fn();
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderHook(() => useEvents({ tenantId: 't1', onEvent }), { wrapper: createWrapper() });
+
+      // type is a number — invalid per guard.
+      act(() => {
+        streams[0].handlers.onMessage({ data: JSON.stringify({ type: 42 }) } as SseEvent);
+      });
+
+      expect(onEvent).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('drops unknown event types without invoking onEvent', () => {
+      const onEvent = vi.fn();
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      renderHook(() => useEvents({ tenantId: 't1', onEvent }), { wrapper: createWrapper() });
+
+      // Well-formed shape but type not in the whitelist.
+      act(() => {
+        streams[0].handlers.onMessage({
+          data: JSON.stringify({ type: 'unknown-event-type' }),
+        } as SseEvent);
+      });
+
+      expect(onEvent).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
 });

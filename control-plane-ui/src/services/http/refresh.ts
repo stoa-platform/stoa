@@ -97,6 +97,14 @@ export function installRefreshInterceptor(instance: AxiosInstance): void {
             if (originalRequest.headers) {
               originalRequest.headers.Authorization = `Bearer ${newToken}`;
             }
+            // P2-2 (WONT-FIX, documented): intentionally replaying the same
+            // Axios config reference. With Axios defaults, already-serialized
+            // JSON data is stable across replay. A shallow clone would not
+            // restore the original pre-transform payload and could drop Axios
+            // internals (adapter, signal, cancel metadata, headers). If
+            // custom transformRequest logic is introduced, it must remain
+            // idempotent under refresh retry — see refresh.test.ts canary
+            // "retry does not double-encode default JSON body".
             return instance(originalRequest);
           }
           // newToken === null: no refresher registered (should not happen here

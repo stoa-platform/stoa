@@ -12,7 +12,6 @@ import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
 import { apiService } from '../services/api';
-import { mcpGatewayService } from '../services/mcpGatewayApi';
 
 interface AuthContextType {
   user: User | null;
@@ -143,7 +142,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const tokenUser = extractUserFromToken(oidc.user);
         setUser(tokenUser);
         apiService.setAuthToken(token);
-        mcpGatewayService.setAuthToken(token);
         setIsReady(true);
         // Prefetch tenants immediately — most pages need this data
         queryClient.prefetchQuery({
@@ -171,7 +169,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       prevTokenRef.current = null;
       setUser(null);
       apiService.clearAuthToken();
-      mcpGatewayService.clearAuthToken();
       setIsReady(false);
     }
   }, [oidc.user, queryClient]);

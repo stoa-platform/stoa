@@ -202,18 +202,6 @@ class MCPToolsService {
     return data;
   }
 
-  // ==========================================================================
-  // Legacy methods for backwards compatibility
-  // These are no-ops since auth is handled by apiService
-  // ==========================================================================
-
-  setAuthToken(_token: string) {
-    // No-op: auth token is managed by apiService
-  }
-
-  clearAuthToken() {
-    // No-op: auth token is managed by apiService
-  }
 }
 
 // Export singleton instance

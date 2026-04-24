@@ -207,7 +207,6 @@ class ApiService {
 
   setAuthToken(token: string): void {
     setAuthTokenCore(token);
-    httpClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
   getAuthToken(): string | null {
@@ -216,7 +215,6 @@ class ApiService {
 
   clearAuthToken(): void {
     clearAuthTokenCore();
-    delete httpClient.defaults.headers.common['Authorization'];
   }
 
   // User profile

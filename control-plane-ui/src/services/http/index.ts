@@ -16,4 +16,6 @@ export {
   type TokenRefresher,
 } from './auth';
 
+export { refreshAuthTokenWithTimeout } from './refresh';
+
 export { createEventSource } from './sse';

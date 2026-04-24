@@ -1,5 +1,13 @@
 # BUG-REPORT-GW-1 — `stoa-gateway/src/handlers/admin/`
 
+> **GW-1 CLOSED 2026-04-24** — 20/20 bugs shipped across 4 batches.
+> - **P0** (#2501) : P0-1 constant-time auth + P0-2 route orphan + P1-0 reload leak + P1-3 admin rate-limit
+> - **P1 contracts** (#2502) : P1-1 bind-first upsert + P1-2 unbind error propagation + P2-2 BindingOutput length
+> - **P1 input validation** (#2504) : P1-6 required-fields across 5 upsert endpoints + P1-9 OAuth2 URL parsing
+> - **P1 admin audit log** (#2506) : P1-4 tactical audit middleware (request_id, action, resource, outcome)
+> - **P1 skills health safety** (#2508) : P1-5 `stats_opt` read-only + 404 on unknown skill
+> - **P2 batch** (branch `fix/gw-1-p2-batch`, commits `4a29c7990..48a4e4a68`) : P1-7 + P2-1/2-3/2-4/2-5/2-6/2-7/2-8 + P2-test-1
+>
 > **Rev 2 (post-review)** — reclassifications appliquées après review :
 > P0-3 reclassé P1 (sécurité/hardening), P1-7 marqué "à vérifier / probablement non-bug" (matchit literal>param + MethodRouter 405), P1-8 reclassé P2 test-infra, P1-10 reclassé P2 (observabilité DORA-adjacent).
 > Exploitability de P0-1 atténuée (sans mesure réelle d'infra, "~1h" était trop précis). P2-2 rattaché au batch contracts avec P1-1/P1-2.
@@ -39,6 +47,7 @@
 ## Critical (P0)
 
 ### P0-1 — Timing attack sur `admin_auth`
+- **STATUS** : **FIXED** — PR #2501 (constant-time compare via `subtle::ConstantTimeEq`).
 - **Fichier** : `src/handlers/admin/auth.rs:43`
 - **Code** :
   ```rust
@@ -61,6 +70,7 @@
 - **Tests à ajouter** : test de régression unit `test_admin_auth_wrong_length` + `test_admin_auth_same_length_wrong_byte`.
 
 ### P0-2 — Endpoint orphelin `/admin/api-proxy/backends` sans auth
+- **STATUS** : **FIXED** — PR #2501 (route moved inside `admin_router`).
 - **Fichier** : `src/lib.rs:374` (+ `src/proxy/api_proxy_handler.rs:451-489`)
 - **Code** :
   ```rust
@@ -86,6 +96,7 @@
 ## High (P1)
 
 ### P1-0 — Fuite d'informations internes dans les erreurs de `/admin/routes/reload` *(ex-P0-3, reclassé P1 post-review)*
+- **STATUS** : **FIXED** — PR #2501 (sanitized client messages + 502/503/500 mapping + request_id log correlation).
 - **Fichier** : `src/handlers/admin/reload.rs:33-39, 53-79`
 - **Code** :
   ```rust
@@ -110,6 +121,7 @@
   3. Mapping ciblé pour les erreurs connues-utiles : `404` si CP a répondu 404, `502` si CP down, `503` si `STOA_CONTROL_PLANE_URL` absent.
 
 ### P1-1 — État transactionnel cassé sur `upsert_contract`
+- **STATUS** : **FIXED** — PR #2502 (bind-first upsert + partial-state rollback).
 - **Fichier** : `src/handlers/admin/contracts.rs:57-99`
 - **Séquence** :
   1. `contract_registry.upsert(contract.clone())` → commit en mémoire (ligne 61).
@@ -121,6 +133,7 @@
 - **Fix direction** : séquence bind-first → puis upsert, ou deux-phase commit (bind dans une struct temporaire → swap atomique) ; **a minima** retourner `207 Multi-Status` / `500` avec `binders_failed: [...]` dans le body quand une des opérations bind échoue.
 
 ### P1-2 — Erreur d'unbind silencieusement écrasée sur `delete_contract`
+- **STATUS** : **FIXED** — PR #2502 (unbind-first delete + error propagation, no more `unwrap_or(0)`).
 - **Fichier** : `src/handlers/admin/contracts.rs:128, 132`
 - **Code** :
   ```rust
@@ -132,18 +145,21 @@
 - **Fix direction** : propager l'erreur — `unbind().await.map_err(...)?` ou `match` explicite avec `500` + log.
 
 ### P1-3 — Pas de rate-limit sur le routeur admin → amplifie P0-1
+- **STATUS** : **FIXED** — PR #2501 (admin_rate_limit middleware, keyed `admin:<peer_ip>`, fail-open without ConnectInfo).
 - **Fichier** : `src/lib.rs:93-264` (admin_router + nest)
 - **Problème** : le routeur admin applique `admin_auth` mais aucune couche de rate-limit/back-off. Combiné au timing-attack (P0-1), un attaquant peut déclencher des millions de comparaisons de token sans être ralenti. `state.rate_limiter` existe (`src/state.rs:59`) mais n'est pas branché ici.
 - **Sévérité P1** : propre (rate-limit absent = bug d'ops même sans timing-attack).
 - **Fix direction** : ajouter une layer `tower_governor` ou impl maison à 60 req/min/IP avant `admin_auth`. Distinguer les endpoints read-only (tolérance large) des endpoints mutatifs (quelques req/min). **Candidat à inclure dans le batch P0** si la layer est simple (~40 LOC) — renforce directement P0-1.
 
 ### P1-4 — Pas d'audit log pour les actions admin mutantes
+- **STATUS** : **FIXED** — PR #2506 (tactical `admin_audit_log` middleware in `handlers/admin/audit.rs`, structured `audit=true` tracing events per request with request_id, method, path, status, actor, action, resource, outcome, duration_ms; applied as outermost layer).
 - **Fichiers concernés** : `apis.rs` (upsert/delete), `policies.rs` (upsert/delete), `contracts.rs` (upsert/delete), `credentials.rs` (4 endpoints mutants), `skills.rs` (upsert/update/delete/sync/reset/health_reset), `reload.rs`, `federation.rs` (cache_invalidate), `quotas.rs` (reset), `circuit_breaker.rs` (reset).
 - **Problème** : aucune de ces routes n'émet un événement d'audit structuré (actor, action, resource_key, outcome, timestamp). Les seuls signaux sont des `tracing::warn!` sur rejection (apis.rs:41, 49, 61). Insuffisant pour DORA (exige "auditabilité complète des opérations admin"), ISO 27001 A.12.4.1.
 - **Sévérité P1** : bloquant pour certification bancaire (cf. démo juin multi-client).
 - **Fix direction** : trait `AdminAuditSink` → topic Kafka dédié / log structuré filtré par appender. Wrapper middleware sur `admin_router` qui capture méthode, path, status, actor, durée. Alternative tactique : crate `tracing` avec champ `audit=true` filtré par un layer dédié. **PR la plus grosse du lot** (~200 LOC + design) — isoler.
 
 ### P1-5 — `skills_health` fait croître la mémoire sans borne + fake-positive
+- **STATUS** : **FIXED** — PR #2508 (`stats_opt` read-only + 404 on unknown skill via `skill_resolver.get()` pre-check + `skills_health_reset` symmetric 404).
 - **Fichier** : `src/handlers/admin/skills.rs:255-259` ; délégué à `src/skills/health.rs:90-114`
 - **Code** :
   ```rust
@@ -160,6 +176,7 @@
 - **Fix direction** : dans `skills.rs:255`, vérifier d'abord `state.skill_resolver.get(&id).is_none()` → `404`. Puis `stats` ne doit lire que via une route `get` pure (pas `get_or_create`). Séparer un chemin `get_or_create_for_record()` (usage interne quand on **enregistre** un call) d'un chemin `peek()` read-only pour l'endpoint admin.
 
 ### P1-6 — Validation manquante sur 5 endpoints upsert
+- **STATUS** : **FIXED** — PR #2504 (shared `validation::require_non_empty` + batched BAD_REQUEST error body across apis/policies/credentials/skills/contracts upserts).
 - **`policies.rs:13-25`** — `PolicyEntry.id`, `name`, `policy_type`, `config`, `api_id` tous acceptés vides. Policy avec id="" stockée sous clé `""`, collision avec autres policy sans id.
 - **`credentials.rs:68-69`** (upsert_backend_credential) — `route_id`, `header_name`, `header_value` non vérifiés vides. Clé `""` en store crée conflits ; credential à valeur vide = injection de `Authorization: Bearer ` vide en aval.
 - **`credentials.rs:109-126`** (upsert_consumer_credential) — zéro validation : pas de check SSRF même si OAuth2, pas de check presence champs.
@@ -169,6 +186,7 @@
 - **Fix direction** : un helper `validate_admin_input!(route.id, route.tenant_id, ...)` qui renvoie `400 BAD_REQUEST` listant les champs en défaut. Les `validate()` ad-hoc existants (ex : `UacContractSpec::validate` couvre déjà bien, `src/uac/schema.rs:169-185`) peuvent servir de modèle.
 
 ### P1-7 — ~~Conflit de matching `/skills/status` vs `/skills/:id`~~ **À vérifier / probablement non-bug**
+- **STATUS** : **CLOSED as non-bug** — branch `fix/gw-1-p2-batch` commit `4a29c7990` (regression test `regression_delete_skills_status_returns_405_not_delete_by_id` in `src/handlers/admin/router.rs` verifies matchit's literal > param priority + Axum's default `MethodRouter` 405 response with `Allow` header).
 - **Fichier** : `src/lib.rs:162-181`
 - **Statut post-review** : le finding initial supposait un fallthrough méthode sur `MethodRouter` Axum. Revue faite :
   - `matchit` donne priorité aux segments statiques sur les segments dynamiques → `/skills/status` match le literal avant `/skills/:id`.
@@ -188,6 +206,7 @@
 - *(Section déplacée vers Medium / P2 — voir P2-test-1)*
 
 ### P1-9 — HTTPS check case-sensitive + pas de normalisation URL sur OAuth2 token_url
+- **STATUS** : **FIXED** — PR #2504 (`url::Url::parse` + lowercase scheme check + CRLF injection test).
 - **Fichier** : `src/handlers/admin/credentials.rs:44`
 - **Code** : `if !oauth2.token_url.starts_with("https://") { return 400; }`
 - **Problème** : `HTTPS://...` est rejeté (faux positif sur URL valide), `https://foo\nHost: evil` accepté (pas de parsing URL propre). La chaîne brute est passée plus tard à `is_blocked_url` (ligne 54) qui fait sans doute un parse ; mais la validation initiale est naïve.
@@ -199,47 +218,56 @@
 ## Medium (P2)
 
 ### P2-1 — `health.rs` toujours `"ok"` — endpoint admin_health sans liveness/readiness
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `0233e0598` (added `contracts_count`, `skills_count`, `uptime_seconds` + module doc-comment clarifying this is NOT a liveness probe; `/ready` and `/health/ready` remain the K8s probes).
 - **Fichier** : `src/handlers/admin/health.rs:17-25`
 - **Problème** : `/admin/health` renvoie toujours `status: "ok"`, même si route_registry / policy_registry sont vides mais fonctionnels. Pas de signal de readiness (ex : CP atteignable, KC atteignable). Utilisé comme endpoint admin, pas comme liveness probe K8s — MAIS confusion possible si un opérateur s'y réfère.
 - **Fix direction** : ajouter un mode `?readiness=true` qui vérifie CP reachability + KC JWKS cache âge ; ou laisser `/admin/health` purement statique (version + compteurs) et déléguer liveness/readiness à `/ready` + `/health/ready` déjà présents (`src/lib.rs:260-263`) — documenter dans le doc-comment de `admin_health`.
 
 ### P2-2 — `routes_count` / `tools_count` couplés à `contract.endpoints.len()` *(rattaché au batch P1-1/P1-2)*
+- **STATUS** : **FIXED** — PR #2502 (uses `BindingOutput` actual lengths).
 - **Fichier** : `src/handlers/admin/contracts.rs:66, 76`
 - **Problème** : on fait confiance à la taille de `contract.endpoints` comme proxy de "nombre de routes/tools générés". Aujourd'hui `RestBinder::generate_routes` est 1-pour-1 (cf. `src/uac/binders/rest.rs:26-68`) mais c'est un couplage implicite. Un futur skip/filtre rendra la métrique fausse sans casser de test.
 - **Fix direction** : `rest_binder.bind(...)` renvoie déjà `BindingOutput::Routes(Vec<_>)` ; utiliser `.len()` sur le retour. Idem côté MCP. **À inclure dans la PR "Contract consistency"** avec P1-1 et P1-2.
 
 ### P2-3 — `skills_delete` legacy (?key=) coexiste avec `skills_delete_by_id` (:id)
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `0ac0e1671` (RFC 9745 `Deprecation: @1776988800` + RFC 8594 `Sunset: Sat, 24 Oct 2026 23:59:59 GMT` + RFC 8288 `Link` successor-version + `warn!` tracing; `#[deprecated]` intentionally avoided to stay compatible with `-D warnings`).
 - **Fichier** : `src/handlers/admin/skills.rs:186-195, 243-252`
 - **Problème** : deux endpoints DELETE fonctionnellement redondants. Tech-debt, risque de drift comportemental (audit/observabilité inégale).
 - **Fix direction** : documenter le legacy comme deprecated + header `Deprecation:` ; planifier suppression CAB.
 
 ### P2-4 — `skills_upsert` retourne toujours `200 OK` jamais `201 CREATED`
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `0ac0e1671` (probe `skill_resolver.get(&key).is_some()` before upsert to choose 201/200; aligned with apis/policies/credentials/contracts convention).
 - **Fichier** : `src/handlers/admin/skills.rs:113-117`
 - **Problème** : tous les autres upsert admin (`apis.rs`, `policies.rs`, `credentials.rs`, `contracts.rs`) respectent la convention `OK (update) / CREATED (new)`. Skills casse le contrat.
 - **Fix direction** : `let existed = state.skill_resolver.upsert(skill).is_some();` si l'API le permet, sinon probe préalable. Aligner sur le reste.
 
 ### P2-5 — `federation_cache_invalidate` renvoie 200 aveuglément
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `0ac0e1671` (new `FederationCache::contains` wraps moka's `contains_key`; response body carries `{ invalidated: bool, sub_account_id }`).
 - **Fichier** : `src/handlers/admin/federation.rs:41-53`
 - **Problème** : aucune indication si la clé existait. Admin ne peut pas distinguer "cache invalidé" vs "sub_account_id typé n'avait rien en cache" vs "typo dans l'ID".
 - **Fix direction** : retourner `{ "invalidated": true|false, "entries_removed": N }` selon l'API du cache.
 
 ### P2-6 — `circuit_breaker_reset` ne remonte pas l'état précédent
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `0ac0e1671` (new atomic `CircuitBreaker::reset_with_previous` + `CircuitBreakerRegistry::reset_with_previous`; both legacy CP and per-upstream endpoints now return `{ previous_state, new_state }`).
 - **Fichier** : `src/handlers/admin/circuit_breaker.rs:44-51`
 - **Problème** : retourne 200 OK même si le CB était déjà `closed`. Admin ne peut pas voir si l'action a eu un effet.
 - **Fix direction** : réponse `{ "previous_state": "...", "new_state": "closed" }`.
 
 ### P2-7 — `prometheus::gather()` plein-scan à chaque `/admin/llm/costs`
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `48a4e4a68` (replaced global `prometheus::gather()` with `LLM_COST_TOTAL.collect()` via `prometheus::core::Collector`; reader-side only, no change to counter registration or increments).
 - **Fichier** : `src/handlers/admin/llm.rs:124`
 - **Problème** : `prometheus::gather()` itère toutes les MetricFamilies du registry global (peut être centaines de milliers de lignes dans une instance prod chargée). Endpoint admin, appelé rarement, donc pas un P0/P1 — mais inutile ; on peut exposer un `CounterVec` dédié et le lire directement.
 - **Fix direction** : stocker une référence aux counters `gateway_llm_cost_total_*` dans `state.cost_calculator` et les lire ciblément.
 
 ### P2-8 — `upsert_api` émet des steps de progression fictifs *(ex-P1-10, reclassé P2)*
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `0233e0598` (removed fake `ApplyingPolicies` and `Activating` step pairs; honest sequence is now `Validating` → `ApplyingRoutes` → `Done`; enum variants preserved for real consumers).
 - **Fichier** : `src/handlers/admin/apis.rs:108-147`
 - **Problème** : les steps `ApplyingPolicies` et `Activating` sont émis `step_started`/`step_completed` sans exécuter de travail (`// no-op for direct route upsert`, ligne 108). La route est en fait activée en un seul appel `route_registry.upsert` ligne 95. Les événements télémétriques sont donc mensongers : un consommateur de `state.deploy_progress` (ex : portal UI) affiche une chronologie synthétique qui ne reflète pas la réalité.
 - **Sévérité P2 (DORA-adjacent)** : observabilité mensongère. Pour un audit DORA post-incident, un opérateur regardant la timeline peut mal attribuer la cause racine. Downgradé sous P1-4 (audit log) qui est le vrai mécanisme d'auditabilité.
 - **Fix direction** : soit émettre ces steps pour de vraies phases (brancher une vraie logique "apply policies" une fois que `upsert_api` les gère), soit les supprimer et laisser `Validating` → `ApplyingRoutes` → `Done` (3 steps honnêtes).
 
 ### P2-test-1 — Drift `build_full_admin_router` *(ex-P1-8, reclassé test-infra)*
+- **STATUS** : **FIXED** — `fix/gw-1-p2-batch` commit `4a29c7990` (factory `admin::build_admin_router` in new `src/handlers/admin/router.rs` is the single source of truth; `lib.rs` calls it with `.nest("/admin", ...)` and `test_helpers::build_full_admin_router` delegates to the same factory — zero drift possible by construction).
 - **Fichier** : `src/handlers/admin/test_helpers.rs:48-112` vs prod `src/lib.rs:93-263`
 - **Problème** : le helper `build_full_admin_router` utilisé par les tests n'inclut **pas** les endpoints suivants (présents en prod) : `skills_*` (11 routes), `reload_routes`, `llm_*` (3), `diagnostic_*` (3), `snapshot_*` (3), `ebpf_*`, `a2a/agents/*`, `hegemon/*`. Conséquence : aucune des rewrite-GW1 tests ne couvre ces handlers à travers le middleware `admin_auth`. Pire : la couverture varie en fonction du test harness — drift silencieux possible.
 - **Sévérité P2 test-infra** : dette structurelle. Pas de bug runtime directement exploitable, mais sous-estime la couverture réelle et rate des régressions d'auth middleware sur ~25 routes prod.

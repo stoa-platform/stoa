@@ -42,11 +42,22 @@ pub async fn circuit_breaker_stats(
 }
 
 /// POST /admin/circuit-breaker/reset
+///
+/// GW-1 P2-6: the response now carries `previous_state` + `new_state`
+/// so admins can tell whether the reset actually changed anything
+/// (`closed` → `closed` reset is a no-op; `open` → `closed` is a real
+/// action). The capture is atomic under the CB write lock — no TOCTOU
+/// between reading the previous state and clearing it.
 pub async fn circuit_breaker_reset(State(state): State<AppState>) -> impl IntoResponse {
-    state.cp_circuit_breaker.reset();
+    let previous = state.cp_circuit_breaker.reset_with_previous();
     (
         StatusCode::OK,
-        Json(serde_json::json!({"status": "ok", "message": "Circuit breaker reset to closed"})),
+        Json(serde_json::json!({
+            "status": "ok",
+            "previous_state": previous.to_string(),
+            "new_state": "closed",
+            "message": "Circuit breaker reset to closed",
+        })),
     )
 }
 
@@ -62,24 +73,35 @@ pub async fn circuit_breakers_list(
 }
 
 /// POST /admin/circuit-breakers/:name/reset
+///
+/// GW-1 P2-6: returns `previous_state` + `new_state` on success so the
+/// caller knows whether the reset actually changed anything. The
+/// registry lookup + reset are atomic under the registry read lock,
+/// avoiding the TOCTOU a separate `state_for` + `reset` pair would
+/// introduce.
 pub async fn circuit_breaker_reset_by_name(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    if state.circuit_breakers.reset(&name) {
-        (
+    match state.circuit_breakers.reset_with_previous(&name) {
+        Some(previous) => (
             StatusCode::OK,
-            Json(
-                serde_json::json!({"status": "ok", "message": format!("Circuit breaker '{}' reset", name)}),
-            ),
-        )
-    } else {
-        (
+            Json(serde_json::json!({
+                "status": "ok",
+                "name": name,
+                "previous_state": previous.to_string(),
+                "new_state": "closed",
+                "message": format!("Circuit breaker '{}' reset", name),
+            })),
+        ),
+        None => (
             StatusCode::NOT_FOUND,
-            Json(
-                serde_json::json!({"status": "error", "message": format!("Circuit breaker '{}' not found", name)}),
-            ),
-        )
+            Json(serde_json::json!({
+                "status": "error",
+                "name": name,
+                "message": format!("Circuit breaker '{}' not found", name),
+            })),
+        ),
     }
 }
 
@@ -123,6 +145,75 @@ mod tests {
             .unwrap();
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(data["status"], "ok");
+    }
+
+    // GW-1 P2-6: the legacy CP reset response carries previous_state /
+    // new_state so admins can tell whether the reset actually changed
+    // anything. A closed-to-closed reset is a documented no-op; the
+    // fields must still be emitted.
+    #[tokio::test]
+    async fn regression_circuit_breaker_reset_reports_previous_state() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("POST", "/circuit-breaker/reset"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["new_state"], "closed");
+        assert!(
+            data["previous_state"].is_string(),
+            "previous_state must be serialised, got {:?}",
+            data["previous_state"]
+        );
+    }
+
+    // GW-1 P2-6: per-upstream reset reports previous_state + new_state,
+    // and the 404 path carries the name on the error body (the admin
+    // can distinguish "no such CB" from any other failure mode).
+    #[tokio::test]
+    async fn regression_circuit_breaker_reset_by_name_reports_previous_state() {
+        use crate::resilience::CircuitBreakerConfig;
+
+        let state = create_test_state(Some("secret"));
+        // Seed a breaker so the path is the "found" branch.
+        let _cb = state
+            .circuit_breakers
+            .get_or_create_with_config("my-upstream", CircuitBreakerConfig::default());
+
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("POST", "/circuit-breakers/my-upstream/reset"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["name"], "my-upstream");
+        assert_eq!(data["new_state"], "closed");
+        assert!(data["previous_state"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_reset_by_name_not_found_carries_name() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("POST", "/circuit-breakers/unknown-cb/reset"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["name"], "unknown-cb");
     }
 
     #[tokio::test]

@@ -105,6 +105,15 @@ impl FederationCache {
         }
     }
 
+    /// Return whether `sub_account_id` is currently cached (GW-1 P2-5).
+    /// Synchronous O(1) probe used by the admin invalidation handler so
+    /// the response body can tell the caller whether an entry was
+    /// actually purged. moka may expose an entry that is about to
+    /// expire; accepting that tiny window keeps the admin call cheap.
+    pub fn contains(&self, sub_account_id: &str) -> bool {
+        self.cache.contains_key(sub_account_id)
+    }
+
     /// Manually invalidate a sub-account's cached allow-list.
     pub async fn invalidate(&self, sub_account_id: &str) {
         self.cache.invalidate(sub_account_id).await;

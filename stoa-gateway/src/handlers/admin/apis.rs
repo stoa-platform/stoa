@@ -103,39 +103,18 @@ pub async fn upsert_api(
         tid,
     );
 
-    // Step 3: Applying policies (no-op for direct route upsert, but signals step)
-    emitter.step_started(
-        deployment_id,
-        DeployStep::ApplyingPolicies,
-        "Checking associated policies",
-        aid,
-        tid,
-    );
-    emitter.step_completed(
-        deployment_id,
-        DeployStep::ApplyingPolicies,
-        "Policy check complete",
-        aid,
-        tid,
-    );
+    // GW-1 P2-8: `upsert_api` does NOT apply policies and does NOT have
+    // a separate activation phase — `route_registry.upsert` above both
+    // persists and activates the route in one call. Emitting fake
+    // `ApplyingPolicies` / `Activating` step_started + step_completed
+    // events around empty blocks produced a mendacious timeline that
+    // confused operators reading the deploy_progress stream during
+    // post-incident reviews. The `DeployStep` variants stay defined in
+    // `telemetry/deploy.rs` for genuine consumers (contract-level flows
+    // that actually bind policies). The honest sequence emitted here
+    // is: Validating → ApplyingRoutes → Done.
 
-    // Step 4: Activating
-    emitter.step_started(
-        deployment_id,
-        DeployStep::Activating,
-        format!("Activating route '{}'", api_id),
-        aid,
-        tid,
-    );
-    emitter.step_completed(
-        deployment_id,
-        DeployStep::Activating,
-        format!("Route '{}' active", api_id),
-        aid,
-        tid,
-    );
-
-    // Step 5: Done
+    // Done
     emitter.step_completed(
         deployment_id,
         DeployStep::Done,
@@ -457,6 +436,57 @@ mod tests {
                 "missing error for {} in {:?}",
                 field,
                 errors
+            );
+        }
+    }
+
+    // ─── GW-1 P2-8: deploy step honesty ──────────────────────────────
+    //
+    // `upsert_api` does not apply policies and does not have a separate
+    // activation phase — `route_registry.upsert` both persists and
+    // activates the route in one call. Emitting fake `ApplyingPolicies`
+    // / `Activating` step_started + step_completed events around empty
+    // blocks produced a mendacious timeline that confused operators
+    // reading the `deploy_progress` stream during post-incident review.
+    //
+    // Capturing `tracing::debug!` events from inside an axum handler is
+    // unreliable (tower's Service futures can reattach the dispatcher
+    // across poll boundaries, defeating `subscriber::set_default`), so
+    // we assert source-level: the `upsert_api` function body must not
+    // reference the two enum variants the fake steps were built on.
+    // The variants stay defined in `telemetry/deploy.rs` for genuine
+    // consumers (contract-level flows) — this check is scoped to the
+    // `upsert_api` body, not the whole module.
+    #[test]
+    fn regression_upsert_api_source_does_not_emit_fake_policy_or_activating() {
+        let src = include_str!("apis.rs");
+
+        let handler_start = src
+            .find("pub async fn upsert_api")
+            .expect("upsert_api fn must exist");
+        let handler_tail = &src[handler_start..];
+        let handler_end = handler_tail
+            .find("\npub async fn list_apis")
+            .expect("list_apis fn must immediately follow upsert_api");
+        let body = &handler_tail[..handler_end];
+
+        assert!(
+            !body.contains("DeployStep::ApplyingPolicies"),
+            "upsert_api must not emit ApplyingPolicies (GW-1 P2-8 — was a fake step with no underlying work)"
+        );
+        assert!(
+            !body.contains("DeployStep::Activating"),
+            "upsert_api must not emit Activating (GW-1 P2-8 — was a fake step with no underlying work)"
+        );
+        for expected in [
+            "DeployStep::Validating",
+            "DeployStep::ApplyingRoutes",
+            "DeployStep::Done",
+        ] {
+            assert!(
+                body.contains(expected),
+                "upsert_api is expected to emit {} (honest step removed?)",
+                expected
             );
         }
     }

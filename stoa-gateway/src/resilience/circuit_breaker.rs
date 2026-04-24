@@ -329,14 +329,25 @@ impl CircuitBreaker {
 
     /// Reset the circuit breaker to closed state (admin operation)
     pub fn reset(&self) {
+        let _ = self.reset_with_previous();
+    }
+
+    /// Reset the circuit breaker to closed and return the state it was in
+    /// just before the reset (GW-1 P2-6). Atomic under the write lock, so
+    /// there is no TOCTOU between reading the previous state and clearing
+    /// it. Admin handlers use the return value to populate the
+    /// `previous_state` field of the response body.
+    pub fn reset_with_previous(&self) -> CircuitState {
         let mut state = self.state.write();
-        info!(circuit = %self.name, "Circuit manually reset to closed");
+        let previous = state.state;
+        info!(circuit = %self.name, previous_state = ?previous, "Circuit manually reset to closed");
         state.state = CircuitState::Closed;
         state.window.clear();
         state.half_open_successes = 0;
         state.last_failure_time = None;
         state.last_state_change = Some(Instant::now());
         metrics::update_circuit_breaker_state(&self.name, 0.0);
+        previous
     }
 
     /// Get the circuit breaker name
@@ -456,13 +467,17 @@ impl CircuitBreakerRegistry {
 
     /// Reset a specific circuit breaker by name.
     pub fn reset(&self, name: &str) -> bool {
+        self.reset_with_previous(name).is_some()
+    }
+
+    /// Reset a specific circuit breaker by name and return the state it
+    /// was in just before the reset (GW-1 P2-6). Returns `None` when no
+    /// circuit breaker exists under `name`. Admin handlers use this so
+    /// the response body carries both `previous_state` and `new_state`
+    /// without a separate lookup-then-reset TOCTOU.
+    pub fn reset_with_previous(&self, name: &str) -> Option<CircuitState> {
         let breakers = self.breakers.read();
-        if let Some(cb) = breakers.get(name) {
-            cb.reset();
-            true
-        } else {
-            false
-        }
+        breakers.get(name).map(|cb| cb.reset_with_previous())
     }
 }
 

@@ -38,16 +38,30 @@ pub async fn federation_cache_stats(
 }
 
 /// DELETE /admin/federation/cache/:sub_account_id -- invalidate cache for a sub-account (CAB-1371)
+///
+/// GW-1 P2-5: the response reports whether an entry was actually
+/// purged. The admin caller previously received a blanket 200 OK with a
+/// generic message, so typos or already-evicted ids were indistinguish-
+/// able from real invalidations. `invalidated` is computed from a
+/// pre-purge `contains` probe; the `status` + `message` fields stay
+/// backward-compatible with older tooling.
 pub async fn federation_cache_invalidate(
     State(state): State<AppState>,
     Path(sub_account_id): Path<String>,
 ) -> impl IntoResponse {
+    let existed = state.federation_cache.contains(&sub_account_id);
     state.federation_cache.invalidate(&sub_account_id).await;
     (
         StatusCode::OK,
         Json(serde_json::json!({
             "status": "ok",
-            "message": format!("Cache invalidated for sub-account '{}'", sub_account_id)
+            "sub_account_id": sub_account_id,
+            "invalidated": existed,
+            "message": if existed {
+                format!("Cache invalidated for sub-account '{}'", sub_account_id)
+            } else {
+                format!("Cache had no entry for sub-account '{}'", sub_account_id)
+            }
         })),
     )
 }
@@ -120,6 +134,36 @@ mod tests {
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(data["status"], "ok");
         assert!(data["message"].as_str().unwrap().contains("sub-acct-123"));
+    }
+
+    // GW-1 P2-5: the admin invalidation response must distinguish "entry
+    // purged" from "cache had no such key" so operators don't silently
+    // accept typos or no-op calls.
+    #[tokio::test]
+    async fn regression_federation_cache_invalidate_reports_false_when_missing() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("DELETE", "/federation/cache/never-seen"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "ok");
+        assert_eq!(data["invalidated"], false);
+        assert_eq!(data["sub_account_id"], "never-seen");
+        assert!(
+            data["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("no entry"),
+            "message should distinguish 'no entry' from a real purge, got {:?}",
+            data["message"]
+        );
     }
 
     #[tokio::test]

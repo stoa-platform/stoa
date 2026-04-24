@@ -54,7 +54,7 @@ pub mod uac;
 pub mod ws;
 
 use axum::{
-    routing::{delete, get, post},
+    routing::{get, post},
     Router,
 };
 use tracing::warn;
@@ -71,7 +71,7 @@ use mcp::{
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post, handle_streamable_http_post},
     ws::handle_ws_upgrade,
 };
-use proxy::{api_proxy_handler, dynamic_proxy, list_api_proxy_backends, llm_proxy_handler};
+use proxy::{api_proxy_handler, dynamic_proxy, llm_proxy_handler};
 use state::AppState;
 
 /// Build the Axum router with all routes.
@@ -90,183 +90,10 @@ pub fn build_router(state: AppState) -> Router {
     // Build TCP filter early (before state is moved into with_state)
     let tcp_filter = std::sync::Arc::new(tcp_filter::TcpFilter::from_config(&state.config));
 
-    // Admin API (shared across all modes)
-    let admin_router = Router::new()
-        .route("/health", get(admin::admin_health))
-        .route("/apis", get(admin::list_apis).post(admin::upsert_api))
-        .route("/apis/:id", get(admin::get_api).delete(admin::delete_api))
-        .route(
-            "/policies",
-            get(admin::list_policies).post(admin::upsert_policy),
-        )
-        .route("/policies/:id", delete(admin::delete_policy))
-        // Phase 6: Circuit Breaker admin
-        .route("/circuit-breaker/stats", get(admin::circuit_breaker_stats))
-        .route("/circuit-breaker/reset", post(admin::circuit_breaker_reset))
-        // Phase 6: Cache admin
-        .route("/cache/stats", get(admin::cache_stats))
-        .route("/cache/clear", post(admin::cache_clear))
-        // CAB-362: Session stats + per-upstream circuit breakers
-        .route("/sessions/stats", get(admin::session_stats))
-        .route("/circuit-breakers", get(admin::circuit_breakers_list))
-        .route(
-            "/circuit-breakers/:name/reset",
-            post(admin::circuit_breaker_reset_by_name),
-        )
-        // CAB-864: mTLS admin
-        .route("/mtls/config", get(admin::mtls_config))
-        .route("/mtls/stats", get(admin::mtls_stats))
-        // CAB-1121 P4: Quota enforcement admin
-        .route("/quotas", get(admin::list_quotas))
-        .route("/quotas/:consumer_id", get(admin::get_consumer_quota))
-        .route(
-            "/quotas/:consumer_id/reset",
-            post(admin::reset_consumer_quota),
-        )
-        // CAB-1250: BYOK backend credentials
-        .route(
-            "/backend-credentials",
-            get(admin::list_backend_credentials).post(admin::upsert_backend_credential),
-        )
-        .route(
-            "/backend-credentials/:route_id",
-            delete(admin::delete_backend_credential),
-        )
-        // CAB-1299: UAC contracts
-        .route(
-            "/contracts",
-            get(admin::list_contracts).post(admin::upsert_contract),
-        )
-        .route(
-            "/contracts/:key",
-            get(admin::get_contract).delete(admin::delete_contract),
-        )
-        // CAB-1362: Federation admin
-        .route("/federation/status", get(admin::federation_status))
-        .route("/federation/cache", get(admin::federation_cache_stats))
-        // CAB-1371: Federation cache invalidation
-        .route(
-            "/federation/cache/:sub_account_id",
-            delete(admin::federation_cache_invalidate),
-        )
-        // CAB-1123: Prompt cache admin
-        .route("/prompt-cache/stats", get(admin::prompt_cache_stats))
-        .route("/prompt-cache/load", post(admin::prompt_cache_load))
-        .route("/prompt-cache/get/:key", get(admin::prompt_cache_get))
-        .route(
-            "/prompt-cache/invalidate",
-            post(admin::prompt_cache_invalidate),
-        )
-        .route("/prompt-cache/patterns", get(admin::prompt_cache_patterns))
-        // CAB-1365/1366: Skills admin
-        .route("/skills/status", get(admin::skills_status))
-        .route("/skills/resolve", get(admin::skills_resolve))
-        .route("/skills/sync", post(admin::skills_sync))
-        .route(
-            "/skills",
-            get(admin::skills_list)
-                .post(admin::skills_upsert)
-                .delete(admin::skills_delete),
-        )
-        // CAB-1551: Skills health (literal path before parametric :id)
-        .route("/skills/health", get(admin::skills_health_all))
-        .route(
-            "/skills/:id",
-            get(admin::skills_get_by_id)
-                .put(admin::skills_update)
-                .delete(admin::skills_delete_by_id),
-        )
-        .route("/skills/:id/health", get(admin::skills_health))
-        .route("/skills/:id/health/reset", post(admin::skills_health_reset))
-        // CAB-1487: LLM cost-aware routing admin
-        .route("/llm/status", get(admin::llm_status))
-        .route("/llm/providers", get(admin::llm_providers))
-        .route("/llm/costs", get(admin::llm_costs))
-        // CAB-1752: Distributed tracing admin
-        .route("/tracing/status", get(admin::tracing_status))
-        // CAB-1752: Federation upstreams listing
-        .route("/federation/upstreams", get(admin::federation_upstreams))
-        // CAB-1316: Diagnostic endpoint (CB states, uptime, route stats)
-        .route("/diagnostic", get(handlers::diagnostic::diagnostic_handler))
-        // CAB-1316: Per-request diagnostic report + aggregated summary
-        .route(
-            "/diagnostics/summary",
-            get(handlers::diagnostic::diagnostic_summary_handler),
-        )
-        .route(
-            "/diagnostics/:request_id",
-            get(handlers::diagnostic::diagnostic_report_handler),
-        )
-        // CAB-1710/1711: HEGEMON agent registry admin
-        .route("/hegemon/agents", get(hegemon::registry::list_agents))
-        .route("/hegemon/agents/:name", get(hegemon::registry::get_agent))
-        .route(
-            "/hegemon/agents/:name/tier",
-            post(hegemon::registry::update_agent_tier),
-        )
-        // CAB-1713/1714: HEGEMON dispatch admin
-        .route(
-            "/hegemon/dispatches",
-            get(hegemon::dispatch::list_dispatches),
-        )
-        .route(
-            "/hegemon/dispatches/:id",
-            get(hegemon::dispatch::get_dispatch),
-        )
-        // CAB-1716: HEGEMON budget admin
-        .route("/hegemon/budget", get(hegemon::budget::list_budgets))
-        // CAB-1718: HEGEMON claims admin
-        .route("/hegemon/claims", get(hegemon::claims::list_claims))
-        .route("/hegemon/claims/:mega_id", get(hegemon::claims::get_claims))
-        // CAB-1720/1721: HEGEMON metering + dashboard admin
-        .route(
-            "/hegemon/dashboard",
-            get(hegemon::dashboard::fleet_dashboard),
-        )
-        .route("/hegemon/events", get(hegemon::metering::list_events))
-        // CAB-1709 P6: HEGEMON messaging admin
-        .route("/hegemon/messages", get(hegemon::messaging::list_inboxes))
-        // CAB-1754: A2A agent registry admin
-        .route(
-            "/a2a/agents",
-            get(a2a::admin::list_agents).post(a2a::admin::register_agent),
-        )
-        .route(
-            "/a2a/agents/:name",
-            get(a2a::admin::get_agent).delete(a2a::admin::unregister_agent),
-        )
-        // CAB-1722: API proxy backends admin (moved here for admin_auth coverage — GW-1 P0-2)
-        .route("/api-proxy/backends", get(list_api_proxy_backends))
-        // CAB-1828: Route hot-reload
-        .route("/routes/reload", post(admin::routes_reload))
-        // CAB-1645: Error snapshot capture
-        .route(
-            "/snapshots",
-            get(handlers::snapshot::list_snapshots).delete(handlers::snapshot::clear_snapshots),
-        )
-        .route(
-            "/snapshots/:request_id",
-            get(handlers::snapshot::get_snapshot),
-        )
-        // CAB-1848: eBPF kernel policy sync
-        .route("/ebpf/sync", post(ebpf::ebpf_sync))
-        .route("/ebpf/status", get(ebpf::ebpf_status))
-        // GW-1 P0-1 / P1-3-lite / P1-4 — middleware order from innermost
-        // (runs last) to outermost (runs first):
-        //   handler → admin_auth → admin_rate_limit → admin_audit_log
-        // Audit layer is outermost so rate-limited (429) and unauthenticated
-        // (401) attempts are part of the audit trail too. Rate-limit runs
-        // before auth so bearer probing is throttled without reaching the
-        // constant-time compare.
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            admin::admin_auth,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            admin::admin_rate_limit,
-        ))
-        .layer(axum::middleware::from_fn(admin::admin_audit_log));
+    // GW-1 P2-test-1: single source of truth for the `/admin/*` wiring.
+    // See `src/handlers/admin/router.rs` — the same factory is reused by
+    // the test harness so unit tests exercise every production route.
+    let admin_router = admin::build_admin_router(state.clone());
 
     // Common routes for all modes: health, metrics, admin
     let base = Router::new()

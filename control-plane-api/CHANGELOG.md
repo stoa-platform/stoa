@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.1...control-plane-api-v1.8.2) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** return one-time api key for smoke ([#2535](https://github.com/stoa-platform/stoa/issues/2535)) ([a18ed9a](https://github.com/stoa-platform/stoa/commit/a18ed9a7c4266d8addeb095a2939cbbd6a463e9e))
+
 ## [1.8.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.0...control-plane-api-v1.8.1) (2026-04-24)
 
 

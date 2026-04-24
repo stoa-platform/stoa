@@ -6,8 +6,14 @@
 # production source of truth until Phase 2d. Concurrency group is also
 # isolated so a manual v2 run cannot cancel a legacy run.
 #
-# Kill-switch: reuses DISABLE_L1_IMPLEMENT repo variable — setting it
-# to "true" also halts this workflow.
+# Kill-switch: `DISABLE_L1_V2_SMOKE` repo variable (off by default).
+# Phase 2b intentionally does NOT reuse `DISABLE_L1_IMPLEMENT` — that
+# variable is the L1 prod kill-switch and is set to `true` in prod
+# today, which would block every manual smoke run. Since v2 in Phase
+# 2b is dispatch-only and cannot auto-fire, guarding against accidental
+# production impact is handled by the dispatch itself, not a shared
+# prod kill-switch. Phase 2d will restore `DISABLE_L1_IMPLEMENT` as
+# the guard when event triggers return.
 
 name: Claude Code Issue-to-PR v2 (Phase 2b smoke)
 
@@ -36,7 +42,7 @@ permissions:
 
 jobs:
   prepare:
-    if: vars.DISABLE_L1_IMPLEMENT != 'true'
+    if: vars.DISABLE_L1_V2_SMOKE != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
@@ -76,7 +82,7 @@ jobs:
 
   council-validate:
     needs: prepare
-    if: vars.DISABLE_L1_IMPLEMENT != 'true'
+    if: vars.DISABLE_L1_V2_SMOKE != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -191,7 +197,7 @@ jobs:
 
   plan-validate:
     needs: [prepare, council-validate]
-    if: vars.DISABLE_L1_IMPLEMENT != 'true' && needs.council-validate.result == 'success'
+    if: vars.DISABLE_L1_V2_SMOKE != 'true' && needs.council-validate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -321,7 +327,7 @@ jobs:
   implement:
     needs: [prepare, plan-validate]
     if: >
-      vars.DISABLE_L1_IMPLEMENT != 'true' &&
+      vars.DISABLE_L1_V2_SMOKE != 'true' &&
       inputs.run_implement == true &&
       needs.plan-validate.result == 'success'
     runs-on: ubuntu-latest

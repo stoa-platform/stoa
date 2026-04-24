@@ -99,24 +99,14 @@ jobs:
           output: 'licenses.spdx.json'
           scanners: 'license'
 
+      - name: Self-test copyleft checker
+        run: python3 .github/scripts/check-copyleft.py --self-test
+
       - name: Check for copyleft licenses
         run: |
           echo "## License Compliance" >> $GITHUB_STEP_SUMMARY
           if [ -f licenses.spdx.json ]; then
-            COPYLEFT=$(cat licenses.spdx.json | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          copyleft = ['GPL-2.0', 'GPL-3.0', 'AGPL-3.0', 'LGPL-2.1', 'LGPL-3.0', 'SSPL-1.0', 'EUPL-1.2']
-          pkgs = data.get('packages', [])
-          found = []
-          for p in pkgs:
-            lic = p.get('licenseDeclared', '') or p.get('licenseConcluded', '')
-            for c in copyleft:
-              if c in lic:
-                found.append(f\"{p.get('name', '?')}: {lic}\")
-          for f in found:
-            print(f)
-          " 2>/dev/null || echo "")  # intentional: python parse may fail on unexpected spdx format
+            COPYLEFT=$(python3 .github/scripts/check-copyleft.py licenses.spdx.json 2>/dev/null || echo "")
             if [ -n "$COPYLEFT" ]; then
               echo "::warning::Copyleft licenses detected:"
               echo "$COPYLEFT"

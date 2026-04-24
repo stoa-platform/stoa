@@ -2,7 +2,7 @@
 
 ---
 description: MEGA ticket close gate enforcement — prevents false Dones on multi-phase tickets
-globs: ".claude/rules/workflow-essentials.md,.claude/rules/instance-dispatch.md,.claude/rules/session-lifecycle.md,.github/workflows/linear-close-on-merge.yml,.github/workflows/claude-linear-dispatch.yml"
+globs: ".claude/docs/workflow-essentials.md,.claude/docs/instance-dispatch.md,.claude/docs/session-lifecycle.md,.github/workflows/linear-close-on-merge.yml,.github/workflows/claude-linear-dispatch.yml"
 ---
 
 # MEGA Verification — Close Gate Enforcement

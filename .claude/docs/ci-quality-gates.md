@@ -57,7 +57,7 @@ A change is NOT done until ArgoCD has synced the new image. The complete lifecyc
 ### Path triggers
 
 Each workflow only triggers on its own component paths:
-- `control-plane-api/**`, `control-plane-ui/**` + `shared/**`, `portal/**` + `shared/**`, `stoa-gateway/**`, `mcp-gateway/**`
+- `control-plane-api/**`, `control-plane-ui/**` + `shared/**`, `portal/**` + `shared/**`, `stoa-gateway/**`
 - `e2e-a11y-gate.yml` triggers on `control-plane-ui/**`, `portal/**`, `e2e/smoke-mock/**`, `e2e/fixtures/axe-helper*`
 - `e2e-visual-regression.yml` triggers on `control-plane-ui/**`, `portal/**`, `e2e/visual/**`, `e2e/golden/**`
 - `e2e-cross-validation.yml` triggers daily 07:00 UTC + manual (self-hosted, `continue-on-error: true`)
@@ -124,15 +124,13 @@ curl -s -u admin:$AWX_PASS https://awx.gostoa.dev/api/v2/jobs/?order_by=-finishe
 | Component | Coverage | Line Length | Ruff Rules | Notes |
 |-----------|----------|-------------|------------|-------|
 | control-plane-api | **70%** | 120 | E,W,F,I,B,C4,UP,ARG,SIM,S,DTZ,LOG,RUF | `--ignore tests/test_opensearch.py` for integration |
-| mcp-gateway | **40%** | 100 | E,W,F,I,B,C4,UP | Simpler ruleset |
+
+Historical: the retired `mcp-gateway` Python service had its own coverage gate (≥40%) with a simpler ruleset; those thresholds no longer apply.
 
 Pre-push commands:
 ```bash
 # control-plane-api
 cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=70 --ignore=tests/test_opensearch.py -q
-
-# mcp-gateway
-cd mcp-gateway && pytest tests/ --cov=src --cov-fail-under=40 -q
 ```
 
 ## TypeScript Thresholds
@@ -210,7 +208,7 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **b
 | Tool | Scope | Blocking? |
 |------|-------|-----------|
 | Gitleaks | Entire repo, `.gitleaks.toml` config | Yes |
-| Bandit | control-plane-api, mcp-gateway, MEDIUM+ severity+confidence | Yes |
+| Bandit | control-plane-api, MEDIUM+ severity+confidence | Yes |
 | ESLint security plugin | control-plane-ui, portal (7 rules) | 2 critical rules blocking (`detect-eval-with-expression`, `detect-unsafe-regex`) |
 | Clippy SAST | stoa-gateway (strict rules above) | Yes (`-D` rules) |
 | Trivy | Container images, CRITICAL+HIGH, ignore-unfixed | Yes |
@@ -261,7 +259,7 @@ Source: `stoa-infra` Helm charts (`charts/<component>/values.yaml`).
 
 ## Pre-Commit Checklist by Component
 
-### Python (control-plane-api / mcp-gateway)
+### Python (control-plane-api)
 ```bash
 ruff check . && black --check . && pytest tests/ --cov=src --cov-fail-under=<threshold> -q
 ```

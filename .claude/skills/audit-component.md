@@ -9,7 +9,7 @@ Quand on veut analyser un composant sans le modifier. Audit de code, detection d
 ## Workflow
 
 ### Step 1: Identifier le scope
-- Quel composant auditer (control-plane-api, mcp-gateway, portal, etc.)
+- Quel composant auditer (control-plane-api, stoa-gateway, portal, etc.)
 - Quel angle: securite, performance, qualite de code, architecture, dette technique
 
 ### Step 2: Lire le contexte

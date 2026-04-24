@@ -1,3 +1,5 @@
+> **Historical prompt (retired):** references to `mcp-gateway` below reflect the old context from CAB-1103 and must not be used as current architecture guidance. The Python `mcp-gateway/` service was retired in Feb 2026 and superseded by `stoa-gateway/` (Rust). See `CLAUDE.md`.
+
 CAB-1103 Phase 6D: Test Loop Automation — smoke tests en CI + audit hebdo.
 
 Branch: `feat/cab-1103-6d-test-loop` (creer depuis main)

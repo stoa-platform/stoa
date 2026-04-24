@@ -18,6 +18,7 @@ mod federation;
 mod llm_router;
 mod loader;
 mod mtls;
+mod path_safety;
 mod redact;
 mod sender_constraint;
 

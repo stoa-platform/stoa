@@ -180,6 +180,20 @@ impl Config {
             tracing::warn!("No JWT_SECRET or KEYCLOAK_URL - auth will be limited");
         }
 
+        // CAB-2165 Bundle 2 / P2-11 GW-2 defense-in-depth: warn when a
+        // filesystem path field resolves outside canonical STOA prefixes
+        // (/etc/stoa, /var/stoa, /opt/stoa). Never rejects — operator keeps
+        // control; the warning surfaces typos and misconfigured mounts.
+        if let Some(ref p) = self.policy_path {
+            super::path_safety::warn_if_unsafe("policy_path", p);
+        }
+        if let Some(ref p) = self.ip_blocklist_file {
+            super::path_safety::warn_if_unsafe("ip_blocklist_file", p);
+        }
+        if let Some(ref p) = self.prompt_cache_watch_dir {
+            super::path_safety::warn_if_unsafe("prompt_cache_watch_dir", p);
+        }
+
         Ok(())
     }
 }

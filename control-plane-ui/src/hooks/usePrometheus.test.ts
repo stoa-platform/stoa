@@ -63,8 +63,26 @@ describe('usePrometheus hooks — P0-7 regression lock', () => {
       expect(httpClient.get).toHaveBeenCalled();
     });
     const [url, opts] = (httpClient.get as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe('/api/v1/metrics/query');
+    expect(url).toBe('/v1/metrics/query');
     expect(opts).toMatchObject({ params: { query: 'up' }, timeout: 10_000 });
+  });
+
+  // regression for double /api/v1/... prefix against api.gostoa.dev (reported 2026-04-24).
+  // httpClient baseURL already points at the cp-api host, so the path must start with /v1 — never /api/v1.
+  it('usePrometheus URLs do not carry an /api prefix (prod regression)', async () => {
+    const { httpClient } = await import('../services/http');
+    const getMock = httpClient.get as ReturnType<typeof vi.fn>;
+    getMock.mockResolvedValue(PROM_RESPONSE);
+
+    renderHook(() => usePrometheusQuery('up', 0));
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
+    expect(getMock.mock.calls[0][0]).not.toMatch(/^\/api\//);
+
+    getMock.mockReset();
+    getMock.mockResolvedValue(RANGE_RESPONSE);
+    renderHook(() => usePrometheusRange('up', 60, '15s', 0));
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
+    expect(getMock.mock.calls[0][0]).not.toMatch(/^\/api\//);
   });
 
   it('usePrometheusRange calls httpClient.get with correct params', async () => {
@@ -77,7 +95,7 @@ describe('usePrometheus hooks — P0-7 regression lock', () => {
       expect(httpClient.get).toHaveBeenCalled();
     });
     const [url, opts] = (httpClient.get as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe('/api/v1/metrics/query_range');
+    expect(url).toBe('/v1/metrics/query_range');
     expect(opts.params).toMatchObject({ query: 'up', step: '15s' });
     expect(typeof opts.params.start).toBe('number');
     expect(typeof opts.params.end).toBe('number');

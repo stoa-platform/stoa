@@ -152,8 +152,8 @@ fn test_default_github_config() {
     assert!(config.github_catalog_repo.is_none());
     assert!(config.github_gitops_repo.is_none());
     assert!(config.github_webhook_secret.is_none());
-    // git_provider defaults to "gitlab" for backward compatibility
-    assert_eq!(config.git_provider, "gitlab");
+    // git_provider defaults to GitProvider::Gitlab for backward compatibility
+    assert_eq!(config.git_provider, super::GitProvider::Gitlab);
     // GitLab fields are unaffected
     assert!(config.gitlab_url.is_none());
     assert!(config.gitlab_token.is_none());
@@ -163,7 +163,7 @@ fn test_default_github_config() {
 fn test_git_provider_github_config_complete() {
     // Verify that a fully-configured GitHub setup has all expected fields
     let config = Config {
-        git_provider: "github".into(),
+        git_provider: super::GitProvider::Github,
         github_token: Some("ghp_test123".into()),
         github_org: Some("stoa-platform".into()),
         github_catalog_repo: Some("stoa".into()),
@@ -171,7 +171,7 @@ fn test_git_provider_github_config_complete() {
         github_webhook_secret: Some("whsec_test".into()),
         ..Config::default()
     };
-    assert_eq!(config.git_provider, "github");
+    assert_eq!(config.git_provider, super::GitProvider::Github);
     assert_eq!(config.github_token.as_deref(), Some("ghp_test123"));
     assert_eq!(config.github_org.as_deref(), Some("stoa-platform"));
     assert_eq!(config.github_catalog_repo.as_deref(), Some("stoa"));
@@ -183,7 +183,7 @@ fn test_git_provider_github_config_complete() {
 fn test_git_provider_gitlab_and_github_coexist() {
     // During migration, both provider configs can coexist
     let config = Config {
-        git_provider: "github".into(),
+        git_provider: super::GitProvider::Github,
         github_token: Some("ghp_tok".into()),
         github_org: Some("acme".into()),
         gitlab_url: Some("https://gitlab.example.com".into()),
@@ -192,21 +192,17 @@ fn test_git_provider_gitlab_and_github_coexist() {
         ..Config::default()
     };
     // git_provider selects github even though gitlab fields are present
-    assert_eq!(config.git_provider, "github");
+    assert_eq!(config.git_provider, super::GitProvider::Github);
     // GitLab fields remain accessible (for shadow mode fallback)
     assert!(config.gitlab_token.is_some());
 }
 
-#[test]
-fn test_git_provider_unknown_value_treated_as_gitlab() {
-    // Any value other than "github" falls through to gitlab
-    let config = Config {
-        git_provider: "bitbucket".into(),
-        ..Config::default()
-    };
-    // GitProvider::from_config would treat this as GitLab (the catch-all)
-    assert_ne!(config.git_provider, "github");
-}
+// CAB-2165 Bundle 1 / P2-9 GW-2: the legacy
+// `test_git_provider_unknown_value_treated_as_gitlab` test locked in the
+// silent-fallthrough anti-pattern. It was replaced by strict-parse coverage
+// in `config::enums::tests::git_provider_rejects_unknown_value` — unknown
+// YAML/env values now surface as a clear deserialize error at Config::load()
+// time instead of decaying to the Gitlab default.
 
 /// Serialized snapshot of `Config::default()`. Drift of any default or field
 /// order will show up as a diff in the .snap file during `cargo insta review`.

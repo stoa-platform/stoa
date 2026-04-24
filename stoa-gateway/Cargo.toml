@@ -110,6 +110,7 @@ pcap = ["pnet"]                              # Port mirror capture (raw packets)
 
 [dev-dependencies]
 criterion = "0.8"
+figment = { version = "0.10", features = ["yaml", "env", "test"] }  # "test" gates figment::Jail for hermetic env-var tests (CAB-2165 Bundle 1)
 insta = { version = "1", features = ["json", "redactions"] }
 tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }

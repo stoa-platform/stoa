@@ -56,11 +56,11 @@ pub enum GitProvider {
 impl GitProvider {
     /// Build a provider from gateway config.
     ///
-    /// `config.git_provider == "github"` → `GitProvider::GitHub`.
-    /// Any other value (including the `"gitlab"` default) → `GitProvider::GitLab`.
+    /// `config.git_provider == GitProvider::Github` → `GitProvider::GitHub`.
+    /// `config.git_provider == GitProvider::Gitlab` → `GitProvider::GitLab`.
     pub fn from_config(config: &Config) -> Result<Self, GitProviderError> {
-        match config.git_provider.as_str() {
-            "github" => {
+        match config.git_provider {
+            crate::config::GitProvider::Github => {
                 let token = config
                     .github_token
                     .as_deref()
@@ -72,7 +72,7 @@ impl GitProvider {
                 let client = GitHubClient::new(token, org)?;
                 Ok(GitProvider::GitHub(client))
             }
-            _ => {
+            crate::config::GitProvider::Gitlab => {
                 let api_url = config
                     .gitlab_url
                     .clone()
@@ -146,7 +146,7 @@ mod tests {
 
     fn github_config(token: Option<&str>, org: Option<&str>) -> Config {
         Config {
-            git_provider: "github".into(),
+            git_provider: crate::config::GitProvider::Github,
             github_token: token.map(|s| s.to_string()),
             github_org: org.map(|s| s.to_string()),
             ..Default::default()
@@ -207,39 +207,13 @@ mod tests {
         assert!(!gl.is_github());
     }
 
-    #[test]
-    fn test_from_config_unknown_provider_falls_back_to_gitlab() {
-        let config = Config {
-            git_provider: "bitbucket".into(),
-            ..Config::default()
-        };
-        let provider = GitProvider::from_config(&config).unwrap();
-        assert!(provider.is_gitlab());
-    }
-
-    #[test]
-    fn test_from_config_empty_provider_falls_back_to_gitlab() {
-        let config = Config {
-            git_provider: String::new(),
-            ..Config::default()
-        };
-        let provider = GitProvider::from_config(&config).unwrap();
-        assert!(provider.is_gitlab());
-    }
-
-    #[test]
-    fn test_from_config_github_case_sensitive() {
-        // "GitHub" (capitalized) should NOT match — only "github" is valid
-        let config = Config {
-            git_provider: "GitHub".into(),
-            github_token: Some("tok".into()),
-            github_org: Some("org".into()),
-            ..Config::default()
-        };
-        let provider = GitProvider::from_config(&config).unwrap();
-        // Falls through to GitLab because match is case-sensitive
-        assert!(provider.is_gitlab());
-    }
+    // NOTE: the legacy silent-fallthrough tests
+    // (test_from_config_unknown_provider_falls_back_to_gitlab,
+    //  test_from_config_empty_provider_falls_back_to_gitlab,
+    //  test_from_config_github_case_sensitive) were removed in CAB-2165
+    // Bundle 1. The String→GitProvider enum migration makes invalid values
+    // unrepresentable at the type level; strict-parse coverage lives in
+    // `config::enums::tests::git_provider_rejects_unknown_value`.
 
     #[test]
     fn test_provider_error_display() {

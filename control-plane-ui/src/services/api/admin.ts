@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type {
   AdminUserListResponse,
   AccessRequestListResponse,
@@ -30,7 +30,7 @@ export const adminClient = {
   },
 
   async updateSetting(key: string, value: string): Promise<PlatformSetting> {
-    const { data } = await httpClient.put(`/v1/admin/settings/${key}`, { value });
+    const { data } = await httpClient.put(path('v1', 'admin', 'settings', key), { value });
     return data;
   },
 
@@ -72,7 +72,7 @@ export const adminClient = {
   },
 
   async getProspect(inviteId: string): Promise<ProspectDetail> {
-    const { data } = await httpClient.get(`/v1/admin/prospects/${inviteId}`);
+    const { data } = await httpClient.get(path('v1', 'admin', 'prospects', inviteId));
     return data;
   },
 

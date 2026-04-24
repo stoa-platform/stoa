@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 
 // ── LLM usage & cost (CAB-1487) ──────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ type LlmPeriod = 'hour' | 'day' | 'week' | 'month';
 
 export const llmClient = {
   async getUsage(tenantId: string, period: LlmPeriod = 'month'): Promise<LlmUsageResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage`, {
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'llm', 'usage'), {
       params: { period },
     });
     return data;
@@ -59,9 +59,12 @@ export const llmClient = {
     tenantId: string,
     period: LlmPeriod = 'week'
   ): Promise<LlmTimeseriesResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage/timeseries`, {
-      params: { period },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'llm', 'usage', 'timeseries'),
+      {
+        params: { period },
+      }
+    );
     return data;
   },
 
@@ -69,14 +72,17 @@ export const llmClient = {
     tenantId: string,
     period: LlmPeriod = 'month'
   ): Promise<LlmProviderBreakdownResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/usage/providers`, {
-      params: { period },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'llm', 'usage', 'providers'),
+      {
+        params: { period },
+      }
+    );
     return data;
   },
 
   async getBudget(tenantId: string): Promise<LlmBudgetResponse> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/llm/budget`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'llm', 'budget'));
     return data;
   },
 
@@ -84,7 +90,7 @@ export const llmClient = {
     tenantId: string,
     update: { monthly_limit_usd?: number; alert_threshold_pct?: number }
   ): Promise<LlmBudgetResponse> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/llm/budget`, update);
+    const { data } = await httpClient.put(path('v1', 'tenants', tenantId, 'llm', 'budget'), update);
     return data;
   },
 };

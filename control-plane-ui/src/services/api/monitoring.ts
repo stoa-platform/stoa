@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 
 // ── Monitoring / Call flow (CAB-1869) ────────────────────────────────────────
 
@@ -75,7 +75,7 @@ export const monitoringClient = {
   },
 
   async getTransactionDetail(transactionId: string): Promise<MonitoringTransactionDetail> {
-    const { data } = await httpClient.get(`/v1/monitoring/transactions/${transactionId}`);
+    const { data } = await httpClient.get(path('v1', 'monitoring', 'transactions', transactionId));
     return data;
   },
 

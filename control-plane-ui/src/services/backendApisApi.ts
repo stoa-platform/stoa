@@ -6,6 +6,7 @@
  */
 
 import { apiService } from './api';
+import { path } from './http';
 import type { BackendApi, BackendApiListResponse, SaasApiKeyListResponse } from '../types';
 import type { Schemas } from '@stoa/shared/api-types';
 
@@ -18,7 +19,7 @@ class BackendApisService {
     tenantId: string,
     params?: { page?: number; page_size?: number; status?: string }
   ): Promise<BackendApiListResponse> {
-    const { data } = await apiService.get(`/v1/tenants/${tenantId}/backend-apis`, {
+    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'backend-apis'), {
       params: {
         page: params?.page || 1,
         page_size: params?.page_size || 50,
@@ -29,7 +30,7 @@ class BackendApisService {
   }
 
   async createBackendApi(tenantId: string, api: Schemas['BackendApiCreate']): Promise<BackendApi> {
-    const { data } = await apiService.post(`/v1/tenants/${tenantId}/backend-apis`, api);
+    const { data } = await apiService.post(path('v1', 'tenants', tenantId, 'backend-apis'), api);
     return data;
   }
 
@@ -39,19 +40,19 @@ class BackendApisService {
     update: Schemas['BackendApiUpdate']
   ): Promise<BackendApi> {
     const { data } = await apiService.patch(
-      `/v1/tenants/${tenantId}/backend-apis/${apiId}`,
+      path('v1', 'tenants', tenantId, 'backend-apis', apiId),
       update
     );
     return data;
   }
 
   async getBackendApi(tenantId: string, apiId: string): Promise<BackendApi> {
-    const { data } = await apiService.get(`/v1/tenants/${tenantId}/backend-apis/${apiId}`);
+    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'backend-apis', apiId));
     return data;
   }
 
   async deleteBackendApi(tenantId: string, apiId: string): Promise<void> {
-    await apiService.delete(`/v1/tenants/${tenantId}/backend-apis/${apiId}`);
+    await apiService.delete(path('v1', 'tenants', tenantId, 'backend-apis', apiId));
   }
 
   // ==========================================================================
@@ -62,7 +63,7 @@ class BackendApisService {
     tenantId: string,
     params?: { page?: number; page_size?: number }
   ): Promise<SaasApiKeyListResponse> {
-    const { data } = await apiService.get(`/v1/tenants/${tenantId}/saas-keys`, {
+    const { data } = await apiService.get(path('v1', 'tenants', tenantId, 'saas-keys'), {
       params: {
         page: params?.page || 1,
         page_size: params?.page_size || 50,
@@ -75,12 +76,12 @@ class BackendApisService {
     tenantId: string,
     key: Schemas['SaasApiKeyCreate']
   ): Promise<Schemas['SaasApiKeyCreatedResponse']> {
-    const { data } = await apiService.post(`/v1/tenants/${tenantId}/saas-keys`, key);
+    const { data } = await apiService.post(path('v1', 'tenants', tenantId, 'saas-keys'), key);
     return data;
   }
 
   async revokeSaasKey(tenantId: string, keyId: string): Promise<void> {
-    await apiService.delete(`/v1/tenants/${tenantId}/saas-keys/${keyId}`);
+    await apiService.delete(path('v1', 'tenants', tenantId, 'saas-keys', keyId));
   }
 }
 

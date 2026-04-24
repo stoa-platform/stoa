@@ -1,4 +1,4 @@
-import { httpClient } from '../http';
+import { httpClient, path } from '../http';
 import type { Schemas } from '@stoa/shared/api-types';
 import type { API, APICreate, Environment } from '../../types';
 
@@ -6,7 +6,7 @@ export const apisClient = {
   async list(tenantId: string, environment?: Environment): Promise<API[]> {
     const params: Record<string, unknown> = { page: 1, page_size: 100 };
     if (environment) params.environment = environment;
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis`, { params });
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'apis'), { params });
     return data.items ?? data;
   },
 
@@ -18,22 +18,22 @@ export const apisClient = {
   },
 
   async get(tenantId: string, apiId: string): Promise<API> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis/${apiId}`);
+    const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'apis', apiId));
     return data;
   },
 
   async create(tenantId: string, api: APICreate): Promise<API> {
-    const { data } = await httpClient.post(`/v1/tenants/${tenantId}/apis`, api);
+    const { data } = await httpClient.post(path('v1', 'tenants', tenantId, 'apis'), api);
     return data;
   },
 
   async update(tenantId: string, apiId: string, api: Partial<APICreate>): Promise<API> {
-    const { data } = await httpClient.put(`/v1/tenants/${tenantId}/apis/${apiId}`, api);
+    const { data } = await httpClient.put(path('v1', 'tenants', tenantId, 'apis', apiId), api);
     return data;
   },
 
   async remove(tenantId: string, apiId: string): Promise<void> {
-    await httpClient.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
+    await httpClient.delete(path('v1', 'tenants', tenantId, 'apis', apiId));
   },
 
   async listVersions(
@@ -41,9 +41,12 @@ export const apisClient = {
     apiId: string,
     limit = 20
   ): Promise<Schemas['APIVersionEntry'][]> {
-    const { data } = await httpClient.get(`/v1/tenants/${tenantId}/apis/${apiId}/versions`, {
-      params: { limit },
-    });
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'versions'),
+      {
+        params: { limit },
+      }
+    );
     return data;
   },
 
@@ -52,13 +55,16 @@ export const apisClient = {
     apiId: string,
     audience: string
   ): Promise<{ api_id: string; tenant_id: string; audience: string; updated_by: string }> {
-    const { data } = await httpClient.patch(`/v1/admin/catalog/${tenantId}/${apiId}/audience`, {
-      audience,
-    });
+    const { data } = await httpClient.patch(
+      path('v1', 'admin', 'catalog', tenantId, apiId, 'audience'),
+      {
+        audience,
+      }
+    );
     return data;
   },
 
   async triggerCatalogSync(tenantId: string): Promise<void> {
-    await httpClient.post(`/v1/admin/catalog/sync/tenant/${tenantId}`);
+    await httpClient.post(path('v1', 'admin', 'catalog', 'sync', 'tenant', tenantId));
   },
 };

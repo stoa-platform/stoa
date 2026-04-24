@@ -1,0 +1,121 @@
+name: 'Council Notify Slack + Metrics'
+description: >-
+  Post a Council S1 report to Slack (via ai-factory-notify.sh),
+  react with the :mag: emoji, and push verdict metrics to the
+  Prometheus Pushgateway. Phase 2b of CI-1 rewrite
+  (CI-1-REWRITE-PLAN.md C.5).
+
+  NOTE: This composite targets the Stage 1 notification only
+  (notify_council). Stage 2 uses notify_plan with a different shape
+  and is kept inline in the v2 workflow per rewrite plan §D.2.
+
+inputs:
+  ticket:
+    description: 'Linear ticket id or fallback identifier shown in the Slack card.'
+    required: true
+  issue-title:
+    description: 'GitHub issue title rendered in the Slack card.'
+    required: true
+  issue-url:
+    description: 'Permalink to the GitHub issue.'
+    required: true
+  issue-number:
+    description: 'GitHub issue number (used as fallback ticket label).'
+    required: true
+  score:
+    description: 'Council score (float string). Pass empty to render "?".'
+    required: true
+  verdict:
+    description: 'Council verdict: go | fix | redo (any case accepted).'
+    required: true
+  mode:
+    description: 'Ship/Show/Ask classification (optional — informational for card).'
+    required: false
+    default: ''
+  slack-webhook:
+    description: 'Slack incoming webhook URL.'
+    required: true
+  slack-bot-token:
+    description: 'Slack Bot API token (for reactions + updates).'
+    required: true
+  slack-channel-id:
+    description: 'Slack channel id for Bot API calls.'
+    required: true
+  pushgateway-url:
+    description: 'Prometheus Pushgateway base URL.'
+    required: true
+  pushgateway-auth:
+    description: 'Pushgateway basic-auth credential (user:pass or token).'
+    required: true
+  workflow-label:
+    description: 'Metric label for the workflow (default "issue-to-pr").'
+    required: false
+    default: 'issue-to-pr'
+
+outputs:
+  slack-ts:
+    description: 'Slack message timestamp (used by callers that want to thread).'
+    value: ${{ steps.notify.outputs.slack-ts }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Notify Slack + push metrics
+      id: notify
+      shell: bash
+      env:
+        # Secrets via with: -> env:. Untrusted inputs (ticket, titles,
+        # URLs from the GitHub issue) also go through env: so the shell
+        # `"$VAR"` expansion handles metacharacters safely. Never
+        # interpolate `${{ inputs.* }}` directly inside the script body —
+        # CodeQL flags those as code-injection surfaces because inputs
+        # on workflow_dispatch are user-controlled.
+        SLACK_WEBHOOK: ${{ inputs.slack-webhook }}
+        SLACK_BOT_TOKEN: ${{ inputs.slack-bot-token }}
+        SLACK_CHANNEL_ID: ${{ inputs.slack-channel-id }}
+        PUSHGATEWAY_URL: ${{ inputs.pushgateway-url }}
+        PUSHGATEWAY_AUTH: ${{ inputs.pushgateway-auth }}
+        INPUT_TICKET: ${{ inputs.ticket }}
+        INPUT_ISSUE_TITLE: ${{ inputs.issue-title }}
+        INPUT_ISSUE_URL: ${{ inputs.issue-url }}
+        INPUT_ISSUE_NUMBER: ${{ inputs.issue-number }}
+        INPUT_SCORE: ${{ inputs.score }}
+        INPUT_VERDICT: ${{ inputs.verdict }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_WORKFLOW_LABEL: ${{ inputs.workflow-label }}
+      run: |
+        set -uo pipefail
+        source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+
+        # Render score/verdict the way the legacy did: "?" when missing,
+        # title-case verdict for the Slack card, lower-case for the metric.
+        LC_VERDICT=$(printf '%s' "$INPUT_VERDICT" | tr '[:upper:]' '[:lower:]')
+        case "$LC_VERDICT" in
+          go)   DISPLAY_VERDICT="Go" ;;
+          fix)  DISPLAY_VERDICT="Fix" ;;
+          redo) DISPLAY_VERDICT="Redo" ;;
+          *)    DISPLAY_VERDICT="Go"; LC_VERDICT="go" ;;
+        esac
+
+        DISPLAY_SCORE="${INPUT_SCORE:-?}"
+        METRIC_SCORE="${INPUT_SCORE:-0}"
+
+        COUNCIL_TS=$(notify_council \
+          "$INPUT_TICKET" \
+          "$INPUT_ISSUE_TITLE" \
+          "$DISPLAY_SCORE" \
+          "$DISPLAY_VERDICT" \
+          "$INPUT_ISSUE_URL" \
+          "$INPUT_ISSUE_NUMBER" \
+          "$INPUT_MODE")
+
+        _react_slack "mag" "$COUNCIL_TS" || true
+
+        push_metrics_council \
+          "$INPUT_WORKFLOW_LABEL" \
+          "$INPUT_TICKET" \
+          "$METRIC_SCORE" \
+          "$LC_VERDICT" || true
+
+        echo "slack-ts=${COUNCIL_TS}" >> "$GITHUB_OUTPUT"
+        echo "::notice::council Slack notification sent (ts=${COUNCIL_TS:-n/a}, verdict=${DISPLAY_VERDICT}, score=${DISPLAY_SCORE})"

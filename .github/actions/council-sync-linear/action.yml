@@ -1,0 +1,125 @@
+name: 'Council Sync to Linear'
+description: >-
+  Apply the council:<namespace>-{go|fix|redo} label to a Linear issue
+  and post a completion comment. Consolidates the two ~80-line bash
+  blocks of the legacy workflow (Sync Council to Linear / Sync Plan
+  Council to Linear). Phase 2b of CI-1 rewrite
+  (CI-1-REWRITE-PLAN.md C.4).
+
+inputs:
+  ticket-id:
+    description: >-
+      Linear ticket id (e.g. CAB-1234). If empty, extracted from
+      `issue-title` and `issue-body`.
+    required: false
+    default: ''
+  issue-title:
+    description: 'Used for ticket-id auto-extraction when ticket-id is empty.'
+    required: false
+    default: ''
+  issue-body:
+    description: 'Used for ticket-id auto-extraction when ticket-id is empty.'
+    required: false
+    default: ''
+  namespace:
+    description: '`ticket` for Council S1 sync, `plan` for Council S2 sync.'
+    required: true
+  score:
+    description: 'Council score (float string, e.g. "8.2").'
+    required: true
+  run-url:
+    description: 'Permalink to the current GitHub Actions run (embedded in the Linear comment).'
+    required: true
+  linear-api-key:
+    description: 'Linear personal API token. When empty, the composite skips gracefully.'
+    required: true
+
+outputs:
+  applied-label:
+    description: 'Label actually applied (empty on skip).'
+    value: ${{ steps.sync.outputs.applied-label }}
+  skipped:
+    description: '"true" if the sync was skipped (no key, ticket not found, etc).'
+    value: ${{ steps.sync.outputs.skipped }}
+  skipped-reason:
+    description: 'Reason for skip, when applicable (no_api_key | ticket_not_found | label_not_found).'
+    value: ${{ steps.sync.outputs.skipped-reason }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Sync council to Linear
+      id: sync
+      shell: bash
+      env:
+        LINEAR_API_KEY: ${{ inputs.linear-api-key }}
+        ISSUE_TITLE: ${{ inputs.issue-title }}
+        ISSUE_BODY: ${{ inputs.issue-body }}
+        TICKET_ID_INPUT: ${{ inputs.ticket-id }}
+        NAMESPACE: ${{ inputs.namespace }}
+        SCORE: ${{ inputs.score }}
+        RUN_URL: ${{ inputs.run-url }}
+      run: |
+        set -uo pipefail
+        source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+
+        TICKET_ID="$TICKET_ID_INPUT"
+        if [ -z "$TICKET_ID" ]; then
+          TICKET_ID=$(extract_ticket_id "$ISSUE_TITLE $ISSUE_BODY")
+        fi
+
+        if [ -z "$TICKET_ID" ]; then
+          echo "::notice::no CAB-XXXX id found — skipping Linear sync"
+          {
+            echo "applied-label="
+            echo "skipped=true"
+            echo "skipped-reason=ticket_not_found"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Build the comment body with real newlines. The legacy bash
+        # produced a literal "\\n" in the request payload which Linear
+        # happened to JSON-decode as a newline; the new script expects
+        # real newlines so we construct the body with $'\n' bash ANSI
+        # quoting and let json.dumps handle the escape.
+        case "$NAMESPACE" in
+          ticket) PREFIX="Council validation (Stage 1)" ;;
+          plan)   PREFIX="Plan validation (Stage 2)" ;;
+          *)      echo "::error::namespace must be ticket|plan, got '$NAMESPACE'"; exit 1 ;;
+        esac
+
+        LABEL_PREVIEW="council:${NAMESPACE}-?"
+        BODY=$'\n'"${PREFIX}: **${SCORE}/10** — ${LABEL_PREVIEW}"$'\n'"[GitHub Actions run](${RUN_URL})"
+
+        SCRIPT_OUT=$(python3 "${GITHUB_WORKSPACE}/scripts/ci/linear_apply_label.py" \
+          --ticket-id "$TICKET_ID" \
+          --namespace "$NAMESPACE" \
+          --score "$SCORE" \
+          --comment-body "$BODY")
+
+        SCRIPT_EXIT=$?
+        if [ $SCRIPT_EXIT -ne 0 ]; then
+          echo "::warning::linear_apply_label.py exited $SCRIPT_EXIT — treating as skip"
+          {
+            echo "applied-label="
+            echo "skipped=true"
+            echo "skipped-reason=script_error"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        APPLIED=$(printf '%s' "$SCRIPT_OUT" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("applied_label") or "")')
+        REASON=$(printf '%s' "$SCRIPT_OUT" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("skipped_reason") or "")')
+
+        if [ -n "$APPLIED" ]; then
+          echo "applied-label=${APPLIED}" >> "$GITHUB_OUTPUT"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+          echo "skipped-reason=" >> "$GITHUB_OUTPUT"
+          echo "::notice::applied ${APPLIED} on ${TICKET_ID}"
+        else
+          echo "applied-label=" >> "$GITHUB_OUTPUT"
+          echo "skipped=true" >> "$GITHUB_OUTPUT"
+          echo "skipped-reason=${REASON}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Linear sync skipped for ${TICKET_ID} (${REASON:-unknown})"
+        fi

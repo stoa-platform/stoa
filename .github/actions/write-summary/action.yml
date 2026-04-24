@@ -1,0 +1,48 @@
+name: 'Write GHA Job Summary'
+description: >-
+  Emit a Markdown job summary to $GITHUB_STEP_SUMMARY using the
+  ai-factory-notify helper. Phase 2b of CI-1 rewrite
+  (CI-1-REWRITE-PLAN.md C.8).
+
+inputs:
+  ticket:
+    description: 'Linear ticket id (e.g. CAB-1234) or fallback label.'
+    required: true
+  outcome:
+    description: 'Step outcome: success | failure | skipped | cancelled.'
+    required: true
+  stage:
+    description: 'Pipeline stage: council-s1 | council-s2 | L1-implement.'
+    required: true
+  model:
+    description: 'Claude model used (optional — renders in summary if set).'
+    required: false
+    default: ''
+  pr-num:
+    description: 'PR number if one was opened by the stage (optional).'
+    required: false
+    default: ''
+  duration-seconds:
+    description: 'Total stage duration in seconds (optional).'
+    required: false
+    default: ''
+  error-excerpt:
+    description: 'Short error excerpt for failure summaries (optional).'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Write job summary
+      shell: bash
+      run: |
+        source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+        write_job_summary \
+          "${{ inputs.ticket }}" \
+          "${{ inputs.outcome }}" \
+          "${{ inputs.pr-num }}" \
+          "${{ inputs.model }}" \
+          "${{ inputs.stage }}" \
+          "${{ inputs.duration-seconds }}" \
+          "${{ inputs.error-excerpt }}"

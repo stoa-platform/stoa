@@ -59,26 +59,39 @@ export function ApiDeploymentsDashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const params: Record<string, string | number> = { page: currentPage, page_size: PAGE_SIZE };
-      if (statusFilter) params.sync_status = statusFilter;
-      if (envFilter) params.environment = envFilter;
+    const params: Record<string, string | number> = { page: currentPage, page_size: PAGE_SIZE };
+    if (statusFilter) params.sync_status = statusFilter;
+    if (envFilter) params.environment = envFilter;
 
-      const [deploymentsResult, summaryResult] = await Promise.all([
-        apiService.getGatewayDeployments(params),
-        apiService.getDeploymentStatusSummary(),
-      ]);
+    // P1-1: allSettled — partial failure preserves the other slice.
+    const [deploymentsResult, summaryResult] = await Promise.allSettled([
+      apiService.getGatewayDeployments(params),
+      apiService.getDeploymentStatusSummary(),
+    ]);
 
-      setDeployments(deploymentsResult.items);
-      setTotal(deploymentsResult.total);
-      setSummary(summaryResult);
-      setError(null);
-    } catch (err: unknown) {
+    if (deploymentsResult.status === 'fulfilled') {
+      setDeployments(deploymentsResult.value.items);
+      setTotal(deploymentsResult.value.total);
+    } else {
+      console.error('Failed to load API deployments:', deploymentsResult.reason);
+    }
+    if (summaryResult.status === 'fulfilled') {
+      setSummary(summaryResult.value);
+    } else {
+      console.error('Failed to load deployment summary:', summaryResult.reason);
+    }
+
+    if (
+      deploymentsResult.status === 'rejected' &&
+      summaryResult.status === 'rejected'
+    ) {
+      const err = deploymentsResult.reason;
       const message = err instanceof Error ? err.message : 'Failed to load deployments';
       setError(message);
-    } finally {
-      setLoading(false);
+    } else {
+      setError(null);
     }
+    setLoading(false);
   }, [currentPage, statusFilter, envFilter]);
 
   useEffect(() => {

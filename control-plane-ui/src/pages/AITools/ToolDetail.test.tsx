@@ -94,6 +94,18 @@ describe('ToolDetail', () => {
     });
   });
 
+  it('P1-1: tool renders when auxiliary usage endpoint fails (allSettled)', async () => {
+    // Regression: Promise.all would reject the whole fetch when getToolUsage
+    // failed, preventing the tool detail from rendering even though the
+    // primary getTool succeeded. After allSettled, the tool renders and
+    // usage is null.
+    mockGetTool.mockResolvedValue(mockToolData);
+    mockGetToolUsage.mockRejectedValue(new Error('Usage endpoint 500'));
+    renderToolDetail();
+    expect(await screen.findByRole('heading', { name: 'stoa_list_apis' })).toBeInTheDocument();
+    expect(screen.queryByText(/failed to load tool/i)).not.toBeInTheDocument();
+  });
+
   it('renders back link to AI Tools', async () => {
     renderToolDetail();
     await screen.findByRole('heading', { name: 'stoa_list_apis' });

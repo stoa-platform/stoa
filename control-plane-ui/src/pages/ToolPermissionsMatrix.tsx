@@ -72,10 +72,19 @@ export function ToolPermissionsMatrix() {
   const { data: serverDetails, isLoading: detailsLoading } = useQuery({
     queryKey: ['external-mcp-server-details', serverIds],
     queryFn: async () => {
-      const details = await Promise.all(
-        servers.map((s) => externalMcpServersService.getServer(s.id))
+      // P1-1: allSettled — one unreachable server must not blank the whole
+      // permissions matrix. Rejected slices are dropped; the matrix renders
+      // with the subset of servers that responded.
+      const results = await Promise.allSettled(
+        servers.map((s) => externalMcpServersService.getServer(s.id)),
       );
-      return details;
+      return results
+        .filter(
+          (r): r is PromiseFulfilledResult<
+            Awaited<ReturnType<typeof externalMcpServersService.getServer>>
+          > => r.status === 'fulfilled',
+        )
+        .map((r) => r.value);
     },
     enabled: servers.length > 0,
   });

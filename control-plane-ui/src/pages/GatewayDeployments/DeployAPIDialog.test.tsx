@@ -12,6 +12,10 @@ const mockGetCatalogEntries = vi
     { id: 'cat-1', api_name: 'Payment API', tenant_id: 'oasis-gunters', version: '1.0.0' },
   ]);
 
+const mockGetTenants = vi
+  .fn()
+  .mockResolvedValue([{ id: 'oasis-gunters', name: 'Oasis Gunters' }]);
+
 const mockGetGatewayInstances = vi.fn().mockResolvedValue({
   items: [
     {
@@ -27,7 +31,9 @@ const mockGetGatewayInstances = vi.fn().mockResolvedValue({
 vi.mock('../../services/api', () => ({
   apiService: {
     getCatalogEntries: (...args: unknown[]) => mockGetCatalogEntries(...args),
+    getTenants: (...args: unknown[]) => mockGetTenants(...args),
     getGatewayInstances: (...args: unknown[]) => mockGetGatewayInstances(...args),
+    getApis: vi.fn().mockResolvedValue([]),
     getGatewayDeployments: vi.fn().mockResolvedValue({ items: [] }),
     getDeployableEnvironments: vi.fn().mockResolvedValue([]),
     deployApiToGateways: vi.fn().mockResolvedValue(undefined),
@@ -58,8 +64,13 @@ describe('DeployAPIDialog', () => {
     expect(screen.getByText('Cancel')).toBeInTheDocument();
   });
 
-  it('shows error when API load fails', async () => {
+  it('shows error when every initial load endpoint fails (allSettled)', async () => {
+    // After P1-1 (allSettled), a single-endpoint failure no longer
+    // short-circuits the dialog. The error banner only renders when every
+    // init endpoint rejects.
     mockGetCatalogEntries.mockRejectedValue(new Error('Failed'));
+    mockGetTenants.mockRejectedValue(new Error('Failed'));
+    mockGetGatewayInstances.mockRejectedValue(new Error('Failed'));
     render(<DeployAPIDialog onClose={onClose} onDeployed={onDeployed} />);
     await waitFor(() => {
       expect(screen.getByText(/failed/i)).toBeInTheDocument();

@@ -34,26 +34,34 @@ export function UsageDashboard() {
   // Load data
   useEffect(() => {
     async function loadUsage() {
-      try {
-        setLoading(true);
-        setError(null);
+      setLoading(true);
+      setError(null);
 
-        const [usageData, historyData] = await Promise.all([
-          mcpGatewayService.getMyUsage({ period }),
-          mcpGatewayService.getUsageHistory({
-            period,
-            groupBy: period === 'day' ? 'hour' : 'day',
-          }),
-        ]);
+      // P1-1: allSettled — each slice independent.
+      const [usageResult, historyResult] = await Promise.allSettled([
+        mcpGatewayService.getMyUsage({ period }),
+        mcpGatewayService.getUsageHistory({
+          period,
+          groupBy: period === 'day' ? 'hour' : 'day',
+        }),
+      ]);
 
-        setUsage(usageData);
-        setHistory(historyData.dataPoints || []);
-      } catch (err) {
-        console.error('Failed to load usage:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load usage data');
-      } finally {
-        setLoading(false);
+      if (usageResult.status === 'fulfilled') {
+        setUsage(usageResult.value);
+      } else {
+        console.error('Failed to load usage:', usageResult.reason);
       }
+      if (historyResult.status === 'fulfilled') {
+        setHistory(historyResult.value.dataPoints || []);
+      } else {
+        console.error('Failed to load usage history:', historyResult.reason);
+      }
+
+      if (usageResult.status === 'rejected' && historyResult.status === 'rejected') {
+        const err = usageResult.reason;
+        setError(err instanceof Error ? err.message : 'Failed to load usage data');
+      }
+      setLoading(false);
     }
 
     loadUsage();

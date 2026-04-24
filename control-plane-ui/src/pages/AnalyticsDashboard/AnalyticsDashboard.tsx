@@ -150,29 +150,41 @@ export function AnalyticsDashboard() {
 
   // API data
   const loadApiData = useCallback(async () => {
-    try {
-      const [apis, taxonomy] = await Promise.all([
-        apiService.getTopAPIs(10).catch(() => []),
-        apiService
-          .get<{
-            items: ErrorCategory[];
-            total_errors: number;
-            error_rate: number;
-          }>(`/v1/tenants/${tenantId}/executions/taxonomy`)
-          .then((r) => r.data)
-          .catch(() => ({ items: [], total_errors: 0, error_rate: 0 })),
-      ]);
-      if (!mountedRef.current) return;
-      setTopApis(apis);
-      setErrorCategories(taxonomy.items || []);
-      setError(null);
-    } catch (err: unknown) {
-      if (!mountedRef.current) return;
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setError(axiosErr.response?.data?.detail || 'Failed to load analytics');
-    } finally {
-      if (mountedRef.current) setLoading(false);
+    // P1-1: allSettled — each slice independent. Preserve prior data on
+    // partial failure instead of blanking both slices.
+    const [apisResult, taxonomyResult] = await Promise.allSettled([
+      apiService.getTopAPIs(10),
+      apiService
+        .get<{
+          items: ErrorCategory[];
+          total_errors: number;
+          error_rate: number;
+        }>(`/v1/tenants/${tenantId}/executions/taxonomy`)
+        .then((r) => r.data),
+    ]);
+    if (!mountedRef.current) return;
+
+    if (apisResult.status === 'fulfilled') {
+      setTopApis(apisResult.value);
+    } else {
+      console.error('Failed to load top APIs:', apisResult.reason);
     }
+    if (taxonomyResult.status === 'fulfilled') {
+      setErrorCategories(taxonomyResult.value.items || []);
+    } else {
+      console.error('Failed to load error taxonomy:', taxonomyResult.reason);
+    }
+
+    if (
+      apisResult.status === 'rejected' &&
+      taxonomyResult.status === 'rejected'
+    ) {
+      const axiosErr = apisResult.reason as { response?: { data?: { detail?: string } } };
+      setError(axiosErr.response?.data?.detail || 'Failed to load analytics');
+    } else {
+      setError(null);
+    }
+    if (mountedRef.current) setLoading(false);
   }, [tenantId]);
 
   useEffect(() => {

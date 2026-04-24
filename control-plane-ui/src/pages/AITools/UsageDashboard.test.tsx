@@ -67,8 +67,12 @@ describe('UsageDashboard', () => {
     });
   });
 
-  it('shows error message on API failure', async () => {
+  it('shows error message when every usage endpoint fails (allSettled)', async () => {
+    // After P1-1 (allSettled), a single-endpoint failure no longer clobbers
+    // the other slice. The error banner only renders when EVERY endpoint
+    // in the fan-out rejects.
     mockGetMyUsage.mockRejectedValue(new Error('Network error'));
+    mockGetUsageHistory.mockRejectedValue(new Error('Network error'));
     renderWithProviders(<UsageDashboard />);
     await waitFor(() => {
       expect(screen.getByText(/failed|error/i)).toBeInTheDocument();

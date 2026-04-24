@@ -548,26 +548,33 @@ export function APIMonitoring() {
   const mountedRef = useRef(true);
 
   const fetchData = useCallback(async () => {
-    try {
-      const [txnResponse, statsResponse] = await Promise.all([
-        apiService.get<{ transactions: APITransactionSummary[]; demo_mode?: boolean }>(
-          '/v1/monitoring/transactions'
-        ),
-        apiService.get<APITransactionStats>('/v1/monitoring/transactions/stats'),
-      ]);
-      if (!mountedRef.current) return;
-      setTransactions(txnResponse.data.transactions);
-      setStats(statsResponse.data);
-      setDemoMode(txnResponse.data.demo_mode === true);
-      setError(null);
-    } catch (_err) {
-      if (!mountedRef.current) return;
-      setError('Transaction monitoring is unavailable');
-      setTransactions([]);
-      setStats(null);
-    } finally {
-      if (mountedRef.current) setLoading(false);
+    // P1-1: allSettled so one endpoint failing does NOT clobber the other's
+    // data. We only update fulfilled slices and preserve prior state on
+    // rejection — the UI shows the last good snapshot rather than a blank.
+    const [txnResult, statsResult] = await Promise.allSettled([
+      apiService.get<{ transactions: APITransactionSummary[]; demo_mode?: boolean }>(
+        '/v1/monitoring/transactions'
+      ),
+      apiService.get<APITransactionStats>('/v1/monitoring/transactions/stats'),
+    ]);
+    if (!mountedRef.current) return;
+
+    if (txnResult.status === 'fulfilled') {
+      setTransactions(txnResult.value.data.transactions);
+      setDemoMode(txnResult.value.data.demo_mode === true);
     }
+    if (statsResult.status === 'fulfilled') {
+      setStats(statsResult.value.data);
+    }
+
+    const allFailed =
+      txnResult.status === 'rejected' && statsResult.status === 'rejected';
+    if (allFailed) {
+      setError('Transaction monitoring is unavailable');
+    } else {
+      setError(null);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

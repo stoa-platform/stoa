@@ -11,9 +11,12 @@ const mockGetGatewayAggregatedMetrics = vi.fn().mockResolvedValue({
   rate_limiting: { enforcements: 12 },
 });
 
+const mockGetGuardrailsEvents = vi.fn().mockResolvedValue({ events: [] });
+
 vi.mock('../../services/api', () => ({
   apiService: {
     getGatewayAggregatedMetrics: (...args: unknown[]) => mockGetGatewayAggregatedMetrics(...args),
+    getGuardrailsEvents: (...args: unknown[]) => mockGetGuardrailsEvents(...args),
     setAuthToken: vi.fn(),
     clearAuthToken: vi.fn(),
   },
@@ -58,6 +61,21 @@ describe('GuardrailsDashboard', () => {
   it('renders configuration section', async () => {
     renderWithProviders(<GuardrailsDashboard />);
     expect(await screen.findByText('Guardrail Configuration')).toBeInTheDocument();
+  });
+
+  it('P1-1: metrics render when events endpoint fails (allSettled)', async () => {
+    // Regression: Promise.all would have discarded the fulfilled metrics
+    // slice the moment the auxiliary events endpoint threw. allSettled
+    // preserves metrics + error is not set for a partial failure.
+    mockGetGuardrailsEvents.mockRejectedValue(new Error('Events endpoint 500'));
+    renderWithProviders(<GuardrailsDashboard />);
+    expect(
+      await screen.findByRole('heading', { name: /Gateway Guardrails/i }),
+    ).toBeInTheDocument();
+    // Metric cards still render with non-zero PII detection value from the
+    // fulfilled metrics slice.
+    const pii = await screen.findAllByText('PII Detection');
+    expect(pii.length).toBeGreaterThanOrEqual(1);
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mutation_emits_structured_audit_event() {
+    async fn regression_mutation_emits_structured_audit_event() {
         let (buf, _guard) = install_capture_subscriber();
 
         let app: Router = Router::new()
@@ -299,7 +299,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_failure_status_records_outcome_failure_and_actor_unknown() {
+    async fn regression_failure_status_records_outcome_failure_and_actor_unknown() {
         let (buf, _guard) = install_capture_subscriber();
 
         let app: Router = Router::new()

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Link (sidecar) traffic seed — multi-tenant, Kong (k3d) + webMethods (Docker).
+# Link traffic seed — multi-tenant, Kong proxy (k3d) + webMethods (Docker).
 #
 # Registers stoa-link instances in the CP, sends heartbeats, then generates
-# multi-tenant authz traffic through both sidecars.
+# multi-tenant authz traffic through standalone link/authz endpoints.
 #
 # Usage:
 #   ./scripts/traffic/link-traffic-seed.sh
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/seed-common.sh"
 
 # ─── Config ──────────────────────────────────────────────────────────
-LINK_KONG_URL="${LINK_KONG_URL:-http://localhost:9082}"
+LINK_KONG_AUTHZ_URL="${LINK_KONG_AUTHZ_URL:-${LINK_KONG_URL:-http://localhost:9082}}"
 LINK_WM_URL="${LINK_WM_URL:-http://localhost:8086}"
 LINK_CALLS_PER_COMBO="${LINK_CALLS_PER_COMBO:-2}"
 SEED_INTERVAL="${SEED_INTERVAL:-30}"
@@ -26,7 +26,7 @@ TENANTS=("acme-corp" "globex-inc" "initech")
 
 # ─── Link instances: name|gateway_type|tenant|authz_url|target_gw_url ─
 LINKS=(
-  "link-kong-local|stoa_sidecar|acme-corp|$LINK_KONG_URL|http://localhost:9080"
+  "link-kong-local|stoa_sidecar|acme-corp|$LINK_KONG_AUTHZ_URL|http://localhost:9080"
   "link-wm-local|stoa_sidecar|globex-inc|$LINK_WM_URL|http://localhost:5555"
 )
 
@@ -204,7 +204,7 @@ run_batch() {
   print_summary "link"
 }
 
-echo "[link] Config: kong=$LINK_KONG_URL wm=$LINK_WM_URL calls=$LINK_CALLS_PER_COMBO cp=$CP_INTERNAL_URL"
+echo "[link] Config: kong_authz=$LINK_KONG_AUTHZ_URL wm=$LINK_WM_URL calls=$LINK_CALLS_PER_COMBO cp=$CP_INTERNAL_URL"
 echo "[link] Tenants: ${TENANTS[*]}"
 echo "[link] Links: ${#LINKS[@]} (stoa-link instances, mode=sidecar)"
 echo ""

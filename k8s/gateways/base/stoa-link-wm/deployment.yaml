@@ -4,6 +4,11 @@ metadata:
   name: stoa-link-wm
   labels:
     app: stoa-link-wm
+    stoa.io/deployment-kind: standalone-link
+    stoa.io/runtime-mode: sidecar
+  annotations:
+    stoa.io/topology: "standalone-remote-link"
+    stoa.io/note: "This is not a Kubernetes sidecar; Helm stoaSidecar renders the real same-pod sidecar topology."
 spec:
   replicas: 1
   selector:
@@ -13,6 +18,10 @@ spec:
     metadata:
       labels:
         app: stoa-link-wm
+        stoa.io/deployment-kind: standalone-link
+        stoa.io/runtime-mode: sidecar
+      annotations:
+        stoa.io/topology: "standalone-remote-link"
     spec:
       imagePullSecrets:
         - name: ghcr-creds
@@ -47,7 +56,7 @@ spec:
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
-            - name: STOA_SIDECAR_UPSTREAM_URL
+            - name: STOA_TARGET_GATEWAY_URL
               value: "https://vps-wm.gostoa.dev"
             - name: STOA_RATE_LIMIT_DEFAULT
               value: "1000"

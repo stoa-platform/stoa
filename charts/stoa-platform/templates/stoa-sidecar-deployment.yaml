@@ -1,4 +1,7 @@
 {{- if .Values.stoaSidecar.enabled }}
+{{- if not .Values.stoaSidecar.mainGateway.enabled }}
+{{- fail "stoaSidecar.enabled requires stoaSidecar.mainGateway.enabled=true so the chart renders a real two-container Kubernetes sidecar. Use stoa-link manifests for standalone remote-gateway links." }}
+{{- end }}
 ---
 # ==============================================================================
 # STOA Sidecar Deployment
@@ -22,6 +25,8 @@ metadata:
     app.kubernetes.io/name: stoa-sidecar
     app.kubernetes.io/component: sidecar
     stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+    stoa.io/deployment-kind: sidecar
+    stoa.io/runtime-mode: sidecar
     {{- include "stoa-platform.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.stoaSidecar.replicas | default 2 }}
@@ -35,11 +40,15 @@ spec:
         app.kubernetes.io/name: stoa-sidecar
         app.kubernetes.io/component: sidecar
         stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+        stoa.io/deployment-kind: sidecar
+        stoa.io/runtime-mode: sidecar
         {{- include "stoa-platform.labels" . | nindent 8 }}
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8081"
         prometheus.io/path: "/metrics"
+        stoa.io/authz-endpoint: "http://localhost:8081/authz"
+        stoa.io/topology: "same-pod-sidecar"
     spec:
       serviceAccountName: {{ .Values.stoaSidecar.serviceAccount | default "default" }}
       containers:
@@ -78,6 +87,8 @@ spec:
             # Sidecar mode configuration
             - name: STOA_GATEWAY_MODE
               value: "sidecar"
+            - name: STOA_UPSTREAM_TYPE
+              value: {{ .Values.stoaSidecar.targetGateway | default "generic" | quote }}
             - name: STOA_PORT
               value: "8081"
             - name: STOA_HOST

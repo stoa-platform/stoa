@@ -121,6 +121,18 @@ dépendent du mode de gateway. La Console ne doit pas assimiler `online` à
 `synced`: `online` prouve seulement le heartbeat/connectivité agent, pas
 l'application de la route.
 
+La classification canonique des gateways est définie par
+`specs/gateway-topology-normalization.md`:
+
+```text
+deployment_mode=edge|connect|sidecar
+target_gateway_type=stoa|kong|webmethods|gravitee|agentgateway
+topology=native-edge|remote-agent|same-pod
+```
+
+`/api-deployments` doit choisir le chemin de déploiement depuis ces champs, pas
+depuis un libellé UI, un hostname, ou l'ancien usage flou de `sidecar`.
+
 | Mode gateway | Exemple | Identité CP | Transport de déploiement | Preuve `synced` | Contraintes runtime |
 |--------------|---------|-------------|---------------------------|-----------------|---------------------|
 | Legacy VM via STOA Connect | webMethods/Kong/Gravitee en VM, `connect-webmethods-dev` | gateway `self_register`, nom logique agent + gateway canonique DB | pull agent `GET /v1/internal/gateways/routes?gateway_name={agent_name}`; SSE peut accélérer mais le polling reste obligatoire | `POST /v1/internal/gateways/{gateway_id}/route-sync-ack` avec `deployment_id` appliqué | le `backend_url` doit être joignable depuis la VM; une URL Kubernetes `*.svc.cluster.local` est invalide sauf tunnel/réseau partagé explicite |

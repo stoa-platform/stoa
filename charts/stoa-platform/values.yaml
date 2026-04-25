@@ -174,7 +174,9 @@ podDisruptionBudget:
 # ==============================================================================
 # STOA Sidecar Configuration (ADR-028: Tier 2 - Third-Party Gateway Integration)
 # ==============================================================================
-# Deploy STOA Gateway in sidecar mode alongside third-party gateways
+# Deploy STOA Gateway in sidecar mode alongside third-party gateways in the
+# same Kubernetes pod. This block is intentionally not for standalone remote
+# links; use k8s/gateways/base/stoa-link-wm for that topology.
 # (WebMethods, Kong, Envoy, Apigee). Provides:
 # - ext_authz endpoint for policy enforcement
 # - Rate limiting
@@ -201,6 +203,8 @@ stoaSidecar:
   targetGateway: webmethods  # webmethods | kong | envoy | apigee | generic
 
   # STOA Sidecar image (Rust gateway in sidecar mode)
+  # The same Rust gateway binary is used, with the sidecar route profile:
+  # /authz + health/ready/metrics/admin, no MCP routes.
   image:
     repository: ghcr.io/stoa-platform/stoa-gateway
     tag: latest
@@ -260,10 +264,10 @@ stoaSidecar:
   resources:
     requests:
       cpu: 50m
-      memory: 32Mi
+      memory: 64Mi
     limits:
       cpu: 200m
-      memory: 128Mi
+      memory: 256Mi
 
   nodeSelector: {}
   tolerations: []

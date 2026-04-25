@@ -11,6 +11,7 @@ ports:
     nodeFilters: [server:0]
   - port: 9081:30081
     nodeFilters: [server:0]
+  # Standalone STOA /authz endpoint used by link traffic seeds.
   - port: 9082:30082
     nodeFilters: [server:0]
 options:

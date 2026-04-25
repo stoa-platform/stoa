@@ -36,6 +36,10 @@
 //! - **Apigee**: Policy callout
 //! - **AWS API Gateway**: Lambda authorizer format
 
+use super::decision::{
+    Decision, DecisionEngine, DecisionInput, DecisionMetadata, DecisionPrincipal,
+    DecisionRateLimitState,
+};
 use super::{DecisionFormat, SidecarSettings};
 use crate::quota::ConsumerRateLimiter;
 use axum::{
@@ -47,7 +51,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{debug, info, instrument, warn};
+use tracing::instrument;
 
 /// Sidecar authorization request (from upstream gateway)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,6 +170,68 @@ pub struct RateLimitState {
     pub remaining: u64,
 }
 
+impl From<UserInfo> for DecisionPrincipal {
+    fn from(user: UserInfo) -> Self {
+        Self {
+            id: user.id,
+            email: user.email,
+            roles: user.roles,
+            scopes: user.scopes,
+            claims: user.claims,
+        }
+    }
+}
+
+impl From<AuthzRequest> for DecisionInput {
+    fn from(request: AuthzRequest) -> Self {
+        Self {
+            method: request.method,
+            path: request.path,
+            headers: request.headers,
+            source_ip: request.source_ip,
+            principal: request.user.map(DecisionPrincipal::from),
+            tenant_id: request.tenant_id,
+            context: request.context,
+        }
+    }
+}
+
+impl From<DecisionRateLimitState> for RateLimitState {
+    fn from(state: DecisionRateLimitState) -> Self {
+        Self {
+            current: state.current,
+            limit: state.limit,
+            reset_at: state.reset_at,
+            remaining: state.remaining,
+        }
+    }
+}
+
+impl From<DecisionMetadata> for RequestMetadata {
+    fn from(metadata: DecisionMetadata) -> Self {
+        Self {
+            request_id: metadata.request_id,
+            policies_evaluated: metadata.policies_evaluated,
+            evaluation_time_us: metadata.evaluation_time_us,
+            rate_limit: metadata.rate_limit.map(RateLimitState::from),
+        }
+    }
+}
+
+impl From<Decision> for AuthzResponse {
+    fn from(decision: Decision) -> Self {
+        Self {
+            allowed: decision.allowed,
+            status_code: decision.status_code,
+            headers_to_add: decision.headers_to_add,
+            headers_to_remove: decision.headers_to_remove,
+            denial_reason: decision.denial_reason,
+            denied_by_policy: decision.denied_by_policy,
+            metadata: decision.metadata.map(RequestMetadata::from),
+        }
+    }
+}
+
 impl AuthzResponse {
     /// Create an allow response
     pub fn allow() -> Self {
@@ -257,11 +323,8 @@ pub struct SidecarService {
     /// Configuration
     settings: SidecarSettings,
 
-    /// Optional consumer rate limiter (wired from AppState)
-    rate_limiter: Option<Arc<ConsumerRateLimiter>>,
-
-    /// Required scopes for authorization (if set, user must have at least one)
-    required_scopes: Vec<String>,
+    /// Shared policy/quota/scope decision pipeline.
+    decision_engine: DecisionEngine,
 }
 
 impl SidecarService {
@@ -269,124 +332,26 @@ impl SidecarService {
     pub fn new(settings: SidecarSettings) -> Self {
         Self {
             settings,
-            rate_limiter: None,
-            required_scopes: Vec::new(),
+            decision_engine: DecisionEngine::new(),
         }
     }
 
     /// Attach a consumer rate limiter
     pub fn with_rate_limiter(mut self, limiter: Arc<ConsumerRateLimiter>) -> Self {
-        self.rate_limiter = Some(limiter);
+        self.decision_engine = self.decision_engine.with_rate_limiter(limiter);
         self
     }
 
     /// Set required scopes for authorization
     pub fn with_required_scopes(mut self, scopes: Vec<String>) -> Self {
-        self.required_scopes = scopes;
+        self.decision_engine = self.decision_engine.with_required_scopes(scopes);
         self
     }
 
     /// Handle authorization request
     #[instrument(skip(self, request))]
     pub async fn authorize(&self, request: AuthzRequest) -> AuthzResponse {
-        let start = std::time::Instant::now();
-        let request_id = uuid::Uuid::new_v4().to_string();
-
-        debug!(
-            request_id = %request_id,
-            method = %request.method,
-            path = %request.path,
-            "Processing authorization request"
-        );
-
-        // 1. Validate user info is present
-        let user = match &request.user {
-            Some(u) => u,
-            None => {
-                warn!(request_id = %request_id, "No user info in request");
-                return AuthzResponse::unauthorized("Missing user information");
-            }
-        };
-
-        // 2. Validate tenant
-        let tenant_id = match &request.tenant_id {
-            Some(t) => t,
-            None => {
-                warn!(request_id = %request_id, "No tenant ID in request");
-                return AuthzResponse::deny("Missing tenant ID");
-            }
-        };
-
-        // 3. Check rate limit (if rate limiter is wired)
-        if let Some(ref limiter) = self.rate_limiter {
-            let consumer_key = format!("{}:{}", tenant_id, user.id);
-            if let Err(e) = limiter.check_rate_limit(&consumer_key) {
-                warn!(
-                    request_id = %request_id,
-                    consumer = %consumer_key,
-                    error = %e,
-                    "Rate limit exceeded"
-                );
-                return AuthzResponse::rate_limited(RateLimitState {
-                    current: 0,
-                    limit: 0,
-                    reset_at: 0,
-                    remaining: 0,
-                })
-                .with_policy("consumer_rate_limit");
-            }
-        }
-
-        // 4. Check required scopes (if configured)
-        if !self.required_scopes.is_empty() {
-            let has_scope = self.required_scopes.iter().any(|s| user.scopes.contains(s));
-            if !has_scope {
-                warn!(
-                    request_id = %request_id,
-                    user_scopes = ?user.scopes,
-                    required = ?self.required_scopes,
-                    "Insufficient scopes"
-                );
-                return AuthzResponse::deny(format!(
-                    "Insufficient scopes: requires one of [{}]",
-                    self.required_scopes.join(", ")
-                ))
-                .with_policy("scope_enforcement");
-            }
-        }
-
-        let evaluation_time = start.elapsed().as_micros() as u64;
-
-        // 5. Build allow response with enrichment headers
-        let mut response = AuthzResponse::allow()
-            .with_header("X-User-ID", &user.id)
-            .with_header("X-Tenant-ID", tenant_id)
-            .with_header("X-Request-ID", &request_id);
-
-        // Add scopes header if present
-        if !user.scopes.is_empty() {
-            response = response.with_header("X-User-Scopes", user.scopes.join(","));
-        }
-
-        // Add roles header if present
-        if !user.roles.is_empty() {
-            response = response.with_header("X-User-Roles", user.roles.join(","));
-        }
-
-        // Add metadata
-        response = response.with_metadata(RequestMetadata {
-            request_id,
-            policies_evaluated: vec!["default".to_string()],
-            evaluation_time_us: evaluation_time,
-            rate_limit: None,
-        });
-
-        info!(
-            evaluation_time_us = evaluation_time,
-            "Authorization allowed"
-        );
-
-        response
+        self.decision_engine.decide(request.into()).into()
     }
 
     /// Convert response to gateway-specific format

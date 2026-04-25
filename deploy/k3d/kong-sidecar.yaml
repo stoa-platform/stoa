@@ -1,5 +1,8 @@
-# Kong DB-less + STOA Gateway sidecar for k3d.
-# Architecture: Client → Kong → pre-function (authz call) → STOA sidecar → allow/deny → echo-backend
+# Kong DB-less + standalone STOA authz endpoint for k3d.
+# This legacy demo is not a Kubernetes sidecar: Kong proxies to echo-backend,
+# while STOA exposes /authz separately on node port 30082 for link traffic seeds.
+# Real same-pod third-party gateway sidecars are rendered by the Helm
+# stoaSidecar template.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -100,10 +103,9 @@ data:
           - name: admin-route
             paths: [/admin/tenants]
             strip_path: false
-    # Kong proxies traffic to echo-backend. The sidecar is available separately
-    # on port 30082 for direct authz testing. Kong's role here is to provide
-    # the proxy layer that the link seed tests through.
-    # In prod, Kong would use ext_authz to call the sidecar before proxying.
+    # Kong proxies traffic to echo-backend. STOA authz is available separately
+    # on port 30082 for direct /authz testing and local link seed traffic.
+    # This file intentionally does not claim a same-pod sidecar topology.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -161,17 +163,25 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stoa-sidecar
+  name: stoa-authz
   namespace: stoa-dev
+  labels:
+    stoa.io/deployment-kind: standalone-authz
+    stoa.io/runtime-mode: sidecar
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: stoa-sidecar
+      app: stoa-authz
   template:
     metadata:
       labels:
-        app: stoa-sidecar
+        app: stoa-authz
+        stoa.io/deployment-kind: standalone-authz
+        stoa.io/runtime-mode: sidecar
+      annotations:
+        stoa.io/topology: "standalone-authz"
+        stoa.io/note: "Not a Kubernetes sidecar; Helm stoaSidecar renders same-pod sidecars."
     spec:
       containers:
         - name: gateway
@@ -202,10 +212,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: stoa-sidecar
+  name: stoa-authz
   namespace: stoa-dev
 spec:
   type: NodePort
-  selector: {app: stoa-sidecar}
+  selector: {app: stoa-authz}
   ports:
     - {name: http, port: 8081, targetPort: 8081, nodePort: 30082}

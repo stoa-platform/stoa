@@ -311,8 +311,12 @@ pub fn build_router(state: AppState) -> Router {
         GatewayMode::Sidecar => {
             // Sidecar: policy enforcement, ext_authz style
             let sidecar_settings = mode::SidecarSettings::from_env();
-            let sidecar_service =
-                std::sync::Arc::new(mode::sidecar::SidecarService::new(sidecar_settings));
+            let mut sidecar_service = mode::sidecar::SidecarService::new(sidecar_settings);
+            if state.config.quota_enforcement_enabled {
+                sidecar_service =
+                    sidecar_service.with_rate_limiter(state.consumer_rate_limiter.clone());
+            }
+            let sidecar_service = std::sync::Arc::new(sidecar_service);
 
             // Use closure to capture sidecar service (avoids state type mismatch)
             let svc = sidecar_service.clone();
@@ -839,4 +843,65 @@ async fn prometheus_metrics() -> String {
     let mut buffer = Vec::new();
     encoder.encode(&metric_families, &mut buffer).unwrap();
     String::from_utf8(buffer).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    fn sidecar_app() -> Router {
+        let config = config::Config {
+            gateway_mode: mode::GatewayMode::Sidecar,
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        };
+        build_router(AppState::new(config))
+    }
+
+    #[tokio::test]
+    async fn sidecar_mode_exposes_authz_without_mcp_routes() {
+        let app = sidecar_app();
+        let body = serde_json::json!({
+            "method": "GET",
+            "path": "/api/v1/accounts",
+            "tenant_id": "acme",
+            "user": {
+                "id": "user-456",
+                "email": "user@example.com",
+                "roles": ["admin"],
+                "scopes": ["read"]
+            }
+        });
+
+        let authz = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/authz")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(authz.status(), StatusCode::OK);
+
+        let mcp = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/mcp")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(mcp.status(), StatusCode::NOT_FOUND);
+    }
 }

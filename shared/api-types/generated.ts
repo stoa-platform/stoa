@@ -702,30 +702,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/admin/deployments/console": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Console Deployments
-         * @description List the aggregated Console contract for /api-deployments.
-         *
-         *     This endpoint intentionally exposes deployment status and gateway health as
-         *     separate fields so transient gateway connectivity does not overwrite the
-         *     runtime reconciliation state.
-         */
-        get: operations["list_console_deployments"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/admin/deployments/status": {
         parameters: {
             query?: never;
@@ -9091,10 +9067,6 @@ export interface paths {
         /**
          * Github Webhook
          * @description Handle GitHub webhooks for GitOps.
-         *
-         *     CP-1 H.1: after signature verification, claim a dedup slot keyed on
-         *     X-GitHub-Delivery. Claim is released on pipeline failure so the
-         *     next redelivery retries cleanly.
          */
         post: operations["github_webhook"];
         delete?: never;
@@ -9118,18 +9090,6 @@ export interface paths {
          *
          *     Captures the git author (who pushed) from the GitLab payload and stores
          *     traces in PostgreSQL for persistent monitoring.
-         *
-         *     CP-1 C.7: token verification happens BEFORE any DB write. Rejected
-         *     requests produce zero trace rows, eliminating the DoS amplification
-         *     vector where an unauthenticated flood would burn 1 INSERT + 2 UPDATEs
-         *     per request on the traces table.
-         *
-         *     CP-1 H.1: after auth, we claim a dedup slot keyed on Idempotency-Key
-         *     (preferred) or X-Gitlab-Webhook-UUID. X-Gitlab-Event-UUID is NEVER
-         *     used as primary key because it is shared across recursive webhooks —
-         *     deduping on it would drop legitimate events. The claim is released
-         *     on pipeline failure so the next redelivery retries cleanly instead
-         *     of being answered with "duplicate forever".
          */
         post: operations["gitlab_webhook"];
         delete?: never;
@@ -11235,80 +11195,6 @@ export interface components {
             sort_order: number;
             /** Transport */
             transport: string;
-        };
-        /**
-         * ConsoleDeploymentRow
-         * @description Aggregated deployment row for /api-deployments.
-         *
-         *     Deployment status and gateway health are intentionally separate axes.
-         *     A previously synced route can stay synced while its gateway is offline.
-         */
-        ConsoleDeploymentRow: {
-            /**
-             * Api Catalog Id
-             * Format: uuid
-             */
-            api_catalog_id: string;
-            /** Api Id */
-            api_id: string;
-            /** Api Name */
-            api_name: string;
-            /**
-             * Deployment Id
-             * Format: uuid
-             */
-            deployment_id: string;
-            /** Deployment Status */
-            deployment_status: string;
-            /** Desired State */
-            desired_state: {
-                [key: string]: unknown;
-            };
-            /** Environment */
-            environment: string;
-            /** Gateway Health */
-            gateway_health: string;
-            gateway_target: components["schemas"]["ConsoleGatewayTarget"];
-            /** Last Ack */
-            last_ack?: string | null;
-            /** Promotion State */
-            promotion_state?: string | null;
-            /** Sync Error */
-            sync_error?: string | null;
-            /** Tenant Id */
-            tenant_id: string;
-        };
-        /**
-         * ConsoleGatewayTarget
-         * @description Gateway target details for the Console API deployments table.
-         */
-        ConsoleGatewayTarget: {
-            /**
-             * Deployment Mode
-             * @description Canonical topology: edge, connect, or sidecar
-             */
-            deployment_mode: string;
-            /** Display Name */
-            display_name: string;
-            /** Environment */
-            environment: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Name */
-            name: string;
-            /**
-             * Source
-             * @description Gateway source of truth: argocd, self_register, or manual
-             */
-            source: string;
-            /**
-             * Target Gateway Type
-             * @description Gateway technology: stoa, kong, webmethods, gravitee, ...
-             */
-            target_gateway_type: string;
         };
         /**
          * ConsumerCreate
@@ -14392,7 +14278,7 @@ export interface components {
              * Gateway Type
              * @enum {string}
              */
-            gateway_type: "webmethods" | "kong" | "apigee" | "aws_apigateway" | "azure_apim" | "gravitee" | "stoa" | "stoa_edge_mcp" | "stoa_sidecar" | "stoa_proxy" | "stoa_shadow";
+            gateway_type: "webmethods" | "kong" | "apigee" | "aws_apigateway" | "stoa" | "stoa_edge_mcp" | "stoa_sidecar" | "stoa_proxy" | "stoa_shadow";
             /** Health Details */
             health_details: {
                 [key: string]: unknown;
@@ -16939,20 +16825,6 @@ export interface components {
             text_length: number;
             /** Total Pii Count */
             total_pii_count: number;
-        };
-        /**
-         * PaginatedConsoleDeployments
-         * @description Paginated Console deployment contract.
-         */
-        PaginatedConsoleDeployments: {
-            /** Items */
-            items: components["schemas"]["ConsoleDeploymentRow"][];
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Total */
-            total: number;
         };
         /**
          * PaginatedGatewayDeployments
@@ -23517,43 +23389,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["src__routers__gateway_deployments__CatalogEntry"][];
-                };
-            };
-        };
-    };
-    list_console_deployments: {
-        parameters: {
-            query?: {
-                /** @description Filter by gateway environment (dev/staging/production) */
-                environment?: string | null;
-                gateway_instance_id?: string | null;
-                /** @description Filter by API tenant id */
-                tenant_id?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedConsoleDeployments"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -38473,7 +38308,6 @@ export interface operations {
             header?: {
                 "X-Hub-Signature-256"?: string | null;
                 "X-GitHub-Event"?: string | null;
-                "X-GitHub-Delivery"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -38506,8 +38340,6 @@ export interface operations {
             header?: {
                 "X-Gitlab-Token"?: string | null;
                 "X-Gitlab-Event"?: string | null;
-                "X-Gitlab-Webhook-UUID"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path?: never;
             cookie?: never;

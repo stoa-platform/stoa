@@ -100,8 +100,75 @@
         },
         "output_schema": {
           "description": "JSON Schema for response body"
+        },
+        "llm": {
+          "$ref": "#/$defs/EndpointLlm",
+          "description": "Optional LLM-facing metadata for MCP tool projection"
         }
       }
+    },
+    "EndpointLlm": {
+      "type": "object",
+      "required": [
+        "summary",
+        "intent",
+        "tool_name",
+        "side_effects",
+        "safe_for_agents",
+        "requires_human_approval",
+        "examples"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable tool summary"
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Agent-facing intent describing when to use this endpoint"
+        },
+        "tool_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable MCP tool name to expose for this endpoint"
+        },
+        "side_effects": {
+          "type": "string",
+          "enum": ["none", "read", "write", "destructive"],
+          "description": "Effect level of invoking this endpoint"
+        },
+        "safe_for_agents": {
+          "type": "boolean",
+          "description": "Whether autonomous agents may use this endpoint"
+        },
+        "requires_human_approval": {
+          "type": "boolean",
+          "description": "Whether a human approval step is required before invocation"
+        },
+        "examples": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/EndpointLlmExample" },
+          "description": "Example inputs for MCP clients and smoke validation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EndpointLlmExample": {
+      "type": "object",
+      "required": ["input"],
+      "properties": {
+        "input": {
+          "type": "object",
+          "description": "Example input object for the projected MCP tool"
+        },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Optional explanation for the example"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

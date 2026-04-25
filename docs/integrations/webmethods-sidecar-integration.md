@@ -2,6 +2,12 @@
 
 This guide explains how to deploy Software AG webMethods API Gateway with STOA sidecar for policy enforcement, rate limiting, and usage metering.
 
+This topology is a real Kubernetes sidecar: webMethods API Gateway and the
+`stoa-sidecar` container run in the same pod, and webMethods calls
+`http://127.0.0.1:8081/authz` before forwarding to backend APIs. Standalone
+STOA deployments targeting a remote webMethods gateway must be labelled and
+documented as `standalone-link`, not sidecar.
+
 ## Architecture Overview
 
 ```
@@ -56,6 +62,7 @@ stoaSidecar:
   targetGateway: webmethods
 
   # STOA Sidecar configuration
+  # Same Rust gateway binary, sidecar route profile: /authz + health/admin/metrics.
   image:
     repository: ghcr.io/stoa-platform/stoa-gateway
     tag: latest
@@ -126,10 +133,11 @@ POST /v1/internal/gateways/register
 
 1. **Client** → webMethods Gateway (port 9072)
 2. webMethods → **ext_authz** → STOA sidecar (port 8081)
-3. STOA sidecar evaluates:
-   - OPA policies (loaded from Control Plane)
-   - Rate limits (per tenant/API/user)
-   - JWT token validation (via Keycloak)
+3. STOA sidecar evaluates the shared decision pipeline:
+   - Pre-validated user and tenant context
+   - Optional consumer rate limits
+   - Configured scope requirements
+   - Policy/metering integrations as they are enabled for the gateway runtime
 4. **Decision** returned to webMethods (allow/deny)
 5. If allowed, webMethods → **Backend API**
 6. STOA sidecar → **Kafka** (usage metrics)

@@ -35,6 +35,7 @@
 
 #![allow(dead_code)] // Phase 8 methods will be wired incrementally
 
+pub mod decision;
 pub mod proxy;
 pub mod shadow;
 pub mod sidecar;

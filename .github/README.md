@@ -67,14 +67,34 @@ runs three jobs on every PR that touches the AI-Factory surface:
 
 | Job | What it checks |
 |---|---|
-| `action-validator` | Schema-validates every composite under `.github/actions/` and the `claude-issue-to-pr*.yml` workflows via [mpalmer/action-validator](https://github.com/mpalmer/action-validator) `v0.9.0`. |
+| `action-validator` | Schema-validates every composite under `.github/actions/` and the `claude-issue-to-pr.yml` workflow via [mpalmer/action-validator](https://github.com/mpalmer/action-validator) `v0.9.0`. |
 | `yamllint` | YAML hygiene over the AI-Factory scope using [`.yamllint`](../.yamllint) (line-length warning at 200, `truthy` disabled, etc.). |
 | `pytest scripts/ci/tests` | Runs the full Python + bash test suite. Coverage is reported but not gated in Phase 2c. |
 
 The trigger is path-filtered (`scripts/ci/**`,
-`.github/actions/**`, `claude-issue-to-pr*.yml`,
+`.github/actions/**`, `claude-issue-to-pr.yml`,
 `ai-factory-scripts-tests.yml`, `.yamllint`) so unrelated PRs do not
 run it.
+
+## Issue-to-PR workflow
+
+[`workflows/claude-issue-to-pr.yml`](./workflows/claude-issue-to-pr.yml)
+is the Level-1 AI-Factory pipeline (Council S1 → /go → Council S2 →
+/go-plan → implement). It is event-driven plus a controlled
+`workflow_dispatch` smoke/replay path.
+
+Triggers:
+- `issues:[labeled, assigned]` — Council S1 fires when the
+  `claude-implement` label is applied or the issue is assigned.
+- `issue_comment:[created]` — `/go` (or `/approve`) fires Council S2;
+  `/go-plan` fires implementation. Both gated by
+  `author_association in {OWNER, MEMBER, COLLABORATOR}` (fork-safety).
+- `workflow_dispatch` with `stage = council | plan | implement` for
+  smoke/replay. Bypasses the kill-switch.
+
+Kill-switch: set `vars.DISABLE_L1_IMPLEMENT=true` in repo variables to
+disable real-event triggers. Dispatch path stays open so operators can
+run controlled smokes/replays.
 
 ### Running the harness locally
 
@@ -86,7 +106,6 @@ pip install yamllint
 yamllint -c .yamllint \
   .github/actions/ \
   .github/workflows/claude-issue-to-pr.yml \
-  .github/workflows/claude-issue-to-pr-v2.yml \
   .github/workflows/ai-factory-scripts-tests.yml \
   .yamllint
 
@@ -96,7 +115,6 @@ curl -fsSL "https://github.com/mpalmer/action-validator/releases/download/v0.9.0
 chmod +x /tmp/action-validator
 for f in .github/actions/*/action.yml \
          .github/workflows/claude-issue-to-pr.yml \
-         .github/workflows/claude-issue-to-pr-v2.yml \
          .github/workflows/ai-factory-scripts-tests.yml; do
   /tmp/action-validator "$f" || echo "FAIL: $f"
 done

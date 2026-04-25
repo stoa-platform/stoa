@@ -3,10 +3,9 @@
 #
 # Triggers only on PRs that touch the AI-Factory surface. Three jobs:
 #   1. action-validator — schema-validates composite actions and the
-#      claude-issue-to-pr workflows (legacy + v2). Scoped to AI-Factory
-#      because action-validator's schema is stricter than GitHub's
-#      runtime parser, producing false positives on unrelated legacy
-#      workflows.
+#      claude-issue-to-pr workflow. Scoped to AI-Factory because
+#      action-validator's schema is stricter than GitHub's runtime
+#      parser, producing false positives on unrelated legacy workflows.
 #   2. yamllint — surface-level YAML hygiene over the same scope.
 #   3. pytest — runs scripts/ci/tests/ which cover both the Python
 #      helpers and the bash helpers (via pytest+subprocess per Phase
@@ -21,7 +20,7 @@ on:
     paths:
       - 'scripts/ci/**'
       - '.github/actions/**'
-      - '.github/workflows/claude-issue-to-pr*.yml'
+      - '.github/workflows/claude-issue-to-pr.yml'
       - '.github/workflows/ai-factory-scripts-tests.yml'
       - '.yamllint'
 
@@ -82,7 +81,6 @@ jobs:
           fail=0
           for f in \
             .github/workflows/claude-issue-to-pr.yml \
-            .github/workflows/claude-issue-to-pr-v2.yml \
             .github/workflows/ai-factory-scripts-tests.yml; do
             if [ ! -f "${f}" ]; then
               echo "::warning::Skipping missing file ${f}"
@@ -109,7 +107,6 @@ jobs:
           file_or_dir: |
             .github/actions/
             .github/workflows/claude-issue-to-pr.yml
-            .github/workflows/claude-issue-to-pr-v2.yml
             .github/workflows/ai-factory-scripts-tests.yml
             .yamllint
           config_file: .yamllint

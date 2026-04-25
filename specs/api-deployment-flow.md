@@ -102,6 +102,23 @@ Invariants spécifiques:
 `Promotion.status=promoted` ne signifie jamais "gateway synced" sans
 `GatewayDeployment` lié et acquitté.
 
+Le statut de déploiement et le statut de santé/connectivité gateway sont deux
+axes distincts. Une route déjà acquittée `synced` ne doit pas repasser `failed`
+uniquement parce qu'un healthcheck gateway échoue, qu'une gateway webMethods de
+démo redémarre, ou qu'un agent rate un heartbeat. Dans ce cas, la route reste
+`synced` et la gateway devient `offline`, `restarting`, `stale`, ou
+`unreachable` sur l'axe connectivité.
+
+Un `GatewayDeployment` déjà `synced` ne peut changer vers `error`, `drifted` ou
+`deleting` que dans ces cas:
+
+- une nouvelle génération de desired state est demandée et son application
+  échoue;
+- un undeploy/rollback explicite crée une intention de suppression;
+- un drift detector confirme, après retour online/retry, que la route attendue
+  n'existe plus ou ne correspond plus au desired state;
+- un opérateur force un resync et l'ack de cette nouvelle tentative échoue.
+
 Statuts utilisateur canoniques à exposer sur `/api-deployments`:
 
 | Statut UI | Condition minimale |
@@ -115,6 +132,14 @@ Statuts utilisateur canoniques à exposer sur `/api-deployments`:
 | `failed` | au moins un `error`, aucun `pending/syncing` récupérable |
 | `drifted` | au moins un `drifted` |
 | `deleting` | undeploy/rollback en suppression active |
+
+Axes UI obligatoires pour une ligne `/api-deployments`:
+
+| Axe | Source | Exemple | Ne doit pas masquer |
+|-----|--------|---------|---------------------|
+| Déploiement | `GatewayDeployment.sync_status`, `desired_generation`, `last_synced_generation` | `synced`, `pending`, `failed` | le nom API et la gateway cible |
+| Connectivité gateway | heartbeat, route-sync poll, dernier ack agent | `online`, `restarting`, `offline`, `stale` | un deployment déjà `synced` |
+| Runtime call optionnel | test manuel ou smoke ciblé | `2xx`, `404`, backend unreachable | la preuve d'ack gateway |
 
 ### 3.2 Assignments et gateways
 
@@ -156,6 +181,46 @@ Statuts utilisateur canoniques à exposer sur `/api-deployments`:
 - La Console doit afficher un état actionnable: re-sync, inspect gateway, ou
   supprimer la cible.
 
+### 3.6 Colonnes minimales de la Console
+
+Le tableau `/api-deployments` doit permettre de comprendre où l'API est
+déployée sans ouvrir le détail.
+
+Colonnes minimales:
+
+- API: nom catalogue ou `desired_state.api_name`
+- Environment: env normalisé (`dev`, `staging`, `prod`)
+- Gateway: nom lisible de la gateway, nom logique agent si différent, et type
+  (`stoa-connect`, `stoa-gateway`, `sidecar`, `legacy`)
+- Deployment status: statut stable dérivé du `GatewayDeployment`
+- Gateway status: connectivité/heartbeat séparée du statut de déploiement
+- Last route ack: `last_sync_success` ou dernier `route-sync-ack`
+- Promotion: lien/état promotion si le deployment vient d'une promotion
+
+FAIL si le tableau affiche seulement "gateway unreachable" ou un point rouge
+global sans montrer que l'API reste déployée sur une gateway précédemment
+acquittée.
+
+### 3.7 Déploiement vers environnements supérieurs
+
+Le chemin attendu n'est pas le même selon l'environnement:
+
+| Source | Cible | Déclencheur | Contrôle | Completion |
+|--------|-------|-------------|----------|------------|
+| local/dev | dev | deploy direct Console/API autorisé | gateway cible explicite ou assignment dev | ack gateway sur chaque `GatewayDeployment` |
+| dev | staging | promotion `dev -> staging` | assignment staging `auto_deploy=true` ou choix explicite gateway staging | promotion `promoted` seulement après ack de toutes les gateways staging |
+| staging | prod | promotion contrôlée/GitOps selon ADR-040 | approbation requise, pas de click-to-prod silencieux | prod `promoted` seulement après ack gateway prod ou signal GitOps équivalent |
+
+Pour staging/prod:
+
+- la promotion crée un `GatewayDeployment` par gateway cible valide;
+- chaque gateway utilise son mode de transport déclaré;
+- l'état promotion reste `promoting` tant que les deployments liés ne sont pas
+  tous `synced`;
+- une gateway temporairement offline conserve le deployment en attente ou
+  `synced + gateway offline` selon qu'elle avait déjà ack la génération courante;
+- aucun `Promotion.status=promoted` n'est autorisé avec `0` deployment créé.
+
 ## 4. Acceptance tests
 
 ### ADF-0 — Seed idempotent
@@ -196,13 +261,17 @@ La page `/api-deployments` charge les gateway deployments.
 
 PASS si la ligne affiche:
 - nom API issu de `desired_state.api_name` ou du catalog
-- gateway cible
+- gateway cible avec nom lisible et type/capacité de déploiement
 - environnement gateway
 - statut dérivé de `GatewayDeployment.sync_status`
+- statut de connectivité gateway séparé du statut deployment
 - last sync basé sur `last_sync_success`
 
 FAIL si la page affiche un succès basé uniquement sur `Deployment.completed_at`
 ou `Promotion.completed_at`.
+
+FAIL si une gateway offline/restarting fait repasser une API déjà `synced` en
+`failed` sans nouvelle génération, undeploy, ou drift confirmé.
 
 ### ADF-4 — Assignment target env valide
 
@@ -335,6 +404,44 @@ PASS si:
 FAIL si la promotion réussit avec `0` deployment ou avec seulement une partie
 des modes gateway acquittés.
 
+### ADF-14 — Reboot gateway ne casse pas le statut déployé
+
+Déployer une API vers une gateway webMethods de démo via STOA Connect, attendre
+`sync_status=synced`, puis simuler un reboot gateway ou un heartbeat manquant.
+
+PASS si:
+- le `GatewayDeployment` reste `synced` pour la génération déjà acquittée
+- la Console affiche la gateway `offline`, `restarting`, `stale` ou équivalent
+  sur l'axe connectivité
+- le tableau conserve le nom de la gateway et le dernier ack connu
+
+FAIL si le statut principal de déploiement devient rouge/`failed` uniquement à
+cause du healthcheck.
+
+### ADF-15 — Drift confirmé après retour online
+
+Après ADF-14, remettre la gateway online puis forcer une vérification qui
+confirme que la route n'existe plus.
+
+PASS si le deployment devient `drifted` ou demande un resync explicite, avec
+preuve que la route attendue manque après retour online.
+
+FAIL si un état offline temporaire est traité immédiatement comme drift.
+
+### ADF-16 — Promotion vers staging/prod attend les acks cibles
+
+Créer une promotion `dev -> staging` puis `staging -> prod` avec assignments
+valides dans chaque environnement.
+
+PASS si:
+- chaque promotion crée ses propres `GatewayDeployment` liés par `promotion_id`
+- les gateways staging/prod affichent leur nom dans le tableau
+- la promotion ne devient `promoted` qu'après ack de toutes les gateways cibles
+- une gateway cible déjà `synced` ne repasse pas `failed` sur simple reboot
+
+FAIL si prod est marqué promoted avec `0` deployment, avec une gateway cross-env,
+ou avec une gateway seulement healthcheckée mais jamais ack.
+
 Court terme:
 - ajouter un smoke API-level ciblé, par exemple
   `scripts/api-deployment-flow-smoke.sh`
@@ -356,6 +463,8 @@ Critère GO pour toute PR touchant ce flux:
 - ADF-5, ADF-6, ADF-7 passent pour toute PR promotion/assignment/sync
 - ADF-8 passe pour toute PR Console deploy dialog ou environment selector
 - ADF-9 passe pour toute PR rollback/undeploy
+- ADF-14, ADF-15, ADF-16 passent pour toute PR qui touche healthcheck gateway,
+  drift detection, promotion, ou la table `/api-deployments`
 
 ## 6. Blockers connus
 
@@ -369,6 +478,8 @@ Critère GO pour toute PR touchant ce flux:
 | A-B6 | `/api-deployments` n'est pas encore couvert par un smoke transverse | P1 | ADF-3, ADF-8 |
 | A-B7 | chemins legacy SyncEngine/inline sync encore visibles dans le code malgré ADR-059 SSE cible | P1 | ADF-2, ADF-5 |
 | A-B8 | capacité de déploiement gateway non exposée/normalisée (`agent_pull_ack`, `stoa_gateway_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
+| A-B9 | statut de déploiement et healthcheck gateway mélangés dans la Console | P0 | ADF-3, ADF-14, ADF-15 |
+| A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
 
 ## 7. Révisions
 
@@ -377,3 +488,4 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-25 | Codex | Création initiale du contrat API deployment flow |
 | 2026-04-25 | Codex | Alignement explicite ADR-040/ADR-059/ADR-035/ADR-036 |
 | 2026-04-25 | Codex | Ajout du contrat multi-mode legacy VM/STOA gateway/STOA sidecar |
+| 2026-04-25 | Codex | Séparation statut déploiement vs health gateway et promotion env supérieurs |

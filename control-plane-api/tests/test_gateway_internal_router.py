@@ -654,6 +654,8 @@ class TestInternalToolDiscovery:
 def _make_deployment(desired_state: dict):
     """Build a minimal mock GatewayDeployment."""
     m = MagicMock()
+    m.id = uuid4()
+    m.desired_generation = 1
     m.desired_state = desired_state
     return m
 
@@ -755,3 +757,47 @@ class TestListGatewayRoutes:
 
         assert resp.status_code == 200
         assert resp.json() == []
+
+    def test_routes_filter_falls_back_to_self_registered_hostname(self, client):
+        """stoa-connect route polling accepts the agent hostname as gateway_name.
+
+        The CP stores self-registered gateways under the canonical name
+        ``{hostname}-{mode}-{environment}``, but existing agents poll with their
+        configured ``STOA_INSTANCE_NAME``. Route delivery must resolve that
+        hostname or the gateway stays online with zero routes to ack.
+        """
+        gateway = MagicMock()
+        gateway.id = uuid4()
+        dep = _make_deployment(
+            {
+                "api_catalog_id": "cat-4",
+                "api_name": "fapi-banking",
+                "backend_url": "http://banking-mock:8080",
+                "methods": ["GET", "POST"],
+                "spec_hash": "sha-banking",
+                "activated": True,
+                "tenant_id": "banking-demo",
+            }
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockGatewayRepo,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeploymentRepo,
+        ):
+            mock_settings.GATEWAY_ADMIN_KEY = None
+            gw_repo = MockGatewayRepo.return_value
+            gw_repo.get_by_name = AsyncMock(return_value=None)
+            gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=gateway)
+            deploy_repo = MockDeploymentRepo.return_value
+            deploy_repo.list_by_statuses_and_gateway = AsyncMock(return_value=[dep])
+
+            resp = client.get("/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev")
+
+        assert resp.status_code == 200
+        routes = resp.json()
+        assert len(routes) == 1
+        assert routes[0]["name"] == "fapi-banking"
+        gw_repo.get_by_name.assert_awaited_once_with("connect-webmethods-dev")
+        gw_repo.get_self_registered_by_hostname.assert_awaited_once_with("connect-webmethods-dev")
+        deploy_repo.list_by_statuses_and_gateway.assert_awaited_once()

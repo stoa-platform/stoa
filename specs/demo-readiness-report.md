@@ -10,12 +10,12 @@
 1. Les briques démo existent toutes en code : cp-api (routes apis/apps/subs/deployments présentes), stoa-gateway (`/apis/{api_name}/{*path}`, `/health`, `/metrics`), stoactl (apply/get/subscription).
 2. Il n'y a **aucun test bout-en-bout** qui exerce les 5 étapes dans l'ordre sur la même instance. Le rewrite a recertifié chaque brique isolément.
 3. Les rewrites actifs (GW-1 closed, GW-2 open, GO-2 validated) respectent leurs contrats internes mais aucun garde-fou démo ne protège le chemin vertical.
-4. La route proxy gateway canonique est figée pour la démo : `GET /apis/{api_name}/get`. Le smoke ne probe plus plusieurs shapes.
+4. La route proxy gateway canonique est figée pour la démo : `GET /apis/demo-httpbin/get` en mode UAC-driven. Le smoke ne probe plus plusieurs shapes.
 5. Le seed existe (`make seed-dev`), mais un tenant `demo` minimal dédié smoke n'est pas garanti reproductible.
 6. La métrique Prometheus attendue (`proxy_requests_total` ou `mcp_tool_calls_total`) est présente en code gateway mais son nom exact + labels ne sont pas figés dans un contrat testé ; OTEL/Grafana/Console/Portal sont maintenant cadrés en AT-5b nice-to-have.
 7. L'auth API key (header `X-Api-Key`) existe gateway-side ; B1 borne maintenant le retour `api_key` cleartext au mode explicite `X-Demo-Mode: true`.
 8. La stack docker-compose pré-existe (`deploy/docker-compose/docker-compose.yml`) mais son suffisance pour le smoke n'est pas validée (mock-backend non-confirmé).
-9. Les specs `/specs/*.md` créés + `scripts/demo-smoke-test.sh` donnent un contrat exécutable avec verdicts non ambigus (`REAL_PASS`, `CONTRACT_DRY_RUN`, `MOCK_PASS`, `FAIL`). **Aucun run réel n'a encore été tenté**.
+9. Les specs `/specs/*.md` + `scripts/demo-smoke-test.sh` donnent un contrat exécutable avec verdicts non ambigus (`REAL_PASS`, `CONTRACT_DRY_RUN`, `MOCK_PASS`, `FAIL`) et une première vérité UAC fonctionnelle via `specs/uac/demo-httpbin.uac.json`.
 10. Verdict préliminaire : **FAIL attendu en premier run** sur AT-2/AT-3/AT-4. Plan "démo-first" actionnable immédiat ci-dessous.
 
 ## 2. Ce qui marche déjà (inspection statique)
@@ -60,9 +60,10 @@ Il reste non bloquant pour `demo-smoke-test.sh` tant que les blockers provider
 P0 ne sont pas fermés, mais il devient la référence pour toute PR touchant
 Portal, signup, prospects, subscriptions UX ou usage client.
 
-### 3.1 Contrats figés non documentés
+### 3.1 Contrats figés
 - `architecture-rules.md` §2.2 affirme que `/apis/{api_name}/{*path}` est la surface démo officielle.
-- `demo-smoke-test.sh` utilise un seul chemin canonique: `/apis/${DEMO_API_NAME}/get`.
+- `architecture-rules.md` §2.2bis fige le contrat UAC démo `demo-httpbin` publié.
+- `demo-smoke-test.sh` utilise un seul chemin canonique dérivé du UAC quand `DEMO_UAC_CONTRACT` est fourni: `/apis/demo-httpbin/get`.
 - Format Prometheus attendu (`proxy_requests_total`) pas testé en intégration — probable drift silencieux si renommé
 
 ### 3.2 Seed démo reproductible
@@ -84,10 +85,12 @@ Ce point ferme B2 pour AT-0. AT-4 peut maintenant cibler un backend local
 déterministe dès que la stack locale dépasse AT-0/AT-2
 exploitable.
 
-### 3.5 Chemin proxy gateway figé
+### 3.5 Chemin proxy gateway figé et UAC-driven
 Le chemin gateway démo est canonique : `{GATEWAY_URL}/apis/{api_name}/get`.
-`api_name` désigne le slug retourné par `POST /v1/tenants/{tid}/apis`
-(`demo-api-smoke` par défaut). Le smoke utilise ce chemin unique.
+En mode UAC-driven, `api_name` vient de `specs/uac/demo-httpbin.uac.json`
+(`name=demo-httpbin`) et le path vient de `endpoints[0].path` (`/get`), soit
+`/apis/demo-httpbin/get`. Sans `DEMO_UAC_CONTRACT`, le smoke conserve le
+fallback historique `demo-api-smoke` et affiche `WARN — smoke not UAC-driven`.
 
 ### 3.6 Auth bypass dev non documenté
 Le script smoke autorise `DEMO_ADMIN_TOKEN=""` en fallback, mais aucune variable `STOA_DISABLE_AUTH` ou flag équivalent n'est documenté côté cp-api. Probable que la démo échoue silencieusement en 401/403 sur AT-1 sans JWT Keycloak valide.
@@ -109,6 +112,10 @@ Polling 30s par défaut dans stoa-connect → AT-2 peut timeout. Mitigation dans
 | B8 | OTEL visible en UI non prouvé automatiquement | P3 | AT-5b | observability/ui (nice-to-have) |
 | C-B1 | Démo client/prospect non automatisée (seed + UI + conversion) | P1 | CPD-0..CPD-10 | portal/console/cp-api |
 
+Le premier lien UAC → smoke est traité: `demo-httpbin` `GET /get` est chargé,
+validé, puis utilisé pour construire `/apis/demo-httpbin/get`. Cela ne ferme pas
+les blockers runtime AT-0..AT-5.
+
 ## 5. Contournements acceptables pendant le rewrite
 
 Pour débloquer rapidement la validation du contrat sans confondre script OK et démo prête :
@@ -116,6 +123,7 @@ Pour débloquer rapidement la validation du contrat sans confondre script OK et 
 | Contournement | Cible | Durée | Risque |
 |---------------|-------|-------|--------|
 | `./scripts/demo-smoke-test.sh --dry-run-contract` | Tous | permanent | Valide le contrat/script, verdict `CONTRACT_DRY_RUN`, jamais `DEMO READY` |
+| `DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh --dry-run-contract` | UAC | permanent | Valide la preuve UAC minimale sans stack live |
 | `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | stack absente | usage local | Valide le chemin mocké, verdict `MOCK_PASS`, jamais `DEMO READY` |
 | Démarrer `mock-backend` via compose seul (`docker compose ... up -d mock-backend`) | B2 | jusqu'à stack complète | Service sous profil `demo`; ne pas exposer Prometheus sur le même port pendant ce smoke |
 | `DEMO_GATEWAY_PATH` override local | B3 | debug uniquement | Toute démo officielle doit revenir à `/apis/{api_name}/get` |
@@ -159,3 +167,4 @@ La PR de cadrage posait le contrat sans code applicatif. B1 est maintenant trait
 | Date | Version | Auteur | Delta |
 |------|---------|--------|-------|
 | 2026-04-24 | v1.0 | Claude (session `/demo-scope`) | Création initiale, 7 blockers identifiés, verdict GO conditionnel |
+| 2026-04-24 | v1.1 | Codex | Ajout du contrat UAC démo `demo-httpbin` et du chemin smoke dérivé `/apis/demo-httpbin/get` |

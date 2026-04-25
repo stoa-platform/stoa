@@ -134,7 +134,11 @@ class DeploymentService:
             )
             gateway = await gw_repo.create(gateway)
 
-        await GatewayDeploymentService(self.db).deploy_api(api_catalog.id, [gateway.id])
+        await GatewayDeploymentService(self.db).deploy_api(
+            api_catalog.id,
+            [gateway.id],
+            emit_sync_requests=False,
+        )
 
     async def rollback_deployment(
         self,

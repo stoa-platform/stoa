@@ -96,7 +96,7 @@ fallback historique `demo-api-smoke` et affiche `WARN — smoke not UAC-driven`.
 Le script smoke autorise `DEMO_ADMIN_TOKEN=""` en fallback, mais aucune variable `STOA_DISABLE_AUTH` ou flag équivalent n'est documenté côté cp-api. Probable que la démo échoue silencieusement en 401/403 sur AT-1 sans JWT Keycloak valide.
 
 ### 3.7 Route-sync latence
-Polling 30s par défaut dans stoa-connect → AT-2 pouvait timeout. Mitigation démo actuelle : en mode `STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true`, `POST /v1/tenants/{tid}/deployments` crée le `GatewayDeployment` consommé par `GET /v1/internal/gateways/routes`, et la gateway compose recharge les routes toutes les 2s. Le run local passe maintenant AT-2 et AT-4; le prochain blocker réel est AT-5 métriques.
+Polling 30s par défaut dans stoa-connect → AT-2 pouvait timeout. Mitigation démo actuelle : en mode `STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true`, `POST /v1/tenants/{tid}/deployments` crée le `GatewayDeployment` consommé par `GET /v1/internal/gateways/routes` sans déclencher le push sync admin `/admin/apis`, et la gateway compose recharge les routes toutes les 2s. Le run local passe maintenant AT-2 et AT-4; le prochain blocker réel est AT-5 métriques.
 
 ## 4. Blockers réels (à résoudre avant smoke `REAL_PASS`)
 

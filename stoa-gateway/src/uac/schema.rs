@@ -31,14 +31,14 @@ pub enum EndpointSideEffects {
     Destructive,
 }
 
-/// Example input for an LLM-facing endpoint tool.
+/// Example input/output hint for an LLM-facing endpoint tool.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndpointLlmExample {
     /// Example input object for the projected MCP tool
     pub input: Value,
-    /// Optional explanation for the example
+    /// Optional partial output shape expected from the example
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub expected_output_contains: Option<Value>,
 }
 
 /// LLM-facing metadata for a UAC endpoint.
@@ -275,6 +275,27 @@ impl UacContractSpec {
                         i
                     ));
                 }
+                if llm.examples.is_empty() {
+                    errors.push(format!("endpoints[{}].llm.examples must not be empty", i));
+                }
+                for (j, example) in llm.examples.iter().enumerate() {
+                    if !example.input.is_object() {
+                        errors.push(format!(
+                            "endpoints[{}].llm.examples[{}].input must be an object",
+                            i, j
+                        ));
+                    }
+                    if example
+                        .expected_output_contains
+                        .as_ref()
+                        .is_some_and(|expected| !expected.is_object())
+                    {
+                        errors.push(format!(
+                            "endpoints[{}].llm.examples[{}].expected_output_contains must be an object",
+                            i, j
+                        ));
+                    }
+                }
             }
         }
 
@@ -310,6 +331,13 @@ mod tests {
         spec.description = Some("Process payments".to_string());
         spec.endpoints = vec![sample_endpoint()];
         spec
+    }
+
+    fn sample_llm_example() -> EndpointLlmExample {
+        EndpointLlmExample {
+            input: serde_json::json!({"id": "pay_123"}),
+            expected_output_contains: Some(serde_json::json!({"id": "pay_123"})),
+        }
     }
 
     #[test]
@@ -481,13 +509,17 @@ mod tests {
                 requires_human_approval: false,
                 examples: vec![EndpointLlmExample {
                     input: serde_json::json!({"verbose": false}),
-                    description: None,
+                    expected_output_contains: Some(serde_json::json!({"status": "ok"})),
                 }],
             }),
         };
 
         let json = serde_json::to_value(&endpoint).expect("serialize");
         assert_eq!(json["llm"]["tool_name"], "health_read");
+        assert_eq!(
+            json["llm"]["examples"][0]["expected_output_contains"]["status"],
+            "ok"
+        );
 
         let roundtrip: UacEndpoint = serde_json::from_value(json).expect("deserialize");
         let llm = roundtrip.llm.expect("llm metadata");
@@ -506,7 +538,7 @@ mod tests {
             side_effects: EndpointSideEffects::Read,
             safe_for_agents: true,
             requires_human_approval: false,
-            examples: vec![],
+            examples: vec![sample_llm_example()],
         });
         spec.endpoints[1].llm = Some(EndpointLlm {
             summary: "Read two".to_string(),
@@ -515,7 +547,7 @@ mod tests {
             side_effects: EndpointSideEffects::Read,
             safe_for_agents: true,
             requires_human_approval: false,
-            examples: vec![],
+            examples: vec![sample_llm_example()],
         });
 
         let errors = spec.validate();
@@ -532,13 +564,54 @@ mod tests {
             side_effects: EndpointSideEffects::Destructive,
             safe_for_agents: false,
             requires_human_approval: false,
-            examples: vec![],
+            examples: vec![sample_llm_example()],
         });
 
         let errors = spec.validate();
         assert!(errors
             .iter()
             .any(|e| e.contains("destructive") && e.contains("requires_human_approval")));
+    }
+
+    #[test]
+    fn test_validate_llm_examples_required() {
+        let mut spec = sample_contract();
+        spec.endpoints[0].llm = Some(EndpointLlm {
+            summary: "Read payment".to_string(),
+            intent: "Read one payment.".to_string(),
+            tool_name: "payment_read".to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![],
+        });
+
+        let errors = spec.validate();
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("llm.examples must not be empty")));
+    }
+
+    #[test]
+    fn test_validate_llm_example_input_must_be_object() {
+        let mut spec = sample_contract();
+        spec.endpoints[0].llm = Some(EndpointLlm {
+            summary: "Read payment".to_string(),
+            intent: "Read one payment.".to_string(),
+            tool_name: "payment_read".to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![EndpointLlmExample {
+                input: serde_json::json!("pay_123"),
+                expected_output_contains: None,
+            }],
+        });
+
+        let errors = spec.validate();
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("examples[0].input must be an object")));
     }
 
     // === LLM Config integration tests (CAB-709) ===

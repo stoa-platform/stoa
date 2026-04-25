@@ -89,11 +89,12 @@ afficher `WARN — smoke not UAC-driven`.
 
 ### 2.3 Format métriques Prometheus
 
-Nom obligatoirement présent: **au moins un** de
+Nom obligatoirement présent pour le smoke démo:
 - `proxy_requests_total{tenant,api,method,status}`
-- `mcp_tool_calls_total{...}`
 
-incrémenté à chaque appel proxyé. Changement de nom = breaking contract démo.
+Il est exposé par la gateway sur `/metrics` au format Prometheus text et
+incrémenté à chaque appel proxyé par `/apis/{api_name}/{*path}`. Changement de
+nom = breaking contract démo.
 
 ### 2.4 Format logs
 

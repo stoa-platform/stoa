@@ -14,6 +14,7 @@
 # Env vars (with defaults):
 #   API_URL              http://localhost:8000
 #   GATEWAY_URL          http://localhost:8081
+#   GATEWAY_METRICS_URL  ${GATEWAY_URL}/metrics
 #   MOCK_BACKEND_URL     http://localhost:9090
 #   MOCK_BACKEND_UPSTREAM_URL http://mock-backend:9090
 #   DEMO_UAC_CONTRACT    (empty → legacy fallback; set specs/uac/demo-httpbin.uac.json for UAC-driven smoke)
@@ -49,6 +50,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # ── Config ───────────────────────────────────────────────────────────────────
 API_URL="${API_URL:-http://localhost:8000}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8081}"
+GATEWAY_METRICS_URL="${GATEWAY_METRICS_URL:-${GATEWAY_URL}/metrics}"
 MOCK_BACKEND_URL="${MOCK_BACKEND_URL:-http://localhost:9090}"
 MOCK_BACKEND_UPSTREAM_URL="${MOCK_BACKEND_UPSTREAM_URL:-http://mock-backend:9090}"
 DEMO_UAC_CONTRACT="${DEMO_UAC_CONTRACT:-}"
@@ -569,8 +571,18 @@ at5_observable() {
     log "=== AT-5  Observable proof ==="
     at_filter_match 5 || { log "  (skipped by AT filter)"; return 0; }
 
-    local metrics
-    metrics="$(curl -sS --max-time 5 "${GATEWAY_URL}/metrics" 2>/dev/null || true)"
+    local metrics="" counter="" value=""
+    for _ in 1 2 3; do
+        metrics="$(curl -sS --max-time 5 "${GATEWAY_METRICS_URL}" 2>/dev/null || true)"
+        counter="$(echo "$metrics" | grep -E '^proxy_requests_total\{' | head -1 || true)"
+        if [[ -n "$counter" ]]; then
+            value="$(echo "$counter" | awk '{print $NF}')"
+            if echo "$value" | grep -Eq '^[0-9]+(\.[0-9]+)?$' && [[ "${value%.*}" != "0" ]]; then
+                break
+            fi
+        fi
+        sleep 1
+    done
     if [[ -z "$metrics" ]]; then
         if mock_allowed; then
             record "AT-5" "MOCK" "no /metrics body; observable proof skipped in mock/contract mode"
@@ -580,21 +592,16 @@ at5_observable() {
         return 1
     fi
 
-    local counter
-    counter="$(echo "$metrics" | grep -E '^(proxy_requests_total|mcp_tool_calls_total)\{' | head -1)"
-
     if [[ -z "$counter" ]]; then
         if mock_allowed; then
-            record "AT-5" "MOCK" "no proxy_requests_total/mcp_tool_calls_total counter. Either names diverged or no traffic. Spec requires at least one."
+            record "AT-5" "MOCK" "no proxy_requests_total counter. Either names diverged or no traffic. Spec requires it."
             return 0
         fi
-        record "AT-5" "FAIL" "no counter proxy_requests_total|mcp_tool_calls_total"
+        record "AT-5" "FAIL" "no counter proxy_requests_total"
         return 1
     fi
 
     # Extract value (last field on the line)
-    local value
-    value="$(echo "$counter" | awk '{print $NF}')"
     if ! echo "$value" | grep -Eq '^[0-9]+(\.[0-9]+)?$' || [[ "${value%.*}" == "0" ]]; then
         if mock_allowed; then
             record "AT-5" "MOCK" "counter found but value=${value} (likely no traffic in AT-4). Spec expects >0."

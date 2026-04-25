@@ -19,7 +19,7 @@ Ce scope fige ce chemin. Tant qu'il n'est pas vert bout-en-bout, **aucune autre 
 | 2 | Provisionner la route gateway | cp-api + stoa-gateway | `POST /v1/tenants/{t}/deployments` → gateway polling `GET /v1/internal/gateways/routes` OU `stoa-connect` SSE `GET /v1/internal/gateways/{id}/events` | Route active dans la table gateway (log `Route table reloaded` + réponse non-404 au step 4) |
 | 3 | Créer une souscription applicative | cp-api | `POST /v1/tenants/{t}/applications` + `POST /v1/subscriptions` (ou `POST /applications/{id}/subscribe/{api_id}`) | Subscription `active`, clé API retournée (préfixe visible) |
 | 4 | Appeler l'API via la gateway | stoa-gateway | `GET {GATEWAY_URL}/apis/demo-httpbin/get` avec header `X-Api-Key: ${KEY}` en mode UAC-driven | HTTP 2xx, payload backend |
-| 5 | Preuve observable | stoa-gateway + cp-api | `GET {GATEWAY_URL}/metrics` + logs JSON stdout | Compteur Prometheus incrémenté (`proxy_requests_total` ou `mcp_tool_calls_total`) + ligne log corrélée (request_id, tenant, route) |
+| 5 | Preuve observable | stoa-gateway + cp-api | `GET ${GATEWAY_METRICS_URL:-${GATEWAY_URL}/metrics}` + logs JSON stdout | Compteur Prometheus incrémenté (`proxy_requests_total`) + ligne log corrélée (request_id, tenant, route) |
 | 5b | Visibilité observabilité (nice-to-have) | Grafana + Console + Portal | Grafana datasource/dashboard, Console `/monitoring`, Portal `/usage` ou dashboard embarqué | La même activité démo est visible dans au moins une surface UI si la stack observabilité est démarrée |
 
 ## 3. Surface in-scope (et rien d'autre)

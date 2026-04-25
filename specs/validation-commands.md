@@ -39,6 +39,7 @@ Variables d'environnement (defaults documentés dans le script) :
 |-----|---------|-------------|
 | `API_URL` | `http://localhost:8000` | Base URL cp-api |
 | `GATEWAY_URL` | `http://localhost:8081` | Base URL stoa-gateway exposée par le compose démo |
+| `GATEWAY_METRICS_URL` | `${GATEWAY_URL}/metrics` | Endpoint Prometheus gateway utilisé par AT-5 pour vérifier `proxy_requests_total > 0` |
 | `MOCK_BACKEND_URL` | `http://localhost:9090` | Mock HTTP backend vu par le poste dev pour AT-0 |
 | `MOCK_BACKEND_UPSTREAM_URL` | `http://mock-backend:9090` | Mock HTTP backend vu par la gateway en compose |
 | `DEMO_UAC_CONTRACT` | vide | Contrat UAC démo à charger, par exemple `specs/uac/demo-httpbin.uac.json` |

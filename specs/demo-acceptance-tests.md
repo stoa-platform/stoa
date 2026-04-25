@@ -140,11 +140,11 @@ shapes.
 
 **Given** AT-4 PASS (au moins 1 appel effectué)
 **When**:
-1. `GET ${GATEWAY_URL}/metrics | grep -E 'proxy_requests_total|mcp_tool_calls_total'`
+1. `GET ${GATEWAY_METRICS_URL:-${GATEWAY_URL}/metrics} | grep -E '^proxy_requests_total\{'`
 2. Récupérer les logs stdout de la gateway (ou `docker logs stoa-gateway`) sur les 60 dernières secondes
 
 **Then**:
-- Au moins une métrique Prometheus avec `_total` strictement > 0 (compteur incrémenté par AT-4)
+- `proxy_requests_total{tenant,api,method,status}` est strictement > 0 (compteur incrémenté par AT-4)
 - Au moins une ligne log JSON contenant `api_id=${API_ID}` OU `tenant=demo` OU `request_id=${X_STOA_REQUEST_ID}` issue d'AT-4
 - **[MOCK OK]** Trace OTEL = non bloquant (no-op si endpoint vide), mais vérifié par AT-5b quand la stack observabilité est disponible
 

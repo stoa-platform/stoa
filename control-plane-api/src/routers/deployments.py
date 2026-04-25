@@ -31,8 +31,10 @@ git_service = git_provider_factory()
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
 
 
-def _demo_mode_enabled(request: Request) -> bool:
+def _demo_mode_enabled(request: Request | None) -> bool:
     """Demo/dev bypass is explicit and per-request."""
+    if request is None:
+        return False
     return settings.STOA_DISABLE_AUTH and request.headers.get("X-Demo-Mode", "").lower() == "true"
 
 
@@ -89,7 +91,7 @@ async def get_deployment(
 async def create_deployment(
     tenant_id: str,
     request: DeploymentCreate,
-    http_request: Request,
+    http_request: Request = None,  # type: ignore[assignment]
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     git: GitProvider = Depends(get_git_provider),

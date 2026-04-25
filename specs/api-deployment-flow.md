@@ -51,12 +51,55 @@ Ce contrat est un contrat de flux Console/runtime. Il ne remplace pas les ADRs:
   et auto-enregistrées avec identité d'environnement. Le filtre env/gateway de
   la Console doit respecter cette identité.
 
+ADR-040 et ADR-059 ne parlent pas exactement du même niveau:
+
+- ADR-040 définit la vérité configurationnelle et la gouvernance
+  multi-environnement: Git/UAC/stoa.yaml est la source de vérité, surtout pour
+  staging/prod.
+- ADR-059 définit le chemin d'exécution runtime simplifié: CP matérialise une
+  intention en `GatewayDeployment`, le Link/gateway applique, puis ack. Dans ce
+  chemin, Git peut être un side-effect asynchrone en dev/demo, mais il ne devient
+  pas une preuve runtime.
+
+Ce contrat tranche donc ainsi: Git/UAC est la vérité configurationnelle,
+`GatewayDeployment` est la vérité d'exécution, et la Console affiche l'écart
+entre desired state et observed state.
+
+## 1.2 Source de vérité
+
+Le contrat ne définit pas un déploiement "vers une gateway". Il définit la
+réconciliation d'un desired state Git/UAC vers une ou plusieurs cibles gateway
+déclarées pour un environnement. Les gateways n'initient pas la vérité de
+configuration; elles appliquent et acquittent une génération de desired state.
+
+| Objet | Rôle | Source de vérité |
+|-------|------|------------------|
+| Git/UAC/stoa.yaml | configuration déclarative, overlays par environnement, gouvernance | vérité configurationnelle |
+| CP matérialisé | cache DB/API du desired state résolu | projection réconciliable, pas source primaire prod |
+| GatewayDeployment | cible d'exécution par gateway et génération de desired state | vérité runtime/exécution |
+| Gateway observed state | état réellement observé/reporté par Link/gateway | preuve d'application ou drift |
+| Gateway health | connectivité/heartbeat/reboot | vérité connectivité seulement |
+| Promotion | intention/lifecycle env -> env | jamais preuve runtime seule |
+
+Chaîne conceptuelle:
+
+```text
+Git/UAC/stoa.yaml desired state
+→ CP materialized desired state
+→ environment overlay resolved
+→ gateway assignments/capabilities resolved
+→ N GatewayDeployment target states
+→ Link/gateway applies locally
+→ ack / failed / drift observed state
+→ Console displays desired vs observed
+```
+
 ## 2. Scénario cible
 
 | # | Étape | Surface | API/Commande | Preuve |
 |---|-------|---------|--------------|--------|
-| ADF-0 | Seed flux deployment | cp-api + DB | seed tenant, API catalogue, gateway dev/staging | Données idempotentes prêtes |
-| ADF-1 | Déployer en dev | Console/API | `POST /v1/tenants/{t}/apis/{api}/deploy` avec `gateway_ids` | `GatewayDeployment` créé `pending/syncing` |
+| ADF-0 | Déclarer le desired state | Git/UAC + cp-api | UAC/stoa.yaml + overlays env ou raccourci dev/demo | desired state idempotent prêt |
+| ADF-1 | Réconcilier en dev | Console/API | `POST /v1/tenants/{t}/apis/{api}/deploy` comme raccourci dev/demo avec `gateway_ids` | `GatewayDeployment` créé `pending/syncing` pour chaque cible |
 | ADF-2 | Ack gateway | STOA Link/gateway + cp-api | callback Link ou `route-sync-ack` legacy | `sync_status=synced`, `last_sync_success` non nul |
 | ADF-3 | Voir l'état Console | Console | `/api-deployments` | Ligne API/gateway/env visible, statut runtime affiché |
 | ADF-4 | Préparer auto-deploy env cible | cp-api | assignment `auto_deploy=true` pour target env | assignment listé avec gateway du même env |
@@ -65,6 +108,11 @@ Ce contrat est un contrat de flux Console/runtime. Il ne remplace pas les ADRs:
 | ADF-7 | Gérer absence de cible | Console/API | promotion sans assignment target | erreur/warning explicite, jamais succès silencieux |
 | ADF-8 | Changer d'environnement | Console | global env selector ou filtre local | gateway invalide désélectionnée, aucune cible cross-env |
 | ADF-9 | Rollback/undeploy | Console/API | reverse promotion, Git revert, ou undeploy | intention de suppression puis route absente gateway |
+
+`Deploy` signifie: réconcilier un desired state vers les gateways cibles. Ce
+n'est pas un push CP -> gateway. Pour les chemins dev/demo, `POST /deploy` est
+un raccourci qui crée ou matérialise une intention de desired state; il ne doit
+pas devenir le chemin canonique prod.
 
 ## 2.1 Modes gateway supportés
 
@@ -140,6 +188,27 @@ Axes UI obligatoires pour une ligne `/api-deployments`:
 | Déploiement | `GatewayDeployment.sync_status`, `desired_generation`, `last_synced_generation` | `synced`, `pending`, `failed` | le nom API et la gateway cible |
 | Connectivité gateway | heartbeat, route-sync poll, dernier ack agent | `online`, `restarting`, `offline`, `stale` | un deployment déjà `synced` |
 | Runtime call optionnel | test manuel ou smoke ciblé | `2xx`, `404`, backend unreachable | la preuve d'ack gateway |
+
+### 3.1.1 Agrégation multi-gateway
+
+Une API peut avoir N cibles gateway par environnement. Chaque cible valide crée
+un `GatewayDeployment` distinct, lié à la même génération de desired state.
+
+Statut agrégé Console par API + environnement:
+
+| Cas | Statut agrégé |
+|-----|---------------|
+| 0 cible gateway valide | `no_target_gateway` |
+| tous les targets de la génération courante sont `synced` | `synced` |
+| au moins un target `synced`, au moins un target `pending/syncing/error` | `partial` |
+| aucun target `synced` et au moins un `error` final | `failed` |
+| au moins un target `drifted`, tous les autres `synced` | `drifted` |
+| au moins un target `drifted` et au moins un target non-synced | `partial_drifted` |
+| au moins un target `deleting` | `deleting` |
+
+L'agrégat ne doit jamais masquer les statuts par gateway: la Console doit
+permettre de voir quelle cible est `synced`, `pending`, `error`, `drifted` ou
+offline.
 
 ### 3.2 Assignments et gateways
 
@@ -221,7 +290,71 @@ Pour staging/prod:
   `synced + gateway offline` selon qu'elle avait déjà ack la génération courante;
 - aucun `Promotion.status=promoted` n'est autorisé avec `0` deployment créé.
 
+Règles par environnement:
+
+- **dev**: la Console/API peut créer une intention directe. Cette intention doit
+  être dérivable d'un UAC/stoa.yaml ou réconciliée vers Git en side-effect selon
+  le mode ADR-059.
+- **staging**: la promotion ou un changement Git est le chemin recommandé. Un
+  succès staging exige des `GatewayDeployment` cibles et des acks gateway, pas
+  seulement une promotion approuvée.
+- **prod**: pas de click-to-prod silencieux. La Console génère une PR Git ou
+  suit le chemin GitOps approuvé par ADR-040, sauf emergency path explicitement
+  audité. Une écriture directe prod ne peut pas être le chemin nominal.
+
 ## 4. Acceptance tests
+
+### ADF-G1 — Desired state Git/UAC présent
+
+Préparer un UAC/stoa.yaml pour une API et ses overlays d'environnement.
+
+PASS si:
+- le desired state contient l'API, les paramètres gateway et l'upstream
+- les overlays `dev`, `staging`, `prod` expriment uniquement les différences
+  d'environnement
+- la spec est idempotente et versionnable dans Git
+
+### ADF-G2 — CP matérialise le desired state
+
+Réconcilier le desired state dans CP.
+
+PASS si CP expose une projection matérialisée contenant:
+- API/catalog identity
+- desired generation/hash
+- environment overlay résolu
+- gateway targets candidates
+
+FAIL si CP invente une configuration runtime qui ne peut pas être retracée vers
+Git/UAC/stoa.yaml, sauf raccourci dev/demo explicitement marqué.
+
+### ADF-G3 — Assignments et capabilities résolus
+
+Résoudre les gateways cibles pour un environnement.
+
+PASS si:
+- les `ApiGatewayAssignment` et capabilities gateway produisent N targets valides
+- les targets cross-env sont refusées
+- le mode de transport de chaque target est connu avant création du deployment
+
+### ADF-G4 — N GatewayDeployments créés
+
+Créer ou matérialiser l'intention vers un environnement avec N targets.
+
+PASS si un `GatewayDeployment` distinct existe par target, avec:
+- `environment`
+- gateway id/name
+- transport/capability
+- desired generation/hash
+- `promotion_id` si issu d'une promotion
+
+### ADF-G5 — Chaque gateway ack sa cible
+
+Faire appliquer la génération courante par chaque Link/gateway cible.
+
+PASS si:
+- chaque target ack son `deployment_id`
+- le statut agrégé reflète les statuts par gateway
+- la Console permet de voir chaque cible et son dernier ack
 
 ### ADF-0 — Seed idempotent
 
@@ -238,6 +371,9 @@ PASS si le seed est relançable sans doublons et retourne les IDs utiles.
 
 `POST /v1/tenants/{tenant}/apis/{api}/deploy` avec
 `{"environment":"dev","gateway_ids":["gateway-dev-demo"]}` retourne `201`.
+
+Ce endpoint est un raccourci dev/demo qui matérialise une intention de desired
+state vers des targets. Il n'est pas le chemin canonique prod.
 
 PASS si un `GatewayDeployment` existe pour API + gateway dev avec statut
 `pending` ou `syncing`.
@@ -459,6 +595,9 @@ cd e2e && npx playwright test api-deployment-flow.spec.ts
 ```
 
 Critère GO pour toute PR touchant ce flux:
+- ADF-G1 à ADF-G5 passent ou restent explicitement inchangés pour toute PR qui
+  touche Git/UAC/stoa.yaml, reconciliation CP, assignments, capabilities ou
+  matérialisation deployment
 - ADF-1, ADF-2, ADF-3 passent ou restent explicitement inchangés par la PR
 - ADF-5, ADF-6, ADF-7 passent pour toute PR promotion/assignment/sync
 - ADF-8 passe pour toute PR Console deploy dialog ou environment selector
@@ -480,6 +619,7 @@ Critère GO pour toute PR touchant ce flux:
 | A-B8 | capacité de déploiement gateway non exposée/normalisée (`agent_pull_ack`, `stoa_gateway_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
 | A-B9 | statut de déploiement et healthcheck gateway mélangés dans la Console | P0 | ADF-3, ADF-14, ADF-15 |
 | A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
+| A-B11 | spec encore trop `GatewayDeployment`-first si Git/UAC desired state n'est pas vérifié avant matérialisation | P0 | ADF-G1, ADF-G2, ADF-G3, ADF-G4, ADF-G5 |
 
 ## 7. Révisions
 
@@ -489,3 +629,4 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-25 | Codex | Alignement explicite ADR-040/ADR-059/ADR-035/ADR-036 |
 | 2026-04-25 | Codex | Ajout du contrat multi-mode legacy VM/STOA gateway/STOA sidecar |
 | 2026-04-25 | Codex | Séparation statut déploiement vs health gateway et promotion env supérieurs |
+| 2026-04-25 | Codex | Réorientation Git/UAC desired-state-first selon ADR-040 et ADR-059 |

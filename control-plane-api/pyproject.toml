@@ -3,7 +3,7 @@
 
 [project]
 name = "stoa-control-plane-api"
-version = "1.8.5"
+version = "1.8.7"
 description = "STOA Platform Control Plane API"
 readme = "README.md"
 requires-python = ">=3.11"

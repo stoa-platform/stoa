@@ -546,6 +546,7 @@ mod transactional {
             operation_id: Some("tx".to_string()),
             input_schema: None,
             output_schema: None,
+            llm: None,
         }];
         spec
     }

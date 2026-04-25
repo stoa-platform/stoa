@@ -322,10 +322,12 @@ services:
       STOA_LOG_FORMAT: json
       STOA_GATEWAY_MODE: edge-mcp
       STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-false}"
-      STOA_INSTANCE_NAME: "stoa-quickstart"
+      STOA_INSTANCE_NAME: "${GATEWAY_ID:-gateway-demo}"
       STOA_ENVIRONMENT: "dev"
       STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
       STOA_ADMIN_API_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
+      STOA_ROUTE_RELOAD_ENABLED: "${STOA_ROUTE_RELOAD_ENABLED:-true}"
+      STOA_ROUTE_RELOAD_INTERVAL_SECS: "${STOA_ROUTE_RELOAD_INTERVAL_SECS:-2}"
       # Kafka metering (Redpanda)
       STOA_KAFKA_ENABLED: "true"
       STOA_KAFKA_BROKERS: redpanda:9092

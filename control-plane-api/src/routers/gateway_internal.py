@@ -94,6 +94,7 @@ class GatewayRouteItem(BaseModel):
     """Route in stoa-gateway ApiRoute format for hot-reload."""
 
     id: str
+    api_id: str = ""
     deployment_id: str = ""
     name: str
     tenant_id: str

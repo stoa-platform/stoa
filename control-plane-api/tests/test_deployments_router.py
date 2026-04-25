@@ -312,6 +312,63 @@ class TestCreateDeployment:
         assert call_kwargs["api_name"] == "Git API Name"
         assert call_kwargs["version"] == "2.0.0"
 
+    def test_create_demo_mode_bridges_legacy_deployment_to_gateway_route(
+        self, app_with_tenant_admin, mock_db_session, monkeypatch
+    ):
+        """Demo smoke must create the GatewayDeployment read by /internal/gateways/routes."""
+        from src.routers import deployments as deployments_router
+        from src.services.git_provider import GitProvider, get_git_provider
+
+        monkeypatch.setattr(deployments_router.settings, "STOA_DISABLE_AUTH", True)
+
+        deployment = _mock_deployment(api_id="demo-api-smoke", api_name="demo-api-smoke", environment="dev")
+        mock_svc = MagicMock()
+        mock_svc.create_deployment = AsyncMock(return_value=deployment)
+        mock_svc.ensure_demo_gateway_deployment = AsyncMock()
+
+        mock_git = MagicMock(spec=GitProvider)
+        mock_git._project = object()
+        mock_git.get_api = AsyncMock(return_value=None)
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+
+        with (
+            patch(DEPLOY_SVC_PATH, return_value=mock_svc),
+            TestClient(app_with_tenant_admin) as client,
+        ):
+            resp = client.post(
+                "/v1/tenants/acme/deployments",
+                headers={"X-Demo-Mode": "true"},
+                json={"api_id": "demo-api-smoke", "environment": "dev", "gateway_id": "gateway-demo"},
+            )
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
+
+        assert resp.status_code == 201
+        mock_svc.ensure_demo_gateway_deployment.assert_awaited_once_with(
+            tenant_id="acme",
+            api_id="demo-api-smoke",
+            api_name="demo-api-smoke",
+            gateway_name="gateway-demo",
+        )
+
+    def test_create_without_demo_header_does_not_bridge_gateway_route(self, app_with_tenant_admin, mock_db_session):
+        deployment = _mock_deployment(api_id="demo-api-smoke", api_name="demo-api-smoke", environment="dev")
+        mock_svc = MagicMock()
+        mock_svc.create_deployment = AsyncMock(return_value=deployment)
+        mock_svc.ensure_demo_gateway_deployment = AsyncMock()
+
+        with (
+            patch(DEPLOY_SVC_PATH, return_value=mock_svc),
+            TestClient(app_with_tenant_admin) as client,
+        ):
+            resp = client.post(
+                "/v1/tenants/acme/deployments",
+                json={"api_id": "demo-api-smoke", "environment": "dev", "gateway_id": "gateway-demo"},
+            )
+
+        assert resp.status_code == 201
+        mock_svc.ensure_demo_gateway_deployment.assert_not_awaited()
+
 
 # ============== Rollback Deployment ==============
 

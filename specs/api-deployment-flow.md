@@ -66,6 +66,34 @@ Ce contrat est un contrat de flux Console/runtime. Il ne remplace pas les ADRs:
 | ADF-8 | Changer d'environnement | Console | global env selector ou filtre local | gateway invalide désélectionnée, aucune cible cross-env |
 | ADF-9 | Rollback/undeploy | Console/API | reverse promotion, Git revert, ou undeploy | intention de suppression puis route absente gateway |
 
+## 2.1 Modes gateway supportés
+
+Le contrat de déploiement est commun, mais le transport et la preuve d'ack
+dépendent du mode de gateway. La Console ne doit pas assimiler `online` à
+`synced`: `online` prouve seulement le heartbeat/connectivité agent, pas
+l'application de la route.
+
+| Mode gateway | Exemple | Identité CP | Transport de déploiement | Preuve `synced` | Contraintes runtime |
+|--------------|---------|-------------|---------------------------|-----------------|---------------------|
+| Legacy VM via STOA Connect | webMethods/Kong/Gravitee en VM, `connect-webmethods-dev` | gateway `self_register`, nom logique agent + gateway canonique DB | pull agent `GET /v1/internal/gateways/routes?gateway_name={agent_name}`; SSE peut accélérer mais le polling reste obligatoire | `POST /v1/internal/gateways/{gateway_id}/route-sync-ack` avec `deployment_id` appliqué | le `backend_url` doit être joignable depuis la VM; une URL Kubernetes `*.svc.cluster.local` est invalide sauf tunnel/réseau partagé explicite |
+| STOA Gateway edge/gateway | `stoa-gateway` central ou edge MCP | gateway auto-enregistrée ou seedée dans l'env cible | route registry CP consommée par la gateway, par polling ou SSE selon l'implémentation active | ack gateway/agent ou état route-table observé, corrélé au `deployment_id` | chemin public canonique `/apis/{api_name}/{*path}`; le backend doit être joignable depuis la gateway |
+| STOA Gateway sidecar | `stoa-link-wm-dev`, sidecar proche d'une gateway legacy | gateway `self_register` typée sidecar dans l'env cible | pull/ack agent-managed comme STOA Connect, ou adapter direct seulement si le sidecar est réellement joignable depuis CP | route ack côté sidecar avec `deployment_id`, puis route active côté gateway locale | la résolution DNS/backend est locale au sidecar; une erreur DNS côté CP ne doit pas être utilisée pour juger un sidecar agent-managed |
+
+Invariants spécifiques:
+
+- Chaque gateway expose une capacité de déploiement dérivée, par exemple
+  `agent_pull_ack`, `stoa_gateway_registry` ou `direct_adapter`. La Console doit
+  afficher cette capacité et adapter ses actions de test.
+- Une gateway `self_register` est agent-managed par défaut: CP ne doit pas
+  tenter un push direct si l'agent est le chemin déclaré.
+- Le mapping nom agent -> gateway DB est contractuel. Le lookup doit accepter le
+  nom logique annoncé par l'agent (`STOA_INSTANCE_NAME`) et le réconcilier avec
+  la gateway canonique auto-enregistrée, sans créer de cible cross-env.
+- `GatewayInstance.environment`, `ApiGatewayAssignment.environment` et
+  `GatewayDeployment.environment` doivent être identiques pour une même cible.
+  Les alias `prod`/`production` doivent être normalisés avant toute sélection ou
+  promotion.
+
 ## 3. Invariants
 
 ### 3.1 Source de vérité des statuts
@@ -247,6 +275,66 @@ PASS si:
 
 ## 5. Validation cible
 
+### ADF-10 — Legacy VM via STOA Connect
+
+Déployer une API vers une gateway legacy VM agent-managed, par exemple
+`connect-webmethods-dev`.
+
+PASS si:
+- CP crée un `GatewayDeployment` pour la gateway canonique de l'environnement
+- l'agent récupère la route via `GET /v1/internal/gateways/routes` en utilisant
+  son nom logique
+- l'agent applique la route via l'adapter gateway local
+- l'agent envoie `route-sync-ack`
+- la Console affiche `synced` uniquement après cet ack
+
+FAIL si:
+- la Console utilise le heartbeat `online` comme preuve de sync
+- CP tente un push direct vers une gateway `self_register` agent-managed
+- le déploiement reste invisible car le nom agent ne correspond pas au nom
+  canonique DB
+
+### ADF-11 — STOA Gateway edge/gateway
+
+Déployer `demo-httpbin` vers une STOA gateway edge/gateway.
+
+PASS si:
+- la route est chargée dans la route table gateway
+- `GET {GATEWAY_URL}/apis/demo-httpbin/get` répond non-404 avec une clé valide
+- l'état Console est dérivé du `GatewayDeployment` et de la preuve gateway, pas
+  d'un `Deployment.completed_at`
+
+### ADF-12 — STOA Gateway sidecar
+
+Déployer une API vers une STOA gateway sidecar dans l'environnement cible.
+
+PASS si:
+- le sidecar reçoit l'intention par le chemin agent-managed déclaré
+- le backend configuré est résoluble depuis le sidecar
+- l'ack `deployment_id` marque le `GatewayDeployment` `synced`
+- un échec DNS ou gateway local remonte en `error` actionnable avec le nom de la
+  cible fautive
+
+FAIL si:
+- CP marque la cible `error` uniquement parce qu'il ne peut pas résoudre le nom
+  interne du sidecar alors que le mode déclaré est agent-managed
+- une promotion dev->staging/prod est `promoted` avant l'ack sidecar
+
+### ADF-13 — Promotion multi-mode fermée
+
+Configurer des assignments `auto_deploy=true` vers au moins deux modes gateway
+différents dans l'environnement cible, puis approuver une promotion.
+
+PASS si:
+- un `GatewayDeployment` est créé par cible valide
+- chaque cible utilise son transport déclaré
+- la promotion reste `promoting` tant que toutes les cibles ne sont pas
+  `synced`
+- la promotion devient `failed` si une cible est en `error` final
+
+FAIL si la promotion réussit avec `0` deployment ou avec seulement une partie
+des modes gateway acquittés.
+
 Court terme:
 - ajouter un smoke API-level ciblé, par exemple
   `scripts/api-deployment-flow-smoke.sh`
@@ -280,6 +368,7 @@ Critère GO pour toute PR touchant ce flux:
 | A-B5 | rollback ne garantit pas une intention `deleting` sur les anciens deployments | P1 | ADF-9 |
 | A-B6 | `/api-deployments` n'est pas encore couvert par un smoke transverse | P1 | ADF-3, ADF-8 |
 | A-B7 | chemins legacy SyncEngine/inline sync encore visibles dans le code malgré ADR-059 SSE cible | P1 | ADF-2, ADF-5 |
+| A-B8 | capacité de déploiement gateway non exposée/normalisée (`agent_pull_ack`, `stoa_gateway_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
 
 ## 7. Révisions
 
@@ -287,3 +376,4 @@ Critère GO pour toute PR touchant ce flux:
 |------|--------|------------|
 | 2026-04-25 | Codex | Création initiale du contrat API deployment flow |
 | 2026-04-25 | Codex | Alignement explicite ADR-040/ADR-059/ADR-035/ADR-036 |
+| 2026-04-25 | Codex | Ajout du contrat multi-mode legacy VM/STOA gateway/STOA sidecar |

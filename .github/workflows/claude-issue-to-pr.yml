@@ -1,7 +1,21 @@
-# Level 1: Claude Code Issue-to-PR — assigns issue to Claude, creates a PR
-# Triggered when an issue is labeled "claude-implement" or assigned to claude bot.
-# Two-stage Council: Stage 1 (ticket pertinence) → /go → Stage 2 (plan validation) → /go-plan → implement.
-# Kill-switch: set DISABLE_L1_IMPLEMENT=true in repo variables to disable.
+# Level 1: Claude Code Issue-to-PR — assigns issue to Claude, creates a PR.
+# Triggered when an issue is labeled "claude-implement" or assigned, or when
+# a member comments /go (Stage 2) or /go-plan (Stage 3).
+#
+# Two-stage Council: Stage 1 (ticket pertinence) → /go → Stage 2 (plan
+# validation) → /go-plan → implement.
+#
+# Kill-switch: set DISABLE_L1_IMPLEMENT=true in repo variables to disable
+# real-event triggers. workflow_dispatch bypasses the kill-switch so
+# operators can run controlled smokes/replays even with prod blocked.
+#
+# Smoke / replay: workflow_dispatch with `stage = council | plan | implement`
+# fires exactly one job (no implicit chaining). Sequence smokes manually
+# by re-dispatching with the next stage.
+#
+# Phase 2d of CI-1 rewrite — superseded the legacy 797 LOC monolith using
+# composite actions (.github/actions/) and scripts (scripts/ci/) shipped
+# in Phases 2a/2b.
 
 name: Claude Code Issue-to-PR
 
@@ -10,9 +24,21 @@ on:
     types: [labeled, assigned]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Existing issue number to process.'
+        required: true
+        type: string
+      stage:
+        description: 'Stage to dispatch (smoke/replay knob).'
+        required: true
+        type: choice
+        default: council
+        options: [council, plan, implement]
 
 concurrency:
-  group: claude-issue-${{ github.event.issue.number }}
+  group: claude-issue-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 permissions:
@@ -22,40 +48,94 @@ permissions:
   id-token: write
 
 jobs:
-  # ----- Stage 1: Council Ticket Validation (runs on label or assignment) -----
-  council-validate:
+  prepare:
+    # Bypass kill-switch for workflow_dispatch so operators can run
+    # smokes/replays even when DISABLE_L1_IMPLEMENT=true.
     if: |
-      vars.DISABLE_L1_IMPLEMENT != 'true' &&
+      github.event_name == 'workflow_dispatch' ||
+      vars.DISABLE_L1_IMPLEMENT != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      title: ${{ steps.fetch.outputs.title }}
+      body: ${{ steps.fetch.outputs.body }}
+      url: ${{ steps.fetch.outputs.url }}
+      number: ${{ steps.fetch.outputs.number }}
+      ticket-id: ${{ steps.fetch.outputs.ticket-id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Fetch issue data
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Resolve issue number from dispatch input (smoke path) or the
+          # event payload (issues / issue_comment). Routed through env so
+          # any user-controlled value is shell-safe.
+          ISSUE_NUMBER: ${{ inputs.issue_number || github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          RAW=$(gh issue view "$ISSUE_NUMBER" --json title,body,url)
+          TITLE=$(printf '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["title"])')
+          URL=$(printf   '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["url"])')
+          BODY=$(printf  '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["body"] or "")')
+          TICKET=$(extract_ticket_id "$TITLE $BODY")
+
+          echo "number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "ticket-id=${TICKET}" >> "$GITHUB_OUTPUT"
+
+          # Multi-line body via heredoc delimiter.
+          {
+            echo "body<<CI1_BODY_EOF"
+            printf '%s\n' "$BODY"
+            echo "CI1_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::prepared issue #${ISSUE_NUMBER} ticket=${TICKET:-none}"
+
+  council-validate:
+    # Stage 1 — Council ticket pertinence. Fires on:
+    #   - issues:labeled with `claude-implement`
+    #   - issues:assigned (legacy: bot/human "claim this for AI" path)
+    #   - workflow_dispatch with stage=council (smoke/replay)
+    needs: prepare
+    if: |
+      (github.event_name == 'workflow_dispatch' || vars.DISABLE_L1_IMPLEMENT != 'true') &&
+      needs.prepare.result == 'success' &&
       (
         (github.event_name == 'issues' && github.event.label.name == 'claude-implement') ||
-        (github.event_name == 'issues' && github.event.action == 'assigned')
+        (github.event_name == 'issues' && github.event.action == 'assigned') ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'council')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      score: ${{ steps.council.outputs.score }}
+      verdict: ${{ steps.council.outputs.verdict }}
+      mode: ${{ steps.council.outputs.mode }}
+      estimate-points: ${{ steps.council.outputs.estimate-points }}
+      outcome: ${{ steps.council.outputs.outcome }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      # Guard: skip Council S1 if already validated (prevents double-run on re-label)
-      - name: Check Council Already Done
+      - uses: ./.github/actions/label-guard
         id: guard
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          LABELS=$(gh issue view "${{ github.event.issue.number }}" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
-          if echo "$LABELS" | grep -q "council-validated"; then
-            echo "Council S1 already passed (council-validated label present). Skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run Council Validation
-        if: steps.guard.outputs.skip != 'true'
-        id: council
-        continue-on-error: true
-        uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: council-validated
+          github-token: ${{ github.token }}
+
+      - uses: ./.github/actions/council-run
+        if: steps.guard.outputs.already-set != 'true'
+        id: council
+        with:
+          stage: s1
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-6
+          max-turns: '5'
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.
@@ -65,8 +145,8 @@ jobs:
             Read the issue description and run a 4-persona Council validation
             (Chucky, OSS Killer, Archi, Better Call Saul).
 
-            Issue title: ${{ github.event.issue.title }}
-            Issue body: ${{ github.event.issue.body }}
+            Issue title: ${{ needs.prepare.outputs.title }}
+            Issue body: ${{ needs.prepare.outputs.body }}
 
             Follow the Council format from .claude/skills/council/SKILL.md.
             Score each persona /10, compute the average.
@@ -82,294 +162,194 @@ jobs:
             Comment `/go` to approve and start plan validation (Stage 2).
 
             IMPORTANT: Do NOT implement anything yet. Only validate the ticket pertinence.
-          # Model tier: sonnet (Council gate — structured rubric evaluation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
 
-      - name: Log token usage
-        if: always() && steps.guard.outputs.skip != 'true'
-        run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=5, Stage=council-validate"
-
-      # Add council-validated label so plan-validate job can verify
-      - name: Mark Council complete
-        if: steps.council.outcome == 'success' || steps.guard.outputs.skip == 'true'
+      - name: Apply council-validated label
+        # Verdict-gated: only handshake when Council actually produced a
+        # valid verdict. `outcome == success` alone is not enough (parser
+        # can return an empty verdict on partial Claude runs).
+        if: |
+          (
+            steps.council.outputs.outcome == 'success' &&
+            contains(fromJSON('["go","fix","redo"]'), steps.council.outputs.verdict)
+          ) ||
+          steps.guard.outputs.already-set == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          gh label create "council-validated" --color "0e8a16" --description "Council validation passed" --force 2>/dev/null || true
-          gh issue edit "${{ github.event.issue.number }}" --add-label "council-validated"
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          ensure_label "council-validated" "0e8a16" "Council validation passed"
+          add_label "$ISSUE_NUMBER" "council-validated"
 
-      # Check if this ticket qualifies for Ship fast-path (skip Stage 2)
-      - name: Check Ship Fast Path
-        id: check-fast
-        if: steps.council.outcome == 'success' || steps.guard.outputs.skip == 'true'
-        run: |
-          source scripts/ai-ops/model-router.sh
-
-          # Extract estimate from issue body (via env var to avoid bash injection from issue content)
-          ESTIMATE=$(extract_estimate "$ISSUE_BODY")
-
-          # Extract Ship/Show/Ask from Council output
-          MODE="ask"
-          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
-          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
-          if [ -f "$EXEC_FILE" ]; then
-            COUNCIL_TEXT=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null || echo "")
-            MODE=$(extract_mode "$COUNCIL_TEXT")
-          fi
-
-          echo "Estimate: ${ESTIMATE}, Mode: ${MODE}"
-
-          if [ "$MODE" = "ship" ] && [ "${ESTIMATE:-0}" -le 5 ] && [ "${ESTIMATE:-0}" -gt 0 ]; then
-            echo "Ship fast-path: adding label for S2 short-circuit"
-            gh label create "ship-fast-path" --color "d4c5f9" --description "Ship fast-path: skip Stage 2" --force 2>/dev/null || true
-            gh issue edit "${{ github.event.issue.number }}" --add-label "ship-fast-path"
-            echo "fast_path=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Regular path: ${MODE} mode, ${ESTIMATE} pts"
-            echo "fast_path=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Apply ship-fast-path label
+        if: |
+          steps.council.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.council.outputs.verdict)
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-
-      # Sync Council result to Linear (apply council:ticket-* label + comment)
-      - name: Sync Council to Linear
-        if: steps.council.outcome == 'success'
-        continue-on-error: true
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          MODE: ${{ steps.council.outputs.mode }}
+          ESTIMATE: ${{ steps.council.outputs.estimate-points }}
         run: |
-          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
-
-          # Extract CAB-XXXX from issue title or body
-          TICKET_ID=$(echo "$ISSUE_TITLE $ISSUE_BODY" \
-            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
-          if [ -z "$TICKET_ID" ]; then
-            echo "No CAB-XXXX found in issue — skipping Linear sync"
-            exit 0
-          fi
-
-          # Extract score from Council output (look for "Council Score: X.XX/10" pattern)
-          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
-          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
-          SCORE=""
-          if [ -f "$EXEC_FILE" ]; then
-            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
-              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
-          fi
-          if [ -z "$SCORE" ]; then
-            echo "Could not extract score — skipping Linear sync"
-            exit 0
-          fi
-
-          # Map score → label name
-          LABEL_NAME=""
-          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
-            LABEL_NAME="council:ticket-go"
-          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
-            LABEL_NAME="council:ticket-fix"
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          if [ "$MODE" = "ship" ] && [ "${ESTIMATE:-0}" -gt 0 ] && [ "${ESTIMATE:-0}" -le 5 ]; then
+            ensure_label "ship-fast-path" "d4c5f9" "Ship fast-path: skip Stage 2"
+            add_label "$ISSUE_NUMBER" "ship-fast-path"
+            echo "::notice::ship fast-path label applied (mode=${MODE} estimate=${ESTIMATE}pt)"
           else
-            LABEL_NAME="council:ticket-redo"
+            echo "::notice::regular path (mode=${MODE} estimate=${ESTIMATE}pt)"
           fi
 
-          echo "Syncing to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
+      - uses: ./.github/actions/council-sync-linear
+        if: |
+          steps.council.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.council.outputs.verdict)
+        with:
+          ticket-id: ${{ needs.prepare.outputs.ticket-id }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-body: ${{ needs.prepare.outputs.body }}
+          namespace: ticket
+          score: ${{ steps.council.outputs.score }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          linear-api-key: ${{ secrets.LINEAR_API_KEY }}
 
-          # Find Linear issue ID
-          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
-            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+      - uses: ./.github/actions/council-notify-slack
+        if: always() && steps.guard.outputs.already-set != 'true'
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('#{0}', needs.prepare.outputs.number) }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-url: ${{ needs.prepare.outputs.url }}
+          issue-number: ${{ needs.prepare.outputs.number }}
+          score: ${{ steps.council.outputs.score }}
+          verdict: ${{ steps.council.outputs.verdict }}
+          mode: ${{ steps.council.outputs.mode }}
+          slack-webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack-channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          pushgateway-url: ${{ vars.PUSHGATEWAY_URL }}
+          pushgateway-auth: ${{ secrets.PUSHGATEWAY_AUTH }}
 
-          if [ -z "$ISSUE_ID" ]; then
-            echo "::warning::Could not find Linear issue for ${TICKET_ID}"
-            exit 0
-          fi
+      - uses: ./.github/actions/write-summary
+        if: always()
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('issue-{0}', needs.prepare.outputs.number) }}
+          outcome: ${{ steps.council.outputs.outcome || 'skipped' }}
+          stage: council-s1
 
-          # Find label ID
-          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
-            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
-
-          if [ -n "$LABEL_ID" ]; then
-            # Get existing labels and add the new one
-            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
-              -H "Authorization: ${LINEAR_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
-              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
-
-            # Build label ID array: existing (minus old council:ticket-*) + new
-            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
-
-            curl -s -X POST "https://api.linear.app/graphql" \
-              -H "Authorization: ${LINEAR_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
-              > /dev/null 2>&1 || true
-            echo "Applied label ${LABEL_NAME} to ${TICKET_ID}"
-          fi
-
-          # Post Council comment on Linear
-          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
-          COMMENT="Council validation (Stage 1): **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
-          curl -s -X POST "https://api.linear.app/graphql" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
-            > /dev/null 2>&1 || true
-          echo "Posted Council comment on ${TICKET_ID}"
-
-      - name: Slack Council Report
-        if: always() && steps.guard.outputs.skip != 'true'
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-          N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
-          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
-          PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
-          PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_HTML_URL: ${{ github.event.issue.html_url }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE $ISSUE_BODY" | grep -oE 'CAB-[0-9]+' | head -1)
-          TICKET="${TICKET:-#${ISSUE_NUMBER}}"
-
-          # Extract score from Council execution output
-          SCORE=""
-          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
-          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
-          if [ -f "$EXEC_FILE" ]; then
-            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
-              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
-          fi
-
-          # Compute verdict from score (don't hardcode "Go")
-          VERDICT="Go"
-          if [ -n "$SCORE" ]; then
-            if echo "$SCORE < 6.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Redo"
-            elif echo "$SCORE < 8.0" | bc -l 2>/dev/null | grep -q 1; then VERDICT="Fix"; fi
-          fi
-
-          COUNCIL_TS=$(notify_council "$TICKET" "$ISSUE_TITLE" "${SCORE:-?}" "$VERDICT" "$ISSUE_HTML_URL" "$ISSUE_NUMBER")
-          _react_slack "mag" "$COUNCIL_TS"
-
-          # Push metrics with actual verdict
-          METRIC_VERDICT=$(echo "$VERDICT" | tr '[:upper:]' '[:lower:]')
-          push_metrics_council "issue-to-pr" "$TICKET" "${SCORE:-0}" "$METRIC_VERDICT"
-
-      - name: Write Job Summary — Council
-        if: always() && steps.guard.outputs.skip != 'true'
-        env:
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          COUNCIL_OUTCOME: ${{ steps.council.outcome }}
-        run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
-          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
-          write_job_summary "$TICKET" "$COUNCIL_OUTCOME" "" "" "council-s1"
-
-  # ----- Stage 2: Plan Validation (runs on /go approval) -----
   plan-validate:
-    # Defense-in-depth: author_association guard for public repo fork safety
+    # Stage 2 — Council plan validation. Fires on:
+    #   - issue_comment with /go or /approve from a MEMBER+ author
+    #   - workflow_dispatch with stage=plan (smoke/replay)
+    # No `needs: council-validate` — plan-validate fires from its own
+    # event (legacy pattern). Stage 1 presence is verified inline via
+    # `verify-stage1` so /go on a fresh issue can't bypass Stage 1.
+    needs: prepare
     if: |
-      vars.DISABLE_L1_IMPLEMENT != 'true' &&
-      github.event_name == 'issue_comment' &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (github.event_name == 'workflow_dispatch' || vars.DISABLE_L1_IMPLEMENT != 'true') &&
+      needs.prepare.result == 'success' &&
       (
-        github.event.comment.body == '/go' ||
-        github.event.comment.body == '/approve' ||
-        startsWith(github.event.comment.body, '/go ') ||
-        startsWith(github.event.comment.body, '/approve ')
+        (
+          github.event_name == 'issue_comment' &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            github.event.comment.body == '/go' ||
+            github.event.comment.body == '/approve' ||
+            startsWith(github.event.comment.body, '/go ') ||
+            startsWith(github.event.comment.body, '/approve ')
+          )
+        ) ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'plan')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      score: ${{ steps.plan.outputs.score }}
+      outcome: ${{ steps.plan.outputs.outcome }}
+      ship-fast-path: ${{ steps.fast-path.outputs.already-set }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Verify Stage 1 Council
+        # Legacy parity: prevent /go on a fresh issue from running Stage
+        # 2 without Stage 1 ever firing. Outputs `validated=true|false`;
+        # downstream operational steps gate on it (no silent exit).
         id: verify-stage1
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
-
-          # Guard: skip S2 if plan-validated already exists (prevents double-run)
-          if echo "$LABELS" | grep -q "plan-validated"; then
-            echo "Plan already validated (plan-validated label present). Skipping S2."
-            echo "validated=false" >> "$GITHUB_OUTPUT"
-            echo "already_validated=true" >> "$GITHUB_OUTPUT"
+          set -uo pipefail
+          LABELS=$(gh issue view "$ISSUE_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "council-validated"; then
+            echo "Stage 1 confirmed via label"
+            echo "validated=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          if echo "$LABELS" | grep -q "council-validated"; then
-            echo "Stage 1 Council confirmed"
+          # Fallback: scan comments for "Council Score" (legacy behaviour).
+          HAS_COMMENT=$(gh issue view "$ISSUE_NUMBER" --json comments \
+            --jq '[.comments[].body | select(contains("Council Score"))] | length')
+          if [ "${HAS_COMMENT:-0}" -gt 0 ]; then
+            echo "Stage 1 confirmed via comment fallback"
             echo "validated=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Checking for Council comment as fallback..."
-            COUNCIL_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Council Score"))] | length')
-            if [ "$COUNCIL_COMMENT" -gt 0 ]; then
-              echo "Council comment found"
-              echo "validated=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "Not an L1 issue or no Stage 1 Council — skipping"
-              echo "validated=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "::notice::No Stage 1 Council on this issue — skipping plan validation"
+            echo "validated=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Skip if not L1
-        if: steps.verify-stage1.outputs.validated != 'true'
-        run: |
-          echo "Not an L1 council-validated issue — exiting cleanly"
-          exit 0
-
-      # Ship fast-path: skip Stage 2, auto-add plan-validated + comment /go-plan
-      - name: Check Ship Fast Path
-        id: fast-path
+      - uses: ./.github/actions/label-guard
+        id: guard
         if: steps.verify-stage1.outputs.validated == 'true'
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: plan-validated
+          github-token: ${{ github.token }}
+
+      - uses: ./.github/actions/label-guard
+        id: fast-path
+        if: |
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.guard.outputs.already-set != 'true'
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: ship-fast-path
+          github-token: ${{ github.token }}
+
+      - name: Apply plan-validated via ship fast-path
+        # Note: /go-plan in body restores legacy parity — auto-triggers
+        # the implement job from the issue_comment:created event.
+        if: |
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.fast-path.outputs.already-set == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
-          if echo "$LABELS" | grep -q "ship-fast-path"; then
-            echo "Ship fast-path detected — skipping Stage 2"
-            gh label create "plan-validated" --color "006b75" --description "Stage 2 plan validation passed" --force 2>/dev/null || true
-            gh issue edit "$ISSUE_NUM" --add-label "plan-validated"
-            gh issue comment "$ISSUE_NUM" --body "Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation.\n\n/go-plan"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Regular path — running Stage 2"
-            echo "skipped=false" >> "$GITHUB_OUTPUT"
-          fi
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
+          add_label "$ISSUE_NUMBER" "plan-validated"
+          gh issue comment "$ISSUE_NUMBER" \
+            --body $'Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation.\n\n/go-plan'
 
-      - name: Run Plan Validation (Stage 2 Council)
-        if: steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
-        id: plan-council
-        continue-on-error: true
-        uses: anthropics/claude-code-action@v1
+      - uses: ./.github/actions/council-run
+        id: plan
+        if: |
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.guard.outputs.already-set != 'true' &&
+          steps.fast-path.outputs.already-set != 'true'
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          stage: s2
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-6
+          max-turns: '10'
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the task below.
 
-            You are running Stage 2 Council Plan Validation for issue #${{ github.event.issue.number }}.
+            You are running Stage 2 Council Plan Validation for issue #${{ needs.prepare.outputs.number }}.
 
-            Issue title: ${{ github.event.issue.title }}
-            Issue body: ${{ github.event.issue.body }}
+            Issue title: ${{ needs.prepare.outputs.title }}
+            Issue body: ${{ needs.prepare.outputs.body }}
 
             Stage 1 Council has already validated this ticket (pertinence check passed).
             Now run Stage 2: validate the IMPLEMENTATION PLAN.
@@ -401,266 +381,194 @@ jobs:
             Comment `/go-plan` to start implementation.
 
             IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
-          # Model tier: sonnet (Stage 2 Council — plan validation, Sonnet sufficient)
-          claude_args: "--model claude-sonnet-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
-      - name: Log token usage
-        if: always()
-        run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-6, MaxTurns=10, Stage=plan-validate"
-
-      - name: Mark Plan validated
-        if: steps.plan-council.outcome == 'success' && steps.fast-path.outputs.skipped != 'true'
+      - name: Apply plan-validated label
+        # Verdict-gated: only handshake when plan Council produced a
+        # valid verdict. Without this, parser failure on a partial
+        # Claude run silently labels the issue.
+        if: |
+          steps.plan.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.plan.outputs.verdict)
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          gh label create "plan-validated" --color "006b75" --description "Stage 2 plan validation passed" --force 2>/dev/null || true
-          gh issue edit "${{ github.event.issue.number }}" --add-label "plan-validated"
+          source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
+          ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
+          add_label "$ISSUE_NUMBER" "plan-validated"
 
-      # Sync Stage 2 result to Linear (apply council:plan-* label + comment)
-      - name: Sync Plan Council to Linear
-        if: steps.plan-council.outcome == 'success' && steps.fast-path.outputs.skipped != 'true'
-        continue-on-error: true
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: |
-          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+      - uses: ./.github/actions/council-sync-linear
+        if: |
+          steps.plan.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.plan.outputs.verdict)
+        with:
+          ticket-id: ${{ needs.prepare.outputs.ticket-id }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-body: ${{ needs.prepare.outputs.body }}
+          namespace: plan
+          score: ${{ steps.plan.outputs.score }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          linear-api-key: ${{ secrets.LINEAR_API_KEY }}
 
-          TICKET_ID=$(echo "$ISSUE_TITLE $ISSUE_BODY" \
-            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
-          if [ -z "$TICKET_ID" ]; then exit 0; fi
-
-          # Extract plan score from execution output
-          EXEC_FILE="${{ steps.plan-council.outputs.execution_file }}"
-          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
-          SCORE=""
-          if [ -f "$EXEC_FILE" ]; then
-            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
-              | grep -oE 'Plan Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
-          fi
-          # Fallback: try generic "Score:" pattern (last match = plan score)
-          if [ -z "$SCORE" ] && [ -f "$EXEC_FILE" ]; then
-            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
-              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | tail -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
-          fi
-          if [ -z "$SCORE" ]; then
-            echo "Could not extract plan score — skipping Linear sync"
-            exit 0
-          fi
-
-          # Map score → plan label
-          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
-            LABEL_NAME="council:plan-go"
-          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
-            LABEL_NAME="council:plan-fix"
-          else
-            LABEL_NAME="council:plan-redo"
-          fi
-
-          echo "Syncing plan to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
-
-          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
-            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
-          if [ -z "$ISSUE_ID" ]; then exit 0; fi
-
-          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
-            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
-
-          if [ -n "$LABEL_ID" ]; then
-            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
-              -H "Authorization: ${LINEAR_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
-              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:plan-") | not) | .id]' 2>/dev/null || echo "[]")
-            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
-
-            curl -s -X POST "https://api.linear.app/graphql" \
-              -H "Authorization: ${LINEAR_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
-              > /dev/null 2>&1 || true
-          fi
-
-          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
-          COMMENT="Plan validation (Stage 2): **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
-          curl -s -X POST "https://api.linear.app/graphql" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
-            > /dev/null 2>&1 || true
-
-      - name: Slack Plan Validation
-        if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
+      - name: Slack Plan Validation (inline — uses notify_plan signature)
+        if: |
+          always() &&
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.guard.outputs.already-set != 'true' &&
+          steps.fast-path.outputs.already-set != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_HTML_URL: ${{ github.event.issue.html_url }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PLAN_COUNCIL_OUTCOME: ${{ steps.plan-council.outcome }}
+          # Route untrusted issue data through env rather than direct
+          # ${{ … }} interpolation — CodeQL flags the direct form as a
+          # code-injection surface since workflow_dispatch inputs are
+          # user-controlled.
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          ISSUE_TITLE: ${{ needs.prepare.outputs.title }}
+          ISSUE_URL: ${{ needs.prepare.outputs.url }}
+          PLAN_OUTCOME: ${{ steps.plan.outputs.outcome || 'skipped' }}
         run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          PLAN_TS=$(notify_plan "$ISSUE_NUMBER" "$ISSUE_TITLE" "$ISSUE_HTML_URL" "$PLAN_COUNCIL_OUTCOME")
-          _react_slack "white_check_mark" "$PLAN_TS"
+          source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+          PLAN_TS=$(notify_plan \
+            "$ISSUE_NUMBER" \
+            "$ISSUE_TITLE" \
+            "$ISSUE_URL" \
+            "$PLAN_OUTCOME")
+          _react_slack "white_check_mark" "$PLAN_TS" || true
 
-      - name: Write Job Summary — Plan
-        if: always() && steps.verify-stage1.outputs.validated == 'true' && steps.fast-path.outputs.skipped != 'true'
-        env:
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          PLAN_COUNCIL_OUTCOME: ${{ steps.plan-council.outcome }}
-        run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
-          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
-          write_job_summary "$TICKET" "$PLAN_COUNCIL_OUTCOME" "" "" "council-s2"
+      - uses: ./.github/actions/write-summary
+        if: always()
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('issue-{0}', needs.prepare.outputs.number) }}
+          outcome: ${{ steps.plan.outputs.outcome || 'skipped' }}
+          stage: council-s2
 
-  # ----- Stage 3: Implementation (runs on /go-plan approval) -----
   implement:
-    # Defense-in-depth: author_association guard for public repo fork safety
+    # Stage 3 — Implementation. Fires on:
+    #   - issue_comment with /go-plan from a MEMBER+ author
+    #   - workflow_dispatch with stage=implement (smoke/replay)
+    # Stage 2 presence is verified inside the job by the wait-for-label
+    # composite (polls for plan-validated label / Plan Score comment).
+    needs: prepare
     if: |
-      vars.DISABLE_L1_IMPLEMENT != 'true' &&
-      github.event_name == 'issue_comment' &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (github.event_name == 'workflow_dispatch' || vars.DISABLE_L1_IMPLEMENT != 'true') &&
+      needs.prepare.result == 'success' &&
       (
-        github.event.comment.body == '/go-plan' ||
-        startsWith(github.event.comment.body, '/go-plan ')
+        (
+          github.event_name == 'issue_comment' &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            github.event.comment.body == '/go-plan' ||
+            startsWith(github.event.comment.body, '/go-plan ')
+          )
+        ) ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'implement')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      HEGEMON_INSTANCE: l1-v2-impl-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      # Guard: verify both Stage 1 and Stage 2 passed (with polling for race condition)
-      - name: Verify Plan validation
-        id: verify-council
+      - uses: ./.github/actions/wait-for-label
+        id: wait
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          label-name: plan-validated
+          max-attempts: '10'
+          interval-seconds: '30'
+          fallback-comment-pattern: 'Plan Score'
+          github-token: ${{ github.token }}
+
+      - name: Abort if no plan validation
+        if: steps.wait.outputs.validated != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          ISSUE_NUM="${{ github.event.issue.number }}"
-          MAX_ATTEMPTS=10
-          POLL_INTERVAL=30
-
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
-
-            if echo "$LABELS" | grep -q "plan-validated"; then
-              echo "Stage 2 plan validation confirmed (attempt ${attempt}/${MAX_ATTEMPTS})"
-              echo "validated=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            # Fallback: check for Plan Score comment
-            PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
-            if [ "$PLAN_COMMENT" -gt 0 ]; then
-              echo "Plan validation comment found (attempt ${attempt}/${MAX_ATTEMPTS})"
-              echo "validated=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-              echo "::notice::plan-validated not found yet (attempt ${attempt}/${MAX_ATTEMPTS}). Waiting ${POLL_INTERVAL}s for plan-validate job..."
-              sleep "$POLL_INTERVAL"
-            fi
-          done
-
-          echo "::error::No plan validation found after ${MAX_ATTEMPTS} attempts (~$((MAX_ATTEMPTS * POLL_INTERVAL))s)."
-          echo "validated=false" >> "$GITHUB_OUTPUT"
-
-      - name: Abort if no Plan validation
-        if: steps.verify-council.outputs.validated != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh issue comment "${{ github.event.issue.number }}" \
+          gh issue comment "$ISSUE_NUMBER" \
             --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first to trigger plan validation, then \`/go-plan\` after it passes."
           exit 1
 
-      # Route model based on ticket estimate
-      - name: Route Model
-        if: steps.verify-council.outputs.validated == 'true'
+      - name: Route model
         id: route
+        if: steps.wait.outputs.validated == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           CLAUDE_DEFAULT_MODEL: ${{ vars.CLAUDE_DEFAULT_MODEL }}
+          # User-controlled text via env (CodeQL code-injection guard).
+          ISSUE_BODY: ${{ needs.prepare.outputs.body }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
         run: |
-          source scripts/ai-ops/model-router.sh
-          ISSUE_NUM="${{ github.event.issue.number }}"
-
-          # Read issue body (Stage 1 Council report or claude-implement issue)
-          ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body' 2>/dev/null || echo "")
+          source "${GITHUB_WORKSPACE}/scripts/ai-ops/model-router.sh"
           ESTIMATE=$(extract_estimate "$ISSUE_BODY")
           MODE=$(extract_mode "$ISSUE_BODY")
-
-          # If estimate not found in body, search comments (Stage 2 plan has LOC estimate)
           if [ "${ESTIMATE:-0}" = "0" ]; then
-            COMMENTS=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+            COMMENTS=$(gh issue view "$ISSUE_NUMBER" --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
             ESTIMATE=$(extract_estimate "$COMMENTS")
-            echo "Estimate from body: 0 — retried from comments: ${ESTIMATE}pt"
           fi
-
           ROUTE=$(route_model "$ESTIMATE" "$MODE")
-          MODEL=$(echo "$ROUTE" | cut -d'|' -f1)
-          TURNS=$(echo "$ROUTE" | cut -d'|' -f2)
-          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
-          echo "turns=$TURNS" >> "$GITHUB_OUTPUT"
-          echo "Routed: ${ESTIMATE}pt ${MODE} → ${MODEL}, ${TURNS} turns"
+          echo "model=$(echo "$ROUTE" | cut -d'|' -f1)" >> "$GITHUB_OUTPUT"
+          echo "turns=$(echo "$ROUTE" | cut -d'|' -f2)" >> "$GITHUB_OUTPUT"
+          echo "::notice::implement routing estimate=${ESTIMATE} mode=${MODE} -> ${ROUTE}"
 
-      - name: Record Start Time
-        if: steps.verify-council.outputs.validated == 'true'
-        run: |
-          echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
-          echo "HEGEMON_INSTANCE=l1-impl-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+      - name: Record start time
+        if: steps.wait.outputs.validated == 'true'
+        run: echo "IMPL_START=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Push State — Implementation Started
-        if: steps.verify-council.outputs.validated == 'true'
-        continue-on-error: true
-        env:
-          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
-          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
-          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
-          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
-          push_state_session "$HEGEMON_INSTANCE" "implementing" "$TICKET" "" "" "ci-l1" "gha"
-          push_state_milestone "$TICKET" "impl-started" "$HEGEMON_INSTANCE" "" "" "L1 Issue-to-PR"
+      - uses: ./.github/actions/hegemon-state-push
+        if: steps.wait.outputs.validated == 'true'
+        with:
+          action: session-start
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          ticket: ${{ needs.prepare.outputs.ticket-id }}
+          step: implementing
+          role: ci-l1
+          source-tag: gha
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
 
-      - name: Run Implementation
-        if: steps.verify-council.outputs.validated == 'true'
-        continue-on-error: true
+      - uses: ./.github/actions/hegemon-state-push
+        if: steps.wait.outputs.validated == 'true'
+        with:
+          action: milestone
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          ticket: ${{ needs.prepare.outputs.ticket-id }}
+          step: impl-started
+          detail: 'L1 Issue-to-PR v2'
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - name: Run implementation
         id: implement
-        uses: anthropics/claude-code-action@v1
+        if: steps.wait.outputs.validated == 'true'
+        continue-on-error: true
+        # Pinned to the v1 tag's commit (same SHA as council-run composite).
+        uses: anthropics/claude-code-action@e58dfa55559035499a4982426bb73605e8b5ad8e  # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the task below.
 
-            Implement the feature described in issue #${{ github.event.issue.number }}.
+            Implement the feature described in issue #${{ needs.prepare.outputs.number }}.
 
-            Issue title: ${{ github.event.issue.title }}
+            Issue title: ${{ needs.prepare.outputs.title }}
             Issue body:
-            ${{ github.event.issue.body }}
+            ${{ needs.prepare.outputs.body }}
 
             Read the Stage 2 plan validation comment (posted earlier on this issue).
             Follow the implementation plan from the Stage 2 comment.
             Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
 
             Steps:
-            1. Create a feature branch: feat/issue-${{ github.event.issue.number }}-<slug>
+            1. Create a feature branch: feat/issue-${{ needs.prepare.outputs.number }}-<slug>
             2. For feat() and fix() changes: write FAILING tests FIRST that assert the expected behavior
             3. Implement the code to make the tests pass
             4. For fix() PRs: include a regression test (test_regression_* / regression/*.test.ts / fn regression_*)
@@ -673,68 +581,19 @@ jobs:
             If Ask: leave PR open for human review.
 
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-          # Model tier: routed dynamically based on ticket estimate
-          claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
-      - name: Log token usage
-        if: always()
-        run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=${{ steps.route.outputs.model || 'sonnet-4-6' }}, MaxTurns=${{ steps.route.outputs.turns || '60' }}, Stage=implement"
+      - uses: ./.github/actions/detect-partial-pr
+        id: detect
+        if: always() && steps.wait.outputs.validated == 'true'
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          ticket-id: ${{ needs.prepare.outputs.ticket-id }}
+          issue-title: ${{ needs.prepare.outputs.title }}
+          issue-body: ${{ needs.prepare.outputs.body }}
+          github-token: ${{ github.token }}
 
-      - name: Detect Partial Success
-        id: detect-partial
-        if: always() && steps.verify-council.outputs.validated == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          ISSUE_NUM="$ISSUE_NUMBER"
-          TICKET_ID=$(echo "$ISSUE_TITLE $ISSUE_BODY" \
-            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
-
-          SEARCH_TERM="${TICKET_ID:-issue-${ISSUE_NUM}}"
-
-          # Search for PRs created by this run (open or merged)
-          PR_INFO=$(gh pr list --state all --search "${SEARCH_TERM}" \
-            --json number,url,state,headRefName,title --jq '.[0] // empty' 2>/dev/null || echo "")
-
-          # Verify: PR branch or title must contain ticket ID or issue ref to prevent false positives
-          if [ -n "$PR_INFO" ]; then
-            VFY_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // ""' 2>/dev/null)
-            VFY_TITLE=$(echo "$PR_INFO" | jq -r '.title // ""' 2>/dev/null)
-            MATCH=false
-            if [ -n "$TICKET_ID" ] && echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "${TICKET_ID}"; then MATCH=true; fi
-            if echo "$VFY_BRANCH $VFY_TITLE" | grep -qi "issue-${ISSUE_NUM}"; then MATCH=true; fi
-            if [ "$MATCH" = "false" ]; then
-              echo "::warning::PR found but branch/title doesn't contain ${SEARCH_TERM} — false positive"
-              echo "  Branch: $VFY_BRANCH | Title: $VFY_TITLE"
-              PR_INFO=""
-            fi
-          fi
-
-          PR_NUM=$(echo "$PR_INFO" | jq -r '.number // empty' 2>/dev/null || echo "")
-          PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
-          PR_STATE=$(echo "$PR_INFO" | jq -r '.state // empty' 2>/dev/null || echo "")
-
-          if [ -n "$PR_NUM" ]; then
-            echo "pr_found=true" >> "$GITHUB_OUTPUT"
-            echo "pr_num=$PR_NUM" >> "$GITHUB_OUTPUT"
-            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-            echo "pr_state=$PR_STATE" >> "$GITHUB_OUTPUT"
-            echo "PR #${PR_NUM} found (${PR_STATE}) — partial success"
-          else
-            echo "pr_found=false" >> "$GITHUB_OUTPUT"
-            echo "No PR found"
-          fi
-
-          echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
-          echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
-          echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
-
-      - name: Slack Implementation Result
-        if: always()
+      - name: Slack Implementation Result (inline — notify_implement signature)
+        if: always() && steps.wait.outputs.validated == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -742,56 +601,64 @@ jobs:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           PUSHGATEWAY_URL: ${{ vars.PUSHGATEWAY_URL }}
           PUSHGATEWAY_AUTH: ${{ secrets.PUSHGATEWAY_AUTH }}
-          N8N_MERGE_WEBHOOK: ${{ vars.N8N_MERGE_WEBHOOK_URL }}
-          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
-          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-6' }}
-          ROUTE_TURNS: ${{ steps.route.outputs.turns || '60' }}
-          HEGEMON_REMOTE_URL: ${{ secrets.HEGEMON_REMOTE_URL }}
-          HEGEMON_REMOTE_EMAIL: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
-          HEGEMON_REMOTE_PASSWORD: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+          # Route every workflow-controlled value through env so the
+          # shell expands via `"$VAR"` instead of literal substitution.
+          # Applies even to numeric / bot-generated values for uniformity
+          # (and so CodeQL doesn't have to second-guess which is which).
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+          TICKET_ID_RAW: ${{ needs.prepare.outputs.ticket-id }}
+          STATUS: ${{ steps.implement.outcome }}
+          PR_FOUND: ${{ steps.detect.outputs.pr-found }}
+          PR_NUM: ${{ steps.detect.outputs.pr-num }}
+          PR_URL: ${{ steps.detect.outputs.pr-url }}
+          MODEL: ${{ steps.route.outputs.model }}
+          TURNS: ${{ steps.route.outputs.turns }}
         run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
-          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
-          STATUS="$IMPLEMENT_OUTCOME"
-          PR_FOUND="${{ steps.detect-partial.outputs.pr_found }}"
+          source "${GITHUB_WORKSPACE}/scripts/ai-ops/ai-factory-notify.sh"
+          TICKET="${TICKET_ID_RAW:-issue-${ISSUE_NUMBER}}"
           DURATION=$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))
-          MODEL="$ROUTE_MODEL"
-          MAX_TURNS="$ROUTE_TURNS"
-          if [ "$STATUS" = "success" ]; then
-            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR" "$DURATION")
-            linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR" "$DURATION" || true
-            push_metrics_implement "issue-to-pr" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
-            _react_slack "tada" "$IMPL_TS"
-          elif [ "$STATUS" = "failure" ] && [ "${PR_FOUND}" = "true" ]; then
-            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "$ISSUE_NUMBER" "L1 Issue-to-PR (max_turns)" "$DURATION")
-            push_metrics_implement "issue-to-pr" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$MAX_TURNS"
-            _react_slack "rocket" "$IMPL_TS"
-          elif [ "$STATUS" = "failure" ]; then
-            IMPL_TS=$(notify_error "claude-issue-to-pr" "implement" "$TICKET" "" "$DURATION")
-            push_metrics_error "issue-to-pr" "implement" "$TICKET"
-            _react_slack "x" "$IMPL_TS"
-          else
-            notify_implement "$TICKET" "$STATUS" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR"
-          fi
-          # Push final state milestone + cleanup session
-          push_state_milestone "$TICKET" "impl-${STATUS}" "${HEGEMON_INSTANCE:-l1-impl-${GITHUB_RUN_ID}}" "${PR_NUM:-}" "" "L1 Issue-to-PR, ${DURATION}s"
-          push_state_cleanup "${HEGEMON_INSTANCE:-l1-impl-${GITHUB_RUN_ID}}"
 
-      - name: Write Job Summary — Implement
+          if [ "$STATUS" = "success" ]; then
+            IMPL_TS=$(notify_implement "$TICKET" "success" "" "" "$ISSUE_NUMBER" "L1 Issue-to-PR v2" "$DURATION")
+            linear_comment "$TICKET" "completed" "" "" "L1 Issue-to-PR v2" "$DURATION" || true
+            push_metrics_implement "issue-to-pr-v2" "$TICKET" "success" "$DURATION" "" "" "$MODEL" "$TURNS" || true
+            _react_slack "tada" "$IMPL_TS" || true
+          elif [ "$STATUS" = "failure" ] && [ "$PR_FOUND" = "true" ]; then
+            IMPL_TS=$(notify_implement "$TICKET" "ask" "$PR_NUM" "$PR_URL" "$ISSUE_NUMBER" "L1 Issue-to-PR v2 (max_turns)" "$DURATION")
+            push_metrics_implement "issue-to-pr-v2" "$TICKET" "max_turns" "$DURATION" "" "" "$MODEL" "$TURNS" || true
+            _react_slack "rocket" "$IMPL_TS" || true
+          elif [ "$STATUS" = "failure" ]; then
+            IMPL_TS=$(notify_error "claude-issue-to-pr-v2" "implement" "$TICKET" "" "$DURATION")
+            push_metrics_error "issue-to-pr-v2" "implement" "$TICKET" || true
+            _react_slack "x" "$IMPL_TS" || true
+          fi
+
+      - uses: ./.github/actions/hegemon-state-push
+        if: always() && steps.wait.outputs.validated == 'true'
+        with:
+          action: milestone
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          ticket: ${{ needs.prepare.outputs.ticket-id }}
+          step: impl-${{ steps.implement.outcome || 'skipped' }}
+          pr-num: ${{ steps.detect.outputs.pr-num }}
+          detail: 'L1 Issue-to-PR v2'
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - uses: ./.github/actions/hegemon-state-push
         if: always()
-        env:
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          IMPLEMENT_OUTCOME: ${{ steps.implement.outcome || 'skipped' }}
-          ROUTE_MODEL: ${{ steps.route.outputs.model || 'sonnet-4-6' }}
-        run: |
-          source scripts/ai-ops/ai-factory-notify.sh
-          TICKET=$(echo "$ISSUE_TITLE" | grep -oE 'CAB-[0-9]+' | head -1)
-          TICKET="${TICKET:-issue-${ISSUE_NUMBER}}"
-          write_job_summary "$TICKET" "$IMPLEMENT_OUTCOME" "" \
-            "$ROUTE_MODEL" "L1-implement" \
-            "$(( $(date +%s) - ${IMPL_START:-$(date +%s)} ))"
+        with:
+          action: cleanup
+          instance: ${{ env.HEGEMON_INSTANCE }}
+          hegemon-url: ${{ secrets.HEGEMON_REMOTE_URL }}
+          hegemon-email: ${{ secrets.HEGEMON_REMOTE_EMAIL }}
+          hegemon-password: ${{ secrets.HEGEMON_REMOTE_PASSWORD }}
+
+      - uses: ./.github/actions/write-summary
+        if: always()
+        with:
+          ticket: ${{ needs.prepare.outputs.ticket-id || format('issue-{0}', needs.prepare.outputs.number) }}
+          outcome: ${{ steps.implement.outcome || 'skipped' }}
+          stage: L1-implement
+          model: ${{ steps.route.outputs.model }}

@@ -5,8 +5,41 @@ from uuid import UUID
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance
+from src.models.promotion import Promotion
+
+
+def _wire_value(value: object) -> object:
+    """Return enum value for wire responses while preserving plain values."""
+    return value.value if hasattr(value, "value") else value
+
+
+def _deployment_mode(gateway_type: object, mode: str | None, source: str | None) -> str:
+    """Derive the canonical deployment topology used by the Console contract."""
+    normalized_mode = (mode or "").strip().lower()
+    if normalized_mode == "sidecar":
+        return "sidecar"
+    if normalized_mode in {"edge", "edge-mcp"}:
+        return "edge"
+    if normalized_mode == "connect" or source == "self_register":
+        return "connect"
+
+    normalized_type = str(_wire_value(gateway_type) or "").strip().lower()
+    if normalized_type in {"stoa", "stoa_edge_mcp"}:
+        return "edge"
+    if normalized_type == "stoa_sidecar":
+        return "sidecar"
+    return "connect"
+
+
+def _target_gateway_type(gateway_type: object) -> str:
+    """Normalize STOA topology-specific types to the technology family."""
+    normalized_type = str(_wire_value(gateway_type) or "").strip().lower()
+    if normalized_type.startswith("stoa_"):
+        return "stoa"
+    return normalized_type
 
 
 class GatewayDeploymentRepository:
@@ -132,6 +165,82 @@ class GatewayDeploymentRepository:
                 "gateway_environment": row.gateway_environment,
             })
         return deployments, total
+
+    async def list_console_contract(
+        self,
+        environment: str | None = None,
+        gateway_instance_id: UUID | None = None,
+        tenant_id: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[dict], int]:
+        """List aggregated deployment rows for the Console /api-deployments page."""
+        query = (
+            select(
+                GatewayDeployment,
+                APICatalog.id.label("api_catalog_id"),
+                APICatalog.api_id.label("api_id"),
+                APICatalog.api_name.label("api_name"),
+                APICatalog.tenant_id.label("tenant_id"),
+                GatewayInstance.id.label("gateway_id"),
+                GatewayInstance.name.label("gateway_name"),
+                GatewayInstance.display_name.label("gateway_display_name"),
+                GatewayInstance.gateway_type.label("gateway_type"),
+                GatewayInstance.environment.label("gateway_environment"),
+                GatewayInstance.status.label("gateway_status"),
+                GatewayInstance.mode.label("gateway_mode"),
+                GatewayInstance.source.label("gateway_source"),
+                Promotion.status.label("promotion_state"),
+            )
+            .join(APICatalog, GatewayDeployment.api_catalog_id == APICatalog.id)
+            .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+            .outerjoin(Promotion, GatewayDeployment.promotion_id == Promotion.id)
+        )
+
+        if environment:
+            query = query.where(GatewayInstance.environment == environment)
+        if gateway_instance_id:
+            query = query.where(GatewayDeployment.gateway_instance_id == gateway_instance_id)
+        if tenant_id:
+            query = query.where(APICatalog.tenant_id == tenant_id)
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await self.session.execute(count_query)
+        total = total_result.scalar_one()
+
+        query = query.order_by(GatewayDeployment.created_at.desc())
+        query = query.offset((page - 1) * page_size).limit(page_size)
+
+        result = await self.session.execute(query)
+        items = []
+        for row in result.all():
+            dep = row.GatewayDeployment
+            items.append(
+                {
+                    "deployment_id": dep.id,
+                    "api_catalog_id": row.api_catalog_id,
+                    "api_id": row.api_id,
+                    "api_name": row.api_name,
+                    "tenant_id": row.tenant_id,
+                    "environment": row.gateway_environment,
+                    "desired_state": dep.desired_state,
+                    "gateway_target": {
+                        "id": row.gateway_id,
+                        "name": row.gateway_name,
+                        "display_name": row.gateway_display_name,
+                        "environment": row.gateway_environment,
+                        "deployment_mode": _deployment_mode(row.gateway_type, row.gateway_mode, row.gateway_source),
+                        "target_gateway_type": _target_gateway_type(row.gateway_type),
+                        "source": row.gateway_source,
+                    },
+                    "deployment_status": _wire_value(dep.sync_status),
+                    "gateway_health": _wire_value(row.gateway_status),
+                    "last_ack": dep.last_sync_success,
+                    "promotion_state": row.promotion_state,
+                    "sync_error": dep.sync_error,
+                }
+            )
+        return items, total
 
     async def list_by_statuses(self, statuses: list[DeploymentSyncStatus]) -> list[GatewayDeployment]:
         """List deployments matching any of the given statuses."""

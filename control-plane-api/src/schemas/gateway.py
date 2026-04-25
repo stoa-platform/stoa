@@ -241,6 +241,49 @@ class DeploymentStatusSummary(BaseModel):
     total: int = 0
 
 
+class ConsoleGatewayTarget(BaseModel):
+    """Gateway target details for the Console API deployments table."""
+
+    id: UUID
+    name: str
+    display_name: str
+    environment: str
+    deployment_mode: str = Field(..., description="Canonical topology: edge, connect, or sidecar")
+    target_gateway_type: str = Field(..., description="Gateway technology: stoa, kong, webmethods, gravitee, ...")
+    source: str = Field(..., description="Gateway source of truth: argocd, self_register, or manual")
+
+
+class ConsoleDeploymentRow(BaseModel):
+    """Aggregated deployment row for /api-deployments.
+
+    Deployment status and gateway health are intentionally separate axes.
+    A previously synced route can stay synced while its gateway is offline.
+    """
+
+    deployment_id: UUID
+    api_catalog_id: UUID
+    api_id: str
+    api_name: str
+    tenant_id: str
+    environment: str
+    desired_state: dict
+    gateway_target: ConsoleGatewayTarget
+    deployment_status: str
+    gateway_health: str
+    last_ack: datetime | None = None
+    promotion_state: str | None = None
+    sync_error: str | None = None
+
+
+class PaginatedConsoleDeployments(BaseModel):
+    """Paginated Console deployment contract."""
+
+    items: list[ConsoleDeploymentRow]
+    total: int
+    page: int
+    page_size: int
+
+
 # =========================================================================
 # Pagination
 # =========================================================================

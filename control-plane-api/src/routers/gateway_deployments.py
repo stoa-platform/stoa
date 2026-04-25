@@ -16,6 +16,7 @@ from src.schemas.gateway import (
     DeploymentStatusSummary,
     GatewayDeploymentCreate,
     GatewayDeploymentResponse,
+    PaginatedConsoleDeployments,
     PaginatedGatewayDeployments,
 )
 from src.services.gateway_deployment_service import GatewayDeploymentService
@@ -122,6 +123,33 @@ async def get_deployment_status(
         **counts,
         total=sum(counts.values()),
     )
+
+
+@router.get("/console", response_model=PaginatedConsoleDeployments)
+async def list_console_deployments(
+    environment: str | None = Query(None, description="Filter by gateway environment (dev/staging/production)"),
+    gateway_instance_id: UUID | None = Query(None),
+    tenant_id: str | None = Query(None, description="Filter by API tenant id"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["cpi-admin", "tenant-admin"])),
+):
+    """List the aggregated Console contract for /api-deployments.
+
+    This endpoint intentionally exposes deployment status and gateway health as
+    separate fields so transient gateway connectivity does not overwrite the
+    runtime reconciliation state.
+    """
+    deploy_repo = GatewayDeploymentRepository(db)
+    items, total = await deploy_repo.list_console_contract(
+        environment=environment,
+        gateway_instance_id=gateway_instance_id,
+        tenant_id=tenant_id,
+        page=page,
+        page_size=page_size,
+    )
+    return PaginatedConsoleDeployments(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/catalog-entries", response_model=list[CatalogEntry])

@@ -120,6 +120,54 @@ class TestGetDeploymentStatus:
         assert body["total"] == 8
 
 
+class TestConsoleDeploymentContract:
+    def test_console_contract_separates_deployment_status_from_gateway_health(
+        self,
+        client_as_cpi_admin,
+        mock_db_session,
+    ):
+        row = {
+            "deployment_id": str(uuid4()),
+            "api_catalog_id": str(uuid4()),
+            "api_id": "fapi-banking",
+            "api_name": "fapi-banking",
+            "tenant_id": "banking-demo",
+            "environment": "dev",
+            "desired_state": {"api_name": "fapi-banking", "spec_hash": "abc123"},
+            "gateway_target": {
+                "id": str(uuid4()),
+                "name": "connect-webmethods-dev",
+                "display_name": "STOA Gateway (connect)",
+                "environment": "dev",
+                "deployment_mode": "connect",
+                "target_gateway_type": "webmethods",
+                "source": "self_register",
+            },
+            "deployment_status": "synced",
+            "gateway_health": "offline",
+            "last_ack": "2026-01-01T00:00:00Z",
+            "promotion_state": None,
+            "sync_error": None,
+        }
+        with patch(REPO_PATH) as MockRepo:
+            instance = MockRepo.return_value
+            instance.list_console_contract = AsyncMock(return_value=([row], 1))
+            resp = client_as_cpi_admin.get("/v1/admin/deployments/console")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 1
+        item = body["items"][0]
+        assert item["deployment_status"] == "synced"
+        assert item["gateway_health"] == "offline"
+        assert item["gateway_target"]["deployment_mode"] == "connect"
+        assert item["gateway_target"]["target_gateway_type"] == "webmethods"
+
+    def test_console_contract_forbidden_for_viewer(self, client_as_no_tenant_user):
+        resp = client_as_no_tenant_user.get("/v1/admin/deployments/console")
+        assert resp.status_code == 403
+
+
 class TestGetSingleDeployment:
     def test_get_success(self, client_as_cpi_admin, mock_db_session):
         dep = _mock_deployment()

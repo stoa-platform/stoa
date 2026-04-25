@@ -25,6 +25,7 @@ Les éléments suivants sont **figés** : toute modification demande Council 8/1
 - Format métriques Prometheus `proxy_requests_total` / `mcp_tool_calls_total`
 - Header `X-Api-Key` accepté par gateway `/apis/{api_name}/{*path}`
 - Header de réponse `X-Stoa-Request-Id` injecté par gateway
+- Contrat UAC démo `specs/uac/demo-httpbin.uac.json` et chemin dérivé `/apis/demo-httpbin/get`
 - Datasources Grafana `prometheus`, `loki`, `opensearch-traces`, `tempo` si la stack observabilité est touchée
 - Compatibilité DB consommée par le smoke (§2.6 de `architecture-rules.md`)
 
@@ -65,8 +66,8 @@ Chaque PR touchant cp-api, stoa-gateway, stoa-go, charts, deploy/ doit inclure d
 ## Demo impact
 
 - [ ] Vérifié : aucune modification de `specs/architecture-rules.md` §2 (contrats figés)
-- [ ] `./scripts/demo-smoke-test.sh` exécuté avant cette PR : REAL_PASS / CONTRACT_DRY_RUN / MOCK_PASS / FAIL (préciser)
-- [ ] `./scripts/demo-smoke-test.sh` exécuté après cette PR : REAL_PASS / CONTRACT_DRY_RUN / MOCK_PASS / FAIL (préciser)
+- [ ] `DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh` exécuté avant cette PR : REAL_PASS / CONTRACT_DRY_RUN / MOCK_PASS / FAIL (préciser)
+- [ ] `DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh` exécuté après cette PR : REAL_PASS / CONTRACT_DRY_RUN / MOCK_PASS / FAIL (préciser)
 - [ ] Si non-REAL_PASS ou régression : quelle étape AT-N échoue ou est mockée et pourquoi est-ce acceptable ?
 ```
 

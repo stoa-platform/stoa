@@ -64,6 +64,29 @@ Auth démo provider/runtime :
 | `/metrics` | GET | 200 | format Prometheus text |
 | `/apis/{api_name}/{*path}` | GET/POST/… | 200/…  | chemin gateway canonique démo. `api_name` est le slug retourné par `POST /v1/tenants/{tid}/apis`; proxy vers backend configuré, header `X-Stoa-Request-Id` en réponse, vérifie `X-Api-Key` (ou `Authorization: Bearer`) |
 
+### 2.2bis Contrat UAC démo minimal
+
+Le smoke réel peut être UAC-driven via `DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json`.
+Ce contrat ne généralise pas toute l'architecture STOA; il verrouille seulement
+la première preuve fonctionnelle "Define once, expose everywhere" sur un contrat,
+un endpoint, un chemin gateway:
+
+| Champ | Valeur figée |
+|-------|--------------|
+| `name` | `demo-httpbin` |
+| `tenant_id` | `demo` |
+| `version` | `1.0.0` |
+| `status` | `published` |
+| `classification` | `H` |
+| `endpoints[0].methods[0]` | `GET` |
+| `endpoints[0].path` | `/get` |
+| `endpoints[0].backend_url` | `http://mock-backend:9090` |
+| `endpoints[0].operation_id` | `demo_httpbin_get` |
+| chemin gateway dérivé | `/apis/demo-httpbin/get` |
+
+Le fallback sans `DEMO_UAC_CONTRACT` reste autorisé pour debug local, mais doit
+afficher `WARN — smoke not UAC-driven`.
+
 ### 2.3 Format métriques Prometheus
 
 Nom obligatoirement présent: **au moins un** de

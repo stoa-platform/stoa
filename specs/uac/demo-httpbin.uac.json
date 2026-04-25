@@ -1,0 +1,30 @@
+{
+  "name": "demo-httpbin",
+  "version": "1.0.0",
+  "tenant_id": "demo",
+  "status": "published",
+  "classification": "H",
+  "endpoints": [
+    {
+      "path": "/get",
+      "methods": ["GET"],
+      "backend_url": "http://mock-backend:9090",
+      "operation_id": "demo_httpbin_get",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["ok", "path", "service"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "path": { "type": "string" },
+          "service": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  ],
+  "spec_hash": "515839b4b1e23631e9699a9608e8e0f54e01f14572a513c8f514f6ee55da7e39"
+}

@@ -15,10 +15,10 @@ Ce scope fige ce chemin. Tant qu'il n'est pas vert bout-en-bout, **aucune autre 
 
 | # | Étape | Composant(s) | Commande/API | Preuve |
 |---|-------|--------------|--------------|--------|
-| 1 | Déclarer une API | cp-api + DB | `POST /v1/tenants/{t}/apis` (ou `stoactl apply -f api.yaml`) | API visible dans `GET /v1/tenants/{t}/apis` |
+| 1 | Déclarer une API | cp-api + DB | `POST /v1/tenants/{t}/apis`, dérivé du contrat `specs/uac/demo-httpbin.uac.json` quand `DEMO_UAC_CONTRACT` est fourni | API visible dans `GET /v1/tenants/{t}/apis` |
 | 2 | Provisionner la route gateway | cp-api + stoa-gateway | `POST /v1/tenants/{t}/deployments` → gateway polling `GET /v1/internal/gateways/routes` OU `stoa-connect` SSE `GET /v1/internal/gateways/{id}/events` | Route active dans la table gateway (log `Route table reloaded` + réponse non-404 au step 4) |
 | 3 | Créer une souscription applicative | cp-api | `POST /v1/tenants/{t}/applications` + `POST /v1/subscriptions` (ou `POST /applications/{id}/subscribe/{api_id}`) | Subscription `active`, clé API retournée (préfixe visible) |
-| 4 | Appeler l'API via la gateway | stoa-gateway | `GET {GATEWAY_URL}/apis/{api_name}/get` avec header `X-Api-Key: ${KEY}` (ou JWT OAuth) | HTTP 2xx, payload backend |
+| 4 | Appeler l'API via la gateway | stoa-gateway | `GET {GATEWAY_URL}/apis/demo-httpbin/get` avec header `X-Api-Key: ${KEY}` en mode UAC-driven | HTTP 2xx, payload backend |
 | 5 | Preuve observable | stoa-gateway + cp-api | `GET {GATEWAY_URL}/metrics` + logs JSON stdout | Compteur Prometheus incrémenté (`proxy_requests_total` ou `mcp_tool_calls_total`) + ligne log corrélée (request_id, tenant, route) |
 | 5b | Visibilité observabilité (nice-to-have) | Grafana + Console + Portal | Grafana datasource/dashboard, Console `/monitoring`, Portal `/usage` ou dashboard embarqué | La même activité démo est visible dans au moins une surface UI si la stack observabilité est démarrée |
 
@@ -30,6 +30,11 @@ Ce scope fige ce chemin. Tant qu'il n'est pas vert bout-en-bout, **aucune autre 
 - `stoactl` (Go) — sous-commandes `apply`, `get`, `subscription`, `auth login` seulement
 
 **Backend cible pour l'appel démo**: un mock HTTP (ex. `mock-backends/` ou `httpbin` en conteneur) qui répond 200 JSON. Pas de backend externe réseau.
+
+**Contrat UAC cible**: `specs/uac/demo-httpbin.uac.json`. Le smoke n'est pas
+encore une preuve UAC globale: il charge un seul contrat publié, sélectionne le
+premier endpoint `GET /get`, et dérive un seul chemin gateway
+`/apis/demo-httpbin/get`.
 
 **Auth**: API key (préfixe `stoa_…`) OU JWT Keycloak — un seul mode suffit pour la démo. Choisir API key (plus simple à reproduire).
 
@@ -80,12 +85,23 @@ Tant que ce script n'affiche pas `REAL_PASS — DEMO READY`, la démo réelle
 n'existe pas. `CONTRACT_DRY_RUN` et `MOCK_PASS` peuvent retourner exit 0, mais
 signifient seulement que le contrat ou le chemin mocké est cohérent.
 
+Commande de référence UAC-driven:
+
+```
+$ DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh
+[PASS] UAC contract loaded demo-httpbin v1.0.0
+[PASS] UAC endpoint GET /get selected operation_id=demo_httpbin_get
+[PASS] UAC Gateway call derived from UAC /apis/demo-httpbin/get
+...
+```
+
 ## 6. Dépendances figées pendant le rewrite
 
 Voir `rewrite-guardrails.md` §Contrats figés:
 - Compatibilité DB consommée par le smoke (`apis`, `applications`, `subscriptions`, `deployments`, `api_keys`)
 - Endpoints listés §2 (URL + status codes + shape minimal de réponse)
 - Route `/apis/{api_name}/{*path}` gateway + comportement auth-header
+- Contrat UAC démo `specs/uac/demo-httpbin.uac.json` pour `demo-httpbin` `GET /get`
 - Format métrique Prometheus (nom `_total`, labels `tenant`, `api`, `method`, `status`)
 
 Tout autre aspect peut bouger.
@@ -95,3 +111,4 @@ Tout autre aspect peut bouger.
 | Date | Auteur | Changement |
 |------|--------|------------|
 | 2026-04-24 | Claude (via `/demo-scope`) | Création initiale |
+| 2026-04-24 | Codex | Ajout du premier lien UAC-driven: `demo-httpbin` `GET /get` → `/apis/demo-httpbin/get` |

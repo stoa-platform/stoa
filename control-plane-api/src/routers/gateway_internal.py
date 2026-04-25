@@ -94,6 +94,7 @@ class GatewayRouteItem(BaseModel):
     """Route in stoa-gateway ApiRoute format for hot-reload."""
 
     id: str
+    api_id: str = ""
     deployment_id: str = ""
     name: str
     tenant_id: str
@@ -134,6 +135,8 @@ async def list_gateway_routes(
     if gateway_name:
         gw_repo = GatewayInstanceRepository(db)
         gateway = await gw_repo.get_by_name(gateway_name)
+        if not gateway:
+            gateway = await gw_repo.get_self_registered_by_hostname(gateway_name)
         if gateway:
             deployments = await deploy_repo.list_by_statuses_and_gateway(statuses, gateway.id)
         else:

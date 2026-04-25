@@ -18,6 +18,31 @@ Chaque étape du scénario démo (`demo-scope.md` §2) a un test d'acceptance bi
 
 `MOCK_MODE=auto` est traité comme un mode réel strict : il ne convertit jamais un blocker en PASS silencieux.
 
+## Contrat UAC démo
+
+Le smoke peut être lancé en mode UAC-driven avec:
+
+```bash
+DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh
+```
+
+Dans ce mode, le script valide que le fichier est un JSON valide, contient au
+moins un endpoint, a `status=published`, puis dérive le nom API, la méthode, le
+path, le `backend_url` et le chemin gateway canonique depuis le premier endpoint.
+
+Contrat démo figé:
+- `name=demo-httpbin`
+- `tenant_id=demo`
+- `version=1.0.0`
+- endpoint `GET /get`
+- `backend_url=http://mock-backend:9090`
+- `operation_id=demo_httpbin_get`
+- chemin gateway dérivé: `/apis/demo-httpbin/get`
+
+Si `DEMO_UAC_CONTRACT` n'est pas fourni, le smoke garde son fallback historique
+et affiche `WARN — smoke not UAC-driven`. Ce fallback ne signifie pas que STOA
+est déjà UAC-driven de bout en bout.
+
 ## Pré-conditions (AT-0)
 
 Avant lancement, ces ressources doivent exister (seed minimal) :
@@ -38,16 +63,17 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 **When** `POST ${API_URL}/v1/tenants/${TENANT_ID}/apis` avec body:
 ```json
 {
-  "name": "demo-api",
+  "name": "demo-httpbin",
+  "display_name": "demo-httpbin",
   "version": "1.0.0",
   "protocol": "http",
   "backend_url": "http://mock-backend:9090",
-  "paths": [{"path": "/ping", "methods": ["GET"]}]
+  "paths": [{"path": "/get", "methods": ["GET"]}]
 }
 ```
 **Then**:
 - HTTP 201
-- Réponse contient `id` (UUID) et `name=demo-api`
+- Réponse contient `id` (UUID) et `name=demo-httpbin`
 - `GET /v1/tenants/${TENANT_ID}/apis/${API_ID}` renvoie 200 avec le même payload
 
 **Exit code**: 0 si les 3 assertions passent, 1 sinon.
@@ -59,14 +85,15 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 ```json
 {
   "api_id": "${API_ID}",
-  "environment": "demo",
+  "environment": "dev",
   "gateway_id": "${GATEWAY_ID}"
 }
 ```
 **Then**:
 - HTTP 201
-- Dans un délai ≤ 30s : `GET ${GATEWAY_URL}/health` reste 200 ET la route est atteignable (retry AT-4 peut valider)
-- **[MOCK OK]** Le polling route-sync peut être forcé par SIGHUP à la gateway (`kill -HUP $PID`) si on ne veut pas attendre le tick
+- Dans un délai ≤ 30s : `GET ${API_URL}/v1/internal/gateways/routes?gateway_name=${GATEWAY_ID}` contient `api_id=${API_ID}`
+- En stack compose démo, `STOA_ROUTE_RELOAD_INTERVAL_SECS=2` réduit l'attente côté gateway; AT-4 prouve l'activation runtime.
+- **[MOCK OK]** Le polling route-sync peut être remplacé par mock uniquement en mode dry-run/contract explicite.
 
 **Exit code**: 0 si 201 + route active avant timeout, 1 sinon.
 
@@ -74,9 +101,14 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 
 **Given** AT-1 PASS
 **When**:
-1. `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications` avec `{"name": "demo-app"}`  → récupérer `APP_ID`
+1. `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications` avec `{"name": "demo-app", "display_name": "demo-app"}`  → récupérer `APP_ID`
 2. `POST ${API_URL}/v1/subscriptions` ou `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications/${APP_ID}/subscribe/${API_ID}` avec `X-Demo-Mode: true`
 3. Alternative single-shot : `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications/${APP_ID}/subscribe/${API_ID}`
+
+En mode démo/dev borné (`STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true`),
+la création d'application retourne une application déterministe sans client
+Keycloak pour éviter que le smoke dépende des credentials admin Keycloak locaux.
+Ce comportement est interdit hors mode démo explicite.
 
 **Then**:
 - HTTP 201 sur subscription
@@ -90,8 +122,10 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 **Given** AT-2 PASS ET AT-3 PASS, `API_KEY` connu
 **When**: `GET ${GATEWAY_URL}/apis/${DEMO_API_NAME}/get -H "X-Api-Key: ${API_KEY}"`
 
-Chemin canonique figé: `/apis/{api_name}/{*path}`. Le smoke ne probe plus
-plusieurs shapes.
+Chemin canonique figé: `/apis/{api_name}/{*path}`. En mode UAC-driven, le smoke
+construit ce chemin depuis `name` + `endpoints[0].path`, soit
+`/apis/demo-httpbin/get` pour le contrat démo. Le smoke ne probe plus plusieurs
+shapes.
 
 **Then**:
 - HTTP 200

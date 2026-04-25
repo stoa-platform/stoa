@@ -2,13 +2,14 @@
 
 import json
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..config import settings
 from ..database import get_db
 from ..models.subscription import Subscription, SubscriptionStatus
 from ..repositories.subscription import SubscriptionRepository
@@ -20,6 +21,36 @@ from ..services.keycloak_service import keycloak_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/applications", tags=["Applications"])
+
+
+def _demo_mode_enabled(request: Request) -> bool:
+    return (
+        bool(getattr(settings, "STOA_DISABLE_AUTH", False))
+        and request.headers.get("x-demo-mode", "").lower() == "true"
+    )
+
+
+def _demo_app_id(tenant_id: str, app_name: str) -> str:
+    return f"demo-{tenant_id}-{app_name}"
+
+
+def _demo_application_response(
+    tenant_id: str, app_name: str, display_name: str, description: str = ""
+) -> "AdminApplicationResponse":
+    now = datetime.now(UTC).isoformat()
+    return AdminApplicationResponse(
+        id=_demo_app_id(tenant_id, app_name),
+        tenant_id=tenant_id,
+        name=app_name,
+        display_name=display_name,
+        description=description,
+        client_id=_demo_app_id(tenant_id, app_name),
+        api_subscriptions=[],
+        environment="development",
+        security_profile="demo_api_key",
+        created_at=now,
+        updated_at=now,
+    )
 
 
 class ApplicationCreate(BaseModel):
@@ -128,9 +159,16 @@ async def get_application(tenant_id: str, app_id: str, user: User = Depends(get_
 @require_permission(Permission.APPS_CREATE)
 @require_tenant_access
 async def create_application(
-    tenant_id: str, app: ApplicationCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    tenant_id: str,
+    app: ApplicationCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new application (Keycloak client)."""
+    if _demo_mode_enabled(request):
+        return _demo_application_response(tenant_id, app.name, app.display_name, app.description)
+
     # Check tenant application limit (CAB-1549)
     from ..routers.tenants import get_tenant_limits
 
@@ -141,8 +179,6 @@ async def create_application(
         current_apps = await keycloak_service.get_clients(tenant_id)
         if len(current_apps) >= max_apps:
             raise HTTPException(status_code=429, detail=f"Application limit reached ({max_apps})")
-
-    from datetime import datetime
 
     result = await keycloak_service.create_client(
         tenant_id=tenant_id,
@@ -175,8 +211,6 @@ async def update_application(
     tenant_id: str, app_id: str, app: ApplicationCreate, user: User = Depends(get_current_user)
 ):
     """Update application."""
-    from datetime import datetime
-
     client = await _get_tenant_client(app_id, tenant_id)
     now = datetime.now(UTC).isoformat()
     attrs = client.get("attributes", {})
@@ -228,6 +262,36 @@ async def subscribe_to_api(
     db: AsyncSession = Depends(get_db),
 ):
     """Subscribe application to an API."""
+    if _demo_mode_enabled(request) and app_id.startswith(f"demo-{tenant_id}-"):
+        api_key, api_key_hash, api_key_prefix = APIKeyService.generate_key()
+        repo = SubscriptionRepository(db)
+        application_name = app_id.removeprefix(f"demo-{tenant_id}-")
+        subscription = Subscription(
+            application_id=app_id,
+            application_name=application_name,
+            subscriber_id=user.id,
+            subscriber_email=user.email,
+            api_id=api_id,
+            api_name=api_id,
+            api_version="1.0",
+            tenant_id=tenant_id,
+            plan_name="demo",
+            api_key_hash=api_key_hash,
+            api_key_prefix=api_key_prefix,
+            status=SubscriptionStatus.ACTIVE,
+            approved_by="system:demo-smoke",
+        )
+        subscription = await repo.create(subscription)
+        await db.commit()
+        return {
+            "id": str(subscription.id),
+            "subscription_id": str(subscription.id),
+            "api_key": api_key,
+            "api_key_prefix": api_key_prefix,
+            "status": subscription.status.value,
+            "message": f"Demo application subscribed to API {api_id}",
+        }
+
     client = await _get_tenant_client(app_id, tenant_id)
     attrs = client.get("attributes", {})
     subs_raw = attrs.get("api_subscriptions", ["[]"])

@@ -12,6 +12,7 @@ from src.schemas.uac import (
     UacContractSpec,
     UacContractStatus,
     UacEndpointSpec,
+    UacEndpointSideEffects,
 )
 
 # =============================================================================
@@ -63,6 +64,43 @@ class TestUacEndpointSpec:
         assert ep.operation_id is None
         assert ep.input_schema is None
         assert ep.output_schema is None
+        assert ep.llm is None
+
+    def test_endpoint_llm_metadata(self):
+        ep = UacEndpointSpec(
+            path="/health",
+            methods=["GET"],
+            backend_url="https://api.example.com/health",
+            llm={
+                "summary": "Read health",
+                "intent": "Let agents inspect service health.",
+                "tool_name": "health_read",
+                "side_effects": "read",
+                "safe_for_agents": True,
+                "requires_human_approval": False,
+                "examples": [{"input": {"verbose": False}}],
+            },
+        )
+        assert ep.llm is not None
+        assert ep.llm.tool_name == "health_read"
+        assert ep.llm.side_effects == UacEndpointSideEffects.READ
+        assert ep.llm.examples[0].input == {"verbose": False}
+
+    def test_endpoint_llm_missing_examples_rejected(self):
+        with pytest.raises(ValidationError):
+            UacEndpointSpec(
+                path="/health",
+                methods=["GET"],
+                backend_url="https://api.example.com/health",
+                llm={
+                    "summary": "Read health",
+                    "intent": "Let agents inspect service health.",
+                    "tool_name": "health_read",
+                    "side_effects": "read",
+                    "safe_for_agents": True,
+                    "requires_human_approval": False,
+                },
+            )
 
 
 # =============================================================================

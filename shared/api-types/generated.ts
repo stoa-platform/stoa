@@ -14565,6 +14565,11 @@ export interface components {
              * @default true
              */
             activated: boolean;
+            /**
+             * Api Id
+             * @default
+             */
+            api_id: string;
             /** Backend Url */
             backend_url: string;
             /**

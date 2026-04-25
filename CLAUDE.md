@@ -6,6 +6,26 @@
 - Kill feature: UAC (Universal API Contract) — "Define Once, Expose Everywhere"
 - Legacy-to-MCP Bridge: connect traditional APIs to AI agents
 
+## UAC / Agent Contract Doctrine
+
+Canonical rule from ADR-067:
+
+```text
+UAC describes.
+MCP projects.
+Smoke proves.
+```
+
+For any API operation exposed to agents:
+- UAC is the primary product contract; MCP tools are projections of UAC operations.
+- LLM metadata is endpoint-level, not contract-level.
+- V1: missing `endpoint.llm` metadata is a warning/review note; malformed metadata is an error.
+- V2 target: new MCP-exposed endpoints must be LLM-ready before merge.
+- `side_effects=destructive` requires `requires_human_approval=true`.
+- A feature exposed to an agent should not exist only in code; it must be attached to a UAC operation or flow contract.
+
+Load `.claude/docs/uac-llm-ready.md` when touching UAC schemas, UAC examples, MCP tool generation, smoke tests for MCP projections, or API operations exposed to agents.
+
 ## Architecture
 
 ```

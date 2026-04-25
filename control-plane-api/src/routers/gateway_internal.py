@@ -693,6 +693,31 @@ async def route_sync_ack(
             )
             continue
 
+        desired_generation = (
+            deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
+        )
+        synced_generation = (
+            deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
+        )
+
+        if (
+            result.status == "failed"
+            and deployment.sync_status == DeploymentSyncStatus.SYNCED
+            and deployment.last_sync_success is not None
+            and synced_generation >= desired_generation
+        ):
+            logger.info(
+                "route-sync-ack: preserving synced deployment %s after failed re-ack for generation %s",
+                result.deployment_id,
+                result.generation,
+            )
+            if result.generation is not None:
+                deployment.attempted_generation = max(deployment.attempted_generation, result.generation)
+            deployment.last_sync_attempt = now
+            await deploy_repo.update(deployment)
+            processed += 1
+            continue
+
         if result.status == "applied":
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.last_sync_success = now

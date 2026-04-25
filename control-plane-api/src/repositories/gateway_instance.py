@@ -40,6 +40,26 @@ class GatewayInstanceRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_self_registered_by_hostname(self, hostname: str) -> GatewayInstance | None:
+        """Get the latest self-registered gateway by original registration hostname.
+
+        stoa-connect sends ``STOA_INSTANCE_NAME`` as the registration hostname,
+        while the Control Plane stores the canonical instance name as
+        ``{hostname}-{mode}-{environment}``. Route polling clients still filter
+        by their configured hostname, so route delivery must support both forms.
+        """
+        result = await self.session.execute(
+            select(GatewayInstance)
+            .where(
+                GatewayInstance.source == "self_register",
+                GatewayInstance.health_details["hostname"].as_string() == hostname,
+                GatewayInstance.deleted_at.is_(None),
+            )
+            .order_by(GatewayInstance.updated_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_name_including_deleted(self, name: str) -> GatewayInstance | None:
         """Get gateway instance by name, including soft-deleted entries."""
         result = await self.session.execute(

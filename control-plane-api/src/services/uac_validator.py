@@ -94,6 +94,7 @@ def _validate_semantics(document: dict, result: UacValidationResult) -> None:
     _check_classification_policy_consistency(document, result)
     _check_endpoint_uniqueness(document, result)
     _check_naming_conventions(document, result)
+    _check_endpoint_llm_rules(document, result)
     _check_published_readiness(document, result)
 
 
@@ -143,6 +144,31 @@ def _check_naming_conventions(document: dict, result: UacValidationResult) -> No
         if op_id and not op_id.replace("_", "").replace("-", "").isalnum():
             result.add_warning(
                 f"endpoints[{i}].operation_id '{op_id}' contains " f"non-alphanumeric characters beyond _ and -"
+            )
+
+
+def _check_endpoint_llm_rules(document: dict, result: UacValidationResult) -> None:
+    """Validate cross-endpoint and effect rules for optional endpoint.llm."""
+    tool_names: dict[str, int] = {}
+
+    for i, ep in enumerate(document.get("endpoints", [])):
+        llm = ep.get("llm")
+        if not llm:
+            continue
+
+        tool_name = llm.get("tool_name")
+        if tool_name:
+            if tool_name in tool_names:
+                result.add_error(
+                    f"endpoints[{i}].llm.tool_name duplicate tool_name '{tool_name}' "
+                    f"already used by endpoints[{tool_names[tool_name]}]"
+                )
+            else:
+                tool_names[tool_name] = i
+
+        if llm.get("side_effects") == "destructive" and llm.get("requires_human_approval") is not True:
+            result.add_error(
+                f"endpoints[{i}].llm destructive side_effects requires requires_human_approval=true"
             )
 
 

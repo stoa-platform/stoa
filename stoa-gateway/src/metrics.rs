@@ -506,6 +506,16 @@ pub static API_PROXY_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_api_proxy_requests_total metric")
 });
 
+/// Canonical demo-facing proxy request counter.
+pub static PROXY_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "proxy_requests_total",
+        "Total dynamic proxy requests by tenant, API, method, and status",
+        &["tenant", "api", "method", "status"]
+    )
+    .expect("Failed to create proxy_requests_total metric")
+});
+
 /// Histogram of API proxy request durations in seconds, by backend.
 pub static API_PROXY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
@@ -1214,6 +1224,14 @@ pub fn record_api_proxy_request(backend: &str, method: &str, status: u16, durati
         .observe(duration_secs);
 }
 
+/// Record a dynamic proxy request using the stable demo smoke metric name.
+pub fn record_proxy_request(tenant: &str, api: &str, method: &str, status: u16) {
+    let status_str = status.to_string();
+    PROXY_REQUESTS_TOTAL
+        .with_label_values(&[tenant, api, method, &status_str])
+        .inc();
+}
+
 /// Record an API proxy rate limit rejection.
 pub fn record_api_proxy_rate_limited(backend: &str) {
     API_PROXY_RATE_LIMITED.with_label_values(&[backend]).inc();
@@ -1328,6 +1346,7 @@ pub fn init_all_metrics() {
     Lazy::force(&POOL_NEW_CONNECTIONS);
     Lazy::force(&UPSTREAM_LATENCY);
     Lazy::force(&API_PROXY_REQUESTS_TOTAL);
+    Lazy::force(&PROXY_REQUESTS_TOTAL);
     Lazy::force(&API_PROXY_DURATION);
     Lazy::force(&API_PROXY_RATE_LIMITED);
     Lazy::force(&API_PROXY_CIRCUIT_OPEN);
@@ -1456,6 +1475,24 @@ mod tests {
         record_http_request("GET", "/health", 200, 0.001);
         record_http_request("POST", "/mcp/tools/call", 200, 0.05);
         record_http_request("GET", "/mcp/tools/list", 401, 0.002);
+    }
+
+    #[test]
+    fn regression_demo_smoke_exports_proxy_requests_total() {
+        record_proxy_request("demo", "demo-api-smoke", "GET", 200);
+
+        let metric_families = prometheus::gather();
+        let mut buffer = Vec::new();
+        let encoder = prometheus::TextEncoder::new();
+        prometheus::Encoder::encode(&encoder, &metric_families, &mut buffer)
+            .expect("encode prometheus metrics");
+        let body = String::from_utf8(buffer).expect("prometheus metrics should be utf-8");
+
+        assert!(
+            body.contains(r#"proxy_requests_total{api="demo-api-smoke",method="GET",status="200",tenant="demo"}"#),
+            "proxy_requests_total sample missing from /metrics body:\n{}",
+            body
+        );
     }
 
     #[test]

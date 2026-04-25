@@ -520,7 +520,9 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     span.record("upstream.active_conns", format!("{active}"));
 
     // Record HTTP status on the proxy span for Tempo trace filtering
-    record_proxy_status(response.status().as_u16());
+    let status = response.status().as_u16();
+    record_proxy_status(status);
+    crate::metrics::record_proxy_request(&route.tenant_id, &route.name, method.as_str(), status);
 
     response
 }

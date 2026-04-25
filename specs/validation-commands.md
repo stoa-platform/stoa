@@ -237,3 +237,23 @@ curl -sI http://localhost:3002/usage
 curl -sI http://localhost:3000/admin/prospects
 curl -sI http://localhost:3000/subscriptions
 ```
+
+## 11. Flux API deployments Console
+
+Le flux transverse Console `/api-deployments` est spécifié séparément dans
+`specs/api-deployment-flow.md`.
+
+Ce contrat couvre le chemin API catalogue -> gateway assignment -> deploy direct
+ou promotion -> gateway sync ack -> affichage Console. Il reste non bloquant
+pour `scripts/demo-smoke-test.sh` tant qu'il n'est pas explicitement ajouté au
+scope minimal `demo-scope.md`.
+
+Validation cible future:
+
+```bash
+# API-level, à créer
+./scripts/api-deployment-flow-smoke.sh
+
+# UI-level, à créer
+cd e2e && npx playwright test api-deployment-flow.spec.ts
+```

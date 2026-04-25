@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { X, AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type { API, GatewayDeployment } from '../../types';
+import { getEnvLabel, normalizeEnvironment } from '@stoa/shared/constants/environments';
 
 interface GatewayOption {
   id: string;
@@ -32,6 +33,10 @@ interface DeployAPIDialogProps {
   onDeployed: () => void;
   /** Pre-select an API (from API Detail page). Format: "tenantId:apiName" */
   preselectedApiKey?: string;
+}
+
+function sameEnvironment(left: string, right: string): boolean {
+  return normalizeEnvironment(left) === normalizeEnvironment(right);
 }
 
 export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: DeployAPIDialogProps) {
@@ -180,8 +185,27 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
     );
   }, [apis, apiSearchTerm]);
 
-  // Filter gateways by selected environment
-  const filteredGateways = gateways.filter((gw) => selectedEnv && gw.environment === selectedEnv);
+  // Filter gateways by selected environment, accepting both `prod` and
+  // `production` wire shapes. ADF-8 forbids keeping cross-env gateway targets.
+  const filteredGateways = useMemo(
+    () => gateways.filter((gw) => selectedEnv && sameEnvironment(gw.environment, selectedEnv)),
+    [gateways, selectedEnv]
+  );
+
+  const selectedGatewayIdsForEnv = useMemo(() => {
+    const validGatewayIds = new Set(filteredGateways.map((gw) => gw.id));
+    return selectedGateways.filter((id) => validGatewayIds.has(id));
+  }, [filteredGateways, selectedGateways]);
+
+  useEffect(() => {
+    if (!selectedEnv) return;
+    const validGatewayIds = new Set(filteredGateways.map((gw) => gw.id));
+    setSelectedGateways((prev) => {
+      const next = prev.filter((id) => validGatewayIds.has(id));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [filteredGateways, selectedEnv]);
 
   const isAlreadyDeployed = (gwId: string) =>
     existingDeployments.some((d) => d.gateway_instance_id === gwId && d.sync_status === 'synced');
@@ -194,7 +218,9 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedApi || !selectedEnv || !selectedTenant || selectedGateways.length === 0) return;
+    if (!selectedApi || !selectedEnv || !selectedTenant || selectedGatewayIdsForEnv.length === 0) {
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -202,7 +228,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
     try {
       await apiService.deployApiToEnv(selectedTenant, selectedApi, {
         environment: selectedEnv,
-        gateway_ids: selectedGateways,
+        gateway_ids: selectedGatewayIdsForEnv,
       });
       onDeployed();
     } catch {
@@ -212,11 +238,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
     }
   };
 
-  const envLabels: Record<string, string> = {
-    dev: 'Development',
-    staging: 'Staging',
-    production: 'Production',
-  };
+  const getEnvironmentLabel = (env: string) => getEnvLabel(env);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -364,7 +386,7 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
                           value={env.environment}
                           disabled={!env.deployable}
                         >
-                          {envLabels[env.environment] || env.environment}
+                          {getEnvironmentLabel(env.environment)}
                           {!env.deployable ? ' (not promoted)' : ''}
                         </option>
                       ))}
@@ -377,11 +399,11 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
               {selectedEnv && (
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                    Target Gateways ({envLabels[selectedEnv] || selectedEnv})
+                    Target Gateways ({getEnvironmentLabel(selectedEnv)})
                   </label>
                   {filteredGateways.length === 0 ? (
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      No gateways registered in {envLabels[selectedEnv] || selectedEnv}.
+                      No gateways registered in {getEnvironmentLabel(selectedEnv)}.
                     </p>
                   ) : (
                     <div className="space-y-2 max-h-48 overflow-y-auto border border-neutral-200 dark:border-neutral-600 rounded-lg p-3">
@@ -438,12 +460,16 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
             </button>
             <button
               type="submit"
-              disabled={submitting || !selectedApi || !selectedEnv || selectedGateways.length === 0}
+              disabled={
+                submitting || !selectedApi || !selectedEnv || selectedGatewayIdsForEnv.length === 0
+              }
               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
             >
               {submitting
                 ? 'Deploying...'
-                : `Deploy to ${selectedGateways.length} gateway${selectedGateways.length !== 1 ? 's' : ''}`}
+                : `Deploy to ${selectedGatewayIdsForEnv.length} gateway${
+                    selectedGatewayIdsForEnv.length !== 1 ? 's' : ''
+                  }`}
             </button>
           </div>
         </form>

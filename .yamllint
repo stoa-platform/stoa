@@ -1,0 +1,28 @@
+---
+# yamllint configuration for STOA platform.
+#
+# Tuned for GitHub Actions YAML, which is often long-lined and uses keys
+# (e.g. `on:`) that yamllint's default `truthy` rule flags as truthy
+# values per YAML 1.1.
+#
+# Scope today: enforced on .github/ via .github/workflows/ai-factory-scripts-tests.yml.
+# Adopt for other directories opt-in (call `yamllint -c .yamllint <path>`).
+
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  truthy: disable
+  comments-indentation: disable
+  document-start: disable
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+  comments:
+    min-spaces-from-content: 1

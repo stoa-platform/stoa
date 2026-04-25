@@ -68,6 +68,28 @@ cargo build --release                          # Community
 cargo build --release --features "kafka,k8s"   # Enterprise
 ```
 
+## Deployment Modes
+
+The gateway ships as one Rust binary with route profiles selected by
+`STOA_GATEWAY_MODE`.
+
+| Mode | Routes | Intended topology |
+|------|--------|-------------------|
+| `edge-mcp` | MCP/SSE/tool routes plus health/admin/metrics | STOA native gateway |
+| `sidecar` | `POST /authz` plus health/admin/metrics | Same-pod sidecar for Kong, Envoy, webMethods, Apigee |
+| `proxy` | Inline proxy routes | Micro-gateway path |
+| `shadow` | Passive capture routes | Mesh/tap analysis |
+
+Sidecar mode does not mount MCP routes. It adapts third-party gateway authz
+calls into the shared `mode::decision::DecisionEngine`, so sidecar,
+micro-gateway, and mesh adapters can reuse identity, tenant, quota, and scope
+decisions instead of duplicating policy logic.
+
+For a lean sidecar image, build with the default feature set unless Kafka or
+Kubernetes watchers are required. The Helm sidecar defaults reserve a small
+runtime envelope (`50m` CPU / `64Mi` memory request, `200m` / `256Mi` limit)
+and should be re-measured for each release image.
+
 ## Configuration
 
 All settings via `STOA_*` env vars or `config.yaml`. See `.env.example` for the full list.

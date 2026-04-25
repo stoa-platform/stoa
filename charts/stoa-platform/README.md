@@ -56,7 +56,7 @@ kubectl apply -f charts/stoa-platform/crds/
 | `stoaGateway.serviceMonitor.enabled` | `true` | Create Prometheus ServiceMonitor |
 | `stoaGateway.resources.requests.memory` | `128Mi` | Memory request |
 | `stoaGateway.resources.limits.memory` | `256Mi` | Memory limit |
-| `stoaSidecar.enabled` | `false` | Deploy sidecar mode (future) |
+| `stoaSidecar.enabled` | `false` | Deploy a real same-pod third-party gateway + STOA sidecar |
 | `gatewaySync.enabled` | `false` | Enable OpenAPI sync CronJob |
 | `gatewaySync.schedule` | `*/30 * * * *` | Sync frequency |
 | `autoscaling.enabled` | `false` | Enable HPA |
@@ -87,6 +87,19 @@ kubectl apply -f charts/stoa-platform/crds/
 | `bootstrap-job.yaml` | Post-install bootstrap Job |
 | `control-plane-api-chat-config.yaml` | Chat kill-switch ConfigMap |
 | `tests/test-connection.yaml` | Helm test Pod |
+
+### STOA Sidecar
+
+`stoaSidecar.enabled=true` renders one `Deployment` containing both the target
+gateway container (`stoaSidecar.mainGateway`) and the `stoa-sidecar` container.
+The target gateway must call `http://localhost:8081/authz`; the sidecar binds
+`127.0.0.1:8081` inside the pod and exposes only the main gateway Service.
+
+The chart fails rendering if `stoaSidecar.enabled=true` and
+`stoaSidecar.mainGateway.enabled=false`, because that would be a standalone
+authz service rather than a Kubernetes sidecar. Standalone remote links are kept
+under `k8s/gateways/base/stoa-link-wm` and are labelled
+`stoa.io/deployment-kind=standalone-link`.
 
 ## CRDs
 

@@ -30,8 +30,8 @@ STOA gateways can automatically register with the Control Plane at startup, elim
              │ HTTPS (X-Gateway-Key header)
              │
     ┌────────┴────────┐              ┌────────────────┐
-    │  STOA Gateway   │              │ STOA Sidecar   │
-    │  (edge-mcp)     │              │ + Kong/Envoy   │
+    │  STOA Gateway   │              │ Kong/Envoy Pod │
+    │  (edge-mcp)     │              │ + STOA sidecar │
     │                 │              │                │
     │  1. Register    │              │  ext_authz     │
     │  2. Heartbeat   │              │  ↓             │
@@ -62,7 +62,14 @@ The gateway will:
 
 ### Tier 2: Sidecar Mode
 
-Deploy STOA as a sidecar alongside a third-party gateway:
+Deploy STOA as a sidecar alongside a third-party gateway in the same pod. This
+uses the same `stoa-gateway` binary as edge MCP, but `STOA_GATEWAY_MODE=sidecar`
+mounts only `/authz` plus health, readiness, metrics, and admin routes. MCP
+routes are not mounted in this mode.
+
+For Kubernetes, prefer the Helm `stoaSidecar` values. The chart renders both
+containers in one `Deployment` and fails if the target gateway container is
+disabled, so a standalone authz service cannot be mistaken for a sidecar.
 
 ```yaml
 # Kubernetes deployment example
@@ -101,6 +108,11 @@ spec:
           ports:
             - containerPort: 8081  # ext_authz endpoint
 ```
+
+Standalone link deployments, for example a STOA process pointing at a remote
+webMethods VPS, are valid but are not sidecars. They should be labelled as
+`stoa.io/deployment-kind=standalone-link` and documented separately from Tier 2
+same-pod gateway sidecars.
 
 ## Control Plane Configuration
 

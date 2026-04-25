@@ -39,6 +39,10 @@ Auth démo provider/runtime :
   `X-Demo-Mode: true` sur la requête.
 - `STOA_DISABLE_AUTH=true` est interdit en `ENVIRONMENT=production` et doit
   faire échouer le boot cp-api.
+- Dans ce mode explicite seulement, `POST /v1/tenants/{tid}/applications`
+  peut retourner une application synthétique `demo-{tenant}-{app}` sans créer
+  de client Keycloak. Hors smoke démo, les applications restent des clients
+  Keycloak réels.
 
 | Endpoint | Method | Status OK | Champs min réponse |
 |----------|--------|-----------|--------------------|

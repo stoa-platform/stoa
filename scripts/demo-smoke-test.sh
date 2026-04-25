@@ -22,6 +22,7 @@
 #   DEMO_ADMIN_TOKEN     (empty → bypass via ?demo-admin header if cp-api allows)
 #   DEMO_MODE_HEADER     true (sends X-Demo-Mode: true to bounded demo endpoints)
 #   ROUTE_SYNC_GRACE_SECS 30
+#   DEMO_DEPLOY_ENV      dev
 #   DEMO_API_NAME        demo-api-smoke
 #   DEMO_APP_NAME        demo-app-smoke
 #   OBS_VISIBILITY_CHECK auto (auto | off)
@@ -54,6 +55,7 @@ GATEWAY_ID="${GATEWAY_ID:-gateway-demo}"
 DEMO_ADMIN_TOKEN="${DEMO_ADMIN_TOKEN:-}"
 DEMO_MODE_HEADER="${DEMO_MODE_HEADER:-true}"
 ROUTE_SYNC_GRACE_SECS="${ROUTE_SYNC_GRACE_SECS:-30}"
+DEMO_DEPLOY_ENV="${DEMO_DEPLOY_ENV:-dev}"
 DEMO_API_NAME="${DEMO_API_NAME:-demo-api-smoke}"
 DEMO_APP_NAME="${DEMO_APP_NAME:-demo-app-smoke}"
 DEMO_GATEWAY_PATH="${DEMO_GATEWAY_PATH:-/apis/${DEMO_API_NAME}/get}"
@@ -249,7 +251,13 @@ JSON
     if [[ "$HTTP_STATUS" == "409" ]]; then
         http_call GET "${API_URL}/v1/tenants/${TENANT_ID}/apis?name=${DEMO_API_NAME}" ""
         resp="$HTTP_BODY"
-        API_ID="$(echo "$resp" | jq -r '.items[0].id // .apis[0].id // empty' 2>/dev/null || true)"
+        API_ID="$(
+            echo "$resp" \
+                | jq -r --arg name "$DEMO_API_NAME" \
+                    '(.items // .apis // [])[] | select(.name == $name or .id == $name) | .id' \
+                    2>/dev/null \
+                | head -n 1
+        )"
     else
         API_ID="$(echo "$resp" | jq -r '.id // empty' 2>/dev/null || true)"
     fi
@@ -279,7 +287,7 @@ at2_provision_route() {
     body="$(cat <<JSON
 {
   "api_id": "${API_ID}",
-  "environment": "demo",
+  "environment": "${DEMO_DEPLOY_ENV}",
   "gateway_id": "${GATEWAY_ID}"
 }
 JSON
@@ -341,7 +349,13 @@ at3_subscription() {
 
     # Step 1: application
     local resp body
-    body="{\"name\":\"${DEMO_APP_NAME}\"}"
+    body="$(cat <<JSON
+{
+  "name": "${DEMO_APP_NAME}",
+  "display_name": "${DEMO_APP_NAME}"
+}
+JSON
+)"
     http_call POST "${API_URL}/v1/tenants/${TENANT_ID}/applications" "$body"
     resp="$HTTP_BODY"
     if [[ "$HTTP_STATUS" != "201" && "$HTTP_STATUS" != "200" && "$HTTP_STATUS" != "409" ]]; then
@@ -359,7 +373,13 @@ at3_subscription() {
     if [[ -z "$APP_ID" && "$HTTP_STATUS" == "409" ]]; then
         http_call GET "${API_URL}/v1/tenants/${TENANT_ID}/applications?name=${DEMO_APP_NAME}" ""
         resp="$HTTP_BODY"
-        APP_ID="$(echo "$resp" | jq -r '.items[0].id // .applications[0].id // empty' 2>/dev/null)"
+        APP_ID="$(
+            echo "$resp" \
+                | jq -r --arg name "$DEMO_APP_NAME" \
+                    '(.items // .applications // [])[] | select(.name == $name or .id == $name or .client_id == $name) | .id' \
+                    2>/dev/null \
+                | head -n 1
+        )"
     fi
     if [[ -z "$APP_ID" ]]; then
         record "AT-3" "FAIL" "no application id"

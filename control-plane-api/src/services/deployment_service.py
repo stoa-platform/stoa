@@ -4,8 +4,10 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.events.deployment_producer import (
     emit_deployment_completed,
     emit_deployment_failed,
@@ -13,10 +15,14 @@ from src.events.deployment_producer import (
     emit_deployment_rolledback,
     emit_deployment_started,
 )
+from src.models.catalog import APICatalog
 from src.models.deployment import Deployment, DeploymentStatus
 from src.models.deployment_log import DeploymentLog
+from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
 from src.repositories.deployment import DeploymentRepository
 from src.repositories.deployment_log import DeploymentLogRepository
+from src.repositories.gateway_instance import GatewayInstanceRepository
+from src.services.gateway_deployment_service import GatewayDeploymentService
 from src.services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -83,6 +89,52 @@ class DeploymentService:
             step="init",
         )
         return deployment
+
+    async def ensure_demo_gateway_deployment(
+        self,
+        tenant_id: str,
+        api_id: str,
+        api_name: str,
+        gateway_name: str,
+    ) -> None:
+        """Bridge the legacy demo deployment endpoint to GatewayDeployment routes.
+
+        This is only called by the router after the explicit demo/dev header
+        gate. It lets the smoke test keep using the public deployment endpoint
+        while the gateway route table continues to read GatewayDeployment.
+        """
+        result = await self.db.execute(
+            select(APICatalog).where(
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.deleted_at.is_(None),
+                or_(APICatalog.api_id == api_id, APICatalog.api_name == api_name),
+            )
+        )
+        api_catalog = result.scalar_one_or_none()
+        if not api_catalog:
+            logger.warning("Demo gateway deployment skipped: API catalog not found tenant=%s api=%s", tenant_id, api_id)
+            return
+
+        gw_repo = GatewayInstanceRepository(self.db)
+        gateway = await gw_repo.get_by_name(gateway_name)
+        if not gateway:
+            gateway = GatewayInstance(
+                name=gateway_name,
+                display_name=gateway_name,
+                gateway_type=GatewayType.STOA_EDGE_MCP,
+                environment="dev",
+                tenant_id=None,
+                base_url=settings.MCP_GATEWAY_URL,
+                public_url=settings.MCP_GATEWAY_URL,
+                auth_config={},
+                status=GatewayInstanceStatus.ONLINE,
+                capabilities=["rest", "mcp"],
+                mode="edge-mcp",
+                source="demo_smoke",
+            )
+            gateway = await gw_repo.create(gateway)
+
+        await GatewayDeploymentService(self.db).deploy_api(api_catalog.id, [gateway.id])
 
     async def rollback_deployment(
         self,

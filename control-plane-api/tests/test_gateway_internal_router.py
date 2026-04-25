@@ -687,6 +687,7 @@ class TestListGatewayRoutes:
         assert resp.status_code == 200
         routes = resp.json()
         assert len(routes) == 1
+        assert routes[0]["api_id"] == "petstore"
         assert routes[0]["name"] == "petstore"
         assert routes[0]["spec_hash"] == "abc123"
         assert routes[0]["openapi_spec"] is None

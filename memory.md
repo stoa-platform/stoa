@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-04-22. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-04-25. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
 
 ## ✅ FREEZE LEVÉ (2026-04-19)
 
@@ -96,8 +96,9 @@ Phase 0 ✅ baseline (PR #2362). Phase 1 pending: Agent Teams flag + canary MEGA
 ## Clés transversales
 
 - Linear team ID: `624a9948-a160-4e47-aba5-7f9404d23506`
-- ADR numbering: stoa-docs owns 001-060. Next = **ADR-061**
+- ADR numbering: stoa-docs owns the ADR index; check `stoa-docs/docs/architecture/adr/` before creating a new ADR.
 - Docs user-facing → stoa-docs. Runbooks/ops-only → stoa/docs/
+- ADR-067 doctrine added to agent context (2026-04-25): `UAC describes. MCP projects. Smoke proves.` V1 `endpoint.llm` metadata is warning/recommended for MCP-exposed operations; malformed metadata is an error when present; V2 target = mandatory for new MCP endpoints. Local references: `CLAUDE.md`, `AGENTS.md`, `.claude/docs/uac-llm-ready.md`.
 - stoa-docs branch protection requires Vercel deploy check
 
 ## Key Gotchas (détails → `gotchas.md`)

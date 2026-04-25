@@ -23,7 +23,9 @@ SCRIPT = Path(__file__).resolve().parent.parent / "map_score_to_label.py"
         (5.99, "ticket", "council:ticket-redo"),
         (0.0, "ticket", "council:ticket-redo"),
         (8.5, "plan", "council:plan-go"),
+        (8.0, "plan", "council:plan-go"),
         (6.5, "plan", "council:plan-fix"),
+        (6.0, "plan", "council:plan-fix"),
         (4.0, "plan", "council:plan-redo"),
     ],
 )

@@ -1,0 +1,147 @@
+---
+# Static tests for AI-Factory scripts and composites (CI-1 Phase 2c).
+#
+# Triggers only on PRs that touch the AI-Factory surface. Three jobs:
+#   1. action-validator — schema-validates composite actions and the
+#      claude-issue-to-pr workflows (legacy + v2). Scoped to AI-Factory
+#      because action-validator's schema is stricter than GitHub's
+#      runtime parser, producing false positives on unrelated legacy
+#      workflows.
+#   2. yamllint — surface-level YAML hygiene over the same scope.
+#   3. pytest — runs scripts/ci/tests/ which cover both the Python
+#      helpers and the bash helpers (via pytest+subprocess per Phase
+#      2a decision K1).
+#
+# All third-party actions are SHA-pinned per CI-1 Phase 1 decision K2.
+
+name: AI-Factory Scripts Tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/**'
+      - '.github/actions/**'
+      - '.github/workflows/claude-issue-to-pr*.yml'
+      - '.github/workflows/ai-factory-scripts-tests.yml'
+      - '.yamllint'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-factory-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  action-validator:
+    name: action-validator
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AV_VERSION: v0.9.0
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install mpalmer/action-validator
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/mpalmer/action-validator/releases/download/${AV_VERSION}/action-validator_linux_amd64" \
+            -o /tmp/action-validator
+          chmod +x /tmp/action-validator
+          sudo mv /tmp/action-validator /usr/local/bin/action-validator
+          action-validator --version
+
+      - name: Validate composite actions
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          fail=0
+          found=0
+          for f in .github/actions/*/action.yml .github/actions/*/action.yaml; do
+            found=1
+            echo "::group::Validating ${f}"
+            if ! action-validator "${f}"; then
+              echo "::error file=${f}::action-validator rejected ${f}"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          if [ "${found}" -eq 0 ]; then
+            echo "::error::No composite actions found under .github/actions/"
+            exit 1
+          fi
+          exit "${fail}"
+
+      - name: Validate AI-Factory workflows
+        # Scope: only the AI-Factory CI-1 workflows. Other workflows
+        # in .github/workflows/ pre-date this lint and use schema
+        # dialects that action-validator rejects despite running fine
+        # on GitHub. Bringing them in-scope is a separate decision.
+        run: |
+          set -uo pipefail
+          fail=0
+          for f in \
+            .github/workflows/claude-issue-to-pr.yml \
+            .github/workflows/claude-issue-to-pr-v2.yml \
+            .github/workflows/ai-factory-scripts-tests.yml; do
+            if [ ! -f "${f}" ]; then
+              echo "::warning::Skipping missing file ${f}"
+              continue
+            fi
+            echo "::group::Validating ${f}"
+            if ! action-validator "${f}"; then
+              echo "::error file=${f}::action-validator rejected ${f}"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "${fail}"
+
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Run yamllint on AI-Factory scope
+        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c  # v3
+        with:
+          file_or_dir: |
+            .github/actions/
+            .github/workflows/claude-issue-to-pr.yml
+            .github/workflows/claude-issue-to-pr-v2.yml
+            .github/workflows/ai-factory-scripts-tests.yml
+            .yamllint
+          config_file: .yamllint
+          strict: false
+
+  pytest-scripts:
+    name: pytest scripts/ci/tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f scripts/ci/requirements.txt ]; then
+            pip install -r scripts/ci/requirements.txt
+          fi
+          pip install pytest pytest-cov
+      - name: Run pytest
+        # scripts/ci/tests/ covers both Python helpers and bash
+        # helpers (bash via pytest+subprocess per Phase 2a K1).
+        run: |
+          pytest scripts/ci/tests/ \
+            -v \
+            --cov=scripts/ci \
+            --cov-report=term-missing
+      - name: Coverage note
+        if: always()
+        run: |
+          echo "Coverage report shown above. Phase 2c does not enforce a"
+          echo "coverage gate — baseline is informational. Phase 2d will"
+          echo "decide whether to ratchet."

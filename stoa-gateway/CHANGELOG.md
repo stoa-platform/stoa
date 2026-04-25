@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.17](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.16...stoa-gateway-v0.9.17) (2026-04-25)
+
+
+### Bug Fixes
+
+* **demo:** expose proxy request metric for smoke ([#2557](https://github.com/stoa-platform/stoa/issues/2557)) ([c9d8fbb](https://github.com/stoa-platform/stoa/commit/c9d8fbbcb0ef2c33f3e0a70b6bdee7cd0932ea91))
+
 ## [0.9.16](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.15...stoa-gateway-v0.9.16) (2026-04-24)
 
 

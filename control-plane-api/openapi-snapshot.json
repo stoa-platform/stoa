@@ -12146,6 +12146,11 @@
             "title": "Activated",
             "type": "boolean"
           },
+          "api_id": {
+            "default": "",
+            "title": "Api Id",
+            "type": "string"
+          },
           "backend_url": {
             "title": "Backend Url",
             "type": "string"

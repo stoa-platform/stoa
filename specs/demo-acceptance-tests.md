@@ -91,8 +91,9 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 ```
 **Then**:
 - HTTP 201
-- Dans un délai ≤ 30s : `GET ${GATEWAY_URL}/health` reste 200 ET la route est atteignable (retry AT-4 peut valider)
-- **[MOCK OK]** Le polling route-sync peut être forcé par SIGHUP à la gateway (`kill -HUP $PID`) si on ne veut pas attendre le tick
+- Dans un délai ≤ 30s : `GET ${API_URL}/v1/internal/gateways/routes?gateway_name=${GATEWAY_ID}` contient `api_id=${API_ID}`
+- En stack compose démo, `STOA_ROUTE_RELOAD_INTERVAL_SECS=2` réduit l'attente côté gateway; AT-4 prouve l'activation runtime.
+- **[MOCK OK]** Le polling route-sync peut être remplacé par mock uniquement en mode dry-run/contract explicite.
 
 **Exit code**: 0 si 201 + route active avant timeout, 1 sinon.
 

@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.8.7](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.6...control-plane-api-v1.8.7) (2026-04-25)
+
+
+### Bug Fixes
+
+* **demo:** bridge route sync for smoke ([#2553](https://github.com/stoa-platform/stoa/issues/2553)) ([f6d6497](https://github.com/stoa-platform/stoa/commit/f6d649728ae04412ea454d68d5c4f003192dffe9))
+
+## [1.8.6](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.5...control-plane-api-v1.8.6) (2026-04-25)
+
+
+### Bug Fixes
+
+* **cp-api:** deliver routes to self-registered agents by hostname ([7926b0d](https://github.com/stoa-platform/stoa/commit/7926b0de07439ab02a6a9aecabb3804a92663f6e))
+* **demo:** align smoke payloads with runtime models ([#2549](https://github.com/stoa-platform/stoa/issues/2549)) ([0e49393](https://github.com/stoa-platform/stoa/commit/0e4939343ec349b31880caac912f3c61f841e033))
+
+## [1.8.5](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.4...control-plane-api-v1.8.5) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** add bounded auth bypass for smoke ([#2546](https://github.com/stoa-platform/stoa/issues/2546)) ([1e55659](https://github.com/stoa-platform/stoa/commit/1e55659546aeab2ed59abed985138b126fcc09b2))
+
+## [1.8.4](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.3...control-plane-api-v1.8.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* **api:** prevent GET /v1/admin/gateways 500 on enum drift (CAB-2169) ([#2544](https://github.com/stoa-platform/stoa/issues/2544)) ([6719957](https://github.com/stoa-platform/stoa/commit/671995743105d8c4cf0b3f41c70b242de84fc976))
+
 ## [1.8.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.2...control-plane-api-v1.8.3) (2026-04-24)
 
 

@@ -32,6 +32,18 @@ Tout composant non présent dans ce diagramme (Portal, Console UI, Kafka, OpenSe
 
 ### 2.1 HTTP endpoints cp-api (URL + method + status code + shape minimal)
 
+Auth démo provider/runtime :
+
+- Auth réelle : JWT Keycloak valide via `Authorization: Bearer`.
+- Bypass démo/dev borné : `STOA_DISABLE_AUTH=true` côté cp-api **et** header
+  `X-Demo-Mode: true` sur la requête.
+- `STOA_DISABLE_AUTH=true` est interdit en `ENVIRONMENT=production` et doit
+  faire échouer le boot cp-api.
+- Dans ce mode explicite seulement, `POST /v1/tenants/{tid}/applications`
+  peut retourner une application synthétique `demo-{tenant}-{app}` sans créer
+  de client Keycloak. Hors smoke démo, les applications restent des clients
+  Keycloak réels.
+
 | Endpoint | Method | Status OK | Champs min réponse |
 |----------|--------|-----------|--------------------|
 | `/v1/tenants/{tid}/apis` | POST | 201 | `id`, `name` |
@@ -40,8 +52,8 @@ Tout composant non présent dans ce diagramme (Portal, Console UI, Kafka, OpenSe
 | `/v1/tenants/{tid}/applications` | POST | 201 | `id`, `name` |
 | `/v1/tenants/{tid}/applications/{id}/subscribe/{api_id}` | POST | 200 | `subscription_id`, `api_key`, `api_key_prefix` en mode `X-Demo-Mode: true`; sinon message historique |
 | `/v1/subscriptions` | POST | 201 | `id`, `api_key` ou `api_key_prefix`, `status="active"` |
-| `/v1/tenants/{tid}/deployments` | POST | 201 | `id`, `status` |
-| `/v1/internal/gateways/routes?gateway_name=X` | GET | 200 | liste de routes avec `api_id`, `path` |
+| `/v1/tenants/{tid}/deployments` | POST | 201 | `id`, `status`; en mode démo explicite, crée aussi le `GatewayDeployment` lu par la gateway sans déclencher le push sync admin |
+| `/v1/internal/gateways/routes?gateway_name=X` | GET | 200 | liste de routes avec `api_id`, `path_prefix` |
 | `/health` | GET | 200 | n/a |
 
 ### 2.2 HTTP endpoints gateway
@@ -51,6 +63,29 @@ Tout composant non présent dans ce diagramme (Portal, Console UI, Kafka, OpenSe
 | `/health` | GET | 200 | body indifférent |
 | `/metrics` | GET | 200 | format Prometheus text |
 | `/apis/{api_name}/{*path}` | GET/POST/… | 200/…  | chemin gateway canonique démo. `api_name` est le slug retourné par `POST /v1/tenants/{tid}/apis`; proxy vers backend configuré, header `X-Stoa-Request-Id` en réponse, vérifie `X-Api-Key` (ou `Authorization: Bearer`) |
+
+### 2.2bis Contrat UAC démo minimal
+
+Le smoke réel peut être UAC-driven via `DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json`.
+Ce contrat ne généralise pas toute l'architecture STOA; il verrouille seulement
+la première preuve fonctionnelle "Define once, expose everywhere" sur un contrat,
+un endpoint, un chemin gateway:
+
+| Champ | Valeur figée |
+|-------|--------------|
+| `name` | `demo-httpbin` |
+| `tenant_id` | `demo` |
+| `version` | `1.0.0` |
+| `status` | `published` |
+| `classification` | `H` |
+| `endpoints[0].methods[0]` | `GET` |
+| `endpoints[0].path` | `/get` |
+| `endpoints[0].backend_url` | `http://mock-backend:9090` |
+| `endpoints[0].operation_id` | `demo_httpbin_get` |
+| chemin gateway dérivé | `/apis/demo-httpbin/get` |
+
+Le fallback sans `DEMO_UAC_CONTRACT` reste autorisé pour debug local, mais doit
+afficher `WARN — smoke not UAC-driven`.
 
 ### 2.3 Format métriques Prometheus
 

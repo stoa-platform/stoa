@@ -3,10 +3,11 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..config import settings
 from ..database import get_db
 from ..schemas.deployment import (
     DeploymentCreate,
@@ -28,6 +29,13 @@ logger = logging.getLogger(__name__)
 git_service = git_provider_factory()
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
+
+
+def _demo_mode_enabled(request: Request | None) -> bool:
+    """Demo/dev bypass is explicit and per-request."""
+    if request is None:
+        return False
+    return settings.STOA_DISABLE_AUTH and request.headers.get("X-Demo-Mode", "").lower() == "true"
 
 
 @router.get("", response_model=DeploymentListResponse)
@@ -83,6 +91,7 @@ async def get_deployment(
 async def create_deployment(
     tenant_id: str,
     request: DeploymentCreate,
+    http_request: Request = None,  # type: ignore[assignment]
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     git: GitProvider = Depends(get_git_provider),
@@ -121,6 +130,15 @@ async def create_deployment(
         gateway_id=request.gateway_id,
     )
     await db.commit()
+
+    if _demo_mode_enabled(http_request) and request.gateway_id:
+        await service.ensure_demo_gateway_deployment(
+            tenant_id=tenant_id,
+            api_id=request.api_id,
+            api_name=api_name,
+            gateway_name=request.gateway_id,
+        )
+        await db.commit()
 
     # Update deployment flag in git so the API appears in the environment view
     env = request.environment.value

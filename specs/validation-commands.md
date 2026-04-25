@@ -12,6 +12,15 @@
 Affiche `REAL_PASS — DEMO READY` uniquement si AT-0..AT-5 de
 `demo-acceptance-tests.md` passent sans mock critique.
 
+Mode UAC-driven réel:
+
+```bash
+DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh
+```
+
+Le smoke valide alors le contrat UAC minimal, sélectionne `GET /get`, et appelle
+la gateway sur `/apis/demo-httpbin/get`.
+
 Modes non réels explicites:
 
 ```bash
@@ -32,10 +41,12 @@ Variables d'environnement (defaults documentés dans le script) :
 | `GATEWAY_URL` | `http://localhost:8081` | Base URL stoa-gateway exposée par le compose démo |
 | `MOCK_BACKEND_URL` | `http://localhost:9090` | Mock HTTP backend vu par le poste dev pour AT-0 |
 | `MOCK_BACKEND_UPSTREAM_URL` | `http://mock-backend:9090` | Mock HTTP backend vu par la gateway en compose |
-| `DEMO_GATEWAY_PATH` | `/apis/${DEMO_API_NAME}/get` | Chemin gateway canonique AT-4 |
+| `DEMO_UAC_CONTRACT` | vide | Contrat UAC démo à charger, par exemple `specs/uac/demo-httpbin.uac.json` |
+| `DEMO_GATEWAY_PATH` | `/apis/${DEMO_API_NAME}/get` | Chemin gateway canonique AT-4, dérivé du UAC quand `DEMO_UAC_CONTRACT` est fourni |
 | `TENANT_ID` | `demo` (slug, résolu en UUID par cp-api) | Tenant démo |
-| `DEMO_ADMIN_TOKEN` | vide | JWT admin pour écrire côté cp-api. Si vide, le script passe en `STOA_DISABLE_AUTH=true` mode (dev only) |
+| `DEMO_ADMIN_TOKEN` | vide | JWT admin pour écrire côté cp-api. Si vide, le compose démo doit activer `STOA_DISABLE_AUTH=true` (dev only, requiert `X-Demo-Mode: true`, interdit en prod) |
 | `ROUTE_SYNC_GRACE_SECS` | `30` | Délai d'attente pour route visible en gateway après AT-2 |
+| `DEMO_DEPLOY_ENV` | `dev` | Environnement AT-2 accepté par le modèle réel (`dev`, `staging`, `production`) |
 | `OBS_VISIBILITY_CHECK` | `auto` | Lance AT-5b nice-to-have (`off` pour désactiver) |
 | `GRAFANA_URL` | `http://localhost:3001` | Grafana local pour vérifier health + datasources |
 | `GRAFANA_USER` / `GRAFANA_PASSWORD` | `admin` / `admin` | Basic auth Grafana local |
@@ -50,8 +61,15 @@ Variables d'environnement (defaults documentés dans le script) :
 POSTGRES_PASSWORD=stoa KEYCLOAK_ADMIN_PASSWORD=admin \
 OPENSEARCH_ADMIN_PASSWORD=admin OPENSEARCH_DASHBOARDS_PASSWORD=admin \
 OPENSEARCH_LOGWRITER_PASSWORD=admin OPENSEARCH_OIDC_CLIENT_SECRET=x \
+STOA_DISABLE_AUTH=true \
 docker compose -f deploy/docker-compose/docker-compose.yml --profile demo up --build -d \
     postgres keycloak control-plane-api stoa-gateway mock-backend
+
+# Avec STOA_DISABLE_AUTH=true, le smoke envoie X-Demo-Mode: true et peut
+# créer une application synthétique déterministe sans client Keycloak.
+# Ce mode sert uniquement à rendre AT-2/AT-3 rejouables localement; il est refusé en prod.
+# La gateway compose active STOA_ROUTE_RELOAD_ENABLED=true avec intervalle 2s;
+# AT-2 vérifie /internal/gateways/routes et AT-4 prouve le reload runtime.
 
 # Attendre healthy
 docker compose -f deploy/docker-compose/docker-compose.yml ps
@@ -137,7 +155,7 @@ psql $DATABASE_URL -c "SELECT status, count(*) FROM subscriptions GROUP BY statu
 # Route table live gateway
 curl -s http://localhost:8081/admin/routes | jq .      # si admin API exposée
 curl -s http://localhost:8000/v1/internal/gateways/routes?gateway_name=demo | jq .
-curl -sI http://localhost:8081/apis/demo-api-smoke/get
+curl -sI http://localhost:8081/apis/demo-httpbin/get
 
 # Logs gateway corrélés à un request_id
 docker logs stoa-gateway 2>&1 | grep "request_id=${REQUEST_ID}"
@@ -161,7 +179,8 @@ kill -HUP $(pgrep stoa-gateway)
 |----------|-----------|
 | `make seed-dev` | AT-0 pré-conditions |
 | `docker compose up …` | AT-0 pré-conditions |
-| `./scripts/demo-smoke-test.sh` | AT-0 → AT-5 réel (`REAL_PASS` seulement si aucun mock) |
+| `DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh` | UAC + AT-0 → AT-5 réel (`REAL_PASS` seulement si aucun mock) |
+| `./scripts/demo-smoke-test.sh` | AT-0 → AT-5 réel en fallback historique avec warning `WARN — smoke not UAC-driven` |
 | `./scripts/demo-smoke-test.sh --dry-run-contract` | Contrat script/spec (`CONTRACT_DRY_RUN`, pas démo prête) |
 | `MOCK_MODE=all ./scripts/demo-smoke-test.sh` | Chemin mocké (`MOCK_PASS`, pas démo prête) |
 | `OBS_VISIBILITY_CHECK=auto ./scripts/demo-smoke-test.sh` | AT-5b nice-to-have Grafana/Console/Portal |
@@ -181,7 +200,7 @@ Le workflow `.github/workflows/demo-smoke.yml` est volontairement
 
 ```bash
 bash -n scripts/demo-smoke-test.sh
-./scripts/demo-smoke-test.sh --no-observability-ui
+DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json ./scripts/demo-smoke-test.sh --no-observability-ui
 ```
 
 Il publie dans `$GITHUB_STEP_SUMMARY` :
@@ -230,4 +249,24 @@ curl -sI http://localhost:3002/discover
 curl -sI http://localhost:3002/usage
 curl -sI http://localhost:3000/admin/prospects
 curl -sI http://localhost:3000/subscriptions
+```
+
+## 11. Flux API deployments Console
+
+Le flux transverse Console `/api-deployments` est spécifié séparément dans
+`specs/api-deployment-flow.md`.
+
+Ce contrat couvre le chemin API catalogue -> gateway assignment -> deploy direct
+ou promotion -> gateway sync ack -> affichage Console. Il reste non bloquant
+pour `scripts/demo-smoke-test.sh` tant qu'il n'est pas explicitement ajouté au
+scope minimal `demo-scope.md`.
+
+Validation cible future:
+
+```bash
+# API-level, à créer
+./scripts/api-deployment-flow-smoke.sh
+
+# UI-level, à créer
+cd e2e && npx playwright test api-deployment-flow.spec.ts
 ```

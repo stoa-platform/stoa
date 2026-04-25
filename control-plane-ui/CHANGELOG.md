@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.5](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.4...control-plane-ui-v1.5.5) (2026-04-25)
+
+
+### Bug Fixes
+
+* **demo:** bridge route sync for smoke ([#2553](https://github.com/stoa-platform/stoa/issues/2553)) ([f6d6497](https://github.com/stoa-platform/stoa/commit/f6d649728ae04412ea454d68d5c4f003192dffe9))
+
 ## [1.5.4](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.3...control-plane-ui-v1.5.4) (2026-04-24)
 
 

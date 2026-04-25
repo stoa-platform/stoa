@@ -296,6 +296,106 @@ class TestSemanticValidation:
 
 
 # =============================================================================
+# Endpoint LLM metadata validation
+# =============================================================================
+
+
+def _endpoint_llm(**overrides: object) -> dict:
+    """Create a minimal valid endpoint.llm metadata block."""
+    llm = {
+        "summary": "Read backend health",
+        "intent": "Let agents inspect backend availability without changing state.",
+        "tool_name": "demo_health_read",
+        "side_effects": "read",
+        "safe_for_agents": True,
+        "requires_human_approval": False,
+        "examples": [],
+    }
+    llm.update(overrides)
+    return llm
+
+
+class TestEndpointLlmValidation:
+    """Strict V1 validation for optional endpoint.llm metadata."""
+
+    def test_legacy_endpoint_without_llm_still_valid(self) -> None:
+        result = validate_uac_contract(_minimal_contract())
+        assert result.valid, result.errors
+
+    def test_endpoint_with_complete_llm_valid(self) -> None:
+        doc = _minimal_contract()
+        doc["endpoints"][0]["llm"] = _endpoint_llm()
+        result = validate_uac_contract(doc)
+        assert result.valid, result.errors
+
+    def test_endpoint_llm_missing_required_field_fails(self) -> None:
+        doc = _minimal_contract()
+        llm = _endpoint_llm()
+        del llm["intent"]
+        doc["endpoints"][0]["llm"] = llm
+        result = validate_uac_contract(doc)
+        assert not result.valid
+        assert any("intent" in e for e in result.errors)
+
+    def test_endpoint_llm_empty_tool_name_fails(self) -> None:
+        doc = _minimal_contract()
+        doc["endpoints"][0]["llm"] = _endpoint_llm(tool_name="")
+        result = validate_uac_contract(doc)
+        assert not result.valid
+        assert any("tool_name" in e for e in result.errors)
+
+    def test_endpoint_llm_examples_absent_fails(self) -> None:
+        doc = _minimal_contract()
+        llm = _endpoint_llm()
+        del llm["examples"]
+        doc["endpoints"][0]["llm"] = llm
+        result = validate_uac_contract(doc)
+        assert not result.valid
+        assert any("examples" in e for e in result.errors)
+
+    def test_endpoint_llm_duplicate_tool_name_fails(self) -> None:
+        doc = _minimal_contract(
+            endpoints=[
+                {
+                    "path": "/health",
+                    "methods": ["GET"],
+                    "backend_url": "https://backend.example.com/health",
+                    "llm": _endpoint_llm(tool_name="duplicate_tool"),
+                },
+                {
+                    "path": "/status",
+                    "methods": ["GET"],
+                    "backend_url": "https://backend.example.com/status",
+                    "llm": _endpoint_llm(tool_name="duplicate_tool"),
+                },
+            ]
+        )
+        result = validate_uac_contract(doc)
+        assert not result.valid
+        assert any("duplicate tool_name" in e for e in result.errors)
+
+    def test_endpoint_llm_destructive_requires_human_approval(self) -> None:
+        doc = _minimal_contract()
+        doc["endpoints"][0]["llm"] = _endpoint_llm(
+            side_effects="destructive",
+            requires_human_approval=False,
+        )
+        result = validate_uac_contract(doc)
+        assert not result.valid
+        assert any("destructive" in e and "requires_human_approval" in e for e in result.errors)
+
+    def test_endpoint_llm_destructive_with_human_approval_valid(self) -> None:
+        doc = _minimal_contract()
+        doc["endpoints"][0]["llm"] = _endpoint_llm(
+            side_effects="destructive",
+            requires_human_approval=True,
+            safe_for_agents=False,
+        )
+        result = validate_uac_contract(doc)
+        assert result.valid, result.errors
+
+
+# =============================================================================
 # Strict wrapper
 # =============================================================================
 

@@ -16,12 +16,14 @@
 #   GATEWAY_URL          http://localhost:8081
 #   MOCK_BACKEND_URL     http://localhost:9090
 #   MOCK_BACKEND_UPSTREAM_URL http://mock-backend:9090
-#   DEMO_GATEWAY_PATH    /apis/${DEMO_API_NAME}/get
+#   DEMO_UAC_CONTRACT    (empty → legacy fallback; set specs/uac/demo-httpbin.uac.json for UAC-driven smoke)
+#   DEMO_GATEWAY_PATH    /apis/${DEMO_API_NAME}/get (derived from UAC when DEMO_UAC_CONTRACT is set)
 #   TENANT_ID            demo
 #   GATEWAY_ID           gateway-demo
 #   DEMO_ADMIN_TOKEN     (empty → bypass via ?demo-admin header if cp-api allows)
 #   DEMO_MODE_HEADER     true (sends X-Demo-Mode: true to bounded demo endpoints)
 #   ROUTE_SYNC_GRACE_SECS 30
+#   DEMO_DEPLOY_ENV      dev
 #   DEMO_API_NAME        demo-api-smoke
 #   DEMO_APP_NAME        demo-app-smoke
 #   OBS_VISIBILITY_CHECK auto (auto | off)
@@ -49,13 +51,18 @@ API_URL="${API_URL:-http://localhost:8000}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8081}"
 MOCK_BACKEND_URL="${MOCK_BACKEND_URL:-http://localhost:9090}"
 MOCK_BACKEND_UPSTREAM_URL="${MOCK_BACKEND_UPSTREAM_URL:-http://mock-backend:9090}"
+DEMO_UAC_CONTRACT="${DEMO_UAC_CONTRACT:-}"
 TENANT_ID="${TENANT_ID:-demo}"
 GATEWAY_ID="${GATEWAY_ID:-gateway-demo}"
 DEMO_ADMIN_TOKEN="${DEMO_ADMIN_TOKEN:-}"
 DEMO_MODE_HEADER="${DEMO_MODE_HEADER:-true}"
 ROUTE_SYNC_GRACE_SECS="${ROUTE_SYNC_GRACE_SECS:-30}"
+DEMO_DEPLOY_ENV="${DEMO_DEPLOY_ENV:-dev}"
 DEMO_API_NAME="${DEMO_API_NAME:-demo-api-smoke}"
 DEMO_APP_NAME="${DEMO_APP_NAME:-demo-app-smoke}"
+DEMO_ENDPOINT_PATH="${DEMO_ENDPOINT_PATH:-/get}"
+DEMO_ENDPOINT_METHOD="${DEMO_ENDPOINT_METHOD:-GET}"
+DEMO_OPERATION_ID="${DEMO_OPERATION_ID:-}"
 DEMO_GATEWAY_PATH="${DEMO_GATEWAY_PATH:-/apis/${DEMO_API_NAME}/get}"
 MOCK_MODE="${MOCK_MODE:-none}"     # none | all | auto (auto is treated as none)
 DRY_RUN_CONTRACT="${DRY_RUN_CONTRACT:-0}"
@@ -173,6 +180,75 @@ http_call() {
     rm -f "$tmp"
 }
 
+load_uac_contract() {
+    if [[ -z "$DEMO_UAC_CONTRACT" ]]; then
+        log "WARN — smoke not UAC-driven"
+        note "WARN" "smoke not UAC-driven; using legacy fallback DEMO_API_NAME=${DEMO_API_NAME}, path=${DEMO_ENDPOINT_PATH}"
+        return 0
+    fi
+
+    local contract_path="$DEMO_UAC_CONTRACT"
+    if [[ "$contract_path" != /* ]]; then
+        contract_path="${REPO_ROOT}/${contract_path}"
+    fi
+
+    if [[ ! -f "$contract_path" ]]; then
+        record "UAC" "FAIL" "contract not found: ${DEMO_UAC_CONTRACT}"
+        return 1
+    fi
+
+    if ! jq -e . "$contract_path" >/dev/null 2>&1; then
+        record "UAC" "FAIL" "contract is not valid JSON: ${DEMO_UAC_CONTRACT}"
+        return 1
+    fi
+
+    local endpoint_count contract_status contract_name contract_version contract_tenant
+    local endpoint_path endpoint_method endpoint_backend operation_id
+    endpoint_count="$(jq -r '.endpoints | if type == "array" then length else 0 end' "$contract_path")"
+    contract_status="$(jq -r '.status // empty' "$contract_path")"
+    contract_name="$(jq -r '.name // empty' "$contract_path")"
+    contract_version="$(jq -r '.version // empty' "$contract_path")"
+    contract_tenant="$(jq -r '.tenant_id // empty' "$contract_path")"
+    endpoint_path="$(jq -r '.endpoints[0].path // empty' "$contract_path")"
+    endpoint_method="$(jq -r '.endpoints[0].methods[0] // empty' "$contract_path")"
+    endpoint_backend="$(jq -r '.endpoints[0].backend_url // empty' "$contract_path")"
+    operation_id="$(jq -r '.endpoints[0].operation_id // empty' "$contract_path")"
+
+    if [[ "$endpoint_count" -lt 1 ]]; then
+        record "UAC" "FAIL" "contract has no endpoints: ${DEMO_UAC_CONTRACT}"
+        return 1
+    fi
+    if [[ "$contract_status" != "published" ]]; then
+        record "UAC" "FAIL" "contract status=${contract_status:-empty}; expected published for real smoke"
+        return 1
+    fi
+    if [[ -z "$contract_name" || -z "$contract_version" || -z "$contract_tenant" ]]; then
+        record "UAC" "FAIL" "contract name/version/tenant_id must be non-empty"
+        return 1
+    fi
+    if [[ -z "$endpoint_method" || -z "$endpoint_path" || -z "$endpoint_backend" ]]; then
+        record "UAC" "FAIL" "endpoint method/path/backend_url must be non-empty"
+        return 1
+    fi
+    if [[ "$endpoint_path" != /* ]]; then
+        record "UAC" "FAIL" "endpoint path must start with / (got ${endpoint_path})"
+        return 1
+    fi
+
+    DEMO_API_NAME="$contract_name"
+    TENANT_ID="$contract_tenant"
+    DEMO_ENDPOINT_PATH="$endpoint_path"
+    DEMO_ENDPOINT_METHOD="$endpoint_method"
+    DEMO_OPERATION_ID="$operation_id"
+    MOCK_BACKEND_UPSTREAM_URL="$endpoint_backend"
+    DEMO_GATEWAY_PATH="/apis/${DEMO_API_NAME}${DEMO_ENDPOINT_PATH}"
+
+    record "UAC" "PASS" "contract loaded ${DEMO_API_NAME} v${contract_version}"
+    record "UAC" "PASS" "endpoint ${DEMO_ENDPOINT_METHOD} ${DEMO_ENDPOINT_PATH} selected operation_id=${DEMO_OPERATION_ID:-n/a}"
+    record "UAC" "PASS" "Gateway call derived from UAC ${DEMO_GATEWAY_PATH}"
+    return 0
+}
+
 # ── AT-0 pré-conditions ─────────────────────────────────────────────────────
 
 at0_preconditions() {
@@ -220,16 +296,21 @@ at1_declare_api() {
     at_filter_match 1 || { log "  (skipped by AT filter)"; return 0; }
 
     local body
-    body="$(cat <<JSON
-{
-  "name": "${DEMO_API_NAME}",
-  "version": "1.0.0",
-  "protocol": "http",
-  "backend_url": "${MOCK_BACKEND_UPSTREAM_URL}",
-  "paths": [{"path": "/get", "methods": ["GET"]}]
-}
-JSON
-)"
+    body="$(
+        jq -n \
+            --arg name "$DEMO_API_NAME" \
+            --arg backend_url "$MOCK_BACKEND_UPSTREAM_URL" \
+            --arg path "$DEMO_ENDPOINT_PATH" \
+            --arg method "$DEMO_ENDPOINT_METHOD" \
+            '{
+              name: $name,
+              display_name: $name,
+              version: "1.0.0",
+              protocol: "http",
+              backend_url: $backend_url,
+              paths: [{path: $path, methods: [$method]}]
+            }'
+    )"
 
     local resp
     http_call POST "${API_URL}/v1/tenants/${TENANT_ID}/apis" "$body"
@@ -248,7 +329,13 @@ JSON
     if [[ "$HTTP_STATUS" == "409" ]]; then
         http_call GET "${API_URL}/v1/tenants/${TENANT_ID}/apis?name=${DEMO_API_NAME}" ""
         resp="$HTTP_BODY"
-        API_ID="$(echo "$resp" | jq -r '.items[0].id // .apis[0].id // empty' 2>/dev/null || true)"
+        API_ID="$(
+            echo "$resp" \
+                | jq -r --arg name "$DEMO_API_NAME" \
+                    '(.items // .apis // [])[] | select(.name == $name or .id == $name) | .id' \
+                    2>/dev/null \
+                | head -n 1
+        )"
     else
         API_ID="$(echo "$resp" | jq -r '.id // empty' 2>/dev/null || true)"
     fi
@@ -278,7 +365,7 @@ at2_provision_route() {
     body="$(cat <<JSON
 {
   "api_id": "${API_ID}",
-  "environment": "demo",
+  "environment": "${DEMO_DEPLOY_ENV}",
   "gateway_id": "${GATEWAY_ID}"
 }
 JSON
@@ -340,7 +427,13 @@ at3_subscription() {
 
     # Step 1: application
     local resp body
-    body="{\"name\":\"${DEMO_APP_NAME}\"}"
+    body="$(cat <<JSON
+{
+  "name": "${DEMO_APP_NAME}",
+  "display_name": "${DEMO_APP_NAME}"
+}
+JSON
+)"
     http_call POST "${API_URL}/v1/tenants/${TENANT_ID}/applications" "$body"
     resp="$HTTP_BODY"
     if [[ "$HTTP_STATUS" != "201" && "$HTTP_STATUS" != "200" && "$HTTP_STATUS" != "409" ]]; then
@@ -358,7 +451,13 @@ at3_subscription() {
     if [[ -z "$APP_ID" && "$HTTP_STATUS" == "409" ]]; then
         http_call GET "${API_URL}/v1/tenants/${TENANT_ID}/applications?name=${DEMO_APP_NAME}" ""
         resp="$HTTP_BODY"
-        APP_ID="$(echo "$resp" | jq -r '.items[0].id // .applications[0].id // empty' 2>/dev/null)"
+        APP_ID="$(
+            echo "$resp" \
+                | jq -r --arg name "$DEMO_APP_NAME" \
+                    '(.items // .applications // [])[] | select(.name == $name or .id == $name or .client_id == $name) | .id' \
+                    2>/dev/null \
+                | head -n 1
+        )"
     fi
     if [[ -z "$APP_ID" ]]; then
         record "AT-3" "FAIL" "no application id"
@@ -436,6 +535,7 @@ at4_gateway_call() {
     while [[ $attempt -lt 5 ]]; do
         status="$(
             curl -sS -o "$body_file" -D "$hdr_file" -w '%{http_code}' --max-time 10 \
+                 -X "$DEMO_ENDPOINT_METHOD" \
                  -H "X-Api-Key: ${API_KEY}" \
                  "${GATEWAY_URL}${DEMO_GATEWAY_PATH}" 2>/dev/null || echo 000
         )"
@@ -446,7 +546,7 @@ at4_gateway_call() {
 
     if [[ "$status" == "200" ]]; then
         LAST_REQUEST_ID="$(grep -i '^x-stoa-request-id:' "$hdr_file" | awk '{print $2}' | tr -d '\r' || true)"
-        record "AT-4" "PASS" "HTTP 200 on ${DEMO_GATEWAY_PATH}, request_id=${LAST_REQUEST_ID:-n/a}"
+        record "AT-4" "PASS" "${DEMO_ENDPOINT_METHOD} ${DEMO_GATEWAY_PATH} HTTP 200, request_id=${LAST_REQUEST_ID:-n/a}"
         rm -f "$hdr_file" "$body_file"
         return 0
     fi
@@ -579,6 +679,8 @@ print_report() {
     echo "  Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     echo "  API_URL=${API_URL}"
     echo "  GATEWAY_URL=${GATEWAY_URL}"
+    echo "  DEMO_UAC_CONTRACT=${DEMO_UAC_CONTRACT:-<none>}"
+    echo "  DEMO_GATEWAY_PATH=${DEMO_GATEWAY_PATH}"
     echo "  MOCK_MODE=${MOCK_MODE}"
     echo "  DRY_RUN_CONTRACT=${DRY_RUN_CONTRACT}"
     echo "================================================================"
@@ -613,6 +715,11 @@ main() {
     if [[ "$MOCK_MODE" == "auto" ]]; then
         note "INFO" "MOCK_MODE=auto is treated as strict real mode; blockers will FAIL, not mock-pass"
         MOCK_MODE="none"
+    fi
+
+    if ! load_uac_contract; then
+        print_report
+        exit 2
     fi
 
     if ! at0_preconditions; then

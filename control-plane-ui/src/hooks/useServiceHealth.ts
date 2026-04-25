@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 type ServiceStatus = 'checking' | 'available' | 'unavailable';
 
@@ -16,13 +16,25 @@ interface UseServiceHealthResult {
  * requested path means the service requires auth and is not directly embeddable.
  *
  * Cross-origin URLs: uses no-cors mode (opaque response = reachable).
+ *
+ * P2-5 + P2-6: the probe is aborted on unmount (effect cleanup) and the
+ * catch path distinguishes unmount-abort (no state change) from
+ * timeout-abort (→ 'unavailable'), so a slow service is still correctly
+ * reported as down while a fast unmount doesn't trigger setState warnings.
  */
 export function useServiceHealth(url: string): UseServiceHealthResult {
   const [status, setStatus] = useState<ServiceStatus>('checking');
+  const probeControllerRef = useRef<AbortController | null>(null);
+  const abortedByUnmountRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const checkHealth = useCallback(async () => {
-    setStatus('checking');
+    // Abort any in-flight probe before starting a new one (retry path).
+    probeControllerRef.current?.abort();
+
     const controller = new AbortController();
+    probeControllerRef.current = controller;
+    if (mountedRef.current) setStatus('checking');
     const timeout = setTimeout(() => controller.abort(), 5000);
 
     try {
@@ -37,6 +49,8 @@ export function useServiceHealth(url: string): UseServiceHealthResult {
           mode: 'same-origin',
           redirect: 'follow',
         });
+
+        if (!mountedRef.current) return;
 
         if (response.ok) {
           // Check if we were redirected to a login page (auth redirect)
@@ -67,6 +81,8 @@ export function useServiceHealth(url: string): UseServiceHealthResult {
           redirect: 'manual',
         });
 
+        if (!mountedRef.current) return;
+
         if (response.type === 'opaque' || response.type === 'opaqueredirect' || response.ok) {
           setStatus('available');
         } else if (response.status >= 500) {
@@ -75,15 +91,35 @@ export function useServiceHealth(url: string): UseServiceHealthResult {
           setStatus('available');
         }
       }
-    } catch {
-      setStatus('unavailable');
+    } catch (err) {
+      // P2-5: only treat timeout-abort as 'unavailable'; unmount-abort is
+      // a silent cancel. Any non-Abort error (network failure, CORS, etc.)
+      // still maps to 'unavailable'.
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (!abortedByUnmountRef.current && mountedRef.current) {
+          setStatus('unavailable');
+        }
+        return;
+      }
+      if (mountedRef.current) setStatus('unavailable');
     } finally {
       clearTimeout(timeout);
     }
   }, [url]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    abortedByUnmountRef.current = false;
     checkHealth();
+
+    return () => {
+      // P2-6: abort the in-flight probe on unmount so the catch path can
+      // distinguish this from a timeout-abort and skip the final setState.
+      mountedRef.current = false;
+      abortedByUnmountRef.current = true;
+      probeControllerRef.current?.abort();
+      probeControllerRef.current = null;
+    };
   }, [checkHealth]);
 
   return { status, retry: checkHealth };

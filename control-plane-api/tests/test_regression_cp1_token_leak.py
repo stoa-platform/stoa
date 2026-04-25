@@ -64,10 +64,31 @@ def _patched_git_settings(provider: str, token: str) -> GitProviderConfig:
         provider="github",
         github=GitHubConfig(
             token=SecretStr(token),
-            catalog_project_id="org/catalog",
+            org="org",
+            catalog_repo="catalog",
             webhook_secret=SecretStr("whsec"),
         ),
     )
+
+
+class TestPatchedGitSettingsFixture:
+    """CAB-1889 CP-2 H-1: guard against the silent-kwarg-drop regression.
+
+    Before CP-2, ``_patched_git_settings`` passed ``catalog_project_id=``
+    as a kwarg to ``GitHubConfig``, which is a read-only ``@property``.
+    Pydantic's default ``extra="ignore"`` silently discarded it and the
+    fixture ended up using the production defaults — invisible to every
+    test in this file that relies on the helper. CP-2 fixes the fixture
+    to populate the real fields and activates ``extra="forbid"`` (see
+    ``test_git_provider.py``) so a future typo raises instead of drifting.
+    """
+
+    def test_github_fixture_uses_requested_org_and_catalog_repo(self):
+        cfg = _patched_git_settings("github", _GITHUB_TOKEN)
+        assert cfg.provider == "github"
+        assert cfg.github.org == "org"
+        assert cfg.github.catalog_repo == "catalog"
+        assert cfg.github.catalog_project_id == "org/catalog"
 
 
 # ──────────────────────────────────────────────────────────────────

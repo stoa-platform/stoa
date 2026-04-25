@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.8.5](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.4...control-plane-api-v1.8.5) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** add bounded auth bypass for smoke ([#2546](https://github.com/stoa-platform/stoa/issues/2546)) ([1e55659](https://github.com/stoa-platform/stoa/commit/1e55659546aeab2ed59abed985138b126fcc09b2))
+
+## [1.8.4](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.3...control-plane-api-v1.8.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* **api:** prevent GET /v1/admin/gateways 500 on enum drift (CAB-2169) ([#2544](https://github.com/stoa-platform/stoa/issues/2544)) ([6719957](https://github.com/stoa-platform/stoa/commit/671995743105d8c4cf0b3f41c70b242de84fc976))
+
+## [1.8.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.2...control-plane-api-v1.8.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** make AT-0 health probes observable ([#2541](https://github.com/stoa-platform/stoa/issues/2541)) ([90ef5a7](https://github.com/stoa-platform/stoa/commit/90ef5a7deafdaa2aed8117427ae27282b9902b9f))
+
+## [1.8.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.1...control-plane-api-v1.8.2) (2026-04-24)
+
+
+### Bug Fixes
+
+* **demo:** return one-time api key for smoke ([#2535](https://github.com/stoa-platform/stoa/issues/2535)) ([a18ed9a](https://github.com/stoa-platform/stoa/commit/a18ed9a7c4266d8addeb095a2939cbbd6a463e9e))
+
 ## [1.8.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.0...control-plane-api-v1.8.1) (2026-04-24)
 
 

@@ -90,13 +90,16 @@ export function GuardrailsDashboard() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [metrics, eventsData] = await Promise.all([
-        apiService.getGatewayAggregatedMetrics().catch(() => null),
-        apiService.getGuardrailsEvents(50).catch(() => ({ events: [] })),
-      ]);
+    setLoading(true);
+    // P1-1: allSettled — each endpoint independent, partial failure leaves
+    // the other slice's prior state intact.
+    const [metricsResult, eventsResult] = await Promise.allSettled([
+      apiService.getGatewayAggregatedMetrics(),
+      apiService.getGuardrailsEvents(50),
+    ]);
 
+    if (metricsResult.status === 'fulfilled') {
+      const metrics = metricsResult.value;
       setStats({
         pii_detections: metrics?.guardrails?.pii_detections || 0,
         injection_blocks: metrics?.guardrails?.injection_blocks || 0,
@@ -106,14 +109,23 @@ export function GuardrailsDashboard() {
         by_tool: metrics?.guardrails?.by_tool || {},
         by_category: metrics?.guardrails?.by_category || {},
       });
-      setEvents(eventsData?.events || []);
-      setError(null);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load guardrail metrics';
-      setError(message);
-    } finally {
-      setLoading(false);
+    } else {
+      console.error('Failed to load gateway aggregated metrics:', metricsResult.reason);
     }
+    if (eventsResult.status === 'fulfilled') {
+      setEvents(eventsResult.value?.events || []);
+    } else {
+      console.error('Failed to load guardrails events:', eventsResult.reason);
+    }
+
+    if (metricsResult.status === 'rejected' && eventsResult.status === 'rejected') {
+      const reason = metricsResult.reason;
+      const message = reason instanceof Error ? reason.message : 'Failed to load guardrail metrics';
+      setError(message);
+    } else {
+      setError(null);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

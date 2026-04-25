@@ -34,23 +34,29 @@ export function ToolDetail() {
     async function loadTool() {
       if (!toolName) return;
 
-      try {
-        setLoading(true);
-        setError(null);
+      setLoading(true);
+      setError(null);
 
-        const [toolData, usageData] = await Promise.all([
-          mcpGatewayService.getTool(toolName),
-          mcpGatewayService.getToolUsage(toolName, { period: 'month' }).catch(() => null),
-        ]);
+      // P1-1: allSettled — tool details is primary, usage is auxiliary.
+      // If usage fails, still render the tool. If tool fails, surface an error.
+      const [toolResult, usageResult] = await Promise.allSettled([
+        mcpGatewayService.getTool(toolName),
+        mcpGatewayService.getToolUsage(toolName, { period: 'month' }),
+      ]);
 
-        setTool(toolData);
-        setUsage(usageData);
-      } catch (err) {
-        console.error('Failed to load tool:', err);
+      if (toolResult.status === 'fulfilled') {
+        setTool(toolResult.value);
+      } else {
+        console.error('Failed to load tool:', toolResult.reason);
+        const err = toolResult.reason;
         setError(err instanceof Error ? err.message : 'Failed to load tool');
-      } finally {
-        setLoading(false);
       }
+      if (usageResult.status === 'fulfilled') {
+        setUsage(usageResult.value);
+      } else {
+        setUsage(null);
+      }
+      setLoading(false);
     }
 
     loadTool();

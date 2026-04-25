@@ -6,29 +6,44 @@
 //! - Backward compatible with existing envy-based env vars
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::mode::GatewayMode;
 
 mod api_proxy;
 mod defaults;
+mod deserializers;
+mod enums;
 mod expansion;
 mod federation;
 mod llm_router;
 mod loader;
 mod mtls;
+mod path_safety;
+mod redact;
 mod sender_constraint;
 
 pub use api_proxy::{ApiProxyConfig, ProxyBackendConfig};
+pub use enums::{
+    Environment, GitProvider, LlmProxyProvider, LogFormat, LogLevel, ShadowCaptureSource,
+    SupervisionDefaultTier,
+};
 pub use expansion::ExpansionMode;
 pub use federation::FederationUpstreamConfig;
 pub use llm_router::LlmRouterConfig;
+pub use loader::ConfigError;
 pub use mtls::MtlsConfig;
+pub use redact::Redacted;
 pub use sender_constraint::SenderConstraintConfig;
 
 use self::defaults::*;
 
 /// Gateway configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `Debug` is implemented manually (see bottom of this file) so that secret
+/// fields like `jwt_secret`, `keycloak_client_secret`, API keys and tokens
+/// are rendered as `<redacted>` in trace logs, panics, etc.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     // === Server ===
     #[serde(default = "default_port")]
@@ -127,16 +142,17 @@ pub struct Config {
     #[serde(default)]
     pub github_webhook_secret: Option<String>,
 
-    /// Git provider selector for UAC sync: "gitlab" (default) or "github".
+    /// Git provider selector for UAC sync: `gitlab` (default) or `github`.
+    /// Strict parsing — unknown values fail `Config::load()`.
     /// Env: GIT_PROVIDER / STOA_GIT_PROVIDER
     #[serde(default = "default_git_provider")]
-    pub git_provider: String,
+    pub git_provider: GitProvider,
 
     // === Rate Limiting ===
-    #[serde(default)]
+    #[serde(default = "default_rate_limit_default")]
     pub rate_limit_default: Option<usize>,
 
-    #[serde(default)]
+    #[serde(default = "default_rate_limit_window_seconds")]
     pub rate_limit_window_seconds: Option<u64>,
 
     // === MCP ===
@@ -175,11 +191,15 @@ pub struct Config {
     pub policy_enabled: bool,
 
     // === Observability ===
-    #[serde(default)]
-    pub log_level: Option<String>,
+    /// Informational log level (tracing itself is driven by `RUST_LOG`).
+    /// Env: STOA_LOG_LEVEL (values: trace | debug | info | warn | error)
+    #[serde(default = "default_log_level")]
+    pub log_level: Option<LogLevel>,
 
-    #[serde(default)]
-    pub log_format: Option<String>,
+    /// Informational log format hint.
+    /// Env: STOA_LOG_FORMAT (values: json | pretty | compact)
+    #[serde(default = "default_log_format")]
+    pub log_format: Option<LogFormat>,
 
     #[serde(default)]
     pub otel_endpoint: Option<String>,
@@ -235,10 +255,10 @@ pub struct Config {
     pub attestation_interval: u64,
 
     // === Shadow Mode ===
-    /// Traffic capture source for shadow mode
-    /// Env: STOA_SHADOW_CAPTURE_SOURCE (inline, envoy-tap, port-mirror, kafka)
+    /// Traffic capture source for shadow mode.
+    /// Env: STOA_SHADOW_CAPTURE_SOURCE (values: inline | envoy-tap | port-mirror | kafka)
     #[serde(default)]
-    pub shadow_capture_source: Option<String>,
+    pub shadow_capture_source: Option<ShadowCaptureSource>,
 
     /// Minimum samples before generating UAC
     /// Env: STOA_SHADOW_MIN_SAMPLES
@@ -251,10 +271,11 @@ pub struct Config {
     pub shadow_gitlab_project: Option<String>,
 
     // === Auto-Registration (ADR-028) ===
-    /// Environment identifier for registration (dev, staging, prod)
+    /// Environment identifier for registration (canonical: dev | staging | prod).
+    /// Strict parsing — unknown values fail `Config::load()`.
     /// Env: STOA_ENVIRONMENT
     #[serde(default = "default_environment")]
-    pub environment: String,
+    pub environment: Environment,
 
     /// Enable auto-registration with Control Plane on startup
     /// Env: STOA_AUTO_REGISTER
@@ -341,20 +362,23 @@ pub struct Config {
     pub kafka_cns_consumer_group: String,
 
     // === mTLS Certificate Binding (CAB-864) ===
-    /// mTLS configuration (nested struct, STOA_MTLS_ prefix)
-    /// Env: STOA_MTLS_ENABLED, STOA_MTLS_REQUIRE_BINDING, etc.
+    /// mTLS configuration (nested struct, env vars use the `STOA_MTLS__` prefix
+    /// with a **double underscore** separating nested path from field name).
+    /// Env: STOA_MTLS__ENABLED, STOA_MTLS__REQUIRE_BINDING, etc.
     #[serde(default)]
     pub mtls: MtlsConfig,
 
     // === DPoP Sender-Constrained Tokens (CAB-438, RFC 9449) ===
-    /// DPoP configuration (nested struct, STOA_DPOP_ prefix)
-    /// Env: STOA_DPOP_ENABLED, STOA_DPOP_REQUIRED, etc.
+    /// DPoP configuration (nested struct, env vars use the `STOA_DPOP__` prefix
+    /// with a **double underscore**).
+    /// Env: STOA_DPOP__ENABLED, STOA_DPOP__REQUIRED, etc.
     #[serde(default)]
     pub dpop: crate::auth::dpop::DpopConfig,
 
     // === Sender-Constraint Middleware (CAB-1607, unified mTLS + DPoP) ===
-    /// Sender-constraint configuration (nested struct, STOA_SENDER_CONSTRAINT_ prefix)
-    /// Env: STOA_SENDER_CONSTRAINT_ENABLED, STOA_SENDER_CONSTRAINT_DPOP_REQUIRED, etc.
+    /// Sender-constraint configuration (nested struct, env vars use the
+    /// `STOA_SENDER_CONSTRAINT__` prefix with a **double underscore**).
+    /// Env: STOA_SENDER_CONSTRAINT__ENABLED, STOA_SENDER_CONSTRAINT__DPOP_REQUIRED, etc.
     #[serde(default)]
     pub sender_constraint: SenderConstraintConfig,
 
@@ -619,8 +643,9 @@ pub struct Config {
     pub llm_default_timeout_ms: u64,
 
     // === LLM Provider Router (CAB-1487) ===
-    /// LLM provider router configuration (nested struct, STOA_LLM_ROUTER_ prefix).
-    /// Env: STOA_LLM_ROUTER_DEFAULT_STRATEGY, STOA_LLM_ROUTER_BUDGET_LIMIT_USD
+    /// LLM provider router configuration (nested struct, env vars use the
+    /// `STOA_LLM_ROUTER__` prefix with a **double underscore**).
+    /// Env: STOA_LLM_ROUTER__DEFAULT_STRATEGY, STOA_LLM_ROUTER__BUDGET_LIMIT_USD
     #[serde(default)]
     pub llm_router: LlmRouterConfig,
 
@@ -636,10 +661,12 @@ pub struct Config {
     pub supervision_webhook_url: Option<String>,
 
     /// Default supervision tier when X-Hegemon-Supervision header is absent.
-    /// Values: "autopilot" (default), "copilot", "command".
+    /// Canonical values: `autopilot` (default), `copilot`, `command`.
+    /// Accepts `co-pilot` as a deprecated alias for parity with
+    /// `SupervisionTier::from_header`.
     /// Env: STOA_SUPERVISION_DEFAULT_TIER
     #[serde(default = "default_supervision_tier")]
-    pub supervision_default_tier: String,
+    pub supervision_default_tier: SupervisionDefaultTier,
 
     // === LLM Proxy (CAB-1568: STOA Dogfood) ===
     /// Enable the LLM API proxy (passthrough to upstream LLM provider).
@@ -667,11 +694,12 @@ pub struct Config {
     #[serde(default)]
     pub llm_proxy_metering_url: Option<String>,
 
-    /// Default LLM proxy provider format: "anthropic" | "mistral" | "openai".
-    /// Controls header injection and response parsing for the default upstream.
+    /// Default LLM proxy provider format (canonical: `anthropic` | `mistral`
+    /// | `openai`). Controls header injection and response parsing for the
+    /// default upstream.
     /// Env: STOA_LLM_PROXY_PROVIDER
     #[serde(default)]
-    pub llm_proxy_provider: Option<String>,
+    pub llm_proxy_provider: Option<LlmProxyProvider>,
 
     /// API key for Mistral upstream (when provider=mistral or for /v1/chat/completions).
     /// Env: STOA_LLM_PROXY_MISTRAL_API_KEY
@@ -693,6 +721,8 @@ pub struct Config {
     // === API Proxy — Internal Dogfooding (CAB-1722) ===
     /// API proxy configuration for routing internal API calls through the gateway.
     /// Each backend (Linear, GitHub, Slack, etc.) is individually toggled.
+    /// Nested struct: env vars use the `STOA_API_PROXY__` prefix with a
+    /// **double underscore** (e.g. `STOA_API_PROXY__ENABLED=true`).
     #[serde(default)]
     pub api_proxy: ApiProxyConfig,
 
@@ -819,9 +849,222 @@ pub struct Config {
     pub snapshot_body_max_bytes: usize,
 
     /// Extra regex patterns to treat as PII during snapshot masking.
-    /// Env: STOA_SNAPSHOT_EXTRA_PII_PATTERNS (comma-separated)
-    #[serde(default)]
+    /// Env: STOA_SNAPSHOT_EXTRA_PII_PATTERNS (comma-separated or JSON array)
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub snapshot_extra_pii_patterns: Vec<String>,
+}
+
+impl fmt::Debug for Config {
+    /// Custom `Debug` that redacts every secret-bearing field.
+    ///
+    /// Any `Option<String>` field that holds a credential (JWT secret, client
+    /// secret, admin password, API token, webhook secret, API key) is rendered
+    /// as `Some(<redacted>)` / `None` so that `tracing::debug!(?config)` or
+    /// `panic!("{:?}", config)` cannot leak the value to structured logs.
+    /// Non-secret fields are rendered normally.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use self::redact::debug_redact_opt_string as r;
+
+        f.debug_struct("Config")
+            .field("port", &self.port)
+            .field("host", &self.host)
+            .field("jwt_secret", &r(&self.jwt_secret))
+            .field("jwt_issuer", &self.jwt_issuer)
+            .field("keycloak_url", &self.keycloak_url)
+            .field("keycloak_realm", &self.keycloak_realm)
+            .field("keycloak_client_id", &self.keycloak_client_id)
+            .field("keycloak_client_secret", &r(&self.keycloak_client_secret))
+            .field("keycloak_admin_password", &r(&self.keycloak_admin_password))
+            .field("keycloak_internal_url", &self.keycloak_internal_url)
+            .field("gateway_external_url", &self.gateway_external_url)
+            .field("control_plane_url", &self.control_plane_url)
+            .field("control_plane_api_key", &r(&self.control_plane_api_key))
+            .field("admin_api_token", &r(&self.admin_api_token))
+            .field("gitlab_url", &self.gitlab_url)
+            .field("gitlab_api_url", &self.gitlab_api_url)
+            .field("gitlab_token", &r(&self.gitlab_token))
+            .field("gitlab_project_id", &self.gitlab_project_id)
+            .field("github_token", &r(&self.github_token))
+            .field("github_org", &self.github_org)
+            .field("github_catalog_repo", &self.github_catalog_repo)
+            .field("github_gitops_repo", &self.github_gitops_repo)
+            .field("github_webhook_secret", &r(&self.github_webhook_secret))
+            .field("git_provider", &self.git_provider)
+            .field("rate_limit_default", &self.rate_limit_default)
+            .field("rate_limit_window_seconds", &self.rate_limit_window_seconds)
+            .field("mcp_session_ttl_minutes", &self.mcp_session_ttl_minutes)
+            .field("websocket_enabled", &self.websocket_enabled)
+            .field("ws_proxy_enabled", &self.ws_proxy_enabled)
+            .field(
+                "ws_proxy_rate_limit_per_second",
+                &self.ws_proxy_rate_limit_per_second,
+            )
+            .field("ws_proxy_rate_limit_burst", &self.ws_proxy_rate_limit_burst)
+            .field("policy_path", &self.policy_path)
+            .field("policy_enabled", &self.policy_enabled)
+            .field("log_level", &self.log_level)
+            .field("log_format", &self.log_format)
+            .field("otel_endpoint", &self.otel_endpoint)
+            .field("otel_enabled", &self.otel_enabled)
+            .field("otel_sample_rate", &self.otel_sample_rate)
+            .field("detailed_tracing", &self.detailed_tracing)
+            .field("proxy_metrics_enabled", &self.proxy_metrics_enabled)
+            .field("proxy_tracing_enabled", &self.proxy_tracing_enabled)
+            .field("gateway_mode", &self.gateway_mode)
+            .field("zombie_detection_enabled", &self.zombie_detection_enabled)
+            .field("agent_session_ttl_secs", &self.agent_session_ttl_secs)
+            .field("attestation_interval", &self.attestation_interval)
+            .field("shadow_capture_source", &self.shadow_capture_source)
+            .field("shadow_min_samples", &self.shadow_min_samples)
+            .field("shadow_gitlab_project", &self.shadow_gitlab_project)
+            .field("environment", &self.environment)
+            .field("auto_register", &self.auto_register)
+            .field("advertise_url", &self.advertise_url)
+            .field("heartbeat_interval_secs", &self.heartbeat_interval_secs)
+            .field("target_gateway_url", &self.target_gateway_url)
+            .field("gateway_public_url", &self.gateway_public_url)
+            .field("native_tools_enabled", &self.native_tools_enabled)
+            .field("kafka_enabled", &self.kafka_enabled)
+            .field("kafka_brokers", &self.kafka_brokers)
+            .field("kafka_metering_topic", &self.kafka_metering_topic)
+            .field("kafka_errors_topic", &self.kafka_errors_topic)
+            .field(
+                "kafka_deploy_progress_topic",
+                &self.kafka_deploy_progress_topic,
+            )
+            .field("k8s_enabled", &self.k8s_enabled)
+            .field("kafka_cns_enabled", &self.kafka_cns_enabled)
+            .field("kafka_cns_topics", &self.kafka_cns_topics)
+            .field("kafka_cns_consumer_group", &self.kafka_cns_consumer_group)
+            .field("mtls", &self.mtls)
+            .field("dpop", &self.dpop)
+            .field("sender_constraint", &self.sender_constraint)
+            .field("quota_enforcement_enabled", &self.quota_enforcement_enabled)
+            .field("quota_sync_interval_secs", &self.quota_sync_interval_secs)
+            .field(
+                "quota_default_rate_per_minute",
+                &self.quota_default_rate_per_minute,
+            )
+            .field("quota_default_daily_limit", &self.quota_default_daily_limit)
+            .field("access_log_enabled", &self.access_log_enabled)
+            .field("route_reload_enabled", &self.route_reload_enabled)
+            .field(
+                "route_reload_interval_secs",
+                &self.route_reload_interval_secs,
+            )
+            .field("guardrails_pii_enabled", &self.guardrails_pii_enabled)
+            .field("guardrails_pii_redact", &self.guardrails_pii_redact)
+            .field(
+                "guardrails_injection_enabled",
+                &self.guardrails_injection_enabled,
+            )
+            .field(
+                "guardrails_content_filter_enabled",
+                &self.guardrails_content_filter_enabled,
+            )
+            .field("prompt_guard_enabled", &self.prompt_guard_enabled)
+            .field("prompt_guard_action", &self.prompt_guard_action)
+            .field("rag_injector_enabled", &self.rag_injector_enabled)
+            .field("rag_max_context_length", &self.rag_max_context_length)
+            .field("rag_source_timeout_ms", &self.rag_source_timeout_ms)
+            .field("rag_max_chunks", &self.rag_max_chunks)
+            .field("token_budget_enabled", &self.token_budget_enabled)
+            .field(
+                "token_budget_default_limit",
+                &self.token_budget_default_limit,
+            )
+            .field("token_budget_window_hours", &self.token_budget_window_hours)
+            .field("fallback_enabled", &self.fallback_enabled)
+            .field("fallback_chains", &self.fallback_chains)
+            .field("fallback_timeout_ms", &self.fallback_timeout_ms)
+            .field(
+                "classification_enforcement_enabled",
+                &self.classification_enforcement_enabled,
+            )
+            .field("tool_refresh_ttl_secs", &self.tool_refresh_ttl_secs)
+            .field("tool_max_staleness_secs", &self.tool_max_staleness_secs)
+            .field("tool_expansion_mode", &self.tool_expansion_mode)
+            .field("cb_failure_threshold", &self.cb_failure_threshold)
+            .field("cb_reset_timeout_secs", &self.cb_reset_timeout_secs)
+            .field("cb_success_threshold", &self.cb_success_threshold)
+            .field("skill_context_enabled", &self.skill_context_enabled)
+            .field("skill_cache_ttl_secs", &self.skill_cache_ttl_secs)
+            .field("skill_context_max_bytes", &self.skill_context_max_bytes)
+            .field("skill_context_header", &self.skill_context_header)
+            .field("federation_enabled", &self.federation_enabled)
+            .field("federation_cache_ttl_secs", &self.federation_cache_ttl_secs)
+            .field(
+                "federation_cache_max_entries",
+                &self.federation_cache_max_entries,
+            )
+            .field("federation_upstreams", &self.federation_upstreams)
+            .field("prompt_cache_max_entries", &self.prompt_cache_max_entries)
+            .field("prompt_cache_ttl_secs", &self.prompt_cache_ttl_secs)
+            .field("prompt_cache_watch_dir", &self.prompt_cache_watch_dir)
+            .field(
+                "budget_enforcement_enabled",
+                &self.budget_enforcement_enabled,
+            )
+            .field("budget_cache_ttl_secs", &self.budget_cache_ttl_secs)
+            .field("billing_api_url", &self.billing_api_url)
+            .field(
+                "mcp_discovery_cache_ttl_secs",
+                &self.mcp_discovery_cache_ttl_secs,
+            )
+            .field(
+                "mcp_discovery_cache_max_entries",
+                &self.mcp_discovery_cache_max_entries,
+            )
+            .field("llm_enabled", &self.llm_enabled)
+            .field("llm_default_timeout_ms", &self.llm_default_timeout_ms)
+            .field("llm_router", &self.llm_router)
+            .field("supervision_enabled", &self.supervision_enabled)
+            .field("supervision_webhook_url", &self.supervision_webhook_url)
+            .field("supervision_default_tier", &self.supervision_default_tier)
+            .field("llm_proxy_enabled", &self.llm_proxy_enabled)
+            .field("llm_proxy_upstream_url", &self.llm_proxy_upstream_url)
+            .field("llm_proxy_api_key", &r(&self.llm_proxy_api_key))
+            .field("llm_proxy_timeout_secs", &self.llm_proxy_timeout_secs)
+            .field("llm_proxy_metering_url", &self.llm_proxy_metering_url)
+            .field("llm_proxy_provider", &self.llm_proxy_provider)
+            .field(
+                "llm_proxy_mistral_api_key",
+                &r(&self.llm_proxy_mistral_api_key),
+            )
+            .field(
+                "llm_proxy_mistral_upstream_url",
+                &self.llm_proxy_mistral_upstream_url,
+            )
+            .field("llm_proxy_skip_validation", &self.llm_proxy_skip_validation)
+            .field("api_proxy", &self.api_proxy)
+            .field("hegemon_enabled", &self.hegemon_enabled)
+            .field("hegemon_budget_daily_usd", &self.hegemon_budget_daily_usd)
+            .field("hegemon_budget_warn_pct", &self.hegemon_budget_warn_pct)
+            .field("a2a_enabled", &self.a2a_enabled)
+            .field("a2a_max_agents", &self.a2a_max_agents)
+            .field("a2a_max_tasks", &self.a2a_max_tasks)
+            .field("soap_proxy_enabled", &self.soap_proxy_enabled)
+            .field("soap_bridge_enabled", &self.soap_bridge_enabled)
+            .field("grpc_proxy_enabled", &self.grpc_proxy_enabled)
+            .field("grpc_bridge_enabled", &self.grpc_bridge_enabled)
+            .field("graphql_proxy_enabled", &self.graphql_proxy_enabled)
+            .field("graphql_bridge_enabled", &self.graphql_bridge_enabled)
+            .field("kafka_bridge_enabled", &self.kafka_bridge_enabled)
+            .field("plugin_sdk_enabled", &self.plugin_sdk_enabled)
+            .field("ip_blocklist", &self.ip_blocklist)
+            .field("ip_blocklist_file", &self.ip_blocklist_file)
+            .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
+            .field("memory_limit_mb", &self.memory_limit_mb)
+            .field("snapshot_enabled", &self.snapshot_enabled)
+            .field("snapshot_max_count", &self.snapshot_max_count)
+            .field("snapshot_max_age_secs", &self.snapshot_max_age_secs)
+            .field("snapshot_body_max_bytes", &self.snapshot_body_max_bytes)
+            .field(
+                "snapshot_extra_pii_patterns",
+                &self.snapshot_extra_pii_patterns,
+            )
+            .finish()
+    }
 }
 
 #[cfg(test)]

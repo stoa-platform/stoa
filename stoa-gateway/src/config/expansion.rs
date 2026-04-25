@@ -14,6 +14,8 @@ pub enum ExpansionMode {
     #[default]
     Coarse,
     /// One tool per OpenAPI operation via `/apis/expanded`.
+    // TODO(GW-3): drop the `per_operation` snake_case alias after the
+    // post-2026-05-15 doc-drift window closes. Only `per-op` should remain.
     #[serde(alias = "per_operation")]
     PerOp,
 }

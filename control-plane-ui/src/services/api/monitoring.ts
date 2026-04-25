@@ -1,7 +1,13 @@
+import type { Schemas } from '@stoa/shared/api-types';
 import { httpClient, path } from '../http';
 
 // ── Monitoring / Call flow (CAB-1869) ────────────────────────────────────────
 
+// Detail view: canonicalized on the backend schema. The list endpoint shape
+// is not yet extracted as a dedicated backend schema — `MonitoringTransaction`
+// stays a local summary until backend exposes `TransactionListItem`.
+// DRIFT: monitoring transaction list response is not yet a dedicated
+// backend schema. Keep this summary shape local.
 export interface MonitoringTransaction {
   id: string;
   trace_id: string;
@@ -25,23 +31,7 @@ export interface MonitoringTransaction {
   }>;
 }
 
-export interface MonitoringTransactionDetail extends MonitoringTransaction {
-  tenant_id: string | null;
-  client_ip: string | null;
-  user_id: string | null;
-  spans: Array<{
-    name: string;
-    service: string;
-    start_offset_ms: number;
-    duration_ms: number;
-    status: string;
-    metadata: Record<string, unknown>;
-  }>;
-  request_headers: Record<string, string> | null;
-  response_headers: Record<string, string> | null;
-  error_message: string | null;
-  demo_mode: boolean;
-}
+export type MonitoringTransactionDetail = Schemas['TransactionDetailWithDemoResponse'];
 
 export interface MonitoringStats {
   total_requests: number;
@@ -64,12 +54,15 @@ export const monitoringClient = {
     statusCode?: number,
     route?: string
   ): Promise<{ transactions: MonitoringTransaction[] }> {
+    // P1-14: `!= null` keeps `0` (valid for numeric params) and blocks a
+    // caller that explicitly passed `null`. `if (x)` would drop `0` and
+    // `''` alike — not what we want for numeric-or-string params.
     const params: Record<string, string | number> = { limit };
-    if (status) params.status = status;
-    if (timeRange) params.time_range = timeRange;
-    if (serviceType) params.service_type = serviceType;
-    if (statusCode) params.status_code = statusCode;
-    if (route) params.route = route;
+    if (status != null) params.status = status;
+    if (timeRange != null) params.time_range = timeRange;
+    if (serviceType != null) params.service_type = serviceType;
+    if (statusCode != null) params.status_code = statusCode;
+    if (route != null) params.route = route;
     const { data } = await httpClient.get('/v1/monitoring/transactions', { params });
     return data;
   },
@@ -81,7 +74,7 @@ export const monitoringClient = {
 
   async getTransactionStats(timeRange?: string): Promise<MonitoringStats> {
     const params: Record<string, string> = {};
-    if (timeRange) params.time_range = timeRange;
+    if (timeRange != null) params.time_range = timeRange;
     const { data } = await httpClient.get('/v1/monitoring/transactions/stats', { params });
     return data;
   },

@@ -71,7 +71,9 @@ describe('UI-2 S3 domain clients', () => {
     });
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(6, '/v1/operations/metrics');
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(7, '/v1/business/metrics');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(8, '/v1/business/top-apis?limit=5');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(8, '/v1/business/top-apis', {
+      params: { limit: 5 },
+    });
   });
 
   it('covers chatClient request delegation', async () => {

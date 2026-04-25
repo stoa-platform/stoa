@@ -45,14 +45,11 @@ export interface TenantCreate {
 }
 
 // ---- API (catalog entity) ---------------------------------------------------
-// Wire = `Schemas['APIResponse']`. UI ENRICHES with four optional fields
-// the backend doesn't (yet) emit — see BUG-4. Consumers already guard with
-// `?? defaults`, so optional is honest.
+// Wire = `Schemas['APIResponse']`. Post-CAB-2159 the backend declares
+// `audience`, `created_at`, `updated_at` directly — only `openapi_spec` stays
+// UI-side (fetched from a separate endpoint, not embedded in APIResponse).
 export type API = Schemas['APIResponse'] & {
   openapi_spec?: string | Record<string, unknown>;
-  audience?: 'public' | 'internal' | 'partner';
-  created_at?: string;
-  updated_at?: string;
 };
 
 export interface APICreate {
@@ -67,15 +64,11 @@ export interface APICreate {
 }
 
 // ---- Application ------------------------------------------------------------
-// Wire = `Schemas['ApplicationResponse']`
-// (BUG-1 is now fixed in the backend: the portal router owns the canonical
-// schema name). UI narrows two nullable fields (`client_id, tenant_id`) and
-// adds a UI-only `environment` field.
-export type Application = Omit<Schemas['ApplicationResponse'], 'client_id' | 'tenant_id'> & {
-  /** UI assumes always set (BUG-1: backend should make it required). */
-  client_id: string;
-  /** UI assumes always set in the contexts we render. */
-  tenant_id: string;
+// Wire = `Schemas['ApplicationResponse']` (BUG-1 resolved in backend via
+// CAB-2159). `client_id` and `tenant_id` stay nullable at the wire layer —
+// consumers must guard before string operations. Regression CAB-2159 covers
+// alias parity with the canonical schema.
+export type Application = Schemas['ApplicationResponse'] & {
   /** UI-only field, populated client-side via filters/context. */
   environment?: string;
 };
@@ -100,6 +93,18 @@ export interface ApplicationCreate {
 
 // Consumer types (CAB-864 — mTLS Self-Service)
 export type CertificateStatus = 'active' | 'rotating' | 'revoked' | 'expired';
+
+// Backend emits `certificate_status: string | null`. Coerce unknown/null to
+// `undefined` so `CertificateHealthBadge` (undefined-tolerant) never receives
+// a silent `null`.
+export function normalizeCertificateStatus(
+  value: string | null | undefined
+): CertificateStatus | undefined {
+  if (value === 'active' || value === 'rotating' || value === 'revoked' || value === 'expired') {
+    return value;
+  }
+  return undefined;
+}
 
 // Token binding mode (CAB-438 — Sender-Constrained Tokens)
 export type TokenBindingMode = 'mtls' | 'dpop' | 'none';
@@ -1033,25 +1038,12 @@ export type DeploymentSyncStatus =
   | 'deleting';
 
 // ---- GatewayInstance --------------------------------------------------------
-// Wire = `Schemas['GatewayInstanceResponse']`. View-model NARROWS three
-// stringy fields to unions (BUG-2 — backend should use `Literal[...]`) and
-// ENRICHES with admin fields the backend emits via `extra='allow'` Pydantic
-// but doesn't declare in its schema.
-export type GatewayInstance = Omit<
-  Schemas['GatewayInstanceResponse'],
-  'gateway_type' | 'mode' | 'status'
-> & {
-  gateway_type: GatewayType;
-  mode?: GatewayMode;
-  status: GatewayInstanceStatus;
-  /** Admin toggle, BUG-2. */
-  enabled: boolean;
-  /** Where the instance was registered, BUG-2. */
-  source?: 'argocd' | 'self_register' | 'manual';
-  /** Tenant ACL, BUG-2. */
+// Wire = `Schemas['GatewayInstanceResponse']`. Post-CAB-2159 the backend
+// declares enums + admin fields directly. Only `visibility` keeps a UI narrow:
+// backend emits `{ tenant_ids: string[] } | null` but declares the shape as
+// `Record<string, unknown> | null` (additionalProperties). Narrow for consumers.
+export type GatewayInstance = Omit<Schemas['GatewayInstanceResponse'], 'visibility'> & {
   visibility?: { tenant_ids: string[] } | null;
-  /** UI navigation URL — synthesized client-side for some gateways. */
-  ui_url?: string | null;
 };
 
 export interface GatewayInstanceCreate {
@@ -1092,13 +1084,26 @@ export interface SyncStep {
   detail?: string;
 }
 
+// Backend declares `desired_state`/`actual_state` as open objects
+// (`Record<string, unknown>`) but the UI reads two well-known keys. Narrow
+// with an index signature so typed access works and forward-compat stays.
+export interface GatewayDeploymentState {
+  api_name?: string;
+  tenant_id?: string;
+  [key: string]: unknown;
+}
+
+// UI `GatewayDeployment` narrows `actual_state` to undefined-only (no null).
+// Backend emits `null | undefined | {...}`; the UI reduces that to a simple
+// "present or absent" contract for consumers. Normalized at the client edge
+// (see `gatewayDeploymentsClient.list` / `.get`).
 export interface GatewayDeployment {
   id: string;
   api_catalog_id: string;
   gateway_instance_id: string;
-  desired_state: Record<string, unknown>;
+  desired_state: GatewayDeploymentState;
   desired_at: string;
-  actual_state?: Record<string, unknown>;
+  actual_state?: GatewayDeploymentState;
   actual_at?: string;
   sync_status: DeploymentSyncStatus;
   last_sync_attempt?: string;
@@ -1113,6 +1118,39 @@ export interface GatewayDeployment {
   gateway_display_name?: string;
   gateway_type?: string;
   gateway_environment?: string;
+}
+
+// UI paginated wrapper — narrows the Schemas version so consumers receive
+// `GatewayDeployment[]` (with UI-narrowed `actual_state`) instead of the
+// looser wire shape. Pattern mirrors `PaginatedGatewayInstances`.
+export interface PaginatedGatewayDeployments {
+  items: GatewayDeployment[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// UI summary types for platform dashboards. The backend endpoints
+// (`/v1/admin/gateways/health-summary`, `/v1/admin/gateways/modes/stats`)
+// are not yet modelled as canonical schemas (returns `unknown`); tracked in
+// BACKEND-GAPS-CAB-2159.md §BUG-9.
+export interface GatewayHealthSummary {
+  online: number;
+  offline: number;
+  degraded: number;
+  maintenance: number;
+  total: number;
+}
+
+export interface GatewayModeStats {
+  modes: Array<{
+    mode: string;
+    total: number;
+    online: number;
+    offline: number;
+    degraded: number;
+  }>;
+  total_gateways: number;
 }
 
 // =============================================================================
@@ -1168,6 +1206,74 @@ export interface AggregatedMetrics {
     sync_percentage: number;
   };
   overall_status: string;
+  // Guardrails slice is emitted by the metrics endpoint when runtime security
+  // features are enabled. Backend does not expose a canonical schema — consumer
+  // (`GuardrailsDashboard`) expects this shape (CAB-2164).
+  guardrails?: {
+    pii_detections?: number;
+    injection_blocks?: number;
+    content_filters?: number;
+    prompt_guard_flags?: number;
+    by_tool?: Record<string, number>;
+    by_category?: Record<string, number>;
+  };
+  rate_limiting?: {
+    enforcements?: number;
+  };
+  // TODO(WAVE-2): promote guardrails/rate_limiting to Schemas when backend
+  // publishes their shape (see BACKEND-GAPS-CAB-2159.md §BUG-6/BUG-9).
+  [key: string]: unknown;
+}
+
+// CAB-2164 local wrapper: guardrails event stream consumed by
+// `GuardrailsDashboard.tsx`. Backend does not publish a canonical schema —
+// these fields reflect the observed runtime contract.
+export interface GatewayGuardrailsEvent {
+  timestamp: string;
+  trace_id: string;
+  span_id: string;
+  tool: string;
+  action: string;
+  reason: string;
+  [key: string]: unknown;
+}
+
+export interface GatewayGuardrailsResponse {
+  events: GatewayGuardrailsEvent[];
+  total: number;
+  // TODO(WAVE-2): replace with Schemas['...'] once backend exposes a canonical
+  // guardrails-events schema (see BACKEND-GAPS-CAB-2159.md §BUG-6).
+  [key: string]: unknown;
+}
+
+// CAB-2164 local wrapper: per-instance metrics mirror the aggregate health
+// slice but for a single gateway. Backend endpoint is not yet modelled as a
+// canonical schema.
+export interface GatewayInstanceMetrics {
+  gateway_id: string;
+  requests_total?: number;
+  errors_total?: number;
+  latency_p50_ms?: number;
+  latency_p95_ms?: number;
+  latency_p99_ms?: number;
+  // TODO(WAVE-2): replace with Schemas['GatewayInstanceMetrics'] once backend
+  // exposes a canonical schema (see BACKEND-GAPS-CAB-2159.md §BUG-7).
+  [key: string]: unknown;
+}
+
+// CAB-2164 local wrapper: deployment status summary for admin dashboard.
+// Backend returns a status breakdown aggregated across all deployments.
+export interface DeploymentStatusSummary {
+  total: number;
+  synced: number;
+  pending: number;
+  syncing: number;
+  drifted: number;
+  error: number;
+  deleting: number;
+  // TODO(WAVE-2): replace with Schemas['DeploymentStatusSummary'] once backend
+  // exposes a canonical schema (see BACKEND-GAPS-CAB-2159.md §BUG-8).
+  [key: string]: unknown;
 }
 
 // Workflow Engine types (CAB-593)

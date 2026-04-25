@@ -8,8 +8,9 @@ import json
 import logging
 import os
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 # Base domain - used to construct default URLs
@@ -29,13 +30,29 @@ SENSITIVE_DEBUG_FLAGS_IN_PROD: tuple[str, ...] = (
     "LOG_DEBUG_HTTP_HEADERS",
 )
 
-# CAB-1889 CP-2: startup validation gate. Activated in C.3 once all consumers
-# migrated to `settings.git.*` (verified by scripts/check_git_config_access.sh).
-_VALIDATE_GIT_CONFIG: bool = True
+
+def _is_valid_http_url(url: str) -> bool:
+    """CAB-1889 CP-2 E-1: accept http(s) with non-empty netloc.
+
+    Permissive on path/query/fragment so self-hosted GitLab under a
+    sub-path (``https://gitlab.corp/path/subpath/``) remains valid.
+    Rejects missing scheme (``gitlab.corp``), non-http schemes
+    (``ftp://...``), and empty netloc (``https://``).
+    """
+    try:
+        parsed = urlparse(url)
+    except (ValueError, TypeError):
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
 class GitHubConfig(BaseModel):
     """GitHub provider config — hydrated from flat env vars by Settings validator."""
+
+    # CAB-1889 CP-2 I-1: reject unknown kwargs so fixture typos (e.g. the
+    # dropped ``catalog_project_id=`` kwarg in the CP-1 token-leak suite)
+    # raise loudly instead of being silently ignored.
+    model_config = ConfigDict(extra="forbid")
 
     token: SecretStr = Field(default=SecretStr(""))
     org: str = "stoa-platform"
@@ -50,6 +67,8 @@ class GitHubConfig(BaseModel):
 
 class GitLabConfig(BaseModel):
     """GitLab provider config — hydrated from flat env vars by Settings validator."""
+
+    model_config = ConfigDict(extra="forbid")
 
     url: str = "https://gitlab.com"
     token: SecretStr = Field(default=SecretStr(""))
@@ -67,6 +86,8 @@ class GitProviderConfig(BaseModel):
     Consumers must read from ``settings.git.*`` only. A grep gate in CI
     enforces this (see ``scripts/check_git_config_access.sh``).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     provider: Literal["github", "gitlab"] = "github"
     github: GitHubConfig = Field(default_factory=GitHubConfig)
@@ -111,6 +132,9 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "control-plane-api"
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_VERIFY_SSL: bool = True
+    # Demo/dev-only bypass for executable smoke tests. This is rejected at
+    # startup in production and still requires X-Demo-Mode: true per request.
+    STOA_DISABLE_AUTH: bool = False
 
     @property
     def keycloak_internal_url(self) -> str:
@@ -132,26 +156,44 @@ class Settings(BaseSettings):
     SLACK_CHANNEL_ID: str = ""  # Target channel ID for Bot API
 
     # ── Git Provider — legacy flat ingress (CAB-1889 CP-2) ───────────────
-    # These 9 fields exist only so Pydantic Settings can hydrate them from
+    # These 10 fields exist only so Pydantic Settings can hydrate them from
     # env vars, .env and K8s ConfigMap. They are `exclude=True` so they
     # never appear in model_dump() or JSON schema.
     #
     # Consumers MUST read `settings.git.*` instead. A grep gate in CI
     # enforces this (see scripts/check_git_config_access.sh).
+    #
+    # CAB-1889 CP-2 B-1: the four credential fields are `SecretStr` so
+    # `repr(Settings(...))` can't leak them. They are unwrapped, stripped
+    # and re-wrapped at the hydration boundary in `_hydrate_and_validate_git`.
     GIT_PROVIDER: Literal["github", "gitlab"] = Field(default="github", exclude=True)
-    GITHUB_TOKEN: str = Field(default="", exclude=True)
+    GITHUB_TOKEN: SecretStr = Field(default=SecretStr(""), exclude=True)
     GITHUB_ORG: str = Field(default="stoa-platform", exclude=True)
     GITHUB_CATALOG_REPO: str = Field(default="stoa-catalog", exclude=True)
-    GITHUB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
+    GITHUB_WEBHOOK_SECRET: SecretStr = Field(default=SecretStr(""), exclude=True)
     GITLAB_URL: str = Field(default="https://gitlab.com", exclude=True)
-    GITLAB_TOKEN: str = Field(default="", exclude=True)
+    GITLAB_TOKEN: SecretStr = Field(default=SecretStr(""), exclude=True)
     GITLAB_PROJECT_ID: str = Field(default="", exclude=True)
-    GITLAB_WEBHOOK_SECRET: str = Field(default="", exclude=True)
+    GITLAB_WEBHOOK_SECRET: SecretStr = Field(default=SecretStr(""), exclude=True)
     # CP-1 P2 (M.4): catalog repo default branch, provider-agnostic.
     GIT_DEFAULT_BRANCH: str = Field(default="main", exclude=True)
 
     # ── Git Provider — single source of truth for consumers ──────────────
     git: GitProviderConfig = Field(default_factory=GitProviderConfig)
+
+    @field_validator("GIT_PROVIDER", mode="before")
+    @classmethod
+    def _normalize_git_provider(cls, v: object) -> object:
+        """CAB-1889 CP-2 C-1: restore case-insensitive GIT_PROVIDER for
+        backward compat with deployments that pre-date the ``Literal``
+        narrowing (which removed the consumer-side ``.lower()`` shim).
+
+        Also strips so K8s-mounted values with trailing newlines survive.
+        Non-string inputs are passed through untouched for Pydantic to
+        handle (e.g. ``Settings(GIT_PROVIDER=None)`` still raises a
+        proper ``literal_error``).
+        """
+        return v.strip().lower() if isinstance(v, str) else v
 
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
@@ -462,41 +504,50 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hydrate_and_validate_git(self) -> "Settings":
-        """CAB-1889 CP-2: hydrate ``settings.git`` from legacy flat env vars.
+        """CAB-1889 CP-2: hydrate ``settings.git`` from legacy flat env vars,
+        then fail fast in production if the selected provider is
+        misconfigured (warn in dev/staging).
 
-        Runs unconditionally so consumers see a coherent ``settings.git.*``
-        tree. When ``_VALIDATE_GIT_CONFIG`` is True (flipped in C.3), also
-        fails fast in production if the selected provider is misconfigured,
-        and warns in dev/staging.
+        CP-2 B-1/A-1: unwrap the credential ``SecretStr`` flat fields,
+        ``.strip()`` whitespace and newlines (K8s file-mounted secrets
+        often include a trailing ``\\n``), then re-wrap at the inner
+        model boundary so consumers always see a clean ``SecretStr``.
+
+        CP-2 E-1: the validator asserts non-empty identity fields
+        (``GITHUB_ORG``, ``GITHUB_CATALOG_REPO``) and a syntactically
+        valid ``GITLAB_URL`` — catches explicit empty overrides that
+        previously produced malformed ``org/repo`` slugs or URLs at
+        runtime.
         """
-        # Step 1 — hydration (always, wrapping SecretStr at the boundary).
+        # Step 1 — hydration (always, stripping + re-wrapping SecretStr).
         self.git = GitProviderConfig(
             provider=self.GIT_PROVIDER,
             github=GitHubConfig(
-                token=SecretStr(self.GITHUB_TOKEN),
-                org=self.GITHUB_ORG,
-                catalog_repo=self.GITHUB_CATALOG_REPO,
-                webhook_secret=SecretStr(self.GITHUB_WEBHOOK_SECRET),
+                token=SecretStr(self.GITHUB_TOKEN.get_secret_value().strip()),
+                org=self.GITHUB_ORG.strip(),
+                catalog_repo=self.GITHUB_CATALOG_REPO.strip(),
+                webhook_secret=SecretStr(self.GITHUB_WEBHOOK_SECRET.get_secret_value().strip()),
             ),
             gitlab=GitLabConfig(
-                url=self.GITLAB_URL,
-                token=SecretStr(self.GITLAB_TOKEN),
-                project_id=self.GITLAB_PROJECT_ID,
-                webhook_secret=SecretStr(self.GITLAB_WEBHOOK_SECRET),
+                url=self.GITLAB_URL.strip(),
+                token=SecretStr(self.GITLAB_TOKEN.get_secret_value().strip()),
+                project_id=self.GITLAB_PROJECT_ID.strip(),
+                webhook_secret=SecretStr(self.GITLAB_WEBHOOK_SECRET.get_secret_value().strip()),
             ),
-            default_branch=self.GIT_DEFAULT_BRANCH or "main",
+            default_branch=self.GIT_DEFAULT_BRANCH.strip(),
         )
 
-        # Step 2 — validation (gated; flipped in C.3).
-        if not _VALIDATE_GIT_CONFIG:
-            return self
-
+        # Step 2 — validation.
         git = self.git
         offender_msgs: list[str] = []
 
         if git.provider == "github":
             if not git.github.token.get_secret_value():
                 offender_msgs.append("GIT_PROVIDER=github but GITHUB_TOKEN is empty")
+            if not git.github.org:
+                offender_msgs.append("GIT_PROVIDER=github but GITHUB_ORG is empty")
+            if not git.github.catalog_repo:
+                offender_msgs.append("GIT_PROVIDER=github but GITHUB_CATALOG_REPO is empty")
             if git.gitlab.token.get_secret_value():
                 _logger.warning(
                     "GIT_PROVIDER=github but GITLAB_TOKEN is also set. "
@@ -507,6 +558,11 @@ class Settings(BaseSettings):
                 offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_TOKEN is empty")
             if not git.gitlab.project_id:
                 offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_PROJECT_ID is empty")
+            if not _is_valid_http_url(git.gitlab.url):
+                offender_msgs.append(
+                    f"GIT_PROVIDER=gitlab but GITLAB_URL is not a valid http(s) URL "
+                    f"(got {git.gitlab.url!r})"
+                )
             if git.github.token.get_secret_value():
                 _logger.warning(
                     "GIT_PROVIDER=gitlab but GITHUB_TOKEN is also set. "
@@ -556,6 +612,22 @@ class Settings(BaseSettings):
             joined,
             self.ENVIRONMENT,
         )
+        return self
+
+    @model_validator(mode="after")
+    def _gate_auth_bypass_in_prod(self) -> "Settings":
+        """Fail fast if the demo/dev auth bypass is enabled in production."""
+        if self.ENVIRONMENT == "production" and self.STOA_DISABLE_AUTH:
+            raise ValueError(
+                "Refusing to boot: STOA_DISABLE_AUTH=true while ENVIRONMENT=production. "
+                "This bypass is demo/dev only and must never be deployed to prod."
+            )
+        if self.STOA_DISABLE_AUTH:
+            _logger.warning(
+                "STOA_DISABLE_AUTH=true (ENVIRONMENT=%s). Auth bypass is demo/dev only "
+                "and is honored only when requests send X-Demo-Mode: true.",
+                self.ENVIRONMENT,
+            )
         return self
 
     class Config:

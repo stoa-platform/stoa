@@ -24,6 +24,7 @@
 #   --profile federation:      + openldap (1389) + federation-gateway (9000)
 #   --profile monitoring-oidc: + oauth2-proxy (4180) — requires OIDC setup
 #   --profile seed:            + stoa-seeder (one-shot, SEED_PROFILE=dev|staging|prod)
+#   --profile demo:            + mock-backend (9090) for demo smoke tests
 #
 # Total RAM: ~3.3GB base (+ ~256MB with federation profile)
 # =============================================================================
@@ -201,6 +202,8 @@ services:
       KEYCLOAK_CLIENT_ID: control-plane-api
       KEYCLOAK_VERIFY_SSL: "false"
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required (set in .env or Vault)}
+      # Demo/dev only: requires X-Demo-Mode: true on each request and is rejected in production.
+      STOA_DISABLE_AUTH: "${STOA_DISABLE_AUTH:-false}"
       # Observability (Prometheus + Loki + Tempo for Usage/Call Flow Dashboard)
       PROMETHEUS_INTERNAL_URL: http://prometheus:9090
       LOKI_INTERNAL_URL: http://loki:3100
@@ -495,6 +498,28 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Demo Mock Backend — stable target for demo smoke AT-0/AT-4
+  # ==========================================================================
+  mock-backend:
+    image: nginx:1.25-alpine
+    container_name: stoa-mock-backend
+    profiles:
+      - demo
+    ports:
+      - "${PORT_MOCK_BACKEND:-9090}:9090"
+    volumes:
+      - ./config/mock-backend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/ping || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   # ==========================================================================

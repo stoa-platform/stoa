@@ -331,7 +331,8 @@ describe('UI-2 S2d domain clients', () => {
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(5, '/v1/admin/gateways/metrics');
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(
       6,
-      '/v1/admin/gateways/metrics/guardrails/events?limit=15'
+      '/v1/admin/gateways/metrics/guardrails/events',
+      { params: { limit: 15 } }
     );
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(7, '/v1/admin/gateways/health-summary');
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(8, '/v1/admin/gateways/gw-1/metrics');

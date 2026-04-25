@@ -1,14 +1,38 @@
-# UI-1 Rewrite — Backend gaps découverts
+# UI-1 Rewrite + UI-3 Cleanup — Backend gaps découverts
 
-> Issues dans le contrat OpenAPI (`control-plane-api/openapi-snapshot.json`)
-> trouvées pendant le rewrite des types UI. **Hors périmètre rewrite — à
-> remonter à l'équipe backend (control-plane-api).**
+> **Renommé depuis `rewrite-bugs.md` dans CAB-2164** (2026-04-24) : le nom
+> précédent ("rewrite bugs") suggérait des bugs introduits par le rewrite ;
+> en réalité, ce fichier suit les **gaps de contrat OpenAPI côté backend**
+> (`control-plane-api/openapi-snapshot.json`) découverts pendant UI-1 Wave 1
+> et étendus dans UI-3 Cleanup. Le nouveau nom `BACKEND-GAPS-CAB-2159.md`
+> clarifie l'intention et évite la collision APFS avec le `REWRITE-BUGS.md`
+> qui documente les zombies UI-3 (cf. `control-plane-ui/REWRITE-BUGS.md`).
 >
-> **Tracking ticket**: **CAB-2159** (BACKEND-BUG — 3 OpenAPI contract gaps).
+> Issues dans le contrat OpenAPI (`control-plane-api/openapi-snapshot.json`)
+> trouvées pendant le rewrite des types UI et les batches cleanup suivants.
+> **Hors périmètre rewrite — à remonter à l'équipe backend (control-plane-api).**
+>
+> **Tracking ticket**: **CAB-2159** (BACKEND-BUG — OpenAPI contract gaps).
 > Owner: whoever claims that ticket. Resolution unblocks **CAB-2158** (UI-1-Wave2).
 >
 > **Blocks**: CAB-2158 (UI-1-Wave2 remaining migration) and, indirectly,
 > CAB-2160 (UI-1-polish adapter pattern).
+>
+> **Status digest (UI-1 W1 bug-hunt batch, 2026-04-24)**:
+> - BUG-1 **RÉSOLU** backend (CAB-2159 merged 2026-04-22, commit c6abef8f2).
+>   UI alias migrated to honest `client_id: string | null` + guarded call sites.
+> - BUG-2 **RÉSOLU** backend (same PR). UI keeps only a minimal `visibility`
+>   narrowing because the backend schema declares `Record<string, unknown>`.
+> - BUG-3 **STILL OPEN (worse)** — 16+ duplicate `operationId` in the current
+>   snapshot (vs 11 originally reported). `// @ts-nocheck` still required.
+> - BUG-4 **PARTIEL** — `audience`, `created_at`, `updated_at` are in the
+>   schema. `status: string` remains un-typed (no literal union); `openapi_spec`
+>   stays on a separate endpoint by design.
+> - BUG-5 **DESIGN SHIFT** — backend public schema `RoleDetail.permissions` is
+>   now `string[]` (plain strings), but `AdminRoles.tsx` consumes the richer
+>   `role.permissions[].name/description` from a distinct `/v1/admin/roles`
+>   endpoint not exposed in the public OpenAPI snapshot. UI `RolePermission`
+>   type is NOT dead.
 
 ---
 
@@ -176,12 +200,91 @@ comme PUREMENT UI tant que le schema n'est pas extrait.
 
 ---
 
+## BUG-6 — `/v1/admin/gateways/metrics` guardrails/rate_limiting slices non-typés
+
+**Sévérité**: MEDIUM (UI dashboard `GuardrailsDashboard` lit des champs
+non-déclarés ; les nulls silencieux font passer les compteurs à 0 quand
+le backend ne remplit pas la slice).
+
+**Constat**: le retour de `get_aggregated_metrics` est typé `unknown` dans
+`generated.ts`. Le consumer `GuardrailsDashboard.tsx` attend :
+- `guardrails.pii_detections` / `injection_blocks` / `content_filters` /
+  `prompt_guard_flags` / `by_tool` / `by_category`
+- `rate_limiting.enforcements`
+
+Documenté CAB-2164 dans `src/types/index.ts` comme champs optionnels sur
+`AggregatedMetrics` (slice `guardrails?` + `rate_limiting?`) avec index
+signature pour les extensions futures.
+
+**Action proposée backend**: publier un schéma `AggregatedMetricsResponse`
+(pas `unknown`) incluant les slices `guardrails` et `rate_limiting`. Tant
+que l'endpoint renvoie `unknown`, le contrat est invisible pour TypeScript
+et les consumers peuvent lire des fields inexistants.
+
+**Workaround UI**: `AggregatedMetrics` avec slices optionnelles + index
+signature. Aligné sur l'usage observé de `GuardrailsDashboard`.
+
+---
+
+## BUG-7 — `/v1/admin/gateways/metrics/guardrails/events` non-typé
+
+**Sévérité**: LOW.
+
+**Constat**: endpoint renvoie `unknown` côté backend. L'UI (CAB-2164) type
+un wrapper local `GatewayGuardrailsResponse` + `GatewayGuardrailsEvent`
+basé sur l'usage observé :
+```ts
+interface GatewayGuardrailsEvent {
+  timestamp: string;
+  trace_id: string;
+  span_id: string;
+  tool: string;
+  action: string;
+  reason: string;
+  [key: string]: unknown;
+}
+```
+
+**Action proposée backend**: publier un `GuardrailsEventsResponse` avec
+`events: GuardrailEvent[]` et un schéma explicite pour `GuardrailEvent`.
+
+---
+
+## BUG-8 — `/v1/admin/deployments/status` non-typé
+
+**Sévérité**: LOW.
+
+**Constat**: `get_deployment_status_summary` retourne `unknown`. L'UI
+(CAB-2164) type un wrapper local `DeploymentStatusSummary` avec les
+compteurs observés (`total`, `synced`, `pending`, `syncing`, `drifted`,
+`error`, `deleting`) + index signature.
+
+**Action proposée backend**: publier un `DeploymentStatusSummaryResponse`.
+
+---
+
+## BUG-9 — `/v1/admin/gateways/health-summary` + `/modes/stats` non-typés
+
+**Sévérité**: LOW.
+
+**Constat**: les deux endpoints renvoient `unknown`. L'UI (CAB-2164) type
+`GatewayHealthSummary` (`online`, `offline`, `degraded`, `maintenance`,
+`total`) et `GatewayModeStats` (`modes[]`, `total_gateways`). Pré-UI-3
+ces types vivaient dans `src/hooks/usePlatformMetrics.ts` ; ils sont
+déplacés vers `src/types/index.ts` pour consommation par les clients de
+domaine.
+
+**Action proposée backend**: publier `GatewayHealthSummaryResponse` et
+`GatewayModeStatsResponse` comme schemas canoniques.
+
+---
+
 ## Sunset — quand supprimer ce fichier
 
-Supprimer `REWRITE-BUGS.md` quand TOUTES les conditions sont remplies :
+Supprimer `BACKEND-GAPS-CAB-2159.md` quand TOUTES les conditions sont remplies :
 
-1. BUG-1, BUG-2, BUG-3, BUG-4, BUG-5 marqués **RÉSOLU** (snapshot regénéré
-   sans erreurs, types Schemas alignés sur l'usage UI).
+1. BUG-1 à BUG-9 marqués **RÉSOLU** (snapshot regénéré sans erreurs,
+   types Schemas alignés sur l'usage UI).
 2. `// @ts-nocheck` retiré de `shared/api-types/generated.ts` et le drift
    gate CI passe sans le wrapper `inject-tsnocheck.mjs`.
 3. `control-plane-ui/scripts/migrate-types.mjs` et `strip-migrated-types.mjs`
@@ -189,6 +292,10 @@ Supprimer `REWRITE-BUGS.md` quand TOUTES les conditions sont remplies :
 4. Les view-models DRIFT dans `src/types/index.ts` (`API`, `Application`,
    `GatewayInstance`, `Consumer`) peuvent devenir des aliases purs `Schemas[X]`
    ou être supprimés au profit d'imports directs.
+5. Les wrappers locaux CAB-2164 (`GatewayGuardrailsResponse`,
+   `GatewayInstanceMetrics`, `DeploymentStatusSummary`,
+   `GatewayHealthSummary`, `GatewayModeStats`, slices `AggregatedMetrics`)
+   peuvent être supprimés ou alignés sur `Schemas[X]`.
 
 Si une partie seulement est résolue, marquer les BUG individuellement
 **RÉSOLU** dans leur section et garder le fichier jusqu'à clôture complète.

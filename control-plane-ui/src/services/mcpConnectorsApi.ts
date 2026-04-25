@@ -17,8 +17,9 @@ class MCPConnectorsService {
    */
   async listConnectors(tenantId?: string, environment?: string): Promise<ConnectorCatalogResponse> {
     const params: Record<string, string> = {};
-    if (tenantId) params.tenant_id = tenantId;
-    if (environment) params.environment = environment;
+    // P1-14: != null preserves empty-string / 0 legitimate values
+    if (tenantId != null) params.tenant_id = tenantId;
+    if (environment != null) params.environment = environment;
     const { data } = await apiService.get('/v1/admin/mcp-connectors', {
       params: Object.keys(params).length > 0 ? params : undefined,
     });

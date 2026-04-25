@@ -52,6 +52,19 @@ import type {
   IssuedCertificateListResponse,
   TenantToolPermission,
   TenantToolPermissionListResponse,
+  AggregatedMetrics,
+  DeploymentStatusSummary,
+  GatewayDeployment,
+  GatewayGuardrailsResponse,
+  GatewayHealthSummary,
+  GatewayInstance,
+  GatewayInstanceCreate,
+  GatewayInstanceMetrics,
+  GatewayInstanceUpdate,
+  GatewayModeStats,
+  GatewayPolicy,
+  PaginatedGatewayDeployments,
+  PaginatedGatewayInstances,
 } from '../types';
 import type { Schemas } from '@stoa/shared/api-types';
 import {
@@ -638,28 +651,26 @@ class ApiService {
     include_deleted?: boolean;
     page?: number;
     page_size?: number;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
+  }): Promise<PaginatedGatewayInstances> {
     return gatewaysClient.listInstances(params);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayInstance(id: string): Promise<any> {
+  async getGatewayInstance(id: string): Promise<GatewayInstance> {
     return gatewaysClient.getInstance(id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayTools(id: string): Promise<any[]> {
+  async getGatewayTools(id: string): Promise<Schemas['ListToolsResponse']['tools']> {
     return gatewaysClient.listTools(id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async createGatewayInstance(payload: any): Promise<any> {
+  async createGatewayInstance(payload: GatewayInstanceCreate): Promise<GatewayInstance> {
     return gatewaysClient.createInstance(payload);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async updateGatewayInstance(id: string, payload: any): Promise<any> {
+  async updateGatewayInstance(
+    id: string,
+    payload: GatewayInstanceUpdate
+  ): Promise<GatewayInstance> {
     return gatewaysClient.updateInstance(id, payload);
   }
 
@@ -667,32 +678,20 @@ class ApiService {
     return gatewaysClient.removeInstance(id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async restoreGatewayInstance(id: string): Promise<any> {
+  async restoreGatewayInstance(id: string): Promise<GatewayInstance> {
     return gatewaysClient.restoreInstance(id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async checkGatewayHealth(id: string): Promise<any> {
+  async checkGatewayHealth(id: string): Promise<Schemas['GatewayHealthCheckResponse']> {
     return gatewaysClient.checkHealth(id);
   }
 
-  async getGatewayModeStats(): Promise<{
-    modes: Array<{
-      mode: string;
-      total: number;
-      online: number;
-      offline: number;
-      degraded: number;
-    }>;
-    total_gateways: number;
-  }> {
+  async getGatewayModeStats(): Promise<GatewayModeStats> {
     return gatewaysClient.getModeStats();
   }
 
   // Gateway Deployments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getDeploymentStatusSummary(): Promise<any> {
+  async getDeploymentStatusSummary(): Promise<DeploymentStatusSummary> {
     return gatewayDeploymentsClient.getStatusSummary();
   }
 
@@ -703,21 +702,18 @@ class ApiService {
     gateway_type?: string;
     page?: number;
     page_size?: number;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
+  }): Promise<PaginatedGatewayDeployments> {
     return gatewayDeploymentsClient.list(params);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayDeployment(id: string): Promise<any> {
+  async getGatewayDeployment(id: string): Promise<GatewayDeployment> {
     return gatewayDeploymentsClient.get(id);
   }
 
   async deployApiToGateways(payload: {
     api_catalog_id: string;
     gateway_instance_ids: string[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<any[]> {
+  }): Promise<GatewayDeployment[]> {
     return gatewayDeploymentsClient.deployApiToGateways(payload);
   }
 
@@ -725,8 +721,7 @@ class ApiService {
     return gatewayDeploymentsClient.undeploy(id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async forceSyncDeployment(id: string): Promise<any> {
+  async forceSyncDeployment(id: string): Promise<GatewayDeployment> {
     return gatewayDeploymentsClient.forceSync(id);
   }
 
@@ -800,23 +795,19 @@ class ApiService {
   // Gateway Observability
   // =========================================================================
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayAggregatedMetrics(): Promise<any> {
+  async getGatewayAggregatedMetrics(): Promise<AggregatedMetrics> {
     return gatewaysClient.getAggregatedMetrics();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGuardrailsEvents(limit = 20): Promise<any> {
+  async getGuardrailsEvents(limit = 20): Promise<GatewayGuardrailsResponse> {
     return gatewaysClient.getGuardrailsEvents(limit);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayHealthSummary(): Promise<any> {
+  async getGatewayHealthSummary(): Promise<GatewayHealthSummary> {
     return gatewaysClient.getHealthSummary();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayInstanceMetrics(id: string): Promise<any> {
+  async getGatewayInstanceMetrics(id: string): Promise<GatewayInstanceMetrics> {
     return gatewaysClient.getInstanceMetrics(id);
   }
 
@@ -824,18 +815,21 @@ class ApiService {
   // Gateway Policies
   // =========================================================================
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getGatewayPolicies(params?: { tenant_id?: string; environment?: string }): Promise<any[]> {
+  async getGatewayPolicies(params?: {
+    tenant_id?: string;
+    environment?: string;
+  }): Promise<GatewayPolicy[]> {
     return gatewaysClient.listPolicies(params);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async createGatewayPolicy(payload: any): Promise<any> {
+  async createGatewayPolicy(payload: Schemas['GatewayPolicyCreate']): Promise<GatewayPolicy> {
     return gatewaysClient.createPolicy(payload);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async updateGatewayPolicy(id: string, payload: any): Promise<any> {
+  async updateGatewayPolicy(
+    id: string,
+    payload: Schemas['GatewayPolicyUpdate']
+  ): Promise<GatewayPolicy> {
     return gatewaysClient.updatePolicy(id, payload);
   }
 
@@ -843,8 +837,9 @@ class ApiService {
     return gatewaysClient.removePolicy(id);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async createPolicyBinding(payload: any): Promise<any> {
+  async createPolicyBinding(
+    payload: Schemas['PolicyBindingCreate']
+  ): Promise<Schemas['PolicyBindingResponse']> {
     return gatewaysClient.createPolicyBinding(payload);
   }
 

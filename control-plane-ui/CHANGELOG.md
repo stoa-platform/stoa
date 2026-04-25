@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.4](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.3...control-plane-ui-v1.5.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui:** close CAB-2164 UI-3 cleanup — zombies doc + any hardening ([#2527](https://github.com/stoa-platform/stoa/issues/2527)) ([31f00b7](https://github.com/stoa-platform/stoa/commit/31f00b79d4254fd3ae1d3e7a65e90399d22c7bfe))
+
+## [1.5.3](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.2...control-plane-ui-v1.5.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui-1:** close UI-1 Wave 1 bug hunt batch (8 items) ([#2525](https://github.com/stoa-platform/stoa/issues/2525)) ([83abcf7](https://github.com/stoa-platform/stoa/commit/83abcf7a28cb797800f875853fda27a49a00e372))
+
+## [1.5.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.1...control-plane-ui-v1.5.2) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui-2:** P1 batch — 14 P1 fixes across dashboards, auth, http, skills ([#2519](https://github.com/stoa-platform/stoa/issues/2519)) ([63a3010](https://github.com/stoa-platform/stoa/commit/63a3010f075a532a02a191aca2a4cb4163f42d32))
+* **ui-2:** P2 cleanup batch — close UI-2 module (8 code fixes + 3 WONT-FIX + 2 deferred) ([#2521](https://github.com/stoa-platform/stoa/issues/2521)) ([b35039a](https://github.com/stoa-platform/stoa/commit/b35039a0943a2fab3f16de1abfebc3acd619c160))
+
 ## [1.5.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.0...control-plane-ui-v1.5.1) (2026-04-24)
 
 

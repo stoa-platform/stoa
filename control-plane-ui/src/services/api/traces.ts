@@ -10,10 +10,11 @@ export const tracesClient = {
   ): Promise<{ traces: TraceSummary[]; total: number }> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const params: Record<string, any> = {};
-    if (limit) params.limit = limit;
-    if (tenantId) params.tenant_id = tenantId;
-    if (status) params.status = status;
-    if (environment) params.environment = environment;
+    // P1-14: use != null to keep legitimate 0 / empty-string values
+    if (limit != null) params.limit = limit;
+    if (tenantId != null) params.tenant_id = tenantId;
+    if (status != null) params.status = status;
+    if (environment != null) params.environment = environment;
     const { data } = await httpClient.get('/v1/traces', { params });
     return data;
   },
@@ -41,16 +42,16 @@ export const tracesClient = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getAiSessionStats(days?: number, worker?: string): Promise<any> {
     const params: Record<string, string | number> = {};
-    if (days) params.days = days;
-    if (worker) params.worker = worker;
+    if (days != null) params.days = days;
+    if (worker != null) params.worker = worker;
     const { data } = await httpClient.get('/v1/traces/stats/ai-sessions', { params });
     return data;
   },
 
   async exportAiSessionsCsv(days?: number, worker?: string): Promise<Blob> {
     const params: Record<string, string | number> = {};
-    if (days) params.days = days;
-    if (worker) params.worker = worker;
+    if (days != null) params.days = days;
+    if (worker != null) params.worker = worker;
     const { data } = await httpClient.get('/v1/traces/export/ai-sessions', {
       params,
       responseType: 'blob',

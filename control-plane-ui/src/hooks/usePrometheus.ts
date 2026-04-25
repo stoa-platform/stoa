@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { httpClient } from '../services/http';
 
-// CAB-2029: Route through authenticated API proxy instead of unauthenticated nginx pass-through
-const PROMETHEUS_BASE = '/api/v1/metrics';
+// CAB-2029: Route through authenticated API proxy (cp-api /v1/metrics/*) instead of unauthenticated nginx pass-through.
+// httpClient baseURL is https://api.gostoa.dev, so the path is /v1/... — no /api prefix.
+const PROMETHEUS_BASE = '/v1/metrics';
 const PROMETHEUS_TIMEOUT_MS = 10_000;
 
 interface PrometheusResult {

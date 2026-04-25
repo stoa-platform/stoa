@@ -49,17 +49,31 @@ export function GatewayDeploymentsDashboard() {
       if (statusFilter) params.sync_status = statusFilter;
       if (activeEnvironment) params.environment = activeEnvironment;
 
-      const [deploymentsResult, summaryResult] = await Promise.all([
+      // P1-1: allSettled — preserve deployments list on a transient stats
+      // failure (and vice versa) instead of showing a blank dashboard.
+      const [deploymentsResult, summaryResult] = await Promise.allSettled([
         apiService.getGatewayDeployments(params),
         apiService.getDeploymentStatusSummary(),
       ]);
 
-      setDeployments(deploymentsResult.items);
-      setTotal(deploymentsResult.total);
-      setSummary(summaryResult);
-      setError(null);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load deployments');
+      if (deploymentsResult.status === 'fulfilled') {
+        setDeployments(deploymentsResult.value.items);
+        setTotal(deploymentsResult.value.total);
+      } else {
+        console.error('Failed to load gateway deployments:', deploymentsResult.reason);
+      }
+      if (summaryResult.status === 'fulfilled') {
+        setSummary(summaryResult.value);
+      } else {
+        console.error('Failed to load deployment summary:', summaryResult.reason);
+      }
+
+      if (deploymentsResult.status === 'rejected' && summaryResult.status === 'rejected') {
+        const reason: any = deploymentsResult.reason;
+        setError(reason?.response?.data?.detail || 'Failed to load deployments');
+      } else {
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -254,10 +268,10 @@ export function GatewayDeploymentsDashboard() {
                   <td className="px-6 py-4">
                     <div>
                       <p className="text-sm font-medium text-neutral-900 dark:text-white">
-                        {(dep.desired_state as any)?.api_name || dep.api_catalog_id.slice(0, 8)}
+                        {dep.desired_state.api_name || dep.api_catalog_id.slice(0, 8)}
                       </p>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {(dep.desired_state as any)?.tenant_id || '-'}
+                        {dep.desired_state.tenant_id || '-'}
                       </p>
                     </div>
                   </td>
@@ -293,7 +307,7 @@ export function GatewayDeploymentsDashboard() {
                         Sync
                       </button>
                       <button
-                        onClick={() => handleUndeploy(dep.id, (dep.desired_state as any)?.api_name)}
+                        onClick={() => handleUndeploy(dep.id, dep.desired_state.api_name)}
                         disabled={actionLoading === dep.id}
                         className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
                         title="Undeploy"

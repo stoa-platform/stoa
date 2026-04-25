@@ -104,10 +104,15 @@ export const chatClient = {
     tenantId: string,
     params: { group_by?: string; days?: number } = {}
   ): Promise<ChatUsageBySource> {
+    // P1-13: spread in last position with a null-coalescing default so
+    // callers passing `{ group_by: undefined, days: 7 }` do NOT override
+    // the default with undefined (which axios then drops, forcing the
+    // backend fallback instead of the client's intended default).
+    const safeParams = params ?? {};
     const { data } = await httpClient.get(
       path('v1', 'tenants', tenantId, 'chat', 'usage', 'tenant'),
       {
-        params: { group_by: 'source', ...params },
+        params: { ...safeParams, group_by: safeParams.group_by ?? 'source' },
       }
     );
     return data;

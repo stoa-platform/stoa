@@ -6,7 +6,8 @@
 //! new root-level field only ever touches this module plus `config.rs`.
 
 use super::{
-    ApiProxyConfig, Config, ExpansionMode, LlmRouterConfig, MtlsConfig, SenderConstraintConfig,
+    ApiProxyConfig, Config, Environment, ExpansionMode, GitProvider, LlmRouterConfig, LogFormat,
+    LogLevel, MtlsConfig, SenderConstraintConfig, SupervisionDefaultTier,
 };
 use crate::mode::GatewayMode;
 
@@ -58,8 +59,8 @@ pub(super) fn default_shadow_min_samples() -> usize {
     10 // Minimum samples before pattern is considered stable
 }
 
-pub(super) fn default_environment() -> String {
-    "dev".to_string()
+pub(super) fn default_environment() -> Environment {
+    Environment::Dev
 }
 
 pub(super) fn default_auto_register() -> bool {
@@ -214,8 +215,8 @@ pub(super) fn default_mcp_discovery_cache_max_entries() -> u64 {
     256
 }
 
-pub(super) fn default_supervision_tier() -> String {
-    "autopilot".to_string()
+pub(super) fn default_supervision_tier() -> SupervisionDefaultTier {
+    SupervisionDefaultTier::Autopilot
 }
 
 pub(super) fn default_llm_timeout_ms() -> u64 {
@@ -266,8 +267,24 @@ pub(super) fn default_snapshot_body_max_bytes() -> usize {
     4096
 }
 
-pub(super) fn default_git_provider() -> String {
-    "gitlab".to_string() // backward compatible default
+pub(super) fn default_git_provider() -> GitProvider {
+    GitProvider::Gitlab
+}
+
+pub(super) fn default_rate_limit_default() -> Option<usize> {
+    Some(1000)
+}
+
+pub(super) fn default_rate_limit_window_seconds() -> Option<u64> {
+    Some(60)
+}
+
+pub(super) fn default_log_level() -> Option<LogLevel> {
+    Some(LogLevel::Info)
+}
+
+pub(super) fn default_log_format() -> Option<LogFormat> {
+    Some(LogFormat::Json)
 }
 
 impl Default for Config {
@@ -303,8 +320,8 @@ impl Default for Config {
             websocket_enabled: false,
             policy_path: None,
             policy_enabled: default_policy_enabled(),
-            log_level: Some("info".to_string()),
-            log_format: Some("json".to_string()),
+            log_level: default_log_level(),
+            log_format: default_log_format(),
             otel_enabled: default_otel_enabled(),
             otel_endpoint: None,
             otel_sample_rate: default_otel_sample_rate(),

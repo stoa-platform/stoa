@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.16](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.15...stoa-gateway-v0.9.16) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** close CAB-2165 GW-3 cleanup — 3 bundles (enum migration + path warn + DpopConfig docs) ([#2529](https://github.com/stoa-platform/stoa/issues/2529)) ([599b138](https://github.com/stoa-platform/stoa/commit/599b13814c0267e9588775f9bc4c63871a9b7b71))
+
+## [0.9.15](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.14...stoa-gateway-v0.9.15) (2026-04-24)
+
+
+### Bug Fixes
+
+* **gateway:** close GW-2 bug hunt batch — 10 config hardening items ([#2523](https://github.com/stoa-platform/stoa/issues/2523)) ([5d0af28](https://github.com/stoa-platform/stoa/commit/5d0af28dd3898f8d8507db2282b6a23dd31cdb84))
+
 ## [0.9.14](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.13...stoa-gateway-v0.9.14) (2026-04-24)
 
 

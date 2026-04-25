@@ -50,18 +50,16 @@ const { mockGateway, mockDeployments, mockTools } = vi.hoisted(() => ({
     items: [
       {
         id: 'dep-1',
-        api_name: 'Payments API',
-        api_version: '1.0.0',
+        desired_state: { api_name: 'Payments API', api_version: '1.0.0' },
         sync_status: 'synced',
-        environment: 'dev',
+        gateway_environment: 'dev',
         api_catalog_id: 'payments',
       },
       {
         id: 'dep-2',
-        api_name: 'Users API',
-        api_version: '2.1.0',
+        desired_state: { api_name: 'Users API', api_version: '2.1.0' },
         sync_status: 'pending',
-        environment: 'dev',
+        gateway_environment: 'dev',
         api_catalog_id: 'users',
       },
     ],

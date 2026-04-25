@@ -123,30 +123,32 @@ export function Applications() {
 
   // Load all applications and APIs (no environment filtering)
   async function loadTenantData(tenantId: string) {
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const [appsData, apisData] = await Promise.all([
-        apiService.getApplications(tenantId).catch((err) => {
-          console.error('Failed to load applications:', err);
-          return [] as Application[];
-        }),
-        apiService.getApis(tenantId).catch((err) => {
-          console.error('Failed to load APIs:', err);
-          return [] as API[];
-        }),
-      ]);
+    // P1-1: allSettled so a failing endpoint does not clear the other's
+    // previously loaded data on refresh.
+    const [appsResult, apisResult] = await Promise.allSettled([
+      apiService.getApplications(tenantId),
+      apiService.getApis(tenantId),
+    ]);
 
-      setApplications(appsData);
-      setApis(apisData);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load data');
-      setApplications([]);
-      setApis([]);
-    } finally {
-      setLoading(false);
+    if (appsResult.status === 'fulfilled') {
+      setApplications(appsResult.value);
+    } else {
+      console.error('Failed to load applications:', appsResult.reason);
     }
+    if (apisResult.status === 'fulfilled') {
+      setApis(apisResult.value);
+    } else {
+      console.error('Failed to load APIs:', apisResult.reason);
+    }
+
+    if (appsResult.status === 'rejected' && apisResult.status === 'rejected') {
+      const reason: any = appsResult.reason;
+      setError(reason?.message || 'Failed to load data');
+    }
+    setLoading(false);
   }
 
   // Normalize app environment
@@ -192,7 +194,7 @@ export function Applications() {
           app.name.toLowerCase().includes(searchLower) ||
           (app.display_name || '').toLowerCase().includes(searchLower) ||
           (app.description || '').toLowerCase().includes(searchLower) ||
-          app.client_id.toLowerCase().includes(searchLower)
+          (app.client_id ?? '').toLowerCase().includes(searchLower)
       );
     }
 

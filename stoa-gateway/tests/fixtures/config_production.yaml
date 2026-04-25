@@ -1,0 +1,56 @@
+# Representative production-like config (sanitized, no secrets).
+# Must pass Config::validate() — used as a regression guard for invariants.
+
+port: 8080
+host: "0.0.0.0"
+environment: "prod"
+log_level: "info"
+log_format: "json"
+
+control_plane_url: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000"
+keycloak_url: "https://auth.gostoa.dev"
+keycloak_realm: "stoa"
+keycloak_client_id: "stoa-gateway"
+keycloak_internal_url: "http://keycloak.stoa-system.svc.cluster.local"
+
+gateway_public_url: "https://mcp.gostoa.dev"
+gateway_external_url: "https://mcp.gostoa.dev"
+advertise_url: "http://stoa-gateway.stoa-system.svc.cluster.local:80"
+
+otel_enabled: true
+otel_sample_rate: 0.25
+otel_endpoint: "http://tempo.monitoring.svc:4317"
+access_log_enabled: true
+
+# mTLS enabled with a non-empty trusted proxy list — invariant compliant.
+mtls:
+  enabled: true
+  require_binding: true
+  trusted_proxies:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+
+dpop:
+  enabled: true
+  required: false
+  max_age_secs: 300
+
+# sender_constraint has a backing channel (mtls + dpop).
+sender_constraint:
+  enabled: true
+  dpop_required: false
+  mtls_required: false
+
+# federation disabled → upstreams irrelevant.
+federation_enabled: false
+federation_upstreams: []
+
+# tcp_rate_limit off.
+tcp_rate_limit_per_ip: null
+
+snapshot_enabled: true
+snapshot_max_count: 100
+snapshot_body_max_bytes: 4096
+snapshot_extra_pii_patterns:
+  - "card_number"
+  - "ssn_us"

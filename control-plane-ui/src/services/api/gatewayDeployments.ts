@@ -1,12 +1,19 @@
 import { httpClient, path } from '../http';
+import type {
+  DeploymentStatusSummary,
+  GatewayDeployment,
+  PaginatedGatewayDeployments,
+} from '../../types';
 
-// Admin-level gateway deployments — typed loosely (any) for parity with
-// the pre-UI-2 surface. Strict typing to be addressed with Schemas when
-// backend ships them.
+// Admin-level gateway deployments. CAB-2164 replaced the `any` surface with
+// shared schemas (`Schemas['PaginatedGatewayDeployments']`) and local UI
+// types (`GatewayDeployment` narrows `desired_state`/`actual_state` with an
+// index signature, per P2-E UI-1 W1). `getStatusSummary` remains a local
+// wrapper pending a canonical backend schema (see BACKEND-GAPS-CAB-2159.md
+// §BUG-8).
 
 export const gatewayDeploymentsClient = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getStatusSummary(): Promise<any> {
+  async getStatusSummary(): Promise<DeploymentStatusSummary> {
     const { data } = await httpClient.get('/v1/admin/deployments/status');
     return data;
   },
@@ -18,14 +25,12 @@ export const gatewayDeploymentsClient = {
     gateway_type?: string;
     page?: number;
     page_size?: number;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
+  }): Promise<PaginatedGatewayDeployments> {
     const { data } = await httpClient.get('/v1/admin/deployments', { params });
     return data;
   },
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async get(id: string): Promise<any> {
+  async get(id: string): Promise<GatewayDeployment> {
     const { data } = await httpClient.get(path('v1', 'admin', 'deployments', id));
     return data;
   },
@@ -33,8 +38,7 @@ export const gatewayDeploymentsClient = {
   async deployApiToGateways(payload: {
     api_catalog_id: string;
     gateway_instance_ids: string[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<any[]> {
+  }): Promise<GatewayDeployment[]> {
     const { data } = await httpClient.post('/v1/admin/deployments', payload);
     return data;
   },
@@ -43,8 +47,7 @@ export const gatewayDeploymentsClient = {
     await httpClient.delete(path('v1', 'admin', 'deployments', id));
   },
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async forceSync(id: string): Promise<any> {
+  async forceSync(id: string): Promise<GatewayDeployment> {
     const { data } = await httpClient.post(path('v1', 'admin', 'deployments', id, 'sync'));
     return data;
   },

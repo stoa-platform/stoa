@@ -4,16 +4,7 @@ import { apiService } from '../../services/api';
 import { SubNav } from '../../components/SubNav';
 import { gatewayTabs } from '../../components/subNavGroups';
 import { RefreshCw, Shield, Lock, Key, Users, AlertTriangle } from 'lucide-react';
-
-interface GatewayInstance {
-  id: string;
-  name: string;
-  display_name?: string;
-  gateway_type: string;
-  mode?: string;
-  status: string;
-  capabilities?: string[];
-}
+import type { GatewayInstance } from '../../types';
 
 interface SecurityMetrics {
   gateway_health: {
@@ -37,12 +28,17 @@ export function GatewaySecurityDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [_healthSummary, gwData] = await Promise.all([
-        apiService.getGatewayHealthSummary().catch(() => null),
-        apiService.getGatewayInstances().catch(() => ({ items: [] })),
-      ]);
+    setLoading(true);
+    // P1-1: allSettled — gateway instances is primary, health summary is
+    // auxiliary and already discarded (`_`).
+    const [_healthResult, gwResult] = await Promise.allSettled([
+      apiService.getGatewayHealthSummary(),
+      apiService.getGatewayInstances(),
+    ]);
+    void _healthResult; // auxiliary, ignored
+
+    if (gwResult.status === 'fulfilled') {
+      const gwData = gwResult.value;
       const items: GatewayInstance[] = gwData?.items || gwData || [];
       setGateways(items);
 
@@ -68,12 +64,12 @@ export function GatewaySecurityDashboard() {
         },
       });
       setError(null);
-    } catch (err: unknown) {
+    } else {
+      const err = gwResult.reason;
       const message = err instanceof Error ? err.message : 'Failed to load security metrics';
       setError(message);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

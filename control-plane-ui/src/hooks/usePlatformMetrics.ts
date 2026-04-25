@@ -6,27 +6,11 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
+import type { GatewayHealthSummary, GatewayModeStats, PaginatedGatewayInstances } from '../types';
+
+export type { GatewayHealthSummary, GatewayModeStats };
 
 const REFRESH_INTERVAL = 30_000;
-
-export interface GatewayHealthSummary {
-  online: number;
-  offline: number;
-  degraded: number;
-  maintenance: number;
-  total: number;
-}
-
-export interface GatewayModeStats {
-  modes: Array<{
-    mode: string;
-    total: number;
-    online: number;
-    offline: number;
-    degraded: number;
-  }>;
-  total_gateways: number;
-}
 
 /**
  * Fetch gateway health summary (online/offline/degraded counts).
@@ -56,7 +40,7 @@ export function useGatewayModeStats() {
  * Fetch gateway instances list for the health cards.
  */
 export function useGatewayInstances() {
-  return useQuery<{ items: any[]; total: number }>({
+  return useQuery<PaginatedGatewayInstances>({
     queryKey: ['gateway-instances-dashboard'],
     queryFn: () => apiService.getGatewayInstances({ page_size: 20 }),
     refetchInterval: REFRESH_INTERVAL,

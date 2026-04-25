@@ -11,8 +11,8 @@ from src.schemas.uac import (
     UacClassification,
     UacContractSpec,
     UacContractStatus,
-    UacEndpointSpec,
     UacEndpointSideEffects,
+    UacEndpointSpec,
 )
 
 # =============================================================================
@@ -78,13 +78,19 @@ class TestUacEndpointSpec:
                 "side_effects": "read",
                 "safe_for_agents": True,
                 "requires_human_approval": False,
-                "examples": [{"input": {"verbose": False}}],
+                "examples": [
+                    {
+                        "input": {"verbose": False},
+                        "expected_output_contains": {"status": "ok"},
+                    }
+                ],
             },
         )
         assert ep.llm is not None
         assert ep.llm.tool_name == "health_read"
         assert ep.llm.side_effects == UacEndpointSideEffects.READ
         assert ep.llm.examples[0].input == {"verbose": False}
+        assert ep.llm.examples[0].expected_output_contains == {"status": "ok"}
 
     def test_endpoint_llm_missing_examples_rejected(self):
         with pytest.raises(ValidationError):
@@ -99,6 +105,23 @@ class TestUacEndpointSpec:
                     "side_effects": "read",
                     "safe_for_agents": True,
                     "requires_human_approval": False,
+                },
+            )
+
+    def test_endpoint_llm_empty_examples_rejected(self):
+        with pytest.raises(ValidationError):
+            UacEndpointSpec(
+                path="/health",
+                methods=["GET"],
+                backend_url="https://api.example.com/health",
+                llm={
+                    "summary": "Read health",
+                    "intent": "Let agents inspect service health.",
+                    "tool_name": "health_read",
+                    "side_effects": "read",
+                    "safe_for_agents": True,
+                    "requires_human_approval": False,
+                    "examples": [],
                 },
             )
 

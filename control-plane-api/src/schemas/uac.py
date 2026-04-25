@@ -56,10 +56,12 @@ class UacEndpointSideEffects(StrEnum):
 
 
 class UacEndpointLlmExample(BaseModel):
-    """Example input for an LLM-facing endpoint tool."""
+    """Example input/output hint for an LLM-facing endpoint tool."""
 
     input: dict[str, Any] = Field(..., description="Example input object for the projected MCP tool")
-    description: str | None = Field(None, description="Optional explanation for the example")
+    expected_output_contains: dict[str, Any] | None = Field(
+        None, description="Optional partial output shape expected from the example"
+    )
 
 
 class UacEndpointLlmSpec(BaseModel):
@@ -74,7 +76,7 @@ class UacEndpointLlmSpec(BaseModel):
         ..., description="Whether a human approval step is required before invocation"
     )
     examples: list[UacEndpointLlmExample] = Field(
-        ..., description="Example inputs for MCP clients and smoke validation"
+        ..., min_length=1, description="Example inputs for MCP clients and smoke validation"
     )
 
 

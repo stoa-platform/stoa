@@ -103,7 +103,7 @@ Polling 30s par défaut dans stoa-connect → AT-2 peut timeout. Mitigation dans
 | B2 | Mock backend non seedé dans docker-compose | P0 | AT-0, AT-4 | **DONE** — `mock-backend` compose |
 | B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | **DONE** — `/apis/{api_name}/get` |
 | B4 | Auth dev-bypass cp-api non documenté | DONE | AT-1, AT-2, AT-3 | `STOA_DISABLE_AUTH=true` dev-only + `X-Demo-Mode: true` |
-| B5 | Seed profile `demo-smoke` minimal absent | P1 | AT-0 | cp-api/scripts/seeder |
+| B5 | Payload/seed démo non aligné modèle réel | DONE | AT-2, AT-3 | `DEMO_DEPLOY_ENV=dev` + `display_name` application |
 | B6 | Métriques Prometheus noms non figés par test | P2 | AT-5 | gateway (test regression) |
 | B7 | Route-sync 30s est lent pour une démo live | P2 | AT-2 | stoa-connect (trigger endpoint) |
 | B8 | OTEL visible en UI non prouvé automatiquement | P3 | AT-5b | observability/ui (nice-to-have) |
@@ -120,7 +120,7 @@ Pour débloquer rapidement la validation du contrat sans confondre script OK et 
 | Démarrer `mock-backend` via compose seul (`docker compose ... up -d mock-backend`) | B2 | jusqu'à stack complète | Service sous profil `demo`; ne pas exposer Prometheus sur le même port pendant ce smoke |
 | `DEMO_GATEWAY_PATH` override local | B3 | debug uniquement | Toute démo officielle doit revenir à `/apis/{api_name}/get` |
 | `STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true` | B4 | jusqu'à auth Keycloak démo stable | Refusé en `ENVIRONMENT=production`; ne jamais présenter comme auth réelle |
-| Script seed inline dans `demo-smoke-test.sh` qui crée tenant + gateway si absent | B5 | 1 jour | Pas idempotent si collisions |
+| Script seed inline dans `demo-smoke-test.sh` qui crée tenant + gateway si absent | Seed futur | 1 jour | Pas idempotent si collisions |
 | Check "au moins un counter `*_total`" sans figer nom | B6 | jusqu'à B6 | Drift silencieux toléré |
 
 Ces contournements **sont figés dans le script**, mais ils ne produisent jamais

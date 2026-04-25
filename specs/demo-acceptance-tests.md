@@ -60,7 +60,7 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 ```json
 {
   "api_id": "${API_ID}",
-  "environment": "demo",
+  "environment": "dev",
   "gateway_id": "${GATEWAY_ID}"
 }
 ```
@@ -75,9 +75,14 @@ Fail pre-condition ⇒ abort early, pas d'exécution des AT-1..AT-5.
 
 **Given** AT-1 PASS
 **When**:
-1. `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications` avec `{"name": "demo-app"}`  → récupérer `APP_ID`
+1. `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications` avec `{"name": "demo-app", "display_name": "demo-app"}`  → récupérer `APP_ID`
 2. `POST ${API_URL}/v1/subscriptions` ou `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications/${APP_ID}/subscribe/${API_ID}` avec `X-Demo-Mode: true`
 3. Alternative single-shot : `POST ${API_URL}/v1/tenants/${TENANT_ID}/applications/${APP_ID}/subscribe/${API_ID}`
+
+En mode démo/dev borné (`STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true`),
+la création d'application retourne une application déterministe sans client
+Keycloak pour éviter que le smoke dépende des credentials admin Keycloak locaux.
+Ce comportement est interdit hors mode démo explicite.
 
 **Then**:
 - HTTP 201 sur subscription

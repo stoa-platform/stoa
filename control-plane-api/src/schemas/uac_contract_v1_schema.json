@@ -189,6 +189,7 @@
         "examples": {
           "type": "array",
           "items": { "$ref": "#/$defs/EndpointLlmExample" },
+          "minItems": 1,
           "description": "Example inputs for MCP clients and smoke validation."
         }
       },
@@ -202,9 +203,9 @@
           "type": "object",
           "description": "Example input object for the projected MCP tool."
         },
-        "description": {
-          "type": ["string", "null"],
-          "description": "Optional explanation for the example."
+        "expected_output_contains": {
+          "type": ["object", "null"],
+          "description": "Optional partial output shape expected from the example."
         }
       },
       "additionalProperties": false

@@ -309,7 +309,12 @@ def _endpoint_llm(**overrides: object) -> dict:
         "side_effects": "read",
         "safe_for_agents": True,
         "requires_human_approval": False,
-        "examples": [],
+        "examples": [
+            {
+                "input": {"verbose": False},
+                "expected_output_contains": {"status": "ok"},
+            }
+        ],
     }
     llm.update(overrides)
     return llm
@@ -321,12 +326,35 @@ class TestEndpointLlmValidation:
     def test_legacy_endpoint_without_llm_still_valid(self) -> None:
         result = validate_uac_contract(_minimal_contract())
         assert result.valid, result.errors
+        assert not any("endpoint-level LLM metadata" in w for w in result.warnings)
+
+    def test_published_endpoint_without_llm_warns_not_fails(self) -> None:
+        result = validate_uac_contract(
+            _minimal_contract(
+                status="published",
+                display_name="Test API",
+                description="Published test API.",
+            )
+        )
+        assert result.valid, result.errors
+        assert any("endpoint-level LLM metadata" in w for w in result.warnings)
 
     def test_endpoint_with_complete_llm_valid(self) -> None:
         doc = _minimal_contract()
         doc["endpoints"][0]["llm"] = _endpoint_llm()
         result = validate_uac_contract(doc)
         assert result.valid, result.errors
+
+    def test_published_endpoint_with_llm_has_no_llm_ready_warning(self) -> None:
+        doc = _minimal_contract(
+            status="published",
+            display_name="Test API",
+            description="Published test API.",
+        )
+        doc["endpoints"][0]["llm"] = _endpoint_llm()
+        result = validate_uac_contract(doc)
+        assert result.valid, result.errors
+        assert not any("endpoint-level LLM metadata" in w for w in result.warnings)
 
     def test_endpoint_llm_missing_required_field_fails(self) -> None:
         doc = _minimal_contract()
@@ -349,6 +377,13 @@ class TestEndpointLlmValidation:
         llm = _endpoint_llm()
         del llm["examples"]
         doc["endpoints"][0]["llm"] = llm
+        result = validate_uac_contract(doc)
+        assert not result.valid
+        assert any("examples" in e for e in result.errors)
+
+    def test_endpoint_llm_empty_examples_fails(self) -> None:
+        doc = _minimal_contract()
+        doc["endpoints"][0]["llm"] = _endpoint_llm(examples=[])
         result = validate_uac_contract(doc)
         assert not result.valid
         assert any("examples" in e for e in result.errors)

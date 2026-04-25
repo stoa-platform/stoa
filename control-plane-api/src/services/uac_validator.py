@@ -150,10 +150,16 @@ def _check_naming_conventions(document: dict, result: UacValidationResult) -> No
 def _check_endpoint_llm_rules(document: dict, result: UacValidationResult) -> None:
     """Validate cross-endpoint and effect rules for optional endpoint.llm."""
     tool_names: dict[str, int] = {}
+    published = document.get("status") == "published"
 
     for i, ep in enumerate(document.get("endpoints", [])):
         llm = ep.get("llm")
         if not llm:
+            if published:
+                result.add_warning(
+                    f"endpoints[{i}].llm missing: v1 recommends endpoint-level LLM metadata "
+                    "for MCP-projected operations"
+                )
             continue
 
         tool_name = llm.get("tool_name")

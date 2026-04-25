@@ -81,6 +81,7 @@ mod tests {
             operation_id: None,
             input_schema: None,
             output_schema: None,
+            llm: None,
         }];
         spec
     }

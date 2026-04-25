@@ -126,6 +126,7 @@ mod tests {
                 operation_id: Some("list_payments".to_string()),
                 input_schema: None,
                 output_schema: None,
+                llm: None,
             },
             UacEndpoint {
                 path: "/payments/{id}".to_string(),
@@ -136,6 +137,7 @@ mod tests {
                 operation_id: Some("get_payment".to_string()),
                 input_schema: None,
                 output_schema: None,
+                llm: None,
             },
         ];
         spec

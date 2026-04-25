@@ -157,6 +157,7 @@ impl LlmConfig {
                     operation_id: Some(cap.capability.operation_id().to_string()),
                     input_schema: None,
                     output_schema: None,
+                    llm: None,
                 })
             })
             .collect()

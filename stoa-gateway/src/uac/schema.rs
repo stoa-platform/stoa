@@ -8,12 +8,56 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 use super::classifications::Classification;
 use super::llm::LlmConfig;
 
 fn default_tenant_id() -> String {
     "default".to_string()
+}
+
+// =============================================================================
+// Endpoint LLM Metadata
+// =============================================================================
+
+/// Effect level for LLM-facing endpoint metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EndpointSideEffects {
+    None,
+    Read,
+    Write,
+    Destructive,
+}
+
+/// Example input for an LLM-facing endpoint tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointLlmExample {
+    /// Example input object for the projected MCP tool
+    pub input: Value,
+    /// Optional explanation for the example
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// LLM-facing metadata for a UAC endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointLlm {
+    /// Short human-readable tool summary
+    pub summary: String,
+    /// Agent-facing intent describing when to use this endpoint
+    pub intent: String,
+    /// Stable MCP tool name to expose for this endpoint
+    pub tool_name: String,
+    /// Effect level of invoking this endpoint
+    pub side_effects: EndpointSideEffects,
+    /// Whether autonomous agents may use this endpoint
+    pub safe_for_agents: bool,
+    /// Whether a human approval step is required before invocation
+    pub requires_human_approval: bool,
+    /// Example inputs for MCP clients and smoke validation
+    pub examples: Vec<EndpointLlmExample>,
 }
 
 // =============================================================================
@@ -73,6 +117,9 @@ pub struct UacEndpoint {
     /// JSON Schema for response body
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<Value>,
+    /// Optional LLM-facing metadata for MCP tool projection
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub llm: Option<EndpointLlm>,
 }
 
 // =============================================================================
@@ -191,6 +238,7 @@ impl UacContractSpec {
         }
 
         // Validate each endpoint
+        let mut llm_tool_names: HashMap<&str, usize> = HashMap::new();
         for (i, ep) in self.endpoints.iter().enumerate() {
             if ep.path.is_empty() {
                 errors.push(format!("endpoints[{}].path must not be empty", i));
@@ -201,6 +249,32 @@ impl UacContractSpec {
             // backend_url only required for Published contracts — Draft/Deprecated can omit it
             if ep.backend_url.is_empty() && self.status == ContractStatus::Published {
                 errors.push(format!("endpoints[{}].backend_url must not be empty", i));
+            }
+            if let Some(llm) = &ep.llm {
+                if llm.summary.is_empty() {
+                    errors.push(format!("endpoints[{}].llm.summary must not be empty", i));
+                }
+                if llm.intent.is_empty() {
+                    errors.push(format!("endpoints[{}].llm.intent must not be empty", i));
+                }
+                if llm.tool_name.is_empty() {
+                    errors.push(format!("endpoints[{}].llm.tool_name must not be empty", i));
+                } else if let Some(previous_index) =
+                    llm_tool_names.insert(llm.tool_name.as_str(), i)
+                {
+                    errors.push(format!(
+                        "endpoints[{}].llm.tool_name duplicate tool_name '{}' already used by endpoints[{}]",
+                        i, llm.tool_name, previous_index
+                    ));
+                }
+                if llm.side_effects == EndpointSideEffects::Destructive
+                    && !llm.requires_human_approval
+                {
+                    errors.push(format!(
+                        "endpoints[{}].llm destructive side_effects requires requires_human_approval=true",
+                        i
+                    ));
+                }
             }
         }
 
@@ -226,6 +300,7 @@ mod tests {
             operation_id: Some("get_payment".to_string()),
             input_schema: None,
             output_schema: None,
+            llm: None,
         }
     }
 
@@ -357,6 +432,7 @@ mod tests {
                     "name": {"type": "string"}
                 }
             })),
+            llm: None,
         };
 
         let json = serde_json::to_value(&endpoint).expect("serialize");
@@ -375,12 +451,94 @@ mod tests {
             operation_id: None,
             input_schema: None,
             output_schema: None,
+            llm: None,
         };
 
         let json = serde_json::to_value(&endpoint).expect("serialize");
         assert!(json.get("operation_id").is_none());
         assert!(json.get("input_schema").is_none());
         assert!(json.get("output_schema").is_none());
+        assert!(json.get("llm").is_none());
+    }
+
+    #[test]
+    fn test_endpoint_with_llm_metadata() {
+        let endpoint = UacEndpoint {
+            path: "/health".to_string(),
+            methods: vec!["GET".to_string()],
+            backend_url: "https://api.example.com/health".to_string(),
+            method: None,
+            description: None,
+            operation_id: Some("health".to_string()),
+            input_schema: None,
+            output_schema: None,
+            llm: Some(EndpointLlm {
+                summary: "Read health".to_string(),
+                intent: "Let agents inspect service health.".to_string(),
+                tool_name: "health_read".to_string(),
+                side_effects: EndpointSideEffects::Read,
+                safe_for_agents: true,
+                requires_human_approval: false,
+                examples: vec![EndpointLlmExample {
+                    input: serde_json::json!({"verbose": false}),
+                    description: None,
+                }],
+            }),
+        };
+
+        let json = serde_json::to_value(&endpoint).expect("serialize");
+        assert_eq!(json["llm"]["tool_name"], "health_read");
+
+        let roundtrip: UacEndpoint = serde_json::from_value(json).expect("deserialize");
+        let llm = roundtrip.llm.expect("llm metadata");
+        assert_eq!(llm.side_effects, EndpointSideEffects::Read);
+        assert_eq!(llm.examples.len(), 1);
+    }
+
+    #[test]
+    fn test_validate_duplicate_llm_tool_name() {
+        let mut spec = sample_contract();
+        spec.endpoints.push(sample_endpoint());
+        spec.endpoints[0].llm = Some(EndpointLlm {
+            summary: "Read one".to_string(),
+            intent: "Read one payment.".to_string(),
+            tool_name: "payments_read".to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![],
+        });
+        spec.endpoints[1].llm = Some(EndpointLlm {
+            summary: "Read two".to_string(),
+            intent: "Read another payment.".to_string(),
+            tool_name: "payments_read".to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![],
+        });
+
+        let errors = spec.validate();
+        assert!(errors.iter().any(|e| e.contains("duplicate tool_name")));
+    }
+
+    #[test]
+    fn test_validate_destructive_llm_requires_approval() {
+        let mut spec = sample_contract();
+        spec.endpoints[0].llm = Some(EndpointLlm {
+            summary: "Delete payment".to_string(),
+            intent: "Delete a payment permanently.".to_string(),
+            tool_name: "payment_delete".to_string(),
+            side_effects: EndpointSideEffects::Destructive,
+            safe_for_agents: false,
+            requires_human_approval: false,
+            examples: vec![],
+        });
+
+        let errors = spec.validate();
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("destructive") && e.contains("requires_human_approval")));
     }
 
     // === LLM Config integration tests (CAB-709) ===

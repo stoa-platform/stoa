@@ -6,6 +6,7 @@ Cross-language parity is enforced via `uac-contract-v1.schema.json`.
 """
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,6 +46,38 @@ class UacContractStatus(StrEnum):
     DEPRECATED = "deprecated"
 
 
+class UacEndpointSideEffects(StrEnum):
+    """Effect level for LLM-facing endpoint metadata."""
+
+    NONE = "none"
+    READ = "read"
+    WRITE = "write"
+    DESTRUCTIVE = "destructive"
+
+
+class UacEndpointLlmExample(BaseModel):
+    """Example input for an LLM-facing endpoint tool."""
+
+    input: dict[str, Any] = Field(..., description="Example input object for the projected MCP tool")
+    description: str | None = Field(None, description="Optional explanation for the example")
+
+
+class UacEndpointLlmSpec(BaseModel):
+    """LLM-facing metadata for a UAC endpoint."""
+
+    summary: str = Field(..., min_length=1, description="Short human-readable tool summary")
+    intent: str = Field(..., min_length=1, description="Agent-facing intent describing when to use this endpoint")
+    tool_name: str = Field(..., min_length=1, description="Stable MCP tool name to expose for this endpoint")
+    side_effects: UacEndpointSideEffects = Field(..., description="Effect level of invoking this endpoint")
+    safe_for_agents: bool = Field(..., description="Whether autonomous agents may use this endpoint")
+    requires_human_approval: bool = Field(
+        ..., description="Whether a human approval step is required before invocation"
+    )
+    examples: list[UacEndpointLlmExample] = Field(
+        ..., description="Example inputs for MCP clients and smoke validation"
+    )
+
+
 class UacEndpointSpec(BaseModel):
     """A single API endpoint within a UAC contract."""
 
@@ -60,6 +93,9 @@ class UacEndpointSpec(BaseModel):
     )
     input_schema: dict | None = Field(None, description="JSON Schema for request body")
     output_schema: dict | None = Field(None, description="JSON Schema for response body")
+    llm: UacEndpointLlmSpec | None = Field(
+        None, description="Optional LLM-facing metadata for MCP tool projection"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

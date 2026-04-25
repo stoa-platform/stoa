@@ -52,8 +52,8 @@ Auth démo provider/runtime :
 | `/v1/tenants/{tid}/applications` | POST | 201 | `id`, `name` |
 | `/v1/tenants/{tid}/applications/{id}/subscribe/{api_id}` | POST | 200 | `subscription_id`, `api_key`, `api_key_prefix` en mode `X-Demo-Mode: true`; sinon message historique |
 | `/v1/subscriptions` | POST | 201 | `id`, `api_key` ou `api_key_prefix`, `status="active"` |
-| `/v1/tenants/{tid}/deployments` | POST | 201 | `id`, `status` |
-| `/v1/internal/gateways/routes?gateway_name=X` | GET | 200 | liste de routes avec `api_id`, `path` |
+| `/v1/tenants/{tid}/deployments` | POST | 201 | `id`, `status`; en mode démo explicite, crée aussi le `GatewayDeployment` lu par la gateway sans déclencher le push sync admin |
+| `/v1/internal/gateways/routes?gateway_name=X` | GET | 200 | liste de routes avec `api_id`, `path_prefix` |
 | `/health` | GET | 200 | n/a |
 
 ### 2.2 HTTP endpoints gateway

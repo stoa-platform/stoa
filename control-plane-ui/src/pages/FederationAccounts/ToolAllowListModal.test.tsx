@@ -124,18 +124,18 @@ describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     it('pre-checks currently allowed tools', async () => {
       renderModal();
       await waitFor(() => {
-        expect(screen.getByText('weather-lookup')).toBeInTheDocument();
+        const checkboxes = screen.getAllByRole('checkbox');
+        const weatherCb = checkboxes.find((cb) =>
+          cb.closest('label')?.textContent?.includes('weather-lookup')
+        ) as HTMLInputElement | undefined;
+        const codeCb = checkboxes.find((cb) =>
+          cb.closest('label')?.textContent?.includes('code-exec')
+        ) as HTMLInputElement | undefined;
+        expect(weatherCb).toBeDefined();
+        expect(codeCb).toBeDefined();
+        expect(weatherCb?.checked).toBe(true);
+        expect(codeCb?.checked).toBe(false);
       });
-      const checkboxes = screen.getAllByRole('checkbox');
-      // weather-lookup and file-search should be checked
-      const weatherCb = checkboxes.find((cb) =>
-        cb.closest('label')?.textContent?.includes('weather-lookup')
-      ) as HTMLInputElement;
-      const codeCb = checkboxes.find((cb) =>
-        cb.closest('label')?.textContent?.includes('code-exec')
-      ) as HTMLInputElement;
-      expect(weatherCb.checked).toBe(true);
-      expect(codeCb.checked).toBe(false);
     });
 
     it('calls updateToolAllowList on save', async () => {

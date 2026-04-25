@@ -79,6 +79,7 @@ class GatewayDeploymentService:
         self,
         api_catalog_id: UUID,
         gateway_instance_ids: list[UUID],
+        emit_sync_requests: bool = True,
     ) -> list[GatewayDeployment]:
         """Deploy an API to one or more gateways.
 
@@ -123,7 +124,7 @@ class GatewayDeploymentService:
                 deployment = await self.deploy_repo.create(deployment)
                 deployments.append(deployment)
 
-        if settings.is_sync_engine_enabled:
+        if emit_sync_requests and settings.is_sync_engine_enabled:
             await self._emit_sync_requests(deployments, api_catalog.tenant_id)
 
         if settings.is_sse_enabled:
@@ -135,7 +136,7 @@ class GatewayDeploymentService:
             tracker.start("event_emitted")
             tracker.complete(
                 "event_emitted",
-                detail=f"kafka={'yes' if settings.is_sync_engine_enabled else 'no'} "
+                detail=f"kafka={'yes' if emit_sync_requests and settings.is_sync_engine_enabled else 'no'} "
                 f"sse={'yes' if settings.is_sse_enabled else 'no'}",
             )
             dep.sync_steps = tracker.to_list()

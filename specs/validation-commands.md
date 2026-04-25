@@ -67,7 +67,9 @@ docker compose -f deploy/docker-compose/docker-compose.yml --profile demo up --b
 
 # Avec STOA_DISABLE_AUTH=true, le smoke envoie X-Demo-Mode: true et peut
 # créer une application synthétique déterministe sans client Keycloak.
-# Ce mode sert uniquement à rendre AT-3 rejouable localement; il est refusé en prod.
+# Ce mode sert uniquement à rendre AT-2/AT-3 rejouables localement; il est refusé en prod.
+# La gateway compose active STOA_ROUTE_RELOAD_ENABLED=true avec intervalle 2s;
+# AT-2 vérifie /internal/gateways/routes et AT-4 prouve le reload runtime.
 
 # Attendre healthy
 docker compose -f deploy/docker-compose/docker-compose.yml ps

@@ -14,6 +14,7 @@ def map_api_spec_to_stoa(api_spec: dict, tenant_id: str) -> dict:
     api_id = api_spec.get("api_id", api_name)
     result: dict = {
         "id": api_spec.get("api_catalog_id", ""),
+        "api_id": api_id,
         "name": api_name,
         "tenant_id": tenant_id,
         "path_prefix": f"/apis/{api_id}",

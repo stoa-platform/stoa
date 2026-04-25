@@ -1,37 +1,44 @@
-# CI-1 Phase 2b smoke-test workflow.
+# Level 1: Claude Code Issue-to-PR — assigns issue to Claude, creates a PR.
+# Triggered when an issue is labeled "claude-implement" or assigned, or when
+# a member comments /go (Stage 2) or /go-plan (Stage 3).
 #
-# This is the v2 clone of claude-issue-to-pr.yml, wired to the composite
-# actions produced in Phase 2b and the scripts produced in Phase 2a. It
-# triggers ONLY on workflow_dispatch to keep the legacy workflow as the
-# production source of truth until Phase 2d. Concurrency group is also
-# isolated so a manual v2 run cannot cancel a legacy run.
+# Two-stage Council: Stage 1 (ticket pertinence) → /go → Stage 2 (plan
+# validation) → /go-plan → implement.
 #
-# Kill-switch: `DISABLE_L1_V2_SMOKE` repo variable (off by default).
-# Phase 2b intentionally does NOT reuse `DISABLE_L1_IMPLEMENT` — that
-# variable is the L1 prod kill-switch and is set to `true` in prod
-# today, which would block every manual smoke run. Since v2 in Phase
-# 2b is dispatch-only and cannot auto-fire, guarding against accidental
-# production impact is handled by the dispatch itself, not a shared
-# prod kill-switch. Phase 2d will restore `DISABLE_L1_IMPLEMENT` as
-# the guard when event triggers return.
+# Kill-switch: set DISABLE_L1_IMPLEMENT=true in repo variables to disable
+# real-event triggers. workflow_dispatch bypasses the kill-switch so
+# operators can run controlled smokes/replays even with prod blocked.
+#
+# Smoke / replay: workflow_dispatch with `stage = council | plan | implement`
+# fires exactly one job (no implicit chaining). Sequence smokes manually
+# by re-dispatching with the next stage.
+#
+# Phase 2d of CI-1 rewrite — superseded the legacy 797 LOC monolith using
+# composite actions (.github/actions/) and scripts (scripts/ci/) shipped
+# in Phases 2a/2b.
 
-name: Claude Code Issue-to-PR v2 (Phase 2b smoke)
+name: Claude Code Issue-to-PR
 
 on:
+  issues:
+    types: [labeled, assigned]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       issue_number:
-        description: 'Existing issue number to process end-to-end.'
+        description: 'Existing issue number to process.'
         required: true
         type: string
-      run_implement:
-        description: 'Run the implement stage? (default false — smoke the Council path first).'
-        required: false
-        type: boolean
-        default: false
+      stage:
+        description: 'Stage to dispatch (smoke/replay knob).'
+        required: true
+        type: choice
+        default: council
+        options: [council, plan, implement]
 
 concurrency:
-  group: ci-v2-issue-${{ inputs.issue_number }}
+  group: claude-issue-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 permissions:
@@ -42,14 +49,18 @@ permissions:
 
 jobs:
   prepare:
-    if: vars.DISABLE_L1_V2_SMOKE != 'true'
+    # Bypass kill-switch for workflow_dispatch so operators can run
+    # smokes/replays even when DISABLE_L1_IMPLEMENT=true.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      vars.DISABLE_L1_IMPLEMENT != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       title: ${{ steps.fetch.outputs.title }}
       body: ${{ steps.fetch.outputs.body }}
       url: ${{ steps.fetch.outputs.url }}
-      number: ${{ inputs.issue_number }}
+      number: ${{ steps.fetch.outputs.number }}
       ticket-id: ${{ steps.fetch.outputs.ticket-id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -58,9 +69,10 @@ jobs:
         id: fetch
         env:
           GH_TOKEN: ${{ github.token }}
-          # Workflow_dispatch inputs are user-controlled — route through
-          # env so the shell handles any metacharacter safely.
-          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          # Resolve issue number from dispatch input (smoke path) or the
+          # event payload (issues / issue_comment). Routed through env so
+          # any user-controlled value is shell-safe.
+          ISSUE_NUMBER: ${{ inputs.issue_number || github.event.issue.number }}
         run: |
           set -uo pipefail
           source "${GITHUB_WORKSPACE}/scripts/ci/gh_helpers.sh"
@@ -70,6 +82,7 @@ jobs:
           BODY=$(printf  '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["body"] or "")')
           TICKET=$(extract_ticket_id "$TITLE $BODY")
 
+          echo "number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
           echo "ticket-id=${TICKET}" >> "$GITHUB_OUTPUT"
@@ -84,8 +97,19 @@ jobs:
           echo "::notice::prepared issue #${ISSUE_NUMBER} ticket=${TICKET:-none}"
 
   council-validate:
+    # Stage 1 — Council ticket pertinence. Fires on:
+    #   - issues:labeled with `claude-implement`
+    #   - issues:assigned (legacy: bot/human "claim this for AI" path)
+    #   - workflow_dispatch with stage=council (smoke/replay)
     needs: prepare
-    if: vars.DISABLE_L1_V2_SMOKE != 'true'
+    if: |
+      (github.event_name == 'workflow_dispatch' || vars.DISABLE_L1_IMPLEMENT != 'true') &&
+      needs.prepare.result == 'success' &&
+      (
+        (github.event_name == 'issues' && github.event.label.name == 'claude-implement') ||
+        (github.event_name == 'issues' && github.event.action == 'assigned') ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'council')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -140,7 +164,15 @@ jobs:
             IMPORTANT: Do NOT implement anything yet. Only validate the ticket pertinence.
 
       - name: Apply council-validated label
-        if: steps.council.outputs.outcome == 'success' || steps.guard.outputs.already-set == 'true'
+        # Verdict-gated: only handshake when Council actually produced a
+        # valid verdict. `outcome == success` alone is not enough (parser
+        # can return an empty verdict on partial Claude runs).
+        if: |
+          (
+            steps.council.outputs.outcome == 'success' &&
+            contains(fromJSON('["go","fix","redo"]'), steps.council.outputs.verdict)
+          ) ||
+          steps.guard.outputs.already-set == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
@@ -150,7 +182,9 @@ jobs:
           add_label "$ISSUE_NUMBER" "council-validated"
 
       - name: Apply ship-fast-path label
-        if: steps.council.outputs.outcome == 'success'
+        if: |
+          steps.council.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.council.outputs.verdict)
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
@@ -167,7 +201,9 @@ jobs:
           fi
 
       - uses: ./.github/actions/council-sync-linear
-        if: steps.council.outputs.outcome == 'success'
+        if: |
+          steps.council.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.council.outputs.verdict)
         with:
           ticket-id: ${{ needs.prepare.outputs.ticket-id }}
           issue-title: ${{ needs.prepare.outputs.title }}
@@ -201,8 +237,29 @@ jobs:
           stage: council-s1
 
   plan-validate:
-    needs: [prepare, council-validate]
-    if: vars.DISABLE_L1_V2_SMOKE != 'true' && needs.council-validate.result == 'success'
+    # Stage 2 — Council plan validation. Fires on:
+    #   - issue_comment with /go or /approve from a MEMBER+ author
+    #   - workflow_dispatch with stage=plan (smoke/replay)
+    # No `needs: council-validate` — plan-validate fires from its own
+    # event (legacy pattern). Stage 1 presence is verified inline via
+    # `verify-stage1` so /go on a fresh issue can't bypass Stage 1.
+    needs: prepare
+    if: |
+      (github.event_name == 'workflow_dispatch' || vars.DISABLE_L1_IMPLEMENT != 'true') &&
+      needs.prepare.result == 'success' &&
+      (
+        (
+          github.event_name == 'issue_comment' &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            github.event.comment.body == '/go' ||
+            github.event.comment.body == '/approve' ||
+            startsWith(github.event.comment.body, '/go ') ||
+            startsWith(github.event.comment.body, '/approve ')
+          )
+        ) ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'plan')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -212,8 +269,36 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
+      - name: Verify Stage 1 Council
+        # Legacy parity: prevent /go on a fresh issue from running Stage
+        # 2 without Stage 1 ever firing. Outputs `validated=true|false`;
+        # downstream operational steps gate on it (no silent exit).
+        id: verify-stage1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
+        run: |
+          set -uo pipefail
+          LABELS=$(gh issue view "$ISSUE_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "council-validated"; then
+            echo "Stage 1 confirmed via label"
+            echo "validated=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Fallback: scan comments for "Council Score" (legacy behaviour).
+          HAS_COMMENT=$(gh issue view "$ISSUE_NUMBER" --json comments \
+            --jq '[.comments[].body | select(contains("Council Score"))] | length')
+          if [ "${HAS_COMMENT:-0}" -gt 0 ]; then
+            echo "Stage 1 confirmed via comment fallback"
+            echo "validated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No Stage 1 Council on this issue — skipping plan validation"
+            echo "validated=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: ./.github/actions/label-guard
         id: guard
+        if: steps.verify-stage1.outputs.validated == 'true'
         with:
           issue-number: ${{ needs.prepare.outputs.number }}
           label-name: plan-validated
@@ -221,14 +306,20 @@ jobs:
 
       - uses: ./.github/actions/label-guard
         id: fast-path
-        if: steps.guard.outputs.already-set != 'true'
+        if: |
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.guard.outputs.already-set != 'true'
         with:
           issue-number: ${{ needs.prepare.outputs.number }}
           label-name: ship-fast-path
           github-token: ${{ github.token }}
 
       - name: Apply plan-validated via ship fast-path
-        if: steps.fast-path.outputs.already-set == 'true'
+        # Note: /go-plan in body restores legacy parity — auto-triggers
+        # the implement job from the issue_comment:created event.
+        if: |
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.fast-path.outputs.already-set == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
@@ -237,11 +328,14 @@ jobs:
           ensure_label "plan-validated" "006b75" "Stage 2 plan validation passed"
           add_label "$ISSUE_NUMBER" "plan-validated"
           gh issue comment "$ISSUE_NUMBER" \
-            --body "Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation."
+            --body $'Ship fast-path: Stage 2 skipped (small Ship-mode change). Auto-triggering implementation.\n\n/go-plan'
 
       - uses: ./.github/actions/council-run
         id: plan
-        if: steps.guard.outputs.already-set != 'true' && steps.fast-path.outputs.already-set != 'true'
+        if: |
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.guard.outputs.already-set != 'true' &&
+          steps.fast-path.outputs.already-set != 'true'
         with:
           stage: s2
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -289,7 +383,12 @@ jobs:
             IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
 
       - name: Apply plan-validated label
-        if: steps.plan.outputs.outcome == 'success'
+        # Verdict-gated: only handshake when plan Council produced a
+        # valid verdict. Without this, parser failure on a partial
+        # Claude run silently labels the issue.
+        if: |
+          steps.plan.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.plan.outputs.verdict)
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
@@ -299,7 +398,9 @@ jobs:
           add_label "$ISSUE_NUMBER" "plan-validated"
 
       - uses: ./.github/actions/council-sync-linear
-        if: steps.plan.outputs.outcome == 'success'
+        if: |
+          steps.plan.outputs.outcome == 'success' &&
+          contains(fromJSON('["go","fix","redo"]'), steps.plan.outputs.verdict)
         with:
           ticket-id: ${{ needs.prepare.outputs.ticket-id }}
           issue-title: ${{ needs.prepare.outputs.title }}
@@ -310,7 +411,11 @@ jobs:
           linear-api-key: ${{ secrets.LINEAR_API_KEY }}
 
       - name: Slack Plan Validation (inline — uses notify_plan signature)
-        if: always() && steps.guard.outputs.already-set != 'true' && steps.fast-path.outputs.already-set != 'true'
+        if: |
+          always() &&
+          steps.verify-stage1.outputs.validated == 'true' &&
+          steps.guard.outputs.already-set != 'true' &&
+          steps.fast-path.outputs.already-set != 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -340,11 +445,26 @@ jobs:
           stage: council-s2
 
   implement:
-    needs: [prepare, plan-validate]
-    if: >
-      vars.DISABLE_L1_V2_SMOKE != 'true' &&
-      inputs.run_implement == true &&
-      needs.plan-validate.result == 'success'
+    # Stage 3 — Implementation. Fires on:
+    #   - issue_comment with /go-plan from a MEMBER+ author
+    #   - workflow_dispatch with stage=implement (smoke/replay)
+    # Stage 2 presence is verified inside the job by the wait-for-label
+    # composite (polls for plan-validated label / Plan Score comment).
+    needs: prepare
+    if: |
+      (github.event_name == 'workflow_dispatch' || vars.DISABLE_L1_IMPLEMENT != 'true') &&
+      needs.prepare.result == 'success' &&
+      (
+        (
+          github.event_name == 'issue_comment' &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            github.event.comment.body == '/go-plan' ||
+            startsWith(github.event.comment.body, '/go-plan ')
+          )
+        ) ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'implement')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

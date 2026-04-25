@@ -12,11 +12,11 @@
 3. Les rewrites actifs (GW-1 closed, GW-2 open, GO-2 validated) respectent leurs contrats internes mais aucun garde-fou démo ne protège le chemin vertical.
 4. La route proxy gateway canonique est figée pour la démo : `GET /apis/demo-httpbin/get` en mode UAC-driven. Le smoke ne probe plus plusieurs shapes.
 5. Le seed existe (`make seed-dev`), mais un tenant `demo` minimal dédié smoke n'est pas garanti reproductible.
-6. La métrique Prometheus attendue (`proxy_requests_total` ou `mcp_tool_calls_total`) est présente en code gateway mais son nom exact + labels ne sont pas figés dans un contrat testé ; OTEL/Grafana/Console/Portal sont maintenant cadrés en AT-5b nice-to-have.
+6. La métrique Prometheus attendue `proxy_requests_total{tenant,api,method,status}` est le contrat AT-5 canonique, exposé sur `/metrics` et incrémenté par le proxy dynamique ; OTEL/Grafana/Console/Portal restent cadrés en AT-5b nice-to-have.
 7. L'auth API key (header `X-Api-Key`) existe gateway-side ; B1 borne maintenant le retour `api_key` cleartext au mode explicite `X-Demo-Mode: true`.
-8. La stack docker-compose pré-existe (`deploy/docker-compose/docker-compose.yml`) mais son suffisance pour le smoke n'est pas validée (mock-backend non-confirmé).
+8. La stack docker-compose démo expose cp-api, gateway et mock-backend suffisants pour le smoke provider local.
 9. Les specs `/specs/*.md` + `scripts/demo-smoke-test.sh` donnent un contrat exécutable avec verdicts non ambigus (`REAL_PASS`, `CONTRACT_DRY_RUN`, `MOCK_PASS`, `FAIL`) et une première vérité UAC fonctionnelle via `specs/uac/demo-httpbin.uac.json`.
-10. Verdict préliminaire : **FAIL attendu en premier run** sur AT-2/AT-3/AT-4. Plan "démo-first" actionnable immédiat ci-dessous.
+10. Verdict actuel : le chemin provider local peut produire `REAL_PASS — DEMO READY` sans mock critique ; les surfaces client/prospect restent suivies séparément par CPD-0..CPD-10.
 
 ## 2. Ce qui marche déjà (inspection statique)
 
@@ -64,7 +64,7 @@ Portal, signup, prospects, subscriptions UX ou usage client.
 - `architecture-rules.md` §2.2 affirme que `/apis/{api_name}/{*path}` est la surface démo officielle.
 - `architecture-rules.md` §2.2bis fige le contrat UAC démo `demo-httpbin` publié.
 - `demo-smoke-test.sh` utilise un seul chemin canonique dérivé du UAC quand `DEMO_UAC_CONTRACT` est fourni: `/apis/demo-httpbin/get`.
-- Format Prometheus attendu (`proxy_requests_total`) pas testé en intégration — probable drift silencieux si renommé
+- Format Prometheus attendu (`proxy_requests_total`) figé par test de régression gateway et vérifié par AT-5
 
 ### 3.2 Seed démo reproductible
 - `make seed-dev` seed un profile plus large que démo minimale. Besoin d'un profile `demo-smoke` qui seed UNIQUEMENT :
@@ -96,9 +96,9 @@ fallback historique `demo-api-smoke` et affiche `WARN — smoke not UAC-driven`.
 Le script smoke autorise `DEMO_ADMIN_TOKEN=""` en fallback, mais aucune variable `STOA_DISABLE_AUTH` ou flag équivalent n'est documenté côté cp-api. Probable que la démo échoue silencieusement en 401/403 sur AT-1 sans JWT Keycloak valide.
 
 ### 3.7 Route-sync latence
-Polling 30s par défaut dans stoa-connect → AT-2 pouvait timeout. Mitigation démo actuelle : en mode `STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true`, `POST /v1/tenants/{tid}/deployments` crée le `GatewayDeployment` consommé par `GET /v1/internal/gateways/routes` sans déclencher le push sync admin `/admin/apis`, et la gateway compose recharge les routes toutes les 2s. Le run local passe maintenant AT-2 et AT-4; le prochain blocker réel est AT-5 métriques.
+Polling 30s par défaut dans stoa-connect → AT-2 pouvait timeout. Mitigation démo actuelle : en mode `STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true`, `POST /v1/tenants/{tid}/deployments` crée le `GatewayDeployment` consommé par `GET /v1/internal/gateways/routes` sans déclencher le push sync admin `/admin/apis`, et la gateway compose recharge les routes toutes les 2s. Le run local passe maintenant AT-2 et AT-4; AT-5 vérifie le compteur Prometheus canonique `proxy_requests_total`.
 
-## 4. Blockers réels (à résoudre avant smoke `REAL_PASS`)
+## 4. Blockers réels suivis par le smoke
 
 | # | Blocker | Sévérité | Étape impactée | Owner suggéré |
 |---|---------|----------|----------------|---------------|
@@ -107,14 +107,14 @@ Polling 30s par défaut dans stoa-connect → AT-2 pouvait timeout. Mitigation d
 | B3 | Mapping `api_name → proxy path` flou côté gateway | P0 | AT-4 | **DONE** — `/apis/{api_name}/get` |
 | B4 | Auth dev-bypass cp-api non documenté | DONE | AT-1, AT-2, AT-3 | `STOA_DISABLE_AUTH=true` dev-only + `X-Demo-Mode: true` |
 | B5 | Payload/seed démo non aligné modèle réel | DONE | AT-2, AT-3 | `DEMO_DEPLOY_ENV=dev` + `display_name` application |
-| B6 | Métriques Prometheus noms non figés par test | P2 | AT-5 | gateway (test regression) |
+| B6 | Métriques Prometheus noms non figés par test | DONE | AT-5 | `proxy_requests_total` + test regression gateway |
 | B7 | Route-sync 30s est lent pour une démo live | DONE | AT-2 | demo reload borné + route `api_id` exposée |
 | B8 | OTEL visible en UI non prouvé automatiquement | P3 | AT-5b | observability/ui (nice-to-have) |
 | C-B1 | Démo client/prospect non automatisée (seed + UI + conversion) | P1 | CPD-0..CPD-10 | portal/console/cp-api |
 
-Le premier lien UAC → smoke est traité: `demo-httpbin` `GET /get` est chargé,
-validé, puis utilisé pour construire `/apis/demo-httpbin/get`. Cela ne ferme pas
-les blockers runtime AT-0..AT-5.
+Le lien UAC → smoke est traité: `demo-httpbin` `GET /get` est chargé, validé,
+puis utilisé pour construire `/apis/demo-httpbin/get`. Les blockers provider
+AT-0..AT-5 sont fermés pour le mode démo/dev local.
 
 ## 5. Contournements acceptables pendant le rewrite
 
@@ -129,28 +129,30 @@ Pour débloquer rapidement la validation du contrat sans confondre script OK et 
 | `DEMO_GATEWAY_PATH` override local | B3 | debug uniquement | Toute démo officielle doit revenir à `/apis/{api_name}/get` |
 | `STOA_DISABLE_AUTH=true` + `X-Demo-Mode: true` | B4 | jusqu'à auth Keycloak démo stable | Refusé en `ENVIRONMENT=production`; ne jamais présenter comme auth réelle |
 | Script seed inline dans `demo-smoke-test.sh` qui crée tenant + gateway si absent | Seed futur | 1 jour | Pas idempotent si collisions |
-| Check "au moins un counter `*_total`" sans figer nom | B6 | jusqu'à B6 | Drift silencieux toléré |
+| Check `proxy_requests_total > 0` | B6 | fermé | Nom canonique figé, drift refusé par AT-5 |
 
-Ces contournements **sont figés dans le script**, mais ils ne produisent jamais
-`REAL_PASS`. À chaque blocker fermé, on resserre la vérification.
+Ces contournements sont figés dans le script et doivent rester explicitement
+bornés. Les modes mock/contract ne produisent jamais `REAL_PASS`; le mode
+dev-bypass peut produire `REAL_PASS` uniquement avec `STOA_DISABLE_AUTH=true`
+hors production et `X-Demo-Mode: true`.
 
-## 6. Prochaine PR prioritaire
+## 6. Prochaine priorité
 
-**PR `chore(demo): add demo-first scaffolding`** — PR de cadrage demo-first :
+La chaîne provider AT-0..AT-5 est maintenant fermée pour le mode démo/dev local.
+La prochaine priorité n'est pas un nouveau blocker smoke provider, mais la
+préparation du parcours client/prospect :
 
-1. Commit 1 — specs+script : ce batch de fichiers `/specs/*.md` + `/scripts/demo-smoke-test.sh` (créé dans cette session)
-2. Commit 2 — `deploy/docker-compose/docker-compose.demo.yml` : extension de `docker-compose.yml` qui ajoute `mock-backend` (httpbin) sur port 9090 + `.env.demo` avec defaults documentés
-3. Commit 3 — `Makefile` targets : `demo-up`, `demo-down`, `demo-smoke` (le dernier wrappe `./scripts/demo-smoke-test.sh`)
-
-La PR de cadrage posait le contrat sans code applicatif. B1 est maintenant traité par une PR ciblée cp-api + smoke, sans refonte sécurité ni lifecycle complet.
+1. garder `./scripts/demo-smoke-test.sh --no-observability-ui` comme juge provider ;
+2. rendre CPD-0..CPD-10 exécutables pour une démo client/prospect ;
+3. décider séparément quand le workflow CI démo devient bloquant.
 
 ## 7. Verdict GO / NO-GO rewrite
 
-**GO** sur la poursuite du rewrite actuel, **sous les 4 conditions**:
+**GO** sur la poursuite du rewrite actuel, avec ces conditions de maintien:
 
-1. La PR prioritaire §6 est mergée dans la semaine (contrat démo actif en repo)
+1. Le smoke provider reste `REAL_PASS — DEMO READY` sur une stack démo locale sans mock critique
 2. Chaque PR rewrite en cours (GW-2, GO-2, CP-*) ajoute la section "Demo impact" dans sa description (cf. `rewrite-guardrails.md` §4)
-3. Dès le 1er run smoke `REAL_PASS` localement, `scripts/demo-smoke-test.sh` est ajouté en CI (workflow `.github/workflows/demo-smoke.yml`) avec `docker-compose.demo.yml` comme stack de test
+3. Le workflow `.github/workflows/demo-smoke.yml` reste observationnel jusqu'à décision explicite de le rendre bloquant
 4. Le parcours client/prospect a au minimum un seed idempotent + une checklist CPD-0..CPD-10 exécutable manuellement avant toute démo commerciale
 
 **NO-GO** si :
@@ -160,7 +162,7 @@ La PR de cadrage posait le contrat sans code applicatif. B1 est maintenant trait
 - Une régression AT-1..AT-5 est observée sans rollback immédiat
 - Un `MOCK_PASS` ou `CONTRACT_DRY_RUN` est présenté comme `DEMO READY`
 
-**Recommandation opérationnelle** : **GO conditionnel**. Le rewrite est qualitatif (plans GW-2/GO-2 rigoureux), mais il s'exécute sans contrat démo vérifiable. Les fichiers `/specs/` + `scripts/demo-smoke-test.sh` posés aujourd'hui sont le minimum pour transformer le rewrite en livraison démo-first.
+**Recommandation opérationnelle** : **GO** pour le chemin provider démo-first. Le prochain risque n'est plus le smoke provider AT-0..AT-5, mais la preuve client/prospect et la décision future de rendre le workflow CI bloquant.
 
 ## 8. Historique
 
@@ -168,3 +170,4 @@ La PR de cadrage posait le contrat sans code applicatif. B1 est maintenant trait
 |------|---------|--------|-------|
 | 2026-04-24 | v1.0 | Claude (session `/demo-scope`) | Création initiale, 7 blockers identifiés, verdict GO conditionnel |
 | 2026-04-24 | v1.1 | Codex | Ajout du contrat UAC démo `demo-httpbin` et du chemin smoke dérivé `/apis/demo-httpbin/get` |
+| 2026-04-25 | v1.2 | Codex | AT-5 fermé via `proxy_requests_total`; smoke provider local `REAL_PASS` |

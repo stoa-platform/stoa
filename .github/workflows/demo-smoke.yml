@@ -97,8 +97,8 @@ jobs:
           set -e
 
           tail -n 80 "$SMOKE_LOG" > "$TAIL_LOG"
-          VERDICT="$(grep -E 'Verdict:' "$SMOKE_LOG" | tail -1 | sed 's/^[[:space:]]*//')"
-          BLOCKER="$(grep -E '\[FAIL\]' "$SMOKE_LOG" | tail -1 | sed 's/^[[:space:]]*//')"
+          VERDICT="$(grep -E 'Verdict:' "$SMOKE_LOG" | tail -1 | sed 's/^[[:space:]]*//' || true)"
+          BLOCKER="$(grep -E '\[FAIL\]' "$SMOKE_LOG" | tail -1 | sed 's/^[[:space:]]*//' || true)"
           VERDICT="${VERDICT:-Verdict: UNKNOWN}"
           BLOCKER="${BLOCKER:-No [FAIL] line found in log tail}"
 

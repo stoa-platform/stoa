@@ -34,6 +34,17 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 For component paths, runtime versions, RBAC roles, rules, skills, and repo
 map, see `CLAUDE.md`.
 
+## Agent-facing API doctrine
+
+When touching an API operation exposed to agents, load the canonical rule in
+`CLAUDE.md` and `.claude/docs/uac-llm-ready.md`:
+
+```
+UAC describes.
+MCP projects.
+Smoke proves.
+```
+
 ## Historical note
 
 The Python `mcp-gateway/` service was retired in Feb 2026 and superseded by

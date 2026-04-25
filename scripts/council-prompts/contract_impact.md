@@ -4,6 +4,17 @@ Score 1-10 based strictly on whether the change breaks, extends, or is neutral t
 the project's externally-visible contracts. "External" means any boundary a caller
 depends on — HTTP API, database schema, CLI flags, env vars, K8s CRDs, Kafka events.
 
+UAC/MCP doctrine from ADR-067:
+- UAC describes.
+- MCP projects.
+- Smoke proves.
+
+For API operations exposed as MCP tools, check endpoint-level `llm` metadata
+when it is in scope. In v1, missing `endpoint.llm` metadata is a warning/review
+note, not an automatic blocker for existing contracts. If `endpoint.llm` is
+present but malformed, treat it as a contract error. If `side_effects` is
+`destructive`, `requires_human_approval` must be `true`.
+
 Breaking-change signals (these FORCE a score <= 5 unless explicitly justified):
 - HTTP: removed route, changed method, renamed path param, removed response field,
   made an optional request field required, changed status code semantics
@@ -17,6 +28,8 @@ Breaking-change signals (these FORCE a score <= 5 unless explicitly justified):
 - CRD (gostoa.dev/v1alpha1): removed spec field, changed validation, version bump without conversion
 - Kafka: removed topic, changed schema without backward-compat, removed event field
 - Semantic change: same signature, different side effects (e.g. now writes audit log)
+- UAC/LLM metadata: malformed `endpoint.llm`, unstable MCP `tool_name` rename,
+  or `side_effects=destructive` without `requires_human_approval=true`
 
 Non-breaking extensions (ADD-only) are safe and can score 9-10:
 - New optional field, new route, new env var with default, new CLI subcommand

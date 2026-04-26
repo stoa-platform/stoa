@@ -122,6 +122,8 @@ jobs:
         uses: ./.github/actions/e2e-setup
 
       - name: Run E2E tests
+        id: run-e2e-tests
+        continue-on-error: ${{ github.event_name == 'pull_request' || github.event_name == 'schedule' }}
         working-directory: e2e
         env:
           # URLs - Vault values take precedence, then secrets, then defaults
@@ -206,7 +208,7 @@ jobs:
 
       - name: Upload test results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        if: failure()
+        if: ${{ failure() || steps.run-e2e-tests.outcome == 'failure' }}
         with:
           name: test-results-shard-${{ matrix.shard }}-${{ github.run_id }}
           path: |

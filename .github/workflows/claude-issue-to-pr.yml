@@ -133,6 +133,8 @@ jobs:
         id: council
         with:
           stage: s1
+          issue-number: ${{ needs.prepare.outputs.number }}
+          github-token: ${{ github.token }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           model: claude-sonnet-4-6
           max-turns: '5'
@@ -338,6 +340,8 @@ jobs:
           steps.fast-path.outputs.already-set != 'true'
         with:
           stage: s2
+          issue-number: ${{ needs.prepare.outputs.number }}
+          github-token: ${{ github.token }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           model: claude-sonnet-4-6
           max-turns: '10'

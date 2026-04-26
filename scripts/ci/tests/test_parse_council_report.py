@@ -161,6 +161,83 @@ def test_run_strict_raises_when_empty(tmp_path):
     assert result["score"] is None
 
 
+def test_run_s1_fallback_used_when_exec_lacks_trailer(tmp_path):
+    # CAB-2175 regression: when the Council prompt instructs Claude to
+    # post the report via `gh issue comment`, the trailer lives inside
+    # a tool_use.input block and never reaches assistant.text. The
+    # parser must then recover the score from the comment body via the
+    # --fallback-comment path.
+    exec_file = tmp_path / "exec.json"
+    exec_file.write_text(
+        json.dumps(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "I will post the Council report."}
+                        ]
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [{"type": "text", "text": "Comment posted."}]
+                    },
+                },
+            ]
+        )
+    )
+    fallback = tmp_path / "comment.md"
+    fallback.write_text(
+        "## Council Validation — Stage 1 (Ticket Pertinence)\n\n"
+        "**Persona Average**: 8.75/10\n\n"
+        "**Council Score: 8.75/10 — Go**\n"
+        "Comment `/go` to approve and start plan validation (Stage 2).\n"
+    )
+    code, result = run(exec_file, "s1", fallback_comment=fallback, strict=False)
+    assert code == 0
+    assert result["score"] == 8.75
+    assert result["verdict"] == "go"
+    assert result["mode"] == "ask"
+    assert result["source"] == "fallback"
+
+
+def test_run_s2_fallback_used_when_exec_lacks_trailer(tmp_path):
+    # CAB-2175 regression: same defect, Stage 2 path. The S2 marker is
+    # "Plan Score" rather than "Council Score".
+    exec_file = tmp_path / "exec.json"
+    exec_file.write_text(
+        json.dumps(
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "Posting Stage 2 plan validation."}
+                        ]
+                    },
+                }
+            ]
+        )
+    )
+    fallback = tmp_path / "comment.md"
+    fallback.write_text(
+        "## Stage 2: Plan Validation\n\n"
+        "Classification: Show\n"
+        "Estimate: 5 pts\n\n"
+        "**Plan Score: 7.20/10 — Fix**\n"
+        "Comment `/go-plan` to start implementation.\n"
+    )
+    code, result = run(exec_file, "s2", fallback_comment=fallback, strict=False)
+    assert code == 0
+    assert result["score"] == 7.2
+    assert result["verdict"] == "fix"
+    assert result["mode"] == "show"
+    assert result["estimate_points"] == 5
+    assert result["source"] == "fallback"
+
+
 def test_run_fallback_not_used_when_exec_has_score(tmp_path):
     exec_file = tmp_path / "exec.json"
     exec_file.write_text(

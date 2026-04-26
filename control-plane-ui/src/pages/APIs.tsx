@@ -135,30 +135,51 @@ export function APIs() {
     queryClient.invalidateQueries({ queryKey: ['apis', selectedTenant, activeEnvironment] });
   }, [queryClient, selectedTenant, activeEnvironment]);
 
+  const getDeploymentWorkflowHref = useCallback(
+    (api: { id: string; name: string; tenant_id?: string }) => {
+      const params = new URLSearchParams({
+        api_id: api.id,
+        api_name: api.name,
+        environment: activeEnvironment,
+      });
+      const tenantId = api.tenant_id || (selectedTenant !== ALL_TENANTS ? selectedTenant : '');
+      if (tenantId) {
+        params.set('tenant_id', tenantId);
+      }
+      return `/api-deployments?${params.toString()}`;
+    },
+    [activeEnvironment, selectedTenant]
+  );
+
   // Memoized handlers to prevent unnecessary re-renders
   const handleCreate = useCallback(
-    async (api: APICreate, deployToDev: boolean) => {
+    async (api: APICreate, openDeploymentWorkflow: boolean) => {
       try {
         const wasFirstApi = isFirstApi;
         const created = await apiService.createApi(selectedTenant, api);
 
-        // Auto-deploy to DEV if requested
-        if (deployToDev) {
-          await apiService.createDeployment(selectedTenant, {
-            api_id: created.id,
-            api_name: api.name,
-            environment: 'dev',
-            version: api.version,
-          });
-        }
-
         setShowCreateModal(false);
         invalidateApis();
+
+        if (openDeploymentWorkflow) {
+          navigate(
+            getDeploymentWorkflowHref({
+              id: created.id,
+              name: api.name,
+              tenant_id: selectedTenant !== ALL_TENANTS ? selectedTenant : undefined,
+            })
+          );
+        }
 
         // Celebrate first API creation
         if (wasFirstApi) {
           celebrate();
-          toast.success('Welcome!', 'You created your first API. Explore the Deploy options next.');
+          toast.success(
+            'Welcome!',
+            openDeploymentWorkflow
+              ? 'You created your first API. Complete deployment from the Deployments page.'
+              : 'You created your first API. Explore the Deployments page next.'
+          );
         } else {
           toast.success('API created', `${api.display_name || api.name} has been created`);
         }
@@ -166,7 +187,15 @@ export function APIs() {
         toast.error('Creation failed', err.message || 'Failed to create API');
       }
     },
-    [selectedTenant, isFirstApi, celebrate, toast, invalidateApis]
+    [
+      selectedTenant,
+      isFirstApi,
+      celebrate,
+      toast,
+      invalidateApis,
+      navigate,
+      getDeploymentWorkflowHref,
+    ]
   );
 
   const handleUpdate = useCallback(
@@ -202,27 +231,6 @@ export function APIs() {
       }
     },
     [selectedTenant, confirm, toast, invalidateApis]
-  );
-
-  const handleDeploy = useCallback(
-    async (api: API, environment: 'dev' | 'staging') => {
-      try {
-        await apiService.createDeployment(selectedTenant, {
-          api_id: api.id,
-          api_name: api.name,
-          environment,
-          version: api.version,
-        });
-        toast.success(
-          `Deployment started`,
-          `${api.name} is being deployed to ${environment.toUpperCase()}`
-        );
-        invalidateApis();
-      } catch (err: any) {
-        toast.error('Deployment failed', err.message || 'Failed to deploy API');
-      }
-    },
-    [selectedTenant, toast, invalidateApis]
   );
 
   // Memoized filter clear handler
@@ -439,20 +447,12 @@ export function APIs() {
 
                 <div className="flex flex-wrap gap-3 pt-1">
                   {canDeploy && (
-                    <>
-                      <button
-                        onClick={() => handleDeploy(api, 'dev')}
-                        className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm py-1"
-                      >
-                        Deploy DEV
-                      </button>
-                      <button
-                        onClick={() => handleDeploy(api, 'staging')}
-                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm py-1"
-                      >
-                        Deploy STG
-                      </button>
-                    </>
+                    <a
+                      href={getDeploymentWorkflowHref(api)}
+                      className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm py-1"
+                    >
+                      Deployments
+                    </a>
                   )}
                   {canEdit && (
                     <button
@@ -574,22 +574,13 @@ export function APIs() {
                     >
                       <div className="flex gap-2">
                         {canDeploy && (
-                          <>
-                            <button
-                              onClick={() => handleDeploy(api, 'dev')}
-                              className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                              title="Deploy to DEV"
-                            >
-                              Deploy DEV
-                            </button>
-                            <button
-                              onClick={() => handleDeploy(api, 'staging')}
-                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="Deploy to Staging"
-                            >
-                              Deploy STG
-                            </button>
-                          </>
+                          <a
+                            href={getDeploymentWorkflowHref(api)}
+                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                            title="Open deployment workflow"
+                          >
+                            Deployments
+                          </a>
                         )}
                         {canEdit && (
                           <button
@@ -678,7 +669,7 @@ export function APIs() {
 interface APIFormModalProps {
   api?: API;
   onClose: () => void;
-  onSubmit: (data: APICreate, deployToDev: boolean) => Promise<void>;
+  onSubmit: (data: APICreate, openDeploymentWorkflow: boolean) => Promise<void>;
   title: string;
   isEdit?: boolean;
 }
@@ -687,7 +678,7 @@ type CreateMode = 'manual' | 'openapi';
 
 function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalProps) {
   const [mode, setMode] = useState<CreateMode>('manual');
-  const [deployToDev, setDeployToDev] = useState(!isEdit);
+  const [openDeploymentWorkflow, setOpenDeploymentWorkflow] = useState(!isEdit);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<APICreate>({
     name: api?.name || '',
@@ -794,7 +785,7 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
 
     setIsSubmitting(true);
     try {
-      await onSubmit(submitData, deployToDev);
+      await onSubmit(submitData, openDeploymentWorkflow);
     } finally {
       setIsSubmitting(false);
     }
@@ -1090,27 +1081,27 @@ paths:
                 </div>
               </div>
 
-              {/* Deploy to DEV checkbox */}
+              {/* Deployment workflow shortcut */}
               {!isEdit && (
                 <div className="flex items-start gap-3 pt-3 border-t dark:border-neutral-700">
                   <div className="flex items-center h-5">
                     <input
                       type="checkbox"
-                      id="deployToDev"
-                      checked={deployToDev}
-                      onChange={(e) => setDeployToDev(e.target.checked)}
+                      id="openDeploymentWorkflow"
+                      checked={openDeploymentWorkflow}
+                      onChange={(e) => setOpenDeploymentWorkflow(e.target.checked)}
                       className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500"
                     />
                   </div>
                   <div className="flex-1">
                     <label
-                      htmlFor="deployToDev"
+                      htmlFor="openDeploymentWorkflow"
                       className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
                     >
-                      Deploy to DEV environment
+                      Open deployment workflow after creation
                     </label>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                      Automatically deploy this API to the DEV environment after creation.
+                      Choose the target environment and gateway from the dedicated Deployments page.
                     </p>
                   </div>
                 </div>
@@ -1123,7 +1114,11 @@ paths:
               Cancel
             </Button>
             <Button type="submit" loading={isSubmitting}>
-              {isEdit ? 'Update API' : deployToDev ? 'Create & Deploy' : 'Create API'}
+              {isEdit
+                ? 'Update API'
+                : openDeploymentWorkflow
+                  ? 'Create & Open Deployments'
+                  : 'Create API'}
             </Button>
           </div>
         </form>

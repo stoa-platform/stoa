@@ -42,6 +42,8 @@ on:
 permissions:
   contents: read
   actions: read
+  # reusable-promote verifies GHCR manifests before dispatching GitOps.
+  packages: read
 
 concurrency:
   group: promote-to-prod

@@ -393,6 +393,38 @@ PASS si:
 - le statut agrégé reflète les statuts par gateway
 - la Console permet de voir chaque cible et son dernier ack
 
+### ADF-G6 — Target adapter preflight avant dispatch
+
+Avant de créer un `GatewayDeployment` `pending` et avant d'émettre Kafka/SSE,
+CP doit valider que le desired state est au moins structurellement déployable
+par chaque gateway cible.
+
+PASS si:
+- le preflight est exécuté après résolution API + gateway targets, mais avant
+  `GatewayDeploymentService.deploy_api()`;
+- un échec preflight bloque le déploiement avant `event_emitted`;
+- aucun `GatewayDeployment pending`, event Kafka ou event SSE n'est créé en cas
+  d'échec preflight;
+- l'erreur est normalisée par gateway avec `gateway_id`, `gateway_name`,
+  `target_gateway_type`, `code`, `message`, et `path`.
+
+FAIL si:
+- l'agent reçoit une intention qui aurait pu être rejetée localement par un
+  validateur déterministe;
+- `agent_received` ou `adapter_connected` est présenté comme preuve que l'API
+  est déployable par la gateway cible.
+
+Pour `target_gateway_type=webmethods`, le preflight minimal est strict:
+- `openapi_spec` doit être un objet JSON/YAML parsé;
+- `openapi` ou `swagger` doit être présent;
+- `info.title` et `info.version` doivent être présents;
+- `paths` doit contenir au moins une route;
+- chaque opération HTTP déclarée doit contenir un objet `responses` non vide.
+
+Une spec OpenAPI générique peut donc être valide pour STOA mais non déployable
+vers webMethods. Dans ce cas le statut utilisateur est `invalid_desired_state`
+ou `preflight_failed`, pas `gateway unreachable`.
+
 ### ADF-0 — Seed idempotent
 
 Préparer:
@@ -577,6 +609,22 @@ PASS si:
 FAIL si la promotion réussit avec `0` deployment ou avec seulement une partie
 des modes gateway acquittés.
 
+### ADF-13b — WebMethods OpenAPI compatibility preflight
+
+Déployer une API vers `target_gateway_type=webmethods` avec une spec OpenAPI
+syntaxiquement parseable mais incomplète pour WebMethods, par exemple une
+opération sans `responses`.
+
+PASS si:
+- `POST /deploy/validate` retourne `deployable=false` pour la gateway
+  webMethods avec `code=openapi_operation_responses_missing`;
+- `POST /deploy` retourne une erreur 400 actionnable avant `event_emitted`;
+- aucun `GatewayDeployment` n'est créé et aucun event Kafka/SSE n'est émis.
+
+FAIL si l'erreur n'est découverte qu'à l'étape agent `api_synced` avec un 400
+WebMethods générique du type `Unable to create an API as the input openapi file
+is not valid`.
+
 ### ADF-14 — Reboot gateway ne casse pas le statut déployé
 
 Déployer une API vers une gateway webMethods de démo via STOA Connect, attendre
@@ -646,14 +694,14 @@ cd e2e && npx playwright test api-deployment-flow.spec.ts
 ```
 
 Critère GO pour toute PR touchant ce flux:
-- ADF-G1 à ADF-G5 passent ou restent explicitement inchangés pour toute PR qui
+- ADF-G1 à ADF-G6 passent ou restent explicitement inchangés pour toute PR qui
   touche Git/UAC/stoa.yaml, reconciliation CP, assignments, capabilities ou
   matérialisation deployment
 - ADF-1, ADF-2, ADF-3 passent ou restent explicitement inchangés par la PR
 - ADF-5, ADF-6, ADF-7 passent pour toute PR promotion/assignment/sync
 - ADF-8 passe pour toute PR Console deploy dialog ou environment selector
 - ADF-9 passe pour toute PR rollback/undeploy
-- ADF-14, ADF-15, ADF-16, ADF-17 passent pour toute PR qui touche healthcheck
+- ADF-13b, ADF-14, ADF-15, ADF-16, ADF-17 passent pour toute PR qui touche healthcheck
   gateway, drift detection, promotion, ou la table `/api-deployments`
 
 ## 6. Blockers connus
@@ -668,6 +716,7 @@ Critère GO pour toute PR touchant ce flux:
 | A-B6 | `/api-deployments` n'est pas encore couvert par un smoke transverse | P1 | ADF-3, ADF-8 |
 | A-B7 | chemins legacy SyncEngine/inline sync encore visibles dans le code malgré ADR-059 SSE cible | P1 | ADF-2, ADF-5 |
 | A-B8 | capacité de déploiement gateway non exposée/normalisée (`agent_pull_ack`, `stoa_gateway_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
+| A-B13 | absence de preflight adapter avant Kafka/SSE, donc les 400 WebMethods OpenAPI sont découverts trop tard côté agent | P0 | ADF-G6, ADF-13b |
 | A-B9 | statut de déploiement et healthcheck gateway mélangés dans la Console | P0 | ADF-3, ADF-14, ADF-15 |
 | A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
 | A-B11 | `/apis` recrée un chemin de déploiement parallèle à `/api-deployments` | P0 | ADF-17 |
@@ -682,3 +731,4 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-25 | Codex | Ajout du contrat multi-mode legacy VM/STOA gateway/STOA sidecar |
 | 2026-04-25 | Codex | Séparation statut déploiement vs health gateway et promotion env supérieurs |
 | 2026-04-25 | Codex | Réorientation Git/UAC desired-state-first selon ADR-040 et ADR-059 |
+| 2026-04-26 | Codex | Ajout du preflight adapter WebMethods avant dispatch Kafka/SSE |

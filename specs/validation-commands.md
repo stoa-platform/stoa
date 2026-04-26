@@ -255,19 +255,20 @@ curl -sI http://localhost:3000/subscriptions
 ## 11. Flux API deployments Console
 
 Le flux transverse Console `/api-deployments` est spécifié séparément dans
-`specs/api-deployment-flow.md`.
+`specs/api-runtime-reconciliation-contract.md`.
 
-Ce contrat couvre le chemin API catalogue -> gateway assignment -> deploy direct
-ou promotion -> gateway sync ack -> affichage Console. Il reste non bloquant
-pour `scripts/demo-smoke-test.sh` tant qu'il n'est pas explicitement ajouté au
-scope minimal `demo-scope.md`.
+Ce contrat couvre le chemin API catalogue -> desired state Git/UAC JSON ->
+gateway assignment/capability -> réconciliation runtime directe dev/demo ou
+promotion -> gateway/link ack -> affichage Console. Il reste non bloquant pour
+`scripts/demo-smoke-test.sh` tant qu'il n'est pas explicitement ajouté au scope
+minimal `demo-scope.md`.
 
 Validation cible future:
 
 ```bash
 # API-level, à créer
-./scripts/api-deployment-flow-smoke.sh
+./scripts/api-runtime-reconciliation-smoke.sh
 
 # UI-level, à créer
-cd e2e && npx playwright test api-deployment-flow.spec.ts
+cd e2e && npx playwright test api-runtime-reconciliation.spec.ts
 ```

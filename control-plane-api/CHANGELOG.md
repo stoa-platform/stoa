@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.7...control-plane-api-v1.9.0) (2026-04-26)
+
+
+### Features
+
+* **api:** add Console deployment contract endpoint ([#2565](https://github.com/stoa-platform/stoa/issues/2565)) ([4f1996d](https://github.com/stoa-platform/stoa/commit/4f1996d3d49d0ab993d0ae1601e8d3f0f2d60bf7))
+
+
+### Bug Fixes
+
+* **api:** keep synced route ack stable ([#2567](https://github.com/stoa-platform/stoa/issues/2567)) ([f25e79a](https://github.com/stoa-platform/stoa/commit/f25e79abd69ce9f89d2182fe064230593416eaeb))
+* **api:** preflight gateway deployment specs ([#2577](https://github.com/stoa-platform/stoa/issues/2577)) ([549470b](https://github.com/stoa-platform/stoa/commit/549470b79c42a9ec02172f742342ca8abb09ce2e))
+
 ## [1.8.7](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.6...control-plane-api-v1.8.7) (2026-04-25)
 
 

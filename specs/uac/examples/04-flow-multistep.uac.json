@@ -1,0 +1,124 @@
+{
+  "name": "example-orders-flow",
+  "version": "1.0.0",
+  "tenant_id": "example",
+  "display_name": "Example Orders — Multi-step Flow",
+  "description": "Canonical UAC example for a chained agent workflow: create draft → check status → confirm.",
+  "classification": "H",
+  "required_policies": ["rate-limit", "auth-jwt"],
+  "status": "published",
+  "endpoints": [
+    {
+      "path": "/orders",
+      "methods": ["POST"],
+      "backend_url": "https://backend.example.local/v1/orders",
+      "operation_id": "create_order_draft",
+      "input_schema": {
+        "type": "object",
+        "required": ["item_id", "quantity"],
+        "properties": {
+          "item_id": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["order_id", "status"],
+        "properties": {
+          "order_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft"] }
+        },
+        "additionalProperties": true
+      },
+      "llm": {
+        "summary": "Create an order draft.",
+        "intent": "First step of the order flow. Creates a draft that must be confirmed within 15 minutes via example_orders_confirm. Drafts auto-expire and are not billable.",
+        "tool_name": "example_orders_create_draft",
+        "side_effects": "write",
+        "safe_for_agents": true,
+        "requires_human_approval": false,
+        "examples": [
+          {
+            "input": { "item_id": "sku-1234", "quantity": 2 },
+            "expected_output_contains": { "status": "draft" }
+          }
+        ]
+      }
+    },
+    {
+      "path": "/orders/{order_id}",
+      "methods": ["GET"],
+      "backend_url": "https://backend.example.local/v1/orders",
+      "operation_id": "get_order_status",
+      "input_schema": {
+        "type": "object",
+        "required": ["order_id"],
+        "properties": {
+          "order_id": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["order_id", "status"],
+        "properties": {
+          "order_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "confirmed", "expired"] }
+        },
+        "additionalProperties": true
+      },
+      "llm": {
+        "summary": "Read the current status of an order.",
+        "intent": "Intermediate step of the order flow. Use to verify that a draft is still alive before calling confirm, or to observe the final state after confirm.",
+        "tool_name": "example_orders_get_status",
+        "side_effects": "read",
+        "safe_for_agents": true,
+        "requires_human_approval": false,
+        "examples": [
+          {
+            "input": { "order_id": "ord-abc" },
+            "expected_output_contains": { "order_id": "ord-abc" }
+          }
+        ]
+      }
+    },
+    {
+      "path": "/orders/{order_id}/confirm",
+      "methods": ["POST"],
+      "backend_url": "https://backend.example.local/v1/orders",
+      "operation_id": "confirm_order",
+      "input_schema": {
+        "type": "object",
+        "required": ["order_id"],
+        "properties": {
+          "order_id": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["order_id", "status"],
+        "properties": {
+          "order_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["confirmed"] }
+        },
+        "additionalProperties": true
+      },
+      "llm": {
+        "summary": "Confirm an order draft.",
+        "intent": "Final step of the order flow. Promotes a draft to a billable order. Only call after example_orders_get_status confirmed status=draft. Confirming an expired draft returns 409.",
+        "tool_name": "example_orders_confirm",
+        "side_effects": "write",
+        "safe_for_agents": true,
+        "requires_human_approval": false,
+        "examples": [
+          {
+            "input": { "order_id": "ord-abc" },
+            "expected_output_contains": { "status": "confirmed" }
+          }
+        ]
+      }
+    }
+  ]
+}

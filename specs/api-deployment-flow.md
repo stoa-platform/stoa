@@ -114,7 +114,32 @@ n'est pas un push CP -> gateway. Pour les chemins dev/demo, `POST /deploy` est
 un raccourci qui crée ou matérialise une intention de desired state; il ne doit
 pas devenir le chemin canonique prod.
 
-## 2.1 Modes gateway supportés
+## 2.1 Propriété des surfaces Console
+
+Le contrat sépare catalogue, runtime et lifecycle. Aucune surface ne doit
+dupliquer une autre avec un vocabulaire différent.
+
+| Surface | Rôle canonique | Actions autorisées | Actions interdites |
+|---------|----------------|--------------------|--------------------|
+| `/apis` | catalogue API, édition du contrat API, publication portail | créer/éditer/supprimer l'API, afficher des badges de statut en lecture seule, ouvrir `/api-deployments` préfiltré sur l'API | déclencher directement un déploiement env -> env, créer un `Deployment` legacy, afficher `Deploy DEV`/`Deploy STG` comme preuve runtime |
+| `/api-deployments` | vérité runtime desired vs observed | choisir env/gateway, matérialiser le raccourci dev/demo, forcer sync, undeploy, afficher statut par gateway et agrégat | masquer le nom de la gateway cible, assimiler health gateway à statut déployé |
+| `/promotions` | lifecycle env -> env | créer/approuver une promotion, générer PR GitOps prod ou refuser sans chemin conforme | marquer `success` sans `GatewayDeployment` + ack runtime |
+
+Règles UX obligatoires:
+- `/apis` ne poste jamais directement vers `createDeployment` pour une action de
+  ligne. Son action navigue vers `/api-deployments` avec au minimum `tenant_id`,
+  `api_id`, `api_name` et l'environnement courant.
+- Le raccourci de création d'API peut ouvrir le workflow de déploiement après la
+  création, mais il ne déploie pas automatiquement en DEV sans sélection des
+  gateways cibles.
+- Les libellés `Deploy DEV` et `Deploy STG` sont interdits sur `/apis`: ils
+  mélangent catalogue et réconciliation runtime et donnent l'impression d'une
+  promotion concurrente à `/api-deployments` ou `/promotions`.
+- Une promotion vers staging/prod est toujours un lifecycle env -> env. Elle ne
+  devient réussie qu'après matérialisation runtime et ack des gateways cibles,
+  conformément aux règles ADF-5 à ADF-7.
+
+## 2.2 Modes gateway supportés
 
 Le contrat de déploiement est commun, mais le transport et la preuve d'ack
 dépendent du mode de gateway. La Console ne doit pas assimiler `online` à
@@ -590,6 +615,20 @@ PASS si:
 FAIL si prod est marqué promoted avec `0` deployment, avec une gateway cross-env,
 ou avec une gateway seulement healthcheckée mais jamais ack.
 
+### ADF-17 — `/apis` délègue au workflow de déploiement
+
+Depuis la page `/apis`, ouvrir l'action de déploiement d'une API.
+
+PASS si:
+- l'utilisateur est envoyé vers `/api-deployments` avec le tenant, l'API et
+  l'environnement courant dans l'URL
+- aucun appel `createDeployment`/`POST /deploy` n'est émis par `/apis`
+- la sélection de gateway et le statut runtime restent gérés par
+  `/api-deployments`
+
+FAIL si `/apis` expose des boutons `Deploy DEV`/`Deploy STG`, déclenche une
+promotion, ou crée un `Deployment` historique sans cible gateway explicite.
+
 Court terme:
 - ajouter un smoke API-level ciblé, par exemple
   `scripts/api-deployment-flow-smoke.sh`
@@ -614,8 +653,8 @@ Critère GO pour toute PR touchant ce flux:
 - ADF-5, ADF-6, ADF-7 passent pour toute PR promotion/assignment/sync
 - ADF-8 passe pour toute PR Console deploy dialog ou environment selector
 - ADF-9 passe pour toute PR rollback/undeploy
-- ADF-14, ADF-15, ADF-16 passent pour toute PR qui touche healthcheck gateway,
-  drift detection, promotion, ou la table `/api-deployments`
+- ADF-14, ADF-15, ADF-16, ADF-17 passent pour toute PR qui touche healthcheck
+  gateway, drift detection, promotion, ou la table `/api-deployments`
 
 ## 6. Blockers connus
 
@@ -631,7 +670,8 @@ Critère GO pour toute PR touchant ce flux:
 | A-B8 | capacité de déploiement gateway non exposée/normalisée (`agent_pull_ack`, `stoa_gateway_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
 | A-B9 | statut de déploiement et healthcheck gateway mélangés dans la Console | P0 | ADF-3, ADF-14, ADF-15 |
 | A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
-| A-B11 | spec encore trop `GatewayDeployment`-first si Git/UAC desired state n'est pas vérifié avant matérialisation | P0 | ADF-G1, ADF-G2, ADF-G3, ADF-G4, ADF-G5 |
+| A-B11 | `/apis` recrée un chemin de déploiement parallèle à `/api-deployments` | P0 | ADF-17 |
+| A-B12 | spec encore trop `GatewayDeployment`-first si Git/UAC desired state n'est pas vérifié avant matérialisation | P0 | ADF-G1, ADF-G2, ADF-G3, ADF-G4, ADF-G5 |
 
 ## 7. Révisions
 

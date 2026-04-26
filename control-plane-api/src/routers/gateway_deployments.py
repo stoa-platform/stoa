@@ -26,11 +26,16 @@ logger = logging.getLogger(__name__)
 
 def _deployment_to_dict(dep) -> dict:
     """Convert a GatewayDeployment ORM object to a dict compatible with GatewayDeploymentResponse."""
+    desired_state = dep.desired_state or {}
     return {
         "id": dep.id,
         "api_catalog_id": dep.api_catalog_id,
         "gateway_instance_id": dep.gateway_instance_id,
-        "desired_state": dep.desired_state,
+        "desired_state": desired_state,
+        "desired_source": desired_state.get("desired_source"),
+        "git_sync_status": desired_state.get("git_sync_status"),
+        "desired_commit_sha": desired_state.get("desired_commit_sha"),
+        "desired_git_path": desired_state.get("desired_git_path"),
         "desired_at": dep.desired_at,
         "actual_state": dep.actual_state,
         "actual_at": dep.actual_at,

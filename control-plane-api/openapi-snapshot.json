@@ -11105,6 +11105,10 @@
             "title": "Desired State",
             "type": "object"
           },
+          "desired_source": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desired Source"},
+          "git_sync_status": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Git Sync Status"},
+          "desired_commit_sha": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desired Commit Sha"},
+          "desired_git_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desired Git Path"},
           "gateway_display_name": {
             "anyOf": [
               {

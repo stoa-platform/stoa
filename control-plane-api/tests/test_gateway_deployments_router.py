@@ -134,6 +134,10 @@ class TestConsoleDeploymentContract:
             "tenant_id": "banking-demo",
             "environment": "dev",
             "desired_state": {"api_name": "fapi-banking", "spec_hash": "abc123"},
+            "desired_source": "db_shortcut",
+            "git_sync_status": "missing_commit",
+            "desired_commit_sha": None,
+            "desired_git_path": "tenants/banking-demo/apis/fapi-banking",
             "gateway_target": {
                 "id": str(uuid4()),
                 "name": "connect-webmethods-dev",
@@ -160,6 +164,8 @@ class TestConsoleDeploymentContract:
         item = body["items"][0]
         assert item["deployment_status"] == "synced"
         assert item["gateway_health"] == "offline"
+        assert item["desired_source"] == "db_shortcut"
+        assert item["git_sync_status"] == "missing_commit"
         assert item["gateway_target"]["deployment_mode"] == "connect"
         assert item["gateway_target"]["target_gateway_type"] == "webmethods"
 

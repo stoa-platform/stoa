@@ -42,6 +42,23 @@ def _target_gateway_type(gateway_type: object) -> str:
     return normalized_type
 
 
+def _desired_git_fields(
+    desired_state: dict | None,
+    api_git_path: str | None = None,
+    api_git_commit_sha: str | None = None,
+) -> dict[str, object]:
+    """Return stable Git provenance fields for deployment list responses."""
+    desired = desired_state or {}
+    desired_commit_sha = desired.get("desired_commit_sha") or api_git_commit_sha
+    desired_git_path = desired.get("desired_git_path") or api_git_path
+    return {
+        "desired_source": desired.get("desired_source") or ("git" if desired_commit_sha else "unknown"),
+        "git_sync_status": desired.get("git_sync_status") or ("up_to_date" if desired_commit_sha else "unknown"),
+        "desired_commit_sha": desired_commit_sha,
+        "desired_git_path": desired_git_path,
+    }
+
+
 class GatewayDeploymentRepository:
     """Repository for gateway deployment database operations."""
 
@@ -111,6 +128,8 @@ class GatewayDeploymentRepository:
         # Always join GatewayInstance for name/type/environment
         query = select(
             GatewayDeployment,
+            APICatalog.git_path.label("api_git_path"),
+            APICatalog.git_commit_sha.label("api_git_commit_sha"),
             GatewayInstance.name.label("gateway_name"),
             GatewayInstance.display_name.label("gateway_display_name"),
             GatewayInstance.gateway_type.label("gateway_type"),
@@ -118,6 +137,9 @@ class GatewayDeploymentRepository:
         ).join(
             GatewayInstance,
             GatewayDeployment.gateway_instance_id == GatewayInstance.id,
+        ).join(
+            APICatalog,
+            GatewayDeployment.api_catalog_id == APICatalog.id,
         )
 
         if environment:
@@ -142,6 +164,7 @@ class GatewayDeploymentRepository:
         deployments = []
         for row in rows:
             dep = row.GatewayDeployment
+            git_fields = _desired_git_fields(dep.desired_state, row.api_git_path, row.api_git_commit_sha)
             deployments.append({
                 "id": dep.id,
                 "api_catalog_id": dep.api_catalog_id,
@@ -163,6 +186,7 @@ class GatewayDeploymentRepository:
                 "gateway_display_name": row.gateway_display_name,
                 "gateway_type": row.gateway_type.value if hasattr(row.gateway_type, "value") else row.gateway_type,
                 "gateway_environment": row.gateway_environment,
+                **git_fields,
             })
         return deployments, total
 
@@ -182,6 +206,8 @@ class GatewayDeploymentRepository:
                 APICatalog.api_id.label("api_id"),
                 APICatalog.api_name.label("api_name"),
                 APICatalog.tenant_id.label("tenant_id"),
+                APICatalog.git_path.label("api_git_path"),
+                APICatalog.git_commit_sha.label("api_git_commit_sha"),
                 GatewayInstance.id.label("gateway_id"),
                 GatewayInstance.name.label("gateway_name"),
                 GatewayInstance.display_name.label("gateway_display_name"),
@@ -215,6 +241,8 @@ class GatewayDeploymentRepository:
         items = []
         for row in result.all():
             dep = row.GatewayDeployment
+            desired_state = dep.desired_state or {}
+            git_fields = _desired_git_fields(desired_state, row.api_git_path, row.api_git_commit_sha)
             items.append(
                 {
                     "deployment_id": dep.id,
@@ -223,7 +251,8 @@ class GatewayDeploymentRepository:
                     "api_name": row.api_name,
                     "tenant_id": row.tenant_id,
                     "environment": row.gateway_environment,
-                    "desired_state": dep.desired_state,
+                    "desired_state": desired_state,
+                    **git_fields,
                     "gateway_target": {
                         "id": row.gateway_id,
                         "name": row.gateway_name,

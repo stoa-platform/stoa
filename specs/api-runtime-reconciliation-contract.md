@@ -33,7 +33,7 @@ la page Console `/api-deployments`.
 
 Ce contrat est un contrat de flux Console/runtime. Il ne remplace pas les ADRs:
 
-- **ADR-040 — Born GitOps multi-environment**: Git/UAC reste la source de
+- **ADR-040 — Born GitOps multi-environment**: Git/UAC JSON reste la source de
   gouvernance pour les changements de configuration, particulièrement en
   production. Le flux de cette spec ne doit pas réintroduire un "UI click to
   prod" sans approbation. En dev/staging, l'UI peut créer une intention de
@@ -54,8 +54,8 @@ Ce contrat est un contrat de flux Console/runtime. Il ne remplace pas les ADRs:
 ADR-040 et ADR-059 ne parlent pas exactement du même niveau:
 
 - ADR-040 définit la vérité configurationnelle et la gouvernance
-  multi-environnement: Git/UAC/stoa.yaml est la source de vérité, surtout pour
-  staging/prod.
+  multi-environnement: les UAC JSON versionnés dans Git sont la source de
+  vérité, surtout pour staging/prod.
 - ADR-059 définit le chemin d'exécution runtime simplifié: CP matérialise une
   intention en `GatewayDeployment`, le Link/gateway applique, puis ack.
 
@@ -64,22 +64,23 @@ chemin court de démonstration. En staging/prod, ADR-040 reprend le dessus:
 Git/PR est le chemin de gouvernance, et une écriture runtime directe ne peut pas
 devenir le chemin nominal.
 
-Ce contrat tranche donc ainsi: Git/UAC est la vérité configurationnelle,
+Ce contrat tranche donc ainsi: Git/UAC JSON est la vérité configurationnelle,
 `GatewayDeployment` est la vérité d'exécution, et la Console affiche l'écart
 entre desired state et observed state.
 
 ## 1.2 Source de vérité
 
 Le contrat ne définit pas un déploiement "vers une gateway". Il définit la
-réconciliation d'un desired state Git/UAC vers une ou plusieurs cibles gateway
-déclarées pour un environnement. Les gateways n'initient pas la vérité de
-configuration; elles appliquent et acquittent une génération de desired state.
+réconciliation d'un desired state UAC JSON versionné dans Git vers une ou
+plusieurs cibles gateway déclarées pour un environnement. Les gateways
+n'initient pas la vérité de configuration; elles appliquent et acquittent une
+génération de desired state.
 
 Formulation canonique:
 
 ```text
 STOA ne déploie pas une API vers une gateway.
-STOA réconcilie un UAC/GitOps vers des targets runtime.
+STOA réconcilie un UAC JSON GitOps vers des targets runtime.
 Chaque target produit un GatewayDeployment.
 Chaque GatewayDeployment doit être ack par le Link/gateway.
 La Console affiche desired vs observed, jamais un simple état UI.
@@ -87,17 +88,36 @@ La Console affiche desired vs observed, jamais un simple état UI.
 
 | Objet | Rôle | Source de vérité |
 |-------|------|------------------|
-| Git/UAC/stoa.yaml | configuration déclarative, overlays par environnement, gouvernance | vérité configurationnelle |
+| Git/UAC JSON | contrats UAC JSON déclaratifs, overlays par environnement, gouvernance | vérité configurationnelle |
 | CP matérialisé | cache DB/API du desired state résolu | projection réconciliable, pas source primaire prod |
 | GatewayDeployment | cible d'exécution par gateway et génération de desired state | vérité runtime/exécution |
 | Gateway observed state | état réellement observé/reporté par Link/gateway | preuve d'application ou drift |
 | Gateway health | connectivité/heartbeat/reboot | vérité connectivité seulement |
 | Promotion | intention/lifecycle env -> env | jamais preuve runtime seule |
 
+### 1.2.1 Format canonique
+
+L'UAC canonique est un document JSON validé par JSON Schema. La spec ne doit pas
+présenter `stoa.yaml` comme source de vérité UAC.
+
+Les manifests YAML peuvent exister pour Kubernetes, Helm, ArgoCD ou un packaging
+GitOps infra, mais ils ne remplacent pas le contrat UAC JSON. S'ils référencent
+un UAC, ils doivent pointer vers le fichier JSON versionné ou en porter une
+projection strictement dérivée.
+
+Format attendu pour les contrats et fixtures de test:
+
+```text
+specs/uac/*.uac.json
+```
+
+Les tests contractuels doivent donc valider le JSON UAC, puis vérifier que CP
+matérialise la même génération/hash vers les targets runtime.
+
 Chaîne conceptuelle:
 
 ```text
-Git/UAC/stoa.yaml desired state
+Git/UAC JSON desired state
 → CP materialized desired state
 → environment overlay resolved
 → gateway assignments/capabilities resolved
@@ -111,7 +131,7 @@ Git/UAC/stoa.yaml desired state
 
 | # | Étape | Surface | API/Commande | Preuve |
 |---|-------|---------|--------------|--------|
-| ADF-0 | Déclarer le desired state | Git/UAC + cp-api | UAC/stoa.yaml + overlays env ou raccourci dev/demo | desired state idempotent prêt |
+| ADF-0 | Déclarer le desired state | Git/UAC JSON + cp-api | UAC JSON + overlays env ou raccourci dev/demo | desired state idempotent prêt |
 | ADF-1 | Réconcilier en dev | Console/API | `POST /v1/tenants/{t}/apis/{api}/deploy` comme raccourci dev/demo avec `gateway_ids` | `GatewayDeployment` créé `pending/syncing` pour chaque cible |
 | ADF-2 | Ack gateway | STOA Link/gateway + cp-api | callback Link ou `route-sync-ack` legacy | `sync_status=synced`, `last_sync_success` non nul |
 | ADF-3 | Voir l'état Console | Console | `/api-deployments` | Ligne API/gateway/env visible, statut runtime affiché |
@@ -348,7 +368,7 @@ Pour staging/prod:
 Règles par environnement:
 
 - **dev/demo**: la Console/API peut créer une intention directe. Cette
-  intention doit être dérivable d'un UAC/stoa.yaml ou réconciliée vers Git en
+  intention doit être dérivable d'un UAC JSON ou réconciliée vers Git en
   side-effect selon le mode ADR-059.
 - **staging**: la promotion ou un changement Git est le chemin recommandé. Un
   succès staging exige des `GatewayDeployment` cibles et des acks gateway, pas
@@ -385,15 +405,15 @@ Post-démo, les chemins suivants restent requis pour le contrat complet mais ne
 doivent pas élargir la première PR de stabilisation: ADF-9 rollback/undeploy,
 ADF-13 promotion multi-mode fermée, ADF-15 drift confirmé et ADF-16 prod complet.
 
-### ADF-G1 — Desired state Git/UAC présent
+### ADF-G1 — Desired state Git/UAC JSON présent
 
-Préparer un UAC/stoa.yaml pour une API et ses overlays d'environnement.
+Préparer un UAC JSON pour une API et ses overlays d'environnement.
 
 PASS si:
 - le desired state contient l'API, les paramètres gateway et l'upstream
 - les overlays `dev`, `staging`, `prod` expriment uniquement les différences
   d'environnement
-- la spec est idempotente et versionnable dans Git
+- le contrat est un JSON valide, idempotent et versionnable dans Git
 
 ### ADF-G2 — CP matérialise le desired state
 
@@ -406,7 +426,7 @@ PASS si CP expose une projection matérialisée contenant:
 - gateway targets candidates
 
 FAIL si CP invente une configuration runtime qui ne peut pas être retracée vers
-Git/UAC/stoa.yaml, sauf raccourci dev/demo explicitement marqué.
+un UAC JSON versionné dans Git, sauf raccourci dev/demo explicitement marqué.
 
 ### ADF-G3 — Assignments et capabilities résolus
 
@@ -747,7 +767,7 @@ cd e2e && npx playwright test api-runtime-reconciliation.spec.ts
 
 Critère GO pour toute PR touchant ce flux:
 - ADF-G1 à ADF-G6 passent ou restent explicitement inchangés pour toute PR qui
-  touche Git/UAC/stoa.yaml, reconciliation CP, assignments, capabilities ou
+  touche Git/UAC JSON, reconciliation CP, assignments, capabilities ou
   matérialisation deployment
 - ADF-1, ADF-2, ADF-3 passent ou restent explicitement inchangés par la PR
 - ADF-5, ADF-6, ADF-7 passent pour toute PR promotion/assignment/sync
@@ -772,7 +792,7 @@ Critère GO pour toute PR touchant ce flux:
 | A-B9 | statut de déploiement et healthcheck gateway mélangés dans la Console | P0 | ADF-3, ADF-14, ADF-15 |
 | A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
 | A-B11 | `/apis` recrée un chemin de déploiement parallèle à `/api-deployments` | P0 | ADF-17 |
-| A-B12 | spec encore trop `GatewayDeployment`-first si Git/UAC desired state n'est pas vérifié avant matérialisation | P0 | ADF-G1, ADF-G2, ADF-G3, ADF-G4, ADF-G5 |
+| A-B12 | spec encore trop `GatewayDeployment`-first si Git/UAC JSON desired state n'est pas vérifié avant matérialisation | P0 | ADF-G1, ADF-G2, ADF-G3, ADF-G4, ADF-G5 |
 
 ## 7. Révisions
 
@@ -785,3 +805,4 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-25 | Codex | Réorientation Git/UAC desired-state-first selon ADR-040 et ADR-059 |
 | 2026-04-26 | Codex | Ajout du preflight adapter WebMethods avant dispatch Kafka/SSE |
 | 2026-04-26 | Codex | Renommage en Runtime Reconciliation Contract et clarification connect/edge/sidecar |
+| 2026-04-26 | Codex | Clarification UAC JSON canonique; YAML réservé au packaging infra/GitOps |

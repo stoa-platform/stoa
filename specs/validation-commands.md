@@ -257,9 +257,9 @@ curl -sI http://localhost:3000/subscriptions
 Le flux transverse Console `/api-deployments` est spécifié séparément dans
 `specs/api-runtime-reconciliation-contract.md`.
 
-Ce contrat couvre le chemin API catalogue -> desired state Git/UAC -> gateway
-assignment/capability -> réconciliation runtime directe dev/demo ou promotion ->
-gateway/link ack -> affichage Console. Il reste non bloquant pour
+Ce contrat couvre le chemin API catalogue -> desired state Git/UAC JSON ->
+gateway assignment/capability -> réconciliation runtime directe dev/demo ou
+promotion -> gateway/link ack -> affichage Console. Il reste non bloquant pour
 `scripts/demo-smoke-test.sh` tant qu'il n'est pas explicitement ajouté au scope
 minimal `demo-scope.md`.
 

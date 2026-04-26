@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnvironment } from '../../contexts/EnvironmentContext';
@@ -61,7 +62,16 @@ function canonicalSortValue(env: CanonicalEnvironment): number {
 export function ApiDeploymentsDashboard() {
   const { isReady } = useAuth();
   const { activeEnvironment, environments, switchEnvironment } = useEnvironment();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToastActions();
+  const preselectedTenantId = searchParams.get('tenant_id') || '';
+  const preselectedApiName = searchParams.get('api_name') || '';
+  const preselectedEnvironment = searchParams.get('environment') || '';
+  const shouldOpenDeployWorkflow = searchParams.get('open_deploy') === 'true';
+  const preselectedApiKey =
+    preselectedTenantId && preselectedApiName
+      ? `${preselectedTenantId}:${preselectedApiName}`
+      : undefined;
   const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<GatewayDeployment[]>([]);
   const [summary, setSummary] = useState<Schemas['DeploymentStatusSummary'] | null>(null);
@@ -73,7 +83,9 @@ export function ApiDeploymentsDashboard() {
   );
   const [currentPage, setCurrentPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [showDeployDialog, setShowDeployDialog] = useState(false);
+  const [showDeployDialog, setShowDeployDialog] = useState(
+    shouldOpenDeployWorkflow && !!preselectedApiKey
+  );
   const [selectedDeployment, setSelectedDeployment] = useState<GatewayDeployment | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const latestLoadRef = useRef(0);
@@ -100,6 +112,29 @@ export function ApiDeploymentsDashboard() {
     setEnvFilter(toApiEnvironment(activeEnvironment));
     setCurrentPage(1);
   }, [activeEnvironment]);
+
+  useEffect(() => {
+    if (!preselectedEnvironment) return;
+    const nextEnv = toApiEnvironment(preselectedEnvironment);
+    setEnvFilter(nextEnv);
+    setCurrentPage(1);
+    switchEnvironment(toContextEnvironment(nextEnv));
+  }, [preselectedEnvironment, switchEnvironment]);
+
+  useEffect(() => {
+    if (shouldOpenDeployWorkflow && preselectedApiKey) {
+      setShowDeployDialog(true);
+    }
+  }, [preselectedApiKey, shouldOpenDeployWorkflow]);
+
+  const closeDeployDialog = useCallback(() => {
+    setShowDeployDialog(false);
+    if (shouldOpenDeployWorkflow) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('open_deploy');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, shouldOpenDeployWorkflow]);
 
   const loadData = useCallback(async () => {
     const requestId = latestLoadRef.current + 1;
@@ -262,6 +297,15 @@ export function ApiDeploymentsDashboard() {
         </select>
       </div>
 
+      {/* Deep-link context */}
+      {preselectedApiKey && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+          Deployment workflow loaded for <span className="font-semibold">{preselectedApiName}</span>
+          {preselectedEnvironment ? ` in ${getEnvLabel(preselectedEnvironment)}` : ''}. Select the
+          target gateways from this page.
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
@@ -389,12 +433,14 @@ export function ApiDeploymentsDashboard() {
       {/* Deploy Dialog */}
       {showDeployDialog && (
         <DeployAPIDialog
-          onClose={() => setShowDeployDialog(false)}
+          onClose={closeDeployDialog}
           onDeployed={() => {
-            setShowDeployDialog(false);
+            closeDeployDialog();
             loadData();
             toast.success('Deployment initiated');
           }}
+          preselectedApiKey={preselectedApiKey}
+          preselectedEnvironment={preselectedEnvironment}
         />
       )}
 

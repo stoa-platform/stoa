@@ -23,6 +23,20 @@
           "service": { "type": "string" }
         },
         "additionalProperties": true
+      },
+      "llm": {
+        "summary": "Fetch a deterministic JSON echo from the demo backend.",
+        "intent": "Use to verify that the gateway → backend path is alive on the demo tenant. Idempotent and side-effect free.",
+        "tool_name": "demo_httpbin_get",
+        "side_effects": "read",
+        "safe_for_agents": true,
+        "requires_human_approval": false,
+        "examples": [
+          {
+            "input": {},
+            "expected_output_contains": { "ok": true }
+          }
+        ]
       }
     }
   ],

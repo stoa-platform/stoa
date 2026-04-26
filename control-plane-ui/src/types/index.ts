@@ -1102,6 +1102,10 @@ export interface GatewayDeployment {
   api_catalog_id: string;
   gateway_instance_id: string;
   desired_state: GatewayDeploymentState;
+  desired_source?: string;
+  git_sync_status?: string;
+  desired_commit_sha?: string;
+  desired_git_path?: string;
   desired_at: string;
   actual_state?: GatewayDeploymentState;
   actual_at?: string;

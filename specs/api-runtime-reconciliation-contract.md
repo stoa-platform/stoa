@@ -95,7 +95,33 @@ La Console affiche desired vs observed, jamais un simple état UI.
 | Gateway health | connectivité/heartbeat/reboot | vérité connectivité seulement |
 | Promotion | intention/lifecycle env -> env | jamais preuve runtime seule |
 
-### 1.2.1 Format canonique
+### 1.2.1 Fraîcheur Git obligatoire
+
+`Git/UAC JSON source of truth` n'est vrai que si CP peut prouver le lien entre
+le desired state matérialisé et un commit du catalog. Sinon le flux doit être
+affiché comme raccourci DB/runtime, jamais comme GitOps complet.
+
+Toute projection Console ou API de déploiement doit exposer:
+
+| Champ | Valeurs | Contrat |
+|-------|---------|---------|
+| `desired_source` | `git`, `db_shortcut`, `unknown` | provenance du desired state matérialisé |
+| `git_sync_status` | `up_to_date`, `missing_commit`, `git_sync_disabled`, `unknown` | fraîcheur du catalog Git pour cette génération |
+| `desired_commit_sha` | SHA Git ou `null` | commit exact qui porte le desired state |
+| `desired_git_path` | chemin catalog ou `null` | fichier/dossier Git attendu |
+
+Invariants:
+- `deployment_status=synced` prouve uniquement l'ack runtime gateway. Il ne
+  prouve pas que `stoa-catalog` est à jour.
+- `desired_source=db_shortcut` est autorisé pour dev/demo, mais doit être
+  visible dans la Console.
+- En production, une action directe vers une gateway doit être refusée tant que
+  `desired_source != git` ou `desired_commit_sha` est absent. La Console doit
+  générer/attendre une PR GitOps conformément à ADR-040.
+- En staging, un raccourci peut rester toléré pendant la démo, mais la ligne doit
+  rester marquée `db_shortcut` tant qu'aucun commit catalog n'est attaché.
+
+### 1.2.2 Format canonique
 
 L'UAC canonique est un document JSON validé par JSON Schema. La spec ne doit pas
 présenter `stoa.yaml` comme source de vérité UAC.
@@ -259,6 +285,7 @@ Axes UI obligatoires pour une ligne `/api-deployments`:
 
 | Axe | Source | Exemple | Ne doit pas masquer |
 |-----|--------|---------|---------------------|
+| Fraîcheur Git | `desired_source`, `git_sync_status`, `desired_commit_sha`, `desired_git_path` | `git/up_to_date`, `db_shortcut/missing_commit` | le statut runtime gateway |
 | Déploiement | `GatewayDeployment.sync_status`, `desired_generation`, `last_synced_generation` | `synced`, `pending`, `failed` | le nom API et la gateway cible |
 | Connectivité gateway | heartbeat, route-sync poll, dernier ack agent | `online`, `restarting`, `offline`, `stale` | un deployment déjà `synced` |
 | Runtime call optionnel | test manuel ou smoke ciblé | `2xx`, `404`, backend unreachable | la preuve d'ack gateway |
@@ -422,11 +449,16 @@ Réconcilier le desired state dans CP.
 PASS si CP expose une projection matérialisée contenant:
 - API/catalog identity
 - desired generation/hash
+- desired source (`git` ou `db_shortcut`)
+- Git freshness (`git_sync_status`, `desired_commit_sha`, `desired_git_path`)
 - environment overlay résolu
 - gateway targets candidates
 
 FAIL si CP invente une configuration runtime qui ne peut pas être retracée vers
 un UAC JSON versionné dans Git, sauf raccourci dev/demo explicitement marqué.
+
+FAIL si un déploiement production est accepté avec `desired_source=db_shortcut`
+ou sans `desired_commit_sha`.
 
 ### ADF-G3 — Assignments et capabilities résolus
 
@@ -537,10 +569,15 @@ PASS si la ligne affiche:
 - environnement gateway
 - statut dérivé de `GatewayDeployment.sync_status`
 - statut de connectivité gateway séparé du statut deployment
+- provenance Git/DB du desired state (`desired_source`, `git_sync_status`,
+  `desired_commit_sha`)
 - last sync basé sur `last_sync_success`
 
 FAIL si la page affiche un succès basé uniquement sur `Deployment.completed_at`
 ou `Promotion.completed_at`.
+
+FAIL si la page affiche un deployment `synced` comme GitOps complet alors que
+`git_sync_status != up_to_date`.
 
 FAIL si une gateway offline/restarting fait repasser une API déjà `synced` en
 `failed` sans nouvelle génération, undeploy, ou drift confirmé.
@@ -793,6 +830,7 @@ Critère GO pour toute PR touchant ce flux:
 | A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
 | A-B11 | `/apis` recrée un chemin de déploiement parallèle à `/api-deployments` | P0 | ADF-17 |
 | A-B12 | spec encore trop `GatewayDeployment`-first si Git/UAC JSON desired state n'est pas vérifié avant matérialisation | P0 | ADF-G1, ADF-G2, ADF-G3, ADF-G4, ADF-G5 |
+| A-B14 | `stoa-catalog` n'est pas mis à jour ou aucun commit SHA n'est attaché au desired state runtime | P0 | ADF-G1, ADF-G2, ADF-3, ADF-16 |
 
 ## 7. Révisions
 
@@ -806,3 +844,4 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-26 | Codex | Ajout du preflight adapter WebMethods avant dispatch Kafka/SSE |
 | 2026-04-26 | Codex | Renommage en Runtime Reconciliation Contract et clarification connect/edge/sidecar |
 | 2026-04-26 | Codex | Clarification UAC JSON canonique; YAML réservé au packaging infra/GitOps |
+| 2026-04-26 | Codex | Ajout du contrat de fraîcheur Git et refus prod sans desired state Git-backed |

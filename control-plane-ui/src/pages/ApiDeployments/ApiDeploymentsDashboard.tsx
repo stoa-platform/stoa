@@ -59,6 +59,31 @@ function canonicalSortValue(env: CanonicalEnvironment): number {
   return 2;
 }
 
+function deploymentGitStatus(d: GatewayDeployment): {
+  source: string;
+  status: string;
+  commit?: string;
+} {
+  const source =
+    d.desired_source || (d.desired_state?.desired_source as string | undefined) || 'unknown';
+  const status =
+    d.git_sync_status || (d.desired_state?.git_sync_status as string | undefined) || 'unknown';
+  const commit =
+    d.desired_commit_sha ||
+    (d.desired_state?.desired_commit_sha as string | undefined) ||
+    undefined;
+  return { source, status, commit };
+}
+
+function gitStatusClass(status: string): string {
+  if (status === 'up_to_date')
+    return 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300';
+  if (status === 'missing_commit' || status === 'git_sync_disabled') {
+    return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300';
+  }
+  return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300';
+}
+
 export function ApiDeploymentsDashboard() {
   const { isReady } = useAuth();
   const { activeEnvironment, environments, switchEnvironment } = useEnvironment();
@@ -315,7 +340,7 @@ export function ApiDeploymentsDashboard() {
 
       {/* Table */}
       {loading ? (
-        <TableSkeleton rows={5} columns={5} />
+        <TableSkeleton rows={5} columns={6} />
       ) : deployments.length === 0 ? (
         <EmptyState
           title="No deployments found"
@@ -344,6 +369,9 @@ export function ApiDeploymentsDashboard() {
                     Status
                   </th>
                   <th className="text-left px-4 py-3 text-neutral-500 dark:text-neutral-400 font-medium">
+                    Desired
+                  </th>
+                  <th className="text-left px-4 py-3 text-neutral-500 dark:text-neutral-400 font-medium">
                     Last Sync
                   </th>
                   <th className="text-right px-4 py-3 text-neutral-500 dark:text-neutral-400 font-medium">
@@ -352,53 +380,68 @@ export function ApiDeploymentsDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {deployments.map((d) => (
-                  <tr
-                    key={d.id}
-                    onClick={() => setSelectedDeployment(d)}
-                    className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 cursor-pointer"
-                  >
-                    <td className="px-4 py-3 text-neutral-900 dark:text-white font-medium">
-                      {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
-                      {d.gateway_name || d.gateway_instance_id?.slice(0, 8)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
-                        {d.gateway_environment || '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <SyncStatusBadge status={d.sync_status} />
-                    </td>
-                    <td className="px-4 py-3 text-xs text-neutral-500 dark:text-neutral-400">
-                      {d.last_sync_success ? new Date(d.last_sync_success).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        {(d.sync_status === 'drifted' || d.sync_status === 'error') && (
-                          <button
-                            onClick={() => handleForceSync(d.id)}
-                            disabled={actionLoading === d.id}
-                            className="p-1.5 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                            title="Re-sync"
+                {deployments.map((d) => {
+                  const gitStatus = deploymentGitStatus(d);
+                  return (
+                    <tr
+                      key={d.id}
+                      onClick={() => setSelectedDeployment(d)}
+                      className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 cursor-pointer"
+                    >
+                      <td className="px-4 py-3 text-neutral-900 dark:text-white font-medium">
+                        {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
+                        {d.gateway_name || d.gateway_instance_id?.slice(0, 8)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
+                          {d.gateway_environment || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <SyncStatusBadge status={d.sync_status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`w-fit rounded px-2 py-0.5 text-xs font-semibold ${gitStatusClass(gitStatus.status)}`}
                           >
-                            <RotateCcw className="h-4 w-4" />
+                            {gitStatus.source}/{gitStatus.status}
+                          </span>
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                            {gitStatus.commit ? gitStatus.commit.slice(0, 8) : 'No Git commit'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-neutral-500 dark:text-neutral-400">
+                        {d.last_sync_success ? new Date(d.last_sync_success).toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          {(d.sync_status === 'drifted' || d.sync_status === 'error') && (
+                            <button
+                              onClick={() => handleForceSync(d.id)}
+                              disabled={actionLoading === d.id}
+                              className="p-1.5 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              title="Re-sync"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleUndeploy(d.id)}
+                            disabled={actionLoading === d.id}
+                            className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Undeploy"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleUndeploy(d.id)}
-                          disabled={actionLoading === d.id}
-                          className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          title="Undeploy"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

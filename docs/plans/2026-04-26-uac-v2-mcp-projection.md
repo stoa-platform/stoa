@@ -1,11 +1,13 @@
 ---
 id: plan-2026-04-26-uac-v2-mcp-projection
 triggers: [a, b]
-validation_status: validated
+validation_status: executed
 challenge_ref: docs/decisions/2026-04-26-uac-v2-mcp-projection.md
 ---
 
 > **Reframed after Decision Gate #9** (2026-04-26). Original draft proposed Python+Rust parity in lockstep. Reframe: Python first, smoke/canary second, Rust **only if usage confirmed**. See `challenge_ref` for full arbitrage.
+>
+> **Status (2026-04-26, end of day) : EXECUTED.** PR 1 merged (`82c5ebb49`, #2585). PR 2 merged (`d368ae4a4`, #2588). PR 3 closed by signal #1 audit (NOGO Rust parity — gateway is a consumer of cp-api projection, not a generator). Go criteria atteint. Voir la section "Audit du signal #1" dans `challenge_ref`.
 
 # Plan — UAC V2, projection MCP de la metadata `endpoint.llm`
 

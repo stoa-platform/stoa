@@ -54,3 +54,45 @@ Le Decision Gate #9 valide une fois de plus le pattern "preuve d'abord, parité 
 ## External index
 
 Le log cross-repo `stoa-docs/HEGEMON/DECISION_GATE.md` s'arrête à #7 ; #8 n'y a pas été enregistré. Conformément à la décision opérationnelle (2026-04-26) de ne pas rétablir une mécanique cross-repo abandonnée, **#9 reste self-contained ici**. Si la pratique cross-repo est reprise un jour, #8 et #9 seront enregistrés à ce moment-là dans le même mouvement.
+
+## Audit du signal #1 (2026-04-26, post PR 2)
+
+Audit lecture du chemin runtime `tools/list` côté `stoa-gateway`, exécuté juste après le merge de PR 2 (`d368ae4a4`).
+
+**Verdict : NOGO confirmé sur PR 3 (Rust parity).** Le gateway Rust est un *consumer* de la projection cp-api, pas un *generator*. Aucun équivalent Rust de `_build_description` (cp-api Python) ne s'exécute sur le chemin chaud `/mcp/tools/list`.
+
+### Chaîne runtime confirmée
+
+```
+client MCP → GET /mcp/tools/list
+  → stoa-gateway/src/mcp/handlers.rs:314      state.tool_registry.list(...)
+  → registry rempli au boot par stoa_tools.rs:298  refresh_tools_for_tenant()
+  → tool_proxy.rs:340                         GET /v1/internal/gateways/tools/generated
+  → cp-api lit la table mcp_generated_tools
+  → tools projetés par UacToolGenerator._build_description (modifié en PR 1, #2585)
+```
+
+Le gateway réutilise tel quel le champ `description` reçu de cp-api (`stoa_tools.rs:48,93-96`). Pas de re-projection Rust en chemin chaud.
+
+### Code Rust qui ressemble à une projection mais ne l'est pas
+
+- `stoa-gateway/src/uac/binders/mcp.rs:46-93` — `McpBinder::generate_tool_definitions()` construit bien des descriptions, mais appelé uniquement depuis `handlers/admin/contracts.rs:72-76` (POST `/admin/contracts`), jamais sur `tools/list`.
+- `stoa-gateway/src/mcp/tools/stoa_tools.rs:114-130` — `infer_action()` est une inférence d'action, pas un équivalent de `_build_description`.
+
+### Implications
+
+- **Signal #1 : NON.** Le chemin gateway → `tools/list` ne consomme pas de projection Rust.
+- **Signal #2** (canary mergé + retour client agent) : partiellement satisfait (canary mergé via PR 2). Pas encore de retour agent en prod, mais sans projection Rust, la question ne se pose plus.
+- **Signal #3** : aucune régression de parité possible (pas de double projection à comparer).
+
+**Décision : PR 3 fermée, aucun ticket backlog ouvert.** Le gateway Rust restera consumer de cp-api pour la metadata projetée. Le seul lieu de maintenance des descriptions reste `control-plane-api/src/services/uac_tool_generator.py`.
+
+### Plan UAC V2 = exécuté
+
+| PR | État | Merge |
+|---|---|---|
+| PR 1 — cp-api generator enrichi | ✅ Merged | `82c5ebb49` (#2585) |
+| PR 2 — smoke + canary | ✅ Merged | `d368ae4a4` (#2588) |
+| PR 3 — Rust parity | ✅ Closed (audit signal #1 NOGO) | n/a |
+
+Go criteria du plan ("`tools/list` expose `Intent` + `Side effects` sur le canary, sans casser les tools legacy") atteint à 100%.

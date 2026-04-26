@@ -1,0 +1,52 @@
+{
+  "name": "example-catalog-write",
+  "version": "1.0.0",
+  "tenant_id": "example",
+  "display_name": "Example Catalog — Write",
+  "description": "Canonical UAC example for a non-destructive write (resource creation).",
+  "classification": "H",
+  "required_policies": ["rate-limit", "auth-jwt"],
+  "status": "published",
+  "endpoints": [
+    {
+      "path": "/catalog/items",
+      "methods": ["POST"],
+      "backend_url": "https://backend.example.local/v1/catalog",
+      "operation_id": "create_catalog_item",
+      "input_schema": {
+        "type": "object",
+        "required": ["name", "price"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "price": { "type": "number", "minimum": 0 },
+          "sku": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "price": { "type": "number" }
+        },
+        "additionalProperties": true
+      },
+      "llm": {
+        "summary": "Create a new catalog item.",
+        "intent": "Use when the agent needs to add a new item to the catalog. Mutating but reversible (the created item can be deleted via the destructive endpoint).",
+        "tool_name": "example_catalog_create_item",
+        "side_effects": "write",
+        "safe_for_agents": true,
+        "requires_human_approval": false,
+        "examples": [
+          {
+            "input": { "name": "Espresso 250g", "price": 12.5, "sku": "esp-250" },
+            "expected_output_contains": { "name": "Espresso 250g" }
+          }
+        ]
+      }
+    }
+  ]
+}

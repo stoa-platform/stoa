@@ -71,6 +71,24 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Mark fallback fetch baseline
+      # CAB-2175 stale-comment guard: capture an ISO-8601 UTC
+      # timestamp BEFORE claude-code-action runs. The fallback fetch
+      # step uses this as a `createdAt >=` floor on the issue's
+      # comments, so a prior-run Council comment still sitting on the
+      # issue cannot be picked up if the current run fails to post a
+      # fresh one. No buffer is applied: clock skew between runner
+      # and GitHub API is bounded by NTP and our fail-mode is
+      # closed-on-skew (reject ambiguous comments rather than risk
+      # acting on stale evidence).
+      id: baseline
+      shell: bash
+      run: |
+        set -uo pipefail
+        TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        echo "start-ts=${TS}" >> "$GITHUB_OUTPUT"
+        echo "::notice::council-run: fallback baseline ts=${TS}"
+
     - name: Run Claude Council action
       id: claude
       continue-on-error: true
@@ -102,8 +120,12 @@ runs:
       # report via `gh issue comment`, the "Council Score / Plan Score"
       # trailer ends up in a tool_use.input block — the parser sees only
       # assistant.text turns and returns score=null. Fetch the latest
-      # comment whose body contains the stage-specific marker and feed
-      # its body to the parser via --fallback-comment.
+      # comment whose body contains the stage-specific marker AND was
+      # created >= the pre-Claude baseline timestamp, then feed its
+      # body to the parser via --fallback-comment. The createdAt floor
+      # rejects stale Council comments from prior runs on the same
+      # issue: if the current run fails to post a fresh comment, no
+      # fallback is found and the verdict gate stays closed.
       id: fallback
       if: always()
       shell: bash
@@ -112,10 +134,19 @@ runs:
         ISSUE_NUMBER: ${{ inputs.issue-number }}
         STAGE: ${{ inputs.stage }}
         REPO: ${{ github.repository }}
+        SINCE_TS: ${{ steps.baseline.outputs.start-ts }}
       run: |
         set -uo pipefail
         if [ -z "$ISSUE_NUMBER" ]; then
           echo "::warning::council-run: issue-number empty — fallback skipped"
+          echo "path=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ -z "$SINCE_TS" ]; then
+          # Baseline step is unconditional, so absent SINCE_TS means
+          # the composite is being run in an unexpected state. Fail
+          # closed by skipping the fetch entirely.
+          echo "::warning::council-run: baseline timestamp missing — fallback skipped"
           echo "path=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
@@ -129,18 +160,19 @@ runs:
             ;;
         esac
         OUT="$RUNNER_TEMP/council-fallback.md"
-        # Last comment whose body contains the marker. `last(stream)`
+        # Last comment whose createdAt is at or after the pre-Claude
+        # baseline AND whose body contains the marker. `last(stream)`
         # returns null on empty stream; `// ""` then yields the empty
         # string so $BODY stays empty rather than the literal "null".
         BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json comments \
-          --jq "last(.comments[] | select(.body | contains(\"$MARKER\")) | .body) // \"\"" \
+          --jq "last(.comments[] | select(.createdAt >= \"$SINCE_TS\") | select(.body | contains(\"$MARKER\")) | .body) // \"\"" \
           2>/dev/null || true)
         if [ -n "$BODY" ]; then
           printf '%s' "$BODY" > "$OUT"
-          echo "::notice::council-run: fallback comment captured ($(wc -c <"$OUT" | tr -d ' ') bytes, marker=\"$MARKER\")"
+          echo "::notice::council-run: fallback comment captured ($(wc -c <"$OUT" | tr -d ' ') bytes, marker=\"$MARKER\", since=$SINCE_TS)"
           echo "path=$OUT" >> "$GITHUB_OUTPUT"
         else
-          echo "::notice::council-run: no comment matching \"$MARKER\" on issue #${ISSUE_NUMBER} — fallback skipped"
+          echo "::notice::council-run: no comment matching \"$MARKER\" since $SINCE_TS on issue #${ISSUE_NUMBER} — fallback skipped"
           echo "path=" >> "$GITHUB_OUTPUT"
         fi
 

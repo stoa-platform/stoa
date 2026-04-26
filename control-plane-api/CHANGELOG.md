@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.9.0...control-plane-api-v1.10.0) (2026-04-26)
+
+
+### Features
+
+* **uac:** enrich MCP tool description with endpoint.llm metadata ([#2585](https://github.com/stoa-platform/stoa/issues/2585)) ([82c5ebb](https://github.com/stoa-platform/stoa/commit/82c5ebb4934b25e4ee0ee3d32d8679a513b2139f))
+
+
+### Bug Fixes
+
+* **deployments:** expose Git desired state freshness ([#2583](https://github.com/stoa-platform/stoa/issues/2583)) ([0da3768](https://github.com/stoa-platform/stoa/commit/0da37680380f8bd4ef554470ff677a5364a1c222))
+
 ## [1.9.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.8.7...control-plane-api-v1.9.0) (2026-04-26)
 
 

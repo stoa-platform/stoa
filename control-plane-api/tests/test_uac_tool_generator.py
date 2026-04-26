@@ -144,6 +144,73 @@ class TestDescription:
         desc = UacToolGenerator._build_description(ep, "Item Service")
         assert desc == "GET, POST /items — Item Service"
 
+    def test_description_without_llm_unchanged(self):
+        """Endpoint without llm metadata: description is byte-identical to legacy format."""
+        ep = UacEndpointSpec(
+            path="/items",
+            methods=["GET"],
+            backend_url="https://b.com/items",
+        )
+        assert ep.llm is None
+        desc = UacToolGenerator._build_description(ep, "Item Service")
+        assert desc == "GET /items — Item Service"
+
+    def test_description_with_llm_metadata(self):
+        """Endpoint with llm metadata: description is enriched on additional lines."""
+        from src.schemas.uac import (
+            UacEndpointLlmExample,
+            UacEndpointLlmSpec,
+            UacEndpointSideEffects,
+        )
+
+        ep = UacEndpointSpec(
+            path="/items/{id}",
+            methods=["GET"],
+            backend_url="https://b.com/items/{id}",
+            llm=UacEndpointLlmSpec(
+                summary="Fetch an item.",
+                intent="Use to read an item by id.",
+                tool_name="example_get_item",
+                side_effects=UacEndpointSideEffects.READ,
+                safe_for_agents=True,
+                requires_human_approval=False,
+                examples=[UacEndpointLlmExample(input={"id": "x"})],
+            ),
+        )
+        desc = UacToolGenerator._build_description(ep, "Item Service")
+        assert desc == (
+            "GET /items/{id} — Item Service\n"
+            "Summary: Fetch an item.\n"
+            "Intent: Use to read an item by id.\n"
+            "Side effects: read"
+        )
+
+    def test_description_with_destructive_llm_includes_approval_marker(self):
+        """Destructive endpoints with requires_human_approval=true include the marker line."""
+        from src.schemas.uac import (
+            UacEndpointLlmExample,
+            UacEndpointLlmSpec,
+            UacEndpointSideEffects,
+        )
+
+        ep = UacEndpointSpec(
+            path="/items/{id}",
+            methods=["DELETE"],
+            backend_url="https://b.com/items/{id}",
+            llm=UacEndpointLlmSpec(
+                summary="Delete an item.",
+                intent="Use only when authorised.",
+                tool_name="example_delete_item",
+                side_effects=UacEndpointSideEffects.DESTRUCTIVE,
+                safe_for_agents=False,
+                requires_human_approval=True,
+                examples=[UacEndpointLlmExample(input={"id": "x"})],
+            ),
+        )
+        desc = UacToolGenerator._build_description(ep, "Item Service")
+        assert "Side effects: destructive" in desc
+        assert desc.endswith("HUMAN APPROVAL REQUIRED")
+
 
 # ---------------------------------------------------------------------------
 # Input schema tests

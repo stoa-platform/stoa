@@ -106,9 +106,20 @@ class UacToolGenerator:
 
     @staticmethod
     def _build_description(endpoint: UacEndpointSpec, contract_display: str) -> str:
-        """Build human-readable description."""
+        """Build human-readable description, enriched with endpoint.llm if present."""
         methods = ", ".join(endpoint.methods) if endpoint.methods else "GET"
-        return f"{methods} {endpoint.path} — {contract_display}"
+        legacy = f"{methods} {endpoint.path} — {contract_display}"
+        if endpoint.llm is None:
+            return legacy
+        lines = [
+            legacy,
+            f"Summary: {endpoint.llm.summary}",
+            f"Intent: {endpoint.llm.intent}",
+            f"Side effects: {endpoint.llm.side_effects}",
+        ]
+        if endpoint.llm.requires_human_approval:
+            lines.append("HUMAN APPROVAL REQUIRED")
+        return "\n".join(lines)
 
     @staticmethod
     def _build_input_schema(endpoint: UacEndpointSpec) -> dict | None:

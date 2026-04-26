@@ -165,6 +165,10 @@ describe('ApiDeploymentsDashboard', () => {
           api_catalog_id: 'api-1',
           gateway_instance_id: 'gw-1',
           desired_state: { api_name: 'Payments' },
+          desired_source: 'db_shortcut',
+          git_sync_status: 'missing_commit',
+          desired_commit_sha: undefined,
+          desired_git_path: 'tenants/oasis-gunters/apis/Payments',
           desired_at: '2026-04-25T10:00:00Z',
           actual_state: { api_name: 'Payments' },
           sync_status: 'synced',
@@ -183,6 +187,8 @@ describe('ApiDeploymentsDashboard', () => {
 
     expect(await screen.findByText('Payments')).toBeInTheDocument();
     expect(screen.getByText('synced')).toBeInTheDocument();
+    expect(screen.getByText('db_shortcut/missing_commit')).toBeInTheDocument();
+    expect(screen.getByText('No Git commit')).toBeInTheDocument();
     expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
 });

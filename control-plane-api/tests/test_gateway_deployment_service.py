@@ -1,8 +1,8 @@
 """Tests for GatewayDeploymentService — deploy, undeploy, force_sync."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
-from datetime import datetime, timezone
+
+import pytest
 
 
 class TestGatewayDeploymentService:
@@ -18,6 +18,8 @@ class TestGatewayDeploymentService:
             "version": "2.0.0",
             "openapi_spec": {"openapi": "3.0.0", "info": {"title": "Payments"}},
             "api_metadata": None,
+            "git_path": None,
+            "git_commit_sha": None,
             "status": "active",
         }
         defaults.update(overrides)
@@ -34,6 +36,7 @@ class TestGatewayDeploymentService:
             "gateway_type": MagicMock(value="webmethods"),
             "base_url": "https://gw.example.com",
             "auth_config": {},
+            "environment": "dev",
             "enabled": True,
         }
         defaults.update(overrides)
@@ -99,6 +102,8 @@ class TestGatewayDeploymentService:
             assert len(deployments) == 1
             mock_deploy_repo.create.assert_awaited_once()
             mock_kafka.publish.assert_awaited()
+            assert deployments[0].desired_state["desired_source"] == "db_shortcut"
+            assert deployments[0].desired_state["desired_commit_sha"] is None
 
     @pytest.mark.asyncio
     async def test_deploy_multiple_gateways(self):

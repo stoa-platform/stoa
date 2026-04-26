@@ -33,6 +33,27 @@ class GatewayDeploymentService:
         self.gw_repo = GatewayInstanceRepository(db)
 
     @staticmethod
+    def _desired_state_git_metadata(api_catalog) -> dict:
+        """Return Git provenance metadata for a materialized desired state."""
+        git_path = getattr(api_catalog, "git_path", None) or (
+            f"tenants/{api_catalog.tenant_id}/apis/{api_catalog.api_name}"
+        )
+        git_commit_sha = getattr(api_catalog, "git_commit_sha", None)
+        if git_commit_sha:
+            return {
+                "desired_source": "git",
+                "git_sync_status": "up_to_date",
+                "desired_commit_sha": git_commit_sha,
+                "desired_git_path": git_path,
+            }
+        return {
+            "desired_source": "db_shortcut",
+            "git_sync_status": "git_sync_disabled" if not settings.GIT_SYNC_ON_WRITE else "missing_commit",
+            "desired_commit_sha": None,
+            "desired_git_path": git_path,
+        }
+
+    @staticmethod
     def build_desired_state(api_catalog) -> dict:
         """Build desired state dict from an API catalog entry.
 
@@ -73,7 +94,14 @@ class GatewayDeploymentService:
             "methods": sorted(methods) if methods else ["GET", "POST", "PUT", "DELETE"],
             "activated": True,
             "openapi_spec": spec_data if spec_data else None,
+            **GatewayDeploymentService._desired_state_git_metadata(api_catalog),
         }
+
+    @staticmethod
+    def _requires_git_backed_desired_state(gateway) -> bool:
+        """Return True for environments where direct DB-only deployment is forbidden."""
+        environment = (getattr(gateway, "environment", "") or "").strip().lower()
+        return environment in {"prod", "production"}
 
     async def deploy_api(
         self,
@@ -103,6 +131,11 @@ class GatewayDeploymentService:
                 raise ValueError(f"Gateway instance {gw_id} not found")
             if not gateway.enabled:
                 raise PermissionError(f"Gateway '{gateway.name}' is disabled. " f"Enable it before deploying.")
+            if self._requires_git_backed_desired_state(gateway) and not getattr(api_catalog, "git_commit_sha", None):
+                raise PermissionError(
+                    "Production deployment requires a Git-backed UAC/catalog desired state "
+                    f"before targeting gateway '{gateway.name}'."
+                )
 
             existing = await self.deploy_repo.get_by_api_and_gateway(api_catalog_id, gw_id)
             if existing:

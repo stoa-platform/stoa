@@ -14118,6 +14118,14 @@ export interface components {
             desired_state: {
                 [key: string]: unknown;
             };
+            /** Desired Source */
+            desired_source?: string | null;
+            /** Git Sync Status */
+            git_sync_status?: string | null;
+            /** Desired Commit Sha */
+            desired_commit_sha?: string | null;
+            /** Desired Git Path */
+            desired_git_path?: string | null;
             /** Gateway Display Name */
             gateway_display_name?: string | null;
             /** Gateway Environment */

@@ -208,6 +208,10 @@ class GatewayDeploymentResponse(BaseModel):
     api_catalog_id: UUID
     gateway_instance_id: UUID
     desired_state: dict
+    desired_source: str | None = None
+    git_sync_status: str | None = None
+    desired_commit_sha: str | None = None
+    desired_git_path: str | None = None
     desired_at: datetime
     actual_state: dict | None = None
     actual_at: datetime | None = None
@@ -267,6 +271,13 @@ class ConsoleDeploymentRow(BaseModel):
     tenant_id: str
     environment: str
     desired_state: dict
+    desired_source: str = Field(..., description="Configuration source: git, db_shortcut, or unknown")
+    git_sync_status: str = Field(
+        ...,
+        description="Catalog freshness: up_to_date, missing_commit, git_sync_disabled, or unknown",
+    )
+    desired_commit_sha: str | None = None
+    desired_git_path: str | None = None
     gateway_target: ConsoleGatewayTarget
     deployment_status: str
     gateway_health: str

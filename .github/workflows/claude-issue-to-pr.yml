@@ -271,32 +271,20 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - name: Verify Stage 1 Council
-        # Legacy parity: prevent /go on a fresh issue from running Stage
-        # 2 without Stage 1 ever firing. Outputs `validated=true|false`;
-        # downstream operational steps gate on it (no silent exit).
+      - uses: ./.github/actions/verify-stage1
+        # CAB-2177: prevent /go (or workflow_dispatch stage=plan) from
+        # running Stage 2 without a current Stage 1 pass. Outputs
+        # `validated=true|false`; downstream operational steps gate
+        # on it. The composite checks only the `council-validated`
+        # label — the legacy comment-fallback was removed because a
+        # stale Council comment can exist without a corresponding
+        # label apply (verdict-gated, race, manual removal), making
+        # it unreliable evidence whenever the label is currently
+        # absent.
         id: verify-stage1
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ needs.prepare.outputs.number }}
-        run: |
-          set -uo pipefail
-          LABELS=$(gh issue view "$ISSUE_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
-          if echo "$LABELS" | grep -q "council-validated"; then
-            echo "Stage 1 confirmed via label"
-            echo "validated=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Fallback: scan comments for "Council Score" (legacy behaviour).
-          HAS_COMMENT=$(gh issue view "$ISSUE_NUMBER" --json comments \
-            --jq '[.comments[].body | select(contains("Council Score"))] | length')
-          if [ "${HAS_COMMENT:-0}" -gt 0 ]; then
-            echo "Stage 1 confirmed via comment fallback"
-            echo "validated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::No Stage 1 Council on this issue — skipping plan validation"
-            echo "validated=false" >> "$GITHUB_OUTPUT"
-          fi
+        with:
+          issue-number: ${{ needs.prepare.outputs.number }}
+          github-token: ${{ github.token }}
 
       - uses: ./.github/actions/label-guard
         id: guard

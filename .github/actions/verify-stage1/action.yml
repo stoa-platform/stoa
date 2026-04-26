@@ -1,0 +1,35 @@
+name: 'Verify Stage 1 Council'
+description: >-
+  Confirm Stage 1 Council validation by checking for the
+  `council-validated` label on the issue. CAB-2177 replaces the
+  legacy inline verify-stage1 step that had an unguarded
+  comment-fallback (any prior "Council Score" comment satisfied the
+  gate, even from verdict-gated runs that never applied the label,
+  or after a deliberate label removal in a redo flow). Now the label
+  is the single source of truth, mirroring the freshness pattern
+  CAB-2175 introduced in council-run.
+
+inputs:
+  issue-number:
+    description: 'GitHub issue number to check.'
+    required: true
+  github-token:
+    description: 'GitHub token for `gh issue view` (needs issues:read).'
+    required: true
+
+outputs:
+  validated:
+    description: '"true" if `council-validated` is currently set on the issue, else "false".'
+    value: ${{ steps.check.outputs.validated }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check council-validated label
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}
+      run: |
+        "${GITHUB_WORKSPACE}/scripts/ci/verify_stage1.sh" "$ISSUE_NUMBER"

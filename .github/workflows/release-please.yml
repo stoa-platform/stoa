@@ -109,14 +109,6 @@ jobs:
             echo "| stoa-go | ${{ steps.release.outputs['stoa-go--version'] }} | ${{ steps.release.outputs['stoa-go--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
           fi
 
-  trigger-docker:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.any_release_created == 'true' }}
-    uses: ./.github/workflows/docker-publish.yml
-    secrets: inherit
-    with:
-      services: ${{ needs.release-please.outputs.released_services }}
-
   trigger-goreleaser:
     needs: release-please
     if: ${{ needs.release-please.outputs.stoa_go_release_created == 'true' }}

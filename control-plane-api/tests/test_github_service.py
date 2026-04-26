@@ -1,5 +1,6 @@
 """Tests for GitHubService (CAB-1890 Wave 2, CAB-2011 write methods)."""
 
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -497,6 +498,7 @@ class TestCreateApi:
         actions = mock_batch.call_args[1]["actions"]
         paths = [a["file_path"] for a in actions]
         assert "tenants/acme/apis/billing-api/api.yaml" in paths
+        assert "tenants/acme/apis/billing-api/uac.json" in paths
         assert "tenants/acme/apis/billing-api/policies/.gitkeep" in paths
 
     @pytest.mark.asyncio
@@ -516,29 +518,44 @@ class TestCreateApi:
         mock_exists.return_value = False
         mock_batch.return_value = {"sha": "abc", "url": ""}
 
-        api_data = {"name": "pet-api", "openapi_spec": "openapi: 3.0.0\ninfo:\n  title: Pets"}
+        api_data = {
+            "id": "pet-api",
+            "name": "pet-api",
+            "display_name": "Pet API",
+            "backend_url": "https://pets.example.com",
+            "openapi_spec": {
+                "openapi": "3.0.0",
+                "info": {"title": "Pets", "version": "1.0.0"},
+                "paths": {"/pets": {"get": {"operationId": "listPets", "responses": {"200": {"description": "ok"}}}}},
+            },
+        }
         await service.create_api("demo", api_data)
 
         actions = mock_batch.call_args[1]["actions"]
-        paths = [a["file_path"] for a in actions]
+        paths = {a["file_path"]: a["content"] for a in actions}
         assert "tenants/demo/apis/pet-api/openapi.yaml" in paths
+        uac = json.loads(paths["tenants/demo/apis/pet-api/uac.json"])
+        assert uac["name"] == "pet-api"
+        assert uac["endpoints"][0]["backend_url"] == "https://pets.example.com/pets"
 
 
 class TestUpdateApi:
     @pytest.mark.asyncio
-    @patch.object(GitHubService, "update_file", new_callable=AsyncMock)
+    @patch.object(GitHubService, "batch_commit", new_callable=AsyncMock)
+    @patch.object(GitHubService, "_file_exists", new_callable=AsyncMock)
     @patch.object(GitHubService, "get_file_content", new_callable=AsyncMock)
-    async def test_update_api_success(self, mock_get, mock_update, service):
+    async def test_update_api_success(self, mock_get, mock_exists, mock_batch, service):
         mock_get.return_value = "name: billing-api\nversion: 1.0.0\n"
-        mock_update.return_value = {"sha": "new", "url": ""}
+        mock_exists.return_value = True
+        mock_batch.return_value = {"sha": "new", "url": ""}
 
         result = await service.update_api("acme", "billing-api", {"version": "2.0.0"})
 
         assert result is True
-        mock_update.assert_called_once()
-        # Verify the YAML content includes merged data
-        call_args = mock_update.call_args[0]
-        assert "2.0.0" in call_args[2]
+        mock_batch.assert_called_once()
+        actions = mock_batch.call_args[1]["actions"]
+        assert any(a["file_path"].endswith("/api.yaml") and "2.0.0" in a["content"] for a in actions)
+        assert any(a["file_path"].endswith("/uac.json") for a in actions)
 
     @pytest.mark.asyncio
     @patch.object(GitHubService, "get_file_content", new_callable=AsyncMock)

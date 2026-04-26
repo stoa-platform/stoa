@@ -123,6 +123,19 @@ def _validate_openapi_spec(spec_str: str) -> None:
         )
 
 
+def _parse_openapi_spec(spec_str: str | None) -> dict | None:
+    """Parse JSON/YAML OpenAPI input into the DB/event shape."""
+    if not spec_str:
+        return None
+    import yaml
+
+    try:
+        parsed = json.loads(spec_str) if spec_str.strip().startswith("{") else yaml.safe_load(spec_str)
+    except (json.JSONDecodeError, yaml.YAMLError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _api_from_catalog(api: APICatalog) -> APIResponse:
     """Convert APICatalog DB model to APIResponse."""
     metadata = api.api_metadata or {}
@@ -272,12 +285,7 @@ async def create_api(
         "deployments": {"dev": False, "staging": False},
     }
 
-    openapi_spec = None
-    if api.openapi_spec:
-        try:
-            openapi_spec = json.loads(api.openapi_spec)
-        except (json.JSONDecodeError, TypeError):
-            openapi_spec = None
+    openapi_spec = _parse_openapi_spec(api.openapi_spec)
 
     try:
         stmt = insert(APICatalog).values(
@@ -300,8 +308,13 @@ async def create_api(
             tenant_id=tenant_id,
             api_data={
                 "id": api_id,
-                "name": api.name,
+                "name": api_id,
+                "display_name": api.display_name,
                 "version": api.version,
+                "description": api.description,
+                "backend_url": api.backend_url,
+                "tags": tags,
+                "openapi_spec": openapi_spec,
             },
             user_id=user.id,
         )
@@ -386,10 +399,7 @@ async def update_api(
             promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
             current.portal_published = any(tag.lower() in promotion_tags for tag in updates["tags"])
         if "openapi_spec" in updates:
-            try:
-                current.openapi_spec = json.loads(updates["openapi_spec"]) if updates["openapi_spec"] else None
-            except (json.JSONDecodeError, TypeError):
-                current.openapi_spec = None
+            current.openapi_spec = _parse_openapi_spec(updates["openapi_spec"])
 
         current.api_metadata = metadata
         current.synced_at = datetime.now(UTC)
@@ -399,7 +409,16 @@ async def update_api(
         # Emit Kafka event
         await kafka_service.emit_api_updated(
             tenant_id=tenant_id,
-            api_data={"id": api_id, **updates},
+            api_data={
+                "id": api_id,
+                "name": current.api_id,
+                "display_name": current.api_name,
+                "version": current.version,
+                "description": metadata.get("description", ""),
+                "backend_url": metadata.get("backend_url", ""),
+                "tags": current.tags or [],
+                "openapi_spec": current.openapi_spec,
+            },
             user_id=user.id,
         )
 

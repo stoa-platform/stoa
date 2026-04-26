@@ -267,10 +267,10 @@ describe('APIs', () => {
   it('links writable users to the deployment workflow', async () => {
     renderAPIs();
     await screen.findByText('Payment API');
-    const deploymentLinks = screen.getAllByRole('link', { name: 'Deployments' });
+    const deploymentLinks = screen.getAllByRole('link', { name: 'Open Deployments' });
     expect(deploymentLinks[0]).toHaveAttribute(
       'href',
-      '/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&tenant_id=oasis-gunters'
+      '/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters'
     );
   });
 
@@ -280,7 +280,7 @@ describe('APIs', () => {
     await screen.findByText('Payment API');
     expect(screen.queryByText('Deploy DEV')).not.toBeInTheDocument();
     expect(screen.queryByText('Deploy STG')).not.toBeInTheDocument();
-    expect(screen.queryByText('Deployments')).not.toBeInTheDocument();
+    expect(screen.queryByText('Open Deployments')).not.toBeInTheDocument();
   });
 
   // 4-persona coverage

@@ -33,13 +33,20 @@ interface DeployAPIDialogProps {
   onDeployed: () => void;
   /** Pre-select an API (from API Detail page). Format: "tenantId:apiName" */
   preselectedApiKey?: string;
+  /** Pre-select the target environment when opening from the API catalog. */
+  preselectedEnvironment?: string;
 }
 
 function sameEnvironment(left: string, right: string): boolean {
   return normalizeEnvironment(left) === normalizeEnvironment(right);
 }
 
-export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: DeployAPIDialogProps) {
+export function DeployAPIDialog({
+  onClose,
+  onDeployed,
+  preselectedApiKey,
+  preselectedEnvironment,
+}: DeployAPIDialogProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState('');
   const [apis, setApis] = useState<API[]>([]);
@@ -134,8 +141,17 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
       .getDeployableEnvironments(selectedTenant, selectedApi)
       .then((result) => {
         setDeployableEnvs(result.environments);
+        const requestedEnv = preselectedEnvironment
+          ? result.environments.find(
+              (env) => env.deployable && sameEnvironment(env.environment, preselectedEnvironment)
+            )
+          : undefined;
         const firstDeployable = result.environments.find((e) => e.deployable);
-        if (firstDeployable) setSelectedEnv(firstDeployable.environment);
+        if (requestedEnv) {
+          setSelectedEnv(requestedEnv.environment);
+        } else if (firstDeployable) {
+          setSelectedEnv(firstDeployable.environment);
+        }
       })
       .catch(() => {
         // If API not in catalog yet, dev is always deployable
@@ -144,10 +160,14 @@ export function DeployAPIDialog({ onClose, onDeployed, preselectedApiKey }: Depl
           { environment: 'staging', deployable: false, promotion_status: 'not_promoted' },
           { environment: 'production', deployable: false, promotion_status: 'not_promoted' },
         ]);
-        setSelectedEnv('dev');
+        setSelectedEnv(
+          preselectedEnvironment && sameEnvironment(preselectedEnvironment, 'dev')
+            ? preselectedEnvironment
+            : 'dev'
+        );
       })
       .finally(() => setLoadingEnvs(false));
-  }, [selectedApi, selectedTenant]);
+  }, [selectedApi, selectedTenant, preselectedEnvironment]);
 
   // Load existing deployments when env changes
   useEffect(() => {

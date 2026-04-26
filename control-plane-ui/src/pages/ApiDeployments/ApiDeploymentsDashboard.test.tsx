@@ -32,6 +32,7 @@ const mockGetDeploymentStatusSummary = vi.fn().mockResolvedValue({
   deleting: 0,
   total: 0,
 });
+const mockDeployDialog = vi.hoisted(() => vi.fn());
 
 vi.mock('../../services/api', () => ({
   apiService: {
@@ -45,7 +46,10 @@ vi.mock('../../services/api', () => ({
 }));
 
 vi.mock('../GatewayDeployments/DeployAPIDialog', () => ({
-  DeployAPIDialog: () => <div data-testid="deploy-dialog">Deploy Dialog</div>,
+  DeployAPIDialog: (props: { preselectedApiKey?: string; preselectedEnvironment?: string }) => {
+    mockDeployDialog(props);
+    return <div data-testid="deploy-dialog">Deploy Dialog</div>;
+  },
 }));
 
 vi.mock('../../components/SubNav', () => ({
@@ -97,6 +101,7 @@ describe('ApiDeploymentsDashboard', () => {
       deleting: 0,
       total: 0,
     });
+    mockDeployDialog.mockClear();
   });
 
   it('uses the global environment as the default runtime filter', async () => {
@@ -118,6 +123,30 @@ describe('ApiDeploymentsDashboard', () => {
       target: { value: 'staging' },
     });
 
+    expect(envMock.switchEnvironment).toHaveBeenCalledWith('staging');
+    await waitFor(() => {
+      expect(mockGetGatewayDeployments).toHaveBeenCalledWith({
+        page: 1,
+        page_size: 20,
+        environment: 'staging',
+      });
+    });
+  });
+
+  it('opens the deployment workflow prefilled from /apis query params', async () => {
+    renderWithProviders(<ApiDeploymentsDashboard />, {
+      route:
+        '/api-deployments?api_id=api-1&api_name=payment-api&environment=staging&open_deploy=true&tenant_id=oasis-gunters',
+    });
+
+    expect(await screen.findByTestId('deploy-dialog')).toBeInTheDocument();
+    expect(screen.getByText(/Deployment workflow loaded for/)).toBeInTheDocument();
+    expect(mockDeployDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preselectedApiKey: 'oasis-gunters:payment-api',
+        preselectedEnvironment: 'staging',
+      })
+    );
     expect(envMock.switchEnvironment).toHaveBeenCalledWith('staging');
     await waitFor(() => {
       expect(mockGetGatewayDeployments).toHaveBeenCalledWith({

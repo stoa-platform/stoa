@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.0...control-plane-api-v1.10.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* **deployments:** materialize UAC catalog contract ([880682d](https://github.com/stoa-platform/stoa/commit/880682dc7a9ac4a7e39456e7309f4907abd5d83f))
+
 ## [1.10.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.9.0...control-plane-api-v1.10.0) (2026-04-26)
 
 

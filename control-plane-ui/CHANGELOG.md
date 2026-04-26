@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.6](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.5...control-plane-ui-v1.5.6) (2026-04-26)
+
+
+### Bug Fixes
+
+* align API deployment workflow contract ([68d6f60](https://github.com/stoa-platform/stoa/commit/68d6f60b4ec0dad113ff354cfaedf8d1e115183a))
+* **ui:** make API deployment workflow visible ([#2575](https://github.com/stoa-platform/stoa/issues/2575)) ([9c13ec9](https://github.com/stoa-platform/stoa/commit/9c13ec98ac8017eee4fb7f45939528119abc12b2))
+
 ## [1.5.5](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.4...control-plane-ui-v1.5.5) (2026-04-25)
 
 

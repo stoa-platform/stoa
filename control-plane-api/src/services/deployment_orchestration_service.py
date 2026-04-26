@@ -9,6 +9,7 @@ Sits above GatewayDeploymentService, adding:
 """
 
 import logging
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import select
@@ -22,6 +23,50 @@ from ..repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
 from ..services.gateway_deployment_service import GatewayDeploymentService
 
 logger = logging.getLogger(__name__)
+
+HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+
+
+@dataclass(frozen=True)
+class DeploymentPreflightError:
+    """A deterministic deployment preflight error for one gateway target."""
+
+    gateway_id: str
+    gateway_name: str
+    target_gateway_type: str
+    code: str
+    message: str
+    path: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "gateway_id": self.gateway_id,
+            "gateway_name": self.gateway_name,
+            "target_gateway_type": self.target_gateway_type,
+            "code": self.code,
+            "message": self.message,
+            "path": self.path,
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentPreflightResult:
+    """Preflight result for one gateway target."""
+
+    gateway_id: str
+    gateway_name: str
+    target_gateway_type: str
+    deployable: bool
+    errors: list[DeploymentPreflightError]
+
+    def as_dict(self) -> dict:
+        return {
+            "gateway_id": self.gateway_id,
+            "gateway_name": self.gateway_name,
+            "target_gateway_type": self.target_gateway_type,
+            "deployable": self.deployable,
+            "errors": [error.as_dict() for error in self.errors],
+        }
 
 
 class DeploymentOrchestrationService:
@@ -188,22 +233,19 @@ class DeploymentOrchestrationService:
                 )
 
         # 3. Resolve target gateways
-        if gateway_ids is None:
-            assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, environment)
-            if not assignments:
-                raise ValueError(
-                    f"No gateway assignments with auto_deploy=True for API "
-                    f"'{api_catalog.api_name}' in {environment}. "
-                    f"Configure assignments or specify gateway_ids explicitly."
-                )
-            gateway_ids = [a.gateway_id for a in assignments]
-        else:
-            await self._validate_gateways_for_env(gateway_ids, environment)
+        gateway_ids = await self._resolve_target_gateway_ids(api_catalog, environment, gateway_ids)
 
-        # 4. Deploy via existing GatewayDeploymentService (creates PENDING records + Kafka events)
+        # 4. Preflight desired state against target adapter contracts before
+        #    GatewayDeploymentService creates PENDING records and emits Kafka/SSE.
+        preflight = await self._preflight_gateway_ids(api_catalog, gateway_ids)
+        failed = [result for result in preflight if not result.deployable]
+        if failed:
+            raise ValueError(self._format_preflight_failure(failed))
+
+        # 5. Deploy via existing GatewayDeploymentService (creates PENDING records + Kafka events)
         deployments = await self.deploy_svc.deploy_api(api_catalog.id, gateway_ids)
 
-        # 5. Legacy mode: attempt inline sync for immediate UI feedback.
+        # 6. Legacy mode: attempt inline sync for immediate UI feedback.
         #    SSE mode (ADR-059): Link handles sync via SSE notification.
         if settings.is_inline_sync_enabled:
             await self._try_inline_sync(deployments)
@@ -216,6 +258,56 @@ class DeploymentOrchestrationService:
             deployed_by,
         )
         return deployments
+
+    async def preflight_deploy_api_to_env(
+        self,
+        tenant_id: str,
+        api_identifier: str,
+        environment: str,
+        gateway_ids: list[UUID] | None = None,
+        validate_promotion: bool = True,
+    ) -> list[DeploymentPreflightResult]:
+        """Validate that the desired state is deployable by each target gateway.
+
+        This is a deterministic local contract check. It must run before any
+        GatewayDeployment is created or any Kafka/SSE event is emitted.
+        """
+        api_catalog = await self._resolve_api_catalog(tenant_id, api_identifier)
+
+        if validate_promotion and environment != "dev":
+            has_promotion = await self._has_active_promotion(api_catalog.api_id, api_catalog.tenant_id, environment)
+            if not has_promotion:
+                raise ValueError(
+                    f"API '{api_catalog.api_name}' has no active promotion to {environment}. "
+                    f"Promote the API first before deploying to {environment}."
+                )
+
+        resolved_gateway_ids = await self._resolve_target_gateway_ids(api_catalog, environment, gateway_ids)
+        return await self._preflight_gateway_ids(api_catalog, resolved_gateway_ids)
+
+    async def _preflight_gateway_ids(
+        self,
+        api_catalog: APICatalog,
+        gateway_ids: list[UUID],
+    ) -> list[DeploymentPreflightResult]:
+        desired_state = GatewayDeploymentService.build_desired_state(api_catalog)
+        results: list[DeploymentPreflightResult] = []
+
+        for gateway_id in gateway_ids:
+            gateway = await self._get_gateway_or_raise(gateway_id)
+            gateway_type = self._gateway_type_value(gateway.gateway_type)
+            errors = self._validate_desired_state_for_gateway(desired_state, gateway_type, gateway)
+            results.append(
+                DeploymentPreflightResult(
+                    gateway_id=str(gateway.id),
+                    gateway_name=gateway.name,
+                    target_gateway_type=gateway_type,
+                    deployable=not errors,
+                    errors=errors,
+                )
+            )
+
+        return results
 
     async def get_deployable_environments(self, tenant_id: str, api_identifier: str) -> list[dict]:
         """Get environments where this API can be deployed.
@@ -385,6 +477,168 @@ class DeploymentOrchestrationService:
                 dep.sync_attempts += 1
                 logger.warning("Inline sync error for deployment %s: %s (will retry via SyncEngine)", dep.id, e)
 
+    async def _resolve_target_gateway_ids(
+        self,
+        api_catalog: APICatalog,
+        environment: str,
+        gateway_ids: list[UUID] | None,
+    ) -> list[UUID]:
+        if gateway_ids is None:
+            assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, environment)
+            if not assignments:
+                raise ValueError(
+                    f"No gateway assignments with auto_deploy=True for API "
+                    f"'{api_catalog.api_name}' in {environment}. "
+                    f"Configure assignments or specify gateway_ids explicitly."
+                )
+            return [a.gateway_id for a in assignments]
+
+        await self._validate_gateways_for_env(gateway_ids, environment)
+        return gateway_ids
+
+    async def _get_gateway_or_raise(self, gateway_id: UUID) -> GatewayInstance:
+        result = await self.db.execute(select(GatewayInstance).where(GatewayInstance.id == gateway_id))
+        gateway = result.scalar_one_or_none()
+        if not gateway:
+            raise ValueError(f"Gateway {gateway_id} not found")
+        return gateway
+
+    @staticmethod
+    def _gateway_type_value(gateway_type) -> str:
+        return str(getattr(gateway_type, "value", gateway_type))
+
+    @staticmethod
+    def _format_preflight_failure(failed_results: list[DeploymentPreflightResult]) -> str:
+        details = []
+        for result in failed_results:
+            for error in result.errors:
+                details.append(f"{result.gateway_name}: {error.code} — {error.message}")
+        return "Deployment preflight failed: " + "; ".join(details)
+
+    def _validate_desired_state_for_gateway(
+        self,
+        desired_state: dict,
+        gateway_type: str,
+        gateway: GatewayInstance,
+    ) -> list[DeploymentPreflightError]:
+        if gateway_type != "webmethods":
+            return []
+
+        return self._validate_webmethods_openapi(
+            desired_state.get("openapi_spec"),
+            gateway_id=str(gateway.id),
+            gateway_name=gateway.name,
+            gateway_type=gateway_type,
+        )
+
+    @staticmethod
+    def _validate_webmethods_openapi(
+        openapi_spec,
+        gateway_id: str,
+        gateway_name: str,
+        gateway_type: str,
+    ) -> list[DeploymentPreflightError]:
+        def error(code: str, message: str, path: str) -> DeploymentPreflightError:
+            return DeploymentPreflightError(
+                gateway_id=gateway_id,
+                gateway_name=gateway_name,
+                target_gateway_type=gateway_type,
+                code=code,
+                message=message,
+                path=path,
+            )
+
+        if not isinstance(openapi_spec, dict):
+            return [
+                error(
+                    "openapi_spec_missing",
+                    "webMethods deployment requires a parsed OpenAPI object",
+                    "openapi_spec",
+                )
+            ]
+
+        version = openapi_spec.get("openapi") or openapi_spec.get("swagger")
+        if not version:
+            return [
+                error(
+                    "openapi_version_missing",
+                    "OpenAPI spec must declare 'openapi' or 'swagger'",
+                    "openapi_spec.openapi",
+                )
+            ]
+
+        errors: list[DeploymentPreflightError] = []
+        info = openapi_spec.get("info")
+        if not isinstance(info, dict):
+            errors.append(
+                error("openapi_info_missing", "OpenAPI spec must include an info object", "openapi_spec.info")
+            )
+        else:
+            if not info.get("title"):
+                errors.append(
+                    error("openapi_info_title_missing", "OpenAPI info.title is required", "openapi_spec.info.title")
+                )
+            if not info.get("version"):
+                errors.append(
+                    error(
+                        "openapi_info_version_missing",
+                        "OpenAPI info.version is required",
+                        "openapi_spec.info.version",
+                    )
+                )
+
+        paths = openapi_spec.get("paths")
+        if not isinstance(paths, dict) or not paths:
+            errors.append(
+                error("openapi_paths_missing", "OpenAPI spec must include at least one path", "openapi_spec.paths")
+            )
+            return errors
+
+        for path, path_item in paths.items():
+            if not isinstance(path, str) or not path.startswith("/"):
+                errors.append(
+                    error(
+                        "openapi_path_invalid",
+                        "OpenAPI path keys must start with '/'",
+                        f"openapi_spec.paths.{path}",
+                    )
+                )
+                continue
+            if not isinstance(path_item, dict):
+                errors.append(
+                    error(
+                        "openapi_path_item_invalid",
+                        "OpenAPI path item must be an object",
+                        f"openapi_spec.paths.{path}",
+                    )
+                )
+                continue
+
+            for method, operation in path_item.items():
+                if method.lower() not in HTTP_METHODS:
+                    continue
+                operation_path = f"openapi_spec.paths.{path}.{method}"
+                if not isinstance(operation, dict):
+                    errors.append(
+                        error(
+                            "openapi_operation_invalid",
+                            "OpenAPI operation must be an object",
+                            operation_path,
+                        )
+                    )
+                    continue
+                responses = operation.get("responses")
+                if not isinstance(responses, dict) or not responses:
+                    errors.append(
+                        error(
+                            "openapi_operation_responses_missing",
+                            "webMethods requires each OpenAPI operation to declare non-empty responses",
+                            f"{operation_path}.responses",
+                        )
+                    )
+
+        return errors
+
     async def _has_active_promotion(self, api_id: str, tenant_id: str, target_environment: str) -> bool:
         result = await self.db.execute(
             select(Promotion.id)
@@ -414,10 +668,7 @@ class DeploymentOrchestrationService:
 
     async def _validate_gateways_for_env(self, gateway_ids: list[UUID], environment: str) -> None:
         for gw_id in gateway_ids:
-            result = await self.db.execute(select(GatewayInstance).where(GatewayInstance.id == gw_id))
-            gateway = result.scalar_one_or_none()
-            if not gateway:
-                raise ValueError(f"Gateway {gw_id} not found")
+            gateway = await self._get_gateway_or_raise(gw_id)
             if gateway.environment != environment:
                 raise ValueError(
                     f"Gateway '{gateway.name}' is in environment '{gateway.environment}', "

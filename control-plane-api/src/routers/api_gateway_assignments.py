@@ -164,6 +164,37 @@ async def deploy_to_environment(
     }
 
 
+@router.post("/deploy/validate")
+async def validate_deploy_to_environment(
+    tenant_id: str,
+    api_id: str,
+    data: DeployToEnvRequest,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+):
+    """Dry-run deployment validation for target gateway adapter contracts.
+
+    This endpoint performs the same API/gateway resolution as /deploy but stops
+    before GatewayDeployment creation and before Kafka/SSE dispatch.
+    """
+    svc = DeploymentOrchestrationService(db)
+    try:
+        results = await svc.preflight_deploy_api_to_env(
+            tenant_id=tenant_id,
+            api_identifier=api_id,
+            environment=data.environment,
+            gateway_ids=data.gateway_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "environment": data.environment,
+        "deployable": all(result.deployable for result in results),
+        "targets": [result.as_dict() for result in results],
+    }
+
+
 @router.get("/deployable-environments")
 async def get_deployable_environments(
     tenant_id: str,

@@ -1,7 +1,7 @@
-# STOA Demo — API Deployment Flow Contract
+# STOA Demo — API Runtime Reconciliation Contract
 
-> **Statut**: v0.1 — 2026-04-25. Contrat transverse pour garder le flux Console
-> `/api-deployments` fonctionnel.
+> **Statut**: v0.2 — 2026-04-26. Contrat transverse pour garder le flux
+> Console `/api-deployments` fonctionnel.
 > **Relation au scope démo**: complément à `demo-scope.md`, non bloquant pour
 > `scripts/demo-smoke-test.sh` tant qu'une décision écrite ne l'ajoute pas au
 > smoke minimal provider/runtime.
@@ -57,9 +57,12 @@ ADR-040 et ADR-059 ne parlent pas exactement du même niveau:
   multi-environnement: Git/UAC/stoa.yaml est la source de vérité, surtout pour
   staging/prod.
 - ADR-059 définit le chemin d'exécution runtime simplifié: CP matérialise une
-  intention en `GatewayDeployment`, le Link/gateway applique, puis ack. Dans ce
-  chemin, Git peut être un side-effect asynchrone en dev/demo, mais il ne devient
-  pas une preuve runtime.
+  intention en `GatewayDeployment`, le Link/gateway applique, puis ack.
+
+En dev/demo, ADR-059 autorise Git comme side-effect après sync pour garder un
+chemin court de démonstration. En staging/prod, ADR-040 reprend le dessus:
+Git/PR est le chemin de gouvernance, et une écriture runtime directe ne peut pas
+devenir le chemin nominal.
 
 Ce contrat tranche donc ainsi: Git/UAC est la vérité configurationnelle,
 `GatewayDeployment` est la vérité d'exécution, et la Console affiche l'écart
@@ -71,6 +74,16 @@ Le contrat ne définit pas un déploiement "vers une gateway". Il définit la
 réconciliation d'un desired state Git/UAC vers une ou plusieurs cibles gateway
 déclarées pour un environnement. Les gateways n'initient pas la vérité de
 configuration; elles appliquent et acquittent une génération de desired state.
+
+Formulation canonique:
+
+```text
+STOA ne déploie pas une API vers une gateway.
+STOA réconcilie un UAC/GitOps vers des targets runtime.
+Chaque target produit un GatewayDeployment.
+Chaque GatewayDeployment doit être ack par le Link/gateway.
+La Console affiche desired vs observed, jamais un simple état UI.
+```
 
 | Objet | Rôle | Source de vérité |
 |-------|------|------------------|
@@ -152,6 +165,7 @@ La classification canonique des gateways est définie par
 ```text
 deployment_mode=edge|connect|sidecar
 target_gateway_type=stoa|kong|webmethods|gravitee|agentgateway
+transport_capability=sse_link|agent_pull_ack|stoa_registry|direct_adapter
 topology=native-edge|remote-agent|same-pod
 ```
 
@@ -160,17 +174,20 @@ depuis un libellé UI, un hostname, ou l'ancien usage flou de `sidecar`.
 
 | Mode gateway | Exemple | Identité CP | Transport de déploiement | Preuve `synced` | Contraintes runtime |
 |--------------|---------|-------------|---------------------------|-----------------|---------------------|
-| Legacy VM via STOA Connect | webMethods/Kong/Gravitee en VM, `connect-webmethods-dev` | gateway `self_register`, nom logique agent + gateway canonique DB | pull agent `GET /v1/internal/gateways/routes?gateway_name={agent_name}`; SSE peut accélérer mais le polling reste obligatoire | `POST /v1/internal/gateways/{gateway_id}/route-sync-ack` avec `deployment_id` appliqué | le `backend_url` doit être joignable depuis la VM; une URL Kubernetes `*.svc.cluster.local` est invalide sauf tunnel/réseau partagé explicite |
-| STOA Gateway edge/gateway | `stoa-gateway` central ou edge MCP | gateway auto-enregistrée ou seedée dans l'env cible | route registry CP consommée par la gateway, par polling ou SSE selon l'implémentation active | ack gateway/agent ou état route-table observé, corrélé au `deployment_id` | chemin public canonique `/apis/{api_name}/{*path}`; le backend doit être joignable depuis la gateway |
-| STOA Gateway sidecar | `stoa-link-wm-dev`, sidecar proche d'une gateway legacy | gateway `self_register` typée sidecar dans l'env cible | pull/ack agent-managed comme STOA Connect, ou adapter direct seulement si le sidecar est réellement joignable depuis CP | route ack côté sidecar avec `deployment_id`, puis route active côté gateway locale | la résolution DNS/backend est locale au sidecar; une erreur DNS côté CP ne doit pas être utilisée pour juger un sidecar agent-managed |
+| `connect/*/remote-agent` | webMethods/Kong/Gravitee en VM ou Link agent-managed, `connect-webmethods-dev`, `stoa-link-wm-dev` sans preuve same-pod | gateway `self_register`, nom logique agent + gateway canonique DB | `agent_pull_ack`; pull agent `GET /v1/internal/gateways/routes?gateway_name={agent_name}`; SSE peut accélérer mais le polling reste obligatoire | `POST /v1/internal/gateways/{gateway_id}/route-sync-ack` avec `deployment_id` appliqué | le `backend_url` doit être joignable depuis l'agent/VM; une URL Kubernetes `*.svc.cluster.local` est invalide sauf tunnel/réseau partagé explicite |
+| `edge/stoa/native-edge` | `stoa-gateway` central ou edge MCP | gateway auto-enregistrée ou seedée dans l'env cible | `stoa_registry` ou `sse_link` selon l'implémentation active | ack gateway/agent ou état route-table observé, corrélé au `deployment_id` | chemin public canonique `/apis/{api_name}/{*path}`; le backend doit être joignable depuis la gateway |
+| `sidecar/*/same-pod` | gateway tierce + `stoa-sidecar` dans le même pod Kubernetes, par exemple `kong-sidecar-prod` | gateway déclarée sidecar uniquement avec preuve same-pod | `agent_pull_ack` ou `direct_adapter` local selon le sidecar déclaré | route ack côté sidecar avec `deployment_id`, puis route active côté gateway locale | la résolution DNS/backend est locale au pod; une erreur DNS côté CP ne doit pas être utilisée pour juger un sidecar agent-managed |
 
 Invariants spécifiques:
 
-- Chaque gateway expose une capacité de déploiement dérivée, par exemple
-  `agent_pull_ack`, `stoa_gateway_registry` ou `direct_adapter`. La Console doit
-  afficher cette capacité et adapter ses actions de test.
+- Chaque gateway expose une capacité de déploiement dérivée
+  `transport_capability=sse_link|agent_pull_ack|stoa_registry|direct_adapter`.
+  La Console doit afficher cette capacité et adapter ses actions de test.
 - Une gateway `self_register` est agent-managed par défaut: CP ne doit pas
   tenter un push direct si l'agent est le chemin déclaré.
+- Une gateway `*-stoa-link` ou `stoa-link-*` sans preuve Kubernetes same-pod est
+  `deployment_mode=connect`, `topology=remote-agent`. Le terme `sidecar` est
+  réservé au cas `same-pod`.
 - Le mapping nom agent -> gateway DB est contractuel. Le lookup doit accepter le
   nom logique annoncé par l'agent (`STOA_INSTANCE_NAME`) et le réconcilier avec
   la gateway canonique auto-enregistrée, sans créer de cible cross-env.
@@ -296,8 +313,9 @@ Colonnes minimales:
 
 - API: nom catalogue ou `desired_state.api_name`
 - Environment: env normalisé (`dev`, `staging`, `prod`)
-- Gateway: nom lisible de la gateway, nom logique agent si différent, et type
-  (`stoa-connect`, `stoa-gateway`, `sidecar`, `legacy`)
+- Gateway: nom lisible de la gateway, nom logique agent si différent, et
+  triplet canonique
+  `deployment_mode/target_gateway_type/topology` plus `transport_capability`
 - Deployment status: statut stable dérivé du `GatewayDeployment`
 - Gateway status: connectivité/heartbeat séparée du statut de déploiement
 - Last route ack: `last_sync_success` ou dernier `route-sync-ack`
@@ -329,9 +347,9 @@ Pour staging/prod:
 
 Règles par environnement:
 
-- **dev**: la Console/API peut créer une intention directe. Cette intention doit
-  être dérivable d'un UAC/stoa.yaml ou réconciliée vers Git en side-effect selon
-  le mode ADR-059.
+- **dev/demo**: la Console/API peut créer une intention directe. Cette
+  intention doit être dérivable d'un UAC/stoa.yaml ou réconciliée vers Git en
+  side-effect selon le mode ADR-059.
 - **staging**: la promotion ou un changement Git est le chemin recommandé. Un
   succès staging exige des `GatewayDeployment` cibles et des acks gateway, pas
   seulement une promotion approuvée.
@@ -340,6 +358,32 @@ Règles par environnement:
   audité. Une écriture directe prod ne peut pas être le chemin nominal.
 
 ## 4. Acceptance tests
+
+### 4.1 Demo-critical acceptance
+
+La spec complète reste le contrat cible, mais la démo ne doit pas attendre tous
+les chemins avancés pour devenir testable. Le bloc demo-critical est le minimum
+bloquant pour toute PR qui touche `/api-deployments`, assignments, promotion,
+preflight ou ack gateway:
+
+| Test | Pourquoi il est bloquant démo |
+|------|-------------------------------|
+| ADF-G2 | CP doit matérialiser un desired state traçable, pas inventer un état runtime opaque |
+| ADF-G3 | les assignments et capabilities déterminent les cibles réelles |
+| ADF-G4 | un `GatewayDeployment` existe par target runtime |
+| ADF-G6 | WebMethods/preflight bloque avant Kafka/SSE/agent |
+| ADF-1 | le raccourci dev/demo crée une intention runtime explicite |
+| ADF-2 | `synced` exige un ack gateway/link |
+| ADF-3 | la Console affiche desired vs observed, avec gateway nommée |
+| ADF-7 | `0 GatewayDeployment` ne peut jamais être compris comme succès |
+| ADF-8 | un changement d'env ne conserve pas une gateway cross-env |
+| ADF-13b | l'erreur OpenAPI WebMethods est détectée avant dispatch |
+| ADF-14 | gateway health/reboot ne dégrade pas un deployment déjà ack |
+| ADF-17 | `/apis` délègue à `/api-deployments`, sans chemin parallèle |
+
+Post-démo, les chemins suivants restent requis pour le contrat complet mais ne
+doivent pas élargir la première PR de stabilisation: ADF-9 rollback/undeploy,
+ADF-13 promotion multi-mode fermée, ADF-15 drift confirmé et ADF-16 prod complet.
 
 ### ADF-G1 — Desired state Git/UAC présent
 
@@ -371,7 +415,9 @@ Résoudre les gateways cibles pour un environnement.
 PASS si:
 - les `ApiGatewayAssignment` et capabilities gateway produisent N targets valides
 - les targets cross-env sont refusées
-- le mode de transport de chaque target est connu avant création du deployment
+- le triplet `deployment_mode/target_gateway_type/topology` et
+  `transport_capability` de chaque target sont connus avant création du
+  deployment
 
 ### ADF-G4 — N GatewayDeployments créés
 
@@ -380,7 +426,8 @@ Créer ou matérialiser l'intention vers un environnement avec N targets.
 PASS si un `GatewayDeployment` distinct existe par target, avec:
 - `environment`
 - gateway id/name
-- transport/capability
+- `deployment_mode`, `target_gateway_type`, `topology` et
+  `transport_capability`
 - desired generation/hash
 - `promotion_id` si issu d'une promotion
 
@@ -392,6 +439,38 @@ PASS si:
 - chaque target ack son `deployment_id`
 - le statut agrégé reflète les statuts par gateway
 - la Console permet de voir chaque cible et son dernier ack
+
+### ADF-G6 — Target adapter preflight avant dispatch
+
+Avant de créer un `GatewayDeployment` `pending` et avant d'émettre Kafka/SSE,
+CP doit valider que le desired state est au moins structurellement déployable
+par chaque gateway cible.
+
+PASS si:
+- le preflight est exécuté après résolution API + gateway targets, mais avant
+  `GatewayDeploymentService.deploy_api()`;
+- un échec preflight bloque le déploiement avant `event_emitted`;
+- aucun `GatewayDeployment pending`, event Kafka ou event SSE n'est créé en cas
+  d'échec preflight;
+- l'erreur est normalisée par gateway avec `gateway_id`, `gateway_name`,
+  `target_gateway_type`, `code`, `message`, et `path`.
+
+FAIL si:
+- l'agent reçoit une intention qui aurait pu être rejetée localement par un
+  validateur déterministe;
+- `agent_received` ou `adapter_connected` est présenté comme preuve que l'API
+  est déployable par la gateway cible.
+
+Pour `target_gateway_type=webmethods`, le preflight minimal est strict:
+- `openapi_spec` doit être un objet JSON/YAML parsé;
+- `openapi` ou `swagger` doit être présent;
+- `info.title` et `info.version` doivent être présents;
+- `paths` doit contenir au moins une route;
+- chaque opération HTTP déclarée doit contenir un objet `responses` non vide.
+
+Une spec OpenAPI générique peut donc être valide pour STOA mais non déployable
+vers webMethods. Dans ce cas le statut utilisateur est `invalid_desired_state`
+ou `preflight_failed`, pas `gateway unreachable`.
 
 ### ADF-0 — Seed idempotent
 
@@ -517,10 +596,11 @@ PASS si:
 
 ## 5. Validation cible
 
-### ADF-10 — Legacy VM via STOA Connect
+### ADF-10 — STOA Connect / Link agent-managed
 
-Déployer une API vers une gateway legacy VM agent-managed, par exemple
-`connect-webmethods-dev`.
+Déployer une API vers une gateway agent-managed, par exemple une gateway legacy
+VM via STOA Connect (`connect-webmethods-dev`) ou un STOA Link
+`deployment_mode=connect` faute de preuve same-pod (`stoa-link-wm-dev`).
 
 PASS si:
 - CP crée un `GatewayDeployment` pour la gateway canonique de l'environnement
@@ -536,7 +616,7 @@ FAIL si:
 - le déploiement reste invisible car le nom agent ne correspond pas au nom
   canonique DB
 
-### ADF-11 — STOA Gateway edge/gateway
+### ADF-11 — STOA Gateway edge
 
 Déployer `demo-httpbin` vers une STOA gateway edge/gateway.
 
@@ -546,18 +626,22 @@ PASS si:
 - l'état Console est dérivé du `GatewayDeployment` et de la preuve gateway, pas
   d'un `Deployment.completed_at`
 
-### ADF-12 — STOA Gateway sidecar
+### ADF-12 — Gateway sidecar same-pod
 
-Déployer une API vers une STOA gateway sidecar dans l'environnement cible.
+Déployer une API vers une gateway tierce équipée d'un `stoa-sidecar` dans le
+même pod Kubernetes.
 
 PASS si:
-- le sidecar reçoit l'intention par le chemin agent-managed déclaré
+- le sidecar est classé `deployment_mode=sidecar`, `topology=same-pod` avec
+  preuve Kubernetes
+- le sidecar reçoit l'intention par le chemin déclaré
 - le backend configuré est résoluble depuis le sidecar
 - l'ack `deployment_id` marque le `GatewayDeployment` `synced`
 - un échec DNS ou gateway local remonte en `error` actionnable avec le nom de la
   cible fautive
 
 FAIL si:
+- une gateway `stoa-link-*` sans preuve same-pod est classée sidecar
 - CP marque la cible `error` uniquement parce qu'il ne peut pas résoudre le nom
   interne du sidecar alors que le mode déclaré est agent-managed
 - une promotion dev->staging/prod est `promoted` avant l'ack sidecar
@@ -576,6 +660,22 @@ PASS si:
 
 FAIL si la promotion réussit avec `0` deployment ou avec seulement une partie
 des modes gateway acquittés.
+
+### ADF-13b — WebMethods OpenAPI compatibility preflight
+
+Déployer une API vers `target_gateway_type=webmethods` avec une spec OpenAPI
+syntaxiquement parseable mais incomplète pour WebMethods, par exemple une
+opération sans `responses`.
+
+PASS si:
+- `POST /deploy/validate` retourne `deployable=false` pour la gateway
+  webMethods avec `code=openapi_operation_responses_missing`;
+- `POST /deploy` retourne une erreur 400 actionnable avant `event_emitted`;
+- aucun `GatewayDeployment` n'est créé et aucun event Kafka/SSE n'est émis.
+
+FAIL si l'erreur n'est découverte qu'à l'étape agent `api_synced` avec un 400
+WebMethods générique du type `Unable to create an API as the input openapi file
+is not valid`.
 
 ### ADF-14 — Reboot gateway ne casse pas le statut déployé
 
@@ -631,7 +731,7 @@ promotion, ou crée un `Deployment` historique sans cible gateway explicite.
 
 Court terme:
 - ajouter un smoke API-level ciblé, par exemple
-  `scripts/api-deployment-flow-smoke.sh`
+  `scripts/api-runtime-reconciliation-smoke.sh`
 - ajouter un test Playwright Console ciblé sur `/api-deployments`
 - garder ce contrat non bloquant pour `demo-smoke-test.sh`
 
@@ -639,21 +739,21 @@ Commandes cibles:
 
 ```bash
 # API-level, à créer
-./scripts/api-deployment-flow-smoke.sh
+./scripts/api-runtime-reconciliation-smoke.sh
 
 # UI-level, à créer
-cd e2e && npx playwright test api-deployment-flow.spec.ts
+cd e2e && npx playwright test api-runtime-reconciliation.spec.ts
 ```
 
 Critère GO pour toute PR touchant ce flux:
-- ADF-G1 à ADF-G5 passent ou restent explicitement inchangés pour toute PR qui
+- ADF-G1 à ADF-G6 passent ou restent explicitement inchangés pour toute PR qui
   touche Git/UAC/stoa.yaml, reconciliation CP, assignments, capabilities ou
   matérialisation deployment
 - ADF-1, ADF-2, ADF-3 passent ou restent explicitement inchangés par la PR
 - ADF-5, ADF-6, ADF-7 passent pour toute PR promotion/assignment/sync
 - ADF-8 passe pour toute PR Console deploy dialog ou environment selector
 - ADF-9 passe pour toute PR rollback/undeploy
-- ADF-14, ADF-15, ADF-16, ADF-17 passent pour toute PR qui touche healthcheck
+- ADF-13b, ADF-14, ADF-15, ADF-16, ADF-17 passent pour toute PR qui touche healthcheck
   gateway, drift detection, promotion, ou la table `/api-deployments`
 
 ## 6. Blockers connus
@@ -667,7 +767,8 @@ Critère GO pour toute PR touchant ce flux:
 | A-B5 | rollback ne garantit pas une intention `deleting` sur les anciens deployments | P1 | ADF-9 |
 | A-B6 | `/api-deployments` n'est pas encore couvert par un smoke transverse | P1 | ADF-3, ADF-8 |
 | A-B7 | chemins legacy SyncEngine/inline sync encore visibles dans le code malgré ADR-059 SSE cible | P1 | ADF-2, ADF-5 |
-| A-B8 | capacité de déploiement gateway non exposée/normalisée (`agent_pull_ack`, `stoa_gateway_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
+| A-B8 | capacité de déploiement gateway non exposée/normalisée (`sse_link`, `agent_pull_ack`, `stoa_registry`, `direct_adapter`) | P0 | ADF-10, ADF-11, ADF-12, ADF-13 |
+| A-B13 | absence de preflight adapter avant Kafka/SSE, donc les 400 WebMethods OpenAPI sont découverts trop tard côté agent | P0 | ADF-G6, ADF-13b |
 | A-B9 | statut de déploiement et healthcheck gateway mélangés dans la Console | P0 | ADF-3, ADF-14, ADF-15 |
 | A-B10 | flow staging/prod insuffisamment contracté côté assignments, promotion et ack | P0 | ADF-5, ADF-6, ADF-13, ADF-16 |
 | A-B11 | `/apis` recrée un chemin de déploiement parallèle à `/api-deployments` | P0 | ADF-17 |
@@ -682,3 +783,5 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-25 | Codex | Ajout du contrat multi-mode legacy VM/STOA gateway/STOA sidecar |
 | 2026-04-25 | Codex | Séparation statut déploiement vs health gateway et promotion env supérieurs |
 | 2026-04-25 | Codex | Réorientation Git/UAC desired-state-first selon ADR-040 et ADR-059 |
+| 2026-04-26 | Codex | Ajout du preflight adapter WebMethods avant dispatch Kafka/SSE |
+| 2026-04-26 | Codex | Renommage en Runtime Reconciliation Contract et clarification connect/edge/sidecar |

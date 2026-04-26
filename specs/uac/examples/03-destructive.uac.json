@@ -1,0 +1,49 @@
+{
+  "name": "example-catalog-delete",
+  "version": "1.0.0",
+  "tenant_id": "example",
+  "display_name": "Example Catalog — Delete",
+  "description": "Canonical UAC example for a destructive operation requiring human approval.",
+  "classification": "VH",
+  "required_policies": ["rate-limit", "auth-jwt", "mtls", "audit-logging"],
+  "status": "published",
+  "endpoints": [
+    {
+      "path": "/catalog/items/{item_id}",
+      "methods": ["DELETE"],
+      "backend_url": "https://backend.example.local/v1/catalog",
+      "operation_id": "delete_catalog_item",
+      "input_schema": {
+        "type": "object",
+        "required": ["item_id"],
+        "properties": {
+          "item_id": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["deleted"],
+        "properties": {
+          "deleted": { "type": "boolean" },
+          "id": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "llm": {
+        "summary": "Delete a catalog item by id.",
+        "intent": "Use only when an authorised human has confirmed the deletion. The operation is irreversible — the item and its history cannot be recovered automatically.",
+        "tool_name": "example_catalog_delete_item",
+        "side_effects": "destructive",
+        "safe_for_agents": false,
+        "requires_human_approval": true,
+        "examples": [
+          {
+            "input": { "item_id": "sku-1234" },
+            "expected_output_contains": { "deleted": true }
+          }
+        ]
+      }
+    }
+  ]
+}

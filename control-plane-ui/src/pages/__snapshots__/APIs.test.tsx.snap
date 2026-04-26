@@ -12,12 +12,12 @@ exports[`APIs > snapshot: cpi-admin persona > matches structural snapshot 1`] = 
   "headings": [],
   "links": [
     {
-      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
     {
-      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
   ],
 }
@@ -35,12 +35,12 @@ exports[`APIs > snapshot: devops persona > matches structural snapshot 1`] = `
   "headings": [],
   "links": [
     {
-      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
     {
-      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
   ],
 }
@@ -58,12 +58,12 @@ exports[`APIs > snapshot: tenant-admin persona > matches structural snapshot 1`]
   "headings": [],
   "links": [
     {
-      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
     {
-      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
   ],
 }
@@ -81,12 +81,12 @@ exports[`APIs > snapshot: viewer persona > matches structural snapshot 1`] = `
   "headings": [],
   "links": [
     {
-      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
     {
-      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&tenant_id=oasis-gunters",
-      "text": "Deployments",
+      "href": "/api-deployments?api_id=api-2&api_name=user-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters",
+      "text": "Open Deployments",
     },
   ],
 }

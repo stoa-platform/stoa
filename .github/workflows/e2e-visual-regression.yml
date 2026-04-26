@@ -4,24 +4,30 @@
 # Compares Console + Portal screenshots against golden baselines.
 # Runs in Playwright Docker container for pixel-consistent rendering.
 # No live backend required (mocked API responses).
+#
+# DISABLED on pull_request — see CAB-2178 (2026-04-26).
+#
+# Why:
+#   The mock auth path in `e2e/smoke-mock/mock-routes.ts` does not actually
+#   authenticate cp-ui / portal at boot. Every route renders the React error
+#   boundary ("Something went wrong"), so all goldens captured via this config
+#   are screenshots of that same error screen. CI therefore reports either
+#   ~83% pixel diff (placeholder goldens, since CAB-1994 / 2026-04-05) or a
+#   fake-green pass against an error-boundary baseline.
+#
+# Re-enable when:
+#   1. Mock OIDC client init is fixed so cp-ui + portal render real pages
+#   2. Goldens are regenerated under that path (mcr.microsoft.com/playwright:
+#      v1.58.2-jammy with --update-snapshots)
+#   3. MD5s of regenerated goldens are distinct per page (sanity check)
+#
+# To run manually in the meantime: `gh workflow run e2e-visual-regression.yml`
 # =============================================================================
 
 name: E2E Visual Regression
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'control-plane-ui/**'
-      - 'portal/**'
-      - 'shared/**'
-      - 'e2e/visual/**'
-      - 'e2e/golden/**'
-      - '.github/workflows/e2e-visual-regression.yml'
-      - '!control-plane-ui/**/*.md'
-      - '!portal/**/*.md'
-      - '!shared/**/*.md'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

@@ -141,6 +141,7 @@ export function APIs() {
         api_id: api.id,
         api_name: api.name,
         environment: activeEnvironment,
+        open_deploy: 'true',
       });
       const tenantId = api.tenant_id || (selectedTenant !== ALL_TENANTS ? selectedTenant : '');
       if (tenantId) {
@@ -451,7 +452,7 @@ export function APIs() {
                       href={getDeploymentWorkflowHref(api)}
                       className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm py-1"
                     >
-                      Deployments
+                      Open Deployments
                     </a>
                   )}
                   {canEdit && (
@@ -579,7 +580,7 @@ export function APIs() {
                             className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
                             title="Open deployment workflow"
                           >
-                            Deployments
+                            Open Deployments
                           </a>
                         )}
                         {canEdit && (

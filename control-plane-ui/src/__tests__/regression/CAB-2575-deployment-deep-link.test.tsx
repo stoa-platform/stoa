@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
 import { createAuthMock, renderWithProviders } from '../../test/helpers';
 import { useAuth } from '../../contexts/AuthContext';
+import { ApiDeploymentsDashboard } from '../../pages/ApiDeployments/ApiDeploymentsDashboard';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const envMock = vi.hoisted(() => ({
-  activeEnvironment: 'prod',
+  activeEnvironment: 'dev',
   switchEnvironment: vi.fn(),
 }));
 
@@ -45,7 +46,7 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-vi.mock('../GatewayDeployments/DeployAPIDialog', () => ({
+vi.mock('../../pages/GatewayDeployments/DeployAPIDialog', () => ({
   DeployAPIDialog: (props: { preselectedApiKey?: string; preselectedEnvironment?: string }) => {
     mockDeployDialog(props);
     return <div data-testid="deploy-dialog">Deploy Dialog</div>;
@@ -84,12 +85,10 @@ vi.mock('@stoa/shared/components/StatCard', () => ({
   ),
 }));
 
-import { ApiDeploymentsDashboard } from './ApiDeploymentsDashboard';
-
-describe('ApiDeploymentsDashboard', () => {
+describe('regression/CAB-2575', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    envMock.activeEnvironment = 'prod';
+    envMock.activeEnvironment = 'dev';
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     mockGetGatewayDeployments.mockResolvedValue({ items: [], total: 0 });
     mockGetDeploymentStatusSummary.mockResolvedValue({
@@ -101,46 +100,15 @@ describe('ApiDeploymentsDashboard', () => {
       deleting: 0,
       total: 0,
     });
-    mockDeployDialog.mockClear();
   });
 
-  it('uses the global environment as the default runtime filter', async () => {
-    renderWithProviders(<ApiDeploymentsDashboard />);
-
-    await waitFor(() => {
-      expect(mockGetGatewayDeployments).toHaveBeenCalledWith({
-        page: 1,
-        page_size: 20,
-        environment: 'production',
-      });
-    });
-  });
-
-  it('keeps the page filter and global environment selector in sync', async () => {
-    renderWithProviders(<ApiDeploymentsDashboard />);
-
-    fireEvent.change(await screen.findByDisplayValue('Production'), {
-      target: { value: 'staging' },
-    });
-
-    expect(envMock.switchEnvironment).toHaveBeenCalledWith('staging');
-    await waitFor(() => {
-      expect(mockGetGatewayDeployments).toHaveBeenCalledWith({
-        page: 1,
-        page_size: 20,
-        environment: 'staging',
-      });
-    });
-  });
-
-  it('opens the deployment workflow prefilled from /apis query params', async () => {
+  it('opens /api-deployments as a prefilled deployment workflow from the API catalog', async () => {
     renderWithProviders(<ApiDeploymentsDashboard />, {
       route:
         '/api-deployments?api_id=api-1&api_name=payment-api&environment=staging&open_deploy=true&tenant_id=oasis-gunters',
     });
 
     expect(await screen.findByTestId('deploy-dialog')).toBeInTheDocument();
-    expect(screen.getByText(/Deployment workflow loaded for/)).toBeInTheDocument();
     expect(mockDeployDialog).toHaveBeenCalledWith(
       expect.objectContaining({
         preselectedApiKey: 'oasis-gunters:payment-api',
@@ -149,40 +117,9 @@ describe('ApiDeploymentsDashboard', () => {
     );
     expect(envMock.switchEnvironment).toHaveBeenCalledWith('staging');
     await waitFor(() => {
-      expect(mockGetGatewayDeployments).toHaveBeenCalledWith({
-        page: 1,
-        page_size: 20,
-        environment: 'staging',
-      });
+      expect(mockGetGatewayDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'staging' })
+      );
     });
-  });
-
-  it('renders runtime sync status and last sync from GatewayDeployment fields', async () => {
-    mockGetGatewayDeployments.mockResolvedValue({
-      items: [
-        {
-          id: 'dep-1',
-          api_catalog_id: 'api-1',
-          gateway_instance_id: 'gw-1',
-          desired_state: { api_name: 'Payments' },
-          desired_at: '2026-04-25T10:00:00Z',
-          actual_state: { api_name: 'Payments' },
-          sync_status: 'synced',
-          last_sync_success: '2026-04-25T10:01:00Z',
-          sync_attempts: 1,
-          created_at: '2026-04-25T10:00:00Z',
-          updated_at: '2026-04-25T10:01:00Z',
-          gateway_name: 'stoa-prod',
-          gateway_environment: 'production',
-        },
-      ],
-      total: 1,
-    });
-
-    renderWithProviders(<ApiDeploymentsDashboard />);
-
-    expect(await screen.findByText('Payments')).toBeInTheDocument();
-    expect(screen.getByText('synced')).toBeInTheDocument();
-    expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
 });

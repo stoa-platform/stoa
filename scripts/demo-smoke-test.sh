@@ -677,6 +677,78 @@ at5b_observability_visibility() {
     return 0
 }
 
+# ── AT-LLM LLM-readiness ────────────────────────────────────────────────────
+
+at_llm_readiness() {
+    log ""
+    log "=== AT-LLM  LLM-readiness ==="
+
+    if [[ -z "$DEMO_UAC_CONTRACT" ]]; then
+        note "INFO" "AT-LLM skipped (no DEMO_UAC_CONTRACT)"
+        return 0
+    fi
+
+    local contract_path="$DEMO_UAC_CONTRACT"
+    if [[ "$contract_path" != /* ]]; then
+        contract_path="${REPO_ROOT}/${contract_path}"
+    fi
+
+    # Static check: contract carries endpoint.llm with intent + side_effects
+    local llm_intent llm_side
+    llm_intent="$(jq -r '.endpoints[0].llm.intent // empty' "$contract_path")"
+    llm_side="$(jq -r '.endpoints[0].llm.side_effects // empty' "$contract_path")"
+
+    if [[ -z "$llm_intent" || -z "$llm_side" ]]; then
+        if mock_allowed; then
+            record "AT-LLM" "MOCK" "contract has no endpoint.llm metadata (V1 warning)"
+            return 0
+        fi
+        record "AT-LLM" "FAIL" "contract has no endpoint.llm.intent or .side_effects"
+        return 1
+    fi
+    record "AT-LLM" "PASS" "contract.endpoints[0].llm declares intent + side_effects=${llm_side}"
+
+    # Optional runtime check: cp-api projects Intent + Side effects in tools/generated description
+    if [[ -z "${GATEWAY_INTERNAL_KEY:-}" ]]; then
+        note "INFO" "AT-LLM runtime projection check skipped (set GATEWAY_INTERNAL_KEY to enable)"
+        return 0
+    fi
+
+    local tools_resp
+    tools_resp="$(curl -sS --max-time 5 \
+        -H "X-Gateway-Key: ${GATEWAY_INTERNAL_KEY}" \
+        "${API_URL}/v1/internal/gateways/tools/generated?tenant_id=${TENANT_ID}" 2>/dev/null || echo '')"
+
+    if [[ -z "$tools_resp" ]]; then
+        if mock_allowed; then
+            record "AT-LLM" "MOCK" "cp-api unreachable for tools/generated"
+            return 0
+        fi
+        record "AT-LLM" "FAIL" "cp-api unreachable for /v1/internal/gateways/tools/generated"
+        return 1
+    fi
+
+    local enriched
+    enriched="$(echo "$tools_resp" | jq -r --arg api "$DEMO_API_NAME" '
+        .tools[]?
+        | select(.tool_name | contains($api))
+        | .description
+        | select(contains("Intent:") and contains("Side effects:"))
+    ' | head -1)"
+
+    if [[ -n "$enriched" ]]; then
+        record "AT-LLM" "PASS" "tools/generated description carries Intent + Side effects (runtime projection live)"
+        return 0
+    fi
+
+    if mock_allowed; then
+        record "AT-LLM" "MOCK" "runtime projection not found (contract not synced or legacy generator)"
+        return 0
+    fi
+    record "AT-LLM" "FAIL" "tools/generated description missing Intent/Side effects (legacy projection?)"
+    return 1
+}
+
 # ── Report ──────────────────────────────────────────────────────────────────
 
 print_report() {
@@ -740,6 +812,7 @@ main() {
     at4_gateway_call     || true
     at5_observable       || true
     at5b_observability_visibility || true
+    at_llm_readiness     || true
 
     print_report
 

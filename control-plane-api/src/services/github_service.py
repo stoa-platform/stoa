@@ -34,6 +34,7 @@ import yaml
 from github import Auth, BadCredentialsException, Github, GithubException, InputGitTreeElement
 
 from ..config import settings
+from ..schemas.uac import UacContractSpec
 from .git_credentials import askpass_env, redact_token
 from .git_executor import (
     BATCH_TIMEOUT_S,
@@ -44,6 +45,7 @@ from .git_executor import (
     run_sync,
 )
 from .git_provider import BranchRef, CommitRef, GitProvider, MergeRequestRef, TreeEntry
+from .uac_transformer import transform_openapi_to_uac
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +67,7 @@ async def _gh_contents_write(
     timeout: float = DEFAULT_TIMEOUT_S,
 ) -> _GHT:
     """Run a sync PyGithub Contents-API write under the serial (1) semaphore."""
-    return await run_sync(
-        fn, semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name
-    )
+    return await run_sync(fn, semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name)
 
 
 async def _gh_meta_write(
@@ -76,9 +76,7 @@ async def _gh_meta_write(
     timeout: float = DEFAULT_TIMEOUT_S,
 ) -> _GHT:
     """Run a sync PyGithub non-Contents write under the meta-write semaphore (5)."""
-    return await run_sync(
-        fn, semaphore=GITHUB_META_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name
-    )
+    return await run_sync(fn, semaphore=GITHUB_META_WRITE_SEMAPHORE, timeout=timeout, op_name=op_name)
 
 
 # CP-1 P2 (M.5): transient error classifier for connect() retries. Kept
@@ -191,6 +189,73 @@ def _normalize_mcp_server_data(raw_data: dict, git_path: str) -> dict:
     }
 
 
+def _uac_name(raw: str) -> str:
+    """Normalize an API identifier to UAC kebab-case."""
+    value = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    if not value:
+        return "api"
+    return f"{value}-api" if len(value) < 2 else value
+
+
+def _coerce_openapi_spec(raw: Any) -> dict | None:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            loaded = json.loads(raw) if raw.lstrip().startswith("{") else yaml.safe_load(raw)
+        except (json.JSONDecodeError, yaml.YAMLError):
+            return None
+        return loaded if isinstance(loaded, dict) else None
+    return None
+
+
+def _openapi_file_content(raw: Any) -> str | None:
+    spec = _coerce_openapi_spec(raw)
+    if spec is not None:
+        return yaml.dump(spec, default_flow_style=False, allow_unicode=True)
+    return raw if isinstance(raw, str) and raw.strip() else None
+
+
+def _uac_json_content(tenant_id: str, api_name: str, api_data: dict) -> str:
+    """Build the canonical Git UAC JSON artifact for an API catalog entry."""
+    contract_name = _uac_name(api_data.get("id") or api_name)
+    openapi_spec = _coerce_openapi_spec(api_data.get("openapi_spec"))
+    if openapi_spec:
+        try:
+            contract = transform_openapi_to_uac(
+                openapi_spec,
+                tenant_id=tenant_id,
+                backend_base_url=api_data.get("backend_url") or None,
+            )
+            contract = contract.model_copy(
+                update={
+                    "name": contract_name,
+                    "display_name": api_data.get("display_name") or api_name,
+                    "version": api_data.get("version", contract.version),
+                }
+            )
+        except ValueError:
+            contract = UacContractSpec(
+                name=contract_name,
+                tenant_id=tenant_id,
+                version=api_data.get("version", "1.0.0"),
+                display_name=api_data.get("display_name") or api_name,
+                description=api_data.get("description") or None,
+            )
+    else:
+        contract = UacContractSpec(
+            name=contract_name,
+            tenant_id=tenant_id,
+            version=api_data.get("version", "1.0.0"),
+            display_name=api_data.get("display_name") or api_name,
+            description=api_data.get("description") or None,
+        )
+        contract.refresh_policies()
+    if not contract.required_policies:
+        contract.refresh_policies()
+    return json.dumps(contract.model_dump(mode="json", exclude_none=True), indent=2, sort_keys=True) + "\n"
+
+
 class GitHubService(GitProvider):
     """GitHub implementation of GitProvider — GitOps source of truth."""
 
@@ -228,13 +293,17 @@ class GitHubService(GitProvider):
                     delay = backoffs[attempt]
                     logger.warning(
                         "GitHub connect attempt %d/%d failed (transient): %s. Retrying in %ds.",
-                        attempt + 1, max_attempts, exc, delay,
+                        attempt + 1,
+                        max_attempts,
+                        exc,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
                         "Failed to connect to GitHub after %d attempts: %s",
-                        max_attempts, exc,
+                        max_attempts,
+                        exc,
                     )
         assert last_error is not None  # loop always assigns on failure
         raise last_error
@@ -533,9 +602,7 @@ class GitHubService(GitProvider):
                     return json.loads(content)
                 return yaml.safe_load(content)
             except (json.JSONDecodeError, yaml.YAMLError) as exc:
-                logger.error(
-                    "Failed to parse OpenAPI spec for %s/%s (%s): %s", tenant_id, api_name, filename, exc
-                )
+                logger.error("Failed to parse OpenAPI spec for %s/%s (%s): %s", tenant_id, api_name, filename, exc)
                 return None
 
         return None
@@ -614,9 +681,7 @@ class GitHubService(GitProvider):
         gh = self._require_gh()
         project_id = self._catalog_project_id()
         base_path = (
-            "platform/mcp-servers"
-            if tenant_id == "_platform"
-            else f"{self._get_tenant_path(tenant_id)}/mcp-servers"
+            "platform/mcp-servers" if tenant_id == "_platform" else f"{self._get_tenant_path(tenant_id)}/mcp-servers"
         )
 
         default_ref = settings.git.default_branch
@@ -647,9 +712,7 @@ class GitHubService(GitProvider):
         """
         platform_servers_task = asyncio.create_task(self.list_mcp_servers("_platform"))
         tenant_ids = await self.list_tenants()
-        tenant_results = await asyncio.gather(
-            *[self.list_mcp_servers(tid) for tid in tenant_ids]
-        )
+        tenant_results = await asyncio.gather(*[self.list_mcp_servers(tid) for tid in tenant_ids])
         platform_servers = await platform_servers_task
         return list(itertools.chain(platform_servers, *tenant_results))
 
@@ -705,9 +768,7 @@ class GitHubService(GitProvider):
                 existing = repo.get_contents(file_path, ref=effective_branch)
                 if isinstance(existing, list):
                     raise ValueError(f"{file_path} is a directory, not a file")
-                result = repo.update_file(
-                    file_path, commit_message, content, existing.sha, branch=effective_branch
-                )
+                result = repo.update_file(file_path, commit_message, content, existing.sha, branch=effective_branch)
                 return {"sha": result["commit"].sha, "url": result["commit"].html_url}
             except GithubException as exc:
                 if exc.status == 404:
@@ -789,7 +850,10 @@ class GitHubService(GitProvider):
             ref.edit(new_commit.sha)
             logger.info(
                 "Batch commit %s on %s/%s (%d actions)",
-                new_commit.sha[:8], project_id, effective_branch, len(actions),
+                new_commit.sha[:8],
+                project_id,
+                effective_branch,
+                len(actions),
             )
             return {"sha": new_commit.sha, "url": new_commit.html_url}
 
@@ -924,7 +988,7 @@ class GitHubService(GitProvider):
         layer via the serial Contents-write semaphore.
         """
         project_id = self._catalog_project_id()
-        api_name = api_data["name"]
+        api_name = api_data.get("id") or api_data["name"]
         api_path = self._get_api_path(tenant_id, api_name)
 
         await self._ensure_tenant_exists(tenant_id)
@@ -948,13 +1012,17 @@ class GitHubService(GitProvider):
 
         actions: list[dict[str, Any]] = [
             {"action": "create", "file_path": f"{api_path}/api.yaml", "content": api_yaml},
+            {
+                "action": "create",
+                "file_path": f"{api_path}/uac.json",
+                "content": _uac_json_content(tenant_id, api_name, api_data),
+            },
             {"action": "create", "file_path": f"{api_path}/policies/.gitkeep", "content": ""},
         ]
 
-        if api_data.get("openapi_spec"):
-            actions.append(
-                {"action": "create", "file_path": f"{api_path}/openapi.yaml", "content": api_data["openapi_spec"]}
-            )
+        openapi_content = _openapi_file_content(api_data.get("openapi_spec"))
+        if openapi_content:
+            actions.append({"action": "create", "file_path": f"{api_path}/openapi.yaml", "content": openapi_content})
 
         overrides: dict[str, dict] = api_data.get("overrides", {})
         for env_name, env_config in overrides.items():
@@ -983,24 +1051,38 @@ class GitHubService(GitProvider):
         except FileNotFoundError:
             raise FileNotFoundError(f"API '{api_name}' not found for tenant '{tenant_id}'")
 
+        api_data = dict(api_data)
         overrides: dict[str, dict] = api_data.pop("overrides", {})
 
         current = yaml.safe_load(current_content)
-        current.update(api_data)
+        current.update({k: v for k, v in api_data.items() if k != "openapi_spec"})
         updated_yaml = yaml.dump(current, default_flow_style=False, allow_unicode=True)
 
-        if overrides:
-            actions: list[dict[str, Any]] = [
-                {"action": "update", "file_path": file_path, "content": updated_yaml}
-            ]
-            for env_name, env_config in overrides.items():
-                override_path = f"{api_path}/overrides/{env_name}.yaml"
-                override_yaml = yaml.dump(env_config, default_flow_style=False, allow_unicode=True)
-                action = "update" if await self._file_exists(project_id, override_path) else "create"
-                actions.append({"action": action, "file_path": override_path, "content": override_yaml})
-            await self.batch_commit(project_id, actions=actions, commit_message=f"Update API {api_name}")
-        else:
-            await self.update_file(project_id, file_path, updated_yaml, f"Update API {api_name}")
+        actions: list[dict[str, Any]] = [{"action": "update", "file_path": file_path, "content": updated_yaml}]
+        uac_path = f"{api_path}/uac.json"
+        actions.append(
+            {
+                "action": "update" if await self._file_exists(project_id, uac_path) else "create",
+                "file_path": uac_path,
+                "content": _uac_json_content(tenant_id, api_name, {**current, **api_data}),
+            }
+        )
+        openapi_content = _openapi_file_content(api_data.get("openapi_spec"))
+        if openapi_content:
+            openapi_path = f"{api_path}/openapi.yaml"
+            actions.append(
+                {
+                    "action": "update" if await self._file_exists(project_id, openapi_path) else "create",
+                    "file_path": openapi_path,
+                    "content": openapi_content,
+                }
+            )
+        for env_name, env_config in overrides.items():
+            override_path = f"{api_path}/overrides/{env_name}.yaml"
+            override_yaml = yaml.dump(env_config, default_flow_style=False, allow_unicode=True)
+            action = "update" if await self._file_exists(project_id, override_path) else "create"
+            actions.append({"action": action, "file_path": override_path, "content": override_yaml})
+        await self.batch_commit(project_id, actions=actions, commit_message=f"Update API {api_name}")
 
         logger.info("Updated API %s for tenant %s", api_name, tenant_id)
         return True
@@ -1155,9 +1237,7 @@ class GitHubService(GitProvider):
                     files_to_delete.append(item.path)
             return files_to_delete
 
-        files_to_delete = await _gh_read(
-            _collect_files, "github.delete_mcp_server.collect", timeout=BATCH_TIMEOUT_S
-        )
+        files_to_delete = await _gh_read(_collect_files, "github.delete_mcp_server.collect", timeout=BATCH_TIMEOUT_S)
 
         if not files_to_delete:
             return True
@@ -1235,11 +1315,7 @@ class GitHubService(GitProvider):
                     author = c.author.login
                 elif c.commit and c.commit.author and c.commit.author.name:
                     author = c.commit.author.name
-                date = (
-                    c.commit.author.date.isoformat()
-                    if c.commit and c.commit.author and c.commit.author.date
-                    else ""
-                )
+                date = c.commit.author.date.isoformat() if c.commit and c.commit.author and c.commit.author.date else ""
                 refs.append(
                     CommitRef(sha=c.sha, message=c.commit.message if c.commit else "", author=author, date=date)
                 )
@@ -1359,17 +1435,13 @@ class GitHubService(GitProvider):
 
         ``target_branch=None`` resolves to ``settings.git.default_branch`` (CP-1 P2 M.4).
         """
-        effective_target = (
-            target_branch if target_branch is not None else settings.git.default_branch
-        )
+        effective_target = target_branch if target_branch is not None else settings.git.default_branch
         gh = self._require_gh()
         project_id = self._catalog_project_id()
 
         def _create() -> MergeRequestRef:
             repo = gh.get_repo(project_id)
-            pr = repo.create_pull(
-                title=title, body=description, head=source_branch, base=effective_target
-            )
+            pr = repo.create_pull(title=title, body=description, head=source_branch, base=effective_target)
             return self._pr_to_ref(pr)
 
         return await _gh_meta_write(_create, "github.create_merge_request")

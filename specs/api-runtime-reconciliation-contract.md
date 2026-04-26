@@ -135,10 +135,17 @@ Format attendu pour les contrats et fixtures de test:
 
 ```text
 specs/uac/*.uac.json
+tenants/{tenant_id}/apis/{api_id}/uac.json
 ```
 
 Les tests contractuels doivent donc valider le JSON UAC, puis vérifier que CP
 matérialise la même génération/hash vers les targets runtime.
+
+Tout événement `api-created`/`api-updated` consommé par le worker Git doit porter
+le contrat complet nécessaire à cette écriture: `id`, `name`, `display_name`,
+`version`, `description`, `backend_url`, `tags` et `openapi_spec` parsé si
+présent. Un événement réduit à `id/name/version` est invalide car il ne permet
+pas de maintenir `stoa-catalog` comme vérité configurationnelle.
 
 Chaîne conceptuelle:
 

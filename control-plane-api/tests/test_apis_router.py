@@ -138,6 +138,41 @@ class TestCreateAPI:
         body = resp.json()
         assert body["name"] == "new-api"
         assert body["status"] == "draft"
+        event_payload = mock_kafka.emit_api_created.call_args.kwargs["api_data"]
+        assert event_payload["backend_url"] == "https://api.example.com"
+        assert event_payload["display_name"] == "New API"
+        assert "openapi_spec" in event_payload
+
+    def test_create_event_contains_parsed_openapi(self, app_with_tenant_admin, client_as_tenant_admin):
+        openapi_yaml = """
+openapi: 3.0.0
+info:
+  title: New API
+  version: 1.0.0
+paths:
+  /quotes:
+    get:
+      operationId: listQuotes
+      responses:
+        "200":
+          description: ok
+"""
+        with patch(CATALOG_REPO_PATH), patch(KAFKA_PATH) as mock_kafka:
+            mock_kafka.emit_api_created = AsyncMock(return_value="evt-1")
+            mock_kafka.emit_audit_event = AsyncMock(return_value="evt-2")
+            resp = client_as_tenant_admin.post(
+                "/v1/tenants/acme/apis",
+                json={
+                    "name": "quotes-api",
+                    "display_name": "Quotes API",
+                    "backend_url": "https://quotes.example.com",
+                    "openapi_spec": openapi_yaml,
+                },
+            )
+
+        assert resp.status_code == 200
+        event_payload = mock_kafka.emit_api_created.call_args.kwargs["api_data"]
+        assert event_payload["openapi_spec"]["paths"]["/quotes"]["get"]["operationId"] == "listQuotes"
 
     def test_create_duplicate_returns_409(self, app_with_tenant_admin, client_as_tenant_admin):
         from src.database import get_db

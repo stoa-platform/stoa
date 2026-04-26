@@ -75,14 +75,15 @@ jobs:
               ZOMBIE_COUNT=$((ZOMBIE_COUNT + 1))
 
               # Post warning comment via Linear GraphQL (use jq for safe JSON encoding)
-              COMMENT_TEXT="Review drift detected — this ticket is in 'In Review' but no GitHub PR references ${TICKET_ID} in its title.
-
-Per feedback_linear_in_review.md: 'In Review' requires an open PR. Either:
-1. Create a PR and reference ${TICKET_ID} in the title
-2. Move back to 'Todo' if work hasn't started
-3. Move to 'Done' if the work was completed via another ticket's PR
-
-Auto-detected by review-drift-detector workflow"
+              COMMENT_TEXT=$(printf '%s\n' \
+                "Review drift detected — this ticket is in 'In Review' but no GitHub PR references ${TICKET_ID} in its title." \
+                "" \
+                "Per feedback_linear_in_review.md: 'In Review' requires an open PR. Either:" \
+                "1. Create a PR and reference ${TICKET_ID} in the title" \
+                "2. Move back to 'Todo' if work hasn't started" \
+                "3. Move to 'Done' if the work was completed via another ticket's PR" \
+                "" \
+                "Auto-detected by review-drift-detector workflow")
 
               MUTATION=$(jq -n --arg iid "$ISSUE_UUID" --arg body "$COMMENT_TEXT" '{
                 query: "mutation($iid: String!, $body: String!) { commentCreate(input: { issueId: $iid, body: $body }) { success } }",

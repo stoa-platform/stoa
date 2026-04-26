@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.7](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.6...control-plane-ui-v1.5.7) (2026-04-26)
+
+
+### Bug Fixes
+
+* **deployments:** expose Git desired state freshness ([#2583](https://github.com/stoa-platform/stoa/issues/2583)) ([0da3768](https://github.com/stoa-platform/stoa/commit/0da37680380f8bd4ef554470ff677a5364a1c222))
+
 ## [1.5.6](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.5...control-plane-ui-v1.5.6) (2026-04-26)
 
 

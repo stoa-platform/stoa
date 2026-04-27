@@ -252,6 +252,16 @@ class Settings(BaseSettings):
     # Git Sync Worker (CAB-2012) — async Git commits on API CRUD
     GIT_SYNC_ON_WRITE: bool = True  # Kill-switch: set False to disable Git sync
 
+    # GitOps create-API rewrite (CAB-2185 B-FLOW)
+    # Spec ref: specs/api-creation-gitops-rewrite.md §6.13
+    # Default OFF: existing POST /v1/tenants/{tid}/apis path is unchanged.
+    # When True (Phase 4+), the new GitOps writer commits to stoa-catalog first,
+    # then projects api_catalog. The Kafka stoa.api.lifecycle event is NOT
+    # emitted on that path (spec §6.13).
+    GITOPS_CREATE_API_ENABLED: bool = False
+    # Reconciler tick interval in seconds (spec §6.6).
+    CATALOG_RECONCILE_INTERVAL_SECONDS: int = 10
+
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes

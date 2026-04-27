@@ -40,6 +40,24 @@ async def session_factory():
     if not url:
         pytest.skip("DATABASE_URL not set — skipping integration tests")
     engine = create_async_engine(url, echo=False)
+
+    # Bootstrap schema (mirrors ``conftest_integration.integration_db``) — the
+    # reconciler opens a session per tick and the worker tests need the
+    # tables to exist before the first iteration runs.
+    from src.database import Base
+
+    # Import every model so Base.metadata knows about all tables.
+    from src.models.catalog import APICatalog  # noqa: F401
+    from src.models.contract import Contract  # noqa: F401
+    from src.models.gateway_deployment import GatewayDeployment  # noqa: F401
+    from src.models.gateway_instance import GatewayInstance  # noqa: F401
+    from src.models.subscription import Subscription  # noqa: F401
+    from src.models.tenant import Tenant  # noqa: F401
+
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS stoa"))
+        await conn.run_sync(Base.metadata.create_all)
+
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
         yield factory

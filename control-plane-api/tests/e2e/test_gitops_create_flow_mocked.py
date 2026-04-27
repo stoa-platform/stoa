@@ -58,13 +58,32 @@ async def integration_session_factory() -> AsyncGenerator:
     if not url:
         pytest.skip("DATABASE_URL not set — skipping integration E2E tests")
     engine = create_async_engine(url, echo=False)
+
+    # Mirror ``conftest_integration.integration_db``: create the ``stoa``
+    # schema + all model tables before the test runs. The factory pattern
+    # we use here (multiple short-lived sessions per test) bypasses the
+    # shared fixture, so we must bootstrap the schema ourselves.
+    from sqlalchemy import text
+
+    from src.database import Base
+
+    # Import every model so ``Base.metadata`` knows about all tables.
+    from src.models.catalog import APICatalog  # noqa: F401
+    from src.models.contract import Contract  # noqa: F401
+    from src.models.gateway_deployment import GatewayDeployment  # noqa: F401
+    from src.models.gateway_instance import GatewayInstance  # noqa: F401
+    from src.models.subscription import Subscription  # noqa: F401
+    from src.models.tenant import Tenant  # noqa: F401
+
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS stoa"))
+        await conn.run_sync(Base.metadata.create_all)
+
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
         yield factory
     finally:
         async with factory() as session:
-            from sqlalchemy import text
-
             await session.execute(
                 text("DELETE FROM api_catalog WHERE tenant_id LIKE :p").bindparams(p=f"{_TEST_TENANT_PREFIX}%")
             )

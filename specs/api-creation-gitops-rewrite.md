@@ -828,4 +828,88 @@ La migration des catégories B sur `demo` et `free-aech` est hors scope du rewri
 | 2026-04-26 | v1.0 (refusée) | Claude après round 4 | Architecture théorique idéale, refusée car non alignée code réel |
 | 2026-04-26 | v0.4 DRAFT | Claude après audit Phase 1 + round 5 | `apis` → `api_catalog`, retrait UUID5, retrait worktree, layout conservateur, `CatalogGitClient` PyGithub-first, worker asyncio in-tree |
 | 2026-04-26 | v1.0 DRAFT (intermédiaire) | Claude après round 6 + diagnostic SQL terrain (drift 5/7/1) | §0 drift terrain, 6e invariant `git_path` réel, 4 niveaux d'identité, §6.14 3 catégories non-destructives, Phase 6.5, §7bis borné catégorie A, B10 backlog |
-| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` et `openapi_spec` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |
+| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` et `openapi_spec` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |## §12 — Phase 6 closure (LIVE 2026-04-27)
+
+Phase 6 strangler activated on OVH prod for tenant `demo-gitops`. The full chain
+(stoa-catalog GitHub → reconciler tick → `api_catalog` projection) is proven in
+production.
+
+### Activation chain
+
+| PR | Repo | Purpose |
+|---|---|---|
+| stoa-infra #63 | infra | Alembic `PreSync` Job in chart — applies migrations 096 + 097 |
+| stoa-infra #64 | infra | First flag flip (broken — CSV value tripped pydantic-settings JSON decode) |
+| stoa-infra #65 | infra | JSON-array fix: `GITOPS_ELIGIBLE_TENANTS: '["demo-gitops"]'` |
+| stoa #2613 | code | `git_service` singleton made provider-aware (CAB-2197) — unblocks reconciler |
+| stoa-infra `16f0be1` | infra | Image tag bump to `dev-ec9da59d` (PR #2613 deployed) |
+
+Two ops gotchas surfaced and are now in memory for the next strangler:
+
+1. `GITOPS_ELIGIBLE_TENANTS` (typed `list[str]`) must be a JSON array string in
+   env, not a CSV. The `@field_validator(mode="before")` does not see the raw
+   env value — `pydantic_settings.EnvSettingsSource.decode_complex_value` runs
+   first and json-fails on `"demo-gitops"`. Tighten the docstring in a
+   follow-up.
+2. ArgoCD `PreSync` hooks only fire during a sync **operation**, not on a
+   `refresh=hard` annotation. Adding a hook-only template (no diff in the
+   tracked Deployment/Service/Ingress) reconciles to `Synced` without firing
+   the hook. Trigger the first run with
+   `kubectl patch application <app> --type merge -p '{"operation":{"sync":{}}}'`.
+   Subsequent syncs fire the hook normally as part of any operation.
+
+### Evidence (§7 manual smoke)
+
+```
+api_id              = manual-test-1777312098
+api_name            = manual-test-1777312098
+version             = 1.0.0
+status              = active
+git_path            = tenants/demo-gitops/apis/manual-test-1777312098/api.yaml
+git_commit_sha      = 8ba68bb54086541995e4b5272d92f64c0efd67e1   ← matches gh api PUT
+catalog_content_hash = 8763431733a1c15fcd0fff844625942048e980ce11be0e69a788ed644b43f04c
+is_active           = true
+synced_at           = 2026-04-27 17:49:38 UTC
+```
+
+Projection landed 44 s after the catalog PUT, well within
+`CATALOG_RECONCILE_INTERVAL_SECONDS=10`. The `git_commit_sha` stored in
+`api_catalog` is the exact commit returned by `gh api PUT` — proof the
+reconciler reads the commit from GitHub Contents API and pins it, instead of
+re-deriving it.
+
+Residual fixture left in place intentionally per **B11 deferred** (CAB-2191):
+the `manual-test-1777312098` file + DB row remain in prod as a future cycle
+input for delete/prune.
+
+### Steady-state observation
+
+First hour after activation:
+
+| Pod | `iteration_failed` | `Catalog reconciler started` markers | `catalog_sync_status` ticks |
+|---|---|---|---|
+| `5cc9b9ff75-bccsq` | 0 | 2 | 355 |
+| `5cc9b9ff75-s7xlz` | 0 | 2 | 385 |
+
+ArgoCD `Synced/Healthy` on rev `16f0be1`. cp-api image `dev-ec9da59d` rolling
+on both replicas, 0 restarts.
+
+### What this unlocks
+
+- **Phase 6.5** (CAB-2189) — controlled re-adoption of 5 healthy category-A
+  APIs from the `demo` tenant.
+- **Phase 10** — broader rollout per CAB-2193 B14 audit verdict β: eligible
+  tenants are `banking-demo`, `high-five`, `ioi`, `demo-gitops` (excluding
+  `demo`, `free-aech`, `oasis` for the reasons in §11).
+
+### What is still open
+
+- **B11** (CAB-2191) — sync engine no soft-delete. Out-of-scope of this
+  rewrite; required for the eventual delete/prune cycle. The §7 fixture row
+  becomes a natural test input.
+- **B-INDEX** (CAB-2192) — `uq_api_catalog_tenant_api` UNIQUE incompatible with
+  soft-delete intent. Deferred separate cycle.
+- Code follow-up on `control-plane-api/src/config.py:269-278` — drop the
+  misleading "Comma-separated env var" claim from the
+  `GITOPS_ELIGIBLE_TENANTS` docstring or wire a custom env source if CSV is
+  the desired contract.

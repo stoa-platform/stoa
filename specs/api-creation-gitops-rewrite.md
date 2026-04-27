@@ -762,38 +762,63 @@ Conditions pour clôturer cette spec et la passer en statut *Référence* :
 
 1. Phases 0 à 10 toutes terminées avec critère de fin validé
 2. Test §7 + §7bis passent en CI sur 5 runs consécutifs
-3. Le flag `GITOPS_CREATE_API_ENABLED` est `true` par défaut sur tous les **tenants éligibles** (GitOps-initialized + tenants explicitement classés clean) depuis ≥ 7 jours
+3. Le flag `GITOPS_CREATE_API_ENABLED` est `true` par défaut sur tous les **tenants éligibles** (cf. politique de bascule ci-dessous) depuis ≥ 7 jours
 4. Aucun rollback déclenché pendant ces 7 jours
 5. Le backlog `api-creation-rewrite-backlog` :
    - Tickets in-scope **fixed** avec test de régression (B10, bugs runtime)
-   - Tickets out-of-scope **closed-documented/deferred** avec cycle cible (B11, B-INDEX, migration B, prune C)
+   - Tickets out-of-scope **closed-documented/deferred** avec cycle cible (B11, B-INDEX, migration B, prune C, backfill D)
 6. Les 5 APIs catégorie A du tenant `demo` ont `git_path` canonique, `git_commit_sha` rempli, `catalog_content_hash` rempli, `read_at_commit` non-null
-7. Les 7 catégorie B et l'orphelin C sont marqués `drift_detected` ou `drift_orphan` avec `last_error` documenté
+7. Les 7 catégorie B du tenant `demo`, les 3 catégorie B du tenant `free-aech`, l'orphelin C, et les 13 rows catégorie D sont marqués `drift_detected`, `drift_orphan` ou `drift_pre_gitops` avec `last_error` documenté
 8. **B11** est référencé par un ticket explicite dans le backlog du futur cycle delete/prune
-
-### 11.1 Liste des tenants éligibles à Phase 10 (audit B14, 2026-04-27)
-
-Audit `CAB-2193` exécuté sur prod (OVH GRA9), table `api_catalog`, `deleted_at IS NULL`.
-
-**Verdict** : **β — drift ciblé sur 2-3 tenants minoritaires**. Phase 10 peut élargir au-delà des GitOps-initialized.
-
-| Tenant | Total actif | Drift cat B (UUID) | Drift cat D (NULL git) | Cat A (slug) | Phase 10 |
-|---|---|---|---|---|---|
-| `banking-demo` | 1 | 0 | 0 | 1 | ✅ Éligible |
-| `high-five` | 4 | 0 | 0 | 4 | ✅ Éligible |
-| `ioi` | 3 | 0 | 0 | 3 | ✅ Éligible |
-| `demo-gitops` | (GitOps-initialized) | — | — | — | ✅ Éligible (par construction) |
-| `demo` | 25 | 7 | 12 | 6 | 🚫 Exclu — drift hard |
-| `free-aech` | 6 | 3 | 0 | 3 | 🚫 Exclu — 3 cat B UUID |
-| `oasis` | 3 | 0 | 1 | 2 | 🚫 Exclu — 1 cat D |
-
-**Tenants éligibles flag ON** : `banking-demo`, `high-five`, `ioi`, `demo-gitops`, et tous nouveaux tenants GitOps-initialized.
-
-**Tenants exclus** (restent sur l'ancien chemin jusqu'à cycle migration séparé) : `demo`, `free-aech`, `oasis`.
-
-**Surface de la nouveauté** : la catégorie D (pré-GitOps DB-only, `git_path IS NULL` ET `git_commit_sha IS NULL`) n'était pas anticipée par §6.14. 13 rows concernées (12 sur `demo`, 1 sur `oasis`). Documentée comme catégorie additionnelle, traitement = détection seule comme cat B/C.
+9. **Les rows catégorie D** sont référencées par un ticket explicite dans le backlog du futur cycle backfill
 
 Une fois clôturée, cette spec sert de pattern de référence pour les rewrites GitOps suivants.
+
+### 11.1 Bascule Phase 10 — Politique audit-informed
+
+**Verdict B14** (CAB-2193, exécuté 2026-04-27) : scénario **β confirmé** — drift sur 3/6 tenants actifs. Hypothèse défensive γ levée.
+
+#### Tenants éligibles à l'activation GitOps create par défaut
+
+| Tenant | Rows actives | Statut |
+|---|---:|---|
+| `banking-demo` | 1 | ✅ Éligible |
+| `high-five` | 4 | ✅ Éligible |
+| `ioi` | 3 | ✅ Éligible |
+| `demo-gitops` (futur) | — | ✅ Éligible par construction |
+
+Soit 8 rows actives sur 42 (~19%) dans des tenants immédiatement éligibles à l'activation du chemin GitOps create par défaut.
+
+#### Tenants exclus de la bascule
+
+| Tenant | Rows | Motif | Cycle de résolution |
+|---|---:|---|---|
+| `demo` | 25 | 7 cat B (UUID drift) + 12 cat D (pré-GitOps) | Migration legacy + backfill |
+| `free-aech` | 6 | 3 cat B (UUID drift) | Migration legacy |
+| `oasis` | 3 | 1 cat D (pré-GitOps) | Backfill |
+
+#### Politique de bascule
+
+1. `GITOPS_CREATE_API_ENABLED=true` est activé par défaut **uniquement** sur les tenants éligibles ci-dessus.
+2. Les nouveaux tenants créés post-Phase 10 sont éligibles **par construction** si le flow §6.5 refuse les `api_name` UUID-shaped (étape 2) et projette un `git_path` canonique depuis le fichier Git réel (étapes 6+12).
+3. Les tenants exclus restent sur l'ancien chemin DB-first jusqu'à résolution de leur cycle cible : migration legacy (cat B) ou backfill (cat D).
+4. Phase 6.5 (CAB-2189) cible **spécifiquement** les 5 APIs catégorie A du tenant `demo`. Elle n'affecte aucune autre row.
+5. **Cette bascule n'est pas une migration automatique des lignes existantes** : elle active le nouveau chemin de création GitOps pour les tenants éligibles. Les rows pré-existantes des tenants exclus ne sont **jamais** touchées par ce rewrite.
+
+#### Pattern UUID drift uniforme (cat B)
+
+L'audit B14 a confirmé que sur les 10 rows catégorie B identifiées (7 sur `demo`, 3 sur `free-aech`), **toutes** ont à la fois :
+
+- `api_id` UUID-shaped
+- `git_path` UUID-shaped (`tenants/{tid}/apis/{UUID}/api.yaml`)
+
+Aucune variante "UUID `api_id` avec `git_path` canonique" n'a été observée. La catégorie B (§6.14) reste donc uniforme : `UUID hard drift`.
+
+La migration des catégories B sur `demo` et `free-aech` est hors scope du rewrite create-api. Elle relève d'un cycle legacy migration séparé.
+
+#### Note sur les tenants partiels
+
+`oasis` a 2 rows saines (cat A) et 1 row cat D. Dans ce rewrite, le tenant entier est **exclu** de la bascule par défaut, même si 2 de ses 3 rows sont saines. Justification : la complexité d'un mode mixte par-row n'est pas justifiée pour ce cycle. Une fois la row cat D résolue par le cycle backfill, `oasis` deviendra éligible automatiquement.
 
 ## 12. Révisions
 

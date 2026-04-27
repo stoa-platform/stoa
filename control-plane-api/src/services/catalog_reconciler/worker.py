@@ -108,7 +108,13 @@ class CatalogReconcilerWorker:
             logger.exception("catalog_reconciler.orphan_detection_failed")
 
     async def _reconcile_one_path(self, git_path: str) -> tuple[str, str] | None:
-        """Reconcile one Git path. Returns ``(tenant_id, api_id)`` if processed."""
+        """Reconcile one Git path. Returns ``(tenant_id, api_id)`` if processed.
+
+        Implements spec §6.6 lines 352-402 for a single canonical path. The
+        method itself owns the Git fetch + content validation; the per-row
+        DB decision tree is delegated to :meth:`_reconcile_db_row` to keep
+        each helper readable.
+        """
         try:
             tenant_id, api_name = parse_canonical_path(git_path)
         except ValueError as exc:
@@ -140,32 +146,24 @@ class CatalogReconcilerWorker:
             commit_sha = await self._catalog_git_client.latest_file_commit(git_path)
         except FileNotFoundError:
             return None
-        try:
-            parsed = yaml.safe_load(content_bytes)
-        except yaml.YAMLError as exc:
-            self._log_sync_status(
-                tenant_id=tenant_id,
-                api_id=api_name,
-                status="failed",
-                git_commit_sha=commit_sha,
-                catalog_content_hash=content_hash,
-                git_path=git_path,
-                last_error=f"yaml parse error: {exc}",
-            )
-            return (tenant_id, api_name)
-        if not isinstance(parsed, dict):
-            self._log_sync_status(
-                tenant_id=tenant_id,
-                api_id=api_name,
-                status="failed",
-                git_commit_sha=commit_sha,
-                catalog_content_hash=content_hash,
-                git_path=git_path,
-                last_error="api.yaml root is not a mapping",
-            )
+
+        parsed = self._parse_and_validate_yaml(
+            content_bytes=content_bytes,
+            tenant_id=tenant_id,
+            api_name=api_name,
+            commit_sha=commit_sha,
+            content_hash=content_hash,
+            git_path=git_path,
+        )
+        if parsed is None:
             return (tenant_id, api_name)
 
         try:
+            # ``render_api_catalog_projection`` is the schema-validation step
+            # that follows ``yaml.safe_load`` (spec §6.10): it asserts the
+            # canonical layout, refuses ``id != name``, validates types, and
+            # rejects UUID-shaped slugs. Any malformed Git content fails here
+            # before reaching the DB.
             expected = render_api_catalog_projection(
                 parsed_content=parsed,
                 git_commit_sha=commit_sha,
@@ -184,9 +182,82 @@ class CatalogReconcilerWorker:
             )
             return (tenant_id, api_name)
 
-        async with self._db_session_factory() as session:
-            from src.models.catalog import APICatalog
+        await self._reconcile_db_row(
+            tenant_id=tenant_id,
+            api_name=api_name,
+            git_path=git_path,
+            commit_sha=commit_sha,
+            content_hash=content_hash,
+            expected=expected,
+        )
+        return (tenant_id, api_name)
 
+    def _parse_and_validate_yaml(
+        self,
+        *,
+        content_bytes: bytes,
+        tenant_id: str,
+        api_name: str,
+        commit_sha: str,
+        content_hash: str,
+        git_path: str,
+    ) -> dict[str, Any] | None:
+        """Parse ``api.yaml`` bytes and return a mapping or ``None`` on failure.
+
+        On failure the helper logs a structured ``failed`` status so the
+        caller can move on without raising. The schema-level validation
+        (spec §6.10) happens later in
+        :func:`render_api_catalog_projection`.
+        """
+        try:
+            parsed = yaml.safe_load(content_bytes)
+        except yaml.YAMLError as exc:
+            self._log_sync_status(
+                tenant_id=tenant_id,
+                api_id=api_name,
+                status="failed",
+                git_commit_sha=commit_sha,
+                catalog_content_hash=content_hash,
+                git_path=git_path,
+                last_error=f"yaml parse error: {exc}",
+            )
+            return None
+        if not isinstance(parsed, dict):
+            self._log_sync_status(
+                tenant_id=tenant_id,
+                api_id=api_name,
+                status="failed",
+                git_commit_sha=commit_sha,
+                catalog_content_hash=content_hash,
+                git_path=git_path,
+                last_error="api.yaml root is not a mapping",
+            )
+            return None
+        return parsed
+
+    async def _reconcile_db_row(
+        self,
+        *,
+        tenant_id: str,
+        api_name: str,
+        git_path: str,
+        commit_sha: str,
+        content_hash: str,
+        expected: Any,
+    ) -> None:
+        """Apply the §6.6 per-row decision tree against the DB.
+
+        Branches:
+
+        * cat ``UUID_HARD_DRIFT`` (B) → log drift, no mutation.
+        * cat ``PRE_GITOPS`` (D) → log drift, no mutation.
+        * cat ``ABSENT`` → take advisory lock, project a new row, commit.
+        * cat ``HEALTHY_ADOPTABLE`` / ``GITOPS_CREATED`` → drift check; if
+          drifting, lock + project; otherwise log ``synced``.
+        """
+        from src.models.catalog import APICatalog
+
+        async with self._db_session_factory() as session:
             stmt = (
                 select(APICatalog)
                 .where(APICatalog.tenant_id == tenant_id)
@@ -213,7 +284,7 @@ class CatalogReconcilerWorker:
                         f"real_git_name={api_name!r}"
                     ),
                 )
-                return (tenant_id, api_name)
+                return
 
             if category == LegacyCategory.PRE_GITOPS:
                 self._log_sync_status(
@@ -225,7 +296,7 @@ class CatalogReconcilerWorker:
                     git_path=git_path,
                     last_error="no git_path nor commit pointer",
                 )
-                return (tenant_id, api_name)
+                return
 
             if category == LegacyCategory.ABSENT:
                 if await self._try_advisory_lock(session, tenant_id, api_name):
@@ -239,9 +310,8 @@ class CatalogReconcilerWorker:
                         catalog_content_hash=content_hash,
                         git_path=git_path,
                     )
-                return (tenant_id, api_name)
+                return
 
-            # Cat HEALTHY_ADOPTABLE or GITOPS_CREATED — drift check then project.
             assert actual_row is not None
             if not row_matches_projection(actual_row, expected):
                 if await self._try_advisory_lock(session, tenant_id, api_name):
@@ -273,8 +343,6 @@ class CatalogReconcilerWorker:
                     catalog_content_hash=content_hash,
                     git_path=git_path,
                 )
-
-        return (tenant_id, api_name)
 
     async def _detect_legacy_orphans(self, seen_keys: set[tuple[str, str]]) -> None:
         """Iterate active DB rows not seen in the Git tree this tick.

@@ -60,6 +60,11 @@ than a transient race, so we surface :class:`GitOpsRaceExhaustedError`
 (HTTP 503) instead of looping further.
 """
 
+# Mirrors the cap used at the Git client boundary (see
+# ``services.catalog_git_client.github_contents._ACTOR_MAX_LEN``). Commit
+# subjects in ``stoa-catalog`` stay readable even when the JWT-derived
+# claim is unusually long, and the cap bounds how much arbitrary data a
+# malformed claim can splice into the commit message.
 _ACTOR_MAX_LEN = 120
 
 

@@ -1392,5 +1392,11 @@ settings:
         return await _gl_run(_merge, "gitlab.merge_merge_request")
 
 
-# Global instance
-git_service = GitLabService()
+# Provider-aware global instance — must NOT be hardcoded to a single
+# provider. The catalog reconciler and GitOps create path consume this
+# singleton through GitHub-only adapters, so under GIT_PROVIDER=github
+# this must resolve to GitHubService(). Lazy import below avoids the
+# import cycle (git_provider lazy-imports back into this module).
+from .git_provider import git_provider_factory  # noqa: E402
+
+git_service = git_provider_factory()

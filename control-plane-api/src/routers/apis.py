@@ -25,8 +25,8 @@ from ..models.catalog import APICatalog
 from ..repositories.catalog import CatalogRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
+from ..services import git_service
 from ..services.catalog_git_client.github_contents import GitHubContentsCatalogClient
-from ..services.git_provider import git_provider_factory
 from ..services.gitops_writer import (
     ApiCreatePayload,
     GitOpsConflictError,
@@ -43,17 +43,16 @@ AudienceLiteral = Literal["public", "internal", "partner"]
 
 logger = logging.getLogger(__name__)
 
-# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
-git_service = git_provider_factory()
-
 
 def _build_catalog_git_client() -> GitHubContentsCatalogClient:
     """Construct the :class:`CatalogGitClient` used by the GitOps create path.
 
     Extracted so tests can patch it (E2E mocked tests inject an in-memory
     fake client without touching PyGithub). Production deployments wire
-    ``GIT_PROVIDER=github`` and the module-level ``git_service`` resolves to
-    a connected :class:`GitHubService`.
+    ``GIT_PROVIDER=github`` and the module-level ``git_service`` is the
+    same connected :class:`GitHubService` the catalog reconciler consumes
+    — sharing one singleton across the create path and the reconciler
+    ensures both observe the same connection state.
     """
     from ..services.github_service import GitHubService
 

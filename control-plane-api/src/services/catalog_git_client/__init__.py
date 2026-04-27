@@ -7,11 +7,14 @@ Reads/writes ``stoa-catalog`` via PyGithub Contents API (no worktree, no
 ``GitHubContentsCatalogClient`` implementation lands in Phase 4.
 """
 
+from .github_contents import CatalogShaConflictError, GitHubContentsCatalogClient
 from .models import RemoteCommit, RemoteFile
 from .protocol import CatalogGitClient
 
 __all__ = [
     "CatalogGitClient",
+    "CatalogShaConflictError",
+    "GitHubContentsCatalogClient",
     "RemoteCommit",
     "RemoteFile",
 ]

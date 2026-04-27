@@ -171,6 +171,60 @@ class TestCreateOrUpdate:
         assert "alice@stoa" in commit_message
 
     @pytest.mark.asyncio
+    async def test_actor_sanitization_strips_newlines(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        """A malicious actor string with newlines must collapse to a single line.
+
+        The security guarantee is that an attacker controlling ``actor``
+        cannot inject a *new line* after our own ``Actor:`` prefix; they
+        cannot fabricate what looks like an additional commit-trailer
+        header. The substring is preserved (folded) but it stays on the
+        same line as the prefix.
+        """
+        fake_repo.create_file.return_value = {
+            "commit": MagicMock(sha="x"),
+            "content": MagicMock(sha="y"),
+        }
+        await client.create_or_update(
+            path="tenants/demo/apis/petstore/api.yaml",
+            content=b"id: petstore\n",
+            expected_sha=None,
+            actor="alice\n\nFake-Header: injected\nstill-alice",
+            message="create api petstore",
+        )
+        args, _ = fake_repo.create_file.call_args
+        commit_message = args[1]
+        # The commit message structure is: subject \n\n Actor: <one line>
+        body_lines = commit_message.split("\n\n", 1)[1].splitlines()
+        assert len(body_lines) == 1, f"Actor line must be single-line, got: {body_lines!r}"
+        actor_line = body_lines[0]
+        assert actor_line.startswith("Actor: ")
+        # All remnants of the attacker-supplied input are inside the actor line,
+        # never on a separate line where they could pose as a fake trailer.
+        assert "\n" not in actor_line
+        assert "\r" not in actor_line
+
+    @pytest.mark.asyncio
+    async def test_actor_sanitization_empty_falls_back(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        fake_repo.create_file.return_value = {
+            "commit": MagicMock(sha="x"),
+            "content": MagicMock(sha="y"),
+        }
+        await client.create_or_update(
+            path="tenants/demo/apis/petstore/api.yaml",
+            content=b"id: petstore\n",
+            expected_sha=None,
+            actor="",
+            message="create api petstore",
+        )
+        args, _ = fake_repo.create_file.call_args
+        commit_message = args[1]
+        assert "Actor: <unknown>" in commit_message
+
+    @pytest.mark.asyncio
     async def test_other_errors_bubble(self, client: GitHubContentsCatalogClient, fake_repo: MagicMock) -> None:
         fake_repo.create_file.side_effect = GithubException(500, {"message": "boom"}, None)
         with pytest.raises(GithubException):

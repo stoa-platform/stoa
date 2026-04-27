@@ -26,24 +26,17 @@ statically.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 import yaml
 
-# Local UUID detector — duplicated from gitops_writer.paths to keep this
-# helper purity-isolated (the invariants test forbids importing
-# ``gitops_writer`` from this module so the helper stays a pure generator
-# free of the writer's side-effect surface).
-_UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE,
-)
-
-
-def _is_uuid_shaped(value: str) -> bool:
-    return bool(_UUID_PATTERN.match(value))
+# ``gitops_writer.paths`` is itself a pure module (no DB, no Git, no async).
+# Importing only ``is_uuid_shaped`` keeps the helper free of any writer side
+# effect while removing the regex duplication. The invariants test still
+# pins the helper against the SQLAlchemy / catalog_git_client / github_service
+# surfaces.
+from src.services.gitops_writer.paths import is_uuid_shaped
 
 
 def render_api_yaml(
@@ -75,7 +68,7 @@ def render_api_yaml(
             (the YAML is layout-agnostic; tenant ownership is encoded in
             the canonical path ``tenants/{tenant_id}/apis/{api_name}/api.yaml``).
     """
-    if _is_uuid_shaped(api_name):
+    if is_uuid_shaped(api_name):
         raise ValueError(f"api_name UUID-shaped not allowed: {api_name!r}. Spec §6.4 (CAB-2187 B10).")
     if not api_name:
         raise ValueError("api_name must be non-empty")
@@ -105,6 +98,27 @@ def render_api_yaml(
     return yaml.safe_dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True)
 
 
+def _resolve_output_path(raw: str) -> Path:
+    """Resolve ``--output`` against CWD and refuse symlink/special targets.
+
+    The CLI is a dev scaffold but is sometimes piped into shell scripts that
+    interpolate untrusted strings. Refusing symlinks and non-regular files
+    keeps the surface obvious: we only ever write a regular file at the
+    final path, never follow a symlink that escapes elsewhere.
+
+    Order matters: check ``is_symlink()`` on the unresolved path *before*
+    calling :meth:`Path.resolve` (which canonicalises symlinks away).
+    """
+    raw_path = Path(raw).expanduser()
+    # Probe the path as given so symlinks are detected before resolution.
+    if raw_path.is_symlink():
+        raise ValueError(f"--output target is a symlink (refusing to follow): {raw_path}")
+    output = raw_path.resolve()
+    if output.exists() and not output.is_file():
+        raise ValueError(f"--output target exists and is not a regular file: {output}")
+    return output
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate canonical api.yaml")
     parser.add_argument("--tenant", required=True)
@@ -120,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        output = _resolve_output_path(args.output)
         yaml_content = render_api_yaml(
             tenant_id=args.tenant,
             api_name=args.name,
@@ -134,8 +149,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    Path(args.output).write_text(yaml_content)
-    print(f"wrote {args.output}")
+    output.write_text(yaml_content)
+    print(f"wrote {output}")
     return 0
 
 

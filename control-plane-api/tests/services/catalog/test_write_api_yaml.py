@@ -198,3 +198,49 @@ class TestCli:
         parsed = yaml.safe_load(output.read_text())
         assert parsed["category"] == "Banking"
         assert parsed["tags"] == ["portal:published", "banking"]
+
+    def test_cli_refuses_symlink_output(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        target = tmp_path / "real-target.yaml"
+        target.write_text("placeholder\n")
+        symlink = tmp_path / "link.yaml"
+        symlink.symlink_to(target)
+        rc = main(
+            [
+                "--tenant",
+                "demo",
+                "--name",
+                "petstore",
+                "--version",
+                "1.0.0",
+                "--backend",
+                "http://x",
+                "--output",
+                str(symlink),
+            ]
+        )
+        assert rc == 2
+        captured = capsys.readouterr()
+        assert "symlink" in captured.err
+        # Original target unchanged
+        assert target.read_text() == "placeholder\n"
+
+    def test_cli_refuses_directory_output(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        target_dir = tmp_path / "subdir"
+        target_dir.mkdir()
+        rc = main(
+            [
+                "--tenant",
+                "demo",
+                "--name",
+                "petstore",
+                "--version",
+                "1.0.0",
+                "--backend",
+                "http://x",
+                "--output",
+                str(target_dir),
+            ]
+        )
+        assert rc == 2
+        captured = capsys.readouterr()
+        assert "not a regular file" in captured.err

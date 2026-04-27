@@ -188,8 +188,23 @@ async def project_to_api_catalog(
 
     Spec §6.5 step 14, §6.9. NOT wired to the HTTP handler in Phase 4-1.
 
-    The caller is responsible for the surrounding transaction; this function
-    is idempotent within a transaction (re-entry produces the same result).
+    Caller responsibilities (this function does not enforce):
+
+    * **Authz / tenant ownership**: ``projection.tenant_id`` and
+      ``projection.api_id`` are taken from the parsed ``api.yaml`` content
+      already validated by :func:`render_api_catalog_projection` against
+      the canonical Git path. The HTTP writer (Phase 4-2) and the
+      reconciler tick are responsible for ensuring the caller is allowed
+      to touch that ``(tenant_id, api_id)`` pair *before* invoking this
+      function.
+    * **Surrounding transaction**: this function ``flush()``-es but does
+      not commit. The caller wraps the call in a transaction so a partial
+      write is rolled back as a unit (see
+      ``test_transactional_rollback_on_caller_exception`` for the
+      contract).
+
+    The function is idempotent within a transaction — re-entry produces
+    the same row state.
     """
     select_stmt = (
         select(APICatalog)

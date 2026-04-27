@@ -50,8 +50,39 @@ class CatalogShaConflictError(Exception):
         super().__init__(message)
 
 
+_ACTOR_MAX_LEN = 120
+
+
+def _sanitize_actor(actor: str) -> str:
+    """Strip newlines and control chars from ``actor`` before commit-message use.
+
+    The HTTP layer is expected to extract ``actor`` from a validated JWT
+    claim, but this client adds a defence-in-depth scrub so that even a
+    misconfigured caller cannot inject a multi-line commit message via a
+    crafted ``actor`` string. Length is capped to keep commit subjects
+    manageable.
+    """
+    if not actor:
+        return "<unknown>"
+    cleaned = "".join(ch for ch in actor if ch == " " or (ch.isprintable() and ch not in "\r\n"))
+    cleaned = cleaned.strip()
+    if not cleaned:
+        return "<unknown>"
+    return cleaned[:_ACTOR_MAX_LEN]
+
+
 class GitHubContentsCatalogClient:
     """PyGithub-backed ``CatalogGitClient`` implementation.
+
+    Caller responsibilities (out of scope for this client):
+
+    * **Authn/authz**: the caller (writer / reconciler) is responsible for
+      tenant ownership and RBAC checks. This client does not validate that
+      ``path`` belongs to the calling user's tenant.
+    * **Retry policy**: this client maps optimistic-CAS failures to
+      :class:`CatalogShaConflictError` for the writer's spec §6.5 step 10
+      retry loop, and lets transient errors (5xx, timeouts via
+      :class:`asyncio.TimeoutError`) bubble up so the caller can decide.
 
     Args:
         github_service: An already-connected :class:`GitHubService` instance.
@@ -126,7 +157,10 @@ class GitHubContentsCatalogClient:
         gh = self._github_service._require_gh()
         project_id = self._project_id
         branch = self._default_branch
-        full_message = f"{message}\n\nActor: {actor}"
+        # Sanitize actor before splicing into the commit message so a
+        # JWT-derived string cannot inject newlines or control chars.
+        safe_actor = _sanitize_actor(actor)
+        full_message = f"{message}\n\nActor: {safe_actor}"
         # PyGithub expects str content for the Contents API.
         content_str = content.decode("utf-8")
 

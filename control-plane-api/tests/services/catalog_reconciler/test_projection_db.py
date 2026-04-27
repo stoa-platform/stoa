@@ -137,6 +137,40 @@ async def test_idempotent_re_entry_yields_same_state(integration_db) -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_transactional_rollback_on_caller_exception(integration_db) -> None:
+    """If the caller raises after the projection flush, the row is rolled back.
+
+    The fixture wraps each test in a SAVEPOINT-style ``session.begin()`` /
+    rollback. We simulate a caller error by inserting the projection, then
+    re-querying through a fresh nested transaction that is rolled back.
+    The post-rollback SELECT must NOT see the row, proving the caller's
+    transaction owns the visibility lifecycle (spec §6.5 step 14 invariant).
+    """
+    proj = _projection(api_id="rollback-target")
+
+    async with integration_db.begin_nested() as savepoint:
+        await project_to_api_catalog(integration_db, proj)
+        # Sanity: the row is visible inside the savepoint.
+        result = await integration_db.execute(
+            select(APICatalog).where(
+                APICatalog.tenant_id == proj.tenant_id,
+                APICatalog.api_id == proj.api_id,
+            )
+        )
+        assert result.scalar_one() is not None
+        await savepoint.rollback()
+
+    result_after = await integration_db.execute(
+        select(APICatalog).where(
+            APICatalog.tenant_id == proj.tenant_id,
+            APICatalog.api_id == proj.api_id,
+        )
+    )
+    assert result_after.scalar_one_or_none() is None
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_soft_deleted_row_does_not_block_insert(integration_db) -> None:
     """A soft-deleted row with same (tenant, api_id) must not match the SELECT.
 

@@ -27,7 +27,5 @@ class GitOpsConflictError(Exception):
         self.attempted_hash = attempted_hash
         super().__init__(
             message
-            or (
-                f"GitOps conflict for {tenant_id}/{api_id}: " f"remote hash {remote_hash} != attempted {attempted_hash}"
-            )
+            or (f"GitOps conflict for {tenant_id}/{api_id}: remote hash {remote_hash} != attempted {attempted_hash}")
         )

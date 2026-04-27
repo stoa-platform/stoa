@@ -76,8 +76,7 @@ def test_no_uuid5_in_new_code() -> None:
         if pattern.search(_code_only(f.read_text())):
             offenders.append(str(f))
     assert not offenders, (
-        f"uuid5() found in {offenders}. Forbidden by §6.4 (CAB-2181). "
-        "Use the api_name slug from the payload instead."
+        f"uuid5() found in {offenders}. Forbidden by §6.4 (CAB-2181). Use the api_name slug from the payload instead."
     )
 
 
@@ -93,8 +92,7 @@ def test_no_worktree_in_new_code() -> None:
         if pattern.search(_code_only(f.read_text())):
             offenders.append(str(f))
     assert not offenders, (
-        f"git CLI / worktree reference found in {offenders}. "
-        "Forbidden by §6.7 (CAB-2184). Use PyGithub Contents API."
+        f"git CLI / worktree reference found in {offenders}. Forbidden by §6.7 (CAB-2184). Use PyGithub Contents API."
     )
 
 
@@ -113,7 +111,7 @@ def test_no_apis_table_in_new_code() -> None:
         if match:
             offenders.append(f"{f}: {match.group()}")
     assert not offenders, (
-        f"reference to table 'apis' found: {offenders}. " "Use 'api_catalog' instead. Spec §6.3 (CAB-2180)."
+        f"reference to table 'apis' found: {offenders}. Use 'api_catalog' instead. Spec §6.3 (CAB-2180)."
     )
 
 
@@ -160,8 +158,7 @@ def test_no_python_native_hash_in_advisory_lock() -> None:
     bare_hash = re.compile(r"(?<![\w.])hash\s*\(")
     assert "hashlib" in raw, "advisory_lock.py must import hashlib"
     assert not bare_hash.search(code), (
-        "Bare hash() detected in advisory_lock.py code. "
-        "Use hashlib.sha256() for cross-process determinism (spec §6.8)."
+        "Bare hash() detected in advisory_lock.py code. Use hashlib.sha256() for cross-process determinism (spec §6.8)."
     )
 
 
@@ -204,7 +201,7 @@ def test_no_compute_uac_spec_hash_created() -> None:
         if pattern.search(_code_only(f.read_text())):
             offenders.append(str(f))
     assert not offenders, (
-        f"compute_uac_spec_hash defined in {offenders}. " "Out-of-scope this cycle (UAC V2). Spec §6.2.1 (CAB-2182)."
+        f"compute_uac_spec_hash defined in {offenders}. Out-of-scope this cycle (UAC V2). Spec §6.2.1 (CAB-2182)."
     )
 
 
@@ -214,9 +211,9 @@ def test_gitops_create_api_enabled_default_false() -> None:
 
     fresh = Settings()
     assert fresh.GITOPS_CREATE_API_ENABLED is False, "GITOPS_CREATE_API_ENABLED must default to False (spec §6.13)."
-    assert (
-        fresh.CATALOG_RECONCILE_INTERVAL_SECONDS == 10
-    ), "CATALOG_RECONCILE_INTERVAL_SECONDS must default to 10 (spec §6.6)."
+    assert fresh.CATALOG_RECONCILE_INTERVAL_SECONDS == 10, (
+        "CATALOG_RECONCILE_INTERVAL_SECONDS must default to 10 (spec §6.6)."
+    )
 
 
 def test_catalog_git_client_protocol_has_5_methods() -> None:

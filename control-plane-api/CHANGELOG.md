@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.2...control-plane-api-v1.11.0) (2026-04-27)
+
+
+### Features
+
+* **api-creation-gitops:** Phase 4-2 — orchestration (create_api flow + reconciler + handler) ([#2608](https://github.com/stoa-platform/stoa/issues/2608)) ([a8fc1ae](https://github.com/stoa-platform/stoa/commit/a8fc1ae5defa198523e95b754a52c7705694332b))
+* **api:** phase 3 scaffold for gitops create-api rewrite ([#2605](https://github.com/stoa-platform/stoa/issues/2605)) ([d4a182e](https://github.com/stoa-platform/stoa/commit/d4a182e4e94476c53645765d7d9b54af90d3f9f7))
+* **api:** phase 4-1 primitives for gitops create-api rewrite ([#2607](https://github.com/stoa-platform/stoa/issues/2607)) ([115e433](https://github.com/stoa-platform/stoa/commit/115e4339ad2cc8dae95bc8c3641656fe6e419ec5))
+
 ## [1.10.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.1...control-plane-api-v1.10.2) (2026-04-27)
 
 

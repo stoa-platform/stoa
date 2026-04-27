@@ -391,7 +391,26 @@ async def create_tenant(
         # Check if tenant already exists
         existing = await repo.get_by_id(tenant_id)
         if existing:
-            raise HTTPException(status_code=409, detail=f"Tenant '{tenant_id}' already exists")
+            # CAB-2196: an archived row with no kc_group_id is a failed-bootstrap
+            # tombstone (DELETE archived a tenant that never finished provisioning).
+            # Recreate is safe: hard-purge the old row then create fresh. Archived
+            # rows that DID provision (kc_group_id set) stay 409 — those are real
+            # decommissioned tenants and re-using the ID is a compliance concern.
+            if (
+                existing.status == TenantStatus.ARCHIVED.value
+                and existing.kc_group_id is None
+            ):
+                await repo.delete(existing)
+                await kafka_service.emit_audit_event(
+                    tenant_id=tenant_id,
+                    action="recreate-from-failed-bootstrap",
+                    resource_type="tenant",
+                    resource_id=tenant_id,
+                    user_id=user.id,
+                    details={"prev_provisioning_status": existing.provisioning_status},
+                )
+            else:
+                raise HTTPException(status_code=409, detail=f"Tenant '{tenant_id}' already exists")
 
         # Create tenant in database with PENDING provisioning status
         tenant = Tenant(

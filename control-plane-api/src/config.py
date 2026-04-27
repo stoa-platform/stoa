@@ -261,6 +261,20 @@ class Settings(BaseSettings):
     GITOPS_CREATE_API_ENABLED: bool = False
     # Reconciler tick interval in seconds (spec §6.6).
     CATALOG_RECONCILE_INTERVAL_SECONDS: int = 10
+    # Tenants eligible for the GitOps create path (spec §6.13 + §11.1 audit-informed).
+    # Empty list (default) means even with the flag ON, every POST falls through
+    # to the legacy DB-first handler. Phase 6 strangler populates this with
+    # ``demo-gitops``; Phase 10 audit-informed (CAB-2193 §11) extends to
+    # ``banking-demo``, ``high-five``, ``ioi``. Comma-separated env var.
+    GITOPS_ELIGIBLE_TENANTS: list[str] = []
+
+    @field_validator("GITOPS_ELIGIBLE_TENANTS", mode="before")
+    @classmethod
+    def _split_eligible_tenants(cls, v: object) -> object:
+        """Accept comma-separated env var or list/tuple."""
+        if isinstance(v, str):
+            return [t.strip() for t in v.split(",") if t.strip()]
+        return v
 
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True

@@ -231,37 +231,11 @@ def test_catalog_git_client_protocol_has_5_methods() -> None:
     assert not missing, f"CatalogGitClient missing methods: {missing}"
 
 
-def test_writer_create_api_raises_with_ticket_ref() -> None:
-    """Stub messages must point to the Linear ticket + spec section."""
-    from src.services.gitops_writer.models import ApiCreatePayload
-    from src.services.gitops_writer.writer import GitOpsWriter
-
-    writer = GitOpsWriter()
-    payload = ApiCreatePayload(
-        api_name="petstore",
-        display_name="Pet Store",
-        version="1.0.0",
-        backend_url="http://example.invalid",
-    )
-    with pytest.raises(NotImplementedError) as exc:
-        writer.create_api(tenant_id="demo", contract_payload=payload, actor="test")
-    msg = str(exc.value)
-    assert "CAB-2185" in msg, "stub must reference CAB-2185 (B-FLOW)"
-    assert "§6.5" in msg, "stub must reference spec §6.5"
-
-
-def test_reconciler_start_raises_with_ticket_ref() -> None:
-    """Reconciler scaffold raises NotImplementedError on first tick."""
-    import asyncio
-
-    from src.services.catalog_reconciler.worker import CatalogReconcilerWorker
-
-    worker = CatalogReconcilerWorker()
-    with pytest.raises(NotImplementedError) as exc:
-        asyncio.get_event_loop().run_until_complete(worker.start())
-    msg = str(exc.value)
-    assert "CAB-2186" in msg, "stub must reference CAB-2186 (B-WORKER)"
-    assert "§6.6" in msg, "stub must reference spec §6.6"
+# Phase 3 stub-message tests removed in Phase 4-2 once the stubs were filled.
+# The static invariants below (UUID5, worktree, Kafka emit, hash, etc.) still
+# guard the implementation. Behavioural coverage of the writer + reconciler
+# lives in ``tests/services/gitops_writer/test_writer_integration.py`` and
+# ``tests/services/catalog_reconciler/test_worker_loop.py``.
 
 
 def test_no_target_gateways_or_openapi_spec_writes_in_writer() -> None:

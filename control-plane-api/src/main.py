@@ -182,6 +182,10 @@ ENABLE_BILLING_METERING_CONSUMER = (
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"
 ENABLE_GIT_SYNC_WORKER = KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_GIT_SYNC_WORKER", "true").lower() == "true"
+# Phase 3 scaffold (spec §6.6 / CAB-2186 B-WORKER). The settings flag
+# GITOPS_CREATE_API_ENABLED is the contract; this env override mirrors the
+# pattern used by the other workers and lets tests force-disable the loop.
+ENABLE_CATALOG_RECONCILER = os.getenv("ENABLE_CATALOG_RECONCILER", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -322,6 +326,34 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start git sync worker", error=str(e))
 
+    # Start catalog reconciler (Phase 3 scaffold — spec §6.6, CAB-2186 B-WORKER)
+    # Flag-gated: GITOPS_CREATE_API_ENABLED defaults to False, so the loop is
+    # NOT started in production until Phase 4 ships. When the flag is True,
+    # the scaffold worker raises NotImplementedError on its first tick — that
+    # is intentional, it surfaces a missing implementation rather than silent
+    # success.
+    catalog_reconciler_task = None
+    if ENABLE_CATALOG_RECONCILER and settings.GITOPS_CREATE_API_ENABLED:
+        try:
+            from .services.catalog_git_client.github_contents import (
+                GitHubContentsCatalogClient,
+            )
+            from .services.catalog_reconciler.worker import CatalogReconcilerWorker
+
+            catalog_git_client = GitHubContentsCatalogClient(github_service=git_service)
+            catalog_reconciler = CatalogReconcilerWorker(
+                catalog_git_client=catalog_git_client,
+                db=None,
+                interval_seconds=settings.CATALOG_RECONCILE_INTERVAL_SECONDS,
+            )
+            catalog_reconciler_task = asyncio.create_task(catalog_reconciler.start())
+            logger.info(
+                "Catalog reconciler started (scaffold)",
+                interval_seconds=settings.CATALOG_RECONCILE_INTERVAL_SECONDS,
+            )
+        except Exception as e:
+            logger.warning("Failed to start catalog reconciler", error=str(e))
+
     # Start telemetry worker (CAB-1682 — gateway observability)
     telemetry_worker_task = None
     if ENABLE_TELEMETRY_WORKER:
@@ -399,6 +431,12 @@ async def lifespan(app: FastAPI):
         git_sync_task.cancel()
         with suppress(asyncio.CancelledError):
             await git_sync_task
+
+    # Stop catalog reconciler (Phase 3 scaffold — CAB-2186)
+    if catalog_reconciler_task:
+        catalog_reconciler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await catalog_reconciler_task
 
     # Stop telemetry worker (CAB-1682)
     if ENABLE_TELEMETRY_WORKER and telemetry_worker_task:

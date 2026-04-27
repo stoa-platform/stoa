@@ -49,7 +49,10 @@ class InMemoryCatalogGitClient:
     def _next_sha(self, kind: str) -> str:
         self._counter += 1
         raw = f"{kind}:{self._counter}".encode()
-        return hashlib.sha1(raw).hexdigest()  # noqa: S324
+        # nosec B324 — SHA1 is intentional: test fixture only, deterministic
+        # mock of GitHub blob/commit SHAs (which are SHA1 anyway). No security
+        # boundary involves this hash.
+        return hashlib.sha1(raw, usedforsecurity=False).hexdigest()  # noqa: S324
 
     def seed(self, path: str, content: bytes, *, commit_sha: str | None = None) -> str:
         """Pre-populate a file. Returns the recorded commit SHA."""

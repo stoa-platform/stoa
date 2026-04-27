@@ -9,13 +9,20 @@ full loop per spec §6.6.
 """
 
 from .classifier import LegacyCategory, classify_legacy
-from .projection import render_api_catalog_projection, row_matches_projection
+from .projection import (
+    ApiCatalogProjection,
+    project_to_api_catalog,
+    render_api_catalog_projection,
+    row_matches_projection,
+)
 from .worker import CatalogReconcilerWorker
 
 __all__ = [
+    "ApiCatalogProjection",
     "CatalogReconcilerWorker",
     "LegacyCategory",
     "classify_legacy",
+    "project_to_api_catalog",
     "render_api_catalog_projection",
     "row_matches_projection",
 ]

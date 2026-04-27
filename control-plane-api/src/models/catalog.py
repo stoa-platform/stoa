@@ -61,6 +61,8 @@ class APICatalog(Base):
     # Git tracking
     git_path = Column(String(500), nullable=True)
     git_commit_sha = Column(String(40), nullable=True)
+    # GitOps create rewrite (CAB-2182 B-HASH, migration 097): sha256 of api.yaml bytes
+    catalog_content_hash = Column(String(64), nullable=True)
 
     # Gateway targeting (which gateways this API should be deployed to)
     target_gateways = Column(JSONB, default=list, nullable=False, server_default="[]")

@@ -9,6 +9,7 @@ from .advisory_lock import advisory_lock_key
 from .exceptions import GitOpsConflictError
 from .hashing import compute_catalog_content_hash
 from .models import ApiCreatePayload, CatalogContentHash, CreateApiResult
+from .paths import canonical_catalog_path, is_uuid_shaped, parse_canonical_path
 from .writer import GitOpsWriter
 
 __all__ = [
@@ -18,5 +19,8 @@ __all__ = [
     "GitOpsConflictError",
     "GitOpsWriter",
     "advisory_lock_key",
+    "canonical_catalog_path",
     "compute_catalog_content_hash",
+    "is_uuid_shaped",
+    "parse_canonical_path",
 ]

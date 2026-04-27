@@ -45,22 +45,24 @@ class KeycloakService:
         """Initialize Keycloak admin connection.
 
         Uses Resource Owner Password Grant with admin-cli (public client).
-        Authenticates on master realm, then targets the configured realm
-        for client/user management.
+        ``user_realm_name`` pins the auth realm to ``master`` (where the admin
+        user lives) while ``realm_name`` targets the operational realm — token
+        refresh hits the master token endpoint instead of the operational
+        realm where ``admin`` does not exist (CAB-2195).
         """
         try:
             # CAB-2094: admin API uses the internal SVC URL when configured,
             # avoiding hairpin NAT on OVH MKS.
             conn = KeycloakOpenIDConnection(
                 server_url=settings.keycloak_internal_url,
-                realm_name="master",
+                realm_name=settings.KEYCLOAK_REALM,
+                user_realm_name="master",
                 client_id=settings.KEYCLOAK_ADMIN_CLIENT_ID,
                 username="admin",
                 password=settings.KEYCLOAK_ADMIN_CLIENT_SECRET,
                 verify=settings.KEYCLOAK_VERIFY_SSL,
             )
             self._admin = KeycloakAdmin(connection=conn)
-            self._admin.connection.realm_name = settings.KEYCLOAK_REALM
             logger.info(f"Connected to Keycloak realm: {settings.KEYCLOAK_REALM}")
         except Exception as e:
             logger.error(f"Failed to connect to Keycloak: {e}")

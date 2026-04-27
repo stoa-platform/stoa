@@ -591,7 +591,23 @@ Flag ON par défaut **uniquement** sur :
 
 Tenants contenant des catégories B ou C non résolues restent sur l'ancien chemin.
 
-**Hypothèse défensive par défaut (γ)** : tant que la requête SQL globale `audit-uuid-drift-by-tenant.sql` n'a pas confirmé la portée du drift, on suppose qu'il peut être systémique. Phase 10 limitée strictement aux GitOps-initialized.
+**Verdict audit B14 (CAB-2193, exécuté 2026-04-27)** : scénario **β — drift sur 2-3 tenants minoritaires** (PAS γ systémique, PAS α isolé `demo`). Détail dans §11. Hypothèse défensive γ levée.
+
+#### Catégorie D — Pré-GitOps DB-only (nouveau, surfacé par B14)
+
+```
+api_catalog row active
+git_path IS NULL ET git_commit_sha IS NULL
+```
+
+13 rows détectées par l'audit B14 (12 sur `demo` + 1 sur `oasis`). Ces rows sont antérieures à l'introduction du writer GitOps : `git_sync_worker` legacy n'a jamais résolu de pointeur Git pour elles. Distinct de cat C (cat C a `git_path` rempli mais fichier absent à HEAD).
+
+**Action** : **détection seulement, aucune réparation automatique** (mêmes raisons que cat B/C — FK potentielles vers `api_id` slug).
+
+Comportement reconciler :
+- `update_status(drift_pre_gitops, "no git_path nor commit pointer")`
+- aucune mutation `api_catalog`, aucune écriture Git
+- ces tenants restent exclus de Phase 10 jusqu'à cycle migration séparé
 
 ## 7. Critère de succès final
 
@@ -754,6 +770,28 @@ Conditions pour clôturer cette spec et la passer en statut *Référence* :
 6. Les 5 APIs catégorie A du tenant `demo` ont `git_path` canonique, `git_commit_sha` rempli, `catalog_content_hash` rempli, `read_at_commit` non-null
 7. Les 7 catégorie B et l'orphelin C sont marqués `drift_detected` ou `drift_orphan` avec `last_error` documenté
 8. **B11** est référencé par un ticket explicite dans le backlog du futur cycle delete/prune
+
+### 11.1 Liste des tenants éligibles à Phase 10 (audit B14, 2026-04-27)
+
+Audit `CAB-2193` exécuté sur prod (OVH GRA9), table `api_catalog`, `deleted_at IS NULL`.
+
+**Verdict** : **β — drift ciblé sur 2-3 tenants minoritaires**. Phase 10 peut élargir au-delà des GitOps-initialized.
+
+| Tenant | Total actif | Drift cat B (UUID) | Drift cat D (NULL git) | Cat A (slug) | Phase 10 |
+|---|---|---|---|---|---|
+| `banking-demo` | 1 | 0 | 0 | 1 | ✅ Éligible |
+| `high-five` | 4 | 0 | 0 | 4 | ✅ Éligible |
+| `ioi` | 3 | 0 | 0 | 3 | ✅ Éligible |
+| `demo-gitops` | (GitOps-initialized) | — | — | — | ✅ Éligible (par construction) |
+| `demo` | 25 | 7 | 12 | 6 | 🚫 Exclu — drift hard |
+| `free-aech` | 6 | 3 | 0 | 3 | 🚫 Exclu — 3 cat B UUID |
+| `oasis` | 3 | 0 | 1 | 2 | 🚫 Exclu — 1 cat D |
+
+**Tenants éligibles flag ON** : `banking-demo`, `high-five`, `ioi`, `demo-gitops`, et tous nouveaux tenants GitOps-initialized.
+
+**Tenants exclus** (restent sur l'ancien chemin jusqu'à cycle migration séparé) : `demo`, `free-aech`, `oasis`.
+
+**Surface de la nouveauté** : la catégorie D (pré-GitOps DB-only, `git_path IS NULL` ET `git_commit_sha IS NULL`) n'était pas anticipée par §6.14. 13 rows concernées (12 sur `demo`, 1 sur `oasis`). Documentée comme catégorie additionnelle, traitement = détection seule comme cat B/C.
 
 Une fois clôturée, cette spec sert de pattern de référence pour les rewrites GitOps suivants.
 

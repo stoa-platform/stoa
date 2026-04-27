@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.1...control-plane-api-v1.10.2) (2026-04-27)
+
+
+### Bug Fixes
+
+* **uac:** remove stale spec_hash from hand-authored demo contract ([#2598](https://github.com/stoa-platform/stoa/issues/2598)) ([e9af40c](https://github.com/stoa-platform/stoa/commit/e9af40c9a37d35767b90d286b4e06cb78cf0c023))
+
 ## [1.10.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.0...control-plane-api-v1.10.1) (2026-04-26)
 
 

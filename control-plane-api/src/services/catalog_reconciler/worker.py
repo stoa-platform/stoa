@@ -115,24 +115,31 @@ class CatalogReconcilerWorker:
         DB decision tree is delegated to :meth:`_reconcile_db_row` to keep
         each helper readable.
         """
+        # Spec §6.6: a UUID-shaped api_name in the git_path is a "corruption
+        # Git" signal that must surface as ``status=failed`` (a distinct
+        # operational event from a generic non-canonical layout). The check
+        # therefore runs *before* ``parse_canonical_path`` — that helper
+        # rejects UUID segments by raising ``ValueError``, which would
+        # otherwise be funneled into the warning-only branch below.
+        parts = git_path.rstrip("/").split("/")
+        if len(parts) >= 5 and parts[0] == "tenants" and parts[2] == "apis" and is_uuid_shaped(parts[3]):
+            self._log_sync_status(
+                tenant_id=parts[1],
+                api_id=parts[3],
+                status="failed",
+                git_commit_sha=None,
+                catalog_content_hash=None,
+                git_path=git_path,
+                last_error="uuid-shaped api_name in git_path",
+            )
+            return None
+
         try:
             tenant_id, api_name = parse_canonical_path(git_path)
         except ValueError as exc:
             logger.warning(
                 "catalog_reconciler.non_canonical_path",
                 extra={"git_path": git_path, "error": str(exc)},
-            )
-            return None
-
-        if is_uuid_shaped(api_name):
-            self._log_sync_status(
-                tenant_id=tenant_id,
-                api_id=api_name,
-                status="failed",
-                git_commit_sha=None,
-                catalog_content_hash=None,
-                git_path=git_path,
-                last_error="uuid-shaped api_name in git_path",
             )
             return None
 

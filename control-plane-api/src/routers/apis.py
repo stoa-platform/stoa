@@ -55,8 +55,10 @@ def _build_catalog_git_client() -> GitHubContentsCatalogClient:
     ``GIT_PROVIDER=github`` and the module-level ``git_service`` resolves to
     a connected :class:`GitHubService`.
     """
-    if not hasattr(git_service, "_require_gh"):
-        raise RuntimeError("GitOps create path requires GIT_PROVIDER=github; " f"got {type(git_service).__name__}.")
+    from ..services.github_service import GitHubService
+
+    if not isinstance(git_service, GitHubService):
+        raise RuntimeError(f"GitOps create path requires GIT_PROVIDER=github; got {type(git_service).__name__}.")
     return GitHubContentsCatalogClient(github_service=git_service)
 
 

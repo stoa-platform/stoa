@@ -51,6 +51,34 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MAX_RACE_RETRIES = 3
+"""Spec §6.5 step 10: cap optimistic-CAS retry attempts at 3.
+
+The writer re-runs ``get → decide A/B/C → maybe write`` after each
+``CatalogShaConflictError``. After three failed attempts the chance that
+a fourth succeeds is dominated by a runaway concurrent writer rather
+than a transient race, so we surface :class:`GitOpsRaceExhaustedError`
+(HTTP 503) instead of looping further.
+"""
+
+_ACTOR_MAX_LEN = 120
+
+
+def _sanitize_actor(actor: str) -> str:
+    """Defense-in-depth: strip control chars + cap length before commit message use.
+
+    The :class:`GitHubContentsCatalogClient` already sanitizes the actor at
+    its boundary (see ``_sanitize_actor`` in github_contents.py). The writer
+    repeats the scrub so a custom :class:`CatalogGitClient` injected via
+    tests (or future clients that forget to sanitize) cannot smuggle a
+    multi-line commit message via a malformed JWT-derived ``actor`` claim.
+    """
+    if not actor:
+        return "<unknown>"
+    cleaned = "".join(ch for ch in actor if ch == " " or (ch.isprintable() and ch not in "\r\n"))
+    cleaned = cleaned.strip()
+    if not cleaned:
+        return "<unknown>"
+    return cleaned[:_ACTOR_MAX_LEN]
 
 
 class GitOpsWriter:
@@ -88,6 +116,8 @@ class GitOpsWriter:
                 api_name=api_name,
                 reason="UUID-shaped or empty api_name (spec §6.5 step 2)",
             )
+
+        actor = _sanitize_actor(actor)
 
         api_yaml_str = render_api_yaml(
             tenant_id=tenant_id,
@@ -278,14 +308,22 @@ class GitOpsWriter:
     async def _release_advisory_lock(self, key: int) -> None:
         """Spec §6.8 — release the matching ``pg_advisory_unlock``.
 
-        Swallowed exceptions: if release fails (e.g. session already dropped),
-        we log but do not let the failure mask the original outcome of the
-        flow.
+        If release fails (e.g. session already dropped or rolled back) we log
+        a warning rather than re-raising: the caller is in a ``finally``
+        block and re-raising would mask the original outcome (success or a
+        more informative writer-level exception). PostgreSQL auto-releases
+        session-scoped advisory locks when the connection returns to the
+        pool, so a failed unlock here is bounded — the lock is freed when
+        SQLAlchemy recycles or closes the connection. The warning is the
+        signal for ops to investigate.
         """
         try:
             await self._db_session.execute(text("SELECT pg_advisory_unlock(:k)").bindparams(k=key))
-        except Exception:
-            logger.exception("gitops_writer.advisory_unlock_failed", extra={"lock_key": key})
+        except Exception as exc:
+            logger.warning(
+                "gitops_writer.advisory_unlock_failed",
+                extra={"lock_key": key, "error": str(exc)},
+            )
 
     @staticmethod
     def _log_sync_status(

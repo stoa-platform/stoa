@@ -310,12 +310,14 @@ class CatalogReconcilerWorker:
                     continue
 
                 self._log_sync_status(
-                    tenant_id=row.tenant_id,
-                    api_id=row.api_id,
+                    tenant_id=str(row.tenant_id),
+                    api_id=str(row.api_id),
                     status=status,
-                    git_commit_sha=row.git_commit_sha,
-                    catalog_content_hash=row.catalog_content_hash,
-                    git_path=row.git_path,
+                    git_commit_sha=str(row.git_commit_sha) if row.git_commit_sha is not None else None,
+                    catalog_content_hash=(
+                        str(row.catalog_content_hash) if row.catalog_content_hash is not None else None
+                    ),
+                    git_path=str(row.git_path) if row.git_path is not None else None,
                     last_error=last_error,
                 )
 

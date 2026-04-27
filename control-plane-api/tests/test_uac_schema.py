@@ -238,6 +238,41 @@ class TestJsonSchemaParity:
 # =============================================================================
 
 
+class TestHandAuthoredFixtures:
+    """Hand-authored UAC fixtures must validate and must not carry spec_hash.
+
+    spec_hash is a runtime drift signal owned by cp-api / DB columns; embedding
+    it in source-tracked fixtures produces a stale, unreproducible value
+    (the legacy demo-httpbin.uac.json carried a 64-char hash that no visible
+    algo could reproduce — `_compute_spec_hash` truncates to 16 chars).
+    """
+
+    @pytest.fixture
+    def fixture_paths(self) -> list[Path]:
+        repo_root = Path(__file__).parent.parent.parent
+        uac_dir = repo_root / "specs" / "uac"
+        if not uac_dir.exists():
+            pytest.skip("specs/uac/ not present (cross-tree test)")
+        paths = [uac_dir / "demo-httpbin.uac.json"]
+        paths.extend(sorted((uac_dir / "examples").glob("*.uac.json")))
+        return [p for p in paths if p.exists()]
+
+    def test_fixtures_validate(self, fixture_paths: list[Path]):
+        assert fixture_paths, "no UAC fixtures discovered"
+        for path in fixture_paths:
+            data = json.loads(path.read_text())
+            UacContractSpec.model_validate(data)
+
+    def test_fixtures_do_not_carry_spec_hash(self, fixture_paths: list[Path]):
+        assert fixture_paths, "no UAC fixtures discovered"
+        offenders = [
+            p.name for p in fixture_paths if "spec_hash" in json.loads(p.read_text())
+        ]
+        assert offenders == [], (
+            f"hand-authored fixtures must not carry spec_hash (runtime field): {offenders}"
+        )
+
+
 class TestClassificationPolicies:
     def test_h_policies(self):
         policies = CLASSIFICATION_POLICIES[UacClassification.H]

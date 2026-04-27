@@ -326,29 +326,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start git sync worker", error=str(e))
 
-    # Start catalog reconciler (Phase 3 scaffold — spec §6.6, CAB-2186 B-WORKER)
+    # Start catalog reconciler (Phase 4-2 — spec §6.6, CAB-2186 B-WORKER).
     # Flag-gated: GITOPS_CREATE_API_ENABLED defaults to False, so the loop is
-    # NOT started in production until Phase 4 ships. When the flag is True,
-    # the scaffold worker raises NotImplementedError on its first tick — that
-    # is intentional, it surfaces a missing implementation rather than silent
-    # success.
+    # NOT started in production until a tenant is rolled into
+    # GITOPS_ELIGIBLE_TENANTS (Phase 6 strangler).
+    catalog_reconciler = None
     catalog_reconciler_task = None
     if ENABLE_CATALOG_RECONCILER and settings.GITOPS_CREATE_API_ENABLED:
         try:
+            from .database import _get_session_factory
             from .services.catalog_git_client.github_contents import (
                 GitHubContentsCatalogClient,
             )
             from .services.catalog_reconciler.worker import CatalogReconcilerWorker
 
             catalog_git_client = GitHubContentsCatalogClient(github_service=git_service)
+            session_factory = _get_session_factory()
             catalog_reconciler = CatalogReconcilerWorker(
                 catalog_git_client=catalog_git_client,
-                db=None,
+                db_session_factory=session_factory,
                 interval_seconds=settings.CATALOG_RECONCILE_INTERVAL_SECONDS,
             )
             catalog_reconciler_task = asyncio.create_task(catalog_reconciler.start())
             logger.info(
-                "Catalog reconciler started (scaffold)",
+                "Catalog reconciler started",
                 interval_seconds=settings.CATALOG_RECONCILE_INTERVAL_SECONDS,
             )
         except Exception as e:
@@ -432,8 +433,10 @@ async def lifespan(app: FastAPI):
         with suppress(asyncio.CancelledError):
             await git_sync_task
 
-    # Stop catalog reconciler (Phase 3 scaffold — CAB-2186)
+    # Stop catalog reconciler (Phase 4-2 — CAB-2186)
     if catalog_reconciler_task:
+        if catalog_reconciler is not None:
+            await catalog_reconciler.stop()
         catalog_reconciler_task.cancel()
         with suppress(asyncio.CancelledError):
             await catalog_reconciler_task

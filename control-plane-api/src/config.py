@@ -261,6 +261,21 @@ class Settings(BaseSettings):
     GITOPS_CREATE_API_ENABLED: bool = False
     # Reconciler tick interval in seconds (spec §6.6).
     CATALOG_RECONCILE_INTERVAL_SECONDS: int = 10
+    # Tenants eligible for the GitOps create path (spec §6.13 + §11 audit-informed).
+    # Empty list (default) means even with the flag ON, every POST falls through
+    # to the legacy DB-first handler. The strangler tickets populate the list
+    # explicitly per cycle; the eligible-tenant set is therefore an operational
+    # concern, not source-of-truth — see the spec §11 table for the canonical
+    # roll-out plan. Comma-separated env var.
+    GITOPS_ELIGIBLE_TENANTS: list[str] = []
+
+    @field_validator("GITOPS_ELIGIBLE_TENANTS", mode="before")
+    @classmethod
+    def _split_eligible_tenants(cls, v: object) -> object:
+        """Accept comma-separated env var or list/tuple."""
+        if isinstance(v, str):
+            return [t.strip() for t in v.split(",") if t.strip()]
+        return v
 
     # Gateway Sync Engine (Control Plane Agnostique)
     SYNC_ENGINE_ENABLED: bool = True
@@ -570,8 +585,7 @@ class Settings(BaseSettings):
                 offender_msgs.append("GIT_PROVIDER=gitlab but GITLAB_PROJECT_ID is empty")
             if not _is_valid_http_url(git.gitlab.url):
                 offender_msgs.append(
-                    f"GIT_PROVIDER=gitlab but GITLAB_URL is not a valid http(s) URL "
-                    f"(got {git.gitlab.url!r})"
+                    f"GIT_PROVIDER=gitlab but GITLAB_URL is not a valid http(s) URL " f"(got {git.gitlab.url!r})"
                 )
             if git.github.token.get_secret_value():
                 _logger.warning(

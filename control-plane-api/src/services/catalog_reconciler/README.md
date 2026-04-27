@@ -4,13 +4,14 @@ Async in-tree worker that reconciles `api_catalog` against `stoa-catalog` Git.
 
 ## Status
 
-- ✅ Phase 3 — scaffold mergé (PR #2605); `start()` still raises
+- ✅ Phase 3 — scaffold mergé (PR #2605); `start()` raised
   `NotImplementedError`
-- ✅ Phase 4-1 — projection + classifier primitives (this PR)
-- ⏳ Phase 4-2 — `start()` loop body + DB upsert wiring
+- ✅ Phase 4-1 — projection + classifier primitives (PR #2607)
+- ✅ Phase 4-2 — `start()` / `_reconcile_iteration()` loop bodies (this PR)
 
 The worker is flag-gated by `GITOPS_CREATE_API_ENABLED` (default OFF), so it
-is never started in production until Phase 4-2 ships.
+is never started in production until a tenant is added to
+`GITOPS_ELIGIBLE_TENANTS` (Phase 6 strangler).
 
 ## Spec
 
@@ -19,7 +20,13 @@ is never started in production until Phase 4-2 ships.
 
 ## Modules
 
-- `worker.py` — `CatalogReconcilerWorker.start()` loop (stub)
+- `worker.py` — `CatalogReconcilerWorker.start()` loop. Each tick:
+  - lists `tenants/*/apis/*/api.yaml` from the Git remote
+  - classifies each row via `classify_legacy()`
+  - cat ABSENT / A / GITOPS_CREATED → projection (with
+    `pg_try_advisory_xact_lock`)
+  - cat B / C / D → log `drift_*` status, no auto-repair
+  - DB orphan sweep at end of tick (cat C / D rows not seen this tick)
 - `classifier.py` — `classify_legacy()` returning `LegacyCategory` (6
   categories: `HEALTHY_ADOPTABLE`, `UUID_HARD_DRIFT`, `ORPHAN_DB`,
   `PRE_GITOPS`, `GITOPS_CREATED`, `ABSENT`)
@@ -31,10 +38,12 @@ is never started in production until Phase 4-2 ships.
   - `project_to_api_catalog()` — transactional upsert (preserves
     `target_gateways`, `openapi_spec`, `metadata`, `id` PK on UPDATE)
 
-## What's NOT in this PR (Phase 4-2)
+## What's NOT in this PR (out-of-scope, Phase 5+)
 
-- `CatalogReconcilerWorker.start()` body — still raises
-  `NotImplementedError`
-- `main.py` flag-gating change (kept identical to Phase 3)
-- Any reads of `api_sync_status` (the new table is created lazily by
-  Phase 4-2 alongside the loop body)
+- Persistent `api_sync_status` table — Phase 4-2 logs sync transitions via
+  structured logs. The schema lands alongside Phase 5 observability work.
+- Auto-repair of legacy UUID drift (cat B) — separate cycle owns FK
+  migration of `subscriptions.api_id`, gateway routes, etc.
+- Soft-delete of orphans (cat C) — owned by the delete/prune cycle (B11).
+- Migration of pre-GitOps DB-only rows (cat D) — same constraint as cat B.
+- Kafka emission on the reconciler path — short-circuited (spec §6.13).

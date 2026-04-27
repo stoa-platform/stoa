@@ -91,26 +91,12 @@ def test_projection_module_does_not_assign_target_gateways() -> None:
         assert fb not in code, f"Active code mutates {fb!r} in projection module. Forbidden by §6.9."
 
 
-def test_apis_router_does_not_import_gitops_modules_in_phase_4_1() -> None:
-    """The POST handler must not import the new GitOps modules in Phase 4-1.
-
-    Wiring is reserved for Phase 4-2. Earlier import would couple the
-    handler to stubs that still raise ``NotImplementedError``.
-    """
-    assert APIS_ROUTER.exists(), f"router missing: {APIS_ROUTER}"
-    raw = APIS_ROUTER.read_text()
-    forbidden_imports = [
-        "from src.services.gitops_writer",
-        "from src.services.catalog_reconciler",
-        "from src.services.catalog_git_client",
-        "import src.services.gitops_writer",
-        "import src.services.catalog_reconciler",
-        "import src.services.catalog_git_client",
-    ]
-    for fb in forbidden_imports:
-        assert fb not in raw, (
-            f"apis router imports new GitOps modules in Phase 4-1: {fb!r}. Forbidden — wiring is Phase 4-2."
-        )
+# Phase 4-1 explicitly forbade the apis router from importing the new
+# GitOps modules so the stubs could not be exercised before Phase 4-2.
+# That guard was lifted when Phase 4-2 wired the handler. The Phase 4-2
+# invariants in ``test_phase4_2_invariants.py`` enforce that the wiring is
+# flag-gated and never reaches the writer when the flag is OFF — see
+# ``test_handler_post_apis_imports_gated_by_flag``.
 
 
 def test_main_catalog_reconciler_stays_flag_gated() -> None:
@@ -141,21 +127,9 @@ def test_main_catalog_reconciler_stays_flag_gated() -> None:
         )
 
 
-def test_writer_create_api_still_raises_in_phase_4_1() -> None:
-    """``GitOpsWriter.create_api`` must still raise — orchestration is Phase 4-2."""
-    import pytest
-
-    from src.services.gitops_writer.models import ApiCreatePayload
-    from src.services.gitops_writer.writer import GitOpsWriter
-
-    payload = ApiCreatePayload(
-        api_name="petstore",
-        display_name="Pet Store",
-        version="1.0.0",
-        backend_url="http://example.invalid",
-    )
-    with pytest.raises(NotImplementedError):
-        GitOpsWriter().create_api(tenant_id="demo", contract_payload=payload, actor="test")
+# ``test_writer_create_api_still_raises_in_phase_4_1`` removed in Phase 4-2.
+# The writer is now implemented; behavioural tests live in
+# ``tests/services/gitops_writer/test_writer_integration.py``.
 
 
 def test_helper_writes_no_files_outside_argument() -> None:

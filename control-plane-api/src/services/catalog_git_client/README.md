@@ -6,9 +6,9 @@
 ## Status
 
 - ✅ Phase 3 — Protocol figé + scaffold (PR #2605)
-- ✅ Phase 4-1 — `GitHubContentsCatalogClient` real implementation (this PR)
-- ⏳ Phase 4-2 — consumed by `GitOpsWriter.create_api()` and the reconciler
-  tick
+- ✅ Phase 4-1 — `GitHubContentsCatalogClient` real implementation (PR #2607)
+- ✅ Phase 4-2 — consumed by `GitOpsWriter.create_api()` and the reconciler
+  tick (this PR)
 
 ## Spec
 

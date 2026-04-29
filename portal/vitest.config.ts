@@ -40,7 +40,9 @@ export default defineConfig({
         'src/pages/**',
       ],
       thresholds: {
-        lines: 55, // CAB-1951 Phase 2: mechanical test deletion. Restored in Phase 3.
+        // Threshold lowered from default by CAB-1951 Phase 2 (mechanical test deletion).
+        // Coverage drifted further below this floor since 2026-04-26 — restoration tracked in CAB-2205.
+        lines: 55,
         functions: 55,
         branches: 55,
         statements: 55,

@@ -77,3 +77,28 @@ Détail on-demand: `.claude/docs/code-style-python.md`, `testing-standards.md`, 
 - Boundary Integrity: jamais mocker la boundary sous test. `httpx.MockTransport` > `AsyncMock`. FastAPI TestClient + DB in-memory > patch repo.
 - Adapters gateway: implémenter les 16 méthodes de `GatewayAdapterInterface`. `AdapterResult(success=False)` pour unsupported, jamais raise. `httpx.AsyncClient` obligatoire. Tests ≥ 30.
 - Alembic: `alembic revision --autogenerate -m "..."` puis `upgrade head`. COMMIT avant `ADD VALUE` sur enum.
+
+## BASE_DOMAIN — derived URLs recompute on Settings instantiation
+
+Per CAB-2199 / INFRA-1a S2, the module-level `_BASE_DOMAIN = os.getenv(...)` was
+removed. `BASE_DOMAIN` is now a normal Pydantic field, and derived URLs
+(`KEYCLOAK_URL`, `GATEWAY_URL`, `GATEWAY_ADMIN_PROXY_URL`, `ARGOCD_URL`,
+`ARGOCD_EXTERNAL_URL`, `GRAFANA_URL`, `PROMETHEUS_URL`, `LOGS_URL`,
+`VAULT_ADDR`, `CORS_ORIGINS`) are filled in by `_derive_urls_from_base_domain`
+— a `model_validator(mode="before")` that uses `setdefault` (presence-based,
+not truthiness-based).
+
+**Implication for tests**: `Settings(BASE_DOMAIN="other.tld").KEYCLOAK_URL`
+now returns `"https://auth.other.tld"`. Previously frozen at import time at
+`"https://auth.gostoa.dev"` — silent test isolation bug.
+
+**Behavior expansion**: an explicit empty-string override
+(`Settings(KEYCLOAK_URL="")`) is now **preserved**, where the prior
+frozen-default code would have always returned the f-string value. Other
+explicit overrides (e.g. `KEYCLOAK_URL="https://kc.foo.io"`) win over
+BASE_DOMAIN derivation as before.
+
+If you add a new derived URL field, register it in the validator's `derived`
+dict. **Do NOT add new `gostoa.dev` literals** outside the `BASE_DOMAIN`
+default and the validator's fallback — Q6 multi-env-ready rule.
+

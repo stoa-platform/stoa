@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.0...control-plane-api-v1.11.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* **api:** allow recreating archived tenant after failed bootstrap (CAB-2196) ([#2611](https://github.com/stoa-platform/stoa/issues/2611)) ([677787e](https://github.com/stoa-platform/stoa/commit/677787ee4240e75cf0654e93170975e0cb186d96))
+* **api:** pin KC auth to master realm via user_realm_name (CAB-2195) ([#2610](https://github.com/stoa-platform/stoa/issues/2610)) ([22e1723](https://github.com/stoa-platform/stoa/commit/22e172336c33269615d650153bea9fc6764fbfe7))
+
 ## [1.11.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.2...control-plane-api-v1.11.0) (2026-04-27)
 
 

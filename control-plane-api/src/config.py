@@ -13,8 +13,15 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
-# Base domain - used to construct default URLs
-_BASE_DOMAIN = os.getenv("BASE_DOMAIN", "gostoa.dev")
+# Base domain — derived URLs (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR,
+# CORS_ORIGINS) are filled in from this value by the
+# `_derive_urls_from_base_domain` model_validator below. CAB-2199 removed
+# the load-time `os.getenv("BASE_DOMAIN", …)` freeze: BASE_DOMAIN is now a
+# normal Pydantic field, and the derivation happens at instantiation time
+# so `Settings(BASE_DOMAIN="other.tld")` correctly recomputes every
+# downstream URL. Explicit env overrides for the derived URLs are still
+# honored (presence-based dispatch in the validator — see §2.2.c of
+# `docs/infra/INFRA-1a-PLAN.md`).
 
 _logger = logging.getLogger(__name__)
 
@@ -113,8 +120,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"  # dev, staging, production
     STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)
 
-    # Base domain for URL construction
-    BASE_DOMAIN: str = _BASE_DOMAIN
+    # Base domain for URL construction. Drives the derived URL fields below
+    # (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR, CORS_ORIGINS) via the
+    # `_derive_urls_from_base_domain` validator. Explicit env overrides for
+    # any individual derived URL still win — the validator only fills in
+    # fields ABSENT from input (presence-based, not truthiness-based).
+    BASE_DOMAIN: str = "gostoa.dev"
 
     # Keycloak Authentication
     # KEYCLOAK_URL is the PUBLIC URL Keycloak embeds in token `iss` claims
@@ -126,7 +137,7 @@ class Settings(BaseSettings):
     # calls (admin API, token exchange, JWKS fetch). Avoids hairpin NAT on
     # OVH MKS and similar cloud providers. Falls back to KEYCLOAK_URL when
     # unset. Mirrors the stoa-gateway STOA_KEYCLOAK_URL / _INTERNAL_URL pattern.
-    KEYCLOAK_URL: str = f"https://auth.{_BASE_DOMAIN}"
+    KEYCLOAK_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     KEYCLOAK_INTERNAL_URL: str = ""
     KEYCLOAK_REALM: str = "stoa"
     KEYCLOAK_CLIENT_ID: str = "control-plane-api"
@@ -205,13 +216,13 @@ class Settings(BaseSettings):
     KAFKA_SASL_PASSWORD: str = ""
 
     # API Gateway
-    GATEWAY_URL: str = f"https://vps-wm.{_BASE_DOMAIN}"
+    GATEWAY_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     GATEWAY_ADMIN_USER: str = "Administrator"
     GATEWAY_ADMIN_PASSWORD: str = ""
 
     # Gateway Admin Proxy API (OIDC secured)
     # Uses the Gateway-Admin-API proxy instead of direct Basic Auth
-    GATEWAY_ADMIN_PROXY_URL: str = f"https://apis.{_BASE_DOMAIN}/gateway/Gateway-Admin-API/1.0"
+    GATEWAY_ADMIN_PROXY_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     GATEWAY_USE_OIDC_PROXY: bool = True  # Set to False to use Basic Auth directly
 
     # MCP Gateway URL (for tools proxy)
@@ -220,16 +231,16 @@ class Settings(BaseSettings):
 
     # ArgoCD (GitOps Observability - CAB-654)
     # Uses static API token (stoa-api service account) for platform status
-    ARGOCD_URL: str = f"https://argocd.{_BASE_DOMAIN}"
-    ARGOCD_EXTERNAL_URL: str = f"https://argocd.{_BASE_DOMAIN}"
+    ARGOCD_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
+    ARGOCD_EXTERNAL_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     ARGOCD_TOKEN: str = ""
     ARGOCD_VERIFY_SSL: bool = True
     ARGOCD_PLATFORM_APPS: str = "stoa-gateway,control-plane-api,control-plane-ui,stoa-portal"
 
     # External Observability URLs (CAB-654)
-    GRAFANA_URL: str = f"https://grafana.{_BASE_DOMAIN}"
-    PROMETHEUS_URL: str = f"https://prometheus.{_BASE_DOMAIN}"
-    LOGS_URL: str = f"https://grafana.{_BASE_DOMAIN}/explore"
+    GRAFANA_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
+    PROMETHEUS_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
+    LOGS_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
 
     # Prometheus Internal API (CAB-840) - for direct PromQL queries
     PROMETHEUS_INTERNAL_URL: str = "http://prometheus:9090"
@@ -357,14 +368,10 @@ class Settings(BaseSettings):
     STOA_ENVIRONMENTS: str = ""
 
     # CORS - comma-separated list of allowed origins
-    # Includes all known environment UI origins for multi-backend switching
-    CORS_ORIGINS: str = (
-        f"https://console.{_BASE_DOMAIN},https://portal.{_BASE_DOMAIN},"
-        f"https://staging-console.{_BASE_DOMAIN},https://staging-portal.{_BASE_DOMAIN},"
-        f"https://dev-console.{_BASE_DOMAIN},https://dev-portal.{_BASE_DOMAIN},"
-        "http://localhost:3000,http://localhost:3002,http://localhost:5173,"
-        "http://console.stoa.local,http://portal.stoa.local,http://api.stoa.local"
-    )
+    # Includes all known environment UI origins for multi-backend switching.
+    # Absent → derived from BASE_DOMAIN by `_derive_urls_from_base_domain`
+    # validator (mode="before"); explicit env CORS_ORIGINS still wins.
+    CORS_ORIGINS: str = ""
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -447,7 +454,7 @@ class Settings(BaseSettings):
     LOG_MASKING_PATTERNS: str = '["password", "secret", "token", "api_key", "authorization"]'
 
     # HashiCorp Vault (runtime secrets — MCP server credentials, OAuth tokens)
-    VAULT_ADDR: str = f"https://hcvault.{_BASE_DOMAIN}"
+    VAULT_ADDR: str = ""  # absent → derived from BASE_DOMAIN by validator
     VAULT_TOKEN: str = ""  # Dev mode token; production uses K8s auth
     VAULT_KUBERNETES_ROLE: str = "control-plane-api"
     VAULT_MOUNT_POINT: str = "secret"
@@ -526,6 +533,55 @@ class Settings(BaseSettings):
         if not self.GATEWAY_API_KEYS:
             return []
         return [key.strip() for key in self.GATEWAY_API_KEYS.split(",") if key.strip()]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_urls_from_base_domain(cls, data: object) -> object:
+        """CAB-2199 / INFRA-1a S2 — fill in BASE_DOMAIN-derived URL defaults.
+
+        Replaces the prior load-time ``_BASE_DOMAIN = os.getenv(...)`` freeze
+        which made ``Settings(BASE_DOMAIN="other.tld")`` silently keep the
+        original f-string defaults. The validator runs on the raw input dict
+        BEFORE field validation, so:
+
+        * Pydantic-Settings has already flattened env vars + dotenv + secrets
+          into ``data``; an explicit override (``KEYCLOAK_URL=https://kc.foo``
+          from any source) is preserved by ``setdefault`` (presence-based,
+          not truthiness-based).
+        * ``KEYCLOAK_URL=""`` (explicit empty) is also preserved — caller
+          intent honored.
+        * Fields ABSENT from ``data`` get the derived value injected.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        base_domain = data.get("BASE_DOMAIN") or "gostoa.dev"
+
+        derived: dict[str, str] = {
+            "KEYCLOAK_URL": f"https://auth.{base_domain}",
+            "GATEWAY_URL": f"https://vps-wm.{base_domain}",
+            "GATEWAY_ADMIN_PROXY_URL": (
+                f"https://apis.{base_domain}/gateway/Gateway-Admin-API/1.0"
+            ),
+            "ARGOCD_URL": f"https://argocd.{base_domain}",
+            "ARGOCD_EXTERNAL_URL": f"https://argocd.{base_domain}",
+            "GRAFANA_URL": f"https://grafana.{base_domain}",
+            "PROMETHEUS_URL": f"https://prometheus.{base_domain}",
+            "LOGS_URL": f"https://grafana.{base_domain}/explore",
+            "VAULT_ADDR": f"https://hcvault.{base_domain}",
+            "CORS_ORIGINS": (
+                f"https://console.{base_domain},https://portal.{base_domain},"
+                f"https://staging-console.{base_domain},https://staging-portal.{base_domain},"
+                f"https://dev-console.{base_domain},https://dev-portal.{base_domain},"
+                "http://localhost:3000,http://localhost:3002,http://localhost:5173,"
+                "http://console.stoa.local,http://portal.stoa.local,http://api.stoa.local"
+            ),
+        }
+
+        for field, default_value in derived.items():
+            data.setdefault(field, default_value)
+
+        return data
 
     @model_validator(mode="after")
     def _hydrate_and_validate_git(self) -> "Settings":

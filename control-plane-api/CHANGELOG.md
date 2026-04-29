@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.11.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.0...control-plane-api-v1.11.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* **api:** allow recreating archived tenant after failed bootstrap (CAB-2196) ([#2611](https://github.com/stoa-platform/stoa/issues/2611)) ([677787e](https://github.com/stoa-platform/stoa/commit/677787ee4240e75cf0654e93170975e0cb186d96))
+* **api:** pin KC auth to master realm via user_realm_name (CAB-2195) ([#2610](https://github.com/stoa-platform/stoa/issues/2610)) ([22e1723](https://github.com/stoa-platform/stoa/commit/22e172336c33269615d650153bea9fc6764fbfe7))
+
+## [1.11.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.2...control-plane-api-v1.11.0) (2026-04-27)
+
+
+### Features
+
+* **api-creation-gitops:** Phase 4-2 — orchestration (create_api flow + reconciler + handler) ([#2608](https://github.com/stoa-platform/stoa/issues/2608)) ([a8fc1ae](https://github.com/stoa-platform/stoa/commit/a8fc1ae5defa198523e95b754a52c7705694332b))
+* **api:** phase 3 scaffold for gitops create-api rewrite ([#2605](https://github.com/stoa-platform/stoa/issues/2605)) ([d4a182e](https://github.com/stoa-platform/stoa/commit/d4a182e4e94476c53645765d7d9b54af90d3f9f7))
+* **api:** phase 4-1 primitives for gitops create-api rewrite ([#2607](https://github.com/stoa-platform/stoa/issues/2607)) ([115e433](https://github.com/stoa-platform/stoa/commit/115e4339ad2cc8dae95bc8c3641656fe6e419ec5))
+
+## [1.10.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.1...control-plane-api-v1.10.2) (2026-04-27)
+
+
+### Bug Fixes
+
+* **uac:** remove stale spec_hash from hand-authored demo contract ([#2598](https://github.com/stoa-platform/stoa/issues/2598)) ([e9af40c](https://github.com/stoa-platform/stoa/commit/e9af40c9a37d35767b90d286b4e06cb78cf0c023))
+
 ## [1.10.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.10.0...control-plane-api-v1.10.1) (2026-04-26)
 
 

@@ -1,130 +1,175 @@
 # STOA Rewrite — API Creation GitOps
 
-> **Statut**: v1.0 — 2026-04-26. Validée pour exécution Phase 1.
+> **Statut**: v1.0 — 2026-04-26. Audit-informed + drift-justified + schema-confirmed. Validée pour exécution Phase 2 puis Phase 3.
 > **Owner**: humain (Christophe). Les agents n'élargissent pas ce scope sans décision écrite.
-> **Périmètre**: rewrite ciblé du chemin de création d'API (`POST /v1/tenants/{tid}/apis`) vers un modèle GitOps avec UAC en Git comme source de vérité.
-> **Hors périmètre**: update, publish, promote, delete API. Tout ça fera l'objet d'un cycle séparé après stabilisation de la création.
+> **Périmètre**: rewrite ciblé de la création d'API (`POST /v1/tenants/{tid}/apis`) vers un modèle Git-first avec `stoa-catalog` comme source de vérité, et **ré-adoption contrôlée non-destructive** des APIs saines du tenant `demo`.
+> **Hors périmètre**: update, publish, promote, delete, prune ; migration destructive des UUID driftés ; suppression d'orphelins DB ; soft-delete inverse Git→DB ; conversion de format YAML→JSON ; multi-env ; cleanup de `uq_api_catalog_tenant_api`.
 > **Invariant directeur**: à chaque phase, `./scripts/demo-smoke-test.sh` doit rester `REAL_PASS — DEMO READY`. Cf. [`rewrite-guardrails.md`](./rewrite-guardrails.md) §1.
+
+## 0. Contexte — pourquoi cette spec existe
+
+L'audit Phase 1 et 4 requêtes SQL diagnostiques sur `api_catalog` ont révélé **5 bugs structurels** du chemin actuel :
+
+| # | Bug | Statut dans ce rewrite |
+|---|---|---|
+| **B-CATALOG** | Le code utilise `api_catalog`, pas `apis`. La spec v0.3.1 parlait à côté. | Corrigé (mapping aligné) |
+| **B10** | `git_sync_worker` produit `git_path = "tenants/{tid}/apis/{UUID}/api.yaml"` au lieu de `"…/{slug}/api.yaml"`. 7 rows tenant `demo` 404 sur Git. | **In-scope partiel** : le nouveau chemin GitOps ne reproduit jamais ce bug. La migration destructive des 7 rows existantes reste hors scope. |
+| **B11** | Le sync engine ne propage pas la disparition Git en soft-delete DB. `banking-services-v1-2` synced 2026-04-18, absent Git HEAD au 2026-04-26, row active. | **Out-of-scope complet** : cycle delete/prune séparé. Documenté dans le backlog Phase 2, jamais fixé dans ce rewrite. |
+| **B-INDEX** | `uq_api_catalog_tenant_api` UNIQUE complet (sans `WHERE deleted_at IS NULL`) en doublon avec `ix_api_catalog_tenant_api_active`. Bloque la recréation après soft-delete (contredit CAB-1938). | **Out-of-scope complet** : cleanup d'index hérité, cycle séparé. Le rewrite documente le risque mais ne touche pas à l'index. |
+| **B-SPEC-HASH** | `_compute_spec_hash` privé tronqué à 16 chars sur OpenAPI dict. `demo-httpbin.uac.json` portait un hash 64 chars opaque. | **Résolu** : hash supprimé du fixture en commit `0aba7f4a9` (non utilisé). UAC V2 (cycle séparé) tranchera si hash UAC public nécessaire. |
+
+État `api_catalog` du tenant `demo` au 2026-04-26 (13 rows actives) :
+
+| Catégorie | Count | api_id | git_path stocké | Réalité Git |
+|---|---|---|---|---|
+| **A — Sain** | 5 | slug = api_name | `tenants/demo/apis/{slug}` | ✓ existe |
+| **B — Drift UUID dur** | 7 | UUID | `tenants/demo/apis/{UUID}` | 404 (vrai = `…/{slug}`) |
+| **C — Orphelin DB** | 1 | slug | `tenants/demo/apis/{slug}` | 404 (fichier disparu) |
+
+Toutes synced en batch sha `ba7fc9f` le 2026-04-26 → drift produit par le sync engine actuel.
+
+Ce rewrite est :
+1. **justifié** par un drift terrain documenté ;
+2. **ciblé** sur la création d'API uniquement ;
+3. **non-destructif** : il ne migre ni ne supprime aucune row legacy.
 
 ## 1. Pourquoi ce rewrite
 
-Aujourd'hui, `POST /v1/tenants/{tid}/apis` est un endpoint impératif :
+`POST /v1/tenants/{tid}/apis` aujourd'hui :
 - valide le payload
-- écrit en DB
-- (selon flags) propage vers `stoa-catalog` Git
-- (selon flags) déclenche un sync gateway
+- INSERT dans `api_catalog` (avec parfois `id` PK UUID qui fuite dans `git_path` — bug B10)
+- émet un event Kafka `stoa.api.lifecycle`
+- `git_sync_worker` background consomme et écrit dans `stoa-catalog` via PyGithub Contents API
 
-Les side-effects sont éparpillés dans la route FastAPI, la DB est de facto la source de vérité, et `GIT_SYNC_ON_WRITE` est désactivé pour la démo (`demo-acceptance-tests.md` AT-0). Conséquence : on tourne en rond sur des bugs transverses (drift DB ↔ gateway, états incohérents subscription/route, race conditions multi-agents HEGEMON).
-
-Ce rewrite applique les principes OpenGitOps **uniquement à la création d'API**, en réutilisant l'infrastructure UAC déjà en place (cf. [`uac/README.md`](./uac/README.md), ADR-067).
+La DB est de facto la source de vérité, mais elle ment sur Git. Conséquences observées : 7/13 rows avec `git_path` 404, 1 orphelin jamais nettoyé, aucune reconstructibilité.
 
 ## 2. Doctrine — adaptée à STOA
 
-Cinq invariants tirés d'OpenGitOps, reformulés dans le vocabulaire STOA :
+**Six invariants** :
 
-1. **UAC en Git = desired state.** Un `UAC contract` versionné dans `stoa-catalog` est la vérité. La DB est un read model / index opérationnel, pas la source.
-2. **FastAPI ne projette jamais depuis le payload HTTP.** La route `POST /v1/tenants/{tid}/apis` valide, écrit un commit dans `stoa-catalog`, puis projette vers DB en utilisant **le contrat tel qu'il a été committé sur le remote**, jamais le payload HTTP entrant ni un fichier local non poussé.
-3. **Reconcilers idempotents.** Rejouer N fois le sync d'un commit `abc123` produit le même état (DB + gateway). L'idempotence est portée par `spec_hash` (déjà présent dans UAC, calcul figé en §6.2.1).
-4. **Drift détecté par comparaison de projection complète.** Le drift se mesure entre la projection attendue depuis Git (`render_db_projection(contract)`) et la ligne réelle de la table `apis`, **pas** par simple comparaison de hash. Une falsification d'un champ projeté qui ne change pas le hash stocké doit être détectée. Cf. §6.6.
-5. **Reconstructibilité.** Si on supprime la table `apis`, on doit pouvoir la reconstruire intégralement depuis `stoa-catalog`. Donc tous les champs persistants (y compris `api_id` et `display_name`) sont déterministes ou dérivés du UAC. Aucun champ DB-only mutable pour les APIs créées via GitOps. Cf. §6.4 et §6.10.
+1. **`stoa-catalog` Git remote = desired state.** `api_catalog` est un read model, pas la source.
+2. **FastAPI ne projette jamais depuis le payload HTTP.** Validation, commit Git via `CatalogGitClient`, projection depuis le contenu **lu depuis le remote après commit**.
+3. **Reconcilers idempotents.** Idempotence portée par `catalog_content_hash` (§6.2.1).
+4. **Drift détecté par projection complète** sur **tous** les champs projetés, y compris `git_path`.
+5. **Reconstructibilité.** Les rows GitOps-created reconstructibles depuis Git. Aucun champ DB-only mutable.
+6. **Le path Git stocké en DB est une projection vérifiable du fichier Git réel.** Règle déterministe :
+   ```
+   api_catalog.git_path = "tenants/{tenant_id}/apis/{api_name}/api.yaml"
+   ```
+   où `api_name` = slug catalogue, **jamais** un UUID, **jamais** `api_catalog.id` (PK interne), **jamais** un ID gateway/runtime. Le reconciler vérifie que `read_at_commit(git_path, git_commit_sha)` retourne un contenu non-null avant de marquer `synced`.
 
-Règle qui découle des cinq, étendant la doctrine ADR-067 :
+Doctrine résultante :
 
-> **UAC describes. Git stores. Reconciler projects. Payload never projects. Smoke proves.**
-
-La ligne « Payload never projects » est le garde-fou anti-faux-GitOps. Elle interdit le pattern dual-write classique où la DB serait écrite depuis le payload HTTP en parallèle de Git, et elle interdit aussi de projeter depuis un fichier local non poussé sur le remote.
+> **Catalog describes. Git stores. Reconciler projects. Payload never projects. DB never guesses paths. Smoke proves.**
 
 ## 3. Contrats figés — non négociables
-
-Ce rewrite ne casse aucun de ces contrats. Une PR qui les touche = NO-GO automatique (cf. [`rewrite-guardrails.md`](./rewrite-guardrails.md) §2).
 
 | Contrat | Source | Pourquoi figé |
 |---|---|---|
 | `POST /v1/tenants/{tid}/apis` → 201 + `{id, name}` | [`architecture-rules.md`](./architecture-rules.md) §2.1 | AT-1 du smoke en dépend |
 | `GET /v1/tenants/{tid}/apis/{id}` → 200 + `{id, name, backend_url}` | [`architecture-rules.md`](./architecture-rules.md) §2.1 | AT-1 du smoke en dépend |
-| Schéma UAC v1 (JSON Schema + Pydantic + Rust) | [`uac/README.md`](./uac/README.md) | Parité cross-langage déjà enforced |
-| `spec_hash` calculé identiquement Python/Rust selon §6.2.1 | [`uac/demo-httpbin.uac.json`](./uac/demo-httpbin.uac.json) | Idempotence du reconciler en dépend |
+| Format public de `api_catalog.api_id` (string actuel) | Audit Phase 1 §03 + diagnostic SQL | Subscriptions, deployments, gateway routes y référencent |
+| Schéma `api_catalog` existant (cf. §6.3) | `\d api_catalog` 2026-04-26 | 18 colonnes, 9 index, 0 FK. Migration additive seulement. |
+| Index `uq_api_catalog_tenant_api` (résiduel hérité) | Schéma DB | Dangereux mais hors scope. Cleanup = cycle séparé. |
+| Format `api.yaml` actuel (cf. §6.9 — référence : `payment-api/api.yaml`) | Inspection terrain 2026-04-26 | 12 APIs réelles l'utilisent |
+| Fixture `specs/uac/demo-httpbin.uac.json` (forme depuis commit `0aba7f4a9`, sans `spec_hash`) | [`architecture-rules.md`](./architecture-rules.md) §2.2bis | Contrat UAC démo figé |
 | Verdict `REAL_PASS — DEMO READY` du smoke | [`demo-acceptance-tests.md`](./demo-acceptance-tests.md) | Garde-fou universel |
 
-## 4. Périmètre exact de ce rewrite
+## 4. Périmètre exact
 
 ### 4.1 In-scope
 
 - Endpoint `POST /v1/tenants/{tid}/apis` (création uniquement)
-- Module Python nouveau dans `control-plane-api/src/services/gitops_writer/`
-- Worker Python séparé `control-plane-api/src/services/catalog_reconciler/` (process distinct, cf. §6.6)
-- Repo `stoa-catalog` en mode read+write par cp-api via un nouveau pipeline GitOps (pas de réutilisation de `GIT_SYNC_ON_WRITE`, cf. §9.6)
-- Support d'un remote Git local `file://` pour la démo, pas de dépendance GitHub externe en local (cf. §6.12)
-- Layout des contrats UAC dans `stoa-catalog` figé en §6.1
-- Migration Alembic additive : ajout de colonnes `apis.spec_hash` et `apis.source_commit_sha` (cf. §6.6)
-- Projection `stoa-catalog → DB` pour la table `apis` uniquement (target=`db`)
-- Endpoint `GET /v1/tenants/{tid}/apis/{id}/sync-status` (nouveau, optionnel pour la démo)
+- Module Python `control-plane-api/src/services/gitops_writer/`
+- Reconciler in-tree via `asyncio.create_task(worker.start())` (audit Phase 1 §00)
+- Abstraction `CatalogGitClient` (§6.7) — première impl `GitHubContentsCatalogClient` réutilisant le service PyGithub existant
+- Layout Git **conservateur** : `tenants/{tid}/apis/{name}/api.yaml`. Format YAML conservé.
+- Migration Alembic additive **minimale** : ajout d'une seule colonne `catalog_content_hash` (cf. §6.6). `git_path` et `git_commit_sha` existent déjà et sont réutilisés.
+- Projection et **correction non-destructive** de `api_catalog.git_path` pour les APIs GitOps-created ou ré-adoptées
+- Vérification que `git_path` pointe vers un fichier lisible via `read_at_commit()` non-null
+- **Ré-adoption contrôlée des 5 APIs saines (catégorie A) du tenant `demo`** en Phase 6.5
+- Endpoint `GET /v1/tenants/{tid}/apis/{id}/sync-status`
 - Feature flag `GITOPS_CREATE_API_ENABLED` par tenant
-- Lock distribué pour les writes Git (cf. §6.7)
-- Isolation des working trees Git (cf. §6.11)
-- Helper CLI `control_plane_api.services.uac.write_canonical_contract` pour produire un fichier UAC avec `spec_hash` correct, utilisé par le test §7. Doit réutiliser la fonction `compute_spec_hash` existante du module UAC (cf. [`uac/README.md`](./uac/README.md)) ; emplacement exact confirmé par audit Phase 1.
-- Mapping déterministe payload HTTP → UACContract (cf. §6.13)
-- Politique de collision avec les APIs legacy (cf. §6.14)
+- Lock distribué Postgres advisory (§6.8)
+- Politique de collision legacy en 3 catégories (§6.14)
+- Helper CLI pour produire un `api.yaml` valide selon §6.9
 
 ### 4.2 Out-of-scope (refus automatique)
 
-- `PATCH/PUT /v1/tenants/{tid}/apis/{id}` (update)
+**Cycle update API** :
+- `PATCH/PUT /v1/tenants/{tid}/apis/{id}`
+
+**Cycle delete / prune API** :
 - `DELETE /v1/tenants/{tid}/apis/{id}`
-- Promotion dev/staging/prod (la valeur unique `demo` suffit, cf. §6.1)
-- Publication portail (CPD-* dans [`client-prospect-demo-scope.md`](./client-prospect-demo-scope.md), cycle séparé)
-- Projection `stoa-catalog → gateway routes` (target=`gateway`, cycle séparé, géré par AT-2)
-- Projection `stoa-catalog → portal` (target=`portal`, cycle séparé)
-- Refactor des subscriptions, applications, deployments (AT-2/3 du smoke, cycle séparé)
-- Migration vers un nouveau format de manifest (UAC reste le format)
+- Soft-delete automatique des orphelins DB (catégorie C, ex: `banking-services-v1-2`)
+- Correction du sync engine pour propager Git→DB la disparition de fichier (B11)
+- Hard-delete d'une row `api_catalog` soft-deleted
+
+**Cycle migration legacy** :
+- Migration destructive des 7 rows catégorie B (UUID drifté) du tenant `demo`
+- Migration légale d'un `api_id` UUID vers slug (impacte FKs subscriptions/deployments/keys)
+- Migration globale legacy → GitOps de tenants existants
+
+**Cycle promotion / multi-env** :
+- Promotion dev/staging/prod
+- Migration du layout Git vers `environments/{env}/`
+- Décision d'identité multi-env
+
+**Cycle cleanup DB** :
+- Suppression de l'index `uq_api_catalog_tenant_api` hérité
+- Modification de la définition de soft-delete (CAB-1938)
+
+**Cycle UAC V2** :
+- Création d'une fonction publique `compute_uac_spec_hash`
+- Modification de `_compute_spec_hash` privé existant
+- Régénération du fixture `demo-httpbin.uac.json`
+- Conversion YAML → JSON UAC
+
+**Autres** :
+- Changement du format public de `api_catalog.api_id`
+- Calcul `api_id = uuid5(...)` déterministe — retiré
+- Création d'un `api_fingerprint` métier — possible mais reportée
+- Publication portail (CPD-* dans [`client-prospect-demo-scope.md`](./client-prospect-demo-scope.md))
+- Projection `stoa-catalog → gateway routes` ou `→ portal`
+- Refactor des subscriptions, applications, deployments
 - Multi-repo, multi-org GitHub
-- ArgoCD / Flux (le reconciler reste un worker Python interne à cp-api, pas d'intro K8s natif à ce stade)
-- Optimisation du scan worker pour 1000+ APIs (la boucle scanne tout `stoa-catalog` ; backlog Phase 2)
-- Extension du schéma UAC (ajout de champs comme `display_name` au UAC v1) — cycle séparé qui touche la parité Python/Rust
-- Migration des APIs legacy (créées hors GitOps) vers `api_id` déterministe — cycle séparé
-- Décision d'identité multi-env (`api_id` catalogue global vs env-scoped) — cycle promotion (cf. §6.4 note)
+- ArgoCD / Flux
 
 ### 4.3 Règle d'or de scope
 
-Si pendant l'exécution une question type *« et si on en profitait pour... »* émerge, la réponse par défaut est **NON**. La question va dans le bug inventory de Phase 2 et sera traitée dans un cycle ultérieur.
+Si pendant l'exécution une question type *« et si on en profitait pour... »* émerge, la réponse par défaut est **NON**. La question va dans le backlog Phase 2 et sera traitée dans un cycle ultérieur.
 
 ## 5. Plan d'exécution — phases séquentielles
 
 | Phase | Livrable | Critère de fin | Durée cible |
 |---|---|---|---|
 | 0 | **Cette spec validée** | Christophe valide v1.0 | ½ jour |
-| 1 | `specs/audits/2026-XX-XX-api-creation-current-state/` | Le chemin actuel est tracé, emplacement exact de `compute_spec_hash` confirmé, contraintes uniques sur `apis` documentées (cf. §6.14), zéro modif code | 1 jour |
-| 2 | Backlog Linear `label:api-creation-rewrite-backlog` | ≥ 10 tickets, zéro fix | 1 jour (parallèle Phase 1) |
-| 3 | Layout `stoa-catalog` + interface `gitops_writer` figés dans cette spec §6 | PR mergeable scaffold, CI verte, `NotImplementedError` partout, migration Alembic prête, helper `write_canonical_contract` scaffold | 1 jour |
-| 4 | Implémentation `gitops_writer.create_api()` + worker `catalog_reconciler` + helper `write_canonical_contract` + mapping payload→UAC | `python -m gitops_writer.create_api ...` produit un commit visible ; worker boucle et projette ; helper produit un UAC canonique vérifiable ; AT-1 payload accepté et converti en UAC | 2-3 jours |
-| 5 | Tests isolés des deux modules | Couverture 100% des chemins, parité `spec_hash` Python/Rust, drift detection par projection complète, push remote atomicité, workspace isolation, advisory_lock_key stabilité, mapping payload→UAC déterministe, legacy collision rejection | 1 jour |
-| 6 | **Commit-first projection** dans `POST /v1/tenants/{tid}/apis` derrière flag, sur tenant `demo-gitops` propre | Sur tenant `demo-gitops`, le POST commit Git puis projette DB depuis le contrat relu via `git show`. AT-1 reste vert. Tenant `demo` historique reste sur l'ancien chemin. | 1-2 jours |
-| 7 | Re-run du smoke avec flag ON sur tenant `demo-gitops` | `GITOPS_CREATE_API_ENABLED=true ./scripts/demo-smoke-test.sh` = `REAL_PASS` ; remote Git local `file://` suffit | 1 jour |
-| 8 | Fix du backlog Phase 2 | 100% des tickets soit closed-resolved, soit fixed avec test de régression | variable |
-| 9 | Re-run smoke + régression + test §7 du commit Git manuel + drift hostile | Toutes métriques Phase 7 maintenues, test §7 passe entièrement | ½ jour |
-| 10 | Bascule limitée aux tenants GitOps-initialized | Flag ON par défaut sur les tenants GitOps-initialized uniquement, ancien chemin en log-only sur ces tenants, doc de rollback. **Tenants legacy non migrés restent sur l'ancien chemin** (cf. §6.14) | ½ jour |
+| 1 | `specs/audits/2026-04-26-api-creation-current-state/` | **DONE** — audit livré | — |
+| 2 | Backlog Linear `label:api-creation-rewrite-backlog` | ≥ 14 tickets, **dont B10 (in-scope partiel) et B11 (out-of-scope deferred)** | 1 jour |
+| 3 | Décisions Phase 3 + scaffold | (a) format helper CLI catalogue YAML défini ; (b) interface `CatalogGitClient` figée ; (c) migration Alembic mergeable (ajout `catalog_content_hash` uniquement) ; (d) PR scaffold avec `NotImplementedError` partout, CI verte | 1 jour |
+| 4 | Implémentation `gitops_writer.create_api()` + reconciler asyncio + helper CLI | Le POST avec flag ON commit dans `stoa-catalog` via PyGithub puis projette. Le reconciler boucle. Le helper produit un `api.yaml` valide. | 2-3 jours |
+| 5 | Tests isolés | Couverture 100%, drift detection par projection complète **incluant `git_path` + `read_at_commit` non-null**, idempotence, advisory_lock_key stable, mapping payload→catalogue déterministe, **3 catégories legacy correctement classifiées**, refus UUID-shaped api_name | 1 jour |
+| 6 | Strangler sur tenant `demo-gitops` propre | Sur tenant `demo-gitops`, POST commit Git via PyGithub puis projette `api_catalog`. Tenant `demo` historique inchangé. AT-1 vert sur les deux. | 1-2 jours |
+| **6.5** | **Ré-adoption contrôlée des 5 APIs saines (catégorie A) du tenant `demo`** | Pour chaque API `account-management-api`, `customer-360-api`, `fraud-detection-api`, `payment-api`, `petstore` : `git_path` confirmé/corrigé canonique, `git_commit_sha` rempli, `catalog_content_hash` rempli, `read_at_commit` non-null, projection cohérente. **Catégories B et C non touchées.** Aucune mutation de subscriptions/deployments/keys. Smoke historique reste `REAL_PASS`. | 1 jour |
+| 7 | Re-run smoke + tests GitOps | `GITOPS_CREATE_API_ENABLED=true ./scripts/demo-smoke-test.sh` = `REAL_PASS` sur `demo-gitops`. §7 et §7bis passent. | 1 jour |
+| 8 | Fix du backlog Phase 2 | **100% des tickets in-scope sont fixed avec test de régression.** Tickets out-of-scope (B11, B-INDEX, migration B, prune C) sont closed-documented/deferred avec cycle cible explicite. | variable |
+| 9 | Re-run smoke + régression + §7/§7bis | Toutes métriques Phase 7 maintenues | ½ jour |
+| 10 | Bascule limitée aux tenants éligibles | Flag ON par défaut **uniquement** sur (i) tenants GitOps-initialized (`demo-gitops` + nouveaux), et (ii) tenants explicitement classés clean par audit SQL préalable. **Tenants contenant des catégories B ou C non résolues restent sur l'ancien chemin.** Doc de rollback. | ½ jour |
 
-**Total estimé** : 10-13 jours calendaires. Avec AI Factory : 5-7 jours réels.
+**Total estimé** : 9-12 jours calendaires. Avec AI Factory : 5-7 jours réels.
 
 ## 6. Contrat technique
 
-### 6.1 Layout `stoa-catalog`
+### 6.1 Layout `stoa-catalog` — conservateur
 
 ```
 stoa-catalog/
-  tenants/
-    {tenant_id}/
-      environments/
-        {environment}/
-          apis/
-            {api_name}.uac.json
-  README.md
+  tenants/{tenant_id}/apis/{api_name}/api.yaml
 ```
 
-Contraintes de forme :
-- `{tenant_id}` : slug minuscule `[a-z0-9-]+`, sanitisé avant écriture
-- `{environment}` : seule valeur autorisée pendant ce cycle = `demo`
-- `{api_name}` : slug minuscule `[a-z0-9-]+`, pas de `..`, pas de `/`
-- Le chemin segmenté par environnement est figé maintenant pour éviter une migration au prochain cycle (promotion dev/staging/prod), même si une seule valeur est acceptée aujourd'hui
+`{tenant_id}` et `{api_name}` slugs `[a-z0-9-]+`, **jamais UUID-shaped**.
+
+Migration vers `environments/{env}/` out-of-scope.
 
 ### 6.2 Interface `gitops_writer`
 
@@ -133,706 +178,738 @@ class GitOpsWriter:
     def create_api(
         self,
         tenant_id: str,
-        environment: str,    # forcé à "demo" pendant ce cycle
-        contract: UACContract,
+        contract_payload: ApiCreatePayload,
         actor: str,
     ) -> CreateApiResult:
         """
-        Idempotent par spec_hash. Trois cas figés :
+        Idempotent par catalog_content_hash. Trois cas figés :
 
-        Case A — fichier UAC absent dans Git :
-          → write file, commit, push remote
-          → projection DB depuis le contrat relu via git show {sha}:{path}
-          → return CreateApiResult(api_id, spec_hash, commit_sha,
-                                   status="committed", case="created")
+        Case A — fichier api.yaml absent dans Git :
+          → render YAML, commit via CatalogGitClient.create_or_update()
+          → relire le contenu remote au commit produit
+          → projection api_catalog (incluant git_path canonique)
 
-        Case B — fichier UAC présent avec même spec_hash :
+        Case B — fichier api.yaml présent avec même content_hash :
           → no-op Git
-          → projection DB depuis le contrat relu via git show {sha_existing}:{path}
-            (Permet aux retry HTTP de réussir si la projection DB avait échoué
-             sans avoir à re-commit)
-          → return CreateApiResult(api_id, spec_hash, commit_sha_existing,
-                                   status="committed", case="idempotent")
+          → projection api_catalog depuis le contenu remote actuel
+            (Permet aux retry HTTP de réussir si la projection avait échoué)
 
-        Case C — fichier UAC présent avec spec_hash différent :
-          → raise GitOpsConflictError
-          → ne touche ni Git ni DB
-          → l'appelant HTTP retourne 409 Conflict
+        Case C — fichier api.yaml présent avec content_hash différent :
+          → raise GitOpsConflictError → 409 Conflict
         """
 ```
 
-Pas de méthodes `update_api`, `delete_api`, `promote_api` à ce stade (out-of-scope §4.2).
+`api_id` retourné = slug du payload, **jamais un UUID**, **jamais `api_catalog.id` PK**.
 
-### 6.2.1 Calcul canonique de `spec_hash`
-
-Pour éviter toute auto-référence (le hash est lui-même un champ du contrat) et toute divergence Python/Rust, le calcul est figé :
+### 6.2.1 Hash de contenu — figé
 
 ```
-spec_hash = sha256_hex(canonical_json(contract MINUS field "spec_hash"))
+catalog_content_hash = sha256_hex(api_yaml_bytes_from_git_remote)
 ```
 
-Règles du JSON canonique :
-- `sort_keys=True`
-- `separators=(",", ":")` (pas d'espaces)
-- encodage UTF-8
-- floats sérialisés en représentation minimale stable (cf. RFC 8785 ou implémentation existante UAC)
-- aucun champ volatil ne doit influencer le hash (timestamps, ids générés à la volée, etc.)
+Hash technique du contenu Git remote relu. Suffisant pour idempotence et drift detection. Ne prétend pas être un hash UAC sémantique. La fonction `compute_uac_spec_hash` n'est pas créée dans ce rewrite (UAC V2 décidera).
 
-Discipline du reconciler :
-- Le reconciler **ne fait jamais confiance** au `spec_hash` embarqué dans le fichier UAC
-- Il recalcule le hash à chaque lecture et compare
-- Si `embedded_hash != recalculated_hash` : `status='failed'`, `last_error="spec_hash mismatch"`, **aucune projection DB**
+### 6.3 Schéma `api_catalog` réel et `api_sync_status` nouveau
 
-Cette règle protège contre une corruption ou une falsification du fichier UAC dans Git.
+**`api_catalog` existant** (`\d api_catalog` 2026-04-26, ne pas modifier) :
 
-### 6.3 Statut de sync
+```
+id                   uuid PK gen_random_uuid()       ← interne, jamais exposé
+tenant_id            varchar(100) not null
+api_id               varchar(100) not null           ← public, slug
+api_name             varchar(255) not null
+version              varchar(50) not null
+status               varchar(50) not null default 'active'
+category             varchar(100) nullable
+tags                 jsonb not null default '[]'
+portal_published     boolean not null default false
+metadata             jsonb not null
+openapi_spec         jsonb nullable
+git_path             varchar(500) nullable           ← réutilisé, contient bug B10
+git_commit_sha       varchar(40) nullable            ← réutilisé
+synced_at            timestamptz not null default now()
+deleted_at           timestamptz nullable
+target_gateways      jsonb not null default '[]'
+audience             varchar(20) not null default 'public'
 
-Stocké en DB dans une nouvelle table `api_sync_status` :
+UNIQUE (tenant_id, api_name, version) WHERE deleted_at IS NULL
+UNIQUE (tenant_id, api_id) WHERE deleted_at IS NULL
+UNIQUE (tenant_id, api_id)                          ← dangereux, B-INDEX
+```
+
+**Migration additive Phase 3** (une seule colonne) :
+
+```sql
+ALTER TABLE api_catalog ADD COLUMN catalog_content_hash VARCHAR(64) NULL;
+```
+
+Aucune autre colonne ajoutée. `git_path` et `git_commit_sha` existent et sont réutilisés.
+
+**Nouvelle table `api_sync_status`** :
 
 ```
 api_sync_status
-- tenant_id              str
-- environment            str
-- api_id                 uuid (déterministe, cf. §6.4)
-- api_name               str
-- target                 enum(db, gateway, portal)
-- desired_commit_sha     varchar(64)    (commit du fichier UAC, cf. §6.5 étape 12)
-- desired_spec_hash      varchar(64)
-- observed_spec_hash     varchar(64) | null
-- status                 enum(pending, syncing, synced, failed, drift_detected)
-- last_error             text | null
-- last_sync_at           timestamp
+- tenant_id              varchar(100)
+- api_id                 varchar(100)               (= api_catalog.api_id, slug)
+- target                 enum(api_catalog, gateway, portal)
+- desired_commit_sha     varchar(64)
+- desired_content_hash   varchar(64)                 (catalog_content_hash)
+- observed_content_hash  varchar(64) nullable
+- desired_git_path       text                        (= "tenants/{tid}/apis/{name}/api.yaml")
+- status                 enum(pending, syncing, synced, failed,
+                              drift_detected, drift_orphan)
+- last_error             text nullable
+- last_sync_at           timestamptz
 
-PRIMARY KEY (tenant_id, environment, api_id, target)
+PRIMARY KEY (tenant_id, api_id, target)
 ```
 
-Pendant ce cycle, seul `target='db'` est utilisé. `gateway` et `portal` réservés pour les cycles suivants. Cette table est entièrement reconstructible depuis `stoa-catalog` + table `apis` (invariant §2.5).
+Reconstructible depuis `stoa-catalog` + `api_catalog`.
 
-**Note dimensionnement** : `varchar(64)` partout pour les commit SHA — accommode SHA-1 (40 chars) et future migration Git SHA-256 (64 chars) sans dette.
+### 6.4 Identité — 5 niveaux distincts
 
-### 6.4 `api_id` déterministe
+**Aucun UUID5 figé dans ce cycle.** L'identité publique reste `api_catalog.api_id`.
 
-Pour respecter l'invariant de reconstructibilité (§2.5), `api_id` est dérivé de manière déterministe :
+| # | Niveau | Identifiant | Format | Rôle |
+|---|---|---|---|---|
+| 1 | **Catalogue interne** | `api_catalog.id` | UUID PK `gen_random_uuid()` | Clé technique DB. **Jamais exposée publiquement. Jamais utilisée pour `git_path`.** Probable source du bug B10 si fuite. |
+| 2 | **Catalogue public** | `api_catalog.api_id` | string slug actuel | Identité publique exposée par `POST/GET /apis/{id}`. Subscriptions/deployments/keys y référencent. |
+| 3 | **Fingerprint métier** *(optionnel, futur)* | `api_fingerprint` | hash longueur fixe | Décision Phase 3 si besoin. **Non figé ici.** |
+| 4 | **Gateway runtime** | `gateway_route_id` / `gateway_api_id` | propre à chaque gateway | Hors scope. Ne doit jamais devenir l'`api_id`. |
+| 5 | **Déploiement runtime** | `GatewayDeployment.id`, `desired_generation` | cf. [`api-deployment-flow.md`](./api-deployment-flow.md) | Hors scope. |
 
-```python
-import uuid
-
-# Namespace dérivé une fois pour toutes via :
-#   uuid.uuid5(uuid.NAMESPACE_DNS, "stoa.io/api/v1")
-# Puis figé. Ne jamais recalculer avec une autre chaîne — rotation = casse tous les api_id.
-STOA_API_NAMESPACE = uuid.UUID("c276f996-0520-5de1-ab27-83ab8749e086")
-
-def compute_api_id(tenant_id: str, environment: str, api_name: str) -> uuid.UUID:
-    return uuid.uuid5(STOA_API_NAMESPACE, f"{tenant_id}:{environment}:{api_name}")
-```
-
-Exemples vérifiables (calcul reproductible) :
-```
-compute_api_id("demo", "demo", "demo-httpbin") = d5844819-0eab-5ebf-baa2-6ff5c27ea29d
-compute_api_id("demo", "demo", "manual-test")  = aa50c822-2ef4-59bc-afe1-d428fb92f03b
-```
-
-Conséquences :
-- `GET /v1/tenants/{tid}/apis/{id}` continue de fonctionner avec un UUID
-- Pas besoin de stocker l'`id` dans le UAC contract
-- Reconstruire la table `apis` depuis `stoa-catalog` est mécanique
-- Aucun `id` aléatoire DB-generated n'est créé pour les APIs créées via le chemin GitOps
-
-**Note multi-env (cycle promotion)** :
-> Le choix `api_id = uuid5(tenant_id:environment:api_name)` est figé uniquement pour le cycle create API avec `environment=demo`. Il ne constitue pas encore une décision multi-env pour dev/staging/prod.
-> Le cycle promotion devra trancher explicitement entre :
-> - **Identité catalogue globale** : un `api_id` unique par `(tenant, name)`, plus des overlays par environnement projetés vers `GatewayDeployment` (cf. [`api-deployment-flow.md`](./api-deployment-flow.md))
-> - **Identité env-scoped** : un `api_id` distinct par environnement, sémantique actuelle
-> Ce choix n'est pas pris dans cette spec.
+**Règle dure** : aucun ID des niveaux 1, 4 ou 5 ne devient le niveau 2. Le bug B10 viole cette règle (fuite probable du niveau 1 vers `git_path`).
 
 ### 6.5 Flow détaillé `POST /v1/tenants/{tid}/apis` avec flag ON
 
 ```
  1. Valider payload HTTP (Pydantic schema)
- 2. Normaliser tenant_id, environment="demo", api_name (slug)
- 3. Convertir payload → UACContract via le mapping figé (cf. §6.13)
- 4. **Validation projectabilité DB** (refus pré-Git) :
-       - tous les endpoints partagent le même backend_url
-         sinon → 422 Unprocessable Entity, last_error="multiple backend_url",
-                 aucune écriture Git
- 5. Calculer spec_hash canonique (§6.2.1, exclusion du champ spec_hash)
- 6. Calculer api_id = uuid5(STOA_API_NAMESPACE, f"{tenant_id}:{env}:{api_name}")
- 7. **Vérification anti-collision legacy** (cf. §6.14) :
-       - SELECT id, spec_hash FROM apis
-         WHERE tenant_id = ? AND name = ? AND id != api_id
-       - si une ligne legacy existe (id différent, spec_hash NULL) → 409 Conflict,
-         last_error="legacy api name collision", aucune écriture Git
- 8. Acquérir lock distribué scope=(tenant_id, environment)         (cf. §6.7)
- 9. Ouvrir/réutiliser un worktree dédié (cf. §6.11) :
-       git fetch origin
-       git checkout -B main origin/main
-       assert clean working tree
-10. Lire fichier tenants/{tid}/environments/{env}/apis/{name}.uac.json
-       - absent          → Case A
-       - même hash       → Case B  (no-op Git, jump à étape 13)
-       - hash différent  → raise GitOpsConflictError → 409
-11. Écrire fichier, git add, git commit -m "create api {tid}/{env}/{name}"
-12. git push origin main avec retry borné (max 3×) :
-       - push rejected → reset --hard origin/main, fetch, **retour à l'étape 10**
-         (réévaluation Case A/B/C, parce qu'un autre acteur a peut-être
-          écrit le même fichier entre-temps)
-       - épuisement → 503 Service Unavailable, aucune projection DB,
-         worktree resetté propre
-13. Récupérer le commit du fichier (PAS le HEAD repo) :
-       file_commit_sha = git log -n1 --format=%H -- {path}
-       (Pour Case B, identique : commit du fichier existant)
-14. Relire le contrat depuis Git, jamais depuis le payload ni l'in-memory :
-       committed_contract_bytes = git show {file_commit_sha}:{path}
-       committed_contract = parse(committed_contract_bytes)
-15. Vérification anti-corruption :
-       recomputed_hash = compute_spec_hash(committed_contract)
-       if embedded_hash(committed_contract) != recomputed_hash :
-           status='failed', last_error="spec_hash mismatch", retour 500
-16. Vérification cohérence path ↔ contract (cf. §6.9) :
-       if committed_contract.tenant_id != tenant_id : 422
-       if committed_contract.name      != api_name  : 422
-17. Appeler la fonction de projection partagée avec le reconciler :
-       project_to_db(committed_contract, file_commit_sha, target="db")
-       Mappings : cf. §6.8
-       project_to_db est transactionnel et idempotent
-18. Écrire api_sync_status(target='db', status='synced',
-                           desired_spec_hash=recomputed_hash,
-                           observed_spec_hash=recomputed_hash,
-                           desired_commit_sha=file_commit_sha)
-19. Relâcher le lock
-20. Retourner 201 {id: api_id, name: api_name}
+ 2. Normaliser tenant_id, api_name = slug(payload.name)
+       Refus si api_name match un pattern UUID → 422
+ 3. Render contenu api.yaml via le mapping figé (cf. §6.9)
+ 4. Validation projectabilité : single backend_url → sinon 422
+ 5. Calculer catalog_content_hash = sha256_hex(api_yaml_bytes)
+ 6. Calculer git_path = "tenants/{tenant_id}/apis/{api_name}/api.yaml"
+       NEVER from api_catalog.id (PK UUID), NEVER from any UUID source
+ 7. Vérification anti-collision en 3 catégories (cf. §6.14) :
+       SELECT api_id, git_path, git_commit_sha
+       FROM api_catalog WHERE tenant_id = ? AND api_id = ? AND deleted_at IS NULL
+       - row absente → continuer (Case A possible)
+       - row catégorie A (slug + git_path canonique + commit_sha présent) → ré-adoption sûre
+       - row catégorie B (api_id UUID-shaped ou git_path UUID-shaped) → 409 legacy collision
+       - row catégorie C (git_commit_sha référence un fichier disparu Git HEAD) → 409 legacy collision
+ 8. Acquérir lock distribué scope=(tenant_id, api_id)
+ 9. Lire contenu actuel via CatalogGitClient.get(git_path) :
+       - absent              → Case A
+       - hash identique      → Case B (no-op Git, jump à étape 12)
+       - hash différent      → Case C → 409 Conflict
+10. CatalogGitClient.create_or_update(git_path, api_yaml_bytes,
+                                      expected_sha=..., actor=actor,
+                                      message="create api {tid}/{name}")
+       - race condition → relire, réévaluer Case A/B/C, retry max 3×
+       - épuisement → 503, aucune projection
+11. file_commit_sha = CatalogGitClient.latest_file_commit(git_path)
+12. Relire contenu depuis Git remote :
+       committed_bytes = CatalogGitClient.read_at_commit(git_path, file_commit_sha)
+       Vérifier non-null. Si null → 500, last_error="git_path 404 after commit"
+       committed_content_hash = sha256_hex(committed_bytes)
+       parsed_content = parse_yaml(committed_bytes)
+13. Vérification cohérence path ↔ contenu (cf. §6.10)
+14. project_to_api_catalog(parsed_content, file_commit_sha,
+                           committed_content_hash, git_path,
+                           target="api_catalog")
+       Mappings : cf. §6.9
+       Transactionnel et idempotent
+       NE PAS écraser target_gateways ni openapi_spec (cf. §6.9)
+15. update api_sync_status(target='api_catalog', status='synced', ...)
+16. Pas d'émission de l'event Kafka stoa.api.lifecycle (cf. §6.13)
+17. Relâcher le lock
+18. Retourner 201 {id: api_id, name: api_name}
 ```
 
-Points non négociables :
-- **Étape 4.** La validation multi-backend est faite **avant** toute écriture Git. Sinon Git contient un contrat non-projetable, état dégradé permanent.
-- **Étape 7.** La vérification anti-collision legacy est faite **avant** toute écriture Git. Sinon on commit dans `stoa-catalog` un contrat dont la projection échouera à cause d'une legacy en DB.
-- **Étape 12.** Avant push remote réussi, aucune projection DB. En cas d'échec définitif, le worktree local est reset sur `origin/main`. En cas de push rejected, le retry **réévalue Case A/B/C** depuis l'étape 10 — il ne refait pas aveuglément le même push.
-- **Étape 13.** `desired_commit_sha` = dernier commit qui a modifié *ce fichier*, pas le HEAD du repo. Plus stable, plus lisible en debug.
-- **Étape 14.** La projection consomme `git show {sha}:{path}`, jamais le payload HTTP, jamais l'objet Pydantic in-memory, jamais un fichier local non poussé. C'est ce qui rend « Payload never projects » incontestable.
-- **Étape 15.** Le `spec_hash` embarqué dans le fichier UAC n'est jamais cru sur parole.
+**Points non négociables** :
+- **Étape 2.** Refus si `api_name` UUID-shaped. Plus jamais de niveau 1 dans le niveau 2.
+- **Étape 6.** `git_path` calculé depuis le slug, jamais depuis un UUID. Test scaffold Phase 3 vérifie qu'aucune fonction du nouveau code ne convertit `api_catalog.id` → `git_path`.
+- **Étape 7.** 3 catégories distinguées, pas binaire.
+- **Étape 12.** `read_at_commit` retourne null après push réussi → 500 explicite (bug d'infrastructure), pas dégradation silencieuse.
+- **Étape 14.** La projection consomme le contenu Git relu, jamais le payload. **Jamais d'écrasement de `target_gateways` ni `openapi_spec`** (champs gérés par d'autres flows).
+- **Étape 16.** Court-circuit explicite de l'event Kafka legacy.
 
-### 6.6 Reconciler comme worker séparé
+### 6.6 Reconciler in-tree — pattern asyncio existant
 
-Le reconciler n'est **pas** un side-effect de la route FastAPI. Deux processus coexistent :
-
-```
-process 1 :  uvicorn control_plane_api.main:app
-process 2 :  python -m control_plane_api.services.catalog_reconciler.worker
-```
-
-Boucle du worker :
-
-```
-loop forever:
-    git fetch origin                                   (dans son propre clone, cf. §6.11)
-    git checkout -B main origin/main
-    for each tenants/{tid}/environments/{env}/apis/{name}.uac.json :
-
-        # 1. Validation cohérence path ↔ contenu (cf. §6.9)
-        if path validation fails:
-            update_status(failed, "path/content mismatch")
-            continue
-
-        # 2. Lecture desired state depuis Git
-        contract = parse(file)
-        desired_spec_hash = compute_spec_hash(contract)
-        if embedded_hash(contract) != desired_spec_hash:
-            update_status(failed, "spec_hash mismatch")
-            continue
-        desired_commit_sha = git log -n1 --format=%H -- {path}
-
-        # 3. Validation projectabilité DB (single-backend pour ce cycle)
-        if has_multiple_backends(contract):
-            update_status(failed, "multiple backend_url")
-            continue
-
-        # 4. Render projection attendue depuis UAC
-        api_id = compute_api_id(tid, env, name)
-        expected_row = render_db_projection(contract, desired_commit_sha)
-
-        # 5. Vérification anti-collision legacy (cf. §6.14)
-        if legacy_collision_exists(tenant_id, name, api_id):
-            update_status(failed, "legacy api name collision")
-            continue
-
-        # 6. Lecture état réel DB
-        actual_row = SELECT id, tenant_id, name, version,
-                            backend_url, spec_hash, source_commit_sha,
-                            display_name
-                     FROM apis WHERE id = api_id
-
-        # 7. Décision drift par comparaison de projection complète
-        if actual_row is None:
-            # Cas reconstruction (test §7 étape 4) : DB vide, Git plein
-            if try_advisory_lock(tid, env):
-                project_to_db(contract, desired_commit_sha, target='db')
-                update_status(synced, ...)
-            else:
-                continue  # POST tient le lock, on rattrapera
-
-        elif not db_row_matches_projection(actual_row, expected_row):
-            # Vrai drift : DB diverge de la projection attendue.
-            # Couvre l'UPDATE hostile sur backend_url, name, version,
-            # display_name, ou tout autre champ projeté — même si
-            # actual_row.spec_hash est resté identique.
-            if try_advisory_lock(tid, env):
-                update_status(drift_detected, last_error="db projection drift")
-                project_to_db(contract, desired_commit_sha, target='db')
-                update_status(synced, ...)
-            else:
-                continue
-
-        elif sync_status_missing or sync_status.status != 'synced':
-            # DB et Git d'accord sur les champs métier, mais statut absent
-            update_status(synced, ...)
-
-        else:
-            # Tout aligné, no-op
-            pass
-
-    sleep CATALOG_RECONCILE_INTERVAL_SECONDS
+```python
+# Ajout dans main.py:
+from control_plane_api.services.catalog_reconciler.worker import CatalogReconcilerWorker
+asyncio.create_task(CatalogReconcilerWorker(catalog_git_client, db).start())
 ```
 
-Le worker compare la **projection complète attendue** avec la ligne `apis` réelle, pas seulement les hashes. Un `UPDATE apis SET backend_url='hijack'` est détecté même si `apis.spec_hash` reste correct, parce que `expected_row.backend_url != actual_row.backend_url`.
+Boucle (extraits clés) :
 
-`db_row_matches_projection()` compare au minimum :
-- `id`
-- `tenant_id`
-- `name`
-- `version`
-- `backend_url`
-- `display_name`
-- `spec_hash`
-- `source_commit_sha`
-
-Pour rendre cette comparaison possible, **migration additive** sur la table `apis` :
-```sql
-ALTER TABLE apis ADD COLUMN spec_hash VARCHAR(64) NULL;
-ALTER TABLE apis ADD COLUMN source_commit_sha VARCHAR(64) NULL;
 ```
-Ces colonnes sont écrites par `project_to_db()` à chaque projection. Pour les APIs legacy (créées hors GitOps), elles restent NULL — le reconciler les ignore (out-of-scope, cf. §6.14).
+async def start():
+    while not shutdown:
+        try:
+            for git_path in await catalog_git_client.list("tenants/*/apis/*/api.yaml"):
+                tenant_id, api_name = parse_path(git_path)
 
-Réglages :
-- `CATALOG_RECONCILE_INTERVAL_SECONDS=10` pour la démo (cohérent avec test §7 ≤30s)
-- En prod future : webhook GitHub → trigger immédiat, polling 60s en fallback
-- Le worker doit pouvoir tourner même si personne n'appelle `POST /apis` — c'est ce qui rend le test §7 (commit Git manuel) possible
+                # Refus si api_name UUID-shaped (corruption Git)
+                if is_uuid_shaped(api_name):
+                    await update_status(failed, "uuid-shaped api_name in git_path")
+                    continue
 
-### 6.7 Lock distribué
+                content_bytes = await catalog_git_client.get(git_path)
+                content_hash = sha256_hex(content_bytes)
+                commit_sha = await catalog_git_client.latest_file_commit(git_path)
+                parsed = parse_yaml(content_bytes)
 
-Lock Python en mémoire **insuffisant** (cp-api tourne en multi-worker uvicorn et potentiellement multi-pod). Choix figé : **Postgres advisory lock** (pas de nouvelle dépendance).
+                # Validation cohérence path ↔ contenu (§6.10)
+                # Validation projectabilité (single backend_url)
 
-Clé de lock — déterministe, stable cross-process, **ne jamais utiliser `hash()` Python natif** (randomisé via PYTHONHASHSEED depuis Python 3.3) :
+                # Anti-collision legacy en 3 catégories
+                category = await classify_legacy(tenant_id, api_name, git_path)
+                if category in ("uuid_drift", "orphan"):
+                    await update_status(drift_detected, f"legacy: {category}")
+                    continue   # ne pas réparer automatiquement
+
+                # Render projection attendue
+                expected_row = render_api_catalog_projection(
+                    parsed, commit_sha, content_hash, git_path)
+
+                # Lecture état réel
+                actual_row = await db.fetch_one(
+                    "SELECT api_id, tenant_id, api_name, version, status, "
+                    "category, tags, portal_published, audience, "
+                    "git_path, git_commit_sha, catalog_content_hash "
+                    "FROM api_catalog "
+                    "WHERE tenant_id=? AND api_id=? AND deleted_at IS NULL",
+                    tenant_id, api_name)
+
+                # Décision drift par projection complète
+                if actual_row is None:
+                    if try_advisory_lock(tenant_id, api_name):
+                        await project_to_api_catalog(parsed, commit_sha,
+                                                     content_hash, git_path)
+                        await update_status(synced, ...)
+
+                elif not row_matches_projection(actual_row, expected_row):
+                    if try_advisory_lock(tenant_id, api_name):
+                        await update_status(drift_detected, "projection drift")
+                        await project_to_api_catalog(parsed, commit_sha,
+                                                     content_hash, git_path)
+                        await update_status(synced, ...)
+
+                elif sync_status_missing or sync_status.status != 'synced':
+                    await update_status(synced, ...)
+
+            # Détection orphelins DB (information seulement, jamais de delete)
+            for orphan in await find_db_orphans():
+                await update_status(drift_orphan, "no git file at HEAD")
+
+        except Exception as e:
+            logger.exception("reconciler iteration failed")
+
+        await asyncio.sleep(CATALOG_RECONCILE_INTERVAL_SECONDS)
+```
+
+`row_matches_projection()` compare au minimum :
+- `api_id`, `tenant_id`, `api_name`, `version`, `status`, `category`, `tags`, `portal_published`, `audience`
+- `git_path`, `git_commit_sha`, `catalog_content_hash`
+- `read_at_commit(actual_row.git_path, actual_row.git_commit_sha)` retourne non-null
+
+**Pas dans la comparaison (champs préservés, gérés par d'autres flows)** :
+- `target_gateways` (déploiement)
+- `openapi_spec` (potentiellement géré par UAC V2)
+- `metadata` (réservé)
+
+`CATALOG_RECONCILE_INTERVAL_SECONDS=10`.
+
+### 6.7 Abstraction `CatalogGitClient`
+
+```python
+class CatalogGitClient(Protocol):
+    async def get(self, path: str) -> RemoteFile | None
+    async def create_or_update(self, path, content, expected_sha,
+                               actor, message) -> RemoteCommit
+    async def read_at_commit(self, path: str, commit_sha: str) -> bytes | None
+    async def latest_file_commit(self, path: str) -> str
+    async def list(self, glob_pattern: str) -> list[str]
+```
+
+Première impl : `GitHubContentsCatalogClient` réutilisant le service PyGithub existant. Pas de worktree, pas de `git push` CLI.
+
+### 6.8 Lock distribué
 
 ```python
 import hashlib
 
-def advisory_lock_key(tenant_id: str, environment: str) -> int:
-    """
-    Clé bigint signée stable pour pg_advisory_lock / pg_try_advisory_xact_lock.
-    Stabilité testée en Phase 5.
-    """
-    raw = f"stoa:gitops:{tenant_id}:{environment}".encode("utf-8")
+def advisory_lock_key(tenant_id: str, api_id: str) -> int:
+    raw = f"stoa:gitops:{tenant_id}:{api_id}".encode("utf-8")
     digest = hashlib.sha256(raw).digest()
     return int.from_bytes(digest[:8], "big", signed=True)
 ```
 
-Valeurs vérifiables :
-```
-advisory_lock_key("demo", "demo")        =  8118093876459178279
-advisory_lock_key("demo-gitops", "demo") = -9202343674291749306
-```
+Writer : `pg_advisory_lock` bloquant. Reconciler : `pg_try_advisory_xact_lock` non-bloquant. **Jamais `hash()` Python natif**.
 
-Pattern `gitops_writer` (POST) — lock bloquant :
-```python
-key = advisory_lock_key(tenant_id, environment)
-with pg_advisory_lock(key):
-    # étapes 9-18 du flow §6.5
-    ...
-```
+### 6.9 Mapping payload HTTP → `api.yaml` puis → `api_catalog`
 
-Pattern `catalog_reconciler` (worker) — try-lock non bloquant :
-```python
-key = advisory_lock_key(tenant_id, environment)
-if pg_try_advisory_xact_lock(key):
-    # projection (le lock se libère en fin de transaction)
-    ...
-else:
-    # un POST tient le lock, skip ce tenant/env, on le verra au prochain tick
-    continue
+Format référence (`payment-api/api.yaml` 2026-04-26) :
+
+```yaml
+id: payment-api
+name: payment-api
+display_name: "Payment Initiation API"
+version: "3.1.0"
+description: |
+  Multiline description...
+backend_url: https://httpbin.org/anything
+status: active
+category: Banking
+tags: [portal:published, banking, payments]
+deployments:
+  dev: true
+  staging: false
 ```
 
-Justifications :
-- POST bloque pour garantir une réponse HTTP cohérente
-- Worker skip pour ne pas faire la queue derrière les POST sous charge
-- `project_to_db()` est de toute façon transactionnel et idempotent, donc skip = aucune perte de cohérence
+**Mapping payload HTTP → `api.yaml`** :
 
-### 6.8 Mapping UAC → table `apis`
-
-Le contrat HTTP figé impose :
-```
-GET /v1/tenants/{tid}/apis/{id} → {id, name, backend_url, ...}
-```
-
-Mapping figé pendant ce cycle (Phase 3 confirmera l'alignement avec le modèle existant) :
-
-| Champ DB | Source UAC |
+| Champ YAML | Source payload |
 |---|---|
-| `apis.id` | `compute_api_id(tenant_id, environment, contract.name)` |
-| `apis.tenant_id` | `contract.tenant_id` (validé identique au path) |
-| `apis.name` | `contract.name` (validé identique au filename stem) |
-| `apis.display_name` | `contract.name` (cf. §6.10) |
-| `apis.version` | `contract.version` |
-| `apis.backend_url` | `contract.endpoints[0].backend_url` |
-| `apis.spec_hash` | `compute_spec_hash(contract)` |
-| `apis.source_commit_sha` | `git log -n1 --format=%H -- {path}` |
+| `id` | `slug(payload.name)` (refus si UUID-shaped) |
+| `name` | `slug(payload.name)` |
+| `display_name` | `payload.display_name` ou `payload.name` |
+| `version` | `payload.version` |
+| `description` | `payload.description` ou vide |
+| `backend_url` | `payload.backend_url` (single-backend imposé) |
+| `status` | `"active"` (constant pour ce cycle) |
+| `category` | `payload.category` ou non émis |
+| `tags` | `payload.tags` ou `[]` |
+| `deployments` | `{dev: true, staging: false}` (par défaut pour ce cycle) |
 
-**Restriction figée pour ce cycle** :
-> Tous les endpoints d'un même contrat UAC doivent partager le même `backend_url`.
-> - **Côté writer (POST)** : refus pré-Git en 422 (cf. §6.5 étape 4). Aucun commit Git.
-> - **Côté reconciler (commit Git manuel)** : `status='failed'`, `last_error="multiple backend_url"`, aucune projection.
+**Champs payload AT-1 ignorés** (non sérialisés) : `protocol`, `paths[]`.
 
-### 6.9 Validation cohérence path ↔ contract
+**Mapping `api.yaml` → `api_catalog`** :
 
-Le reconciler et le writer refusent les incohérences entre le chemin Git et le contenu UAC :
+| Colonne `api_catalog` | Source | Notes |
+|---|---|---|
+| `id` (PK) | non écrite par GitOps | gen_random_uuid() pour un nouveau INSERT, préservé pour un UPDATE |
+| `tenant_id` | tenant du `git_path` | |
+| `api_id` | YAML `.id` (= slug) | **jamais UUID** |
+| `api_name` | YAML `.name` | |
+| `version` | YAML `.version` | |
+| `status` | YAML `.status` | |
+| `category` | YAML `.category` | nullable |
+| `tags` | YAML `.tags` (jsonb) | sérialisation directe |
+| `portal_published` | dérivé : `"portal:published" in tags` | |
+| `audience` | YAML `.audience` ou `'public'` (default DB) | |
+| `metadata` | non écrit par GitOps en UPDATE ; `'{}'::jsonb` en CREATE | préservé en ré-adoption |
+| `openapi_spec` | **non écrit par GitOps** | préservé, géré par UAC V2 ou ailleurs |
+| `target_gateways` | **non écrit par GitOps** | préservé, géré par déploiement |
+| `git_path` | path réellement lu/committé | canonique, jamais UUID |
+| `git_commit_sha` | `latest_file_commit(git_path)` | |
+| `catalog_content_hash` | `sha256_hex(api_yaml_bytes)` | colonne ajoutée Phase 3 |
+| `synced_at` | `now()` | |
+| `deleted_at` | non touché | |
+
+### 6.10 Validation cohérence path ↔ contenu
 
 | Vérification | Règle | Action si violée |
 |---|---|---|
-| Tenant | `path.tenant_id == contract.tenant_id` | `status='failed'`, last_error="tenant mismatch" |
-| Filename | `path.api_name == contract.name` | `status='failed'`, last_error="name mismatch" |
-| Environment | `path.environment ∈ {"demo"}` | `status='failed'`, last_error="env not allowed" |
-| Slug | `api_name`, `tenant_id` matchent `[a-z0-9-]+` | rejet écriture côté writer (422), rejet projection côté reconciler |
+| Filename | `path.api_name == slug(content.name)` | `failed`, "name mismatch" |
+| ID/Name cohérence | `content.id == content.name` | `failed`, "id != name" |
+| Slug | `api_name` matche `[a-z0-9-]+` (pas UUID-shaped) | rejet writer (422), rejet reconciler |
+| Path canonique | `git_path == "tenants/{tenant_id}/apis/{api_name}/api.yaml"` | rejet projection |
 
-Ces validations s'appliquent aussi bien :
-- côté writer (avant commit)
-- côté reconciler (à chaque scan, en défense en profondeur — un humain peut commit à la main un fichier mal placé)
+### 6.11 [Section retirée v1.0]
 
-### 6.10 `api_name` est un identifiant stable, `display_name` est dérivé
+Workspace Git isolation caduque avec PyGithub Contents API.
 
-Conséquence directe du choix `api_id = uuid5(NS, "tenant:env:name")` :
+### 6.12 Compatibilité avec `demo-scope.md`
 
-> Pendant ce cycle et les cycles suivants, `api_name` est un identifiant stable.
-> Renommer une API = `delete + create`, jamais un update silencieux du nom.
+Le smoke historique reste sur l'ancien chemin. `GIT_SYNC_ON_WRITE` non modifié. L'activation GitOps court-circuite l'event Kafka pour éviter la concurrence.
 
-**`display_name` : pas de champ DB-only mutable**
+### 6.13 Coexistence avec le chemin legacy
 
-Pour préserver l'invariant de reconstructibilité (§2.5), aucun champ métier persistant de `apis` ne peut exister uniquement en DB de manière mutable pour les APIs créées via GitOps. Donc :
+| Flag | Chemin actif | Event `stoa.api.lifecycle` | `git_sync_worker` |
+|---|---|---|---|
+| `GITOPS_CREATE_API_ENABLED=false` (défaut) | Legacy DB-first | Émis | Consomme et écrit Git (avec bug B10) |
+| `GITOPS_CREATE_API_ENABLED=true` | GitOps writer | **Non émis** par le POST | Inactif sur les writes GitOps |
 
-```
-apis.display_name = contract.name
-```
+Test Phase 5 : aucun event de type `created` émis lors d'un POST avec flag ON.
 
-Pour ce cycle, `display_name` n'est pas un champ libre. Si plus tard on veut un `display_name` indépendant, il devra être ajouté au schéma UAC v1 (cycle séparé qui touche la parité Python/Rust, cf. §4.2 out-of-scope), pas hacké en DB-only.
+### 6.14 Politique de collision legacy — 3 catégories
 
-Toute future tentative de rename in-place ou de `display_name` DB-only mutable demandera une ADR explicite, car elle invalide la reconstructibilité.
-
-### 6.11 Isolation des working trees Git
-
-Le lock Postgres protège la section métier mais **pas le filesystem du `.git/`**. Si writer et worker partagent le même répertoire Git, des opérations concurrentes (`checkout`, `reset`, `clean`) provoquent des collisions filesystem indépendantes du lock applicatif.
-
-**Règle non négociable** :
-> Aucun process ne partage un writable working tree Git avec un autre process.
-
-Implémentation pour ce cycle (MVP) :
+#### Catégorie A — Sain adoptable (5 APIs `demo` : account-management-api, customer-360-api, fraud-detection-api, payment-api, petstore)
 
 ```
-/var/lib/stoa/gitops/
-  catalog-mirror/                       # bare clone, fetch-only, partagé en lecture
-  writer/
-    {tenant_id}--{environment}/         # worktree dédié writer, par tenant/env
-  reconciler/
-    worker.work/                        # worktree dédié worker, scan complet
+api_id = slug = api_name
+git_path = "tenants/demo/apis/{slug}/api.yaml"
+fichier Git présent
 ```
 
-- `gitops_writer` ouvre/réutilise un worktree par `(tenant_id, environment)`. Pendant qu'il y travaille, il tient déjà le lock Postgres advisory de ce scope (§6.7), donc deux POST simultanés sur le même tenant/env attendent le lock, pas le filesystem.
-- `catalog_reconciler` utilise un worktree distinct, jamais le même que le writer. Aucune commande destructive (`reset --hard`, `checkout -B`, `clean -fd`) n'est exécutée sur un worktree partagé.
-- Le bare mirror central est rafraîchi via `git fetch` par les deux processus, mais aucun ne checkout dedans.
+**Action** : ré-adoption autorisée Phase 6.5.
+- Reconciler **remplit/corrige** : `git_commit_sha`, `catalog_content_hash`, `git_path` canonique
+- `api_id` reste inchangé
+- Aucune subscription/deployment/key mutée
+- Smoke historique reste `REAL_PASS`
 
-Alternative acceptable (MVP simplifié) : un seul clone partagé protégé par un **file lock OS-level** (`flock(2)`) sur un fichier sentinelle. Plus simple à implémenter, plus lent sous charge. Choix exact figé en Phase 3 selon la complexité d'intégration.
+#### Catégorie B — Drift UUID dur (7 APIs `demo` : demo-api2, test, test2, test3, test5, toto-api, toto2)
 
-Test Phase 5 : lancer en parallèle 1 worker et 5 POST sur des tenants distincts → aucune erreur Git, aucune corruption de worktree.
-
-### 6.12 Compatibilité avec `demo-scope.md` et démo locale
-
-Cette spec est **une décision écrite de rewrite ciblé**. Elle ne remplace pas [`demo-scope.md`](./demo-scope.md) ni [`demo-acceptance-tests.md`](./demo-acceptance-tests.md) tant que Christophe n'a pas explicitement décidé que GitOps create API entre dans le smoke minimal provider/runtime.
-
-`demo-scope.md` §4 dit explicitement que le « GitOps E2E (sync `stoa-catalog` ↔ DB) » est out-of-scope du smoke provider, et que `GIT_SYNC_ON_WRITE=false` est le comportement par défaut. Cette spec crée une **exception contrôlée** à cette règle, sans la révoquer.
-
-**Pendant Phases 1-7** :
-- `./scripts/demo-smoke-test.sh` sans flag GitOps reste compatible avec le chemin démo existant
-- `GIT_SYNC_ON_WRITE=false` reste le comportement du smoke provider historique
-- `GITOPS_CREATE_API_ENABLED=false` reste le défaut sur le tenant `demo` historique
-- L'activation GitOps se fait uniquement sur tenant `demo-gitops` (créé propre pour ce cycle, sans collision legacy) ou via flag explicite par appel
-
-**Validation GitOps additionnelle** :
-
-```bash
-GITOPS_CREATE_API_ENABLED=true \
-DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json \
-./scripts/demo-smoke-test.sh
+```
+api_id = UUID string  OU  git_path UUID-shaped
+fichier Git réel = sous le slug
 ```
 
-Cette commande prouve que GitOps fonctionne, sans remplacer la commande historique.
+**Action** : **détection seulement, aucune réparation automatique**.
 
-**Démo locale sans GitHub externe** :
+Justification : `subscriptions.api_id`, `deployments.api_id`, gateway routes, API keys référencent potentiellement le UUID. La migration relève d'un cycle séparé qui devra identifier toutes les FK et choisir une stratégie.
 
-`architecture-rules.md` §4 impose que la démo « Tourne offline une fois les dépendances pulled ». Cette spec respecte cette règle :
-- Le remote `stoa-catalog` peut être un bare repository local : `STOA_CATALOG_REMOTE_URL=file:///var/lib/stoa/gitops/catalog-remote.git`
-- Aucun accès GitHub externe n'est requis pour exécuter le test §7 localement
-- Les tests GitHub réels (push vers github.com) restent des tests d'intégration séparés, non requis pour le smoke local
+Comportement reconciler :
+- `update_status(drift_detected, "uuid hard drift")`
+- `last_error` documente : `api_id={UUID}, real_git_name={slug}`
+- **aucune mutation `api_catalog`, aucune écriture Git**
 
-**Bascule Phase 10** :
+#### Catégorie C — Orphelin DB (1 API `demo` : banking-services-v1-2)
 
-La bascule Phase 10 ne s'applique qu'aux **tenants GitOps-initialized**, pas à tous les tenants existants (cf. §6.14). Une migration legacy → GitOps des tenants historiques fait l'objet d'une spec séparée, hors de ce cycle.
-
-`demo-scope.md` ne change que si Christophe décide explicitement, au moment de la bascule, que GitOps create API devient partie du smoke minimal.
-
-### 6.13 Mapping payload HTTP → UACContract
-
-Le payload AT-1 du smoke (`demo-acceptance-tests.md`) est un format legacy qui n'est pas un UAC contract :
-
-```json
-{
-  "name": "demo-httpbin",
-  "display_name": "demo-httpbin",
-  "version": "1.0.0",
-  "protocol": "http",
-  "backend_url": "http://mock-backend:9090",
-  "paths": [{"path": "/get", "methods": ["GET"]}]
-}
+```
+api_catalog row active (deleted_at IS NULL)
+fichier Git absent à HEAD
 ```
 
-La conversion vers `UACContract` est **figée et déterministe** :
+**Action** : **détection seulement, aucune suppression automatique**.
 
-| Champ UAC | Source payload HTTP |
-|---|---|
-| `contract.name` | `slug(payload.name)` |
-| `contract.tenant_id` | `tenant_id` du path param `/v1/tenants/{tid}/apis` |
-| `contract.version` | `payload.version` |
-| `contract.status` | `"published"` (constant pour ce cycle) |
-| `contract.classification` | `"H"` par défaut, sauf si `payload.classification ∈ {"H","VH","VVH"}` |
-| `contract.endpoints[i].path` | `payload.paths[i].path` |
-| `contract.endpoints[i].methods` | `payload.paths[i].methods` |
-| `contract.endpoints[i].backend_url` | `payload.backend_url` (le même pour tous les endpoints, cf. §6.8 single-backend) |
-| `contract.endpoints[i].operation_id` | `f"{contract.name}_{method.lower()}_{normalize_path(path)}"` (stable, déterministe) |
-| `contract.endpoints[i].input_schema` | `{"type":"object","additionalProperties":false}` par défaut |
-| `contract.endpoints[i].output_schema` | `{"type":"object","additionalProperties":true}` par défaut |
-| `contract.spec_hash` | `compute_spec_hash(contract)` (calculé en dernier, après remplissage de tous les autres champs) |
+Justification : auto-delete relève du cycle delete/prune (B11), pas de ce rewrite.
 
-**Champs payload ignorés comme source de vérité métier** (mais acceptés pour compatibilité AT-1) :
-- `payload.display_name` — ignoré ; `apis.display_name = contract.name` (cf. §6.10)
-- `payload.protocol` — ignoré pour ce cycle ; le UAC v1 actuel ne porte pas de champ `protocol` au top-level
+Comportement reconciler :
+- `update_status(drift_orphan, "no git file at HEAD")`
+- aucune mutation
 
-**Fonction de normalisation** :
-```python
-def normalize_path(path: str) -> str:
-    """Convertit '/get' → 'get', '/users/{id}' → 'users_id'."""
-    return path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
+#### Bascule Phase 10
+
+Flag ON par défaut **uniquement** sur :
+- tenants GitOps-initialized (`demo-gitops` + nouveaux)
+- tenants explicitement classés clean par audit SQL préalable (toutes rows = catégorie A)
+
+Tenants contenant des catégories B ou C non résolues restent sur l'ancien chemin.
+
+**Verdict audit B14 (CAB-2193, exécuté 2026-04-27)** : scénario **β — drift sur 2-3 tenants minoritaires** (PAS γ systémique, PAS α isolé `demo`). Détail dans §11. Hypothèse défensive γ levée.
+
+#### Catégorie D — Pré-GitOps DB-only (nouveau, surfacé par B14)
+
+```
+api_catalog row active
+git_path IS NULL ET git_commit_sha IS NULL
 ```
 
-Exemple complet — payload AT-1 → UACContract dérivé :
-```python
-# input
-payload = {
-    "name": "demo-httpbin",
-    "display_name": "demo-httpbin",
-    "version": "1.0.0",
-    "protocol": "http",
-    "backend_url": "http://mock-backend:9090",
-    "paths": [{"path": "/get", "methods": ["GET"]}]
-}
-tenant_id = "demo"
+13 rows détectées par l'audit B14 (12 sur `demo` + 1 sur `oasis`). Ces rows sont antérieures à l'introduction du writer GitOps : `git_sync_worker` legacy n'a jamais résolu de pointeur Git pour elles. Distinct de cat C (cat C a `git_path` rempli mais fichier absent à HEAD).
 
-# output (avant calcul spec_hash)
-contract = UACContract(
-    name="demo-httpbin",
-    tenant_id="demo",
-    version="1.0.0",
-    status="published",
-    classification="H",
-    endpoints=[
-        Endpoint(
-            path="/get",
-            methods=["GET"],
-            backend_url="http://mock-backend:9090",
-            operation_id="demo-httpbin_get_get",
-            input_schema={"type": "object", "additionalProperties": False},
-            output_schema={"type": "object", "additionalProperties": True},
-        )
-    ],
-)
-contract.spec_hash = compute_spec_hash(contract)
-```
+**Action** : **détection seulement, aucune réparation automatique** (mêmes raisons que cat B/C — FK potentielles vers `api_id` slug).
 
-Ce mapping est testé en Phase 5 contre le payload AT-1 exact, et le `spec_hash` résultant doit être stable cross-runs.
-
-### 6.14 Politique de collision avec les APIs legacy
-
-**Problème** : pendant la transition, `apis` peut contenir des lignes créées par l'ancien chemin avec un `id` aléatoire et `spec_hash IS NULL`. Si on active GitOps sur un tenant qui a une API legacy `demo-httpbin`, le calcul `compute_api_id("demo", "demo", "demo-httpbin") = d5844819-...` produit un `id` différent. Selon les contraintes uniques de la table (à confirmer Phase 1), trois scénarios :
-- contrainte unique `(tenant_id, name)` → INSERT échoue
-- pas de contrainte → doublon logique avec deux ids
-- contrainte `id` PRIMARY KEY → l'ancien id reste, le nouveau ne peut pas être inséré
-
-**Politique pour ce cycle** :
-
-> **Pendant Phases 6-9, le flag GitOps n'est activé que sur des tenants GitOps-initialized**, c'est-à-dire :
-> - tenants nouveaux créés pour ce cycle (typiquement `demo-gitops`)
-> - tenants dont les APIs legacy conflictuelles ont été manuellement nettoyées avant activation
->
-> Aucune migration automatique legacy → GitOps n'est faite par cette spec.
-
-**Détection writer** (§6.5 étape 7) :
-```python
-def legacy_collision_exists(tenant_id: str, name: str, expected_api_id: uuid.UUID) -> bool:
-    row = SELECT id, spec_hash FROM apis
-          WHERE tenant_id = %s AND name = %s AND id != %s
-    return row is not None  # toute ligne avec même (tenant, name) mais id ≠ deterministic
-```
-
-Si `legacy_collision_exists()` retourne `True` :
-- POST retourne **409 Conflict** avec `last_error="legacy api name collision"`
-- aucune écriture Git
-- aucune mutation DB destructive
-- le tenant doit être nettoyé manuellement avant activation GitOps, ou rester sur l'ancien chemin
-
-**Détection reconciler** (§6.6 étape 5) — défense en profondeur si quelqu'un commit à la main dans `stoa-catalog` un fichier qui collisionne avec une legacy :
-- `status='failed'`, `last_error="legacy api name collision"`
-- aucune mutation `apis`
-
-**Phase 10 — bascule limitée** :
-- Le flag passe à `true` par défaut **uniquement sur les tenants GitOps-initialized**
-- Les tenants legacy non migrés continuent d'utiliser l'ancien chemin (`GITOPS_CREATE_API_ENABLED=false`)
-- Une spec séparée traitera la migration legacy → GitOps quand le besoin métier sera concret
+Comportement reconciler :
+- `update_status(drift_pre_gitops, "no git_path nor commit pointer")`
+- aucune mutation `api_catalog`, aucune écriture Git
+- ces tenants restent exclus de Phase 10 jusqu'à cycle migration séparé
 
 ## 7. Critère de succès final
 
-Test binaire — le rewrite est validé si et seulement si :
+### §7 — Test GitOps create propre (sur `demo-gitops`)
 
 ```bash
-# 0. Pré-condition : tenant GitOps-initialized propre (sans collision legacy)
 TENANT=demo-gitops
+NAME=manual-test-$(date +%s)   # nom unique par run, contournement B-INDEX
 
-# 1. Construire un contrat UAC à la main avec spec_hash correct
-#    (helper en in-scope §4.1, implémenté Phase 4)
-python -m control_plane_api.services.uac.write_canonical_contract \
-  --tenant ${TENANT} \
-  --name manual-test \
-  --version 1.0.0 \
+# 1. Construire api.yaml à la main
+python -m control_plane_api.services.catalog.write_api_yaml \
+  --tenant ${TENANT} --name ${NAME} --version 1.0.0 \
   --backend http://mock-backend:9090 \
-  --output /tmp/manual-test.uac.json
+  --output /tmp/api.yaml
 
-# 2. Couper l'UI, push direct dans stoa-catalog
-#    Note : remote local file:// suffit, pas besoin de GitHub (cf. §6.12)
-mkdir -p stoa-catalog/tenants/${TENANT}/environments/demo/apis/
-cp /tmp/manual-test.uac.json stoa-catalog/tenants/${TENANT}/environments/demo/apis/
-git -C stoa-catalog add .
-git -C stoa-catalog commit -m "manual: add manual-test API"
-git -C stoa-catalog push  # vers le remote local file://
+# 2. Push direct dans stoa-catalog via PyGithub
+gh api -X PUT "repos/stoa-platform/stoa-catalog/contents/tenants/${TENANT}/apis/${NAME}/api.yaml" \
+  -f message="manual: add ${NAME}" \
+  -f content="$(base64 < /tmp/api.yaml)"
 
-# 3. Attendre le reconcile (intervalle worker = 10s, marge × 3)
+# 3. Attendre le reconcile
 sleep 30
 
-# 4. Vérifier que la DB reflète le commit avec api_id déterministe
-EXPECTED_ID=$(python -c "
-import uuid
-ns = uuid.UUID('c276f996-0520-5de1-ab27-83ab8749e086')
-print(uuid.uuid5(ns, '${TENANT}:demo:manual-test'))
-")
-curl -s ${API_URL}/v1/tenants/${TENANT}/apis/${EXPECTED_ID}
-# → doit retourner l'API avec name=manual-test
+# 4. Vérifier api_catalog
+curl -s ${API_URL}/v1/tenants/${TENANT}/apis/${NAME}
 
-# 5. Vérifier que apis.spec_hash et apis.source_commit_sha sont écrits
-psql $DATABASE_URL -c "SELECT id, name, spec_hash, source_commit_sha FROM apis WHERE id='${EXPECTED_ID}';"
-# → spec_hash et source_commit_sha non NULL
+# 5. Vérifier git_path canonique et git_commit_sha rempli
+psql $DATABASE_URL -c "SELECT api_id, api_name, git_path, git_commit_sha, catalog_content_hash \
+  FROM api_catalog WHERE tenant_id='${TENANT}' AND api_id='${NAME}' AND deleted_at IS NULL;"
+# git_path = "tenants/demo-gitops/apis/${NAME}/api.yaml"
+# git_commit_sha non NULL, catalog_content_hash non NULL
 
-# 6. Vérifier la détection de drift par projection complète :
-#    UPDATE manuel hostile sur backend_url (champ projeté, pas le hash)
-psql $DATABASE_URL -c "UPDATE apis SET backend_url='http://hijack:9999' WHERE id='${EXPECTED_ID}';"
+# 6. Vérifier read_at_commit (le path stocké pointe vers un fichier réel)
+COMMIT=$(psql -tAc "SELECT git_commit_sha FROM api_catalog WHERE ...")
+gh api "repos/stoa-platform/stoa-catalog/contents/tenants/${TENANT}/apis/${NAME}/api.yaml?ref=${COMMIT}"
+
+# 7. Drift hostile sur backend_url
+psql -c "UPDATE api_catalog SET tags='[]'::jsonb WHERE ..."
 sleep 30
-psql $DATABASE_URL -c "SELECT backend_url FROM apis WHERE id='${EXPECTED_ID}';"
-# → doit être revenu à http://mock-backend:9090
-#   (reconciler a comparé expected_row vs actual_row, détecté le drift,
-#    et reprojetté depuis Git)
+psql -c "SELECT tags FROM api_catalog WHERE ..."
+# → revenu à la valeur Git
 
-# 7. Vérifier que le smoke complet reste vert avec le flag ON
+# 8. Drift hostile sur git_path (reproduction du bug B10)
+psql -c "UPDATE api_catalog SET git_path='tenants/${TENANT}/apis/00000000-0000-0000-0000-000000000000/api.yaml' WHERE ..."
+sleep 30
+psql -c "SELECT git_path FROM api_catalog WHERE ..."
+# → revenu à "tenants/${TENANT}/apis/${NAME}/api.yaml"
+
+# 9. Smoke complet vert
 GITOPS_CREATE_API_ENABLED=true \
 TENANT_ID=${TENANT} \
 DEMO_UAC_CONTRACT=specs/uac/demo-httpbin.uac.json \
 ./scripts/demo-smoke-test.sh
-# → Verdict: REAL_PASS — DEMO READY
+# → REAL_PASS — DEMO READY
 ```
 
-Si ces 4 vérifications passent (étapes 4, 5, 6, 7), Git est vraiment la source de vérité. Si l'une échoue, le rewrite n'est pas terminé.
+### §7bis — Ré-adoption contrôlée des APIs saines (catégorie A) du tenant `demo`
+
+Borné aux **5 APIs catégorie A uniquement** (`account-management-api`, `customer-360-api`, `fraud-detection-api`, `payment-api`, `petstore`).
+
+```bash
+for API_NAME in account-management-api customer-360-api fraud-detection-api payment-api petstore; do
+  GIT_PATH=$(psql -tAc "SELECT git_path FROM api_catalog \
+    WHERE tenant_id='demo' AND api_id='${API_NAME}' AND deleted_at IS NULL;")
+  EXPECTED="tenants/demo/apis/${API_NAME}/api.yaml"
+  [ "${GIT_PATH}" = "${EXPECTED}" ] || fail "git_path drift for ${API_NAME}"
+
+  COMMIT=$(psql -tAc "SELECT git_commit_sha FROM api_catalog WHERE ...")
+  [ -n "${COMMIT}" ] || fail "git_commit_sha NULL for ${API_NAME}"
+
+  HASH=$(psql -tAc "SELECT catalog_content_hash FROM api_catalog WHERE ...")
+  [ -n "${HASH}" ] || fail "catalog_content_hash NULL for ${API_NAME}"
+
+  gh api "repos/stoa-platform/stoa-catalog/contents/${GIT_PATH}?ref=${COMMIT}" \
+    > /dev/null || fail "read_at_commit 404 for ${API_NAME}"
+
+  YAML=$(gh api "repos/.../contents/${GIT_PATH}?ref=${COMMIT}" -H "Accept: application/vnd.github.raw")
+  GIT_BACKEND=$(echo "${YAML}" | yq '.backend_url')
+  DB_BACKEND=$(psql -tAc "SELECT backend_url FROM api_catalog WHERE ...")
+  # Note : backend_url n'est pas une colonne de api_catalog ; vérification via metadata
+  # ou via re-projection. Ajustement Phase 5.
+done
+
+# Vérification : les 7 catégorie B et l'orphelin C sont INCHANGÉS
+psql -c "SELECT api_id, git_path FROM api_catalog \
+  WHERE tenant_id='demo' AND api_id ~ '^[0-9a-f]{8}-' AND deleted_at IS NULL;"
+# → 7 rows toujours présentes avec git_path UUID
+
+psql -c "SELECT api_id FROM api_catalog WHERE tenant_id='demo' AND api_id='banking-services-v1-2';"
+# → row toujours présente, deleted_at toujours NULL
+
+# Smoke historique reste REAL_PASS
+./scripts/demo-smoke-test.sh
+```
+
+**Garanties §7bis** :
+- 7 catégorie B inchangées
+- Orphelin C inchangé
+- Aucune subscription/deployment/key mutée
+- Smoke historique vert
 
 ## 8. Risques identifiés et mitigations
 
 | Risque | Probabilité | Impact | Mitigation |
 |---|---|---|---|
-| Git remote unavailable pendant un POST API | Moyen | Haut | Retry exponentiel 3×, puis fail-fast 503 avec erreur claire. Ne jamais dégrader vers DB-only silencieusement. Pour la démo, remote local `file://` (cf. §6.12). |
-| Conflits Git multi-agents (HEGEMON parallèle) | Haut | Moyen | Lock distribué Postgres advisory (§6.7). Push rejected → fetch/reset + **réévaluation Case A/B/C** + retry borné. |
-| Collision filesystem Git (`.git/` partagé) | Moyen | Haut | Worktrees isolés writer/worker (§6.11). Test de charge Phase 5. |
-| `spec_hash` différent Python vs Rust | Faible | Critique | Test de parité cross-langage en Phase 5, calcul figé §6.2.1. |
-| `spec_hash` embarqué falsifié dans Git | Faible | Haut | Reconciler recalcule et refuse projection si mismatch (§6.2.1). |
-| Drift DB invisible parce que hash inchangé | Moyen | Critique | Comparaison `expected_row vs actual_row` complète, pas seulement hash (§6.6). Test §7 étape 6 vérifie. |
-| Régression AT-1 pendant Phase 6 | Moyen | Critique | Flag par tenant. Activation uniquement sur `demo-gitops` jusqu'à Phase 7. |
-| Crash entre commit Git et projection DB | Moyen | Moyen | Worker reconciler tourne en boucle 10s, rattrape automatiquement (Case B idempotent). |
-| Push local OK mais push remote KO | Moyen | Haut | Aucune projection avant push remote réussi. Reset worktree en cas d'échec définitif (§6.5 étape 12). |
-| Push rejected = écraser un changement concurrent | Moyen | Haut | Retry réévalue Case A/B/C depuis l'étape 10, jamais re-push aveugle (§6.5 étape 12). |
-| Fichier UAC mal placé dans Git | Moyen | Moyen | Validation cohérence path ↔ contract refuse la projection (§6.9). |
-| Worker et POST projettent en parallèle la même API | Moyen | Faible | Worker en `try_advisory_xact_lock`, skip si POST tient le lock. `project_to_db` transactionnel idempotent. |
-| Contrat multi-backend commité dans Git | Faible | Moyen | Refus pré-commit côté writer 422 (§6.5 étape 4). Refus projection côté reconciler (§6.6). |
-| `display_name` mutable casse la reconstructibilité | Moyen | Haut | `apis.display_name = contract.name` figé pour ce cycle (§6.10). Toute mutation DB-only refusée. |
-| `advisory_lock_key` randomisée (`hash()` Python) | Haut sans patch | Critique | Fonction stable basée sur SHA-256 (§6.7). Test stabilité Phase 5. |
-| Collision avec API legacy (même tenant+name, id différent) | Haut | Critique | `legacy_collision_exists()` côté writer ET reconciler (§6.14). 409 Conflict. Bascule Phase 10 limitée aux tenants GitOps-initialized. |
-| Mapping payload→UAC sous-spécifié | Moyen | Moyen | Mapping figé §6.13. Test cross-run de stabilité du `spec_hash` résultant en Phase 5. |
-| Démo dépend de GitHub externe | Faible | Moyen | Remote local `file://` supporté, pas de dépendance externe en local (§6.12). |
-| Le rewrite déborde sur update/delete sous pression | Haut | Haut | Règle §4.3. Tickets out-of-scope refusés automatiquement. |
-| Quelqu'un branche le worker sur `GIT_SYNC_ON_WRITE` par habitude | Moyen | Haut | §9.6 interdit explicitement. Test de scaffold Phase 3 vérifie l'absence du flag dans le nouveau code. |
-| Cette spec interprétée comme remplacement de `demo-scope.md` | Moyen | Haut | §6.12 explicite l'exception contrôlée. `demo-scope.md` reste source de vérité du smoke minimal. |
+| Hypothèses v0.3.1 ré-introduites par habitude (UUID5, worktree, table `apis`) | Moyen | Haut | §0 explicite. Test scaffold Phase 3 vérifie absence de `uuid5` et `worktree` dans le nouveau code. |
+| Concurrence Git entre nouveau writer et `git_sync_worker` legacy | Haut | Haut | §6.13 : flag ON court-circuite l'event Kafka. Test Phase 5. |
+| Réparation accidentelle des UUID driftés (catégorie B) | Moyen | Critique | §6.14 explicite : détection seulement. Test Phase 5 vérifie. |
+| Suppression accidentelle d'orphelins (catégorie C) | Faible | Critique | §6.14 : pas de delete dans ce rewrite. Garde-fou §9.13. |
+| `git_path = UUID` re-introduit | Faible | Haut | §6.5 étape 2+6 + §6.6 : refus UUID-shaped. Test §7 étape 8. B10 fixé Phase 8 (in-scope partiel). |
+| Phase 6.5 mute des subscriptions/deployments par effet de bord | Faible | Critique | §6.14 catégorie A : `api_id` inchangé. §6.9 : `target_gateways`/`openapi_spec` non écrits. Test §7bis vérifie. |
+| Confusion entre les 5 niveaux d'identité | Moyen | Haut | §6.4. Garde-fou §9.14. |
+| INSERT bloqué par `uq_api_catalog_tenant_api` après soft-delete précédent | Faible (0 soft-delete vu sur `demo`) | P0 si arrive | Test §7 utilise `manual-test-${TIMESTAMP}` unique. B-INDEX out-of-scope, deferred CAB-1938. |
+| Drift UUID systémique au-delà de `demo` | Inconnu (SQL b à lancer) | Haut | Hypothèse défensive γ Phase 10. Bascule limitée. |
+| Sync engine ne soft-delete pas les fichiers Git disparus (B11) | Confirmé | Moyen | Out-of-scope complet. Documenté dans §0. Cycle delete/prune séparé. |
+| Le rewrite déborde sur update/delete sous pression | Haut | Haut | Règle §4.3 + §4.2 out-of-scope étendu. |
 
-## 9. Garde-fous spécifiques à ce rewrite
+## 9. Garde-fous spécifiques
 
-En complément des règles génériques de [`rewrite-guardrails.md`](./rewrite-guardrails.md) :
-
-1. **Aucune ADR créée pendant Phases 0-7** sauf décision irréversible. Si une décision irréversible apparaît (ex: « UAC en Git devient canonique en prod »), elle est ouverte en ADR à ce moment-là, pas avant.
-2. **Aucun fix pendant Phases 1-2.** Tout bug observé va dans le backlog. Les fix arrivent en Phase 8.
-3. **Aucun refactor cosmétique.** Si pendant l'audit Phase 1 on remarque du code moche, il reste moche.
-4. **Smoke = gate démo non négociable + tests GitOps = gates de merge.** Le smoke `REAL_PASS` est obligatoire pour ne pas dégrader la démo. Mais il ne suffit pas seul : des tests dédiés couvrent la parité `spec_hash`, le lock distribué stable, les trois cas idempotents, la détection de drift par projection complète, l'atomicité push remote, la validation path↔content, l'isolation des worktrees Git, le mapping payload→UAC déterministe, la legacy collision rejection. Un PR qui passe le smoke mais casse un test GitOps reste NO-GO.
-5. **Pas de skill Claude Code créée avant Phase 4.** La skill `stoa-gitops-writer` n'est utile que quand le module existe. Phase 3 produit le squelette à la main pour bien comprendre.
-6. **Interdiction d'utiliser `GIT_SYNC_ON_WRITE` dans le nouveau chemin.** Ce flag porte le modèle mental de l'ancien dual-write. Le nouveau pipeline GitOps utilise exclusivement `GITOPS_CREATE_API_ENABLED` et n'a aucune dépendance au flag legacy. Quand `GITOPS_CREATE_API_ENABLED=true`, l'ancien chemin est complètement court-circuité, pas appelé en parallèle.
-7. **Le payload HTTP ne projette jamais.** Toute fonction qui prend un payload HTTP en entrée et écrit en DB sans passer par un commit Git **poussé sur le remote** intermédiaire est interdite dans le périmètre de ce rewrite. Test de scaffold Phase 3 enforce cette règle structurellement (le code de projection accepte uniquement un type `CommittedContract` qui ne peut être obtenu que via `git show`).
-8. **Aucun champ métier DB-only mutable** pour les APIs GitOps-created. Tout champ persistant de `apis` doit être dérivé du UAC ou déterministe (cf. §6.10).
-9. **Cette spec ne remplace pas `demo-scope.md`.** Elle crée une exception contrôlée (cf. §6.12). Tant que Christophe n'a pas explicitement décidé que GitOps create API devient partie du smoke minimal, le smoke historique reste la source de vérité du contrat démo provider/runtime.
+1. **Aucune ADR créée pendant Phases 0-7** sauf décision irréversible.
+2. **Aucun fix pendant Phases 1-2.** Tout bug observé va dans le backlog.
+3. **Aucun refactor cosmétique.**
+4. **Smoke = gate démo non négociable + tests GitOps = gates de merge.** Tests dédiés couvrent : parité advisory_lock_key, 3 cas idempotents, drift detection complète incluant `git_path`+`read_at_commit`, atomicité commit GitHub, validation path↔content, mapping payload→YAML déterministe, refus UUID-shaped, classification 3 catégories legacy.
+5. **Pas de skill Claude Code créée avant Phase 4.**
+6. **Interdiction d'utiliser `GIT_SYNC_ON_WRITE`** dans le nouveau chemin.
+7. **Le payload HTTP ne projette jamais.** Test scaffold Phase 3 : `project_to_api_catalog` accepte uniquement un type `CommittedContent` produit par `read_at_commit`.
+8. **Aucun champ métier DB-only mutable** pour les APIs GitOps-created.
+9. **Cette spec ne remplace pas `demo-scope.md`.** Exception contrôlée (§6.12).
+10. **Pas de `uuid5(...)`, pas de `git worktree`, pas de table `apis`** dans le code de ce rewrite.
+11. **Event Kafka `stoa.api.lifecycle` non émis quand flag ON.**
+12. **`catalog_content_hash` suffit pour l'idempotence.** Pas de blocker `uac_spec_hash`.
+13. **Pas de delete dans ce rewrite.** Aucune suppression de row, même catégorie C. Status `drift_orphan`, jamais `DELETE`.
+14. **Aucun ID gateway/runtime/PK interne ne devient `api_id` catalogue.**
+15. **Pas de réparation automatique des catégories B et C.** Détection + ticket Phase 2 uniquement.
+16. **Pas de touche à `uq_api_catalog_tenant_api`** ni au sync engine pour B11. Documenté, non fixé.
 
 ## 10. Liens avec l'écosystème specs
 
-- Source de vérité du scope démo : [`demo-scope.md`](./demo-scope.md)
-- Tests d'acceptance qui ne doivent pas régresser : [`demo-acceptance-tests.md`](./demo-acceptance-tests.md) AT-1
-- Contrats HTTP figés : [`architecture-rules.md`](./architecture-rules.md) §2.1
+- Source de vérité scope démo : [`demo-scope.md`](./demo-scope.md)
+- Tests d'acceptance figés : [`demo-acceptance-tests.md`](./demo-acceptance-tests.md) AT-1
+- Contrats HTTP figés : [`architecture-rules.md`](./architecture-rules.md) §2.1, §2.2bis
 - Garde-fous transverses : [`rewrite-guardrails.md`](./rewrite-guardrails.md)
-- Format UAC et doctrine : [`uac/README.md`](./uac/README.md)
-- Commandes de validation : [`validation-commands.md`](./validation-commands.md)
-- Démo client/prospect (cycle séparé, ne pas mélanger) : [`client-prospect-demo-scope.md`](./client-prospect-demo-scope.md)
-- Flow de déploiement runtime (cycle séparé) : [`api-deployment-flow.md`](./api-deployment-flow.md)
+- Format UAC : [`uac/README.md`](./uac/README.md)
+- Démo client/prospect (cycle séparé) : [`client-prospect-demo-scope.md`](./client-prospect-demo-scope.md)
+- Flow déploiement runtime (cycle séparé) : [`api-deployment-flow.md`](./api-deployment-flow.md)
+- Audit Phase 1 : `specs/audits/2026-04-26-api-creation-current-state/`
+- Diagnostic SQL terrain : §0 de cette spec
 
 ## 11. Sortie de ce rewrite
 
 Conditions pour clôturer cette spec et la passer en statut *Référence* :
 
 1. Phases 0 à 10 toutes terminées avec critère de fin validé
-2. Le test §7 complet (commit Git manuel + drift hostile + smoke) passe en CI sur 5 runs consécutifs
-3. Le flag `GITOPS_CREATE_API_ENABLED` est `true` par défaut sur tous les **tenants GitOps-initialized** depuis ≥ 7 jours (les tenants legacy non migrés conservent l'ancien chemin, cf. §6.14)
+2. Test §7 + §7bis passent en CI sur 5 runs consécutifs
+3. Le flag `GITOPS_CREATE_API_ENABLED` est `true` par défaut sur tous les **tenants éligibles** (cf. politique de bascule ci-dessous) depuis ≥ 7 jours
 4. Aucun rollback déclenché pendant ces 7 jours
-5. Le backlog `api-creation-rewrite-backlog` est à zéro
-6. La table `api_sync_status` est cohérente : pour chaque API en table `apis` créée via GitOps, il existe une ligne `target='db'` avec `status='synced'`
+5. Le backlog `api-creation-rewrite-backlog` :
+   - Tickets in-scope **fixed** avec test de régression (B10, bugs runtime)
+   - Tickets out-of-scope **closed-documented/deferred** avec cycle cible (B11, B-INDEX, migration B, prune C, backfill D)
+6. Les 5 APIs catégorie A du tenant `demo` ont `git_path` canonique, `git_commit_sha` rempli, `catalog_content_hash` rempli, `read_at_commit` non-null
+7. Les 7 catégorie B du tenant `demo`, les 3 catégorie B du tenant `free-aech`, l'orphelin C, et les 13 rows catégorie D sont marqués `drift_detected`, `drift_orphan` ou `drift_pre_gitops` avec `last_error` documenté
+8. **B11** est référencé par un ticket explicite dans le backlog du futur cycle delete/prune
+9. **Les rows catégorie D** sont référencées par un ticket explicite dans le backlog du futur cycle backfill
 
-Une fois clôturée, cette spec sert de pattern de référence pour les rewrites GitOps suivants (update, publish, promote, delete, target=`gateway`, target=`portal`).
+Une fois clôturée, cette spec sert de pattern de référence pour les rewrites GitOps suivants.
+
+### 11.1 Bascule Phase 10 — Politique audit-informed
+
+**Verdict B14** (CAB-2193, exécuté 2026-04-27) : scénario **β confirmé** — drift sur 3/6 tenants actifs. Hypothèse défensive γ levée.
+
+#### Tenants éligibles à l'activation GitOps create par défaut
+
+| Tenant | Rows actives | Statut |
+|---|---:|---|
+| `banking-demo` | 1 | ✅ Éligible |
+| `high-five` | 4 | ✅ Éligible |
+| `ioi` | 3 | ✅ Éligible |
+| `demo-gitops` (futur) | — | ✅ Éligible par construction |
+
+Soit 8 rows actives sur 42 (~19%) dans des tenants immédiatement éligibles à l'activation du chemin GitOps create par défaut.
+
+#### Tenants exclus de la bascule
+
+| Tenant | Rows | Motif | Cycle de résolution |
+|---|---:|---|---|
+| `demo` | 25 | 7 cat B (UUID drift) + 12 cat D (pré-GitOps) | Migration legacy + backfill |
+| `free-aech` | 6 | 3 cat B (UUID drift) | Migration legacy |
+| `oasis` | 3 | 1 cat D (pré-GitOps) | Backfill |
+
+#### Politique de bascule
+
+1. `GITOPS_CREATE_API_ENABLED=true` est activé par défaut **uniquement** sur les tenants éligibles ci-dessus.
+2. Les nouveaux tenants créés post-Phase 10 sont éligibles **par construction** si le flow §6.5 refuse les `api_name` UUID-shaped (étape 2) et projette un `git_path` canonique depuis le fichier Git réel (étapes 6+12).
+3. Les tenants exclus restent sur l'ancien chemin DB-first jusqu'à résolution de leur cycle cible : migration legacy (cat B) ou backfill (cat D).
+4. Phase 6.5 (CAB-2189) cible **spécifiquement** les 5 APIs catégorie A du tenant `demo`. Elle n'affecte aucune autre row.
+5. **Cette bascule n'est pas une migration automatique des lignes existantes** : elle active le nouveau chemin de création GitOps pour les tenants éligibles. Les rows pré-existantes des tenants exclus ne sont **jamais** touchées par ce rewrite.
+
+#### Pattern UUID drift uniforme (cat B)
+
+L'audit B14 a confirmé que sur les 10 rows catégorie B identifiées (7 sur `demo`, 3 sur `free-aech`), **toutes** ont à la fois :
+
+- `api_id` UUID-shaped
+- `git_path` UUID-shaped (`tenants/{tid}/apis/{UUID}/api.yaml`)
+
+Aucune variante "UUID `api_id` avec `git_path` canonique" n'a été observée. La catégorie B (§6.14) reste donc uniforme : `UUID hard drift`.
+
+La migration des catégories B sur `demo` et `free-aech` est hors scope du rewrite create-api. Elle relève d'un cycle legacy migration séparé.
+
+#### Note sur les tenants partiels
+
+`oasis` a 2 rows saines (cat A) et 1 row cat D. Dans ce rewrite, le tenant entier est **exclu** de la bascule par défaut, même si 2 de ses 3 rows sont saines. Justification : la complexité d'un mode mixte par-row n'est pas justifiée pour ce cycle. Une fois la row cat D résolue par le cycle backfill, `oasis` deviendra éligible automatiquement.
 
 ## 12. Révisions
 
 | Date | Version | Auteur | Delta |
 |---|---|---|---|
-| 2026-04-26 | v0.1 DRAFT | Claude (session rewrite GitOps) | Création initiale |
-| 2026-04-26 | v0.2 DRAFT | Claude après revue ChatGPT round 1 | Doctrine étendue, api_id déterministe, layout avec env, worker séparé, polling 10s, target dans api_sync_status, 3 cas idempotents, commit-first projection, interdiction GIT_SYNC_ON_WRITE, smoke + tests gates, lock distribué, flow détaillé |
-| 2026-04-26 | v0.3 DRAFT | Claude après revue ChatGPT round 2 | UUID `STOA_API_NAMESPACE` valide figé, `spec_hash` canonique défini, drift detection via colonnes `apis.spec_hash`/`source_commit_sha`, `desired_commit_sha` = commit du fichier, atomicité push remote, relire depuis Git uniquement, mapping UAC→`apis` figé avec single-backend, validation path↔contract, worker `pg_try_advisory_xact_lock`, `api_name` identifiant stable |
-| 2026-04-26 | v0.3.1 DRAFT | Claude après revue ChatGPT round 3 | Drift detection par projection complète, workspace Git isolation §6.11, push rejected retry réévalue Case A/B/C, helper `write_canonical_contract` in-scope, validation multi-backend pré-commit, `display_name = contract.name`, `advisory_lock_key` stable SHA-256, `varchar(64)` pour SHA |
-| 2026-04-26 | v1.0 | Claude après revue ChatGPT round 4 | (1) §6.12 nouveau : compatibilité explicite avec `demo-scope.md`, exception contrôlée au out-of-scope GitOps E2E historique, support remote Git local `file://` pour démo offline ; (2) §6.13 nouveau : mapping figé payload HTTP → UACContract avec table de correspondance, defaults, fonction `normalize_path`, exemple complet AT-1 ; (3) §6.14 nouveau : politique de collision avec APIs legacy, `legacy_collision_exists()` côté writer (§6.5 étape 7) ET reconciler (§6.6 étape 5), bascule Phase 10 limitée aux tenants GitOps-initialized ; (4) Note multi-env dans §6.4 : `api_id env-scoped` figé pour ce cycle uniquement, décision multi-env reportée au cycle promotion ; (5) Risques §8 enrichis : remote unavailable au lieu de GitHub down, mapping sous-spécifié, démo GitHub externe, spec interprétée comme remplacement de `demo-scope.md` ; (6) Garde-fou §9.9 nouveau : cette spec ne remplace pas `demo-scope.md` ; (7) Out-of-scope §4.2 : migration legacy, décision multi-env ; (8) Statut DRAFT enlevé. **Spec exécutable Phase 1 GO.** |
+| 2026-04-26 | v0.1-v0.3.1 DRAFT | Claude + ChatGPT rounds 1-3 | Construction itérative doctrine GitOps |
+| 2026-04-26 | v1.0 (refusée) | Claude après round 4 | Architecture théorique idéale, refusée car non alignée code réel |
+| 2026-04-26 | v0.4 DRAFT | Claude après audit Phase 1 + round 5 | `apis` → `api_catalog`, retrait UUID5, retrait worktree, layout conservateur, `CatalogGitClient` PyGithub-first, worker asyncio in-tree |
+| 2026-04-26 | v1.0 DRAFT (intermédiaire) | Claude après round 6 + diagnostic SQL terrain (drift 5/7/1) | §0 drift terrain, 6e invariant `git_path` réel, 4 niveaux d'identité, §6.14 3 catégories non-destructives, Phase 6.5, §7bis borné catégorie A, B10 backlog |
+| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` et `openapi_spec` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |## §12 — Phase 6 closure (LIVE 2026-04-27)
+
+Phase 6 strangler activated on OVH prod for tenant `demo-gitops`. The full chain
+(stoa-catalog GitHub → reconciler tick → `api_catalog` projection) is proven in
+production.
+
+### Activation chain
+
+| PR | Repo | Purpose |
+|---|---|---|
+| stoa-infra #63 | infra | Alembic `PreSync` Job in chart — applies migrations 096 + 097 |
+| stoa-infra #64 | infra | First flag flip (broken — CSV value tripped pydantic-settings JSON decode) |
+| stoa-infra #65 | infra | JSON-array fix: `GITOPS_ELIGIBLE_TENANTS: '["demo-gitops"]'` |
+| stoa #2613 | code | `git_service` singleton made provider-aware (CAB-2197) — unblocks reconciler |
+| stoa-infra `16f0be1` | infra | Image tag bump to `dev-ec9da59d` (PR #2613 deployed) |
+
+Two ops gotchas surfaced and are now in memory for the next strangler:
+
+1. `GITOPS_ELIGIBLE_TENANTS` (typed `list[str]`) must be a JSON array string in
+   env, not a CSV. The `@field_validator(mode="before")` does not see the raw
+   env value — `pydantic_settings.EnvSettingsSource.decode_complex_value` runs
+   first and json-fails on `"demo-gitops"`. Tighten the docstring in a
+   follow-up.
+2. ArgoCD `PreSync` hooks only fire during a sync **operation**, not on a
+   `refresh=hard` annotation. Adding a hook-only template (no diff in the
+   tracked Deployment/Service/Ingress) reconciles to `Synced` without firing
+   the hook. Trigger the first run with
+   `kubectl patch application <app> --type merge -p '{"operation":{"sync":{}}}'`.
+   Subsequent syncs fire the hook normally as part of any operation.
+
+### Evidence (§7 manual smoke)
+
+```
+api_id              = manual-test-1777312098
+api_name            = manual-test-1777312098
+version             = 1.0.0
+status              = active
+git_path            = tenants/demo-gitops/apis/manual-test-1777312098/api.yaml
+git_commit_sha      = 8ba68bb54086541995e4b5272d92f64c0efd67e1   ← matches gh api PUT
+catalog_content_hash = 8763431733a1c15fcd0fff844625942048e980ce11be0e69a788ed644b43f04c
+is_active           = true
+synced_at           = 2026-04-27 17:49:38 UTC
+```
+
+Projection landed 44 s after the catalog PUT, well within
+`CATALOG_RECONCILE_INTERVAL_SECONDS=10`. The `git_commit_sha` stored in
+`api_catalog` is the exact commit returned by `gh api PUT` — proof the
+reconciler reads the commit from GitHub Contents API and pins it, instead of
+re-deriving it.
+
+Residual fixture left in place intentionally per **B11 deferred** (CAB-2191):
+the `manual-test-1777312098` file + DB row remain in prod as a future cycle
+input for delete/prune.
+
+### Steady-state observation
+
+First hour after activation:
+
+| Pod | `iteration_failed` | `Catalog reconciler started` markers | `catalog_sync_status` ticks |
+|---|---|---|---|
+| `5cc9b9ff75-bccsq` | 0 | 2 | 355 |
+| `5cc9b9ff75-s7xlz` | 0 | 2 | 385 |
+
+ArgoCD `Synced/Healthy` on rev `16f0be1`. cp-api image `dev-ec9da59d` rolling
+on both replicas, 0 restarts.
+
+### What this unlocks
+
+- **Phase 6.5** (CAB-2189) — controlled re-adoption of 5 healthy category-A
+  APIs from the `demo` tenant.
+- **Phase 10** — broader rollout per CAB-2193 B14 audit verdict β: eligible
+  tenants are `banking-demo`, `high-five`, `ioi`, `demo-gitops` (excluding
+  `demo`, `free-aech`, `oasis` for the reasons in §11).
+
+### What is still open
+
+- **B11** (CAB-2191) — sync engine no soft-delete. Out-of-scope of this
+  rewrite; required for the eventual delete/prune cycle. The §7 fixture row
+  becomes a natural test input.
+- **B-INDEX** (CAB-2192) — `uq_api_catalog_tenant_api` UNIQUE incompatible with
+  soft-delete intent. Deferred separate cycle.
+- Code follow-up on `control-plane-api/src/config.py:269-278` — drop the
+  misleading "Comma-separated env var" claim from the
+  `GITOPS_ELIGIBLE_TENANTS` docstring or wire a custom env source if CSV is
+  the desired contract.

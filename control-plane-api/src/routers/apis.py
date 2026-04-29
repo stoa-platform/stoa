@@ -19,12 +19,23 @@ from ..auth import (
     require_tenant_access,
     require_writable_environment,
 )
+from ..config import settings
 from ..database import get_db
 from ..models.catalog import APICatalog
 from ..repositories.catalog import CatalogRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
-from ..services.git_provider import git_provider_factory
+from ..services import git_service
+from ..services.catalog_git_client.github_contents import GitHubContentsCatalogClient
+from ..services.gitops_writer import (
+    ApiCreatePayload,
+    GitOpsConflictError,
+    GitOpsRaceExhaustedError,
+    GitOpsWriter,
+    InfrastructureBugError,
+    InvalidApiNameError,
+    LegacyCollisionError,
+)
 from ..services.kafka_service import kafka_service
 
 # CAB-2159 BUG-4 — keep in sync with src/models/catalog.py:AudienceEnum
@@ -32,8 +43,23 @@ AudienceLiteral = Literal["public", "internal", "partner"]
 
 logger = logging.getLogger(__name__)
 
-# Backward-compat shim for test patching (see conftest.py _git_di_bridge)
-git_service = git_provider_factory()
+
+def _build_catalog_git_client() -> GitHubContentsCatalogClient:
+    """Construct the :class:`CatalogGitClient` used by the GitOps create path.
+
+    Extracted so tests can patch it (E2E mocked tests inject an in-memory
+    fake client without touching PyGithub). Production deployments wire
+    ``GIT_PROVIDER=github`` and the module-level ``git_service`` is the
+    same connected :class:`GitHubService` the catalog reconciler consumes
+    — sharing one singleton across the create path and the reconciler
+    ensures both observe the same connection state.
+    """
+    from ..services.github_service import GitHubService
+
+    if not isinstance(git_service, GitHubService):
+        raise RuntimeError(f"GitOps create path requires GIT_PROVIDER=github; got {type(git_service).__name__}.")
+    return GitHubContentsCatalogClient(github_service=git_service)
+
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["APIs"])
 
@@ -247,6 +273,30 @@ async def create_api(
     Trial tenants are subject to limits (CAB-1549):
     - Max 3 APIs (configurable via tenant.settings.max_apis)
     - 402 after 30-day trial expires
+
+    GitOps create rewrite (CAB-2185 B-FLOW): when ``GITOPS_CREATE_API_ENABLED``
+    is True AND ``tenant_id`` is in ``GITOPS_ELIGIBLE_TENANTS``, the request is
+    routed through :class:`GitOpsWriter` (Git-first, no Kafka emit, spec §6.13).
+    Otherwise the legacy DB-first path runs unchanged. Default flag value is
+    ``False`` and the eligible-tenant list is empty by default — production
+    behaviour is unchanged until Phase 6 strangler.
+    """
+    if settings.GITOPS_CREATE_API_ENABLED and tenant_id in settings.GITOPS_ELIGIBLE_TENANTS:
+        return await _create_api_gitops(tenant_id=tenant_id, api=api, user=user, db=db)
+
+    return await _create_api_legacy(tenant_id=tenant_id, api=api, user=user, db=db)
+
+
+async def _create_api_legacy(
+    *,
+    tenant_id: str,
+    api: APICreate,
+    user: User,
+    db: AsyncSession,
+) -> APIResponse:
+    """Legacy DB-first path: INSERT api_catalog + emit Kafka event.
+
+    Behaviour preserved verbatim from before the GitOps rewrite (CAB-2185).
     """
     # Trial limits enforcement (CAB-1549)
     from ..routers.tenants import get_tenant_limits
@@ -356,6 +406,81 @@ async def create_api(
             )
         logger.error(f"Failed to create API {api.name}: {e}")
         raise HTTPException(status_code=500, detail="Failed to create API. Please try again or contact support.")
+
+
+async def _create_api_gitops(
+    *,
+    tenant_id: str,
+    api: APICreate,
+    user: User,
+    db: AsyncSession,
+) -> APIResponse:
+    """GitOps Git-first path (CAB-2185 B-FLOW + spec §6.5).
+
+    Steps:
+
+    * Build :class:`ApiCreatePayload` from the HTTP body
+    * Resolve a :class:`CatalogGitClient` from the configured Git provider
+    * Run ``GitOpsWriter.create_api`` (18-step flow §6.5)
+    * Read the projected ``api_catalog`` row back to build the response
+
+    The Kafka ``stoa.api.lifecycle`` event is intentionally NOT emitted on
+    this path (spec §6.13). Audit events are also skipped here so the
+    legacy and new paths cannot double-emit during the strangler.
+    """
+    if api.openapi_spec:
+        _validate_openapi_spec(api.openapi_spec)
+
+    api_name = _slugify(api.name)
+    payload = ApiCreatePayload(
+        api_name=api_name,
+        display_name=api.display_name,
+        version=api.version,
+        backend_url=api.backend_url,
+        description=api.description,
+        tags=tuple(api.tags or ()),
+    )
+
+    try:
+        catalog_git_client = _build_catalog_git_client()
+    except RuntimeError as exc:
+        logger.error(
+            "gitops_create_api_client_unavailable",
+            extra={"tenant_id": tenant_id, "error": str(exc)},
+        )
+        raise HTTPException(status_code=503, detail=str(exc))
+    writer = GitOpsWriter(catalog_git_client=catalog_git_client, db_session=db)
+
+    try:
+        result = await writer.create_api(
+            tenant_id=tenant_id,
+            contract_payload=payload,
+            actor=user.username or user.id,
+        )
+    except InvalidApiNameError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except LegacyCollisionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except GitOpsConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except GitOpsRaceExhaustedError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except InfrastructureBugError:
+        logger.exception("gitops_writer.infrastructure_bug")
+        raise HTTPException(status_code=500, detail="internal error: read-after-commit returned 404")
+
+    await db.commit()
+
+    repo = CatalogRepository(db)
+    persisted = await repo.get_api_by_id(tenant_id, result.api_id)
+    if persisted is None:
+        logger.error(
+            "gitops_create_api_projection_missing",
+            extra={"tenant_id": tenant_id, "api_id": result.api_id},
+        )
+        raise HTTPException(status_code=500, detail="internal error: api_catalog projection missing")
+
+    return _api_from_catalog(persisted)
 
 
 @router.put("/{api_id}", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])

@@ -8,7 +8,7 @@
 > **Decision source**: Section H of INFRA-1-DISCOVERY.md is the canonical Q1–Q8 list. The prompt's reference to a separate `INFRA-1-DECISIONS.md` is treated as an alias for that section. **No standalone DECISIONS file exists in repo as of 2026-04-29** — flagged for Christophe.
 > **HEG-PAT-020**: Phase 1 preserves behavior; latent bugs go to Section 4 (Bug Hunt seed) for Phase 2, not fixed here.
 > **Date**: 2026-04-29.
-> **Revision**: v3 (2026-04-29) — Council Stage 2 adjustments applied (#1+#2 secret-value masking in S6 conflict scanner, #3 plan-length trim via S2/S6 implementation extraction to companion files `docs/infra/INFRA-1a-IMPL-S2.md` and `docs/infra/INFRA-1a-IMPL-S6.md`). Final score target ≥ 8.0 on re-Council. Full changelog at end of file.
+> **Revision**: v4 (2026-04-29) — §3 Decision Points 1–7 arbitrated by Christophe; nuances on §3.4 (ops-signal `logger.info` on `prod → production` normalization) and §3.6 (header wording — INFRA-1c CI lint + future autogen ticket, NOT a non-existent tool) propagated into §2.4 / §2.5. Plan now Phase-2-ready pending the 2 follow-up Linear tickets (§3.5 k8s-dir cleanup, §3.7 alias sunset tracker). Full changelog at end of file.
 
 ---
 
@@ -446,7 +446,24 @@ def test_model_dump_excludes_flat_opensearch_fields():
   - LLM router: `STOA_LLM_ROUTER__DEFAULT_STRATEGY`, `STOA_LLM_ROUTER__BUDGET_DAILY_USD`, `STOA_LLM_ROUTER__BUDGET_TENANT_DAILY_USD`, `STOA_LLM_ROUTER__FALLBACK_PROVIDER`, `STOA_LLM_ROUTER__CACHE_ENABLED` (~5).
   - API proxy: `STOA_API_PROXY__ENABLED`, `STOA_API_PROXY__LINEAR_API_KEY`, `STOA_API_PROXY__GITHUB_TOKEN`, `STOA_API_PROXY__SLACK_BOT_TOKEN` (~4 — 4 per backend).
   - Core knobs: `STOA_LOG_LEVEL`, `STOA_LOG_FORMAT`, `STOA_ENVIRONMENT`, `STOA_INSTANCE_NAME`, `STOA_HOST`, `STOA_PORT`, `STOA_GATEWAY_MODE`, `STOA_AUTO_REGISTER`, `STOA_OTEL_ENDPOINT`, `STOA_OTEL_SAMPLE_RATE`, `STOA_OTEL_ENABLED`, `STOA_KAFKA_BROKERS`, `STOA_KAFKA_METERING_TOPIC`, `STOA_KAFKA_ERRORS_TOPIC`, `STOA_KEYCLOAK_URL`, `STOA_KEYCLOAK_INTERNAL_URL`, `STOA_KEYCLOAK_REALM`, `STOA_KEYCLOAK_CLIENT_ID`, `STOA_KEYCLOAK_CLIENT_SECRET`, `STOA_KEYCLOAK_ADMIN_PASSWORD`, `STOA_GIT_PROVIDER`, `STOA_GITHUB_TOKEN`, `STOA_GITHUB_ORG`, `STOA_GITHUB_CATALOG_REPO`, `STOA_POLICY_PATH` (~25).
-- Add header comment: `# This file documents ~40 of the most critical STOA_* keys. Exhaustive coverage (165+ keys in src/config.rs) deferred to autogen tooling (INFRA-1c per Q8). For full reference see stoa-gateway/src/config.rs and src/config/*.rs.`
+- Add header comment (Christophe arbitrage 2026-04-29 §3.6 nuance — DO NOT imply an autogen tool already exists):
+  ```
+  # This file documents ~40 of the most critical STOA_* keys.
+  # Exhaustive coverage (165+ keys in src/config.rs) is OUT OF SCOPE for this
+  # hand-maintained baseline.
+  #
+  # Follow-up scope:
+  #   - INFRA-1c will add a CI lint that diffs <repo>/.env.example keys against
+  #     the Pydantic / Rust config schemas (catches drift, NOT exhaustiveness).
+  #   - A separate, future ticket — not yet scoped — will design and implement
+  #     an autogen path for the full 165+ key list.
+  #
+  # Until that future autogen lands: do NOT assume any existing dump command
+  # exists. For the canonical complete key list, refer to:
+  #   - stoa-gateway/src/config.rs
+  #   - stoa-gateway/src/config/*.rs (mtls, dpop, sender_constraint,
+  #     llm_router, api_proxy, federation, expansion, loader)
+  ```
 
 **`landing-api/.env.example`**:
 - Add file header: `# WARNING: landing-api uses STOA_* prefix that COLLIDES with stoa-gateway STOA_* prefix. # Do NOT deploy landing-api in the same K8s namespace as stoa-gateway without explicit env scoping. # See INFRA-1-DISCOVERY.md A.5 (file: landing-api/.env.example collision note).`
@@ -489,8 +506,14 @@ LOG_FORMAT: Literal["json", "text"] = "json"
 
 **ENVIRONMENT** — pick ONE of two patterns:
 
-**Pattern A (preserve string field, narrow normalization)** — strip whitespace and ONLY remap the exact `prod` token to `production`. Do NOT lowercase other values; preserve `Staging`, `dev`, etc. as the caller wrote them (matches BH-8 mitigation: avoid silently transforming case of unrelated values):
+**Pattern A (preserve string field, narrow normalization + ops-signal log)** — strip whitespace, ONLY remap the exact `prod` token to `production`, and emit a `logger.info` line whenever the normalization is applied (Christophe arbitrage 2026-04-29 §3.4 nuance). Do NOT lowercase other values; preserve `Staging`, `dev`, etc. as the caller wrote them (matches BH-8 mitigation: avoid silently transforming case of unrelated values):
+
 ```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 @field_validator("ENVIRONMENT", mode="before")
 @classmethod
 def _normalize_environment(cls, v: object) -> object:
@@ -499,16 +522,27 @@ def _normalize_environment(cls, v: object) -> object:
     Surgical mapping — does NOT lowercase other values. `Staging`, `PRODUCTION`,
     `dev` are passed through untouched (preserves caller spelling for any
     downstream consumer that case-discriminates).
+
+    Ops-signal: emits a ``logger.info`` line when normalization is applied so
+    that an operator inspecting the boot logs sees the rewrite explicitly
+    (avoids the "I set prod, why does the log say production?" trap).
     """
     if isinstance(v, str):
         stripped = v.strip()
         if stripped == "prod":
+            logger.info(
+                "ENVIRONMENT normalized: 'prod' → 'production' "
+                "(CAB-2199 / INFRA-1a §3.4 nuance — gateway uses 'prod', "
+                "cp-api uses 'production'; both accepted, canonical form stored)."
+            )
             return "production"
         return stripped
     return v
 ```
 
-This funnels exactly `prod` into the canonical `production` string, so existing `== "production"` checks just work for both spellings. Other values pass through. **PREFERRED** — minimum diff, no case-fold surprise.
+**Test addendum** (PR-D adds): `test_environment_prod_logs_normalization_at_boot` using `caplog.at_level("INFO")` to assert the log line fires for `prod` and does NOT fire for `production` / `dev` / `Staging`.
+
+This funnels exactly `prod` into the canonical `production` string, so existing `== "production"` checks just work for both spellings. Other values pass through. **PREFERRED** — minimum diff, no case-fold surprise, ops-visible normalization.
 
 **Pattern B (Literal + helper)**:
 ```python
@@ -755,7 +789,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **Option A**. Critères: keep stoa-infra unchanged in 1a (1b owns chart refactors), pattern consistency with `GitProviderConfig`, single Settings class for grep-ability.
 
-**Décide**: ☐ A   ☐ B   ☐ Other:_____
+**Décide**: ☑ A   ☐ B   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe*
 
 ### 3.2 — Decision Point #2: `BASE_DOMAIN` derived URLs — `@property` recompute or `model_validator(mode="before")` resolve?
 
@@ -768,7 +802,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **Validator (`mode="before"`)**. Critères: minimum diff, zero consumer churn, single-validator pattern matches `_hydrate_and_validate_git`, presence-based dispatch avoids the `if not field` truthiness trap.
 
-**Décide**: ☐ Property   ☐ Validator (mode="before")   ☐ Other:_____
+**Décide**: ☐ Property   ☑ Validator (mode="before")   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe*
 
 ### 3.3 — Decision Point #3: `STOA_SNAPSHOTS_*` new prefix name?
 
@@ -782,7 +816,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **A1** (`STOA_API_SNAPSHOT_*`). Critères: maximum disambiguation, scope-clear in ops dashboards, plural/singular consistency across stack.
 
-**Décide**: ☐ A1   ☐ A2   ☐ B   ☐ Other:_____
+**Décide**: ☑ A1   ☐ A2   ☐ B   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe*
 
 ### 3.4 — Decision Point #4: ENVIRONMENT validator pattern — normalize-to-`production` or extend Literal?
 
@@ -795,9 +829,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **A**. Critères: minimum diff, no observable difference for ops (canonical name everywhere).
 
-**Décide**: ☐ A   ☐ B   ☐ Other:_____
-
-### 3.5 — Decision Point #5: per-directory `<svc>/k8s/` audit — delete sibling files (deployment/service/ingress/hpa/pdb) in this PR or defer?
+**Décide**: ☑ A   ☐ B   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe avec **nuance ops-signal** : émettre un `logger.info(...)` au boot lorsque la normalisation `prod → production` est effectivement appliquée. Le but n'est pas le silence canonique — c'est de signaler à l'ops qui inspecte les logs au démarrage que sa valeur d'env a été réécrite, pour éviter le piège "j'ai mis prod, pourquoi le log dit production?". Implémentation : si `stripped == "prod"`, log `logger.info("ENVIRONMENT normalized: 'prod' → 'production' (CAB-2199)")` AVANT de retourner la valeur normalisée.*
 
 **Context**: Section 2.1. CAB-2199 scope mentions "Delete other monorepo `<svc>/k8s/*.yaml` files after per-directory audit". 19 candidate files.
 
@@ -809,7 +841,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **B**. Critères: tight 1a scope, evidence-driven (each `k8s/` dir gets its own PR with explicit audit). Open follow-up after 1a ships.
 
-**Décide**: ☐ A   ☐ B   ☐ C   ☐ Other:_____
+**Décide**: ☐ A   ☑ B   ☐ C   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe*
 
 ### 3.6 — Decision Point #6: `.env.example` `gateway/` scope — 40 critical keys or full 165+?
 
@@ -822,7 +854,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **A** per ticket scope explicit guidance.
 
-**Décide**: ☐ A   ☐ B   ☐ Other:_____
+**Décide**: ☑ A   ☐ B   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe avec **nuance wording** : le header comment doit pointer EXPLICITEMENT vers (1) `INFRA-1c CI lint` (qui diffe les keys vs `Settings.__fields__`) et (2) une future `autogen` (à concevoir, pas encore décidée). NE PAS écrire "deferred to autogen tooling" comme si l'outil existait déjà. Wording-cible : `# This file documents ~40 of the most critical STOA_* keys. Exhaustive coverage (165+ keys in src/config.rs) is OUT OF SCOPE for this hand-maintained baseline. Scope of follow-up: INFRA-1c will add a CI lint that diffs <repo>/.env.example keys against the Pydantic/Rust config schemas. A separate, future ticket — not yet scoped — will design and implement an autogen path. Until then: do NOT assume any existing dump command; refer to stoa-gateway/src/config.rs and src/config/*.rs for the canonical 165+ key list.`*
 
 ### 3.7 — Decision Point #7: Do we open a sunset Linear ticket for `STOA_SNAPSHOTS_*` alias removal during 1a?
 
@@ -835,7 +867,7 @@ These decisions block Phase 2 implementation. Each lists options + recommendatio
 
 **Recommendation**: **A**. Critères: explicit follow-up tracking matches HLFH "extract is the moment to spot divergences" pattern (memory `feedback_extract_spot_divergences.md`).
 
-**Décide**: ☐ A   ☐ B   ☐ Other:_____
+**Décide**: ☑ A   ☐ B   ☐ Other:_____ — *arbitré 2026-04-29 par Christophe (Linear ticket à créer dans la session suivante)*
 
 ---
 
@@ -881,7 +913,7 @@ Capture coverage % and pass/fail. PR-A through PR-E **must not regress this base
 | PR-A | None (deletion only) | — |
 | PR-B (S2) | 5+ tests for BASE_DOMAIN derivation | `tests/test_config_base_domain_derivation.py` |
 | PR-C (S3) | 2-3 tests for OpenSearchSettings consolidation (Option A: hydration; B: prefix) | `tests/test_config_opensearch_consolidation.py` |
-| PR-D (S5) | 3 tests for LOG_FORMAT Literal + ENVIRONMENT normalization | `tests/test_config_validators.py` |
+| PR-D (S5) | 4 tests for LOG_FORMAT Literal + ENVIRONMENT normalization (incl. §3.4 nuance log assertion) | `tests/test_config_validators.py` |
 | PR-E (S6) | 5 tests for STOA_API_SNAPSHOT_* alias + conflict + log + metric | `tests/test_snapshot_config_alias.py` |
 
 Plus: update existing `test_snapshot_config.py` and `test_snapshot_storage_ops.py` to use new prefix (default), with one regression case per file using the legacy prefix.
@@ -1035,6 +1067,22 @@ stoa-gateway/src/config.rs:830-854 — STOA_SNAPSHOT_* (singular, separate scope
 ---
 
 ## Revision changelog
+
+### v4 — 2026-04-29 (§3 arbitrage by Christophe + nuances)
+
+7 Decision Points arbitrated. Marks updated inline (☐ → ☑) with arbitrage date and arbitrer attribution. Two of the 7 carried explicit nuances that have been propagated into the implementation sections:
+
+| # | Decision | Nuance |
+|---|----------|--------|
+| 3.1 | A — `OpenSearchSettings` consolidated as sub-model of main `Settings` | none |
+| 3.2 | Validator (`mode="before"`) for `BASE_DOMAIN` derivation | none |
+| 3.3 | A1 — `STOA_API_SNAPSHOT_*` (singular + `_API_` scope) | none |
+| 3.4 | A — `prod → production` surgical normalization | **§3.4 ops-signal nuance**: emit `logger.info("ENVIRONMENT normalized: 'prod' → 'production' …")` at boot when normalization is applied. Goal: ops inspecting boot logs sees the rewrite explicitly, avoiding the "I set prod, why log says production?" trap. Propagated into §2.5.c code block. PR-D test addendum: `test_environment_prod_logs_normalization_at_boot` (caplog assertion). PR-D test count 3 → 4. |
+| 3.5 | B — only the 2 confirmed dead `configmap.yaml` deleted in 1a; siblings deferred to a follow-up Linear ticket | follow-up ticket creation tracked in handoff |
+| 3.6 | A — gateway `.env.example` documents critical 40 keys | **§3.6 wording nuance**: the header comment must NOT imply an autogen tool exists. Replaced "deferred to autogen tooling" with explicit two-track scope: (1) INFRA-1c will add a CI lint diffing keys vs the Pydantic/Rust schemas (drift gate, NOT exhaustiveness), (2) a separate future ticket — not yet scoped — will design the autogen path. Reader pointed to `stoa-gateway/src/config.rs` and `src/config/*.rs` as canonical reference until then. Propagated into §2.4.c. |
+| 3.7 | A — sunset Linear ticket created for `STOA_SNAPSHOTS_*` alias removal | follow-up ticket creation tracked in handoff |
+
+Top-of-file revision marker advanced to v4.
 
 ### v3 — 2026-04-29 (Council Stage 2 adjustments)
 

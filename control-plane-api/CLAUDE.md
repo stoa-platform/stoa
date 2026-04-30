@@ -102,3 +102,42 @@ If you add a new derived URL field, register it in the validator's `derived`
 dict. **Do NOT add new `gostoa.dev` literals** outside the `BASE_DOMAIN`
 default and the validator's fallback — Q6 multi-env-ready rule.
 
+## OpenSearch — audit endpoint vs docs/embedding endpoint
+
+Per CAB-2199 / INFRA-1a S3 (Christophe arbitrage 2026-04-29 §3.1 = Option A),
+the former standalone `OpenSearchSettings` class (lived in
+`src/opensearch/opensearch_integration.py`) is now `Settings.opensearch_audit`
+— an `OpenSearchAuditConfig` sub-model in main Settings, mirroring the
+`GitProviderConfig` pattern. Hydrated from flat env vars
+(`OPENSEARCH_HOST/USER/PASSWORD/VERIFY_CERTS/CA_CERTS/TIMEOUT` + `AUDIT_*`)
+by the `_hydrate_opensearch_audit` validator (mode="after").
+
+This is the **audit-logger / search-service endpoint** (currently
+`https://opensearch.gostoa.dev` in prod via Helm chart `env.OPENSEARCH_HOST`).
+
+`Settings.OPENSEARCH_URL` (default `http://opensearch.stoa-system.svc...:9200`)
+is a **separate** field for docs/embedding search. The two endpoints can —
+and in prod often do — point at different OpenSearch clusters. **Do not
+conflate.**
+
+**Precedence rule**: explicit `Settings(opensearch_audit=OpenSearchAuditConfig(...))`
+wins over the flat env fields. Absence of an explicit sub-model triggers
+flat-field hydration. Detection compares `model_dump()` outputs to avoid
+SecretStr-equality fragility.
+
+**SecretStr boundary**: `opensearch_audit.password` is a `SecretStr` (CAB-2199
+§3.1). Consumer code passing it to OpenSearch client must unwrap with
+`.get_secret_value()` (see `src/opensearch/opensearch_integration.py`
+`OpenSearchService.connect`).
+
+**Long-term**: rename `OPENSEARCH_URL` → `DOCS_SEARCH_OPENSEARCH_URL` for
+disambiguation (deferred to INFRA-1b or Bug Hunt). Phase 1a does not change
+this.
+
+**Legacy import compat**: `from src.opensearch.opensearch_integration import
+get_settings` still works — the function now returns
+`settings.opensearch_audit` (the sub-model) so legacy callers keep working.
+The legacy class export `OpenSearchSettings` was removed from
+`src/opensearch/__init__.py` — import `OpenSearchAuditConfig` from
+`src.config` if you need the type.
+

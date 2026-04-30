@@ -18,14 +18,15 @@ UPDATE (spec §6.9). The writer never derives ``git_path`` from any UUID source
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 import yaml
 from sqlalchemy import select, text
 
+from src.logging_config import get_logger
 from src.services.catalog.write_api_yaml import render_api_yaml
 from src.services.catalog_reconciler.classifier import LegacyCategory, classify_legacy
+from src.services.catalog_reconciler.metrics import CATALOG_SYNC_STATUS_TOTAL
 from src.services.catalog_reconciler.projection import (
     project_to_api_catalog,
     render_api_catalog_projection,
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
 
     from ..catalog_git_client.protocol import CatalogGitClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _MAX_RACE_RETRIES = 3
 """Spec §6.5 step 10: cap optimistic-CAS retry attempts at 3.
@@ -225,7 +226,9 @@ class GitOpsWriter:
             except Exception:
                 logger.exception(
                     "gitops_writer.collision_check_git_read_failed",
-                    extra={"tenant_id": tenant_id, "api_id": api_name, "git_path": row.git_path},
+                    tenant_id=tenant_id,
+                    api_id=api_name,
+                    git_path=row.git_path,
                 )
                 git_file_exists = False
 
@@ -279,12 +282,10 @@ class GitOpsWriter:
                     last_exc = exc
                     logger.info(
                         "gitops_writer.optimistic_cas_race_retry",
-                        extra={
-                            "tenant_id": tenant_id,
-                            "api_id": api_name,
-                            "attempt": attempt + 1,
-                            "max_attempts": _MAX_RACE_RETRIES,
-                        },
+                        tenant_id=tenant_id,
+                        api_id=api_name,
+                        attempt=attempt + 1,
+                        max_attempts=_MAX_RACE_RETRIES,
                     )
                     continue
 
@@ -327,7 +328,8 @@ class GitOpsWriter:
         except Exception as exc:
             logger.warning(
                 "gitops_writer.advisory_unlock_failed",
-                extra={"lock_key": key, "error": str(exc)},
+                lock_key=key,
+                error=str(exc),
             )
 
     @staticmethod
@@ -345,19 +347,23 @@ class GitOpsWriter:
 
         Persistent ``api_sync_status`` table is intentionally deferred to a
         follow-up migration; Phase 4-2 surfaces sync state via structured
-        logs so dashboards and tests can observe transitions without a
-        schema change in this PR.
+        logs and the ``catalog_sync_status_total`` Prometheus counter
+        (CAB-2208) so dashboards and tests can observe transitions without
+        a schema change.
         """
+        CATALOG_SYNC_STATUS_TOTAL.labels(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            status=status,
+        ).inc()
         logger.info(
             "catalog_sync_status",
-            extra={
-                "tenant_id": tenant_id,
-                "api_id": api_id,
-                "target": "api_catalog",
-                "status": status,
-                "git_commit_sha": git_commit_sha,
-                "catalog_content_hash": catalog_content_hash,
-                "git_path": git_path,
-                "last_error": last_error,
-            },
+            tenant_id=tenant_id,
+            api_id=api_id,
+            target="api_catalog",
+            status=status,
+            git_commit_sha=git_commit_sha,
+            catalog_content_hash=catalog_content_hash,
+            git_path=git_path,
+            last_error=last_error,
         )

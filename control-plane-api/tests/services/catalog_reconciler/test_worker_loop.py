@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import os
 
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from structlog.testing import capture_logs
 
 from src.models.catalog import APICatalog
 from src.services.catalog.write_api_yaml import render_api_yaml
@@ -120,7 +120,7 @@ class TestProjectsAbsent:
 
 
 class TestUuidHardDriftCatB:
-    async def test_iteration_does_not_repair_uuid_drift(self, session_factory, caplog) -> None:
+    async def test_iteration_does_not_repair_uuid_drift(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}b"
         # DB row with UUID-shaped git_path → cat B
         async with session_factory() as session:
@@ -146,20 +146,20 @@ class TestUuidHardDriftCatB:
         fake_git.seed(path, _render_yaml(tenant_id=tenant, api_name="petstore"))
 
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
         # Row unchanged.
         row = await _select_row(session_factory, tenant, "petstore")
         assert row is not None
         assert row.git_path.endswith("00000000-0000-0000-0000-000000000000/api.yaml")
-        # drift_detected logged.
-        statuses = [rec.__dict__.get("status") for rec in caplog.records if rec.message == "catalog_sync_status"]
+        # drift_detected logged (CAB-2208: structlog event dict).
+        statuses = [e.get("status") for e in cap_logs if e.get("event") == "catalog_sync_status"]
         assert "drift_detected" in statuses
 
 
 class TestOrphanCatC:
-    async def test_iteration_reports_orphan_for_db_row_without_git_file(self, session_factory, caplog) -> None:
+    async def test_iteration_reports_orphan_for_db_row_without_git_file(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}c"
         async with session_factory() as session:
             session.add(
@@ -180,18 +180,14 @@ class TestOrphanCatC:
             await session.commit()
         fake_git = InMemoryCatalogGitClient()  # empty Git tree → orphan.
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
-        statuses = [
-            (rec.__dict__.get("status"), rec.__dict__.get("api_id"))
-            for rec in caplog.records
-            if rec.message == "catalog_sync_status"
-        ]
+        statuses = [(e.get("status"), e.get("api_id")) for e in cap_logs if e.get("event") == "catalog_sync_status"]
         assert ("drift_orphan", "banking-services-v1-2") in statuses
 
 
 class TestPreGitopsCatD:
-    async def test_iteration_reports_pre_gitops_for_null_pointers(self, session_factory, caplog) -> None:
+    async def test_iteration_reports_pre_gitops_for_null_pointers(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}d"
         async with session_factory() as session:
             session.add(
@@ -212,18 +208,14 @@ class TestPreGitopsCatD:
             await session.commit()
         fake_git = InMemoryCatalogGitClient()
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
-        statuses = [
-            (rec.__dict__.get("status"), rec.__dict__.get("api_id"))
-            for rec in caplog.records
-            if rec.message == "catalog_sync_status"
-        ]
+        statuses = [(e.get("status"), e.get("api_id")) for e in cap_logs if e.get("event") == "catalog_sync_status"]
         assert ("drift_pre_gitops", "legacy-api") in statuses
 
 
 class TestProjectionDriftRepair:
-    async def test_iteration_repairs_drift_on_backend_url_via_projection(self, session_factory, caplog) -> None:
+    async def test_iteration_repairs_drift_on_backend_url_via_projection(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}drift"
         path = f"tenants/{tenant}/apis/petstore/api.yaml"
 
@@ -250,15 +242,15 @@ class TestProjectionDriftRepair:
             )
             await session.commit()
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
         row = await _select_row(session_factory, tenant, "petstore")
         assert row is not None
         # tags is no longer ``["wrong-tag"]``; projection consumed Git's empty tag list.
         assert row.tags == []
-        # sync_status logged drift_detected then synced.
-        statuses = [rec.__dict__.get("status") for rec in caplog.records if rec.message == "catalog_sync_status"]
+        # sync_status logged drift_detected then synced (CAB-2208).
+        statuses = [e.get("status") for e in cap_logs if e.get("event") == "catalog_sync_status"]
         assert "drift_detected" in statuses
         assert "synced" in statuses
 
@@ -297,7 +289,7 @@ class TestProjectionDriftRepair:
 
 
 class TestNonCanonicalPaths:
-    async def test_uuid_shaped_path_in_git_logged_as_failed(self, session_factory, caplog) -> None:
+    async def test_uuid_shaped_path_in_git_logged_as_failed(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}uuid-git"
         # Simulate a corrupted Git tree where api_name is UUID-shaped.
         uuid_path = f"tenants/{tenant}/apis/00000000-0000-0000-0000-000000000000/api.yaml"
@@ -305,7 +297,7 @@ class TestNonCanonicalPaths:
         # The path will fail parse_canonical_path because of the UUID slot.
         fake_git.seed(uuid_path, _render_yaml(tenant_id=tenant, api_name="petstore"))
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs():
             await worker._reconcile_iteration()
         # No row is created.
         async with session_factory() as session:

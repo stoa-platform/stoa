@@ -19,6 +19,12 @@ APIS_ROUTER = Path(__file__).parent.parent.parent / "src/routers/apis.py"
 MAIN_PY = Path(__file__).parent.parent.parent / "src/main.py"
 WRITER_FILE = NEW_MODULES_ROOT / "gitops_writer/writer.py"
 RECONCILER_DIR = NEW_MODULES_ROOT / "catalog_reconciler"
+GITOPS_MODULE_DIRS = (
+    NEW_MODULES_ROOT / "gitops_writer",
+    NEW_MODULES_ROOT / "catalog_reconciler",
+    NEW_MODULES_ROOT / "catalog_git_client",
+    NEW_MODULES_ROOT / "catalog",
+)
 
 
 def _code_only(source: str) -> str:
@@ -243,3 +249,55 @@ def test_main_py_passes_session_factory_to_reconciler() -> None:
     ), "main.py must pass db_session_factory to CatalogReconcilerWorker (Phase 4-2 wiring)"
     # Phase 3 used ``db=None`` — that line must not survive Phase 4-2.
     assert "db=None" not in raw, "Phase 3 stub ``db=None`` must be replaced by db_session_factory in Phase 4-2."
+
+
+def test_gitops_modules_use_structlog_only() -> None:
+    """CAB-2208: GitOps modules must wire on structlog via the central wrapper.
+
+    Phase 4-1/4-2 introduced ``services/gitops_writer``, ``services/catalog_reconciler``,
+    ``services/catalog_git_client`` and the ``services/catalog`` helper. These
+    modules emit ``catalog_sync_status`` and must use ``get_logger`` from
+    ``src.logging_config`` so ``extra=`` fields survive in production. stdlib
+    ``logging.getLogger`` was used during the Phase 4-1/4-2 scaffold and
+    silently drops kwargs, leaving only the bare event name in the JSON log
+    stream — masking ``status`` transitions from §7bis and Phase 7-9 smokes.
+    """
+    forbidden_patterns = [
+        (re.compile(r"\bimport\s+logging\b"), "import logging"),
+        (re.compile(r"\bfrom\s+logging\s+import\b"), "from logging import"),
+        (re.compile(r"\blogging\s*\.\s*getLogger\b"), "logging.getLogger"),
+    ]
+    offenders: list[str] = []
+    for d in GITOPS_MODULE_DIRS:
+        for f in d.rglob("*.py"):
+            code = _code_only(f.read_text())
+            for pat, label in forbidden_patterns:
+                if pat.search(code):
+                    offenders.append(f"{f}: {label}")
+    assert not offenders, (
+        f"GitOps modules use stdlib logging: {offenders}. "
+        "Use ``from src.logging_config import get_logger`` instead "
+        "(structlog wrapper, CAB-2208)."
+    )
+
+
+def test_catalog_sync_status_counter_wired_in_log_helpers() -> None:
+    """CAB-2208: ``_log_sync_status`` increments the Prometheus counter.
+
+    The structured log is the narrative surface but loses fields when the
+    structlog pipeline isn't bound; the ``catalog_sync_status_total`` counter
+    is the durable observability surface §7bis and Phase 7-9 smokes assert
+    against. The helper in writer.py and worker.py must call
+    ``CATALOG_SYNC_STATUS_TOTAL.labels(...).inc()`` before the log line so the
+    metric is incremented even if structured logging fails.
+    """
+    pattern = re.compile(r"CATALOG_SYNC_STATUS_TOTAL\s*\.\s*labels\s*\(")
+    helpers = (
+        WRITER_FILE,
+        RECONCILER_DIR / "worker.py",
+    )
+    for f in helpers:
+        code = _code_only(f.read_text())
+        assert pattern.search(code), (
+            f"{f} must call ``CATALOG_SYNC_STATUS_TOTAL.labels(...)`` inside " "``_log_sync_status`` (CAB-2208)."
+        )

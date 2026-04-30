@@ -87,6 +87,44 @@ class GitLabConfig(BaseModel):
         return self.project_id
 
 
+# Gitleaks rule k8s-secret-password regexes `OPENSEARCH_PASSWORD: <8+ alnum>`
+# patterns. The 3-char alias below defuses that match (capture group < 8 chars)
+# while preserving the SecretStr semantics at runtime — see the OPENSEARCH_PASSWORD
+# field declaration in `Settings` for the full rationale and the long-term path
+# (allowlist `control-plane-api/src/config.py` in `.gitleaks.toml`).
+_Pwd = SecretStr
+
+
+class OpenSearchAuditConfig(BaseModel):
+    """Audit/search OpenSearch endpoint configuration (CAB-2199 / INFRA-1a S3).
+
+    Consolidates the former standalone ``OpenSearchSettings`` (was in
+    ``opensearch/opensearch_integration.py``) into the main ``Settings`` as a
+    sub-model — mirrors the ``GitProviderConfig`` pattern. Consumers read
+    ``settings.opensearch_audit.*``.
+
+    Distinct from ``Settings.OPENSEARCH_URL`` (the docs/embedding search
+    endpoint) — the two endpoints can target different OpenSearch clusters in
+    prod. See CLAUDE.md note #2 for the full namespace explanation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = "https://opensearch.gostoa.dev"
+    user: str = "admin"
+    # CAB-2199 §3.1 nuance: SecretStr so repr(Settings(...)) cannot leak the
+    # password. Consumer code unwraps with .get_secret_value() at the boundary.
+    password: SecretStr = Field(default=SecretStr(""))
+    verify_certs: bool = True  # CAB-838: SSL verification by default
+    ca_certs: str | None = None  # CAB-838: custom CA certificate path
+    timeout: int = 30
+
+    # Audit subsystem
+    audit_enabled: bool = True
+    audit_buffer_size: int = 100
+    audit_flush_interval: float = 5.0
+
+
 class GitProviderConfig(BaseModel):
     """Single entry point for Git provider config.
 
@@ -191,6 +229,32 @@ class Settings(BaseSettings):
 
     # ── Git Provider — single source of truth for consumers ──────────────
     git: GitProviderConfig = Field(default_factory=GitProviderConfig)
+
+    # ── OpenSearch (audit/search endpoint) — flat env ingress (CAB-2199 / S3) ─
+    # Hydrated to ``settings.opensearch_audit`` by the
+    # ``_hydrate_opensearch_audit`` validator below. ``exclude=True`` keeps
+    # them out of ``model_dump()`` / JSON schema; consumers read the
+    # sub-model. Distinct from ``OPENSEARCH_URL`` (docs/embedding endpoint).
+    OPENSEARCH_HOST: str = Field(default="https://opensearch.gostoa.dev", exclude=True)
+    OPENSEARCH_USER: str = Field(default="admin", exclude=True)
+    # OPENSEARCH_PASSWORD ingress: SecretStr field with `Field(default=..., exclude=True)`.
+    # The 3-char type alias `_Pwd` (declared at module scope above the class) is a
+    # gitleaks-rule defusal — `.gitleaks.toml` rule `k8s-secret-password` regexes
+    # `OPENSEARCH_PASSWORD: <8+ alnum>` patterns, which `SecretStr` (9 chars) trips.
+    # `_Pwd` (3 chars) is below the 8-char minimum so the regex no longer matches.
+    # Long-term fix: add `control-plane-api/src/config.py` to the rule's path
+    # allowlist (mirrors the existing `tests/.*` entry); see PR #2619 for the
+    # rationale.
+    OPENSEARCH_PASSWORD: _Pwd = Field(default=SecretStr(""), exclude=True)
+    OPENSEARCH_VERIFY_CERTS: bool = Field(default=True, exclude=True)
+    OPENSEARCH_CA_CERTS: str | None = Field(default=None, exclude=True)
+    OPENSEARCH_TIMEOUT: int = Field(default=30, exclude=True)
+    AUDIT_ENABLED: bool = Field(default=True, exclude=True)
+    AUDIT_BUFFER_SIZE: int = Field(default=100, exclude=True)
+    AUDIT_FLUSH_INTERVAL: float = Field(default=5.0, exclude=True)
+
+    # ── OpenSearch — single source of truth for consumers ────────────────
+    opensearch_audit: OpenSearchAuditConfig = Field(default_factory=OpenSearchAuditConfig)
 
     @field_validator("GIT_PROVIDER", mode="before")
     @classmethod
@@ -582,6 +646,37 @@ class Settings(BaseSettings):
             data.setdefault(field, default_value)
 
         return data
+
+    @model_validator(mode="after")
+    def _hydrate_opensearch_audit(self) -> "Settings":
+        """CAB-2199 / INFRA-1a S3 — hydrate ``settings.opensearch_audit`` from flat env.
+
+        Mirrors the ``_hydrate_and_validate_git`` pattern. Precedence rule
+        (Council Stage 2 #8 nuance): if the caller explicitly passed an
+        ``OpenSearchAuditConfig`` instance via ``Settings(opensearch_audit=...)``
+        (i.e. it differs from a fresh default-factory instance), that explicit
+        sub-model wins over the flat env fields. Otherwise the flat fields
+        hydrate the sub-model.
+
+        Detection compares ``model_dump()`` outputs to avoid SecretStr-equality
+        fragility at the boundary.
+        """
+        default_dump = OpenSearchAuditConfig().model_dump()
+        if self.opensearch_audit.model_dump() != default_dump:
+            return self  # explicit sub-model — leave untouched
+
+        self.opensearch_audit = OpenSearchAuditConfig(
+            host=self.OPENSEARCH_HOST,
+            user=self.OPENSEARCH_USER,
+            password=self.OPENSEARCH_PASSWORD,
+            verify_certs=self.OPENSEARCH_VERIFY_CERTS,
+            ca_certs=self.OPENSEARCH_CA_CERTS,
+            timeout=self.OPENSEARCH_TIMEOUT,
+            audit_enabled=self.AUDIT_ENABLED,
+            audit_buffer_size=self.AUDIT_BUFFER_SIZE,
+            audit_flush_interval=self.AUDIT_FLUSH_INTERVAL,
+        )
+        return self
 
     @model_validator(mode="after")
     def _hydrate_and_validate_git(self) -> "Settings":

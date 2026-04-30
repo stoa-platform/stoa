@@ -20,7 +20,6 @@ from .audit_middleware import (
 )
 from .opensearch_integration import (
     OpenSearchService,
-    OpenSearchSettings,
     get_audit_logger,
     get_opensearch_client,
     get_settings,
@@ -36,9 +35,10 @@ __all__ = [
     "AuditMiddleware",
     "EventCategory",
     "EventSeverity",
-    # Integration
+    # Integration — CAB-2199 / INFRA-1a S3: OpenSearchSettings was
+    # consolidated into Settings.opensearch_audit (a sub-model). Import
+    # ``OpenSearchAuditConfig`` from ``src.config`` if you need the type.
     "OpenSearchService",
-    "OpenSearchSettings",
     "get_audit_logger",
     "get_opensearch_client",
     "get_settings",

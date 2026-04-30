@@ -141,3 +141,47 @@ The legacy class export `OpenSearchSettings` was removed from
 `src/opensearch/__init__.py` — import `OpenSearchAuditConfig` from
 `src.config` if you need the type.
 
+## STOA_API_SNAPSHOT_* — error-snapshot config (renamed from STOA_SNAPSHOTS_*)
+
+Per CAB-2199 / INFRA-1a S6 (Christophe arbitrage 2026-04-29 §3.3 = A1), the
+error-snapshot Pydantic Settings env prefix was renamed from
+`STOA_SNAPSHOTS_*` (plural) to `STOA_API_SNAPSHOT_*` (singular + `_API_`
+namespace) to disambiguate from the unrelated `STOA_SNAPSHOT_*` (singular,
+in-process ring buffer) on the Rust gateway.
+
+**Legacy alias surface**: each field carries a per-field
+`validation_alias=AliasChoices(NEW, OLD)` so the legacy `STOA_SNAPSHOTS_*`
+prefix continues to resolve from process env, dotenv, or any other
+pydantic-settings source. Legacy usage emits at boot:
+
+- a `WARNING`-level deprecation log line (KEYS only, never values),
+- a Prometheus Counter `stoa_deprecated_config_used_total{name="STOA_SNAPSHOTS_*"}`
+  (one-shot per `(key, process)` via `_METRIC_EMITTED_KEYS` set + Lock).
+
+**Conflict gate**: setting both prefixes for the same suffix with different
+values fails boot with `ValueError`. The conflict scanner reads BOTH
+`os.environ` AND the configured `.env` file (so a `.env`-only legacy setting
+also triggers the gate — verified by `test_conflict_between_new_env_and_old_dotenv_fails`).
+
+**Council Stage 2 #1+#2 secret masking**: env keys matching
+`*SECRET*` / `*KEY*` / `*TOKEN*` / `*PASSWORD*` (case-insensitive substring)
+have their VALUES redacted to `<REDACTED>` in BOTH:
+- the raised `ValueError` message (the part we control), and
+- the input-dict that Pydantic dumps as `input_value=` in
+  `ValidationError.__str__` (mutation in the validator scrubs the data
+  before the error wraps).
+
+The key NAMES remain visible — operator debugging needs them.
+
+**Sunset**: tracked on **CAB-2203** — the alias surface (per-field
+`AliasChoices`, conflict scanner, masking helpers) can be removed once the
+Prometheus Counter reads 0 in prod for 30 consecutive days. Evidence-driven,
+no calendar (per HLFH policy `feedback_no_schedule_arbitrary_timers.md`).
+
+**Migration**: rename ops env vars from `STOA_SNAPSHOTS_*` to
+`STOA_API_SNAPSHOT_*`. Either prefix alone works; both with matching values
+work; conflicting values fail boot.
+
+**Schema metadata**: `SnapshotSettings.DEPRECATED_PREFIX_ALIASES: ClassVar[dict[str, str]]`
+declares the alias mapping for the INFRA-1c CI gate to consume.
+

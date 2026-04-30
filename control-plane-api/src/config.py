@@ -270,6 +270,37 @@ class Settings(BaseSettings):
         """
         return v.strip().lower() if isinstance(v, str) else v
 
+    @field_validator("ENVIRONMENT", mode="before")
+    @classmethod
+    def _normalize_environment(cls, v: object) -> object:
+        """CAB-2199 / INFRA-1a §3.4 — surgical ``prod → production`` mapping.
+
+        stoa-gateway uses ``ENVIRONMENT=prod`` while cp-api historically
+        validated against the literal ``"production"``. This validator
+        funnels exactly the bare ``prod`` token (whitespace-stripped) into
+        the canonical ``production`` so existing ``== "production"`` checks
+        keep working for both spellings. All other values pass through
+        untouched (``Staging``, ``PRODUCTION``, ``dev`` preserve caller
+        spelling — BH-8 mitigation: avoid silent case-fold of unrelated
+        values).
+
+        Christophe arbitrage 2026-04-29 §3.4 nuance: emit a
+        ``logger.info`` line at boot when normalization is applied so an
+        operator inspecting the boot logs sees the rewrite explicitly
+        (avoids the "I set prod, why does the log say production?" trap).
+        """
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped == "prod":
+                _logger.info(
+                    "ENVIRONMENT normalized: 'prod' → 'production' "
+                    "(CAB-2199 / INFRA-1a §3.4 — gateway uses 'prod', "
+                    "cp-api stores the canonical 'production'; both spellings accepted)."
+                )
+                return "production"
+            return stripped
+        return v
+
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.stoa-system.svc.cluster.local:9092"
@@ -457,7 +488,9 @@ class Settings(BaseSettings):
 
     # Logging - Basic Configuration
     LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: str = "json"  # json, text
+    # CAB-2199 §2.5 / S5 — Literal narrowing. Was `str` (accepted any value);
+    # now strict so a typo like `LOG_FORMAT=jsno` fails fast at boot.
+    LOG_FORMAT: Literal["json", "text"] = "json"
     LOG_COMPONENTS: str = "{}"  # JSON dict of component:level overrides
 
     # Logging - Middleware Enable/Disable

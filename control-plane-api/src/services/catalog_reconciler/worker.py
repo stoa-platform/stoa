@@ -15,17 +15,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from typing import TYPE_CHECKING, Any
 
 import yaml
 from sqlalchemy import select, text
 
+from src.logging_config import get_logger
 from src.services.gitops_writer.advisory_lock import advisory_lock_key
 from src.services.gitops_writer.hashing import compute_catalog_content_hash
 from src.services.gitops_writer.paths import is_uuid_shaped, parse_canonical_path
 
 from .classifier import LegacyCategory, classify_legacy
+from .metrics import CATALOG_SYNC_STATUS_TOTAL
 from .projection import (
     project_to_api_catalog,
     render_api_catalog_projection,
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
 
     from ..catalog_git_client.protocol import CatalogGitClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CatalogReconcilerWorker:
@@ -71,7 +72,7 @@ class CatalogReconcilerWorker:
         """Run the reconciler loop until :meth:`stop` is called."""
         logger.info(
             "catalog_reconciler.start",
-            extra={"interval_seconds": self._interval_seconds},
+            interval_seconds=self._interval_seconds,
         )
         while not self._shutdown.is_set():
             try:
@@ -99,7 +100,7 @@ class CatalogReconcilerWorker:
             except Exception:
                 logger.exception(
                     "catalog_reconciler.path_failed",
-                    extra={"git_path": git_path},
+                    git_path=git_path,
                 )
 
         try:
@@ -139,7 +140,8 @@ class CatalogReconcilerWorker:
         except ValueError as exc:
             logger.warning(
                 "catalog_reconciler.non_canonical_path",
-                extra={"git_path": git_path, "error": str(exc)},
+                git_path=git_path,
+                error=str(exc),
             )
             return None
 
@@ -422,7 +424,9 @@ class CatalogReconcilerWorker:
         if not acquired:
             logger.info(
                 "catalog_reconciler.lock_skipped",
-                extra={"tenant_id": tenant_id, "api_id": api_id, "lock_key": key},
+                tenant_id=tenant_id,
+                api_id=api_id,
+                lock_key=key,
             )
         return acquired
 
@@ -440,18 +444,23 @@ class CatalogReconcilerWorker:
         """Spec §6.6 ``update_status``.
 
         See the writer's ``_log_sync_status`` for the rationale: persistent
-        ``api_sync_status`` is deferred; logs are the surface in Phase 4-2.
+        ``api_sync_status`` is deferred; the structured log plus
+        ``catalog_sync_status_total`` Prometheus counter (CAB-2208) are the
+        observability surface in Phase 4-2.
         """
+        CATALOG_SYNC_STATUS_TOTAL.labels(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            status=status,
+        ).inc()
         logger.info(
             "catalog_sync_status",
-            extra={
-                "tenant_id": tenant_id,
-                "api_id": api_id,
-                "target": "api_catalog",
-                "status": status,
-                "git_commit_sha": git_commit_sha,
-                "catalog_content_hash": catalog_content_hash,
-                "git_path": git_path,
-                "last_error": last_error,
-            },
+            tenant_id=tenant_id,
+            api_id=api_id,
+            target="api_catalog",
+            status=status,
+            git_commit_sha=git_commit_sha,
+            catalog_content_hash=catalog_content_hash,
+            git_path=git_path,
+            last_error=last_error,
         )

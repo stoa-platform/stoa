@@ -14,42 +14,29 @@ Provides:
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from functools import lru_cache
 from typing import Optional
 
 from fastapi import FastAPI
 from opensearchpy import AsyncOpenSearch
-from pydantic_settings import BaseSettings
+
+from src.config import OpenSearchAuditConfig, settings
 
 from .audit_middleware import AuditLogger
 
 logger = logging.getLogger("stoa.opensearch")
 
 
-class OpenSearchSettings(BaseSettings):
-    """OpenSearch configuration."""
+def get_settings() -> OpenSearchAuditConfig:
+    """Return the OpenSearch audit-endpoint config (CAB-2199 / INFRA-1a S3).
 
-    opensearch_host: str = "https://opensearch.gostoa.dev"
-    opensearch_user: str = "admin"
-    opensearch_password: str = ""
-    opensearch_verify_certs: bool = True  # CAB-838: Enable SSL verification by default
-    opensearch_ca_certs: str | None = None  # CAB-838: Custom CA certificate path
-    opensearch_timeout: int = 30
-
-    # Audit settings
-    audit_enabled: bool = True
-    audit_buffer_size: int = 100
-    audit_flush_interval: float = 5.0
-
-    class Config:
-        env_prefix = ""
-        env_file = ".env"
-
-
-@lru_cache
-def get_settings() -> OpenSearchSettings:
-    """Get cached settings."""
-    return OpenSearchSettings()
+    Backward-compatible accessor: legacy callers used to import
+    ``get_settings`` from this module to receive the standalone
+    ``OpenSearchSettings`` Pydantic class. After CAB-2199 consolidation,
+    OpenSearch audit config lives in main ``Settings.opensearch_audit``
+    (a sub-model hydrated from the same flat env vars). This function
+    returns that sub-model to keep call-sites that use it unchanged.
+    """
+    return settings.opensearch_audit
 
 
 class OpenSearchService:
@@ -57,7 +44,7 @@ class OpenSearchService:
 
     _instance: Optional["OpenSearchService"] = None
 
-    def __init__(self, settings: OpenSearchSettings):
+    def __init__(self, settings: OpenSearchAuditConfig):
         self.settings = settings
         self.client: AsyncOpenSearch | None = None
         self.audit_logger: AuditLogger | None = None
@@ -71,18 +58,20 @@ class OpenSearchService:
 
     async def connect(self) -> None:
         """Initialize OpenSearch connection."""
-        logger.info(f"Connecting to OpenSearch at {self.settings.opensearch_host}")
+        logger.info(f"Connecting to OpenSearch at {self.settings.host}")
 
         self.client = AsyncOpenSearch(
-            hosts=[self.settings.opensearch_host],
+            hosts=[self.settings.host],
             http_auth=(
-                self.settings.opensearch_user,
-                self.settings.opensearch_password,
+                self.settings.user,
+                # CAB-2199 §3.1: password is now SecretStr; unwrap at the
+                # boundary for the OpenSearch client which needs the raw value.
+                self.settings.password.get_secret_value(),
             ),
-            verify_certs=self.settings.opensearch_verify_certs,
-            ssl_show_warn=self.settings.opensearch_verify_certs,  # CAB-838: Only warn when verification enabled
-            ca_certs=self.settings.opensearch_ca_certs,  # CAB-838: Custom CA support
-            timeout=self.settings.opensearch_timeout,
+            verify_certs=self.settings.verify_certs,
+            ssl_show_warn=self.settings.verify_certs,  # CAB-838: Only warn when verification enabled
+            ca_certs=self.settings.ca_certs,  # CAB-838: Custom CA support
+            timeout=self.settings.timeout,
         )
 
         # Test connection

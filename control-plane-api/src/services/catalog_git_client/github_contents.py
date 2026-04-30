@@ -16,7 +16,6 @@ re-introduce sync-in-async blocking.
 from __future__ import annotations
 
 import fnmatch
-import logging
 from typing import TYPE_CHECKING
 
 from github import GithubException
@@ -32,8 +31,6 @@ from .models import RemoteCommit, RemoteFile
 
 if TYPE_CHECKING:
     from src.services.github_service import GitHubService
-
-logger = logging.getLogger(__name__)
 
 
 class CatalogShaConflictError(Exception):

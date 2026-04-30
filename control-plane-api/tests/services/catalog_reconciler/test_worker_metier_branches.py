@@ -23,13 +23,13 @@ Spec §6.6 / §6.14 + audit-informed §11 (CAB-2186 B-WORKER, CAB-2188 B12).
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any
 
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from structlog.testing import capture_logs
 
 from src.models.catalog import APICatalog
 from src.services.catalog.write_api_yaml import render_api_yaml
@@ -80,17 +80,20 @@ def _new_worker(session_factory: Any, fake_git: InMemoryCatalogGitClient) -> Cat
     )
 
 
-def _sync_status_records(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
-    """Extract structured ``catalog_sync_status`` log payloads from caplog."""
+def _sync_status_records(cap_logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Extract structured ``catalog_sync_status`` event dicts from a structlog
+    capture. CAB-2208: structured fields are kwargs on the BoundLogger and live
+    in the captured event dict, not on a stdlib LogRecord.
+    """
     return [
         {
-            "tenant_id": rec.__dict__.get("tenant_id"),
-            "api_id": rec.__dict__.get("api_id"),
-            "status": rec.__dict__.get("status"),
-            "last_error": rec.__dict__.get("last_error"),
+            "tenant_id": e.get("tenant_id"),
+            "api_id": e.get("api_id"),
+            "status": e.get("status"),
+            "last_error": e.get("last_error"),
         }
-        for rec in caplog.records
-        if rec.message == "catalog_sync_status"
+        for e in cap_logs
+        if e.get("event") == "catalog_sync_status"
     ]
 
 
@@ -103,9 +106,7 @@ class TestUuidShapedGitPath:
     such paths.
     """
 
-    async def test_uuid_path_emits_failed_status_no_mutation(
-        self, session_factory, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_uuid_path_emits_failed_status_no_mutation(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}uuid-path"
         uuid_segment = "00000000-0000-0000-0000-000000000000"
         uuid_git_path = f"tenants/{tenant}/apis/{uuid_segment}/api.yaml"
@@ -115,11 +116,11 @@ class TestUuidShapedGitPath:
         fake_git.seed(uuid_git_path, b"id: x\nname: x\nversion: 1.0.0\nbackend_url: http://x\n")
 
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
         # Status=failed logged with the spec's ``last_error`` string.
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         assert any(
             r["status"] == "failed"
             and r["api_id"] == uuid_segment
@@ -144,9 +145,7 @@ class TestNameMismatchYaml:
     error handler. No ``api_catalog`` mutation.
     """
 
-    async def test_name_mismatch_yields_failed_status_no_mutation(
-        self, session_factory, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_name_mismatch_yields_failed_status_no_mutation(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}mismatch"
         path = f"tenants/{tenant}/apis/petstore/api.yaml"
         # Path slug = ``petstore`` but YAML ``name`` = ``other-api`` → mismatch.
@@ -161,10 +160,10 @@ class TestNameMismatchYaml:
         fake_git.seed(path, bad_yaml)
 
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         failed = [r for r in statuses if r["status"] == "failed" and r["api_id"] == "petstore"]
         assert failed, f"expected status=failed on name mismatch; got {statuses}"
         # The ``last_error`` quotes the §6.10 diagnostic; assertion stays loose
@@ -185,7 +184,7 @@ class TestDetectLegacyOrphansCatC:
     and never DELETE / soft-delete (§9.13 + §9.15).
     """
 
-    async def test_orphan_detection_identifies_cat_c(self, session_factory, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_orphan_detection_identifies_cat_c(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}orphan-c"
         async with session_factory() as session:
             session.add(
@@ -207,12 +206,12 @@ class TestDetectLegacyOrphansCatC:
 
         fake_git = InMemoryCatalogGitClient()  # empty tree → row is orphan.
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             # The orphan sweep runs after the canonical-path scan; calling
             # the iteration once is enough.
             await worker._reconcile_iteration()
 
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         assert any(
             r["status"] == "drift_orphan"
             and r["api_id"] == "banking-services-v1-2"
@@ -239,7 +238,7 @@ class TestDetectLegacyOrphansCatD:
     place. Detection only — never auto-repair (§9.13).
     """
 
-    async def test_orphan_detection_identifies_cat_d(self, session_factory, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_orphan_detection_identifies_cat_d(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}orphan-d"
         async with session_factory() as session:
             session.add(
@@ -261,10 +260,10 @@ class TestDetectLegacyOrphansCatD:
 
         fake_git = InMemoryCatalogGitClient()
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         assert any(
             r["status"] == "drift_pre_gitops"
             and r["api_id"] == "legacy-pre-gitops-api"
@@ -297,9 +296,7 @@ class TestPreGitopsViaCanonicalScan:
     (e.g. someone hand-committed it).
     """
 
-    async def test_main_scan_classifies_cat_d_and_logs_drift(
-        self, session_factory, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_main_scan_classifies_cat_d_and_logs_drift(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}cat-d-scan"
         canonical = f"tenants/{tenant}/apis/legacy-api/api.yaml"
         fake_git = InMemoryCatalogGitClient()
@@ -333,10 +330,10 @@ class TestPreGitopsViaCanonicalScan:
             await session.commit()
 
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         assert any(
             r["status"] == "drift_pre_gitops"
             and r["api_id"] == "legacy-api"
@@ -363,7 +360,7 @@ class TestUuidHardDriftViaOrphanSweep:
     sweep must surface drift_detected with the cat B context.
     """
 
-    async def test_orphan_sweep_classifies_cat_b(self, session_factory, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_orphan_sweep_classifies_cat_b(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}cat-b-orphan"
         # Row api_id is itself UUID-shaped → cat B via the api_id check.
         # No canonical Git file exists for this api_id, so the main scan
@@ -388,10 +385,10 @@ class TestUuidHardDriftViaOrphanSweep:
 
         fake_git = InMemoryCatalogGitClient()  # no canonical paths at all
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         assert any(
             r["status"] == "drift_detected"
             and r["api_id"] == "11111111-2222-3333-4444-555555555555"
@@ -412,9 +409,7 @@ class TestUuidHardDriftViaCanonicalScan:
     classifier.
     """
 
-    async def test_main_scan_classifies_cat_b_and_logs_drift(
-        self, session_factory, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_main_scan_classifies_cat_b_and_logs_drift(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}cat-b-scan"
         canonical = f"tenants/{tenant}/apis/petstore/api.yaml"
         # Seed Git with the canonical (slug-keyed) path so the scan visits it.
@@ -451,10 +446,10 @@ class TestUuidHardDriftViaCanonicalScan:
             await session.commit()
 
         worker = _new_worker(session_factory, fake_git)
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             await worker._reconcile_iteration()
 
-        statuses = _sync_status_records(caplog)
+        statuses = _sync_status_records(cap_logs)
         # The UUID hard drift status must mention both the row's drift git_path
         # and the real (canonical) git_name so operators can spot the mismatch
         # without an extra DB query.

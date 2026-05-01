@@ -33,3 +33,24 @@ class RemoteCommit:
     commit_sha: str
     file_sha: str
     path: str
+
+
+@dataclass(frozen=True)
+class RemotePullRequest:
+    """Provider pull request / merge request created for a catalog write."""
+
+    number: int
+    url: str
+    source_branch: str
+    target_branch: str
+    state: str
+    merge_commit_sha: str | None = None
+
+
+@dataclass(frozen=True)
+class RemoteTag:
+    """Git tag created for a catalog release generation."""
+
+    name: str
+    target_sha: str
+    url: str | None = None

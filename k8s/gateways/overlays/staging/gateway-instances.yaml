@@ -16,6 +16,8 @@ spec:
   targetGatewayType: webmethods
   topology: remote-agent
   endpoints:
+    publicUrl: https://staging-wm-k3s.gostoa.dev
+    targetGatewayUrl: https://staging-wm-k3s.gostoa.dev
     adminUrl: http://connect-webmethods-staging:8090
     healthUrl: http://connect-webmethods-staging:8090/health
   capabilities:
@@ -74,6 +76,7 @@ spec:
   topology: remote-agent
   endpoints:
     publicUrl: https://staging-wm-k3s.gostoa.dev
+    targetGatewayUrl: https://staging-wm-k3s.gostoa.dev
     adminUrl: http://stoa-link-wm-staging:8080
     healthUrl: http://stoa-link-wm-staging:8080/health
   capabilities:

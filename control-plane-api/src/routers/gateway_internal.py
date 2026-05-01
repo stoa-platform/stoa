@@ -12,6 +12,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -41,6 +42,15 @@ router = APIRouter(
     prefix="/v1/internal/gateways",
     tags=["Gateway Internal"],
 )
+
+_PROD_ENVIRONMENTS = {"prod", "production"}
+_PROD_WEBMETHODS_HOSTS = {
+    "vps-wm.gostoa.dev",
+    "vps-wm-ui.gostoa.dev",
+    "webmethods.gostoa.dev",
+}
+_UI_ENDPOINT_KEYS = {"ui_url", "uiUrl", "console_url", "consoleUrl", "web_ui_url", "webUiUrl"}
+_TARGET_ENDPOINT_KEYS = {"target_gateway_url", "targetGatewayUrl", "target_url", "targetUrl"}
 
 
 # --- Route Reload Endpoint (CAB-1828) ---
@@ -290,6 +300,69 @@ def _normalize_mode(mode: str) -> str:
     return mode_map.get(mode_lower, "edge-mcp")
 
 
+def _host(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        return urlparse(value).hostname
+    except ValueError:
+        return None
+
+
+def _drop_endpoint_keys(endpoints: dict | None, keys: set[str]) -> dict:
+    if not isinstance(endpoints, dict):
+        return {}
+    return {key: value for key, value in endpoints.items() if key not in keys}
+
+
+def _is_webmethods_registration(
+    payload: GatewayRegistration,
+    *,
+    instance_name: str,
+    target_gateway_type: str | None,
+) -> bool:
+    target = (payload.target_gateway_type or target_gateway_type or "").lower().replace("-", "_")
+    search_space = " ".join(
+        value
+        for value in [
+            target,
+            instance_name,
+            payload.hostname,
+            payload.target_gateway_url or "",
+            payload.public_url or "",
+            payload.admin_url,
+        ]
+        if value
+    ).lower()
+    return "webmethods" in search_space or "wm" in search_space
+
+
+def _apply_registration_urls(instance: GatewayInstance, payload: GatewayRegistration) -> None:
+    """Apply URL fields from registration and clear stale prod wM URLs in non-prod."""
+    sent_fields = payload.model_fields_set
+    for field_name in ("target_gateway_url", "public_url", "ui_url"):
+        if field_name in sent_fields:
+            setattr(instance, field_name, getattr(payload, field_name))
+
+    environment = (payload.environment or instance.environment or "").lower()
+    if environment in _PROD_ENVIRONMENTS:
+        return
+
+    if not _is_webmethods_registration(
+        payload,
+        instance_name=instance.name,
+        target_gateway_type=instance.target_gateway_type,
+    ):
+        return
+
+    if _host(instance.ui_url) in _PROD_WEBMETHODS_HOSTS:
+        instance.ui_url = None
+        instance.endpoints = _drop_endpoint_keys(instance.endpoints, _UI_ENDPOINT_KEYS)
+    if _host(instance.target_gateway_url) in _PROD_WEBMETHODS_HOSTS:
+        instance.target_gateway_url = None
+        instance.endpoints = _drop_endpoint_keys(instance.endpoints, _TARGET_ENDPOINT_KEYS)
+
+
 def _registration_topology(
     payload: GatewayRegistration,
     *,
@@ -391,12 +464,7 @@ async def register_gateway(
         # Preserve manually-set HTTPS base_url over auto-detected internal URL
         if not (existing.base_url and existing.base_url.startswith("https://")):
             existing.base_url = payload.admin_url
-        if payload.target_gateway_url:
-            existing.target_gateway_url = payload.target_gateway_url
-        if payload.public_url:
-            existing.public_url = payload.public_url
-        if payload.ui_url:
-            existing.ui_url = payload.ui_url
+        _apply_registration_urls(existing, payload)
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
         existing.mode = normalized_mode
@@ -436,12 +504,7 @@ async def register_gateway(
         deleted_entry.version = payload.version
         deleted_entry.capabilities = payload.capabilities
         deleted_entry.base_url = payload.admin_url
-        if payload.target_gateway_url:
-            deleted_entry.target_gateway_url = payload.target_gateway_url
-        if payload.public_url:
-            deleted_entry.public_url = payload.public_url
-        if payload.ui_url:
-            deleted_entry.ui_url = payload.ui_url
+        _apply_registration_urls(deleted_entry, payload)
         deleted_entry.status = GatewayInstanceStatus.ONLINE
         deleted_entry.last_health_check = now
         deleted_entry.mode = normalized_mode
@@ -504,12 +567,7 @@ async def register_gateway(
         argocd_entry.version = payload.version
         argocd_entry.capabilities = payload.capabilities
         argocd_entry.base_url = payload.admin_url
-        if payload.target_gateway_url:
-            argocd_entry.target_gateway_url = payload.target_gateway_url
-        if payload.public_url:
-            argocd_entry.public_url = payload.public_url
-        if payload.ui_url:
-            argocd_entry.ui_url = payload.ui_url
+        _apply_registration_urls(argocd_entry, payload)
         argocd_entry.status = GatewayInstanceStatus.ONLINE
         argocd_entry.last_health_check = now
         argocd_entry.mode = normalized_mode

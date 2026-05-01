@@ -6,23 +6,23 @@
 # ==============================================================================
 stoa:
   # Base domain — used to derive service URLs
-  domain: "gostoa.dev"
+  domain: 'gostoa.dev'
   # Admin email for initial setup (Keycloak realm admin, cert contacts)
-  adminEmail: ""
+  adminEmail: ''
   # Anthropic API key — leave empty to auto-disable chat (CHAT_KILL_SWITCH=true)
-  anthropicApiKey: ""
+  anthropicApiKey: ''
 
   # Bootstrap job (CAB-1864) — runs once on helm install
   bootstrap:
     enabled: false
     # Keycloak admin credentials (required when enabled)
     keycloak:
-      adminUser: "admin"
-      adminPassword: ""
+      adminUser: 'admin'
+      adminPassword: ''
     # Default tenant created during bootstrap
     defaultTenant:
-      name: "default"
-      displayName: "Default Tenant"
+      name: 'default'
+      displayName: 'Default Tenant'
 
 # Gateway Configuration (CAB-958: Unified Gateway Architecture)
 # See ADR-024: https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes
@@ -34,8 +34,8 @@ gateway:
     tag: latest
     pullPolicy: IfNotPresent
 
-  # Future: mode selection (not active yet, prepared for Rust gateway)
-  # mode: edge-mcp  # edge-mcp | sidecar | proxy | shadow
+  # Future: runtime mode selection (not active yet, prepared for Rust gateway)
+  # mode: edge-mcp  # edge-mcp | sidecar | proxy | shadow | connect
 
   # Mode-specific configuration (prepared for future use)
   edgeMcp:
@@ -46,18 +46,18 @@ gateway:
 
   sidecar:
     enabled: false
-    primaryGateway: ""  # kong | envoy | apigee | webmethods
+    primaryGateway: '' # kong | envoy | apigee | webmethods
     metricsEnabled: true
     meteringEnabled: true
 
   proxy:
     enabled: false
-    upstream: ""
-    opaEndpoint: ""
+    upstream: ''
+    opaEndpoint: ''
     rateLimitEnabled: true
 
   shadow:
-    enabled: false  # DEFERRED - requires security review (ADR-024)
+    enabled: false # DEFERRED - requires security review (ADR-024)
     # targetBackend: ""
     # piiMaskingEnabled: true
     # retentionDays: 30
@@ -74,10 +74,10 @@ stoaGateway:
   serviceAccount: default
 
   # Control Plane (Python FastAPI backend)
-  controlPlaneUrl: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+  controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:80'
 
   # Keycloak OIDC
-  keycloakUrl: ""
+  keycloakUrl: ''
   keycloakRealm: stoa
   keycloakClientId: stoa-mcp-gateway
 
@@ -104,7 +104,7 @@ stoaGateway:
   logFormat: json
   # OpenTelemetry Collector endpoint (Grafana Alloy in stoa-monitoring namespace)
   # Set to enable distributed tracing export via OTLP gRPC
-  otelEndpoint: "http://stoa-alloy-otlp.stoa-monitoring:4317"
+  otelEndpoint: 'http://stoa-alloy-otlp.stoa-monitoring:4317'
 
   # Resources
   resources:
@@ -115,7 +115,7 @@ stoaGateway:
       cpu: 500m
       memory: 512Mi
 
-  # Gateway mode (ADR-024): edge-mcp | sidecar | proxy | shadow
+  # Gateway runtime mode (ADR-024): edge-mcp | sidecar | proxy | shadow | connect
   mode: edge-mcp
   # Auto-register with Control Plane (ADR-028)
   autoRegister: true
@@ -127,7 +127,7 @@ stoaGateway:
   # OPA Policy Engine (Phase 1: CAB-1109)
   policies:
     enabled: true
-    path: "/etc/stoa/policies/default.rego"
+    path: '/etc/stoa/policies/default.rego'
 
   # K8s CRD watcher for dynamic tool registration (Phase 7: CAB-1105)
   k8s:
@@ -136,9 +136,9 @@ stoaGateway:
   # Kafka metering (Phase 3: CAB-1105)
   kafka:
     enabled: false
-    brokers: "redpanda.stoa-system.svc.cluster.local:9092"
-    meteringTopic: "stoa.metering"
-    errorsTopic: "stoa.errors"
+    brokers: 'redpanda.stoa-system.svc.cluster.local:9092'
+    meteringTopic: 'stoa.metering'
+    errorsTopic: 'stoa.errors'
 
   # Shadow mode settings
   shadow:
@@ -177,7 +177,8 @@ podDisruptionBudget:
 # Deploy STOA Gateway in sidecar mode alongside third-party gateways in the
 # same Kubernetes pod. This block is intentionally not for standalone remote
 # links; use k8s/gateways/base/stoa-link-wm for that topology.
-# (WebMethods, Kong, Envoy, Apigee). Provides:
+# (WebMethods, Kong, Gravitee, AgentGateway, Apigee, AWS API Gateway, Azure APIM).
+# Provides:
 # - ext_authz endpoint for policy enforcement
 # - Rate limiting
 # - Usage metering via Kafka
@@ -200,7 +201,7 @@ podDisruptionBudget:
 stoaSidecar:
   enabled: false
   # Target gateway type (for labeling/identification)
-  targetGateway: webmethods  # webmethods | kong | envoy | apigee | generic
+  targetGateway: webmethods # webmethods | kong | gravitee | agentgateway | apigee | aws_apigateway | azure_apim
 
   # STOA Sidecar image (Rust gateway in sidecar mode)
   # The same Rust gateway binary is used, with the sidecar route profile:
@@ -212,13 +213,13 @@ stoaSidecar:
 
   replicas: 2
   serviceAccount: default
-  environment: dev  # dev | staging | prod
+  environment: dev # dev | staging | prod
 
   # Control Plane connection (for auto-registration)
-  controlPlaneUrl: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+  controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:80'
 
   # Keycloak OIDC (for token validation)
-  keycloakUrl: ""
+  keycloakUrl: ''
   keycloakRealm: stoa
   keycloakClientId: stoa-sidecar
 
@@ -242,16 +243,16 @@ stoaSidecar:
     enabled: true
     image:
       repository: softwareag/webmethods-api-gateway
-      tag: "10.15"
+      tag: '10.15'
       pullPolicy: IfNotPresent
     port: 9072
     env:
       # WebMethods-specific environment variables
       - name: JAVA_OPTS
-        value: "-Xms512m -Xmx1g"
+        value: '-Xms512m -Xmx1g'
       # Configure ext_authz to point to STOA sidecar
       - name: EXT_AUTHZ_ENABLED
-        value: "true"
+        value: 'true'
     resources:
       requests:
         cpu: 500m
@@ -280,26 +281,26 @@ gatewaySync:
   enabled: true
 
   # CronJob schedule (default: every 6 hours)
-  schedule: "0 */6 * * *"
+  schedule: '0 */6 * * *'
 
   # Image for the sync job
   image: curlimages/curl:8.5.0
 
   # Backend API URL (Control-Plane-API)
-  backendUrl: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+  backendUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:80'
 
   # Gateway admin URL
-  gatewayUrl: "http://apigateway.stoa-system.svc.cluster.local:5555"
+  gatewayUrl: 'http://apigateway.stoa-system.svc.cluster.local:5555'
 
   # API configuration
-  apiName: "Control-Plane-API"
-  apiVersion: "2.0"
+  apiName: 'Control-Plane-API'
+  apiVersion: '2.0'
 
   # Secret containing Gateway credentials (keys: username, password)
-  credentialsSecret: "apigateway-credentials"
+  credentialsSecret: 'apigateway-credentials'
 
   # Service account for the job
-  serviceAccount: "default"
+  serviceAccount: 'default'
 
 # Vault Monitoring & Credentials Integrity (CAB-1042)
 # NOTE: Vault itself is deployed via stoa-infra (hashicorp/vault Helm chart).
@@ -326,7 +327,7 @@ vault:
   # CronJob that verifies PostgreSQL credentials from Vault-synced K8s secret
   credentialsCheck:
     enabled: false
-    schedule: "0 */6 * * *"
+    schedule: '0 */6 * * *'
     image: postgres:16-alpine
     serviceAccount: default
     # K8s secret synced from Vault by External Secrets Operator
@@ -361,16 +362,16 @@ keycloak:
 grafana:
   oidc:
     enabled: false
-    name: "STOA SSO"
-    clientId: "stoa-observability"
-    existingSecret: "stoa-observability-oidc"
-    scopes: "openid profile email"
-    authUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth"
-    tokenUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
-    apiUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/userinfo"
+    name: 'STOA SSO'
+    clientId: 'stoa-observability'
+    existingSecret: 'stoa-observability-oidc'
+    scopes: 'openid profile email'
+    authUrl: 'https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth'
+    tokenUrl: 'https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token'
+    apiUrl: 'https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/userinfo'
     roleAttributePath: "contains(roles[*], 'stoa:admin') && 'Admin' || 'Viewer'"
     allowAssignGrafanaAdmin: true
-    rootUrl: "https://grafana.gostoa.dev"
+    rootUrl: 'https://grafana.gostoa.dev'
     serveFromSubPath: true
     allowEmbedding: true
 
@@ -381,14 +382,14 @@ prometheus:
       repository: quay.io/oauth2-proxy/oauth2-proxy
       tag: v7.6.0
       pullPolicy: IfNotPresent
-    provider: "keycloak-oidc"
-    clientId: "stoa-observability"
-    existingSecret: "stoa-observability-oidc"
-    issuerUrl: "https://auth.gostoa.dev/realms/stoa"
-    redirectUrl: "https://prometheus.gostoa.dev/oauth2/callback"
-    upstream: "http://prometheus:9090"
-    scope: "openid profile email"
-    cookieName: "_stoa_prometheus_oauth2"
+    provider: 'keycloak-oidc'
+    clientId: 'stoa-observability'
+    existingSecret: 'stoa-observability-oidc'
+    issuerUrl: 'https://auth.gostoa.dev/realms/stoa'
+    redirectUrl: 'https://prometheus.gostoa.dev/oauth2/callback'
+    upstream: 'http://prometheus:9090'
+    scope: 'openid profile email'
+    cookieName: '_stoa_prometheus_oauth2'
     resources:
       requests:
         cpu: 50m
@@ -478,8 +479,8 @@ alertmanager:
     repository: prom/alertmanager
     tag: v0.27.0
     pullPolicy: IfNotPresent
-  existingSecret: "stoa-alertmanager-secrets"
-  externalUrl: "https://alertmanager.gostoa.dev"
+  existingSecret: 'stoa-alertmanager-secrets'
+  externalUrl: 'https://alertmanager.gostoa.dev'
   route:
     receiver: 'default'
     groupBy: ['alertname', 'namespace']
@@ -529,17 +530,17 @@ alertmanager:
 # to avoid requiring the Infisical CLI in the image.
 infisical:
   enabled: false
-  url: "https://vault.gostoa.dev/api"
-  projectId: ""
-  environment: "prod"
+  url: 'https://vault.gostoa.dev/api'
+  projectId: ''
+  environment: 'prod'
   # Default secret path used when including the init container
-  defaultSecretPath: "/"
+  defaultSecretPath: '/'
   # Name of the K8s Secret containing the Infisical access token
   # The secret must have a key named "token"
-  tokenSecretName: "infisical-machine-identity-token"
+  tokenSecretName: 'infisical-machine-identity-token'
   image:
     repository: python
-    tag: "3.11-slim"
+    tag: '3.11-slim'
 
 # ==============================================================================
 # Multi-Staging Pattern — Namespace-per-Stage (CAB-1342 Phase 2)
@@ -567,7 +568,7 @@ staging:
   # - staging-2
   argocd:
     enabled: false
-    repoURL: "https://github.com/stoa-platform/stoa.git"
+    repoURL: 'https://github.com/stoa-platform/stoa.git'
     targetRevision: main
-    chartPath: "charts/stoa-platform"
-    project: "default"
+    chartPath: 'charts/stoa-platform'
+    project: 'default'

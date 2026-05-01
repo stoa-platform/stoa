@@ -34,7 +34,19 @@ def _webmethods_gateway():
     gateway.id = uuid4()
     gateway.name = "connect-webmethods-dev"
     gateway.environment = "dev"
-    gateway.gateway_type = MagicMock(value="webmethods")
+    gateway.gateway_type = MagicMock(value="stoa")
+    gateway.mode = "connect"
+    gateway.source = "self_register"
+    gateway.deployment_mode = "connect"
+    gateway.target_gateway_type = "webmethods"
+    gateway.topology = "remote-agent"
+    gateway.health_details = {}
+    gateway.endpoints = {}
+    gateway.base_url = "http://connect-webmethods-dev:8090"
+    gateway.public_url = None
+    gateway.ui_url = None
+    gateway.target_gateway_url = "https://webmethods.gostoa.dev"
+    gateway.tags = ["connect", "webmethods"]
     gateway.enabled = True
     return gateway
 

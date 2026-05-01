@@ -24,6 +24,15 @@ fn test_default_gateway_mode() {
 }
 
 #[test]
+fn test_default_topology_registration_fields_absent() {
+    let config = Config::default();
+    assert!(config.deployment_mode.is_none());
+    assert!(config.target_gateway_type.is_none());
+    assert!(config.topology.is_none());
+    assert!(config.topology_proof.is_none());
+}
+
+#[test]
 fn test_default_rate_limits() {
     let config = Config::default();
     assert_eq!(config.rate_limit_default, Some(1000));

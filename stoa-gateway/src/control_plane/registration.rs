@@ -61,6 +61,22 @@ pub struct RegistrationPayload {
     /// Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev) for Console display (CAB-1940)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_url: Option<String>,
+
+    /// Canonical deployment topology mode (edge, connect, sidecar)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_mode: Option<String>,
+
+    /// Gateway technology STOA fronts or controls
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_gateway_type: Option<String>,
+
+    /// Execution topology (native-edge, remote-agent, same-pod)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topology: Option<String>,
+
+    /// Optional sidecar proof evidence
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topology_proof: Option<serde_json::Value>,
 }
 
 /// Heartbeat payload sent every 30 seconds
@@ -162,6 +178,17 @@ impl GatewayRegistrar {
         let hostname = self.get_hostname()?;
         let mode = config.gateway_mode.to_string();
         let capabilities = self.detect_capabilities(config);
+        let topology_proof =
+            config
+                .topology_proof
+                .as_deref()
+                .and_then(|raw| match serde_json::from_str(raw) {
+                    Ok(value) => Some(value),
+                    Err(error) => {
+                        warn!(error = %error, "Ignoring invalid STOA_TOPOLOGY_PROOF JSON");
+                        None
+                    }
+                });
 
         let payload = RegistrationPayload {
             hostname: hostname.clone(),
@@ -176,6 +203,10 @@ impl GatewayRegistrar {
             tenant_id: None, // Platform-wide gateway
             target_gateway_url: config.target_gateway_url.clone(),
             public_url: config.gateway_public_url.clone(),
+            deployment_mode: config.deployment_mode.clone(),
+            target_gateway_type: config.target_gateway_type.clone(),
+            topology: config.topology.clone(),
+            topology_proof,
         };
 
         info!(
@@ -483,6 +514,10 @@ mod tests {
             tenant_id: None,
             target_gateway_url: None,
             public_url: None,
+            deployment_mode: None,
+            target_gateway_type: None,
+            topology: None,
+            topology_proof: None,
         };
 
         let json = serde_json::to_string(&payload).expect("Should serialize");
@@ -491,6 +526,7 @@ mod tests {
         assert!(!json.contains("tenant_id")); // None should be skipped
         assert!(!json.contains("target_gateway_url")); // None should be skipped
         assert!(!json.contains("public_url")); // None should be skipped
+        assert!(!json.contains("deployment_mode")); // None should be skipped
     }
 
     #[test]
@@ -505,6 +541,10 @@ mod tests {
             tenant_id: Some("acme".to_string()),
             target_gateway_url: Some("https://webmethods-prod:5555".to_string()),
             public_url: Some("https://vps-wm-link.gostoa.dev".to_string()),
+            deployment_mode: Some("connect".to_string()),
+            target_gateway_type: Some("webmethods".to_string()),
+            topology: Some("remote-agent".to_string()),
+            topology_proof: None,
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -514,6 +554,8 @@ mod tests {
         assert!(json.contains("webmethods-prod:5555"));
         assert!(json.contains("public_url"));
         assert!(json.contains("vps-wm-link.gostoa.dev"));
+        assert!(json.contains("deployment_mode"));
+        assert!(json.contains("remote-agent"));
     }
 
     #[test]

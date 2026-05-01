@@ -102,6 +102,35 @@ If you add a new derived URL field, register it in the validator's `derived`
 dict. **Do NOT add new `gostoa.dev` literals** outside the `BASE_DOMAIN`
 default and the validator's fallback — Q6 multi-env-ready rule.
 
+**Phase 3-A — empty BASE_DOMAIN rejected**: `Settings(BASE_DOMAIN="")`
+(or whitespace-only) now raises a `ValidationError` instead of falling
+back silently to `gostoa.dev`. The pre-Phase-3-A behavior masked
+mis-templated Helm values (`baseDomain: ""`).
+
+## ENVIRONMENT — fail-closed alias map (Phase 3-A)
+
+Per CAB-2199 / INFRA-1a Phase 3-A, the `_normalize_environment` validator
+is fail-closed:
+
+- Whitespace-strip + casefold the input.
+- If it matches a documented alias
+  (`dev` | `development` | `staging` | `test` | `prod` | `production`),
+  return the canonical form. `prod` and `development` map to
+  `production` and `dev` respectively. Case variations are accepted —
+  `PROD`, `Prod`, `Staging`, `PRODUCTION` are all normalized.
+- Otherwise raise `ValidationError("ENVIRONMENT=… is not recognized")`.
+
+**Why fail-closed**: `ENVIRONMENT` drives four security gates
+(`_gate_sensitive_debug_flags_in_prod`, `_gate_auth_bypass_in_prod`,
+`_hydrate_and_validate_git`, `cors_origins_list`) which all
+literal-check `== "production"`. Pre-Phase-3-A, any unknown value
+(typo `produciton`, alias `live`, case variation `PROD`) silently
+bypassed every gate. The fail-closed validator ensures unknown values
+never reach the gates with a non-prod meaning.
+
+An `INFO` ops-signal log fires whenever the input differs from the
+canonical output (e.g., `prod` → `production`, `Prod` → `production`).
+
 ## OpenSearch — audit endpoint vs docs/embedding endpoint
 
 Per CAB-2199 / INFRA-1a S3 (Christophe arbitrage 2026-04-29 §3.1 = Option A),
@@ -158,20 +187,38 @@ pydantic-settings source. Legacy usage emits at boot:
 - a Prometheus Counter `stoa_deprecated_config_used_total{name="STOA_SNAPSHOTS_*"}`
   (one-shot per `(key, process)` via `_METRIC_EMITTED_KEYS` set + Lock).
 
-**Conflict gate**: setting both prefixes for the same suffix with different
-values fails boot with `ValueError`. The conflict scanner reads BOTH
-`os.environ` AND the configured `.env` file (so a `.env`-only legacy setting
-also triggers the gate — verified by `test_conflict_between_new_env_and_old_dotenv_fails`).
+**Conflict gate** (Phase 3-B hardened): setting both prefixes for the same
+suffix with different values fails boot with `ValueError`. Behaviour:
 
-**Council Stage 2 #1+#2 secret masking**: env keys matching
-`*SECRET*` / `*KEY*` / `*TOKEN*` / `*PASSWORD*` (case-insensitive substring)
-have their VALUES redacted to `<REDACTED>` in BOTH:
-- the raised `ValueError` message (the part we control), and
-- the input-dict that Pydantic dumps as `input_value=` in
-  `ValidationError.__str__` (mutation in the validator scrubs the data
-  before the error wraps).
+- **Scoped to declared field suffixes.** The scanner enumerates
+  `SnapshotSettings.model_fields` and only checks suffixes
+  corresponding to real fields. Leftover env vars matching the prefix
+  but no declared field (e.g. `STOA_SNAPSHOTS_FOO_REMOVED_LAST_RELEASE`)
+  do NOT trigger spurious boot failures.
+- **Honors the `_env_file=` runtime override.** Pydantic-Settings
+  consumes that kwarg internally; `SnapshotSettings.__init__` stashes
+  it in a `ContextVar` so the validator scans the same dotenv used
+  for field resolution (not just the static cwd `.env`). Pass
+  `_env_file=None` to disable the dotenv pass entirely.
+- **Value-blind error format.** The `ValueError` message lists the
+  source key names only — never the conflicting values. Eliminates the
+  need for a substring-match secret heuristic at the error boundary
+  (which had known false negatives like `DB_DSN`/`JWT_SIG_INPUT`).
 
-The key NAMES remain visible — operator debugging needs them.
+Example error:
+
+```
+ValueError: Conflicting config for suffix 'STORAGE_BUCKET': sources
+['env:STOA_API_SNAPSHOT_STORAGE_BUCKET', 'env:STOA_SNAPSHOTS_STORAGE_BUCKET']
+have different values. Remove the legacy STOA_SNAPSHOTS_* key or align
+both prefixes to the same value. (Values are intentionally omitted
+from this message to avoid leaking secrets.)
+```
+
+**Defence-in-depth helpers** (`_is_secret_env_key`, `_redact_value`)
+remain available in the module for any future log path that includes
+values. They are NOT called by the Phase 3-B validator — the design
+contract is "values never leave the process via this path".
 
 **Sunset**: tracked on **CAB-2203** — the alias surface (per-field
 `AliasChoices`, conflict scanner, masking helpers) can be removed once the

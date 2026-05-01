@@ -1,4 +1,5 @@
 """Tests for DeploymentOrchestrationService — deploy_api_to_env, auto_deploy, deployable_environments."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -233,19 +234,21 @@ class TestDeploymentOrchestrationService:
         db = AsyncMock()
         svc = DeploymentOrchestrationService(db)
 
-        with patch.object(
-            svc,
-            "_resolve_api_catalog",
-            new_callable=AsyncMock,
-            side_effect=ValueError(f"API '{api_id}' not found for tenant 'acme'."),
+        with (
+            patch.object(
+                svc,
+                "_resolve_api_catalog",
+                new_callable=AsyncMock,
+                side_effect=ValueError(f"API '{api_id}' not found for tenant 'acme'."),
+            ),
+            pytest.raises(ValueError, match="not found for tenant"),
         ):
-            with pytest.raises(ValueError, match="not found for tenant"):
-                await svc.deploy_api_to_env(
-                    tenant_id="acme",
-                    api_identifier=api_id,
-                    environment="dev",
-                    gateway_ids=[uuid4()],
-                )
+            await svc.deploy_api_to_env(
+                tenant_id="acme",
+                api_identifier=api_id,
+                environment="dev",
+                gateway_ids=[uuid4()],
+            )
 
     @pytest.mark.asyncio
     async def test_auto_deploy_on_promotion_triggers_deploy(self):
@@ -262,6 +265,7 @@ class TestDeploymentOrchestrationService:
 
         with (
             patch.object(svc.assignment_repo, "list_auto_deploy", new_callable=AsyncMock) as mock_assign,
+            patch.object(svc, "_preflight_gateway_ids", new_callable=AsyncMock) as mock_preflight,
             patch.object(svc.deploy_svc, "deploy_api", new_callable=AsyncMock) as mock_deploy,
         ):
             mock_result = MagicMock()
@@ -269,6 +273,7 @@ class TestDeploymentOrchestrationService:
             db.execute.return_value = mock_result
 
             mock_assign.return_value = assignments
+            mock_preflight.return_value = [MagicMock(deployable=True)]
             mock_deploy.return_value = deployments
 
             result = await svc.auto_deploy_on_promotion(
@@ -279,7 +284,46 @@ class TestDeploymentOrchestrationService:
             )
 
             assert len(result) == 1
+            mock_preflight.assert_awaited_once_with(catalog, [gw_id])
             mock_deploy.assert_called_once_with(catalog.id, [gw_id])
+
+    @pytest.mark.asyncio
+    async def test_auto_deploy_on_promotion_blocks_preflight_failure(self):
+        """auto_deploy_on_promotion must not create deployments when adapter preflight fails."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        catalog = self._make_catalog()
+        gw_id = uuid4()
+        assignments = [self._make_assignment(gateway_id=gw_id)]
+
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        failed_preflight = MagicMock(deployable=False)
+        failed_preflight.errors = [MagicMock(code="openapi_operation_responses_missing")]
+        failed_preflight.gateway_name = "connect-webmethods-dev"
+
+        with (
+            patch.object(svc.assignment_repo, "list_auto_deploy", new_callable=AsyncMock) as mock_assign,
+            patch.object(svc, "_preflight_gateway_ids", new_callable=AsyncMock) as mock_preflight,
+            patch.object(svc.deploy_svc, "deploy_api", new_callable=AsyncMock) as mock_deploy,
+        ):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute.return_value = mock_result
+
+            mock_assign.return_value = assignments
+            mock_preflight.return_value = [failed_preflight]
+
+            with pytest.raises(ValueError, match="Deployment preflight failed"):
+                await svc.auto_deploy_on_promotion(
+                    api_id="payments-v2",
+                    tenant_id="acme",
+                    target_environment="dev",
+                    approved_by="admin",
+                )
+
+            mock_deploy.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_auto_deploy_skips_when_no_assignments(self):
@@ -317,9 +361,7 @@ class TestDeploymentOrchestrationService:
         db = AsyncMock()
         svc = DeploymentOrchestrationService(db)
 
-        with (
-            patch.object(svc, "_get_latest_promotion", new_callable=AsyncMock) as mock_promo,
-        ):
+        with (patch.object(svc, "_get_latest_promotion", new_callable=AsyncMock) as mock_promo,):
             mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = catalog
             db.execute.return_value = mock_result
@@ -360,9 +402,7 @@ class TestRegressionCab1889:
 
         with (
             patch("src.services.git_service.git_service") as mock_git,
-            patch(
-                "src.services.catalog_sync_service.CatalogSyncService"
-            ) as mock_catalog_cls,
+            patch("src.services.catalog_sync_service.CatalogSyncService") as mock_catalog_cls,
         ):
             mock_git.is_connected.return_value = True
             mock_git.connect = AsyncMock()
@@ -382,4 +422,3 @@ class TestRegressionCab1889:
             assert not any(
                 "_project" in str(call) for call in mock_git.mock_calls
             ), f"_project leaked into calls: {mock_git.mock_calls}"
-

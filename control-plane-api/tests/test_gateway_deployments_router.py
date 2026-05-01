@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 SVC_PATH = "src.routers.gateway_deployments.GatewayDeploymentService"
+ORCH_PATH = "src.routers.gateway_deployments.DeploymentOrchestrationService"
 REPO_PATH = "src.routers.gateway_deployments.GatewayDeploymentRepository"
 
 
@@ -31,7 +32,12 @@ def _mock_deployment(**overrides):
 class TestDeployAPI:
     def test_deploy_success(self, client_as_cpi_admin, mock_db_session):
         dep = _mock_deployment()
-        with patch(SVC_PATH) as MockSvc:
+        with (
+            patch(ORCH_PATH) as MockOrch,
+            patch(SVC_PATH) as MockSvc,
+        ):
+            orch = MockOrch.return_value
+            orch.preflight_api_to_gateways = AsyncMock(return_value=[MagicMock(deployable=True)])
             instance = MockSvc.return_value
             instance.deploy_api = AsyncMock(return_value=[dep])
             resp = client_as_cpi_admin.post(
@@ -45,9 +51,9 @@ class TestDeployAPI:
         assert resp.status_code == 201
 
     def test_deploy_not_found(self, client_as_cpi_admin, mock_db_session):
-        with patch(SVC_PATH) as MockSvc:
-            instance = MockSvc.return_value
-            instance.deploy_api = AsyncMock(side_effect=ValueError("API not found"))
+        with patch(ORCH_PATH) as MockOrch:
+            orch = MockOrch.return_value
+            orch.preflight_api_to_gateways = AsyncMock(side_effect=ValueError("API not found"))
             resp = client_as_cpi_admin.post(
                 "/v1/admin/deployments",
                 json={
@@ -68,21 +74,78 @@ class TestDeployAPI:
         )
         assert resp.status_code == 403
 
+    def test_deploy_preflight_failure_blocks_dispatch(self, client_as_cpi_admin, mock_db_session):
+        gateway_id = uuid4()
+        with (
+            patch(ORCH_PATH) as MockOrch,
+            patch(SVC_PATH) as MockSvc,
+        ):
+            orch = MockOrch.return_value
+            orch.preflight_api_to_gateways = AsyncMock(
+                return_value=[
+                    MagicMock(
+                        deployable=False,
+                        as_dict=MagicMock(
+                            return_value={
+                                "gateway_id": str(gateway_id),
+                                "gateway_name": "connect-webmethods-dev",
+                                "target_gateway_type": "webmethods",
+                                "deployable": False,
+                                "errors": [
+                                    {
+                                        "gateway_id": str(gateway_id),
+                                        "gateway_name": "connect-webmethods-dev",
+                                        "target_gateway_type": "webmethods",
+                                        "code": "openapi_operation_responses_missing",
+                                        "message": "webMethods requires each OpenAPI operation to declare non-empty responses",
+                                        "path": "openapi_spec.paths./query.get.responses",
+                                    }
+                                ],
+                            }
+                        ),
+                    )
+                ]
+            )
+            svc = MockSvc.return_value
+            svc.deploy_api = AsyncMock()
+
+            resp = client_as_cpi_admin.post(
+                "/v1/admin/deployments",
+                json={
+                    "api_catalog_id": str(uuid4()),
+                    "gateway_instance_ids": [str(gateway_id)],
+                },
+            )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "deployment_preflight_failed"
+        assert resp.json()["detail"]["targets"][0]["errors"][0]["code"] == "openapi_operation_responses_missing"
+        svc.deploy_api.assert_not_awaited()
+
 
 class TestListDeployments:
     def test_list_returns_paginated(self, client_as_cpi_admin, mock_db_session):
         dep = _mock_deployment()
         dep_dict = {
-            "id": dep.id, "api_catalog_id": dep.api_catalog_id,
+            "id": dep.id,
+            "api_catalog_id": dep.api_catalog_id,
             "gateway_instance_id": dep.gateway_instance_id,
-            "desired_state": dep.desired_state, "desired_at": dep.desired_at,
-            "actual_state": dep.actual_state, "actual_at": dep.actual_at,
-            "sync_status": dep.sync_status, "last_sync_attempt": dep.last_sync_attempt,
-            "last_sync_success": dep.last_sync_success, "sync_error": dep.sync_error,
-            "sync_attempts": dep.sync_attempts, "gateway_resource_id": dep.gateway_resource_id,
-            "created_at": dep.created_at, "updated_at": dep.updated_at,
-            "gateway_name": None, "gateway_display_name": None,
-            "gateway_type": None, "gateway_environment": None,
+            "desired_state": dep.desired_state,
+            "desired_at": dep.desired_at,
+            "actual_state": dep.actual_state,
+            "actual_at": dep.actual_at,
+            "sync_status": dep.sync_status,
+            "last_sync_attempt": dep.last_sync_attempt,
+            "last_sync_success": dep.last_sync_success,
+            "sync_error": dep.sync_error,
+            "sync_attempts": dep.sync_attempts,
+            "gateway_resource_id": dep.gateway_resource_id,
+            "created_at": dep.created_at,
+            "updated_at": dep.updated_at,
+            "gateway_name": None,
+            "gateway_display_name": None,
+            "gateway_type": None,
+            "gateway_environment": None,
         }
         with patch(REPO_PATH) as MockRepo:
             instance = MockRepo.return_value

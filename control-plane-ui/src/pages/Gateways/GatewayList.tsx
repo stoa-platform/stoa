@@ -188,6 +188,95 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+const ENDPOINT_ALIASES: Record<string, string[]> = {
+  public_url: ['public_url', 'publicUrl', 'public', 'runtime_url', 'runtimeUrl', 'external_url'],
+  ui_url: ['ui_url', 'uiUrl', 'console_url', 'consoleUrl', 'web_ui_url', 'webUiUrl'],
+  target_gateway_url: ['target_gateway_url', 'targetGatewayUrl', 'target_url', 'targetUrl'],
+  admin_url: ['admin_url', 'adminUrl', 'admin', 'base_url', 'baseUrl'],
+  internal_url: ['internal_url', 'internalUrl', 'internal'],
+};
+
+type GatewayUrls = {
+  publicUrl: string | null;
+  uiUrl: string | null;
+  targetUrl: string | null;
+  baseUrl: string | null;
+  primaryUrl: string | null;
+};
+
+function cleanUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function endpointValue(gw: GatewayInstance, canonicalKey: string): string | null {
+  const endpoints = gw.endpoints ?? {};
+  for (const key of ENDPOINT_ALIASES[canonicalKey] ?? [canonicalKey]) {
+    const value = cleanUrl(endpoints[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function isInternalUrl(value: string): boolean {
+  if (!/^https?:\/\//i.test(value)) return true;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host.endsWith('.svc') ||
+      host.includes('.svc.cluster.local') ||
+      host.endsWith('.cluster.local')
+    );
+  } catch {
+    return true;
+  }
+}
+
+function externalUrl(value: unknown): string | null {
+  const url = cleanUrl(value);
+  return url && !isInternalUrl(url) ? url : null;
+}
+
+function displayUrl(value: string | null): string {
+  return value?.replace(/^https?:\/\//, '') ?? '--';
+}
+
+function gatewayUrls(gw: GatewayInstance): GatewayUrls {
+  const publicUrl = externalUrl(gw.public_url) ?? externalUrl(endpointValue(gw, 'public_url'));
+  const uiUrl = externalUrl(gw.ui_url) ?? externalUrl(endpointValue(gw, 'ui_url'));
+  const targetUrl =
+    externalUrl(gw.target_gateway_url) ?? externalUrl(endpointValue(gw, 'target_gateway_url'));
+  const baseUrl = cleanUrl(gw.base_url) ?? endpointValue(gw, 'admin_url');
+  const externalBaseUrl = baseUrl ? externalUrl(baseUrl) : null;
+
+  return {
+    publicUrl,
+    uiUrl,
+    targetUrl,
+    baseUrl,
+    primaryUrl: publicUrl ?? targetUrl ?? uiUrl ?? externalBaseUrl ?? baseUrl,
+  };
+}
+
+function gatewayExternalLinks(
+  urls: GatewayUrls
+): { label: string; href: string; icon: typeof Zap }[] {
+  const seen = new Set<string>();
+  return [
+    { label: 'Runtime', href: urls.publicUrl, icon: Zap },
+    { label: 'UI', href: urls.uiUrl, icon: Globe },
+    { label: 'Target', href: urls.targetUrl, icon: Server },
+  ].flatMap((link) => {
+    if (!link.href || seen.has(link.href)) return [];
+    seen.add(link.href);
+    return [{ ...link, href: link.href }];
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
@@ -685,6 +774,8 @@ function GatewayRow({
   const modeLabel = deploymentLabel(gw);
   const target = targetLabel(gw, typeInfo.label);
   const topology = topologyLabel(gw);
+  const urls = gatewayUrls(gw);
+  const links = gatewayExternalLinks(urls);
 
   return (
     <div
@@ -764,37 +855,25 @@ function GatewayRow({
           )}
           <span className="text-neutral-300 dark:text-neutral-600">&middot;</span>
           <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">
-            {gw.base_url.replace(/^https?:\/\//, '')}
+            {displayUrl(urls.primaryUrl)}
           </span>
         </div>
-        {(gw.ui_url || gw.public_url) && (
+        {links.length > 0 && (
           <div className="flex items-center gap-3 mt-0.5">
-            {gw.ui_url && (
+            {links.map(({ label, href, icon: LinkIcon }) => (
               <a
-                href={gw.ui_url}
+                key={`${label}-${href}`}
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Globe className="w-3 h-3" />
-                UI
+                <LinkIcon className="w-3 h-3" />
+                {label}
                 <ExternalLink className="w-2.5 h-2.5" />
               </a>
-            )}
-            {gw.public_url && (
-              <a
-                href={gw.public_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Zap className="w-3 h-3" />
-                Runtime
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -894,6 +973,7 @@ function GatewayDetailPanel({
   const modeLabel = deploymentLabel(gw);
   const target = targetLabel(gw, typeInfo.label);
   const topology = topologyLabel(gw);
+  const urls = gatewayUrls(gw);
 
   return (
     <div
@@ -996,55 +1076,14 @@ function GatewayDetailPanel({
               <DetailRow label="Name" value={gw.name} mono />
               <DetailRow label="Type" value={typeInfo.label} />
               <DetailRow label="Environment" value={gw.environment} />
-              <DetailRow
-                label="Base URL"
-                value={
-                  <a
-                    href={gw.base_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {gw.base_url.replace(/^https?:\/\//, '')}
-                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                  </a>
-                }
-              />
-              {gw.target_gateway_url && (
-                <DetailRow
-                  label="Target Gateway"
-                  value={
-                    <a
-                      href={gw.target_gateway_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {gw.target_gateway_url.replace(/^https?:\/\//, '')}
-                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                    </a>
-                  }
-                />
+              <DetailRow label="Base URL" value={<UrlValue url={urls.baseUrl} />} />
+              {urls.publicUrl && (
+                <DetailRow label="Runtime URL" value={<UrlValue url={urls.publicUrl} />} />
               )}
-              {gw.ui_url && (
-                <DetailRow
-                  label="Gateway UI"
-                  value={
-                    <a
-                      href={gw.ui_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {gw.ui_url.replace(/^https?:\/\//, '')}
-                      <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                    </a>
-                  }
-                />
+              {urls.targetUrl && (
+                <DetailRow label="Target Gateway" value={<UrlValue url={urls.targetUrl} />} />
               )}
+              {urls.uiUrl && <DetailRow label="Gateway UI" value={<UrlValue url={urls.uiUrl} />} />}
               {gw.source && (
                 <DetailRow
                   label="Source"
@@ -1156,5 +1195,29 @@ function DetailRow({
         {value}
       </dd>
     </div>
+  );
+}
+
+function UrlValue({ url }: { url: string | null }) {
+  const href = url ? externalUrl(url) : null;
+  if (!url) return <span className="text-neutral-400">--</span>;
+  if (!href) {
+    return (
+      <span className="font-mono text-xs text-neutral-500 dark:text-neutral-400">
+        {displayUrl(url)}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {displayUrl(href)}
+      <ExternalLink className="w-3 h-3 flex-shrink-0" />
+    </a>
   );
 }

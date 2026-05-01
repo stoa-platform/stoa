@@ -83,14 +83,13 @@ def _render_row_api_yaml(row: APICatalog) -> bytes:
     api_name = cast(str, row.api_name)
     metadata = cast(dict[str, Any], row.api_metadata or {})
     tags = cast(list[Any], row.tags or [])
-    openapi_spec = cast(Any, row.openapi_spec)
     row_category = cast(str | None, row.category)
     row_status = cast(str | None, row.status)
     row_version = cast(str | None, row.version)
     backend_url = _first_string(
         metadata.get("backend_url"),
         metadata.get("backendUrl"),
-        _backend_url_from_openapi(openapi_spec),
+        _backend_url_from_openapi(cast(Any, row.openapi_spec)),
     )
     if backend_url is None:
         raise ValueError("missing backend_url")

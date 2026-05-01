@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.19](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.18...stoa-gateway-v0.9.19) (2026-05-01)
+
+
+### Bug Fixes
+
+* **gateways:** surface external URLs for link and connect ([#2642](https://github.com/stoa-platform/stoa/issues/2642)) ([132de10](https://github.com/stoa-platform/stoa/commit/132de10d7515fc15d7c03a70ab38fa3753ee6a42))
+
 ## [0.9.18](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.17...stoa-gateway-v0.9.18) (2026-05-01)
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.9](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.8...stoa-go-v0.3.9) (2026-05-01)
+
+
+### Bug Fixes
+
+* **stoa-connect:** normalize webMethods externalDocs payload ([7cec6c8](https://github.com/stoa-platform/stoa/commit/7cec6c892915c03042bfccf8cd1c444b9d5bbc5b))
+* **sync:** enforce route ack step consistency ([#2654](https://github.com/stoa-platform/stoa/issues/2654)) ([4c7e1e6](https://github.com/stoa-platform/stoa/commit/4c7e1e641b5bf4497a349dc9e40c90a02b98290f))
+
 ## [0.3.8](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.7...stoa-go-v0.3.8) (2026-04-23)
 
 

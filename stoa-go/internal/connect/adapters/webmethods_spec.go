@@ -52,34 +52,39 @@ func downgradeOpenAPI31(spec []byte) []byte {
 	return safeMarshal(spec, parsed)
 }
 
-// wrapExternalDocs recursively walks any JSON value and wraps every
-// externalDocs single-object occurrence into a single-element array.
-// Returns true if any wrap was performed.
+// normalizeExternalDocs recursively walks any JSON value and normalizes
+// externalDocs to the mixed shape expected by webMethods imports.
+// Returns true if any normalization was performed.
 //
-// The recursion enters each map value and each array item, so nested
-// occurrences at arbitrary depth (tags[], paths[].<operation>,
-// components.schemas.<name>, Schema.properties.<field>, Schema.items,
-// Schema.{allOf|oneOf|anyOf}[*], even inside vendor extensions) are all
-// reached in one pass. Values that are already arrays, primitives, or null
+// webMethods expects the root RestAPI.externalDocs as a list, but nested OpenAPI
+// externalDocs fields (tags, operations, schemas) as a single object. Values
+// that are already in the expected shape, primitives, null, or multi-item arrays
 // are left untouched.
-func wrapExternalDocs(v interface{}) bool {
+func normalizeExternalDocs(v interface{}, root bool) bool {
 	modified := false
 	switch val := v.(type) {
 	case map[string]interface{}:
 		if ed, ok := val["externalDocs"]; ok {
-			if obj, isObj := ed.(map[string]interface{}); isObj {
-				val["externalDocs"] = []interface{}{obj}
-				modified = true
+			if root {
+				if obj, isObj := ed.(map[string]interface{}); isObj {
+					val["externalDocs"] = []interface{}{obj}
+					modified = true
+				}
+			} else if arr, isArr := ed.([]interface{}); isArr && len(arr) == 1 {
+				if obj, isObj := arr[0].(map[string]interface{}); isObj {
+					val["externalDocs"] = obj
+					modified = true
+				}
 			}
 		}
 		for _, child := range val {
-			if wrapExternalDocs(child) {
+			if normalizeExternalDocs(child, false) {
 				modified = true
 			}
 		}
 	case []interface{}:
 		for _, item := range val {
-			if wrapExternalDocs(item) {
+			if normalizeExternalDocs(item, false) {
 				modified = true
 			}
 		}
@@ -87,17 +92,13 @@ func wrapExternalDocs(v interface{}) bool {
 	return modified
 }
 
-// fixExternalDocs walks the full OpenAPI document and wraps every
-// externalDocs single-object occurrence into a single-element array.
-// webMethods expects externalDocs as an array at every level (root, tags[*],
-// paths[*].<operation>, components.schemas.<name>, nested Schemas via
-// allOf/oneOf/anyOf/items/properties.*/additionalProperties). OpenAPI and
-// Swagger specs default to a single object, which webMethods rejects with a
-// deserialization error on PUT.
+// fixExternalDocs walks the full OpenAPI document and keeps externalDocs in the
+// mixed shape accepted by webMethods. webMethods expects root externalDocs as a
+// list, but rejects list-shaped tag externalDocs while importing REST APIs.
 //
 // Closes GO-1 H.2 (BUG-REPORT-GO-1.md) — the previous implementation only
-// handled the root-level occurrence, letting FastAPI / Swaggerhub specs that
-// put externalDocs in tags[] or operations bubble up 500s on PUT.
+// handled the root-level occurrence, letting specs that put externalDocs in
+// tags[] or operations bubble up 500s on PUT.
 //
 // Malformed input (invalid JSON) is returned unchanged — defensive fallback.
 // If the walk produced no modification, the original bytes are returned to
@@ -107,7 +108,7 @@ func fixExternalDocs(spec []byte) []byte {
 	if err := json.Unmarshal(spec, &parsed); err != nil {
 		return spec
 	}
-	if !wrapExternalDocs(parsed) {
+	if !normalizeExternalDocs(parsed, true) {
 		return spec
 	}
 	return safeMarshal(spec, parsed)

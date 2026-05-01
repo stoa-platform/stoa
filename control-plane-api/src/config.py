@@ -423,6 +423,10 @@ class Settings(BaseSettings):
     # concern, not source-of-truth — see the spec §11 table for the canonical
     # roll-out plan. Comma-separated env var.
     GITOPS_ELIGIBLE_TENANTS: list[str] = []
+    # Catalog release write mode:
+    # - direct: compatibility path, commits directly to the catalog default branch.
+    # - pull_request: branch + PR + merge + release tag before CP projection.
+    GITOPS_CATALOG_WRITE_MODE: Literal["direct", "pull_request"] = "direct"
 
     @field_validator("GITOPS_ELIGIBLE_TENANTS", mode="before")
     @classmethod

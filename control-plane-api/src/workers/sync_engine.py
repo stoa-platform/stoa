@@ -239,9 +239,31 @@ class SyncEngine:
 
             logger.info("Reconciling %d deployments", len(deployments))
 
-            # Filter out ERROR deployments that exceeded max retries
+            now = datetime.now(UTC)
+            timeout_seconds = getattr(settings, "SYNC_ENGINE_PENDING_TIMEOUT_SECONDS", 0)
+            if not isinstance(timeout_seconds, int | float):
+                timeout_seconds = 0
+
+            # Fail old PENDING/SYNCING records explicitly instead of leaving
+            # them as an ambiguous in-progress state forever.
             actionable = []
             for dep in deployments:
+                if timeout_seconds > 0 and dep.sync_status in (
+                    DeploymentSyncStatus.PENDING,
+                    DeploymentSyncStatus.SYNCING,
+                ):
+                    stale_after = timedelta(seconds=timeout_seconds)
+                    reference_time = dep.last_sync_attempt or dep.desired_at or dep.created_at
+                    if reference_time and now - reference_time > stale_after:
+                        dep.sync_status = DeploymentSyncStatus.ERROR
+                        dep.sync_error = (
+                            f"Gateway did not acknowledge deployment within {timeout_seconds} seconds; "
+                            "force sync or redeploy after checking the target gateway."
+                        )
+                        dep.sync_attempts = max(dep.sync_attempts, settings.SYNC_ENGINE_RETRY_MAX)
+                        await repo.update(dep)
+                        continue
+
                 if (
                     dep.sync_status == DeploymentSyncStatus.ERROR
                     and dep.sync_attempts >= settings.SYNC_ENGINE_RETRY_MAX
@@ -255,7 +277,10 @@ class SyncEngine:
                 actionable.append(dep)
 
             if not actionable:
+                await session.commit()
                 return
+
+            await session.commit()
 
             # Dispatch bounded concurrent tasks
             tasks = [self._reconcile_one(dep.id) for dep in actionable]
@@ -288,7 +313,10 @@ class SyncEngine:
                 return
 
             # Generation check (CAB-1950): skip if this generation was already attempted
-            if deployment.attempted_generation >= deployment.desired_generation:
+            if (
+                deployment.attempted_generation >= deployment.desired_generation
+                and deployment.sync_status != DeploymentSyncStatus.ERROR
+            ):
                 logger.debug(
                     "Deployment %s: generation %d already attempted (desired=%d), skipping",
                     deployment_id,
@@ -315,6 +343,8 @@ class SyncEngine:
                     gateway.auth_config,
                     source=gateway.source,
                     gateway_name=gateway.name,
+                    deployment_mode=getattr(gateway, "deployment_mode", None),
+                    topology=getattr(gateway, "topology", None),
                 )
 
                 tracker.start("adapter_connected")
@@ -514,6 +544,8 @@ class SyncEngine:
                         gateway.auth_config,
                         source=gateway.source,
                         gateway_name=gateway.name,
+                        deployment_mode=getattr(gateway, "deployment_mode", None),
+                        topology=getattr(gateway, "topology", None),
                     )
                     await adapter.connect()
                     apis = await adapter.list_apis()

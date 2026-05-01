@@ -1957,7 +1957,7 @@
             "type": "boolean"
           },
           "environment": {
-            "pattern": "^(dev|staging|production)$",
+            "pattern": "^(dev|staging|prod|production)$",
             "title": "Environment",
             "type": "string"
           },
@@ -6861,7 +6861,7 @@
         "description": "Request to deploy an API to gateways in a specific environment.",
         "properties": {
           "environment": {
-            "pattern": "^(dev|staging|production)$",
+            "pattern": "^(dev|staging|prod|production)$",
             "title": "Environment",
             "type": "string"
           },
@@ -47917,7 +47917,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^(dev|staging|production)$",
+                  "pattern": "^(dev|staging|prod|production)$",
                   "type": "string"
                 },
                 {

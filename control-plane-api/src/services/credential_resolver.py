@@ -18,9 +18,13 @@ AGENT_MANAGED_MESSAGE = (
     "Use the agent's heartbeat/sync-ack for status."
 )
 
-# Only pure "stoa" type gateways use the pull model (stoa-connect Go agent).
-# stoa_sidecar and stoa_edge_mcp are push-capable even when self-registered.
+# Pure "stoa" gateways use the pull model. STOA Link/Connect registrations may
+# also use STOA-specific gateway types while declaring deployment_mode=connect
+# or topology=remote-agent; those are agent-managed too and must be acked by the
+# agent instead of pushed from the Control Plane.
 _PULL_MODEL_GATEWAY_TYPES = {"stoa"}
+_PULL_MODEL_DEPLOYMENT_MODES = {"connect"}
+_PULL_MODEL_TOPOLOGIES = {"remote-agent"}
 
 
 class AgentManagedGatewayError(Exception):
@@ -113,7 +117,13 @@ async def create_adapter_with_credentials(
         ValueError: if credential resolution fails (e.g. Vault-only config with
             Vault unavailable).
     """
-    if source == "self_register" and gateway_type in _PULL_MODEL_GATEWAY_TYPES:
+    deployment_mode = str(extra_config.get("deployment_mode") or "").strip().lower()
+    topology = str(extra_config.get("topology") or "").strip().lower()
+    if source == "self_register" and (
+        gateway_type in _PULL_MODEL_GATEWAY_TYPES
+        or deployment_mode in _PULL_MODEL_DEPLOYMENT_MODES
+        or topology in _PULL_MODEL_TOPOLOGIES
+    ):
         logger.info(
             "Blocked adapter creation for agent-managed gateway %s (type=%s)",
             gateway_name or "unknown",

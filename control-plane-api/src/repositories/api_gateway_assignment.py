@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.api_gateway_assignment import ApiGatewayAssignment
 from ..models.gateway_instance import GatewayInstance
+from ..services.environment_aliases import deployment_environment_aliases
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class ApiGatewayAssignmentRepository:
             .order_by(ApiGatewayAssignment.environment, GatewayInstance.name)
         )
         if environment:
-            query = query.where(ApiGatewayAssignment.environment == environment)
+            query = query.where(ApiGatewayAssignment.environment.in_(deployment_environment_aliases(environment)))
 
         result = await self.db.execute(query)
         rows = result.all()
@@ -73,7 +74,7 @@ class ApiGatewayAssignmentRepository:
         result = await self.db.execute(
             select(ApiGatewayAssignment).where(
                 ApiGatewayAssignment.api_id == api_id,
-                ApiGatewayAssignment.environment == environment,
+                ApiGatewayAssignment.environment.in_(deployment_environment_aliases(environment)),
                 ApiGatewayAssignment.auto_deploy.is_(True),
             )
         )

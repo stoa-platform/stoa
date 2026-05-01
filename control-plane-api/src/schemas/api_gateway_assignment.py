@@ -10,7 +10,7 @@ class AssignmentCreate(BaseModel):
     """Create a default gateway target for an API/environment."""
 
     gateway_id: UUID
-    environment: str = Field(pattern="^(dev|staging|production)$")
+    environment: str = Field(pattern="^(dev|staging|prod|production)$")
     auto_deploy: bool = False
 
 

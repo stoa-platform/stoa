@@ -9,6 +9,8 @@ so production behaviour is unchanged until Phase 6.
 """
 
 from .advisory_lock import advisory_lock_key
+from .backfill import BackfillApiResult, GitOpsCatalogBackfill
+from .eligibility import is_gitops_create_eligible
 from .exceptions import (
     GitOpsConflictError,
     GitOpsRaceExhaustedError,
@@ -23,8 +25,10 @@ from .writer import GitOpsWriter
 
 __all__ = [
     "ApiCreatePayload",
+    "BackfillApiResult",
     "CatalogContentHash",
     "CreateApiResult",
+    "GitOpsCatalogBackfill",
     "GitOpsConflictError",
     "GitOpsRaceExhaustedError",
     "GitOpsWriter",
@@ -34,6 +38,7 @@ __all__ = [
     "advisory_lock_key",
     "canonical_catalog_path",
     "compute_catalog_content_hash",
+    "is_gitops_create_eligible",
     "is_uuid_shaped",
     "parse_canonical_path",
 ]

@@ -39,6 +39,18 @@ def _projection(
         tags=["portal:published", "banking"],
         portal_published=True,
         audience="public",
+        api_metadata={
+            "name": api_id,
+            "display_name": api_id,
+            "version": version,
+            "description": "",
+            "backend_url": "http://example.invalid",
+            "status": "active",
+            "deployments": {"dev": True, "staging": False},
+            "tags": ["portal:published", "banking"],
+            "category": "Banking",
+            "audience": "public",
+        },
         git_path=git_path or f"tenants/{tenant_id}/apis/{api_id}/api.yaml",
         git_commit_sha=git_commit_sha,
         catalog_content_hash=catalog_content_hash,
@@ -70,8 +82,7 @@ async def test_insert_creates_row_with_defaults(integration_db) -> None:
     assert row.git_path == "tenants/demo-gitops/apis/petstore/api.yaml"
     assert row.git_commit_sha == "a" * 40
     assert row.catalog_content_hash == "b" * 64
-    # Preserved-by-default columns
-    assert row.api_metadata == {}
+    assert row.api_metadata["backend_url"] == "http://example.invalid"
     assert row.openapi_spec is None
     assert row.target_gateways == []
 
@@ -115,7 +126,8 @@ async def test_update_preserves_target_gateways(integration_db) -> None:
     # Non-projected fields preserved
     assert row.target_gateways == ["webmethods-prod", "kong-staging"]
     assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Pet"}}
-    assert row.api_metadata == {"display_name": "Manually set", "backend_url": "http://legacy"}
+    assert row.api_metadata["display_name"] == "petstore"
+    assert row.api_metadata["backend_url"] == "http://example.invalid"
 
 
 @pytest.mark.integration

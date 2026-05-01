@@ -11,8 +11,10 @@ single async function on the DB side. The reconciler tick (Phase 4-2) feeds
 
 Contract:
 
-* The projection NEVER reads or writes ``target_gateways``, ``openapi_spec``
-  or ``metadata`` (preserved fields, owned by deployment / UAC V2).
+* The projection NEVER reads or writes ``target_gateways`` or ``openapi_spec``
+  (preserved fields, owned by deployment / UAC V2).
+* ``metadata`` is projected from ``api.yaml`` because Console fields such as
+  ``backend_url`` and ``display_name`` are read from that JSONB column.
 * The projection NEVER touches ``id`` (PK UUID) on UPDATE.
 * The projection rejects ``id != name`` content (§6.10) and UUID-shaped names.
 """
@@ -37,9 +39,9 @@ _DEFAULT_STATUS = "active"
 class ApiCatalogProjection:
     """Immutable projection of one ``api.yaml`` for ``api_catalog`` upsert.
 
-    Spec §6.9 mapping table. Fields ``target_gateways``, ``openapi_spec`` and
-    ``metadata`` are intentionally absent — they are owned by other flows and
-    preserved on UPDATE.
+    Spec §6.9 mapping table. Fields ``target_gateways`` and ``openapi_spec``
+    are intentionally absent — they are owned by other flows and preserved on
+    UPDATE.
     """
 
     tenant_id: str
@@ -51,6 +53,7 @@ class ApiCatalogProjection:
     tags: list[str]
     portal_published: bool
     audience: str
+    api_metadata: dict[str, Any]
     git_path: str
     git_commit_sha: str
     catalog_content_hash: str
@@ -122,6 +125,41 @@ def render_api_catalog_projection(
     if not isinstance(audience, str) or not audience:
         audience = _DEFAULT_AUDIENCE
 
+    backend_url = parsed_content.get("backend_url")
+    if not isinstance(backend_url, str) or not backend_url:
+        raise ValueError("api.yaml 'backend_url' must be a non-empty string")
+
+    display_name = parsed_content.get("display_name", name)
+    if not isinstance(display_name, str) or not display_name:
+        display_name = name
+
+    description = parsed_content.get("description", "")
+    if description is None:
+        description = ""
+    if not isinstance(description, str):
+        raise ValueError("api.yaml 'description' must be a string when present")
+
+    deployments = parsed_content.get("deployments", {})
+    if deployments is None:
+        deployments = {}
+    if not isinstance(deployments, dict):
+        raise ValueError("api.yaml 'deployments' must be an object when present")
+
+    api_metadata: dict[str, Any] = {
+        "name": name,
+        "display_name": display_name,
+        "version": version,
+        "description": description,
+        "backend_url": backend_url,
+        "status": status_value,
+        "deployments": deployments,
+        "tags": tags,
+    }
+    if category:
+        api_metadata["category"] = category
+    if audience:
+        api_metadata["audience"] = audience
+
     return ApiCatalogProjection(
         tenant_id=tenant_id,
         api_id=name,
@@ -132,6 +170,7 @@ def render_api_catalog_projection(
         tags=tags,
         portal_published=portal_published,
         audience=audience,
+        api_metadata=api_metadata,
         git_path=git_path,
         git_commit_sha=git_commit_sha,
         catalog_content_hash=catalog_content_hash,
@@ -146,15 +185,18 @@ def row_matches_projection(
 
     Compares only the projected fields (spec §6.6 + §6.9):
     ``api_id``, ``tenant_id``, ``api_name``, ``version``, ``status``,
-    ``category``, ``tags``, ``portal_published``, ``audience``, ``git_path``,
-    ``git_commit_sha``, ``catalog_content_hash``.
+    ``category``, ``tags``, ``portal_published``, ``audience``,
+    ``api_metadata``, ``git_path``, ``git_commit_sha``,
+    ``catalog_content_hash``.
 
-    Fields ``target_gateways``, ``openapi_spec``, ``metadata``, ``id``,
-    ``synced_at`` and ``deleted_at`` are ignored — they are not under GitOps
-    write authority.
+    Fields ``target_gateways``, ``openapi_spec``, ``id``, ``synced_at`` and
+    ``deleted_at`` are ignored — they are not under GitOps write authority.
     """
     expected_tags = list(expected.tags)
     actual_tags = list(actual_row.get("tags") or [])
+    actual_metadata = actual_row.get("api_metadata")
+    if actual_metadata is None:
+        actual_metadata = actual_row.get("metadata")
 
     return (
         actual_row.get("tenant_id") == expected.tenant_id
@@ -166,6 +208,7 @@ def row_matches_projection(
         and actual_tags == expected_tags
         and bool(actual_row.get("portal_published")) == expected.portal_published
         and actual_row.get("audience") == expected.audience
+        and actual_metadata == expected.api_metadata
         and actual_row.get("git_path") == expected.git_path
         and actual_row.get("git_commit_sha") == expected.git_commit_sha
         and actual_row.get("catalog_content_hash") == expected.catalog_content_hash
@@ -179,12 +222,12 @@ async def project_to_api_catalog(
     """Upsert ``projection`` into ``api_catalog`` transactionally.
 
     INSERT path: a new row is created with ``id = gen_random_uuid()`` (default),
-    ``metadata = {}``, ``openapi_spec = NULL``, ``target_gateways = []``
-    (defaults from the schema).
+    ``metadata`` comes from ``api.yaml``, ``openapi_spec = NULL`` and
+    ``target_gateways = []`` (defaults from the schema).
 
     UPDATE path: only the projected columns are written. ``target_gateways``,
-    ``openapi_spec``, ``metadata`` and the PK ``id`` are preserved by virtue
-    of NOT being listed in the ``.values()`` clause.
+    ``openapi_spec`` and the PK ``id`` are preserved by virtue of NOT being
+    listed in the ``.values()`` clause.
 
     Spec §6.5 step 14, §6.9. NOT wired to the HTTP handler in Phase 4-1.
 
@@ -226,7 +269,7 @@ async def project_to_api_catalog(
             tags=list(projection.tags),
             portal_published=projection.portal_published,
             audience=projection.audience,
-            api_metadata={},
+            api_metadata=dict(projection.api_metadata),
             git_path=projection.git_path,
             git_commit_sha=projection.git_commit_sha,
             catalog_content_hash=projection.catalog_content_hash,
@@ -246,6 +289,7 @@ async def project_to_api_catalog(
             tags=list(projection.tags),
             portal_published=projection.portal_published,
             audience=projection.audience,
+            api_metadata=dict(projection.api_metadata),
             git_path=projection.git_path,
             git_commit_sha=projection.git_commit_sha,
             catalog_content_hash=projection.catalog_content_hash,

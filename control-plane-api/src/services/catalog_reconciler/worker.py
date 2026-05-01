@@ -410,6 +410,7 @@ class CatalogReconcilerWorker:
             "tags": list(row.tags or []),
             "portal_published": bool(row.portal_published),
             "audience": row.audience,
+            "api_metadata": dict(row.api_metadata or {}),
             "git_path": row.git_path,
             "git_commit_sha": row.git_commit_sha,
             "catalog_content_hash": row.catalog_content_hash,

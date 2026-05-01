@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.2...control-plane-api-v1.11.3) (2026-05-01)
+
+
+### Bug Fixes
+
+* **api:** fail-closed env + base_domain validators (cab-2199 3-a) ([1e4d845](https://github.com/stoa-platform/stoa/commit/1e4d8454eb4bb2c8c65f3849abb45641fc699623))
+* **api:** harden snapshot conflict scanner (cab-2199 3-b) ([3e08fef](https://github.com/stoa-platform/stoa/commit/3e08fef35ddf8a3e2b16e294f4b4b101185f4a91))
+* **subscriptions:** align Portal Console Gateway UAC flow ([61b8f2e](https://github.com/stoa-platform/stoa/commit/61b8f2edf5a8b40c714c39e938505d7198e94d72))
+
 ## [1.11.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.1...control-plane-api-v1.11.2) (2026-05-01)
 
 

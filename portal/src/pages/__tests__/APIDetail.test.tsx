@@ -47,6 +47,10 @@ vi.mock('../../components/subscriptions/SubscribeModal', () => ({
   SubscribeModal: () => <div data-testid="subscribe-modal">Subscribe Modal</div>,
 }));
 
+vi.mock('../../components/consumers/SubscribeWithPlanModal', () => ({
+  SubscribeWithPlanModal: () => <div data-testid="subscribe-with-plan-modal">Subscribe Modal</div>,
+}));
+
 describe('APIDetail', () => {
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',

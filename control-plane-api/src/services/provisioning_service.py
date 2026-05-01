@@ -384,6 +384,18 @@ async def _deprovision_with_session(
     await db.commit()
 
     adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
+    if adapter is None:
+        subscription.provisioning_status = ProvisioningStatus.FAILED
+        subscription.provisioning_error = (
+            "Deprovision failed: no gateway adapter resolved for existing gateway_app_id"
+        )
+        await db.commit()
+        logger.error(
+            "Deprovision failed for subscription %s: no gateway adapter resolved",
+            subscription.id,
+            extra={"correlation_id": correlation_id, "tenant_id": subscription.tenant_id},
+        )
+        return
 
     try:
         # Clean up rate-limit policy first (CAB-1121 Phase 3)

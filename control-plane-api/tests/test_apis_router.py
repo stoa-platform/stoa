@@ -300,3 +300,23 @@ class TestApiFromCatalog:
         result = _api_from_catalog(api)
         assert result.deployed_dev is True
         assert result.deployed_staging is True
+
+    def test_catalog_release_metadata_exposed(self):
+        from src.routers.apis import _api_from_catalog
+
+        api = _mock_catalog_api(
+            catalog_release_id="catalog-release:abc",
+            catalog_release_tag="stoa/api/acme/weather-api/v1.0.0/abc123",
+            catalog_pr_url="https://github.com/stoa-platform/stoa-catalog/pull/12",
+            catalog_pr_number=12,
+            catalog_source_branch="stoa/api/acme/weather-api/v1.0.0/hash",
+            catalog_merge_commit_sha="abc123",
+        )
+        result = _api_from_catalog(api)
+
+        assert result.catalog_release_id == "catalog-release:abc"
+        assert result.catalog_release_tag == "stoa/api/acme/weather-api/v1.0.0/abc123"
+        assert result.catalog_pr_url == "https://github.com/stoa-platform/stoa-catalog/pull/12"
+        assert result.catalog_pr_number == 12
+        assert result.catalog_source_branch == "stoa/api/acme/weather-api/v1.0.0/hash"
+        assert result.catalog_merge_commit_sha == "abc123"

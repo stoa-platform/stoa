@@ -27,7 +27,7 @@ from src.services.git_executor import (
     run_sync,
 )
 
-from .models import RemoteCommit, RemoteFile
+from .models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
 
 if TYPE_CHECKING:
     from src.services.github_service import GitHubService
@@ -140,6 +140,7 @@ class GitHubContentsCatalogClient:
         expected_sha: str | None,
         actor: str,
         message: str,
+        branch: str | None = None,
     ) -> RemoteCommit:
         """Commit ``content`` at ``path`` via the Contents API.
 
@@ -153,7 +154,7 @@ class GitHubContentsCatalogClient:
         """
         gh = self._github_service._require_gh()
         project_id = self._project_id
-        branch = self._default_branch
+        target_branch = branch or self._default_branch
         # Sanitize actor before splicing into the commit message so a
         # JWT-derived string cannot inject newlines or control chars.
         safe_actor = _sanitize_actor(actor)
@@ -165,14 +166,14 @@ class GitHubContentsCatalogClient:
             repo = gh.get_repo(project_id)
             try:
                 if expected_sha is None:
-                    result = repo.create_file(path, full_message, content_str, branch=branch)
+                    result = repo.create_file(path, full_message, content_str, branch=target_branch)
                 else:
                     result = repo.update_file(
                         path,
                         full_message,
                         content_str,
                         expected_sha,
-                        branch=branch,
+                        branch=target_branch,
                     )
             except GithubException as exc:
                 # 409 Conflict and 422 Unprocessable both indicate optimistic-CAS
@@ -195,6 +196,121 @@ class GitHubContentsCatalogClient:
             _create_or_update,
             semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE,
             op_name="catalog_git_client.create_or_update",
+        )
+
+    async def create_branch(self, name: str, ref: str | None = None) -> str:
+        """Create ``name`` from ``ref`` and return the branch HEAD SHA."""
+        gh = self._github_service._require_gh()
+        project_id = self._project_id
+        base_ref_name = ref or self._default_branch
+
+        def _create_branch() -> str:
+            repo = gh.get_repo(project_id)
+            try:
+                base_ref = repo.get_git_ref(f"heads/{base_ref_name}")
+                repo.create_git_ref(f"refs/heads/{name}", base_ref.object.sha)
+            except GithubException as exc:
+                # Idempotent retry: if a previous request created the same
+                # branch, return its current head rather than failing the
+                # catalog write before the PR step can inspect it.
+                if exc.status != 422:
+                    raise
+            branch = repo.get_branch(name)
+            return branch.commit.sha
+
+        return await run_sync(
+            _create_branch,
+            semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE,
+            op_name="catalog_git_client.create_branch",
+        )
+
+    async def create_pull_request(
+        self,
+        *,
+        title: str,
+        body: str,
+        source_branch: str,
+        target_branch: str | None = None,
+    ) -> RemotePullRequest:
+        """Open a PR for a catalog release branch."""
+        gh = self._github_service._require_gh()
+        project_id = self._project_id
+        base_branch = target_branch or self._default_branch
+
+        def _create_pr() -> RemotePullRequest:
+            repo = gh.get_repo(project_id)
+            pr = repo.create_pull(title=title, body=body, head=source_branch, base=base_branch)
+            return RemotePullRequest(
+                number=pr.number,
+                url=pr.html_url,
+                source_branch=source_branch,
+                target_branch=base_branch,
+                state=pr.state,
+                merge_commit_sha=getattr(pr, "merge_commit_sha", None),
+            )
+
+        return await run_sync(
+            _create_pr,
+            semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE,
+            op_name="catalog_git_client.create_pull_request",
+        )
+
+    async def merge_pull_request(self, number: int) -> RemotePullRequest:
+        """Merge a catalog PR and return the provider metadata."""
+        gh = self._github_service._require_gh()
+        project_id = self._project_id
+
+        def _merge_pr() -> RemotePullRequest:
+            repo = gh.get_repo(project_id)
+            pr = repo.get_pull(number)
+            if not pr.merged:
+                merge_status = pr.merge(merge_method="squash")
+                merge_sha = getattr(merge_status, "sha", None)
+            else:
+                merge_sha = None
+            merged = repo.get_pull(number)
+            return RemotePullRequest(
+                number=merged.number,
+                url=merged.html_url,
+                source_branch=merged.head.ref if merged.head else "",
+                target_branch=merged.base.ref if merged.base else self._default_branch,
+                state="merged" if merged.merged else merged.state,
+                merge_commit_sha=merged.merge_commit_sha or merge_sha,
+            )
+
+        return await run_sync(
+            _merge_pr,
+            semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE,
+            op_name="catalog_git_client.merge_pull_request",
+        )
+
+    async def create_tag(self, *, name: str, target_sha: str, message: str) -> RemoteTag:
+        """Create an annotated tag for a catalog release generation."""
+        gh = self._github_service._require_gh()
+        project_id = self._project_id
+
+        def _create_tag() -> RemoteTag:
+            repo = gh.get_repo(project_id)
+            try:
+                existing = repo.get_git_ref(f"tags/{name}")
+                existing_target_sha = existing.object.sha
+                if getattr(existing.object, "type", None) == "tag":
+                    existing_target_sha = repo.get_git_tag(existing.object.sha).object.sha
+                if existing_target_sha == target_sha:
+                    return RemoteTag(name=name, target_sha=target_sha, url=getattr(existing, "url", None))
+                raise ValueError(f"tag {name!r} already exists and points to {existing_target_sha}")
+            except GithubException as exc:
+                if exc.status != 404:
+                    raise
+
+            tag = repo.create_git_tag(tag=name, message=message, object=target_sha, type="commit")
+            ref = repo.create_git_ref(ref=f"refs/tags/{name}", sha=tag.sha)
+            return RemoteTag(name=name, target_sha=target_sha, url=getattr(ref, "url", None))
+
+        return await run_sync(
+            _create_tag,
+            semaphore=GITHUB_CONTENTS_WRITE_SEMAPHORE,
+            op_name="catalog_git_client.create_tag",
         )
 
     async def read_at_commit(self, path: str, commit_sha: str) -> bytes | None:

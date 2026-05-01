@@ -13,6 +13,18 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class CatalogReleaseRef:
+    """Catalog release metadata attached to a GitOps desired-state generation."""
+
+    release_id: str
+    tag_name: str
+    source_branch: str
+    pull_request_url: str
+    pull_request_number: int
+    merge_commit_sha: str
+
+
+@dataclass(frozen=True)
 class ApiCreatePayload:
     """Validated payload accepted by ``GitOpsWriter.create_api``.
 
@@ -44,6 +56,7 @@ class CreateApiResult:
     git_commit_sha: str
     catalog_content_hash: str
     case: str  # "A" (new), "B" (idempotent no-op), unused for "C" (raised as error)
+    catalog_release: CatalogReleaseRef | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

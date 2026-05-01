@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from .models import RemoteCommit, RemoteFile
+from .models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
 
 
 @runtime_checkable
@@ -35,12 +35,43 @@ class CatalogGitClient(Protocol):
         expected_sha: str | None,
         actor: str,
         message: str,
+        branch: str | None = None,
     ) -> RemoteCommit:
         """Commit ``content`` at ``path``.
 
         ``expected_sha`` is the previous blob SHA (None for create). Implements
         optimistic CAS: a mismatch must trigger a re-read upstream (spec §6.5
         step 10 retry loop).
+        """
+        ...
+
+    async def create_branch(self, name: str, ref: str | None = None) -> str:
+        """Create a branch and return its HEAD SHA.
+
+        ``ref=None`` resolves to the catalog default branch.
+        """
+        ...
+
+    async def create_pull_request(
+        self,
+        *,
+        title: str,
+        body: str,
+        source_branch: str,
+        target_branch: str | None = None,
+    ) -> RemotePullRequest:
+        """Open a catalog pull request / merge request for ``source_branch``."""
+        ...
+
+    async def merge_pull_request(self, number: int) -> RemotePullRequest:
+        """Merge a catalog pull request and return the merged ref."""
+        ...
+
+    async def create_tag(self, *, name: str, target_sha: str, message: str) -> RemoteTag:
+        """Create an annotated release tag pointing at ``target_sha``.
+
+        Implementations should be idempotent if the tag already points to the
+        requested target.
         """
         ...
 

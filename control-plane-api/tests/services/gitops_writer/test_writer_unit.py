@@ -11,6 +11,9 @@ from __future__ import annotations
 from src.services.gitops_writer.writer import (
     _ACTOR_MAX_LEN,
     _MAX_RACE_RETRIES,
+    _catalog_release_branch_name,
+    _catalog_release_id,
+    _catalog_release_tag_name,
     _sanitize_actor,
 )
 
@@ -45,3 +48,39 @@ class TestRetryConstant:
     def test_max_retries_is_three(self) -> None:
         # Spec §6.5 step 10: exactly 3 attempts before raising 503.
         assert _MAX_RACE_RETRIES == 3
+
+
+class TestCatalogReleaseNaming:
+    def test_branch_name_is_content_hash_scoped(self) -> None:
+        branch = _catalog_release_branch_name(
+            tenant_id="demo-gitops",
+            api_name="demo-petstore",
+            version="1.2.3",
+            catalog_content_hash="abcdef1234567890",
+        )
+        assert branch == "stoa/api/demo-gitops/demo-petstore/v1.2.3/abcdef123456"
+
+    def test_tag_name_is_merge_commit_scoped(self) -> None:
+        tag = _catalog_release_tag_name(
+            tenant_id="demo-gitops",
+            api_name="demo-petstore",
+            version="1.2.3",
+            merge_commit_sha="1234567890abcdef",
+        )
+        assert tag == "stoa/api/demo-gitops/demo-petstore/v1.2.3/1234567890ab"
+
+    def test_release_id_is_stable_for_same_generation(self) -> None:
+        first = _catalog_release_id(
+            tenant_id="demo-gitops",
+            api_name="demo-petstore",
+            version="1.2.3",
+            merge_commit_sha="1234567890abcdef",
+        )
+        second = _catalog_release_id(
+            tenant_id="demo-gitops",
+            api_name="demo-petstore",
+            version="1.2.3",
+            merge_commit_sha="1234567890abcdef",
+        )
+        assert first == second
+        assert first.startswith("catalog-release:")

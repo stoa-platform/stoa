@@ -109,10 +109,13 @@ Toute projection Console ou API de déploiement doit exposer:
 | `git_sync_status` | `up_to_date`, `missing_commit`, `git_sync_disabled`, `unknown` | fraîcheur du catalog Git pour cette génération |
 | `desired_commit_sha` | SHA Git ou `null` | commit exact qui porte le desired state |
 | `desired_git_path` | chemin catalog ou `null` | fichier/dossier Git attendu |
+| `catalog_release_tag` | tag Git ou `null` | version rollbackable du desired state accepté |
 
 Invariants:
 - `deployment_status=synced` prouve uniquement l'ack runtime gateway. Il ne
   prouve pas que `stoa-catalog` est à jour.
+- `desired_commit_sha` sans `catalog_release_tag` est une preuve Git technique,
+  pas une release GitOps complète.
 - `desired_source=db_shortcut` est autorisé pour dev/demo, mais doit être
   visible dans la Console.
 - En production, une action directe vers une gateway doit être refusée tant que

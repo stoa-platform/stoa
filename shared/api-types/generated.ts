@@ -9467,6 +9467,18 @@ export interface components {
             audience: "public" | "internal" | "partner";
             /** Backend Url */
             backend_url: string;
+            /** Catalog Merge Commit Sha */
+            catalog_merge_commit_sha?: string | null;
+            /** Catalog Pr Number */
+            catalog_pr_number?: number | null;
+            /** Catalog Pr Url */
+            catalog_pr_url?: string | null;
+            /** Catalog Release Id */
+            catalog_release_id?: string | null;
+            /** Catalog Release Tag */
+            catalog_release_tag?: string | null;
+            /** Catalog Source Branch */
+            catalog_source_branch?: string | null;
             /** Created At */
             created_at?: string | null;
             /**

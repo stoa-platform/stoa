@@ -341,6 +341,16 @@ function OverviewTab({ api }: { api: API }) {
       value: api.portal_promoted ? 'Published' : 'Private',
     },
     { label: 'Tags', value: api.tags?.join(', ') || 'None' },
+    { label: 'Catalog Release', value: api.catalog_release_tag || 'Unversioned', mono: true },
+    {
+      label: 'Catalog PR',
+      value:
+        api.catalog_pr_number && api.catalog_pr_url
+          ? `#${api.catalog_pr_number} ${api.catalog_pr_url}`
+          : 'None',
+      mono: Boolean(api.catalog_pr_url),
+    },
+    { label: 'Merge Commit', value: api.catalog_merge_commit_sha || 'None', mono: true },
   ];
 
   return (

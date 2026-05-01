@@ -881,6 +881,20 @@ async def route_sync_ack(
             cp_tracker.start("event_emitted")
             cp_tracker.complete("event_emitted", detail="deployment dispatched to agent")
             merged_steps = cp_tracker.to_list() + result.steps
+        step_error = None
+        if merged_steps:
+            from src.services.sync_step_tracker import SyncStepTracker
+
+            step_error = SyncStepTracker.from_list(merged_steps).first_error()
+        effective_status = result.status
+        effective_error = result.error
+        if result.status == "applied" and step_error:
+            logger.warning(
+                "route-sync-ack: applied result contains failed step for deployment=%s, treating as failed",
+                result.deployment_id,
+            )
+            effective_status = "failed"
+            effective_error = step_error
 
         # CAB-1950: reject stale generation acks
         if result.generation is not None and result.generation < deployment.desired_generation:
@@ -896,7 +910,7 @@ async def route_sync_ack(
         synced_generation = deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
 
         if (
-            result.status == "failed"
+            effective_status == "failed"
             and deployment.sync_status == DeploymentSyncStatus.SYNCED
             and deployment.last_sync_success is not None
             and synced_generation >= desired_generation
@@ -913,7 +927,7 @@ async def route_sync_ack(
             processed += 1
             continue
 
-        if result.status == "applied":
+        if effective_status == "applied":
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.last_sync_success = now
             deployment.sync_error = None
@@ -922,18 +936,14 @@ async def route_sync_ack(
             if result.generation is not None:
                 deployment.synced_generation = result.generation
                 deployment.attempted_generation = result.generation
-        elif result.status == "failed":
+        elif effective_status == "failed":
             deployment.sync_status = DeploymentSyncStatus.ERROR
             if result.generation is not None:
                 deployment.attempted_generation = result.generation
             if merged_steps is not None:
                 deployment.sync_steps = merged_steps
             # Derive sync_error from step trace if available, else use scalar error
-            if merged_steps:
-                tracker = SyncStepTracker.from_list(merged_steps)
-                deployment.sync_error = tracker.first_error() or result.error
-            else:
-                deployment.sync_error = result.error
+            deployment.sync_error = step_error or effective_error
         else:
             logger.warning("route-sync-ack: unknown status=%s for deployment=%s", result.status, result.deployment_id)
             continue

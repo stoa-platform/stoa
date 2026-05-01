@@ -113,8 +113,14 @@ func TestRouteSyncerPerRouteFailure(t *testing.T) {
 	if results[0].Status != "applied" {
 		t.Errorf("dep-1 should be applied, got %q", results[0].Status)
 	}
+	if got := results[0].Steps[2]; got.Name != "api_synced" || got.Status != "success" || got.Detail != "" {
+		t.Errorf("dep-1 should carry successful api_synced step, got %+v", got)
+	}
 	if results[1].Status != "failed" || results[1].Error != "route conflict" {
 		t.Errorf("dep-2 should be failed with 'route conflict', got status=%q err=%q", results[1].Status, results[1].Error)
+	}
+	if got := results[1].Steps[2]; got.Name != "api_synced" || got.Status != "failed" || got.Detail != "route conflict" {
+		t.Errorf("dep-2 should carry failed api_synced step, got %+v", got)
 	}
 }
 

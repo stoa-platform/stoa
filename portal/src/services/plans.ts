@@ -1,8 +1,8 @@
 /**
  * STOA Developer Portal - Plans Service
  *
- * Service for listing subscription plans.
- * Uses Control Plane API endpoints (/v1/plans).
+ * Service for listing subscription plans in the Developer Portal.
+ * Uses read-only Portal endpoints for cross-tenant provider plans.
  *
  * Reference: CAB-1121 Phase 5
  */
@@ -18,11 +18,11 @@ export interface ListPlansParams {
 
 export const plansService = {
   /**
-   * List plans for a tenant
-   * GET /v1/plans/{tenant_id}
+   * List active plans for a Portal-visible provider tenant
+   * GET /v1/portal/plans/{tenant_id}
    */
   list: async (tenantId: string, params?: ListPlansParams): Promise<PlanListResponse> => {
-    const response = await apiClient.get<PlanListResponse>(`/v1/plans/${tenantId}`, {
+    const response = await apiClient.get<PlanListResponse>(`/v1/portal/plans/${tenantId}`, {
       params: {
         page: params?.page || 1,
         page_size: params?.pageSize || 50,

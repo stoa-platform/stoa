@@ -9,6 +9,7 @@ from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance
 from src.models.promotion import Promotion
+from src.services.environment_aliases import deployment_environment_aliases
 from src.services.gateway_topology import normalize_gateway_topology, wire_value
 
 
@@ -195,7 +196,7 @@ class GatewayDeploymentRepository:
         )
 
         if environment:
-            query = query.where(GatewayInstance.environment == environment)
+            query = query.where(GatewayInstance.environment.in_(deployment_environment_aliases(environment)))
         if gateway_type:
             query = query.where(GatewayInstance.gateway_type == gateway_type)
         if sync_status:

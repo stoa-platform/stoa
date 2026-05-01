@@ -22,7 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.dependencies import User, get_current_user
 from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerCategory, MCPServerStatus, MCPServerTool
+from ..models.plan import PlanStatus
 from ..repositories.catalog import CatalogRepository, escape_like, get_allowed_audiences
+from ..repositories.plan import PlanRepository
+from ..schemas.plan import PlanListResponse, PlanResponse
 from ..schemas.portal import APIListItem, MCPServerListItem
 from ..services.mcp_tool_expander import expand_api
 
@@ -286,6 +289,53 @@ class PortalMCPServersResponse(BaseModel):
 # ============================================================================
 # API Catalog Endpoints (CAB-682: Now using PostgreSQL cache)
 # ============================================================================
+
+
+@router.get("/plans/{tenant_id}", response_model=PlanListResponse)
+async def list_portal_plans(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+):
+    """List active subscription plans for a provider tenant visible in Portal.
+
+    The admin plans endpoint remains tenant-scoped. Portal users can browse
+    cross-tenant APIs, so they also need read-only access to the active plans
+    for tenants that expose at least one visible Portal API.
+    """
+    try:
+        catalog_repo = CatalogRepository(db)
+        _visible_apis, visible_total = await catalog_repo.get_portal_apis(
+            tenant_id=tenant_id,
+            user_roles=list(user.roles or []),
+            page=1,
+            page_size=1,
+        )
+        if visible_total == 0:
+            raise HTTPException(status_code=404, detail="No visible Portal APIs for this tenant")
+
+        plan_repo = PlanRepository(db)
+        plans, total = await plan_repo.list_by_tenant(
+            tenant_id=tenant_id,
+            status=PlanStatus.ACTIVE,
+            page=page,
+            page_size=page_size,
+        )
+
+        return PlanListResponse(
+            items=[PlanResponse.model_validate(p) for p in plans],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=((total + page_size - 1) // page_size) if total > 0 else 1,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list Portal plans for tenant {tenant_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list plans")
 
 
 @router.get("/apis", response_model=PortalAPIsResponse)

@@ -20,6 +20,11 @@ from ..models.catalog import APICatalog
 from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus
 from ..repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
+from ..services.environment_aliases import (
+    deployment_environment_aliases,
+    deployment_environment_matches,
+    normalize_deployment_environment,
+)
 from ..services.gateway_deployment_service import GatewayDeploymentService
 from ..services.gateway_topology import normalize_gateway_topology
 
@@ -221,6 +226,8 @@ class DeploymentOrchestrationService:
         Raises:
             ValueError: If prerequisites are not met.
         """
+        environment = normalize_deployment_environment(environment) or environment
+
         # 1. Resolve API to catalog entry (sync from Git if needed)
         api_catalog = await self._resolve_api_catalog(tenant_id, api_identifier)
 
@@ -274,6 +281,8 @@ class DeploymentOrchestrationService:
         GatewayDeployment is created or any Kafka/SSE event is emitted.
         """
         api_catalog = await self._resolve_api_catalog(tenant_id, api_identifier)
+
+        environment = normalize_deployment_environment(environment) or environment
 
         if validate_promotion and environment != "dev":
             has_promotion = await self._has_active_promotion(api_catalog.api_id, api_catalog.tenant_id, environment)
@@ -402,14 +411,13 @@ class DeploymentOrchestrationService:
             return []
 
         # Get auto-deploy assignments
+        target_environment = normalize_deployment_environment(target_environment) or target_environment
         assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, target_environment)
         if not assignments:
-            logger.debug(
-                "No auto-deploy assignments for api=%s env=%s",
-                api_id,
-                target_environment,
+            raise ValueError(
+                f"Promotion to {target_environment} cannot be marked deployed: no auto-deploy gateway "
+                f"assignments exist for API '{api_catalog.api_name}'. Configure at least one target gateway."
             )
-            return []
 
         gateway_ids = [a.gateway_id for a in assignments]
         preflight = await self._preflight_gateway_ids(api_catalog, gateway_ids)
@@ -466,6 +474,8 @@ class DeploymentOrchestrationService:
                     gateway.auth_config,
                     source=gateway.source,
                     gateway_name=gateway.name,
+                    deployment_mode=getattr(gateway, "deployment_mode", None),
+                    topology=getattr(gateway, "topology", None),
                 )
                 await adapter.connect()
                 try:
@@ -514,6 +524,7 @@ class DeploymentOrchestrationService:
         gateway_ids: list[UUID] | None,
     ) -> list[UUID]:
         if gateway_ids is None:
+            environment = normalize_deployment_environment(environment) or environment
             assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, environment)
             if not assignments:
                 raise ValueError(
@@ -694,7 +705,7 @@ class DeploymentOrchestrationService:
             .where(
                 Promotion.api_id == api_id,
                 Promotion.tenant_id == tenant_id,
-                Promotion.target_environment == target_environment,
+                Promotion.target_environment.in_(deployment_environment_aliases(target_environment)),
                 Promotion.status == PromotionStatus.PROMOTED.value,
             )
             .limit(1)
@@ -707,7 +718,7 @@ class DeploymentOrchestrationService:
             .where(
                 Promotion.api_id == api_id,
                 Promotion.tenant_id == tenant_id,
-                Promotion.target_environment == target_environment,
+                Promotion.target_environment.in_(deployment_environment_aliases(target_environment)),
                 Promotion.status == PromotionStatus.PROMOTED.value,
             )
             .order_by(Promotion.completed_at.desc())
@@ -718,7 +729,7 @@ class DeploymentOrchestrationService:
     async def _validate_gateways_for_env(self, gateway_ids: list[UUID], environment: str) -> None:
         for gw_id in gateway_ids:
             gateway = await self._get_gateway_or_raise(gw_id)
-            if gateway.environment != environment:
+            if not deployment_environment_matches(gateway.environment, environment):
                 raise ValueError(
                     f"Gateway '{gateway.name}' is in environment '{gateway.environment}', "
                     f"not '{environment}'. Select gateways matching the target environment."

@@ -56,6 +56,10 @@ const mockGetSubscriptions = vi.fn().mockResolvedValue({
       revoked_at: null,
       revoked_by: null,
       expires_at: null,
+      api_key_prefix: null,
+      provisioning_status: 'failed',
+      gateway_app_id: 'wm-app-1',
+      provisioning_error: 'Gateway timeout',
     },
   ],
   total: 1,
@@ -86,6 +90,9 @@ vi.mock('../services/api', () => ({
     getSubscriptionStats: (...args: unknown[]) => mockGetSubscriptionStats(...args),
     approveSubscription: vi.fn().mockResolvedValue({}),
     rejectSubscription: vi.fn().mockResolvedValue({}),
+    revokeSubscription: vi.fn().mockResolvedValue({}),
+    suspendSubscription: vi.fn().mockResolvedValue({}),
+    reactivateSubscription: vi.fn().mockResolvedValue({}),
     bulkSubscriptionAction: vi.fn().mockResolvedValue({ succeeded: 1, failed: [] }),
   },
 }));
@@ -157,6 +164,10 @@ describe('Subscriptions', () => {
           revoked_at: null,
           revoked_by: null,
           expires_at: null,
+          api_key_prefix: null,
+          provisioning_status: 'failed',
+          gateway_app_id: 'wm-app-1',
+          provisioning_error: 'Gateway timeout',
         },
       ],
       total: 1,
@@ -200,6 +211,13 @@ describe('Subscriptions', () => {
     expect(screen.getByText('Weather API')).toBeInTheDocument();
     expect(screen.getByText('dev@example.com')).toBeInTheDocument();
     expect(screen.getByText('Basic Plan')).toBeInTheDocument();
+  });
+
+  it('renders provisioning status and gateway details', async () => {
+    renderSubscriptions();
+    expect(await screen.findByText('failed')).toBeInTheDocument();
+    expect(screen.getByText('wm-app-1')).toBeInTheDocument();
+    expect(screen.getByText('Gateway timeout')).toBeInTheDocument();
   });
 
   it('renders stats cards', async () => {

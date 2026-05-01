@@ -14,7 +14,13 @@ import type { APISubscription } from '../types';
 
 // ============ Types ============
 
-export type APISubscriptionStatus = 'pending' | 'active' | 'suspended' | 'revoked' | 'expired';
+export type APISubscriptionStatus =
+  | 'pending'
+  | 'active'
+  | 'suspended'
+  | 'revoked'
+  | 'expired'
+  | 'rejected';
 
 export interface CreateAPISubscriptionRequest {
   application_id: string;
@@ -25,7 +31,6 @@ export interface CreateAPISubscriptionRequest {
   tenant_id: string;
   plan_id?: string;
   plan_name?: string;
-  certificate_fingerprint?: string;
 }
 
 export interface APISubscriptionResponse {
@@ -52,6 +57,7 @@ export interface APISubscriptionResponse {
   approved_by: string | null;
   revoked_by: string | null;
   provisioning_status: string | null;
+  gateway_app_id: string | null;
   provisioning_error: string | null;
 }
 
@@ -85,6 +91,9 @@ function transformToAPISubscription(response: APISubscriptionResponse): APISubsc
     planName: response.plan_name || undefined,
     status: response.status,
     apiKeyPrefix: response.api_key_prefix || undefined,
+    provisioningStatus: response.provisioning_status || undefined,
+    provisioningError: response.provisioning_error || undefined,
+    gatewayAppId: response.gateway_app_id || undefined,
     createdAt: response.created_at,
     expiresAt: response.expires_at || undefined,
   };

@@ -4,11 +4,14 @@
 //! Each endpoint in the contract becomes a DynamicTool with the naming pattern:
 //! `{tenant_id}_{contract_name}_{operation_id}`
 
+use std::collections::HashMap;
 use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::mcp::tools::dynamic_tool::DynamicTool;
 use crate::mcp::tools::{ToolAnnotations, ToolDefinition, ToolRegistry, ToolSchema};
-use crate::uac::schema::UacContractSpec;
+use crate::uac::schema::{EndpointSideEffects, UacContractSpec, UacEndpoint};
 use crate::uac::Action;
 
 use super::{BindingOutput, ProtocolBinder};
@@ -16,12 +19,16 @@ use super::{BindingOutput, ProtocolBinder};
 /// MCP protocol binder — generates MCP tools from UAC contracts.
 pub struct McpBinder {
     tool_registry: Arc<ToolRegistry>,
+    contract_tool_names: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl McpBinder {
     /// Create a new MCP binder backed by the given tool registry.
     pub fn new(tool_registry: Arc<ToolRegistry>) -> Self {
-        Self { tool_registry }
+        Self {
+            tool_registry,
+            contract_tool_names: RwLock::new(HashMap::new()),
+        }
     }
 
     /// Tool name prefix for a contract (used for cascade deletion).
@@ -42,6 +49,75 @@ impl McpBinder {
         }
     }
 
+    /// Resolve the tool action from endpoint-level LLM metadata when present.
+    fn endpoint_action(endpoint: &UacEndpoint, primary_method: &str) -> Action {
+        match endpoint.llm.as_ref().map(|llm| llm.side_effects) {
+            Some(EndpointSideEffects::None) | Some(EndpointSideEffects::Read) => Action::Read,
+            Some(EndpointSideEffects::Destructive) => Action::Delete,
+            Some(EndpointSideEffects::Write) | None => Self::method_to_action(primary_method),
+        }
+    }
+
+    fn side_effects_label(side_effects: EndpointSideEffects) -> &'static str {
+        match side_effects {
+            EndpointSideEffects::None => "none",
+            EndpointSideEffects::Read => "read",
+            EndpointSideEffects::Write => "write",
+            EndpointSideEffects::Destructive => "destructive",
+        }
+    }
+
+    /// Build the generated MCP tool name.
+    ///
+    /// For LLM-ready endpoints, endpoint.llm.tool_name is the stable MCP tool
+    /// name. Legacy endpoints keep the namespaced UAC fallback.
+    fn tool_name(contract: &UacContractSpec, endpoint: &UacEndpoint, index: usize) -> String {
+        if let Some(llm) = endpoint.llm.as_ref() {
+            return llm.tool_name.clone();
+        }
+
+        let op_id = endpoint
+            .operation_id
+            .clone()
+            .unwrap_or_else(|| format!("{}-{}", contract.name, index));
+
+        format!("uac:{}:{}:{}", contract.tenant_id, contract.name, op_id)
+    }
+
+    /// Build the agent-facing tool description.
+    fn description(
+        contract: &UacContractSpec,
+        endpoint: &UacEndpoint,
+        primary_method: &str,
+    ) -> String {
+        let legacy = format!(
+            "{} {} — {} [{}]",
+            primary_method, endpoint.path, contract.name, contract.tenant_id
+        );
+
+        let Some(llm) = endpoint.llm.as_ref() else {
+            return legacy;
+        };
+
+        let mut lines = vec![
+            legacy,
+            format!("Summary: {}", llm.summary),
+            format!("Intent: {}", llm.intent),
+            format!(
+                "Side effects: {}",
+                Self::side_effects_label(llm.side_effects)
+            ),
+            format!("Safe for agents: {}", llm.safe_for_agents),
+            format!("Requires human approval: {}", llm.requires_human_approval),
+        ];
+
+        if llm.requires_human_approval {
+            lines.push("HUMAN APPROVAL REQUIRED".to_string());
+        }
+
+        lines.join("\n")
+    }
+
     /// Generate tool definitions from a contract (pure function, no side effects).
     pub fn generate_tool_definitions(contract: &UacContractSpec) -> Vec<ToolDefinition> {
         contract
@@ -49,25 +125,15 @@ impl McpBinder {
             .iter()
             .enumerate()
             .map(|(i, endpoint)| {
-                let op_id = endpoint
-                    .operation_id
-                    .clone()
-                    .unwrap_or_else(|| format!("{}-{}", contract.name, i));
-
-                let tool_name = format!("uac:{}:{}:{}", contract.tenant_id, contract.name, op_id);
-
                 // Use first method for action hint (most endpoints have one primary method)
                 let primary_method = endpoint
                     .methods
                     .first()
                     .map(|m| m.as_str())
                     .unwrap_or("GET");
-                let action = Self::method_to_action(primary_method);
-
-                let description = format!(
-                    "{} {} — {} [{}]",
-                    primary_method, endpoint.path, contract.name, contract.tenant_id
-                );
+                let action = Self::endpoint_action(endpoint, primary_method);
+                let tool_name = Self::tool_name(contract, endpoint, i);
+                let description = Self::description(contract, endpoint, primary_method);
 
                 // Build input schema from endpoint schema or default empty object
                 let input_schema = endpoint
@@ -99,24 +165,14 @@ impl McpBinder {
             .iter()
             .enumerate()
             .map(|(i, endpoint)| {
-                let op_id = endpoint
-                    .operation_id
-                    .clone()
-                    .unwrap_or_else(|| format!("{}-{}", contract.name, i));
-
-                let tool_name = format!("uac:{}:{}:{}", contract.tenant_id, contract.name, op_id);
-
                 let primary_method = endpoint
                     .methods
                     .first()
                     .map(|m| m.as_str())
                     .unwrap_or("GET");
-                let action = Self::method_to_action(primary_method);
-
-                let description = format!(
-                    "{} {} — {} [{}]",
-                    primary_method, endpoint.path, contract.name, contract.tenant_id
-                );
+                let action = Self::endpoint_action(endpoint, primary_method);
+                let tool_name = Self::tool_name(contract, endpoint, i);
+                let description = Self::description(contract, endpoint, primary_method);
 
                 let input_schema = endpoint
                     .input_schema
@@ -152,14 +208,24 @@ impl ProtocolBinder for McpBinder {
 
         // Remove existing tools for this contract (idempotent re-bind)
         self.tool_registry.remove_by_prefix(&prefix);
+        if let Some(previous_names) = self.contract_tool_names.write().remove(&contract_key) {
+            for name in previous_names {
+                self.tool_registry.unregister(&name);
+            }
+        }
 
         // Create and register new tools
         let tools = Self::create_dynamic_tools(contract);
         let count = tools.len();
+        let definitions = Self::generate_tool_definitions(contract);
 
         for tool in &tools {
             self.tool_registry.register(Arc::clone(tool));
         }
+        self.contract_tool_names.write().insert(
+            contract_key.clone(),
+            definitions.iter().map(|d| d.name.clone()).collect(),
+        );
 
         tracing::info!(
             contract = %contract_key,
@@ -167,14 +233,19 @@ impl ProtocolBinder for McpBinder {
             "MCP binder: tools generated"
         );
 
-        // Return definitions for the response
-        let definitions = Self::generate_tool_definitions(contract);
         Ok(BindingOutput::Tools(definitions))
     }
 
     async fn unbind(&self, contract_key: &str) -> Result<usize, String> {
         let prefix = Self::tool_prefix(contract_key);
-        let removed = self.tool_registry.remove_by_prefix(&prefix);
+        let mut removed = self.tool_registry.remove_by_prefix(&prefix);
+        if let Some(previous_names) = self.contract_tool_names.write().remove(contract_key) {
+            for name in previous_names {
+                if self.tool_registry.unregister(&name) {
+                    removed += 1;
+                }
+            }
+        }
 
         tracing::info!(
             contract = %contract_key,
@@ -190,7 +261,10 @@ impl ProtocolBinder for McpBinder {
 mod tests {
     use super::*;
     use crate::uac::classifications::Classification;
-    use crate::uac::schema::{ContractStatus, UacContractSpec, UacEndpoint};
+    use crate::uac::schema::{
+        ContractStatus, EndpointLlm, EndpointLlmExample, EndpointSideEffects, UacContractSpec,
+        UacEndpoint,
+    };
 
     fn sample_contract() -> UacContractSpec {
         let mut spec = UacContractSpec::new("payments", "acme");
@@ -256,6 +330,26 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_definitions_uses_llm_tool_name() {
+        let mut contract = sample_contract();
+        contract.endpoints[0].llm = Some(EndpointLlm {
+            summary: "List customer payments.".to_string(),
+            intent: "Use to inspect payments without changing state.".to_string(),
+            tool_name: "list_customer_payments".to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![EndpointLlmExample {
+                input: serde_json::json!({}),
+                expected_output_contains: None,
+            }],
+        });
+
+        let defs = McpBinder::generate_tool_definitions(&contract);
+        assert_eq!(defs[0].name, "list_customer_payments");
+    }
+
+    #[test]
     fn test_generate_definitions_name_fallback() {
         let mut contract = sample_contract();
         contract.endpoints[0].operation_id = None;
@@ -270,6 +364,34 @@ mod tests {
         assert!(defs[0].description.contains("GET"));
         assert!(defs[0].description.contains("/payments"));
         assert!(defs[0].description.contains("acme"));
+    }
+
+    #[test]
+    fn test_generate_definitions_description_uses_llm_metadata() {
+        let mut contract = sample_contract();
+        contract.endpoints[1].llm = Some(EndpointLlm {
+            summary: "Delete a payment.".to_string(),
+            intent: "Use only after a human has approved permanent removal.".to_string(),
+            tool_name: "delete_payment_after_approval".to_string(),
+            side_effects: EndpointSideEffects::Destructive,
+            safe_for_agents: false,
+            requires_human_approval: true,
+            examples: vec![EndpointLlmExample {
+                input: serde_json::json!({ "id": "pay-123" }),
+                expected_output_contains: None,
+            }],
+        });
+
+        let defs = McpBinder::generate_tool_definitions(&contract);
+        assert!(defs[1].description.contains("Summary: Delete a payment."));
+        assert!(defs[1]
+            .description
+            .contains("Intent: Use only after a human has approved permanent removal."));
+        assert!(defs[1].description.contains("Side effects: destructive"));
+        assert!(defs[1]
+            .description
+            .contains("Requires human approval: true"));
+        assert!(defs[1].description.contains("HUMAN APPROVAL REQUIRED"));
     }
 
     #[test]
@@ -355,6 +477,33 @@ mod tests {
         let contract = sample_contract();
         binder.bind(&contract).await.expect("bind");
         assert_eq!(registry.count(), 2);
+
+        let removed = binder.unbind("acme:payments").await.expect("unbind");
+        assert_eq!(removed, 2);
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn regression_unbind_removes_llm_named_tools() {
+        let registry = Arc::new(ToolRegistry::new());
+        let binder = McpBinder::new(registry.clone());
+
+        let mut contract = sample_contract();
+        contract.endpoints[0].llm = Some(EndpointLlm {
+            summary: "List customer payments.".to_string(),
+            intent: "Use to inspect payments without changing state.".to_string(),
+            tool_name: "list_customer_payments".to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![EndpointLlmExample {
+                input: serde_json::json!({}),
+                expected_output_contains: None,
+            }],
+        });
+
+        binder.bind(&contract).await.expect("bind");
+        assert!(registry.exists("list_customer_payments"));
 
         let removed = binder.unbind("acme:payments").await.expect("unbind");
         assert_eq!(removed, 2);

@@ -402,6 +402,23 @@ class TestDeprovisionOnRevocation:
         # No adapter calls, no status change
         db.commit.assert_not_called()
 
+    async def test_existing_gateway_app_without_adapter_sets_failed(self):
+        db = _make_db()
+        sub = _make_subscription(gateway_app_id="app-123")
+
+        with (
+            patch("src.services.provisioning_service._resolve_adapter", new_callable=AsyncMock, return_value=None),
+            patch("src.services.provisioning_service._cleanup_rate_limit_policy", new_callable=AsyncMock) as cleanup,
+        ):
+            await deprovision_on_revocation(db, sub, "token", "corr-1")
+
+        from src.models.subscription import ProvisioningStatus
+
+        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert "no gateway adapter resolved" in sub.provisioning_error
+        assert sub.gateway_app_id == "app-123"
+        cleanup.assert_not_called()
+
     async def test_adapter_failure_sets_failed(self):
         db = _make_db()
         sub = _make_subscription(gateway_app_id="app-123")

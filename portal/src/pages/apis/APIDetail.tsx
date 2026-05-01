@@ -29,6 +29,10 @@ import {
 import { useAPI, useOpenAPISpec } from '../../hooks/useAPIs';
 import { useSubscribe, type SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
 import { SubscribeModal, SubscribeFormData } from '../../components/subscriptions/SubscribeModal';
+import {
+  SubscribeWithPlanModal,
+  type SubscribeWithPlanFormData,
+} from '../../components/consumers/SubscribeWithPlanModal';
 import { config } from '../../config';
 import { ChatCompletionsEnrichment } from '../../components/apis/ChatCompletionsEnrichment';
 import {
@@ -89,6 +93,30 @@ export function APIDetail() {
         apiVersion: api.version,
         tenantId: api.tenantId || 'default',
         planName: data.plan,
+      });
+      setSubscriptionResult(result);
+      setIsSubscribeModalOpen(false);
+    } catch (err) {
+      setSubscribeError((err as Error)?.message || 'Failed to subscribe to API');
+    }
+  };
+
+  const handleSubscribeWithPlan = async (data: SubscribeWithPlanFormData) => {
+    setSubscribeError(null);
+    if (!api) {
+      setSubscribeError('API not loaded');
+      return;
+    }
+    try {
+      const result = await subscribeMutation.mutateAsync({
+        applicationId: data.applicationId,
+        applicationName: data.applicationName,
+        apiId: data.apiId,
+        apiName: api.name,
+        apiVersion: api.version,
+        tenantId: api.tenantId || 'default',
+        planId: data.planId,
+        planName: data.planName,
       });
       setSubscriptionResult(result);
       setIsSubscribeModalOpen(false);
@@ -575,22 +603,35 @@ export function APIDetail() {
       </div>
 
       {/* Subscribe Modal */}
-      <SubscribeModal
-        isOpen={isSubscribeModalOpen}
-        onClose={() => {
-          setIsSubscribeModalOpen(false);
-          setSubscribeError(null);
-          setPreselectedPlan(undefined);
-        }}
-        onSubmit={handleSubscribe}
-        api={api}
-        isLoading={subscribeMutation.isPending}
-        error={subscribeError}
-        customPlans={
-          api.name === CHAT_COMPLETIONS_API_NAME ? chatCompletionsCustomPlans : undefined
-        }
-        defaultPlan={preselectedPlan}
-      />
+      {api.name === CHAT_COMPLETIONS_API_NAME ? (
+        <SubscribeModal
+          isOpen={isSubscribeModalOpen}
+          onClose={() => {
+            setIsSubscribeModalOpen(false);
+            setSubscribeError(null);
+            setPreselectedPlan(undefined);
+          }}
+          onSubmit={handleSubscribe}
+          api={api}
+          isLoading={subscribeMutation.isPending}
+          error={subscribeError}
+          customPlans={chatCompletionsCustomPlans}
+          defaultPlan={preselectedPlan}
+        />
+      ) : (
+        <SubscribeWithPlanModal
+          isOpen={isSubscribeModalOpen}
+          onClose={() => {
+            setIsSubscribeModalOpen(false);
+            setSubscribeError(null);
+            setPreselectedPlan(undefined);
+          }}
+          onSubmit={handleSubscribeWithPlan}
+          api={api}
+          isLoading={subscribeMutation.isPending}
+          error={subscribeError}
+        />
+      )}
 
       {/* Subscription Success Modal */}
       {subscriptionResult && (

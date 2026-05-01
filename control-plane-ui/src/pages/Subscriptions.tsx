@@ -34,6 +34,16 @@ const statusColors: Record<SubscriptionStatus, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 };
 
+const provisioningColors: Record<string, string> = {
+  none: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700/30 dark:text-neutral-300',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+  provisioning: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  ready: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  deprovisioning: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+  deprovisioned: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700/30 dark:text-neutral-300',
+};
+
 export function Subscriptions() {
   const { isReady } = useAuth();
   const { canEdit } = useEnvironmentMode();
@@ -168,6 +178,69 @@ export function Subscriptions() {
       reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reject subscription');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleSuspend(sub: Subscription) {
+    const ok = await confirm({
+      title: 'Suspend Subscription',
+      message: `Suspend ${sub.application_name}'s subscription to ${sub.api_name}?`,
+      confirmLabel: 'Suspend',
+    });
+    if (!ok) return;
+    try {
+      setActionLoading(true);
+      await apiService.suspendSubscription(sub.id);
+      toast.success('Subscription suspended');
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to suspend subscription');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleReactivate(sub: Subscription) {
+    const ok = await confirm({
+      title: 'Reactivate Subscription',
+      message: `Reactivate ${sub.application_name}'s subscription to ${sub.api_name}?`,
+      confirmLabel: 'Reactivate',
+    });
+    if (!ok) return;
+    try {
+      setActionLoading(true);
+      await apiService.reactivateSubscription(sub.id);
+      toast.success('Subscription reactivated');
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reactivate subscription');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleRevoke(sub: Subscription) {
+    const reason = window.prompt(
+      `Reason for revoking ${sub.application_name}'s subscription to ${sub.api_name}:`
+    );
+    if (!reason?.trim()) return;
+
+    const ok = await confirm({
+      title: 'Revoke Subscription',
+      message: `Permanently revoke ${sub.application_name}'s subscription to ${sub.api_name}?`,
+      confirmLabel: 'Revoke',
+    });
+    if (!ok) return;
+
+    try {
+      setActionLoading(true);
+      await apiService.revokeSubscription(sub.id, reason.trim());
+      toast.success('Subscription revoked');
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke subscription');
     } finally {
       setActionLoading(false);
     }
@@ -353,7 +426,7 @@ export function Subscriptions() {
 
       {/* Table */}
       {loading ? (
-        <TableSkeleton rows={5} columns={7} />
+        <TableSkeleton rows={5} columns={8} />
       ) : filteredSubscriptions.length === 0 ? (
         <EmptyState
           title="No subscriptions"
@@ -394,6 +467,9 @@ export function Subscriptions() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                  Provisioning
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   Created
@@ -437,6 +513,35 @@ export function Subscriptions() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
+                    <div className="flex flex-col gap-1">
+                      <span
+                        title={sub.provisioning_error || undefined}
+                        className={`w-fit inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          provisioningColors[sub.provisioning_status || 'none'] ||
+                          provisioningColors.none
+                        }`}
+                      >
+                        {sub.provisioning_status || 'none'}
+                      </span>
+                      {sub.gateway_app_id && (
+                        <span
+                          title={sub.gateway_app_id}
+                          className="max-w-[12rem] truncate text-xs text-neutral-400 dark:text-neutral-500 font-mono"
+                        >
+                          {sub.gateway_app_id}
+                        </span>
+                      )}
+                      {sub.provisioning_error && (
+                        <span
+                          title={sub.provisioning_error}
+                          className="max-w-[12rem] truncate text-xs text-red-600 dark:text-red-400"
+                        >
+                          {sub.provisioning_error}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {new Date(sub.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -458,6 +563,46 @@ export function Subscriptions() {
                             className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
                           >
                             Reject
+                          </button>
+                        </>
+                      )}
+                      {sub.status === 'active' && (
+                        <>
+                          <button
+                            onClick={() => handleSuspend(sub)}
+                            disabled={actionLoading || !canEdit}
+                            title={!canEdit ? 'Read-only environment' : undefined}
+                            className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300 text-sm font-medium disabled:opacity-50"
+                          >
+                            Suspend
+                          </button>
+                          <button
+                            onClick={() => handleRevoke(sub)}
+                            disabled={actionLoading || !canEdit}
+                            title={!canEdit ? 'Read-only environment' : undefined}
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
+                          >
+                            Revoke
+                          </button>
+                        </>
+                      )}
+                      {sub.status === 'suspended' && (
+                        <>
+                          <button
+                            onClick={() => handleReactivate(sub)}
+                            disabled={actionLoading || !canEdit}
+                            title={!canEdit ? 'Read-only environment' : undefined}
+                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium disabled:opacity-50"
+                          >
+                            Reactivate
+                          </button>
+                          <button
+                            onClick={() => handleRevoke(sub)}
+                            disabled={actionLoading || !canEdit}
+                            title={!canEdit ? 'Read-only environment' : undefined}
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
+                          >
+                            Revoke
                           </button>
                         </>
                       )}

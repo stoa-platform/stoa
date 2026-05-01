@@ -44,6 +44,9 @@ describe('UI-2 S2b domain clients', () => {
     mockHttpClient.post
       .mockResolvedValueOnce({ data: subscription })
       .mockResolvedValueOnce({ data: subscription })
+      .mockResolvedValueOnce({ data: subscription })
+      .mockResolvedValueOnce({ data: subscription })
+      .mockResolvedValueOnce({ data: subscription })
       .mockResolvedValueOnce({ data: bulkResult });
 
     await expect(subscriptionsClient.list('tenant-1', 'approved', 2, 50, 'prod')).resolves.toBe(
@@ -53,6 +56,9 @@ describe('UI-2 S2b domain clients', () => {
     await expect(subscriptionsClient.getStats('tenant-1')).resolves.toBe(stats);
     await expect(subscriptionsClient.approve('sub-1', '2026-04-30')).resolves.toBe(subscription);
     await expect(subscriptionsClient.reject('sub-1', 'missing docs')).resolves.toBe(subscription);
+    await expect(subscriptionsClient.revoke('sub-1', 'retired')).resolves.toBe(subscription);
+    await expect(subscriptionsClient.suspend('sub-1')).resolves.toBe(subscription);
+    await expect(subscriptionsClient.reactivate('sub-1')).resolves.toBe(subscription);
     await expect(
       subscriptionsClient.bulkAction({
         subscription_ids: ['sub-1'],
@@ -85,7 +91,12 @@ describe('UI-2 S2b domain clients', () => {
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(2, '/v1/subscriptions/sub-1/reject', {
       reason: 'missing docs',
     });
-    expect(mockHttpClient.post).toHaveBeenNthCalledWith(3, '/v1/subscriptions/bulk', {
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(3, '/v1/subscriptions/sub-1/revoke', {
+      reason: 'retired',
+    });
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(4, '/v1/subscriptions/sub-1/suspend');
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(5, '/v1/subscriptions/sub-1/reactivate');
+    expect(mockHttpClient.post).toHaveBeenNthCalledWith(6, '/v1/subscriptions/bulk', {
       subscription_ids: ['sub-1'],
       action: 'approve',
     });

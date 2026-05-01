@@ -123,6 +123,32 @@ class TestToolNaming:
         name = UacToolGenerator._build_tool_name("acme", "iam-api", ep)
         assert name == "acme:iam-api:delete_orgs_org_id_users_user_id"
 
+    def test_tool_name_uses_endpoint_llm_tool_name(self):
+        from src.schemas.uac import (
+            UacEndpointLlmExample,
+            UacEndpointLlmSpec,
+            UacEndpointSideEffects,
+        )
+
+        ep = UacEndpointSpec(
+            path="/customers",
+            methods=["GET"],
+            backend_url="https://b.com/customers",
+            operation_id="legacy_list_customers",
+            llm=UacEndpointLlmSpec(
+                summary="List customers.",
+                intent="Use to inspect customers.",
+                tool_name="list_customers_for_agent",
+                side_effects=UacEndpointSideEffects.READ,
+                safe_for_agents=True,
+                requires_human_approval=False,
+                examples=[UacEndpointLlmExample(input={})],
+            ),
+        )
+
+        name = UacToolGenerator._build_tool_name("acme", "customer-api", ep)
+        assert name == "list_customers_for_agent"
+
 
 # ---------------------------------------------------------------------------
 # Description tests
@@ -182,7 +208,9 @@ class TestDescription:
             "GET /items/{id} — Item Service\n"
             "Summary: Fetch an item.\n"
             "Intent: Use to read an item by id.\n"
-            "Side effects: read"
+            "Side effects: read\n"
+            "Safe for agents: True\n"
+            "Requires human approval: False"
         )
 
     def test_description_with_destructive_llm_includes_approval_marker(self):

@@ -43,9 +43,11 @@ export function SubscribeWithPlanModal({
   const { user } = useAuth();
   const [selectedAppId, setSelectedAppId] = useState<string>('');
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const planTenantId = api.tenantId || user?.tenant_id;
+  const requiresMtls = api.tags?.includes('mtls') ?? false;
 
   const { data: applications, isLoading: appsLoading } = useApplications();
-  const { data: plansData, isLoading: plansLoading } = usePlans(user?.tenant_id);
+  const { data: plansData, isLoading: plansLoading } = usePlans(planTenantId);
 
   const activePlans = useMemo(
     () => plansData?.items.filter((p) => p.status === 'active') || [],
@@ -140,6 +142,16 @@ export function SubscribeWithPlanModal({
                 </div>
               )}
 
+              {requiresMtls && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    This API requires mTLS. Subscription is blocked until certificate binding is
+                    available in the Control Plane.
+                  </p>
+                </div>
+              )}
+
               {/* Select Application */}
               <div>
                 <label
@@ -222,7 +234,9 @@ export function SubscribeWithPlanModal({
               </Button>
               <Button
                 type="submit"
-                disabled={!selectedAppId || !selectedPlanId || activeApps.length === 0}
+                disabled={
+                  requiresMtls || !selectedAppId || !selectedPlanId || activeApps.length === 0
+                }
                 loading={isLoading}
               >
                 Subscribe

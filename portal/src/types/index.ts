@@ -288,9 +288,12 @@ export interface APISubscription {
   tenantId?: string;
   planId?: string;
   planName?: string;
-  status: 'pending' | 'active' | 'suspended' | 'cancelled' | 'revoked' | 'expired';
+  status: 'pending' | 'active' | 'suspended' | 'cancelled' | 'revoked' | 'expired' | 'rejected';
   plan?: 'free' | 'basic' | 'premium' | 'enterprise';
   apiKeyPrefix?: string;
+  provisioningStatus?: string;
+  provisioningError?: string;
+  gatewayAppId?: string;
   rateLimit?: {
     requests: number;
     period: string;

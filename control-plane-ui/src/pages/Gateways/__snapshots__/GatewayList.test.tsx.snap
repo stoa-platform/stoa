@@ -6,10 +6,11 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
     "Show deleted",
     "Refresh",
     "+ Register Gateway",
-    "All32",
-    "Production22",
+    "All43",
+    "Production33",
     "Staging101",
     "Development0",
+    "",
     "",
     "",
     "",
@@ -34,6 +35,18 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
     {
       "href": "/drift",
       "text": "Config Sync",
+    },
+    {
+      "href": "https://wm-runtime.gostoa.dev",
+      "text": "Runtime",
+    },
+    {
+      "href": "https://wm-ui.gostoa.dev",
+      "text": "UI",
+    },
+    {
+      "href": "https://vps-wm.gostoa.dev",
+      "text": "Target",
     },
   ],
 }
@@ -44,10 +57,11 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "All32",
-    "Production22",
+    "All43",
+    "Production33",
     "Staging101",
     "Development0",
+    "",
     "",
     "",
     "",
@@ -72,6 +86,18 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
     {
       "href": "/drift",
       "text": "Config Sync",
+    },
+    {
+      "href": "https://wm-runtime.gostoa.dev",
+      "text": "Runtime",
+    },
+    {
+      "href": "https://wm-ui.gostoa.dev",
+      "text": "UI",
+    },
+    {
+      "href": "https://vps-wm.gostoa.dev",
+      "text": "Target",
     },
   ],
 }
@@ -82,10 +108,11 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "All32",
-    "Production22",
+    "All43",
+    "Production33",
     "Staging101",
     "Development0",
+    "",
     "",
     "",
     "",
@@ -110,6 +137,18 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
     {
       "href": "/drift",
       "text": "Config Sync",
+    },
+    {
+      "href": "https://wm-runtime.gostoa.dev",
+      "text": "Runtime",
+    },
+    {
+      "href": "https://wm-ui.gostoa.dev",
+      "text": "UI",
+    },
+    {
+      "href": "https://vps-wm.gostoa.dev",
+      "text": "Target",
     },
   ],
 }
@@ -120,10 +159,11 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
   "buttons": [
     "Refresh",
     "+ Register Gateway",
-    "All32",
-    "Production22",
+    "All43",
+    "Production33",
     "Staging101",
     "Development0",
+    "",
     "",
     "",
     "",
@@ -148,6 +188,18 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
     {
       "href": "/drift",
       "text": "Config Sync",
+    },
+    {
+      "href": "https://wm-runtime.gostoa.dev",
+      "text": "Runtime",
+    },
+    {
+      "href": "https://wm-ui.gostoa.dev",
+      "text": "UI",
+    },
+    {
+      "href": "https://vps-wm.gostoa.dev",
+      "text": "Target",
     },
   ],
 }

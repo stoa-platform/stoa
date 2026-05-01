@@ -341,6 +341,7 @@ impl Default for Config {
             heartbeat_interval_secs: default_heartbeat_interval(),
             target_gateway_url: None,
             gateway_public_url: None,
+            gateway_ui_url: None,
             deployment_mode: None,
             target_gateway_type: None,
             topology: None,

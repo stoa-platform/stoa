@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from src.services.gateway_topology import normalize_gateway_topology
+from src.services.gateway_topology import endpoint_value, normalize_gateway_topology
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +206,9 @@ class GatewayInstanceResponse(BaseModel):
         self.target_gateway_type = normalized.target_gateway_type  # type: ignore[assignment]
         self.topology = normalized.topology  # type: ignore[assignment]
         self.endpoints = normalized.endpoints
+        self.public_url = self.public_url or endpoint_value(self.endpoints, "public_url")
+        self.ui_url = self.ui_url or endpoint_value(self.endpoints, "ui_url")
+        self.target_gateway_url = self.target_gateway_url or endpoint_value(self.endpoints, "target_gateway_url")
         return self
 
     @field_validator("mode", mode="before")
@@ -335,7 +338,9 @@ class ConsoleGatewayTarget(BaseModel):
     name: str
     display_name: str
     environment: str
-    deployment_mode: GatewayDeploymentModeLiteral = Field(..., description="Canonical topology: edge, connect, or sidecar")
+    deployment_mode: GatewayDeploymentModeLiteral = Field(
+        ..., description="Canonical topology: edge, connect, or sidecar"
+    )
     target_gateway_type: str = Field(..., description="Gateway technology: stoa, kong, webmethods, gravitee, ...")
     topology: GatewayTopologyLiteral = Field(..., description="Execution topology: native-edge, remote-agent, same-pod")
     source: str = Field(..., description="Gateway source of truth: argocd, self_register, or manual")

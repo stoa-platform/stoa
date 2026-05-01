@@ -62,6 +62,10 @@ pub struct RegistrationPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_url: Option<String>,
 
+    /// Web UI URL of the third-party gateway managed by this Link instance
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ui_url: Option<String>,
+
     /// Canonical deployment topology mode (edge, connect, sidecar)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deployment_mode: Option<String>,
@@ -203,6 +207,7 @@ impl GatewayRegistrar {
             tenant_id: None, // Platform-wide gateway
             target_gateway_url: config.target_gateway_url.clone(),
             public_url: config.gateway_public_url.clone(),
+            ui_url: config.gateway_ui_url.clone(),
             deployment_mode: config.deployment_mode.clone(),
             target_gateway_type: config.target_gateway_type.clone(),
             topology: config.topology.clone(),
@@ -514,6 +519,7 @@ mod tests {
             tenant_id: None,
             target_gateway_url: None,
             public_url: None,
+            ui_url: None,
             deployment_mode: None,
             target_gateway_type: None,
             topology: None,
@@ -526,6 +532,7 @@ mod tests {
         assert!(!json.contains("tenant_id")); // None should be skipped
         assert!(!json.contains("target_gateway_url")); // None should be skipped
         assert!(!json.contains("public_url")); // None should be skipped
+        assert!(!json.contains("ui_url")); // None should be skipped
         assert!(!json.contains("deployment_mode")); // None should be skipped
     }
 
@@ -541,6 +548,7 @@ mod tests {
             tenant_id: Some("acme".to_string()),
             target_gateway_url: Some("https://webmethods-prod:5555".to_string()),
             public_url: Some("https://vps-wm-link.gostoa.dev".to_string()),
+            ui_url: Some("https://vps-wm-ui.gostoa.dev".to_string()),
             deployment_mode: Some("connect".to_string()),
             target_gateway_type: Some("webmethods".to_string()),
             topology: Some("remote-agent".to_string()),
@@ -554,6 +562,8 @@ mod tests {
         assert!(json.contains("webmethods-prod:5555"));
         assert!(json.contains("public_url"));
         assert!(json.contains("vps-wm-link.gostoa.dev"));
+        assert!(json.contains("ui_url"));
+        assert!(json.contains("vps-wm-ui.gostoa.dev"));
         assert!(json.contains("deployment_mode"));
         assert!(json.contains("remote-agent"));
     }

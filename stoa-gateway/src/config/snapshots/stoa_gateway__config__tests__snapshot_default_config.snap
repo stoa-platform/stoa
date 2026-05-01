@@ -57,6 +57,7 @@ expression: "Config::default()"
   "heartbeat_interval_secs": 30,
   "target_gateway_url": null,
   "gateway_public_url": null,
+  "gateway_ui_url": null,
   "deployment_mode": null,
   "target_gateway_type": null,
   "topology": null,

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.8...control-plane-ui-v1.6.0) (2026-05-01)
+
+
+### Features
+
+* **api:** add catalog release versioning ([e3bd495](https://github.com/stoa-platform/stoa/commit/e3bd4956623003945f4b7443f1e60af998ad6b18))
+
+
+### Bug Fixes
+
+* **gateways:** surface external URLs for link and connect ([#2642](https://github.com/stoa-platform/stoa/issues/2642)) ([132de10](https://github.com/stoa-platform/stoa/commit/132de10d7515fc15d7c03a70ab38fa3753ee6a42))
+
 ## [1.5.8](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.7...control-plane-ui-v1.5.8) (2026-05-01)
 
 

@@ -24,16 +24,23 @@ def _minimal_yaml(
     id_value: str | None = None,
     version: str = "1.0.0",
     status: str = "active",
+    display_name: str = "Petstore",
+    description: str = "",
+    backend_url: str = "http://example.invalid",
     category: str | None = None,
     tags: list[str] | None = None,
     audience: str | None = None,
+    deployments: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     parsed: dict[str, Any] = {
         "id": id_value if id_value is not None else name,
         "name": name,
+        "display_name": display_name,
         "version": version,
         "status": status,
-        "backend_url": "http://example.invalid",
+        "description": description,
+        "backend_url": backend_url,
+        "deployments": deployments or {"dev": True, "staging": False},
     }
     if category is not None:
         parsed["category"] = category
@@ -61,6 +68,17 @@ class TestRenderApiCatalogProjection:
         assert proj.tags == []
         assert proj.portal_published is False
         assert proj.audience == "public"
+        assert proj.api_metadata == {
+            "name": "petstore",
+            "display_name": "Petstore",
+            "version": "1.0.0",
+            "description": "",
+            "backend_url": "http://example.invalid",
+            "status": "active",
+            "deployments": {"dev": True, "staging": False},
+            "tags": [],
+            "audience": "public",
+        }
         assert proj.git_path == "tenants/demo/apis/petstore/api.yaml"
         assert proj.git_commit_sha == "a" * 40
         assert proj.catalog_content_hash == "b" * 64
@@ -101,6 +119,16 @@ class TestRenderApiCatalogProjection:
             git_path="tenants/demo/apis/petstore/api.yaml",
         )
         assert proj.audience == "internal"
+        assert proj.api_metadata["audience"] == "internal"
+
+    def test_backend_url_is_required_for_console_projection(self) -> None:
+        with pytest.raises(ValueError, match="'backend_url'"):
+            render_api_catalog_projection(
+                parsed_content=_minimal_yaml(backend_url=""),
+                git_commit_sha="a" * 40,
+                catalog_content_hash="b" * 64,
+                git_path="tenants/demo/apis/petstore/api.yaml",
+            )
 
     def test_id_not_equal_name_rejected(self) -> None:
         with pytest.raises(ValueError, match="id != name"):
@@ -187,6 +215,17 @@ class TestRowMatchesProjection:
             tags=["portal:published"],
             portal_published=True,
             audience="public",
+            api_metadata={
+                "name": "petstore",
+                "display_name": "Petstore",
+                "version": "1.0.0",
+                "description": "",
+                "backend_url": "http://example.invalid",
+                "status": "active",
+                "deployments": {"dev": True, "staging": False},
+                "tags": ["portal:published"],
+                "audience": "public",
+            },
             git_path="tenants/demo/apis/petstore/api.yaml",
             git_commit_sha="a" * 40,
             catalog_content_hash="b" * 64,
@@ -204,6 +243,7 @@ class TestRowMatchesProjection:
             "tags": list(projection.tags),
             "portal_published": projection.portal_published,
             "audience": projection.audience,
+            "api_metadata": dict(projection.api_metadata),
             "git_path": projection.git_path,
             "git_commit_sha": projection.git_commit_sha,
             "catalog_content_hash": projection.catalog_content_hash,
@@ -216,7 +256,6 @@ class TestRowMatchesProjection:
         # Add unrelated columns — projection ignores them.
         matching_row["target_gateways"] = ["webmethods-prod"]
         matching_row["openapi_spec"] = {"openapi": "3.0.0"}
-        matching_row["metadata"] = {"display_name": "Pet Store"}
         matching_row["id"] = "00000000-0000-0000-0000-000000000001"
         matching_row["synced_at"] = "2026-04-27T00:00:00Z"
         matching_row["deleted_at"] = None
@@ -226,6 +265,12 @@ class TestRowMatchesProjection:
         self, projection: ApiCatalogProjection, matching_row: dict[str, Any]
     ) -> None:
         matching_row["git_path"] = "tenants/demo/apis/00000000-0000-0000-0000-000000000000/api.yaml"
+        assert row_matches_projection(matching_row, projection) is False
+
+    def test_api_metadata_mismatch_returns_false(
+        self, projection: ApiCatalogProjection, matching_row: dict[str, Any]
+    ) -> None:
+        matching_row["api_metadata"] = {**projection.api_metadata, "backend_url": "https://other.example"}
         assert row_matches_projection(matching_row, projection) is False
 
     def test_catalog_content_hash_mismatch_returns_false(

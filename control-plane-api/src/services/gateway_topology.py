@@ -25,6 +25,15 @@ TARGET_GATEWAY_TYPES = {
 
 _THIRD_PARTY_TARGETS = TARGET_GATEWAY_TYPES - {"stoa"}
 
+_ENDPOINT_ALIASES: dict[str, tuple[str, ...]] = {
+    "public_url": ("publicUrl", "public", "runtime_url", "runtimeUrl", "external_url", "externalUrl"),
+    "ui_url": ("uiUrl", "console_url", "consoleUrl", "web_ui_url", "webUiUrl"),
+    "target_gateway_url": ("targetGatewayUrl", "target_url", "targetUrl"),
+    "admin_url": ("adminUrl", "admin", "base_url", "baseUrl"),
+    "internal_url": ("internalUrl", "internal"),
+    "health_url": ("healthUrl", "health"),
+}
+
 
 @dataclass(frozen=True)
 class GatewayTopology:
@@ -46,7 +55,28 @@ def _string_value(value: object) -> str | None:
     if value is None:
         return None
     raw = value.value if hasattr(value, "value") else value
-    return raw if isinstance(raw, str) else None
+    if not isinstance(raw, str):
+        return None
+    raw = raw.strip()
+    return raw or None
+
+
+def _endpoint_map(endpoints: dict | None) -> dict[str, str]:
+    return {
+        str(key): str(value).strip()
+        for key, value in (endpoints if isinstance(endpoints, dict) else {}).items()
+        if value is not None and str(value).strip()
+    }
+
+
+def endpoint_value(endpoints: dict | None, canonical_key: str) -> str | None:
+    """Return a canonical endpoint value from snake_case or legacy/camel aliases."""
+    normalized = _endpoint_map(endpoints)
+    for key in (canonical_key, *_ENDPOINT_ALIASES.get(canonical_key, ())):
+        value = normalized.get(key)
+        if value:
+            return value
+    return None
 
 
 def normalize_mode(mode: object | None) -> str:
@@ -153,25 +183,30 @@ def build_endpoints(
     base_url: object | None = None,
     public_url: object | None = None,
     ui_url: object | None = None,
+    target_gateway_url: object | None = None,
 ) -> dict[str, str]:
     """Return a normalized endpoint map while preserving existing explicit keys."""
-    normalized: dict[str, str] = {
-        str(key): str(value)
-        for key, value in (endpoints if isinstance(endpoints, dict) else {}).items()
-        if value is not None and str(value).strip()
-    }
+    normalized = _endpoint_map(endpoints)
+    for canonical_key in _ENDPOINT_ALIASES:
+        value = endpoint_value(normalized, canonical_key)
+        if value:
+            normalized.setdefault(canonical_key, value)
+
     public_url = _string_value(public_url)
     base_url = _string_value(base_url)
     ui_url = _string_value(ui_url)
+    target_gateway_url = _string_value(target_gateway_url)
     if public_url:
-        normalized.setdefault("public_url", public_url)
+        normalized["public_url"] = public_url
     if base_url:
-        normalized.setdefault("admin_url", base_url)
+        normalized["admin_url"] = base_url
         if ".svc.cluster.local" in base_url or "://" not in base_url:
             normalized.setdefault("internal_url", base_url)
         normalized.setdefault("health_url", f"{base_url.rstrip('/')}/health")
     if ui_url:
-        normalized.setdefault("ui_url", ui_url)
+        normalized["ui_url"] = ui_url
+    if target_gateway_url:
+        normalized["target_gateway_url"] = target_gateway_url
     return normalized
 
 
@@ -204,7 +239,13 @@ def normalize_gateway_topology(
         target_gateway_url=target_gateway_url,
         base_url=base_url,
     )
-    endpoint_map = build_endpoints(endpoints=endpoints, base_url=base_url, public_url=public_url, ui_url=ui_url)
+    endpoint_map = build_endpoints(
+        endpoints=endpoints,
+        base_url=base_url,
+        public_url=public_url,
+        ui_url=ui_url,
+        target_gateway_url=target_gateway_url,
+    )
     proof = health_details.get("topology_proof") if isinstance(health_details, dict) else None
 
     if normalized_deployment == "sidecar" or normalized_topology == "same-pod":

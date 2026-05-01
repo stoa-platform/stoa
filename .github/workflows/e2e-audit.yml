@@ -60,7 +60,7 @@ jobs:
         env:
           STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL || 'https://portal.gostoa.dev' }}
           STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL || 'https://console.gostoa.dev' }}
-          STOA_GATEWAY_URL: ${{ secrets.E2E_GATEWAY_URL || 'https://api.gostoa.dev' }}
+          STOA_GATEWAY_URL: ${{ (secrets.E2E_GATEWAY_URL != 'https://api.gostoa.dev' && secrets.E2E_GATEWAY_URL) || 'https://mcp.gostoa.dev' }}
           KEYCLOAK_URL: ${{ secrets.E2E_KEYCLOAK_URL || 'https://auth.gostoa.dev' }}
           KEYCLOAK_REALM: stoa
           PARZIVAL_USER: ${{ secrets.PARZIVAL_USER }}

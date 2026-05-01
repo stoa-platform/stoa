@@ -161,7 +161,7 @@ async function sendGatewayRequest(
 ): Promise<{ status: number; body: any }> {
   const [method, ...pathParts] = methodAndPath.split(' ');
   const urlPath = pathParts.join(' ');
-  const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+  const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
   const fullUrl = `${baseUrl}${urlPath}`;
 
   const headers: Record<string, string> = {
@@ -275,7 +275,7 @@ When(
   'I send a DPoP-protected request to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({
@@ -300,7 +300,7 @@ When(
   'I send a DPoP proof with algorithm {string} to {string}',
   async ({ request }, algorithm: string, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     // For HS256: we build a structurally valid JWT but with symmetric alg
@@ -320,7 +320,7 @@ When(
   'I send an expired DPoP proof to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({
@@ -338,7 +338,7 @@ When(
   'I send a future-dated DPoP proof to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({
@@ -355,7 +355,7 @@ When(
 When(
   'I send a DPoP proof with htm {string} to {string}',
   async ({ request }, wrongMethod: string, methodAndPath: string) => {
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     // Use the WRONG method in the proof while the actual request uses the correct one
@@ -389,7 +389,7 @@ When(
   'I send a DPoP proof and replay it to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
     const fixedJti = crypto.randomUUID();
 
@@ -412,7 +412,7 @@ When(
   'I send a DPoP proof without ath claim to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({
@@ -430,7 +430,7 @@ When(
   'I send a DPoP proof with wrong ath to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({
@@ -448,7 +448,7 @@ When(
   'I send a dual-bound request with mTLS and DPoP to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({
@@ -466,7 +466,7 @@ When(
   'I send a DPoP proof with private key in jwk to {string}',
   async ({ request }, methodAndPath: string) => {
     const [method] = methodAndPath.split(' ');
-    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+    const baseUrl = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
     const urlPath = methodAndPath.split(' ').slice(1).join(' ');
 
     const proof = buildDpopProof({

@@ -183,6 +183,18 @@ describe('SubscribeWithPlanModal', () => {
     expect(screen.getByText('Subscribe')).toBeDisabled();
   });
 
+  it('should block mTLS subscription until certificate binding is available', async () => {
+    const user = userEvent.setup();
+    const mtlsApi = { ...mockApi, tags: ['payments', 'mtls'] };
+    renderWithProviders(<SubscribeWithPlanModal {...defaultProps} api={mtlsApi} />);
+
+    await user.selectOptions(screen.getByRole('combobox'), 'app-1');
+    await user.click(screen.getByTestId('plan-plan-1'));
+
+    expect(screen.getByText(/requires mTLS/)).toBeInTheDocument();
+    expect(screen.getByText('Subscribe')).toBeDisabled();
+  });
+
   it('should show approval notice when plan requires approval', async () => {
     const user = userEvent.setup();
     renderWithProviders(<SubscribeWithPlanModal {...defaultProps} />);

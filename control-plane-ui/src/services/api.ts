@@ -1092,6 +1092,18 @@ class ApiService {
     return subscriptionsClient.reject(id, reason);
   }
 
+  async revokeSubscription(id: string, reason: string): Promise<Subscription> {
+    return subscriptionsClient.revoke(id, reason);
+  }
+
+  async suspendSubscription(id: string): Promise<Subscription> {
+    return subscriptionsClient.suspend(id);
+  }
+
+  async reactivateSubscription(id: string): Promise<Subscription> {
+    return subscriptionsClient.reactivate(id);
+  }
+
   async bulkSubscriptionAction(
     payload: Schemas['BulkSubscriptionAction']
   ): Promise<Schemas['BulkActionResult']> {

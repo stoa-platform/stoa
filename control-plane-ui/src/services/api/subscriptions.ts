@@ -43,6 +43,21 @@ export const subscriptionsClient = {
     return data;
   },
 
+  async revoke(id: string, reason: string): Promise<Subscription> {
+    const { data } = await httpClient.post(path('v1', 'subscriptions', id, 'revoke'), { reason });
+    return data;
+  },
+
+  async suspend(id: string): Promise<Subscription> {
+    const { data } = await httpClient.post(path('v1', 'subscriptions', id, 'suspend'));
+    return data;
+  },
+
+  async reactivate(id: string): Promise<Subscription> {
+    const { data } = await httpClient.post(path('v1', 'subscriptions', id, 'reactivate'));
+    return data;
+  },
+
   async bulkAction(
     payload: Schemas['BulkSubscriptionAction']
   ): Promise<Schemas['BulkActionResult']> {

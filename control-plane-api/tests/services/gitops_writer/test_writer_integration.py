@@ -96,6 +96,40 @@ class TestCaseACommit:
         assert row.catalog_content_hash == result.catalog_content_hash
 
 
+class TestPullRequestReleaseMode:
+    async def test_creates_catalog_release_after_pr_merge_and_tag(
+        self, fake_git: InMemoryCatalogGitClient, integration_db
+    ) -> None:
+        writer = GitOpsWriter(
+            catalog_git_client=fake_git,
+            db_session=integration_db,
+            catalog_write_mode="pull_request",
+        )
+
+        result = await writer.create_api(
+            tenant_id="demo-gitops",
+            contract_payload=_payload(name="release-petstore", version="1.2.3"),
+            actor="alice",
+        )
+
+        assert result.case == "created"
+        assert result.catalog_release is not None
+        assert result.catalog_release.pull_request_url.endswith("/pull/1")
+        assert result.catalog_release.pull_request_number == 1
+        assert result.catalog_release.source_branch.startswith("stoa/api/demo-gitops/release-petstore/v1.2.3/")
+        assert result.catalog_release.tag_name.startswith("stoa/api/demo-gitops/release-petstore/v1.2.3/")
+        assert result.git_commit_sha == result.catalog_release.merge_commit_sha
+
+        row = await _select_row(integration_db, "demo-gitops", "release-petstore")
+        assert row is not None
+        assert row.catalog_release_id == result.catalog_release.release_id
+        assert row.catalog_release_tag == result.catalog_release.tag_name
+        assert row.catalog_pr_url == result.catalog_release.pull_request_url
+        assert row.catalog_pr_number == result.catalog_release.pull_request_number
+        assert row.catalog_source_branch == result.catalog_release.source_branch
+        assert row.catalog_merge_commit_sha == result.catalog_release.merge_commit_sha
+
+
 class TestCaseBIdempotent:
     async def test_same_payload_replays_idempotently(self, writer: GitOpsWriter, integration_db) -> None:
         first = await writer.create_api(

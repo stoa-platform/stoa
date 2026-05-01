@@ -98,6 +98,12 @@ class APIResponse(BaseModel):
     tags: list[str] = []
     portal_promoted: bool = False  # True if API has portal:published tag
     audience: AudienceLiteral = "public"
+    catalog_release_id: str | None = None
+    catalog_release_tag: str | None = None
+    catalog_pr_url: str | None = None
+    catalog_pr_number: int | None = None
+    catalog_source_branch: str | None = None
+    catalog_merge_commit_sha: str | None = None
     # CAB-2159 BUG-4: APICatalog currently has no true created_at column; we surface
     # ``synced_at`` as both timestamps so UI can render them uniformly with other
     # entities. Adding real ``created_at``/``updated_at`` DB columns is tracked
@@ -175,6 +181,15 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
     # never trips on legacy rows.
     raw_audience = (api.audience or "public") if isinstance(api.audience, str) else "public"
     audience: AudienceLiteral = raw_audience if raw_audience in ("public", "internal", "partner") else "public"
+
+    def _optional_str_attr(name: str) -> str | None:
+        value = getattr(api, name, None)
+        return value if isinstance(value, str) else None
+
+    catalog_pr_number = getattr(api, "catalog_pr_number", None)
+    if not isinstance(catalog_pr_number, int):
+        catalog_pr_number = None
+
     return APIResponse(
         id=api.api_id,
         tenant_id=api.tenant_id,
@@ -189,6 +204,12 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
         tags=tags,
         portal_promoted=portal_promoted,
         audience=audience,
+        catalog_release_id=_optional_str_attr("catalog_release_id"),
+        catalog_release_tag=_optional_str_attr("catalog_release_tag"),
+        catalog_pr_url=_optional_str_attr("catalog_pr_url"),
+        catalog_pr_number=catalog_pr_number,
+        catalog_source_branch=_optional_str_attr("catalog_source_branch"),
+        catalog_merge_commit_sha=_optional_str_attr("catalog_merge_commit_sha"),
         created_at=api.synced_at,
         updated_at=api.synced_at,
     )
@@ -454,7 +475,11 @@ async def _create_api_gitops(
             extra={"tenant_id": tenant_id, "error": str(exc)},
         )
         raise HTTPException(status_code=503, detail=str(exc))
-    writer = GitOpsWriter(catalog_git_client=catalog_git_client, db_session=db)
+    writer = GitOpsWriter(
+        catalog_git_client=catalog_git_client,
+        db_session=db,
+        catalog_write_mode=settings.GITOPS_CATALOG_WRITE_MODE,
+    )
 
     try:
         result = await writer.create_api(

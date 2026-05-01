@@ -50,6 +50,12 @@ export interface TenantCreate {
 // UI-side (fetched from a separate endpoint, not embedded in APIResponse).
 export type API = Schemas['APIResponse'] & {
   openapi_spec?: string | Record<string, unknown>;
+  catalog_release_id?: string | null;
+  catalog_release_tag?: string | null;
+  catalog_pr_url?: string | null;
+  catalog_pr_number?: number | null;
+  catalog_source_branch?: string | null;
+  catalog_merge_commit_sha?: string | null;
 };
 
 export interface APICreate {

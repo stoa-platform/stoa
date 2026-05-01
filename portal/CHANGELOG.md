@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.4](https://github.com/stoa-platform/stoa/compare/portal-v1.3.3...portal-v1.3.4) (2026-05-01)
+
+
+### Bug Fixes
+
+* **portal:** expose provider plans for subscriptions ([#2652](https://github.com/stoa-platform/stoa/issues/2652)) ([497bb7d](https://github.com/stoa-platform/stoa/commit/497bb7dbb674b829c06734ad4bc800aa10c8837e))
+
 ## [1.3.3](https://github.com/stoa-platform/stoa/compare/portal-v1.3.2...portal-v1.3.3) (2026-05-01)
 
 

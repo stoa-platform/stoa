@@ -16,7 +16,7 @@ from src.services.catalog_git_client.github_contents import (
     CatalogShaConflictError,
     GitHubContentsCatalogClient,
 )
-from src.services.catalog_git_client.models import RemoteCommit, RemoteFile
+from src.services.catalog_git_client.models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
 
 
 @pytest.fixture
@@ -225,6 +225,25 @@ class TestCreateOrUpdate:
         assert "Actor: <unknown>" in commit_message
 
     @pytest.mark.asyncio
+    async def test_branch_is_forwarded_to_contents_api(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        fake_repo.create_file.return_value = {
+            "commit": MagicMock(sha="commit-sha-branch"),
+            "content": MagicMock(sha="blob-sha-branch"),
+        }
+        await client.create_or_update(
+            path="tenants/demo/apis/petstore/api.yaml",
+            content=b"id: petstore\n",
+            expected_sha=None,
+            actor="alice",
+            message="create",
+            branch="stoa/api/demo/petstore/v1/hash",
+        )
+        _, kwargs = fake_repo.create_file.call_args
+        assert kwargs["branch"] == "stoa/api/demo/petstore/v1/hash"
+
+    @pytest.mark.asyncio
     async def test_other_errors_bubble(self, client: GitHubContentsCatalogClient, fake_repo: MagicMock) -> None:
         fake_repo.create_file.side_effect = GithubException(500, {"message": "boom"}, None)
         with pytest.raises(GithubException):
@@ -308,3 +327,102 @@ class TestList:
         fake_repo.get_git_ref.side_effect = GithubException(404, {"message": "Not Found"}, None)
         result = await client.list("tenants/*/apis/*/api.yaml")
         assert result == []
+
+
+class TestReleasePrimitives:
+    @pytest.mark.asyncio
+    async def test_create_branch_from_default_ref(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        base_ref = MagicMock()
+        base_ref.object.sha = "base-sha"
+        fake_repo.get_git_ref.return_value = base_ref
+        branch = MagicMock()
+        branch.commit.sha = "branch-head-sha"
+        fake_repo.get_branch.return_value = branch
+
+        result = await client.create_branch("stoa/api/acme/petstore/v1/hash")
+
+        fake_repo.create_git_ref.assert_called_once_with("refs/heads/stoa/api/acme/petstore/v1/hash", "base-sha")
+        assert result == "branch-head-sha"
+
+    @pytest.mark.asyncio
+    async def test_create_pull_request_returns_remote_pr(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        pr = MagicMock()
+        pr.number = 12
+        pr.html_url = "https://github.com/stoa-platform/stoa-catalog/pull/12"
+        pr.state = "open"
+        pr.merge_commit_sha = None
+        fake_repo.create_pull.return_value = pr
+
+        result = await client.create_pull_request(
+            title="catalog release",
+            body="body",
+            source_branch="stoa/api/acme/petstore/v1/hash",
+        )
+
+        fake_repo.create_pull.assert_called_once_with(
+            title="catalog release",
+            body="body",
+            head="stoa/api/acme/petstore/v1/hash",
+            base="main",
+        )
+        assert isinstance(result, RemotePullRequest)
+        assert result.number == 12
+        assert result.url == "https://github.com/stoa-platform/stoa-catalog/pull/12"
+
+    @pytest.mark.asyncio
+    async def test_merge_pull_request_returns_merge_sha(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        pr = MagicMock()
+        pr.merged = False
+        pr.merge.return_value = MagicMock(sha="merge-sha")
+        merged = MagicMock()
+        merged.number = 12
+        merged.html_url = "https://github.com/stoa-platform/stoa-catalog/pull/12"
+        merged.merged = True
+        merged.state = "closed"
+        merged.merge_commit_sha = "merge-sha"
+        merged.head.ref = "source-branch"
+        merged.base.ref = "main"
+        fake_repo.get_pull.side_effect = [pr, merged]
+
+        result = await client.merge_pull_request(12)
+
+        pr.merge.assert_called_once_with(merge_method="squash")
+        assert result.state == "merged"
+        assert result.merge_commit_sha == "merge-sha"
+
+    @pytest.mark.asyncio
+    async def test_create_tag_creates_annotated_ref(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        fake_repo.get_git_ref.side_effect = GithubException(404, {"message": "Not Found"}, None)
+        git_tag = MagicMock()
+        git_tag.sha = "tag-object-sha"
+        fake_repo.create_git_tag.return_value = git_tag
+        ref = MagicMock()
+        ref.url = "https://api.github.test/ref"
+        fake_repo.create_git_ref.return_value = ref
+
+        result = await client.create_tag(
+            name="stoa/api/acme/petstore/v1/merge-sha",
+            target_sha="merge-sha",
+            message="release",
+        )
+
+        fake_repo.create_git_tag.assert_called_once_with(
+            tag="stoa/api/acme/petstore/v1/merge-sha",
+            message="release",
+            object="merge-sha",
+            type="commit",
+        )
+        fake_repo.create_git_ref.assert_called_once_with(
+            ref="refs/tags/stoa/api/acme/petstore/v1/merge-sha",
+            sha="tag-object-sha",
+        )
+        assert isinstance(result, RemoteTag)
+        assert result.target_sha == "merge-sha"

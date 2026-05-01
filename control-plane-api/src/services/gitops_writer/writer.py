@@ -18,10 +18,12 @@ UPDATE (spec §6.9). The writer never derives ``git_path`` from any UUID source
 
 from __future__ import annotations
 
+import hashlib
+import re
 from typing import TYPE_CHECKING, Any
 
 import yaml
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 
 from src.logging_config import get_logger
 from src.services.catalog.write_api_yaml import render_api_yaml
@@ -41,7 +43,7 @@ from .exceptions import (
     LegacyCollisionError,
 )
 from .hashing import compute_catalog_content_hash
-from .models import ApiCreatePayload, CreateApiResult
+from .models import ApiCreatePayload, CatalogReleaseRef, CreateApiResult
 from .paths import canonical_catalog_path, is_uuid_shaped
 
 if TYPE_CHECKING:
@@ -67,6 +69,8 @@ than a transient race, so we surface :class:`GitOpsRaceExhaustedError`
 # claim is unusually long, and the cap bounds how much arbitrary data a
 # malformed claim can splice into the commit message.
 _ACTOR_MAX_LEN = 120
+_CATALOG_WRITE_MODES = {"direct", "pull_request"}
+_RELEASE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _sanitize_actor(actor: str) -> str:
@@ -87,6 +91,52 @@ def _sanitize_actor(actor: str) -> str:
     return cleaned[:_ACTOR_MAX_LEN]
 
 
+def _release_segment(value: str) -> str:
+    """Sanitize one branch/tag path segment while preserving readable slugs."""
+    cleaned = _RELEASE_SEGMENT_RE.sub("-", value.strip()).strip("-")
+    return (cleaned or "unknown")[:63]
+
+
+def _catalog_release_branch_name(
+    *,
+    tenant_id: str,
+    api_name: str,
+    version: str,
+    catalog_content_hash: str,
+) -> str:
+    """Return the canonical branch name for a catalog release proposal."""
+    return (
+        f"stoa/api/{_release_segment(tenant_id)}/{_release_segment(api_name)}"
+        f"/v{_release_segment(version)}/{catalog_content_hash[:12]}"
+    )
+
+
+def _catalog_release_tag_name(
+    *,
+    tenant_id: str,
+    api_name: str,
+    version: str,
+    merge_commit_sha: str,
+) -> str:
+    """Return the canonical Git tag for an accepted catalog release."""
+    return (
+        f"stoa/api/{_release_segment(tenant_id)}/{_release_segment(api_name)}"
+        f"/v{_release_segment(version)}/{merge_commit_sha[:12]}"
+    )
+
+
+def _catalog_release_id(
+    *,
+    tenant_id: str,
+    api_name: str,
+    version: str,
+    merge_commit_sha: str,
+) -> str:
+    """Return a stable product-level release identifier for DB/API surfaces."""
+    raw = f"{tenant_id}:{api_name}:{version}:{merge_commit_sha}".encode()
+    return f"catalog-release:{hashlib.sha256(raw).hexdigest()[:24]}"
+
+
 class GitOpsWriter:
     """Git-first writer for ``POST /v1/tenants/{tid}/apis``.
 
@@ -100,9 +150,13 @@ class GitOpsWriter:
         *,
         catalog_git_client: CatalogGitClient,
         db_session: AsyncSession,
+        catalog_write_mode: str = "direct",
     ) -> None:
+        if catalog_write_mode not in _CATALOG_WRITE_MODES:
+            raise ValueError(f"unsupported catalog_write_mode={catalog_write_mode!r}")
         self._catalog_git_client = catalog_git_client
         self._db_session = db_session
+        self._catalog_write_mode = catalog_write_mode
 
     async def create_api(
         self,
@@ -145,14 +199,26 @@ class GitOpsWriter:
         lock_key = advisory_lock_key(tenant_id, api_name)
         await self._acquire_advisory_lock(lock_key)
         try:
-            file_commit_sha, case = await self._commit_or_noop(
-                git_path=git_path,
-                api_yaml_bytes=api_yaml_bytes,
-                attempted_hash=attempted_hash,
-                actor=actor,
-                tenant_id=tenant_id,
-                api_name=api_name,
-            )
+            if self._catalog_write_mode == "pull_request":
+                file_commit_sha, case, catalog_release = await self._commit_or_noop_via_pull_request(
+                    git_path=git_path,
+                    api_yaml_bytes=api_yaml_bytes,
+                    attempted_hash=attempted_hash,
+                    actor=actor,
+                    tenant_id=tenant_id,
+                    api_name=api_name,
+                    version=contract_payload.version,
+                )
+            else:
+                file_commit_sha, case = await self._commit_or_noop(
+                    git_path=git_path,
+                    api_yaml_bytes=api_yaml_bytes,
+                    attempted_hash=attempted_hash,
+                    actor=actor,
+                    tenant_id=tenant_id,
+                    api_name=api_name,
+                )
+                catalog_release = None
 
             committed_bytes = await self._catalog_git_client.read_at_commit(git_path, file_commit_sha)
             if committed_bytes is None:
@@ -170,6 +236,12 @@ class GitOpsWriter:
                 git_path=git_path,
             )
             await project_to_api_catalog(self._db_session, projection)
+            if catalog_release is not None:
+                await self._apply_catalog_release_metadata(
+                    tenant_id=tenant_id,
+                    api_name=api_name,
+                    catalog_release=catalog_release,
+                )
 
             self._log_sync_status(
                 tenant_id=tenant_id,
@@ -189,6 +261,7 @@ class GitOpsWriter:
             git_commit_sha=file_commit_sha,
             catalog_content_hash=committed_hash,
             case=case,
+            catalog_release=catalog_release,
         )
 
     async def _check_legacy_collision(self, *, tenant_id: str, api_name: str) -> None:
@@ -306,6 +379,128 @@ class GitOpsWriter:
             api_id=api_name,
             attempts=_MAX_RACE_RETRIES,
         ) from last_exc
+
+    async def _commit_or_noop_via_pull_request(
+        self,
+        *,
+        git_path: str,
+        api_yaml_bytes: bytes,
+        attempted_hash: str,
+        actor: str,
+        tenant_id: str,
+        api_name: str,
+        version: str,
+    ) -> tuple[str, str, CatalogReleaseRef | None]:
+        """Create the catalog desired state via branch → PR → merge → tag."""
+        existing = await self._catalog_git_client.get(git_path)
+        if existing is not None:
+            existing_hash = compute_catalog_content_hash(existing.content)
+            if existing_hash == attempted_hash:
+                return await self._catalog_git_client.latest_file_commit(git_path), "idempotent", None
+            raise GitOpsConflictError(
+                tenant_id=tenant_id,
+                api_id=api_name,
+                remote_hash=existing_hash,
+                attempted_hash=attempted_hash,
+            )
+
+        source_branch = _catalog_release_branch_name(
+            tenant_id=tenant_id,
+            api_name=api_name,
+            version=version,
+            catalog_content_hash=attempted_hash,
+        )
+        await self._catalog_git_client.create_branch(source_branch)
+        await self._catalog_git_client.create_or_update(
+            path=git_path,
+            content=api_yaml_bytes,
+            expected_sha=None,
+            actor=actor,
+            message=f"create api {tenant_id}/{api_name}",
+            branch=source_branch,
+        )
+
+        pr_body = (
+            "Automated STOA catalog release.\n\n"
+            f"- tenant_id: {tenant_id}\n"
+            f"- api_id: {api_name}\n"
+            f"- api_version: {version}\n"
+            f"- git_path: {git_path}\n"
+            f"- catalog_content_hash: {attempted_hash}\n"
+        )
+        pr = await self._catalog_git_client.create_pull_request(
+            title=f"catalog: release {tenant_id}/{api_name} v{version}",
+            body=pr_body,
+            source_branch=source_branch,
+        )
+        merged = await self._catalog_git_client.merge_pull_request(pr.number)
+        merge_commit_sha = merged.merge_commit_sha
+        if not merge_commit_sha:
+            raise InfrastructureBugError(git_path=git_path, commit_sha="<missing-merge-sha>")
+
+        tag_name = _catalog_release_tag_name(
+            tenant_id=tenant_id,
+            api_name=api_name,
+            version=version,
+            merge_commit_sha=merge_commit_sha,
+        )
+        release_id = _catalog_release_id(
+            tenant_id=tenant_id,
+            api_name=api_name,
+            version=version,
+            merge_commit_sha=merge_commit_sha,
+        )
+        tag_message = (
+            f"STOA catalog release {release_id}\n\n"
+            f"tenant_id: {tenant_id}\n"
+            f"api_id: {api_name}\n"
+            f"api_version: {version}\n"
+            f"git_path: {git_path}\n"
+            f"catalog_content_hash: {attempted_hash}\n"
+            f"pull_request_url: {pr.url}\n"
+            f"merge_commit_sha: {merge_commit_sha}\n"
+        )
+        await self._catalog_git_client.create_tag(name=tag_name, target_sha=merge_commit_sha, message=tag_message)
+
+        return (
+            merge_commit_sha,
+            "created",
+            CatalogReleaseRef(
+                release_id=release_id,
+                tag_name=tag_name,
+                source_branch=source_branch,
+                pull_request_url=pr.url,
+                pull_request_number=pr.number,
+                merge_commit_sha=merge_commit_sha,
+            ),
+        )
+
+    async def _apply_catalog_release_metadata(
+        self,
+        *,
+        tenant_id: str,
+        api_name: str,
+        catalog_release: CatalogReleaseRef,
+    ) -> None:
+        """Attach release metadata to the projected ``api_catalog`` row."""
+        from src.models.catalog import APICatalog
+
+        stmt = (
+            update(APICatalog)
+            .where(APICatalog.tenant_id == tenant_id)
+            .where(APICatalog.api_id == api_name)
+            .where(APICatalog.deleted_at.is_(None))
+            .values(
+                catalog_release_id=catalog_release.release_id,
+                catalog_release_tag=catalog_release.tag_name,
+                catalog_pr_url=catalog_release.pull_request_url,
+                catalog_pr_number=catalog_release.pull_request_number,
+                catalog_source_branch=catalog_release.source_branch,
+                catalog_merge_commit_sha=catalog_release.merge_commit_sha,
+            )
+        )
+        await self._db_session.execute(stmt)
+        await self._db_session.flush()
 
     async def _acquire_advisory_lock(self, key: int) -> None:
         """Spec §6.8 — blocking session-scoped advisory lock."""

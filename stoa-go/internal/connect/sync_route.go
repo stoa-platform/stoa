@@ -61,14 +61,6 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 
 	syncOutcome, syncErr := s.adapter.SyncRoutes(ctx, adminURL, routes)
 
-	var apiStep SyncStep
-	if syncErr != nil {
-		apiStep = newSyncStep("api_synced", "failed", syncErr.Error())
-	} else {
-		apiStep = newSyncStep("api_synced", "success", "")
-	}
-	steps := []SyncStep{agentStep, adapterStep, apiStep}
-
 	failedMap := syncOutcome.FailedRoutes
 
 	var results []SyncedRouteResult
@@ -77,20 +69,23 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 			log.Printf("route-sync: skipping route %q — missing deployment_id (CP contract drift?)", r.Name)
 			continue
 		}
+		apiStep := newSyncStep("api_synced", "success", "")
 		result := SyncedRouteResult{
 			DeploymentID: r.DeploymentID,
-			Steps:        steps,
 			Generation:   r.Generation, // CAB-1950 — propagated on both paths (B.1 fix)
 		}
 		if routeErr, failed := failedMap[r.DeploymentID]; failed {
 			result.Status = "failed"
 			result.Error = routeErr
+			apiStep = newSyncStep("api_synced", "failed", routeErr)
 		} else if syncErr != nil && len(failedMap) == 0 {
 			result.Status = "failed"
 			result.Error = syncErr.Error()
+			apiStep = newSyncStep("api_synced", "failed", syncErr.Error())
 		} else {
 			result.Status = "applied"
 		}
+		result.Steps = []SyncStep{agentStep, adapterStep, apiStep}
 		results = append(results, result)
 	}
 

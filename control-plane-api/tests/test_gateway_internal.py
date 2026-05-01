@@ -1168,6 +1168,48 @@ class TestRouteSyncAck:
             assert dep.sync_status == DeploymentSyncStatus.ERROR
             assert dep.sync_error == "connection refused"
 
+    def test_route_sync_ack_applied_with_failed_step_fails_closed(self, client):
+        """Contradictory applied ack with failed steps must not mark deployment synced."""
+        from src.models.gateway_deployment import DeploymentSyncStatus
+
+        dep = _make_deployment()
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeployRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
+            mock_deploy_repo.update = AsyncMock()
+
+            agent_steps = [
+                {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
+                {"name": "adapter_connected", "status": "success", "started_at": "2026-04-02T12:00:02Z"},
+                {
+                    "name": "api_synced",
+                    "status": "failed",
+                    "started_at": "2026-04-02T12:00:03Z",
+                    "detail": "webmethods activation failed",
+                },
+            ]
+
+            resp = client.post(
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
+                json={
+                    "synced_routes": [
+                        {"deployment_id": str(dep.id), "status": "applied", "steps": agent_steps},
+                    ],
+                    "sync_timestamp": "2026-04-02T12:00:04Z",
+                },
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 200
+            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert dep.last_sync_success is None
+            assert dep.sync_error == "webmethods activation failed"
+
 
 class TestHelperFunctions:
     """Unit tests for internal helper functions."""

@@ -281,6 +281,14 @@ Un `GatewayDeployment` déjà `synced` ne peut changer vers `error`, `drifted` o
   n'existe plus ou ne correspond plus au desired state;
 - un opérateur force un resync et l'ack de cette nouvelle tentative échoue.
 
+Un ack gateway est atomique par `deployment_id`. Si `route-sync-ack` annonce
+`status=applied`, tous les steps attachés à ce résultat doivent être cohérents
+avec ce statut (`api_synced=success`, aucun step `failed`). Un ack contradictoire
+`status=applied` avec un step `failed` est refusé comme preuve de succès et doit
+être traité comme échec, sauf s'il s'agit d'un re-ack d'une génération déjà
+synced, auquel cas l'état `synced` précédent est préservé et l'observation est
+consignée sans remplacer la dernière preuve de succès.
+
 Statuts utilisateur canoniques à exposer sur `/api-deployments`:
 
 | Statut UI | Condition minimale |
@@ -576,6 +584,8 @@ PASS si le deployment a:
 - `sync_status=synced`
 - `last_sync_success` non nul
 - `actual_state` renseigné ou preuve équivalente que la gateway a appliqué la route
+- un ack par `deployment_id` dont le statut et les `sync_steps` sont cohérents
+  (`applied` ne peut pas contenir `api_synced=failed`)
 
 NOTE: un passage par SyncEngine ou inline sync peut être accepté comme compat
 legacy pendant la migration, mais ne doit pas devenir le contrat cible.
@@ -866,3 +876,4 @@ Critère GO pour toute PR touchant ce flux:
 | 2026-04-26 | Codex | Renommage en Runtime Reconciliation Contract et clarification connect/edge/sidecar |
 | 2026-04-26 | Codex | Clarification UAC JSON canonique; YAML réservé au packaging infra/GitOps |
 | 2026-04-26 | Codex | Ajout du contrat de fraîcheur Git et refus prod sans desired state Git-backed |
+| 2026-05-01 | Codex | Ajout de l'invariant route-sync-ack: statut par deployment_id cohérent avec les steps |

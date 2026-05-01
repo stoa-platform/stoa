@@ -251,6 +251,10 @@ Invariants spécifiques:
   `GatewayDeployment.environment` doivent être identiques pour une même cible.
   Les alias `prod`/`production` doivent être normalisés avant toute sélection ou
   promotion.
+- Les APIs publiques peuvent continuer à accepter `production`, mais la
+  résolution runtime doit interroger les deux formes `production` et `prod`.
+  Une gateway stockée en `prod` est donc valide pour une action Console
+  `production`, et inversement.
 
 ## 3. Invariants
 
@@ -330,6 +334,10 @@ offline.
   UI de choix gateway. Le résultat `0 deployment` silencieux est interdit.
 - Un changement d'environnement ne doit jamais conserver une gateway sélectionnée
   dans un autre environnement.
+- Un bloc Git/UAC `deployments.<env>: true` ne crée pas de cible par devinette.
+  Il peut matérialiser des `GatewayDeployment` uniquement si des
+  `ApiGatewayAssignment(auto_deploy=true)` existent pour l'API et l'environnement
+  normalisé.
 
 ### 3.3 Promotion et sync
 
@@ -358,6 +366,9 @@ offline.
   En architecture cible ADR-059 SSE, une perte de connexion Link laisse
   l'intention en attente jusqu'au reconnect/catch-up, mais la Console doit
   rendre cette attente visible.
+- Le timeout par défaut côté CP est `SYNC_ENGINE_PENDING_TIMEOUT_SECONDS`.
+  Passé ce délai, un `pending/syncing` sans ack gateway devient `error`
+  actionnable; un `synced` déjà acquitté ne doit pas être dégradé par ce timeout.
 - La Console doit afficher un état actionnable: re-sync, inspect gateway, ou
   supprimer la cible.
 

@@ -326,8 +326,8 @@ class TestDeploymentOrchestrationService:
             mock_deploy.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_auto_deploy_skips_when_no_assignments(self):
-        """auto_deploy_on_promotion should return empty when no assignments."""
+    async def test_auto_deploy_fails_when_no_assignments(self):
+        """auto_deploy_on_promotion must not silently succeed with zero runtime targets."""
         from src.services.deployment_orchestration_service import DeploymentOrchestrationService
 
         catalog = self._make_catalog()
@@ -342,14 +342,26 @@ class TestDeploymentOrchestrationService:
 
             mock_assign.return_value = []
 
-            result = await svc.auto_deploy_on_promotion(
-                api_id="payments-v2",
-                tenant_id="acme",
-                target_environment="staging",
-                approved_by="admin",
-            )
+            with pytest.raises(ValueError, match="no auto-deploy gateway assignments"):
+                await svc.auto_deploy_on_promotion(
+                    api_id="payments-v2",
+                    tenant_id="acme",
+                    target_environment="staging",
+                    approved_by="admin",
+                )
 
-            assert result == []
+    @pytest.mark.asyncio
+    async def test_validate_gateways_accepts_prod_production_alias(self):
+        """Runtime gateway rows may store prod while public APIs pass production."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        gw_id = uuid4()
+        gateway = self._make_gateway(id=gw_id, name="connect-webmethods-prod", environment="prod")
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        with patch.object(svc, "_get_gateway_or_raise", new_callable=AsyncMock, return_value=gateway):
+            await svc._validate_gateways_for_env([gw_id], "production")
 
     @pytest.mark.asyncio
     async def test_get_deployable_environments(self):

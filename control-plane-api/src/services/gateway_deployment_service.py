@@ -103,6 +103,16 @@ class GatewayDeploymentService:
         environment = (getattr(gateway, "environment", "") or "").strip().lower()
         return environment in {"prod", "production"}
 
+    @classmethod
+    def build_desired_state_for_gateway(cls, api_catalog, gateway, *, target_source: str) -> dict:
+        """Build desired state and stamp the concrete gateway target."""
+        return {
+            **cls.build_desired_state(api_catalog),
+            "target_gateway_name": getattr(gateway, "name", None),
+            "target_environment": getattr(gateway, "environment", None),
+            "target_source": target_source,
+        }
+
     async def deploy_api(
         self,
         api_catalog_id: UUID,
@@ -138,8 +148,10 @@ class GatewayDeploymentService:
                 )
 
             existing = await self.deploy_repo.get_by_api_and_gateway(api_catalog_id, gw_id)
+            desired_state = self.build_desired_state_for_gateway(api_catalog, gateway, target_source="direct")
+
             if existing:
-                existing.desired_state = self.build_desired_state(api_catalog)
+                existing.desired_state = desired_state
                 existing.desired_at = now
                 existing.sync_status = DeploymentSyncStatus.PENDING
                 existing.sync_error = None
@@ -150,7 +162,7 @@ class GatewayDeploymentService:
                 deployment = GatewayDeployment(
                     api_catalog_id=api_catalog_id,
                     gateway_instance_id=gw_id,
-                    desired_state=self.build_desired_state(api_catalog),
+                    desired_state=desired_state,
                     desired_at=now,
                     sync_status=DeploymentSyncStatus.PENDING,
                 )

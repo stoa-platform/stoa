@@ -441,6 +441,7 @@ class Settings(BaseSettings):
     SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes
     SYNC_ENGINE_MAX_CONCURRENT: int = 5
     SYNC_ENGINE_RETRY_MAX: int = 3
+    SYNC_ENGINE_PENDING_TIMEOUT_SECONDS: int = 3600
 
     # Drift auto-repair mode (CAB-2016)
     # none: log + Kafka event only (default)

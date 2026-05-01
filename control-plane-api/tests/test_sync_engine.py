@@ -1,6 +1,6 @@
 """Tests for SyncEngine — reconciliation and drift detection."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -165,6 +165,55 @@ class TestSyncEngine:
             assert deployment.sync_attempts == 1
 
     @pytest.mark.asyncio
+    async def test_reconcile_error_retries_same_generation_before_max_retries(self):
+        """ERROR deployments must retry even when the current generation was already attempted."""
+        deployment = self._make_deployment(
+            sync_status=DeploymentSyncStatus.ERROR,
+            sync_attempts=1,
+            desired_generation=3,
+            attempted_generation=3,
+        )
+        gateway = self._make_gateway(id=deployment.gateway_instance_id)
+        adapter = self._make_adapter()
+
+        mock_session = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=deployment)
+        mock_repo.update = AsyncMock(return_value=deployment)
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_id = AsyncMock(return_value=gateway)
+
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
+
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.workers.sync_engine.create_adapter_with_credentials", new_callable=AsyncMock, return_value=adapter
+            ),
+        ):
+            from src.workers.sync_engine import SyncEngine
+
+            engine = SyncEngine()
+            engine._semaphore = MagicMock()
+            engine._semaphore.__aenter__ = AsyncMock()
+            engine._semaphore.__aexit__ = AsyncMock()
+
+            await engine._reconcile_one(deployment.id)
+
+        adapter.sync_api.assert_awaited_once()
+        assert deployment.sync_status == DeploymentSyncStatus.SYNCED
+
+    @pytest.mark.asyncio
     async def test_reconcile_delete_success(self):
         """DELETING deployment is deleted from DB on adapter success."""
         deployment = self._make_deployment(
@@ -298,6 +347,49 @@ class TestSyncEngine:
 
             # _reconcile_one should NOT be called since deployment exceeded retries
             engine._reconcile_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reconcile_all_expires_stale_pending_deployment(self):
+        """PENDING/SYNCING deployments must not stay pending forever."""
+        deployment = self._make_deployment(
+            sync_status=DeploymentSyncStatus.PENDING,
+            sync_attempts=0,
+            last_sync_attempt=datetime.now(UTC) - timedelta(seconds=7200),
+        )
+
+        mock_session = AsyncMock()
+        mock_session.commit = AsyncMock()
+        mock_repo = MagicMock()
+        mock_repo.list_by_statuses = AsyncMock(return_value=[deployment])
+        mock_repo.update = AsyncMock(return_value=deployment)
+
+        mock_factory = MagicMock(
+            return_value=MagicMock(
+                __aenter__=AsyncMock(return_value=mock_session),
+                __aexit__=AsyncMock(return_value=False),
+            )
+        )
+
+        with (
+            patch("src.workers.sync_engine._get_session_factory", return_value=mock_factory),
+            patch("src.workers.sync_engine.GatewayDeploymentRepository", return_value=mock_repo),
+            patch("src.workers.sync_engine.settings") as mock_settings,
+        ):
+            mock_settings.SYNC_ENGINE_RETRY_MAX = 3
+            mock_settings.SYNC_ENGINE_INTERVAL_SECONDS = 300
+            mock_settings.SYNC_ENGINE_PENDING_TIMEOUT_SECONDS = 3600
+
+            from src.workers.sync_engine import SyncEngine
+
+            engine = SyncEngine()
+            engine._reconcile_one = AsyncMock()
+
+            await engine._reconcile_all()
+
+        assert deployment.sync_status == DeploymentSyncStatus.ERROR
+        assert "did not acknowledge" in deployment.sync_error
+        assert deployment.sync_attempts == 3
+        engine._reconcile_one.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_drift_detect_hash_mismatch(self):

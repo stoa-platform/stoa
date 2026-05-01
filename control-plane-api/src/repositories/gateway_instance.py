@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
+from src.services.environment_aliases import deployment_environment_aliases
 
 
 class GatewayInstanceRepository:
@@ -84,7 +85,7 @@ class GatewayInstanceRepository:
             GatewayInstance.deleted_at.is_(None),
         )
         if environment:
-            query = query.where(GatewayInstance.environment == environment)
+            query = query.where(GatewayInstance.environment.in_(deployment_environment_aliases(environment)))
         # Prefer the most recently updated entry
         query = query.order_by(GatewayInstance.updated_at.desc()).limit(1)
         result = await self.session.execute(query)
@@ -108,7 +109,7 @@ class GatewayInstanceRepository:
         if gateway_type:
             query = query.where(GatewayInstance.gateway_type == gateway_type)
         if environment:
-            query = query.where(GatewayInstance.environment == environment)
+            query = query.where(GatewayInstance.environment.in_(deployment_environment_aliases(environment)))
         if tenant_id:
             query = query.where((GatewayInstance.tenant_id == tenant_id) | (GatewayInstance.tenant_id.is_(None)))
 
@@ -162,7 +163,7 @@ class GatewayInstanceRepository:
         """
         query = select(GatewayInstance).where(
             GatewayInstance.mode == mode,
-            GatewayInstance.environment == environment,
+            GatewayInstance.environment.in_(deployment_environment_aliases(environment)),
             GatewayInstance.source == "self_register",
             GatewayInstance.deleted_at.is_(None),
         )

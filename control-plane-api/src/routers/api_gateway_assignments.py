@@ -84,7 +84,7 @@ async def create_assignment(
 async def list_assignments(
     tenant_id: str,
     api_id: UUID,
-    environment: str | None = Query(None, pattern="^(dev|staging|production)$"),
+    environment: str | None = Query(None, pattern="^(dev|staging|prod|production)$"),
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin", "devops", "viewer"])),
 ):
@@ -116,7 +116,7 @@ async def delete_assignment(
 class DeployToEnvRequest(BaseModel):
     """Request to deploy an API to gateways in a specific environment."""
 
-    environment: str = Field(pattern="^(dev|staging|production)$")
+    environment: str = Field(pattern="^(dev|staging|prod|production)$")
     gateway_ids: list[UUID] | None = None  # None = use auto-deploy assignments
 
 

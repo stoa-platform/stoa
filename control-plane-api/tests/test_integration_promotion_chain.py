@@ -11,14 +11,13 @@ from uuid import uuid4
 
 import pytest
 
-from src.models.catalog import APICatalog
 from src.models.api_gateway_assignment import ApiGatewayAssignment
+from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
 from src.models.promotion import Promotion, PromotionStatus
 from src.services.deployment_orchestration_service import DeploymentOrchestrationService
 from src.services.promotion_service import PromotionService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -187,6 +186,7 @@ class TestPromotionChainIntegration:
         # Mock _resolve_api_catalog
         orch_svc._resolve_api_catalog = AsyncMock(return_value=api)
         orch_svc.assignment_repo.list_auto_deploy = AsyncMock(return_value=[assignment])
+        orch_svc._preflight_gateway_ids = AsyncMock(return_value=[MagicMock(deployable=True)])
         orch_svc.deploy_svc.deploy_api = AsyncMock(return_value=[deployment])
 
         deployments = await orch_svc.auto_deploy_on_promotion(
@@ -265,8 +265,9 @@ class TestPromotionChainIntegration:
 
         orch_svc = DeploymentOrchestrationService(mock_db)
         orch_svc._resolve_api_catalog = AsyncMock(return_value=api)
-        orch_svc.assignment_repo.list_auto_deploy = AsyncMock(
-            return_value=[assignment1, assignment2]
+        orch_svc.assignment_repo.list_auto_deploy = AsyncMock(return_value=[assignment1, assignment2])
+        orch_svc._preflight_gateway_ids = AsyncMock(
+            return_value=[MagicMock(deployable=True), MagicMock(deployable=True)]
         )
         orch_svc.deploy_svc.deploy_api = AsyncMock(return_value=[dep1, dep2])
 
@@ -418,7 +419,6 @@ class TestPromotionChainIntegration:
 
         await svc.check_promotion_completion(promo.id)
         assert promo.status == PromotionStatus.PROMOTED.value
-        first_completed_at = promo.completed_at
 
         # Second call → should be idempotent (complete_promotion is called again
         # but the ValueError catch in check_promotion_completion handles it).

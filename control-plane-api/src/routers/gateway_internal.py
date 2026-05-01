@@ -672,7 +672,10 @@ async def route_sync_ack(
             not_found += 1
             continue
 
-        # Store step trace — merge CP steps with agent steps (CAB-1947)
+        # Build the merged step trace, but only persist it once the ack is accepted
+        # as canonical. Failed re-acks for an already synced generation are
+        # connectivity observations, not deployment-state changes.
+        merged_steps = None
         if result.steps is not None:
             from src.services.sync_step_tracker import SyncStepTracker
 
@@ -681,7 +684,6 @@ async def route_sync_ack(
             cp_tracker.start("event_emitted")
             cp_tracker.complete("event_emitted", detail="deployment dispatched to agent")
             merged_steps = cp_tracker.to_list() + result.steps
-            deployment.sync_steps = merged_steps
 
         # CAB-1950: reject stale generation acks
         if result.generation is not None and result.generation < deployment.desired_generation:
@@ -693,12 +695,8 @@ async def route_sync_ack(
             )
             continue
 
-        desired_generation = (
-            deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
-        )
-        synced_generation = (
-            deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
-        )
+        desired_generation = deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
+        synced_generation = deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
 
         if (
             result.status == "failed"
@@ -722,6 +720,8 @@ async def route_sync_ack(
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.last_sync_success = now
             deployment.sync_error = None
+            if merged_steps is not None:
+                deployment.sync_steps = merged_steps
             if result.generation is not None:
                 deployment.synced_generation = result.generation
                 deployment.attempted_generation = result.generation
@@ -729,9 +729,11 @@ async def route_sync_ack(
             deployment.sync_status = DeploymentSyncStatus.ERROR
             if result.generation is not None:
                 deployment.attempted_generation = result.generation
+            if merged_steps is not None:
+                deployment.sync_steps = merged_steps
             # Derive sync_error from step trace if available, else use scalar error
-            if result.steps:
-                tracker = SyncStepTracker.from_list(result.steps)
+            if merged_steps:
+                tracker = SyncStepTracker.from_list(merged_steps)
                 deployment.sync_error = tracker.first_error() or result.error
             else:
                 deployment.sync_error = result.error

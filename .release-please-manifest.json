@@ -1,6 +1,6 @@
 {
   "control-plane-api": "1.11.3",
-  "control-plane-ui": "1.5.8",
+  "control-plane-ui": "1.6.0",
   "portal": "1.3.3",
   "stoa-gateway": "0.9.19",
   "stoa-go": "0.3.8"

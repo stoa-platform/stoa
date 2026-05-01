@@ -7,7 +7,7 @@ For Kubernetes deployments, set these in ConfigMaps/Secrets.
 import json
 import logging
 import os
-from typing import Literal
+from typing import Final, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
@@ -36,6 +36,24 @@ SENSITIVE_DEBUG_FLAGS_IN_PROD: tuple[str, ...] = (
     "LOG_DEBUG_HTTP_BODY",
     "LOG_DEBUG_HTTP_HEADERS",
 )
+
+# CAB-2199 / INFRA-1a Phase 3-A — fail-closed ENVIRONMENT alias map.
+# `ENVIRONMENT` drives four security-relevant gates (sensitive debug flags,
+# auth bypass, git provider validation, CORS localhost stripping) which
+# all literal-check `== "production"`. Phase 2 S5 surgically mapped only
+# the bare lowercase `prod` token, so any other spelling (`PROD`, `Prod`,
+# `produciton`, `live`) silently bypassed every gate. Phase 3-A widens
+# the validator into a fail-closed alias map: case-insensitive accept
+# for documented values, hard reject for everything else (the prod
+# gates can never see an unrecognized environment string).
+_ENVIRONMENT_ALIASES: Final[dict[str, str]] = {
+    "dev": "dev",
+    "development": "dev",
+    "staging": "staging",
+    "test": "test",
+    "prod": "production",
+    "production": "production",
+}
 
 
 def _is_valid_http_url(url: str) -> bool:
@@ -256,6 +274,24 @@ class Settings(BaseSettings):
     # ── OpenSearch — single source of truth for consumers ────────────────
     opensearch_audit: OpenSearchAuditConfig = Field(default_factory=OpenSearchAuditConfig)
 
+    @field_validator("BASE_DOMAIN")
+    @classmethod
+    def _base_domain_must_not_be_empty(cls, v: str) -> str:
+        """CAB-2199 Phase 3-A — reject explicit empty BASE_DOMAIN.
+
+        The BASE_DOMAIN derivation validator (``_derive_urls_from_base_domain``)
+        falls back to ``"gostoa.dev"`` when ``data.get("BASE_DOMAIN")`` is
+        falsy, but the BASE_DOMAIN field itself preserved the empty
+        string — producing an inconsistent state where derived URLs
+        used ``gostoa.dev`` while ``settings.BASE_DOMAIN`` reported
+        ``""``. An empty domain is never a valid configuration; reject
+        it at validation so a mis-templated Helm value (``baseDomain: ""``)
+        fails loudly instead of masking the misconfiguration.
+        """
+        if not v.strip():
+            raise ValueError("BASE_DOMAIN must not be empty")
+        return v
+
     @field_validator("GIT_PROVIDER", mode="before")
     @classmethod
     def _normalize_git_provider(cls, v: object) -> object:
@@ -273,33 +309,46 @@ class Settings(BaseSettings):
     @field_validator("ENVIRONMENT", mode="before")
     @classmethod
     def _normalize_environment(cls, v: object) -> object:
-        """CAB-2199 / INFRA-1a §3.4 — surgical ``prod → production`` mapping.
+        """CAB-2199 Phase 3-A — fail-closed ENVIRONMENT alias map.
 
-        stoa-gateway uses ``ENVIRONMENT=prod`` while cp-api historically
-        validated against the literal ``"production"``. This validator
-        funnels exactly the bare ``prod`` token (whitespace-stripped) into
-        the canonical ``production`` so existing ``== "production"`` checks
-        keep working for both spellings. All other values pass through
-        untouched (``Staging``, ``PRODUCTION``, ``dev`` preserve caller
-        spelling — BH-8 mitigation: avoid silent case-fold of unrelated
-        values).
+        Replaces the Phase 2 S5 surgical ``prod → production`` mapping,
+        which left every other spelling (``PROD``, ``Prod``, typo
+        ``produciton``, alias ``live``) silently bypassing the four
+        ``== "production"`` security gates downstream
+        (``_gate_sensitive_debug_flags_in_prod``,
+        ``_gate_auth_bypass_in_prod``, ``_hydrate_and_validate_git``,
+        ``cors_origins_list``).
 
-        Christophe arbitrage 2026-04-29 §3.4 nuance: emit a
-        ``logger.info`` line at boot when normalization is applied so an
-        operator inspecting the boot logs sees the rewrite explicitly
-        (avoids the "I set prod, why does the log say production?" trap).
+        Behaviour:
+        - Whitespace-strip + casefold the input.
+        - If the normalized key matches a documented alias, return the
+          canonical form. Emit a ``logger.info`` ops-signal whenever the
+          stored value differs from the caller's input (case-fold or
+          ``prod`` → ``production``).
+        - Otherwise raise ``ValueError`` — unknown values must NEVER
+          silently mean "non-prod" because they would bypass the gates.
         """
-        if isinstance(v, str):
-            stripped = v.strip()
-            if stripped == "prod":
+        if not isinstance(v, str):
+            return v  # let Pydantic surface the type error
+
+        stripped = v.strip()
+        key = stripped.casefold()
+        if key in _ENVIRONMENT_ALIASES:
+            canonical = _ENVIRONMENT_ALIASES[key]
+            if stripped != canonical:
                 _logger.info(
-                    "ENVIRONMENT normalized: 'prod' → 'production' "
-                    "(CAB-2199 / INFRA-1a §3.4 — gateway uses 'prod', "
-                    "cp-api stores the canonical 'production'; both spellings accepted)."
+                    "ENVIRONMENT normalized: %r → %r "
+                    "(CAB-2199 Phase 3-A — case-insensitive accept).",
+                    v,
+                    canonical,
                 )
-                return "production"
-            return stripped
-        return v
+            return canonical
+
+        accepted = sorted(set(_ENVIRONMENT_ALIASES))
+        raise ValueError(
+            f"ENVIRONMENT={v!r} is not recognized. "
+            f"Accepted values (case-insensitive): {accepted}."
+        )
 
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks

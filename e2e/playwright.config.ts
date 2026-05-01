@@ -101,7 +101,7 @@ export default defineConfig({
     {
       name: 'gateway',
       use: {
-        baseURL: process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev',
+        baseURL: process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev',
       },
       testMatch: /gateway-(access|mtls|uac|federation|credential|dpop|mcp|llm|sender)/,
     },

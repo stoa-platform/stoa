@@ -1,8 +1,6 @@
-// regression for CAB-1944 (GO-1 audit H.2 + H.1): fixExternalDocs must walk
-// the full OpenAPI tree (tags, operations, components.schemas and nested
-// schemas), not just the root. Also covers removal of the dead-code call
-// in webmethods_sync.go — the wrapper payload never carried externalDocs
-// at top level, so the previous post-marshal application was a no-op.
+// regression for webMethods OpenAPI import compatibility: fixExternalDocs must
+// walk the full OpenAPI tree (tags, operations, components.schemas and nested
+// schemas), not just the root.
 package adapters
 
 import (
@@ -22,6 +20,12 @@ func unmarshalTo(t *testing.T, data []byte) map[string]interface{} {
 	return m
 }
 
+// isObject returns true if v is a JSON object.
+func isObject(v interface{}) bool {
+	_, ok := v.(map[string]interface{})
+	return ok
+}
+
 // isArrayOfOneObject returns true if v is a []interface{} containing exactly
 // one map[string]interface{}.
 func isArrayOfOneObject(v interface{}) bool {
@@ -34,21 +38,21 @@ func isArrayOfOneObject(v interface{}) bool {
 }
 
 // ---------------------------------------------------------------------------
-// TestWebMethodsFixExternalDocs_TopLevel — baseline, preserves pre-GO-1
-// behaviour for specs whose only externalDocs lives at the root.
+// TestWebMethodsFixExternalDocs_TopLevel — webMethods expects root
+// externalDocs as a list on its RestAPI model.
 // ---------------------------------------------------------------------------
 func TestWebMethodsFixExternalDocs_TopLevel(t *testing.T) {
 	in := []byte(`{"openapi":"3.0.3","info":{"title":"t","version":"1"},"externalDocs":{"url":"https://a","description":"A"}}`)
 	out := fixExternalDocs(in)
 	m := unmarshalTo(t, out)
 	if !isArrayOfOneObject(m["externalDocs"]) {
-		t.Errorf("root externalDocs not wrapped: %v", m["externalDocs"])
+		t.Errorf("root externalDocs not normalized to one-object array: %v", m["externalDocs"])
 	}
 }
 
 // ---------------------------------------------------------------------------
-// TestWebMethodsFixExternalDocs_InTags — per-tag externalDocs must wrap;
-// tags that don't have externalDocs must be untouched.
+// TestWebMethodsFixExternalDocs_InTags — per-tag externalDocs must remain an
+// object; tags that don't have externalDocs must be untouched.
 // ---------------------------------------------------------------------------
 func TestWebMethodsFixExternalDocs_InTags(t *testing.T) {
 	in := []byte(`{"openapi":"3.0.3","info":{"title":"t","version":"1"},"tags":[{"name":"pets","externalDocs":{"url":"https://pets"}},{"name":"users"}],"paths":{}}`)
@@ -60,8 +64,8 @@ func TestWebMethodsFixExternalDocs_InTags(t *testing.T) {
 		t.Fatalf("expected 2 tags, got %v", m["tags"])
 	}
 	tag0 := tags[0].(map[string]interface{})
-	if !isArrayOfOneObject(tag0["externalDocs"]) {
-		t.Errorf("tag[0].externalDocs not wrapped: %v", tag0["externalDocs"])
+	if !isObject(tag0["externalDocs"]) {
+		t.Errorf("tag[0].externalDocs not normalized to object: %v", tag0["externalDocs"])
 	}
 	tag1 := tags[1].(map[string]interface{})
 	if _, has := tag1["externalDocs"]; has {
@@ -71,7 +75,7 @@ func TestWebMethodsFixExternalDocs_InTags(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestWebMethodsFixExternalDocs_InOperations — Operation Object externalDocs
-// (paths[*].<method>.externalDocs) must wrap.
+// (paths[*].<method>.externalDocs) must remain an object.
 // ---------------------------------------------------------------------------
 func TestWebMethodsFixExternalDocs_InOperations(t *testing.T) {
 	in := []byte(`{"openapi":"3.0.3","info":{"title":"t","version":"1"},"paths":{"/p":{"get":{"operationId":"g","externalDocs":{"url":"https://op"},"responses":{}}}}}`)
@@ -79,15 +83,16 @@ func TestWebMethodsFixExternalDocs_InOperations(t *testing.T) {
 	m := unmarshalTo(t, out)
 
 	op := m["paths"].(map[string]interface{})["/p"].(map[string]interface{})["get"].(map[string]interface{})
-	if !isArrayOfOneObject(op["externalDocs"]) {
-		t.Errorf("operation externalDocs not wrapped: %v", op["externalDocs"])
+	if !isObject(op["externalDocs"]) {
+		t.Errorf("operation externalDocs not normalized to object: %v", op["externalDocs"])
 	}
 }
 
 // ---------------------------------------------------------------------------
 // TestWebMethodsFixExternalDocs_InComponents — nested Schema externalDocs
 // (components.schemas.Pet.externalDocs and deep-nested
-// components.schemas.Pet.properties.owner.externalDocs) must both wrap.
+// components.schemas.Pet.properties.owner.externalDocs) must both remain
+// objects.
 // ---------------------------------------------------------------------------
 func TestWebMethodsFixExternalDocs_InComponents(t *testing.T) {
 	in := []byte(`{"openapi":"3.0.3","info":{"title":"t","version":"1"},"paths":{},"components":{"schemas":{"Pet":{"type":"object","externalDocs":{"url":"https://pet-doc"},"properties":{"owner":{"type":"object","externalDocs":{"url":"https://owner-doc"}}}}}}}`)
@@ -95,20 +100,20 @@ func TestWebMethodsFixExternalDocs_InComponents(t *testing.T) {
 	m := unmarshalTo(t, out)
 
 	pet := m["components"].(map[string]interface{})["schemas"].(map[string]interface{})["Pet"].(map[string]interface{})
-	if !isArrayOfOneObject(pet["externalDocs"]) {
-		t.Errorf("Pet.externalDocs not wrapped: %v", pet["externalDocs"])
+	if !isObject(pet["externalDocs"]) {
+		t.Errorf("Pet.externalDocs not normalized to object: %v", pet["externalDocs"])
 	}
 	owner := pet["properties"].(map[string]interface{})["owner"].(map[string]interface{})
-	if !isArrayOfOneObject(owner["externalDocs"]) {
-		t.Errorf("Pet.properties.owner.externalDocs not wrapped: %v", owner["externalDocs"])
+	if !isObject(owner["externalDocs"]) {
+		t.Errorf("Pet.properties.owner.externalDocs not normalized to object: %v", owner["externalDocs"])
 	}
 }
 
 // ---------------------------------------------------------------------------
 // TestWebMethodsFixExternalDocs_DeepNesting — combination: root + tags +
-// operation + components.schemas. A single call wraps all sites.
+// operation + components.schemas. A single call normalizes all sites.
 // ---------------------------------------------------------------------------
-func TestWebMethodsFixExternalDocs_DeepNesting(t *testing.T) {
+func TestRegressionWebMethodsFixExternalDocs_DeepNesting(t *testing.T) {
 	in := []byte(`{
 		"openapi":"3.0.3",
 		"info":{"title":"t","version":"1"},
@@ -121,19 +126,19 @@ func TestWebMethodsFixExternalDocs_DeepNesting(t *testing.T) {
 	m := unmarshalTo(t, out)
 
 	if !isArrayOfOneObject(m["externalDocs"]) {
-		t.Errorf("root externalDocs not wrapped: %v", m["externalDocs"])
+		t.Errorf("root externalDocs not normalized to one-object array: %v", m["externalDocs"])
 	}
 	tag0 := m["tags"].([]interface{})[0].(map[string]interface{})
-	if !isArrayOfOneObject(tag0["externalDocs"]) {
-		t.Errorf("tag[0].externalDocs not wrapped: %v", tag0["externalDocs"])
+	if !isObject(tag0["externalDocs"]) {
+		t.Errorf("tag[0].externalDocs not normalized to object: %v", tag0["externalDocs"])
 	}
 	op := m["paths"].(map[string]interface{})["/p"].(map[string]interface{})["get"].(map[string]interface{})
-	if !isArrayOfOneObject(op["externalDocs"]) {
-		t.Errorf("operation externalDocs not wrapped: %v", op["externalDocs"])
+	if !isObject(op["externalDocs"]) {
+		t.Errorf("operation externalDocs not normalized to object: %v", op["externalDocs"])
 	}
 	pet := m["components"].(map[string]interface{})["schemas"].(map[string]interface{})["Pet"].(map[string]interface{})
-	if !isArrayOfOneObject(pet["externalDocs"]) {
-		t.Errorf("Pet.externalDocs not wrapped: %v", pet["externalDocs"])
+	if !isObject(pet["externalDocs"]) {
+		t.Errorf("Pet.externalDocs not normalized to object: %v", pet["externalDocs"])
 	}
 }
 
@@ -151,21 +156,31 @@ func TestWebMethodsFixExternalDocs_NoExternalDocs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestWebMethodsFixExternalDocs_AlreadyArray — an externalDocs that is
-// already a single-element array must NOT be double-wrapped.
+// TestWebMethodsFixExternalDocs_RootArrayOfOne — a root externalDocs that is
+// already a single-element array must be preserved.
 // ---------------------------------------------------------------------------
-func TestWebMethodsFixExternalDocs_AlreadyArray(t *testing.T) {
+func TestWebMethodsFixExternalDocs_RootArrayOfOne(t *testing.T) {
 	in := []byte(`{"openapi":"3.0.3","info":{"title":"t","version":"1"},"externalDocs":[{"url":"https://already"}]}`)
 	out := fixExternalDocs(in)
 	m := unmarshalTo(t, out)
 
-	arr, ok := m["externalDocs"].([]interface{})
-	if !ok || len(arr) != 1 {
-		t.Fatalf("expected 1-element array, got %v", m["externalDocs"])
+	if !isArrayOfOneObject(m["externalDocs"]) {
+		t.Fatalf("expected one-object array, got %v", m["externalDocs"])
 	}
-	// The element is the original object, not another array.
-	if _, isArr := arr[0].([]interface{}); isArr {
-		t.Errorf("double-wrap detected: externalDocs[0] is an array, want object")
+}
+
+// ---------------------------------------------------------------------------
+// TestWebMethodsFixExternalDocs_NestedArrayOfOne — nested externalDocs arrays
+// must be unwrapped to object shape for tag/operation/schema models.
+// ---------------------------------------------------------------------------
+func TestWebMethodsFixExternalDocs_NestedArrayOfOne(t *testing.T) {
+	in := []byte(`{"openapi":"3.0.3","info":{"title":"t","version":"1"},"tags":[{"name":"pets","externalDocs":[{"url":"https://pets"}]}]}`)
+	out := fixExternalDocs(in)
+	m := unmarshalTo(t, out)
+
+	tag0 := m["tags"].([]interface{})[0].(map[string]interface{})
+	if !isObject(tag0["externalDocs"]) {
+		t.Fatalf("expected object, got %v", tag0["externalDocs"])
 	}
 }
 

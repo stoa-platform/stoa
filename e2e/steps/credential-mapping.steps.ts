@@ -15,7 +15,7 @@ import { test, expect, URLS } from '../fixtures/test-base';
 const { Given, When, Then } = createBdd(test);
 
 // Admin API base URL (uses gateway URL which serves admin endpoints)
-const ADMIN_URL = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+const ADMIN_URL = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
 const ADMIN_TOKEN = process.env.STOA_ADMIN_TOKEN || '';
 
 // Store for test context

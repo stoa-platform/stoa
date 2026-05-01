@@ -26,7 +26,7 @@ echo ""
 # --- URLs (with defaults — optional, but explicit is better) ---
 gh secret set E2E_PORTAL_URL  --repo "$REPO" --body "https://portal.gostoa.dev"
 gh secret set E2E_CONSOLE_URL --repo "$REPO" --body "https://console.gostoa.dev"
-gh secret set E2E_GATEWAY_URL --repo "$REPO" --body "https://api.gostoa.dev"
+gh secret set E2E_GATEWAY_URL --repo "$REPO" --body "https://mcp.gostoa.dev"
 gh secret set E2E_KEYCLOAK_URL --repo "$REPO" --body "https://auth.gostoa.dev"
 echo "  URLs configured"
 

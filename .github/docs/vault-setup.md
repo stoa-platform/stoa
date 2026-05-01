@@ -79,7 +79,7 @@ vault write auth/jwt/role/github-actions \
 vault kv put secret/e2e/urls \
   PORTAL_URL="https://portal.gostoa.dev" \
   CONSOLE_URL="https://console.gostoa.dev" \
-  GATEWAY_URL="https://api.gostoa.dev" \
+  GATEWAY_URL="https://mcp.gostoa.dev" \
   KEYCLOAK_URL="https://auth.gostoa.dev"
 ```
 

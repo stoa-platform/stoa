@@ -94,6 +94,9 @@ class UacToolGenerator:
         endpoint: UacEndpointSpec,
     ) -> str:
         """Build MCP tool name: {tenant}:{contract}:{operation}."""
+        if endpoint.llm and endpoint.llm.tool_name:
+            return endpoint.llm.tool_name
+
         if endpoint.operation_id:
             op_id = re.sub(r"[^a-zA-Z0-9_]", "_", endpoint.operation_id).lower()
         else:
@@ -116,6 +119,8 @@ class UacToolGenerator:
             f"Summary: {endpoint.llm.summary}",
             f"Intent: {endpoint.llm.intent}",
             f"Side effects: {endpoint.llm.side_effects}",
+            f"Safe for agents: {endpoint.llm.safe_for_agents}",
+            f"Requires human approval: {endpoint.llm.requires_human_approval}",
         ]
         if endpoint.llm.requires_human_approval:
             lines.append("HUMAN APPROVAL REQUIRED")

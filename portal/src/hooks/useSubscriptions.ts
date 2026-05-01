@@ -244,7 +244,13 @@ export function useSubscribe() {
         apiName: response.api_name,
         apiVersion: response.api_version,
         tenantId: response.tenant_id,
+        planId: response.plan_id || undefined,
+        planName: response.plan_name || undefined,
         status: response.status,
+        apiKeyPrefix: response.api_key_prefix || undefined,
+        provisioningStatus: response.provisioning_status || undefined,
+        provisioningError: response.provisioning_error || undefined,
+        gatewayAppId: response.gateway_app_id || undefined,
         createdAt: response.created_at,
         expiresAt: response.expires_at || undefined,
       };
@@ -302,6 +308,9 @@ export function useApplicationSubscriptions(applicationId: string | undefined) {
         planName: item.plan_name || undefined,
         status: item.status,
         apiKeyPrefix: item.api_key_prefix || undefined,
+        provisioningStatus: item.provisioning_status || undefined,
+        provisioningError: item.provisioning_error || undefined,
+        gatewayAppId: item.gateway_app_id || undefined,
         createdAt: item.created_at,
         expiresAt: item.expires_at || undefined,
       }));

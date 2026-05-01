@@ -1,10 +1,16 @@
-"""CAB-2199 / INFRA-1a S2 — regression guards for the BASE_DOMAIN derivation validator.
+"""CAB-2199 / INFRA-1a S2 + Phase 3-A — regression guards for the BASE_DOMAIN derivation validator.
 
 Replaces the prior load-time ``_BASE_DOMAIN = os.getenv(...)`` freeze with a
 ``model_validator(mode="before")`` that fills in BASE_DOMAIN-derived URL
 defaults at instantiation time. The validator uses ``setdefault`` so it
 distinguishes ABSENT (derive) from EXPLICITLY-PROVIDED (preserve, including
-empty string).
+empty string for derived URLs).
+
+Phase 3-A adds a ``_base_domain_must_not_be_empty`` field validator that
+rejects an explicit empty BASE_DOMAIN — closes the BH-INFRA1a-005
+inconsistent-state bug where ``Settings(BASE_DOMAIN="")`` preserved the
+empty string on the field but the derivation lookup fell back to
+``"gostoa.dev"``.
 
 Tests cover:
 - Default (no override) — every derived URL renders from ``gostoa.dev``.
@@ -15,14 +21,16 @@ Tests cover:
 - ``CORS_ORIGINS`` recompute via ``BASE_DOMAIN`` env override + local entries
   preserved.
 - ``model_dump()`` exposes resolved URLs (not the empty sentinel).
-- Empty-string explicit override preserved (caller intent honored — this is
-  a behavior expansion vs. the old frozen-default code, documented in
-  CLAUDE.md note #1).
+- Empty-string explicit override preserved for **derived URLs** (caller
+  intent honored on KEYCLOAK_URL etc.; documented in CLAUDE.md note #1).
+- Empty/whitespace BASE_DOMAIN itself **rejected** at validation
+  (Phase 3-A — closes BH-INFRA1a-005).
 """
 
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from src.config import Settings
 
@@ -156,3 +164,18 @@ def test_env_var_override_short_circuits_derivation(monkeypatch):
     assert s.KEYCLOAK_URL == "https://auth.from-env.io"
     # GATEWAY_URL still derives from BASE_DOMAIN (env did not set it)
     assert s.GATEWAY_URL == "https://vps-wm.stage.gostoa.dev"
+
+
+@pytest.mark.parametrize("value", ["", "   ", "\n", "\t", " \n\t "])
+def test_base_domain_empty_rejected(value):
+    """Phase 3-A — explicit empty / whitespace-only BASE_DOMAIN is rejected.
+
+    Closes BH-INFRA1a-005: pre-Phase 3-A, ``Settings(BASE_DOMAIN="")``
+    preserved the empty string on the field but the derivation lookup
+    (``data.get("BASE_DOMAIN") or "gostoa.dev"``) fell back to
+    ``gostoa.dev`` — producing an inconsistent state where derived URLs
+    used ``gostoa.dev`` while ``settings.BASE_DOMAIN == ""``. The new
+    field validator rejects empty/whitespace at boot.
+    """
+    with pytest.raises(ValidationError, match="BASE_DOMAIN must not be empty"):
+        Settings(BASE_DOMAIN=value)

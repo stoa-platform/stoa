@@ -102,6 +102,35 @@ If you add a new derived URL field, register it in the validator's `derived`
 dict. **Do NOT add new `gostoa.dev` literals** outside the `BASE_DOMAIN`
 default and the validator's fallback — Q6 multi-env-ready rule.
 
+**Phase 3-A — empty BASE_DOMAIN rejected**: `Settings(BASE_DOMAIN="")`
+(or whitespace-only) now raises a `ValidationError` instead of falling
+back silently to `gostoa.dev`. The pre-Phase-3-A behavior masked
+mis-templated Helm values (`baseDomain: ""`).
+
+## ENVIRONMENT — fail-closed alias map (Phase 3-A)
+
+Per CAB-2199 / INFRA-1a Phase 3-A, the `_normalize_environment` validator
+is fail-closed:
+
+- Whitespace-strip + casefold the input.
+- If it matches a documented alias
+  (`dev` | `development` | `staging` | `test` | `prod` | `production`),
+  return the canonical form. `prod` and `development` map to
+  `production` and `dev` respectively. Case variations are accepted —
+  `PROD`, `Prod`, `Staging`, `PRODUCTION` are all normalized.
+- Otherwise raise `ValidationError("ENVIRONMENT=… is not recognized")`.
+
+**Why fail-closed**: `ENVIRONMENT` drives four security gates
+(`_gate_sensitive_debug_flags_in_prod`, `_gate_auth_bypass_in_prod`,
+`_hydrate_and_validate_git`, `cors_origins_list`) which all
+literal-check `== "production"`. Pre-Phase-3-A, any unknown value
+(typo `produciton`, alias `live`, case variation `PROD`) silently
+bypassed every gate. The fail-closed validator ensures unknown values
+never reach the gates with a non-prod meaning.
+
+An `INFO` ops-signal log fires whenever the input differs from the
+canonical output (e.g., `prod` → `production`, `Prod` → `production`).
+
 ## OpenSearch — audit endpoint vs docs/embedding endpoint
 
 Per CAB-2199 / INFRA-1a S3 (Christophe arbitrage 2026-04-29 §3.1 = Option A),

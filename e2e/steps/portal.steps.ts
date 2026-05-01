@@ -15,13 +15,17 @@ const { Given, When, Then } = createBdd(test);
 When('I access the API catalog', async ({ page }) => {
   await page.goto(`${URLS.portal}/apis`);
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('text=Loading').first()).not.toBeVisible({ timeout: 15000 }).catch(() => {});
+  await expect(page.locator('text=Loading').first())
+    .not.toBeVisible({ timeout: 15000 })
+    .catch(() => {});
 });
 
 Given('I am on the API catalog page', async ({ page }) => {
   await page.goto(`${URLS.portal}/apis`);
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('text=Loading').first()).not.toBeVisible({ timeout: 15000 }).catch(() => {});
+  await expect(page.locator('text=Loading').first())
+    .not.toBeVisible({ timeout: 15000 })
+    .catch(() => {});
 });
 
 Given('I am viewing an API in the catalog', async ({ page }) => {
@@ -43,7 +47,9 @@ Given('there are published APIs in the catalog', async ({ page }) => {
 });
 
 Then('I see APIs in the catalog', async ({ page }) => {
-  await expect(page.locator('text=Loading').first()).not.toBeVisible({ timeout: 15000 }).catch(() => {});
+  await expect(page.locator('text=Loading').first())
+    .not.toBeVisible({ timeout: 15000 })
+    .catch(() => {});
 
   // Use href-based selector (most reliable across CSS class changes)
   const apiCards = page.locator('a[href^="/apis/"]');
@@ -61,7 +67,14 @@ Then('I see the same catalog as other users', async ({ page }) => {
 // ============================================================================
 
 When('I search for {string}', async ({ page }, query: string) => {
-  const searchInput = page.locator('input[placeholder*="Search"], input[placeholder*="Rechercher"], input[type="search"]');
+  const searchInput = page
+    .getByRole('textbox', { name: /search|rechercher/i })
+    .or(
+      page.locator(
+        'input[placeholder*="Search"], input[placeholder*="Rechercher"], input[type="search"]'
+      )
+    )
+    .first();
   await searchInput.fill(query);
   await page.waitForTimeout(500);
   await page.waitForLoadState('networkidle');
@@ -79,13 +92,17 @@ Then('the results contain {string}', async ({ page }, text: string) => {
 
 When('I filter by category {string}', async ({ page }, category: string) => {
   // Try select-based category filter first (APIFilters component)
-  const selectFilter = page.locator('select').filter({ has: page.locator(`option:has-text("${category}")`) });
+  const selectFilter = page
+    .locator('select')
+    .filter({ has: page.locator(`option:has-text("${category}")`) });
 
   if (await selectFilter.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await selectFilter.selectOption({ label: new RegExp(category, 'i') });
+    await selectFilter.selectOption({ label: category });
   } else {
     // Fallback: try clicking a category tag/button on the page
-    const categoryButton = page.locator(`button:has-text("${category}"), [role="tab"]:has-text("${category}"), a:has-text("${category}")`);
+    const categoryButton = page.locator(
+      `button:has-text("${category}"), [role="tab"]:has-text("${category}"), a:has-text("${category}")`
+    );
     if (await categoryButton.isVisible({ timeout: 3000 }).catch(() => false)) {
       await categoryButton.first().click();
     }
@@ -108,12 +125,14 @@ Then('all displayed APIs have category {string}', async ({ page }, category: str
 // ============================================================================
 
 Then('I see the list of my subscriptions', async ({ page }) => {
-  await expect(page.locator('h1, h2').filter({ hasText: /subscription|souscription/i })).toBeVisible();
+  await expect(
+    page.locator('h1, h2').filter({ hasText: /subscription|souscription/i })
+  ).toBeVisible();
 });
 
 Then('each subscription shows its status', async ({ page }) => {
   const statusBadges = page.locator('[class*="badge"], [class*="status"]').filter({
-    hasText: /active|pending|revoked|suspended|expired/i
+    hasText: /active|pending|revoked|suspended|expired/i,
   });
 
   const cards = page.locator('[class*="card"], [class*="rounded-lg"][class*="border"]');
@@ -130,7 +149,9 @@ When('I click on {string}', async ({ page }, buttonText: string) => {
 });
 
 When('I confirm the subscription', async ({ page }) => {
-  await page.click('button:has-text("Confirm"), button:has-text("Subscribe"), button:has-text("Confirmer")');
+  await page.click(
+    'button:has-text("Confirm"), button:has-text("Subscribe"), button:has-text("Confirmer")'
+  );
   await page.waitForLoadState('networkidle');
 });
 
@@ -139,7 +160,9 @@ Then('the subscription is created with status {string}', async ({ page }, status
 });
 
 Then('I can see my new API key', async ({ page }) => {
-  await expect(page.locator('text=/^[a-zA-Z0-9_-]{20,}|sk_|pk_|api_/i')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('text=/^[a-zA-Z0-9_-]{20,}|sk_|pk_|api_/i')).toBeVisible({
+    timeout: 10000,
+  });
 });
 
 Given('I have an active subscription', async ({ page }) => {
@@ -152,7 +175,9 @@ Given('I have an active subscription', async ({ page }) => {
 
 When('I click on {string} for a subscription', async ({ page }, buttonText: string) => {
   const subscriptionCard = page.locator('[class*="card"], [class*="rounded-lg"]').first();
-  await subscriptionCard.locator(`button:has-text("${buttonText}"), a:has-text("${buttonText}")`).click();
+  await subscriptionCard
+    .locator(`button:has-text("${buttonText}"), a:has-text("${buttonText}")`)
+    .click();
   await page.waitForLoadState('networkidle');
 });
 
@@ -161,7 +186,9 @@ Then('I can see the API key information', async ({ page }) => {
 });
 
 Then('I can reveal the complete API key', async ({ page }) => {
-  const revealButton = page.locator('button:has-text("Reveal"), button:has-text("Show"), button:has-text("Afficher")');
+  const revealButton = page.locator(
+    'button:has-text("Reveal"), button:has-text("Show"), button:has-text("Afficher")'
+  );
   if (await revealButton.isVisible()) {
     await revealButton.click();
     await expect(page.locator('text=/^[a-zA-Z0-9_-]{32,}/i')).toBeVisible({ timeout: 10000 });
@@ -169,7 +196,9 @@ Then('I can reveal the complete API key', async ({ page }) => {
 });
 
 When('I confirm the revocation', async ({ page }) => {
-  await page.click('button:has-text("Confirm"), button:has-text("Revoke"), button:has-text("Confirmer")');
+  await page.click(
+    'button:has-text("Confirm"), button:has-text("Revoke"), button:has-text("Confirmer")'
+  );
   await page.waitForLoadState('networkidle');
 });
 

@@ -4,7 +4,7 @@ Feature: Portal - API Catalog visibility by community
   Background:
     Given the STOA Portal is accessible
 
-  @rpo @high-five
+  @rpo @high-five @regression
   Scenario: Parzival sees all public OASIS APIs
     Given I am logged in as "parzival" from community "high-five"
     When I access the API catalog

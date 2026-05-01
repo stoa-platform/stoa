@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.18](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.17...stoa-gateway-v0.9.18) (2026-05-01)
+
+
+### Bug Fixes
+
+* **subscriptions:** align Portal Console Gateway UAC flow ([61b8f2e](https://github.com/stoa-platform/stoa/commit/61b8f2edf5a8b40c714c39e938505d7198e94d72))
+
 ## [0.9.17](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.16...stoa-gateway-v0.9.17) (2026-04-25)
 
 

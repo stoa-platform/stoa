@@ -152,8 +152,9 @@ class GatewayInstanceRepository:
         mode: str,
         environment: str,
         exclude_name: str | None = None,
+        target_gateway_type: str | None = None,
     ) -> list[GatewayInstance]:
-        """Find all self-registered gateways with the same mode + environment.
+        """Find all self-registered gateways with the same runtime mode + environment.
 
         Used by the cancel-and-replace logic: when a gateway re-registers with
         a new hostname (e.g. after container recreation), find the stale entries
@@ -167,6 +168,8 @@ class GatewayInstanceRepository:
         )
         if exclude_name:
             query = query.where(GatewayInstance.name != exclude_name)
+        if target_gateway_type:
+            query = query.where(GatewayInstance.target_gateway_type == target_gateway_type)
         result = await self.session.execute(query)
         return list(result.scalars().all())
 

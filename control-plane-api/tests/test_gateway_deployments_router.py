@@ -145,6 +145,7 @@ class TestConsoleDeploymentContract:
                 "environment": "dev",
                 "deployment_mode": "connect",
                 "target_gateway_type": "webmethods",
+                "topology": "remote-agent",
                 "source": "self_register",
             },
             "deployment_status": "synced",
@@ -168,6 +169,7 @@ class TestConsoleDeploymentContract:
         assert item["git_sync_status"] == "missing_commit"
         assert item["gateway_target"]["deployment_mode"] == "connect"
         assert item["gateway_target"]["target_gateway_type"] == "webmethods"
+        assert item["gateway_target"]["topology"] == "remote-agent"
 
     def test_console_contract_forbidden_for_viewer(self, client_as_no_tenant_user):
         resp = client_as_no_tenant_user.get("/v1/admin/deployments/console")

@@ -32,6 +32,10 @@ spec:
         - name: Status
           type: string
           jsonPath: .status.phase
+        - name: Topology
+          type: string
+          jsonPath: .spec.topology
+          priority: 1
       schema:
         openAPIV3Schema:
           type: object
@@ -63,31 +67,80 @@ spec:
                     - stoa_shadow
                 environment:
                   type: string
-                  description: "Target environment (dev, staging, prod)"
+                  description: 'Target environment (dev, staging, prod)'
                 tenantId:
                   type: string
                   description: Owning tenant (empty for platform-wide instances)
                 baseUrl:
                   type: string
                   description: Gateway admin API base URL
+                endpoints:
+                  type: object
+                  description: Logical endpoint map for one GatewayInstance
+                  properties:
+                    publicUrl:
+                      type: string
+                      description: User or tenant reachable runtime URL
+                    internalUrl:
+                      type: string
+                      description: Cluster/service URL for in-cluster calls
+                    adminUrl:
+                      type: string
+                      description: Control/admin endpoint
+                    healthUrl:
+                      type: string
+                      description: Health/readiness endpoint
+                  additionalProperties:
+                    type: string
+                deploymentMode:
+                  type: string
+                  description: 'Canonical topology: edge, connect, or sidecar'
+                  enum:
+                    - edge
+                    - connect
+                    - sidecar
+                targetGatewayType:
+                  type: string
+                  description: Gateway technology STOA fronts or controls
+                  enum:
+                    - stoa
+                    - kong
+                    - webmethods
+                    - gravitee
+                    - agentgateway
+                    - apigee
+                    - aws_apigateway
+                    - azure_apim
+                topology:
+                  type: string
+                  description: 'Execution topology: native-edge, remote-agent, same-pod'
+                  enum:
+                    - native-edge
+                    - remote-agent
+                    - same-pod
+                topologyProof:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Evidence required when deploymentMode=sidecar
                 authConfig:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
                   description: Authentication configuration for the gateway admin API
                 capabilities:
                   type: array
-                  description: "Supported capabilities (rest, graphql, websocket, oidc, rate_limiting, mcp)"
+                  description: 'Supported capabilities (rest, graphql, websocket, oidc, rate_limiting, mcp)'
                   items:
                     type: string
                   default: []
                 mode:
                   type: string
-                  description: "STOA gateway mode (ADR-024): edge-mcp, sidecar, proxy, shadow"
+                  description: 'STOA gateway runtime mode (ADR-024): edge-mcp, sidecar, proxy, shadow, connect'
                   enum:
                     - edge-mcp
                     - sidecar
                     - proxy
                     - shadow
+                    - connect
                 version:
                   type: string
                   description: Gateway software version
@@ -102,7 +155,7 @@ spec:
               properties:
                 phase:
                   type: string
-                  description: "Gateway health: online, offline, degraded, maintenance"
+                  description: 'Gateway health: online, offline, degraded, maintenance'
                   enum:
                     - online
                     - offline

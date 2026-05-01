@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance
+from src.repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.services.catalog_api_definition import (
@@ -33,6 +34,7 @@ class CatalogDeploymentReconciler:
         self.db = db
         self.gw_repo = GatewayInstanceRepository(db)
         self.deploy_repo = GatewayDeploymentRepository(db)
+        self.assignment_repo = ApiGatewayAssignmentRepository(db)
 
     async def reconcile_api(
         self,
@@ -69,6 +71,19 @@ class CatalogDeploymentReconciler:
         base_desired_state = GatewayDeploymentService.build_desired_state(catalog_entry)
         for target in targets:
             if not target.instance:
+                assigned_gateways = await self._resolve_assignment_gateways(catalog_entry, target)
+                if assigned_gateways:
+                    for gateway in assigned_gateways:
+                        desired_state = {
+                            **base_desired_state,
+                            "activated": target.activated,
+                            "target_gateway_name": gateway.name,
+                            "target_environment": gateway.environment,
+                            "target_source": "assignment",
+                        }
+                        changed = await self._upsert_deployment(catalog_entry, gateway, desired_state) or changed
+                    continue
+
                 logger.warning(
                     "GitOps: deployment environment '%s' for API %s/%s has no gateway target; "
                     "add gateways: or deployments.<env>.gateways to make DR materializable",
@@ -127,6 +142,39 @@ class CatalogDeploymentReconciler:
         if gateway:
             return gateway
         return await self.gw_repo.get_self_registered_by_hostname(target.instance)
+
+    async def _resolve_assignment_gateways(
+        self,
+        catalog_entry: APICatalog,
+        target: CatalogDeploymentTarget,
+    ) -> list[GatewayInstance]:
+        if not target.environment:
+            return []
+
+        assignments = await self.assignment_repo.list_auto_deploy(catalog_entry.id, target.environment)
+        gateways: list[GatewayInstance] = []
+        for assignment in assignments:
+            gateway = await self.gw_repo.get_by_id(assignment.gateway_id)
+            if not gateway:
+                logger.warning(
+                    "GitOps: assignment gateway '%s' not found for API %s/%s — skipping",
+                    assignment.gateway_id,
+                    catalog_entry.tenant_id,
+                    catalog_entry.api_id,
+                )
+                continue
+            if not environment_matches(gateway.environment, target.environment):
+                logger.warning(
+                    "GitOps: assignment gateway '%s' environment '%s' does not match target '%s' for API %s/%s",
+                    gateway.name,
+                    gateway.environment,
+                    target.environment,
+                    catalog_entry.tenant_id,
+                    catalog_entry.api_id,
+                )
+                continue
+            gateways.append(gateway)
+        return gateways
 
     async def _upsert_deployment(
         self,

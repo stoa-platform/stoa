@@ -14,6 +14,7 @@ from src.models.gateway_instance import (
 )
 from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.schemas.gateway import GatewayInstanceCreate, GatewayInstanceUpdate
+from src.services.gateway_topology import normalize_gateway_topology
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,22 @@ class GatewayInstanceService:
         if existing:
             raise ValueError(f"Gateway instance with name '{data.name}' already exists")
 
+        topology = normalize_gateway_topology(
+            gateway_type=data.gateway_type,
+            mode=None,
+            source="manual",
+            deployment_mode=data.deployment_mode,
+            target_gateway_type=data.target_gateway_type,
+            topology=data.topology,
+            endpoints=data.endpoints,
+            base_url=data.base_url,
+            public_url=data.public_url,
+            ui_url=data.ui_url,
+            target_gateway_url=data.target_gateway_url,
+            tags=data.tags,
+            name=data.name,
+        )
+
         instance = GatewayInstance(
             name=data.name,
             display_name=data.display_name,
@@ -46,6 +63,13 @@ class GatewayInstanceService:
             environment=data.environment,
             tenant_id=data.tenant_id,
             base_url=data.base_url,
+            target_gateway_url=data.target_gateway_url,
+            public_url=data.public_url,
+            ui_url=data.ui_url,
+            endpoints=topology.endpoints,
+            deployment_mode=topology.deployment_mode,
+            target_gateway_type=topology.target_gateway_type,
+            topology=topology.topology,
             auth_config=data.auth_config,
             capabilities=data.capabilities,
             tags=data.tags,
@@ -89,6 +113,20 @@ class GatewayInstanceService:
             instance.display_name = data.display_name
         if data.base_url is not None:
             instance.base_url = data.base_url
+        if data.target_gateway_url is not None:
+            instance.target_gateway_url = data.target_gateway_url
+        if data.public_url is not None:
+            instance.public_url = data.public_url
+        if data.ui_url is not None:
+            instance.ui_url = data.ui_url
+        if data.endpoints is not None:
+            instance.endpoints = data.endpoints
+        if data.deployment_mode is not None:
+            instance.deployment_mode = data.deployment_mode
+        if data.target_gateway_type is not None:
+            instance.target_gateway_type = data.target_gateway_type
+        if data.topology is not None:
+            instance.topology = data.topology
         if data.auth_config is not None:
             instance.auth_config = data.auth_config
         if data.capabilities is not None:
@@ -113,6 +151,27 @@ class GatewayInstanceService:
                 )
         if data.visibility is not None:
             instance.visibility = data.visibility
+
+        normalized = normalize_gateway_topology(
+            gateway_type=instance.gateway_type,
+            mode=instance.mode,
+            source=instance.source,
+            deployment_mode=instance.deployment_mode,
+            target_gateway_type=instance.target_gateway_type,
+            topology=instance.topology,
+            health_details=instance.health_details,
+            endpoints=instance.endpoints,
+            base_url=instance.base_url,
+            public_url=instance.public_url,
+            ui_url=instance.ui_url,
+            target_gateway_url=instance.target_gateway_url,
+            tags=instance.tags,
+            name=instance.name,
+        )
+        instance.deployment_mode = normalized.deployment_mode
+        instance.target_gateway_type = normalized.target_gateway_type
+        instance.topology = normalized.topology
+        instance.endpoints = normalized.endpoints
 
         return await self.repo.update(instance)
 

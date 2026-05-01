@@ -38,10 +38,22 @@ interface DiscoveredAPI {
 
 const MODE_LABELS: Record<string, string> = {
   'edge-mcp': 'Edge MCP',
-  sidecar: 'STOA Link',
+  sidecar: 'Runtime Sidecar',
   proxy: 'Proxy',
   shadow: 'Shadow',
   connect: 'Connect',
+};
+
+const DEPLOYMENT_LABELS: Record<string, string> = {
+  edge: 'Edge',
+  connect: 'Connect',
+  sidecar: 'Sidecar',
+};
+
+const TOPOLOGY_LABELS: Record<string, string> = {
+  'native-edge': 'Native edge',
+  'remote-agent': 'Remote agent',
+  'same-pod': 'Same pod',
 };
 
 const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
@@ -141,6 +153,14 @@ export function GatewayDetail() {
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
   const discoveredApis = toolsData || [];
+  const modeLabel = gateway.deployment_mode
+    ? DEPLOYMENT_LABELS[gateway.deployment_mode] || gateway.deployment_mode
+    : gateway.mode
+      ? MODE_LABELS[gateway.mode] || gateway.mode
+      : null;
+  const topologyLabel = gateway.topology
+    ? TOPOLOGY_LABELS[gateway.topology] || gateway.topology
+    : null;
   const hasVisibilityRestriction =
     gateway.visibility && Array.isArray(gateway.visibility.tenant_ids);
 
@@ -169,9 +189,14 @@ export function GatewayDetail() {
                 Disabled
               </span>
             )}
-            {gateway.mode && (
+            {modeLabel && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-                {MODE_LABELS[gateway.mode] || gateway.mode}
+                {modeLabel}
+              </span>
+            )}
+            {topologyLabel && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-50 text-slate-700">
+                {topologyLabel}
               </span>
             )}
             {gateway.source === 'argocd' && (
@@ -256,6 +281,13 @@ export function GatewayDetail() {
           {gateway.ui_url && <ConfigItem label="Gateway UI" value={gateway.ui_url} isLink />}
           <ConfigItem label="Environment" value={gateway.environment} />
           <ConfigItem label="Type" value={gateway.gateway_type} />
+          {gateway.target_gateway_type && (
+            <ConfigItem label="Target Type" value={gateway.target_gateway_type} />
+          )}
+          {gateway.deployment_mode && (
+            <ConfigItem label="Deployment Mode" value={gateway.deployment_mode} />
+          )}
+          {gateway.topology && <ConfigItem label="Topology" value={gateway.topology} />}
           {gateway.version && <ConfigItem label="Version" value={gateway.version} />}
           <ConfigItem label="Source" value={gateway.source || 'manual'} />
           {gateway.tenant_id && <ConfigItem label="Tenant" value={gateway.tenant_id} />}

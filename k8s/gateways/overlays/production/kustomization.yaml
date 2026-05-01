@@ -1,10 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: gateway-dev
+namespace: stoa-system
 resources:
   - ../../base
   - gateway-instances.yaml
-  - ingress.yaml
 patches:
   - target:
       kind: Deployment
@@ -14,22 +13,17 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: STOA_ENVIRONMENT
-          value: "dev"
+          value: "prod"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: STOA_INSTANCE_NAME
-          value: "stoa-gateway-dev"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: STOA_GATEWAY_EXTERNAL_URL
-          value: "https://dev-gw-k3s.gostoa.dev"
+          value: "stoa-gateway-prod"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: STOA_GATEWAY_PUBLIC_URL
-          value: "https://dev-gw-k3s.gostoa.dev"
+          value: "https://mcp.gostoa.dev"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
@@ -60,13 +54,9 @@ patches:
               - name: stoa-gateway
                 env:
                   - name: STOA_ENVIRONMENT
-                    value: "dev"
+                    value: "prod"
                   - name: STOA_INSTANCE_NAME
-                    value: "stoa-link-wm-dev"
-                  - name: STOA_GATEWAY_EXTERNAL_URL
-                    value: "https://dev-wm-k3s.gostoa.dev"
-                  - name: STOA_GATEWAY_PUBLIC_URL
-                    value: "https://dev-wm-k3s.gostoa.dev"
+                    value: "webmethods-stoa-link-prod"
                   - name: STOA_DEPLOYMENT_MODE
                     value: "connect"
                   - name: STOA_TARGET_GATEWAY_TYPE

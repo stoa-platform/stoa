@@ -21,6 +21,7 @@ from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus
 from ..repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
 from ..services.gateway_deployment_service import GatewayDeploymentService
+from ..services.gateway_topology import normalize_gateway_topology
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +296,7 @@ class DeploymentOrchestrationService:
 
         for gateway_id in gateway_ids:
             gateway = await self._get_gateway_or_raise(gateway_id)
-            gateway_type = self._gateway_type_value(gateway.gateway_type)
+            gateway_type = self._target_gateway_type_value(gateway)
             errors = self._validate_desired_state_for_gateway(desired_state, gateway_type, gateway)
             results.append(
                 DeploymentPreflightResult(
@@ -506,6 +507,25 @@ class DeploymentOrchestrationService:
     @staticmethod
     def _gateway_type_value(gateway_type) -> str:
         return str(getattr(gateway_type, "value", gateway_type))
+
+    @staticmethod
+    def _target_gateway_type_value(gateway: GatewayInstance) -> str:
+        return normalize_gateway_topology(
+            gateway_type=gateway.gateway_type,
+            mode=gateway.mode,
+            source=gateway.source,
+            deployment_mode=gateway.deployment_mode,
+            target_gateway_type=gateway.target_gateway_type,
+            topology=gateway.topology,
+            health_details=gateway.health_details,
+            endpoints=gateway.endpoints,
+            base_url=gateway.base_url,
+            public_url=gateway.public_url,
+            ui_url=gateway.ui_url,
+            target_gateway_url=gateway.target_gateway_url,
+            tags=gateway.tags,
+            name=gateway.name,
+        ).target_gateway_type
 
     @staticmethod
     def _format_preflight_failure(failed_results: list[DeploymentPreflightResult]) -> str:

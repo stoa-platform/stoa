@@ -4,7 +4,8 @@ Feature: Gateway - MCP Resource Discovery (MCP 2025-11-25)
   REST endpoints: POST /mcp/resources/list, POST /mcp/resources/read,
   POST /mcp/resources/templates/list (CAB-1472).
 
-  @smoke @mcp
+  @smoke @mcp @regression
+  # Regression: E2E gateway smoke must target the MCP gateway host, not the control-plane API host.
   Scenario: MCP capabilities advertise resource support
     When I request MCP capabilities
     Then the MCP response status is 200

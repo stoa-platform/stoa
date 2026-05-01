@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 // URLs
 const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
 const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev';
-const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
 
 /**
  * Mutable auth session that can be swapped when BDD steps switch personas.

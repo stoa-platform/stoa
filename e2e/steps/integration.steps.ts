@@ -19,7 +19,7 @@ const { Given, When, Then } = createBdd(test);
 
 const API_URL = process.env.STOA_API_URL || 'https://api.gostoa.dev';
 const AUTH_URL = process.env.STOA_AUTH_URL || 'https://auth.gostoa.dev';
-const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
+const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev';
 
 // ---------------------------------------------------------------------------
 // State (module-scoped, independent from other step files)

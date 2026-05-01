@@ -396,7 +396,7 @@ async function run() {
 
     for (const endpoint of endpoints) {
       try {
-        const apiUrl = `${process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev'}${endpoint}`;
+        const apiUrl = `${process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev'}${endpoint}`;
         const response = await page.request.fetch(apiUrl, {
           headers: {
             'Authorization': `Bearer ${extractedToken}`,
@@ -435,7 +435,7 @@ async function run() {
         }
       }
       return results;
-    }, process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev');
+    }, process.env.STOA_GATEWAY_URL || 'https://mcp.gostoa.dev');
 
     fs.writeFileSync(
       path.join(DIAG_DIR, 'api-session-response.json'),

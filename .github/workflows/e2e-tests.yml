@@ -118,6 +118,31 @@ jobs:
             secret/data/e2e/personas/alex password | ALEX_PASSWORD ;
             secret/data/e2e/api-keys test | TEST_API_KEY
 
+      - name: Normalize E2E URLs
+        env:
+          SECRET_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL }}
+          SECRET_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL }}
+          SECRET_GATEWAY_URL: ${{ secrets.E2E_GATEWAY_URL }}
+          SECRET_KEYCLOAK_URL: ${{ secrets.E2E_KEYCLOAK_URL }}
+        run: |
+          portal_url="${E2E_PORTAL_URL:-${SECRET_PORTAL_URL:-https://portal.gostoa.dev}}"
+          console_url="${E2E_CONSOLE_URL:-${SECRET_CONSOLE_URL:-https://console.gostoa.dev}}"
+          gateway_url="${E2E_GATEWAY_URL:-${SECRET_GATEWAY_URL:-https://mcp.gostoa.dev}}"
+          keycloak_url="${E2E_KEYCLOAK_URL:-${SECRET_KEYCLOAK_URL:-https://auth.gostoa.dev}}"
+
+          # The control-plane API lives on api.gostoa.dev; gateway/MCP/LLM routes live on mcp.gostoa.dev.
+          # Older Vault/GitHub E2E secrets used the API host and caused broad 404s in gateway smoke tests.
+          if [ -z "$gateway_url" ] || [ "$gateway_url" = "https://api.gostoa.dev" ]; then
+            gateway_url="https://mcp.gostoa.dev"
+          fi
+
+          {
+            echo "STOA_PORTAL_URL=$portal_url"
+            echo "STOA_CONSOLE_URL=$console_url"
+            echo "STOA_GATEWAY_URL=$gateway_url"
+            echo "KEYCLOAK_URL=$keycloak_url"
+          } >> "$GITHUB_ENV"
+
       - name: Setup E2E environment
         uses: ./.github/actions/e2e-setup
 
@@ -126,11 +151,7 @@ jobs:
         continue-on-error: ${{ github.event_name == 'pull_request' || github.event_name == 'schedule' }}
         working-directory: e2e
         env:
-          # URLs - Vault values take precedence, then secrets, then defaults
-          STOA_PORTAL_URL: ${{ env.E2E_PORTAL_URL || secrets.E2E_PORTAL_URL || 'https://portal.gostoa.dev' }}
-          STOA_CONSOLE_URL: ${{ env.E2E_CONSOLE_URL || secrets.E2E_CONSOLE_URL || 'https://console.gostoa.dev' }}
-          STOA_GATEWAY_URL: ${{ env.E2E_GATEWAY_URL || secrets.E2E_GATEWAY_URL || 'https://api.gostoa.dev' }}
-          KEYCLOAK_URL: ${{ env.E2E_KEYCLOAK_URL || secrets.E2E_KEYCLOAK_URL || 'https://auth.gostoa.dev' }}
+          # STOA_* URLs and KEYCLOAK_URL are normalized through $GITHUB_ENV above.
           KEYCLOAK_REALM: stoa
 
           # Personas - High-Five (Vault values take precedence)

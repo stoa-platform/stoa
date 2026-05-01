@@ -91,6 +91,86 @@
           "title": "Base Url",
           "type": "string"
         },
+        "target_gateway_url": {
+          "description": "URL of the third-party gateway managed by Link/Connect",
+          "maxLength": 500,
+          "title": "Target Gateway Url",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "public_url": {
+          "description": "Public DNS URL for runtime APIs",
+          "maxLength": 500,
+          "title": "Public Url",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ui_url": {
+          "description": "Third-party gateway web UI URL",
+          "maxLength": 500,
+          "title": "Ui Url",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpoints": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Logical endpoint map: public/internal/admin/health",
+          "title": "Endpoints",
+          "type": "object"
+        },
+        "deployment_mode": {
+          "description": "Canonical topology: edge, connect, or sidecar",
+          "enum": [
+            "edge",
+            "connect",
+            "sidecar"
+          ],
+          "title": "Deployment Mode",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_gateway_type": {
+          "description": "Gateway technology fronted or controlled by STOA",
+          "enum": [
+            "stoa",
+            "kong",
+            "webmethods",
+            "gravitee",
+            "agentgateway",
+            "apigee",
+            "aws_apigateway",
+            "azure_apim",
+            null
+          ],
+          "title": "Target Gateway Type",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "topology": {
+          "description": "Execution topology: native-edge, remote-agent, or same-pod",
+          "enum": [
+            "native-edge",
+            "remote-agent",
+            "same-pod"
+          ],
+          "title": "Topology",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "auth_config": {
           "additionalProperties": true,
           "description": "Auth config: {type, vault_path, ...}",

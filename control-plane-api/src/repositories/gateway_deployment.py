@@ -9,37 +9,89 @@ from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance
 from src.models.promotion import Promotion
+from src.services.gateway_topology import normalize_gateway_topology, wire_value
 
 
-def _wire_value(value: object) -> object:
-    """Return enum value for wire responses while preserving plain values."""
-    return value.value if hasattr(value, "value") else value
-
-
-def _deployment_mode(gateway_type: object, mode: str | None, source: str | None) -> str:
+def _deployment_mode(
+    gateway_type: object,
+    mode: str | None,
+    source: str | None,
+    *,
+    deployment_mode: str | None = None,
+    target_gateway_type: str | None = None,
+    topology: str | None = None,
+    health_details: dict | None = None,
+    tags: list[str] | None = None,
+    name: str | None = None,
+    base_url: str | None = None,
+    target_gateway_url: str | None = None,
+) -> str:
     """Derive the canonical deployment topology used by the Console contract."""
-    normalized_mode = (mode or "").strip().lower()
-    if normalized_mode == "sidecar":
-        return "sidecar"
-    if normalized_mode in {"edge", "edge-mcp"}:
-        return "edge"
-    if normalized_mode == "connect" or source == "self_register":
-        return "connect"
+    return normalize_gateway_topology(
+        gateway_type=gateway_type,
+        mode=mode,
+        source=source,
+        deployment_mode=deployment_mode,
+        target_gateway_type=target_gateway_type,
+        topology=topology,
+        health_details=health_details,
+        tags=tags,
+        name=name,
+        base_url=base_url,
+        target_gateway_url=target_gateway_url,
+    ).deployment_mode
 
-    normalized_type = str(_wire_value(gateway_type) or "").strip().lower()
-    if normalized_type in {"stoa", "stoa_edge_mcp"}:
-        return "edge"
-    if normalized_type == "stoa_sidecar":
-        return "sidecar"
-    return "connect"
 
-
-def _target_gateway_type(gateway_type: object) -> str:
+def _target_gateway_type(
+    gateway_type: object,
+    explicit_target: str | None = None,
+    *,
+    tags: list[str] | None = None,
+    name: str | None = None,
+    base_url: str | None = None,
+    target_gateway_url: str | None = None,
+) -> str:
     """Normalize STOA topology-specific types to the technology family."""
-    normalized_type = str(_wire_value(gateway_type) or "").strip().lower()
-    if normalized_type.startswith("stoa_"):
-        return "stoa"
-    return normalized_type
+    return normalize_gateway_topology(
+        gateway_type=gateway_type,
+        mode=None,
+        source=None,
+        target_gateway_type=explicit_target,
+        tags=tags,
+        name=name,
+        base_url=base_url,
+        target_gateway_url=target_gateway_url,
+    ).target_gateway_type
+
+
+def _topology(
+    gateway_type: object,
+    mode: str | None,
+    source: str | None,
+    *,
+    deployment_mode: str | None = None,
+    target_gateway_type: str | None = None,
+    topology: str | None = None,
+    health_details: dict | None = None,
+    tags: list[str] | None = None,
+    name: str | None = None,
+    base_url: str | None = None,
+    target_gateway_url: str | None = None,
+) -> str:
+    """Derive the canonical execution topology used by the Console contract."""
+    return normalize_gateway_topology(
+        gateway_type=gateway_type,
+        mode=mode,
+        source=source,
+        deployment_mode=deployment_mode,
+        target_gateway_type=target_gateway_type,
+        topology=topology,
+        health_details=health_details,
+        tags=tags,
+        name=name,
+        base_url=base_url,
+        target_gateway_url=target_gateway_url,
+    ).topology
 
 
 def _desired_git_fields(
@@ -173,7 +225,7 @@ class GatewayDeploymentRepository:
                 "desired_at": dep.desired_at,
                 "actual_state": dep.actual_state,
                 "actual_at": dep.actual_at,
-                "sync_status": dep.sync_status.value if hasattr(dep.sync_status, "value") else dep.sync_status,
+                "sync_status": wire_value(dep.sync_status),
                 "last_sync_attempt": dep.last_sync_attempt,
                 "last_sync_success": dep.last_sync_success,
                 "sync_error": dep.sync_error,
@@ -216,6 +268,13 @@ class GatewayDeploymentRepository:
                 GatewayInstance.status.label("gateway_status"),
                 GatewayInstance.mode.label("gateway_mode"),
                 GatewayInstance.source.label("gateway_source"),
+                GatewayInstance.deployment_mode.label("gateway_deployment_mode"),
+                GatewayInstance.target_gateway_type.label("gateway_target_gateway_type"),
+                GatewayInstance.topology.label("gateway_topology"),
+                GatewayInstance.health_details.label("gateway_health_details"),
+                GatewayInstance.tags.label("gateway_tags"),
+                GatewayInstance.base_url.label("gateway_base_url"),
+                GatewayInstance.target_gateway_url.label("gateway_target_gateway_url"),
                 Promotion.status.label("promotion_state"),
             )
             .join(APICatalog, GatewayDeployment.api_catalog_id == APICatalog.id)
@@ -258,12 +317,44 @@ class GatewayDeploymentRepository:
                         "name": row.gateway_name,
                         "display_name": row.gateway_display_name,
                         "environment": row.gateway_environment,
-                        "deployment_mode": _deployment_mode(row.gateway_type, row.gateway_mode, row.gateway_source),
-                        "target_gateway_type": _target_gateway_type(row.gateway_type),
+                        "deployment_mode": _deployment_mode(
+                            row.gateway_type,
+                            row.gateway_mode,
+                            row.gateway_source,
+                            deployment_mode=row.gateway_deployment_mode,
+                            target_gateway_type=row.gateway_target_gateway_type,
+                            topology=row.gateway_topology,
+                            health_details=row.gateway_health_details,
+                            tags=row.gateway_tags,
+                            name=row.gateway_name,
+                            base_url=row.gateway_base_url,
+                            target_gateway_url=row.gateway_target_gateway_url,
+                        ),
+                        "target_gateway_type": _target_gateway_type(
+                            row.gateway_type,
+                            row.gateway_target_gateway_type,
+                            tags=row.gateway_tags,
+                            name=row.gateway_name,
+                            base_url=row.gateway_base_url,
+                            target_gateway_url=row.gateway_target_gateway_url,
+                        ),
+                        "topology": _topology(
+                            row.gateway_type,
+                            row.gateway_mode,
+                            row.gateway_source,
+                            deployment_mode=row.gateway_deployment_mode,
+                            target_gateway_type=row.gateway_target_gateway_type,
+                            topology=row.gateway_topology,
+                            health_details=row.gateway_health_details,
+                            tags=row.gateway_tags,
+                            name=row.gateway_name,
+                            base_url=row.gateway_base_url,
+                            target_gateway_url=row.gateway_target_gateway_url,
+                        ),
                         "source": row.gateway_source,
                     },
-                    "deployment_status": _wire_value(dep.sync_status),
-                    "gateway_health": _wire_value(row.gateway_status),
+                    "deployment_status": wire_value(dep.sync_status),
+                    "gateway_health": wire_value(row.gateway_status),
                     "last_ack": dep.last_sync_success,
                     "promotion_state": row.promotion_state,
                     "sync_error": dep.sync_error,

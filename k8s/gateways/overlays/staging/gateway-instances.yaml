@@ -1,0 +1,86 @@
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: connect-webmethods-staging
+  labels:
+    stoa.dev/environment: staging
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (connect)
+  gatewayType: stoa
+  environment: staging
+  baseUrl: http://connect-webmethods-staging:8090
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://connect-webmethods-staging:8090
+    healthUrl: http://connect-webmethods-staging:8090/health
+  capabilities:
+    - rest
+    - discovery
+  mode: connect
+  tags:
+    - connect
+    - webmethods
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: stoa-gateway-staging
+  labels:
+    stoa.dev/environment: staging
+    stoa.dev/deployment-mode: edge
+    stoa.dev/target-gateway-type: stoa
+    stoa.dev/topology: native-edge
+spec:
+  displayName: STOA Gateway
+  gatewayType: stoa_edge_mcp
+  environment: staging
+  baseUrl: http://stoa-gateway-staging:8080
+  deploymentMode: edge
+  targetGatewayType: stoa
+  topology: native-edge
+  endpoints:
+    publicUrl: https://staging-gw-k3s.gostoa.dev
+    adminUrl: http://stoa-gateway-staging:8080
+    healthUrl: http://stoa-gateway-staging:8080/health
+  capabilities:
+    - mcp
+    - rest
+  mode: edge-mcp
+  tags:
+    - edge
+    - stoa
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: stoa-link-wm-staging
+  labels:
+    stoa.dev/environment: staging
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: staging
+  baseUrl: http://stoa-link-wm-staging:8080
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    publicUrl: https://staging-wm-k3s.gostoa.dev
+    adminUrl: http://stoa-link-wm-staging:8080
+    healthUrl: http://stoa-link-wm-staging:8080/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - webmethods
+    - not-a-k8s-sidecar

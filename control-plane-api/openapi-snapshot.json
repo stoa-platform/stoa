@@ -4494,6 +4494,199 @@
         "title": "ConnectorTemplateResponse",
         "type": "object"
       },
+      "ConsoleDeploymentRow": {
+        "description": "Aggregated deployment row for /api-deployments.\n\nDeployment status and gateway health are intentionally separate axes.\nA previously synced route can stay synced while its gateway is offline.",
+        "properties": {
+          "api_catalog_id": {
+            "format": "uuid",
+            "title": "Api Catalog Id",
+            "type": "string"
+          },
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "api_name": {
+            "title": "Api Name",
+            "type": "string"
+          },
+          "deployment_id": {
+            "format": "uuid",
+            "title": "Deployment Id",
+            "type": "string"
+          },
+          "deployment_status": {
+            "title": "Deployment Status",
+            "type": "string"
+          },
+          "desired_commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Commit Sha"
+          },
+          "desired_git_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Git Path"
+          },
+          "desired_source": {
+            "description": "Configuration source: git, db_shortcut, or unknown",
+            "title": "Desired Source",
+            "type": "string"
+          },
+          "desired_state": {
+            "additionalProperties": true,
+            "title": "Desired State",
+            "type": "object"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "gateway_health": {
+            "title": "Gateway Health",
+            "type": "string"
+          },
+          "gateway_target": {
+            "$ref": "#/components/schemas/ConsoleGatewayTarget"
+          },
+          "git_sync_status": {
+            "description": "Catalog freshness: up_to_date, missing_commit, git_sync_disabled, or unknown",
+            "title": "Git Sync Status",
+            "type": "string"
+          },
+          "last_ack": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ack"
+          },
+          "promotion_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promotion State"
+          },
+          "sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Error"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deployment_id",
+          "api_catalog_id",
+          "api_id",
+          "api_name",
+          "tenant_id",
+          "environment",
+          "desired_state",
+          "desired_source",
+          "git_sync_status",
+          "gateway_target",
+          "deployment_status",
+          "gateway_health"
+        ],
+        "title": "ConsoleDeploymentRow",
+        "type": "object"
+      },
+      "ConsoleGatewayTarget": {
+        "description": "Gateway target details for the Console API deployments table.",
+        "properties": {
+          "deployment_mode": {
+            "description": "Canonical topology: edge, connect, or sidecar",
+            "enum": [
+              "edge",
+              "connect",
+              "sidecar"
+            ],
+            "title": "Deployment Mode",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "description": "Gateway source of truth: argocd, self_register, or manual",
+            "title": "Source",
+            "type": "string"
+          },
+          "target_gateway_type": {
+            "description": "Gateway technology: stoa, kong, webmethods, gravitee, ...",
+            "title": "Target Gateway Type",
+            "type": "string"
+          },
+          "topology": {
+            "description": "Execution topology: native-edge, remote-agent, same-pod",
+            "enum": [
+              "native-edge",
+              "remote-agent",
+              "same-pod"
+            ],
+            "title": "Topology",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "display_name",
+          "environment",
+          "deployment_mode",
+          "target_gateway_type",
+          "topology",
+          "source"
+        ],
+        "title": "ConsoleGatewayTarget",
+        "type": "object"
+      },
       "ConsumerCreate": {
         "description": "Schema for creating a new consumer.",
         "example": {
@@ -11100,15 +11293,44 @@
             "title": "Desired At",
             "type": "string"
           },
+          "desired_commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Commit Sha"
+          },
+          "desired_git_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Git Path"
+          },
+          "desired_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Source"
+          },
           "desired_state": {
             "additionalProperties": true,
             "title": "Desired State",
             "type": "object"
           },
-          "desired_source": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desired Source"},
-          "git_sync_status": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Git Sync Status"},
-          "desired_commit_sha": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desired Commit Sha"},
-          "desired_git_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Desired Git Path"},
           "gateway_display_name": {
             "anyOf": [
               {
@@ -11168,6 +11390,17 @@
               }
             ],
             "title": "Gateway Type"
+          },
+          "git_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Sync Status"
           },
           "id": {
             "format": "uuid",
@@ -11369,10 +11602,33 @@
             "title": "Capabilities",
             "type": "array"
           },
+          "deployment_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "edge",
+                  "connect",
+                  "sidecar"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical topology: edge, connect, or sidecar",
+            "title": "Deployment Mode"
+          },
           "display_name": {
             "maxLength": 255,
             "title": "Display Name",
             "type": "string"
+          },
+          "endpoints": {
+            "additionalProperties": true,
+            "description": "Logical endpoint map: public/internal/admin/health",
+            "title": "Endpoints",
+            "type": "object"
           },
           "environment": {
             "description": "dev, staging, prod",
@@ -11391,12 +11647,60 @@
             "title": "Name",
             "type": "string"
           },
+          "public_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public DNS URL for runtime APIs",
+            "title": "Public Url"
+          },
           "tags": {
             "items": {
               "type": "string"
             },
             "title": "Tags",
             "type": "array"
+          },
+          "target_gateway_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stoa",
+                  "kong",
+                  "webmethods",
+                  "gravitee",
+                  "agentgateway",
+                  "apigee",
+                  "aws_apigateway",
+                  "azure_apim"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway technology fronted or controlled by STOA",
+            "title": "Target Gateway Type"
+          },
+          "target_gateway_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL of the third-party gateway managed by Link/Connect",
+            "title": "Target Gateway Url"
           },
           "tenant_id": {
             "anyOf": [
@@ -11410,6 +11714,36 @@
             ],
             "description": "null = platform-wide",
             "title": "Tenant Id"
+          },
+          "topology": {
+            "anyOf": [
+              {
+                "enum": [
+                  "native-edge",
+                  "remote-agent",
+                  "same-pod"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Execution topology: native-edge, remote-agent, or same-pod",
+            "title": "Topology"
+          },
+          "ui_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Third-party gateway web UI URL",
+            "title": "Ui Url"
           }
         },
         "required": [
@@ -11471,6 +11805,23 @@
             "description": "User ID who deleted this gateway",
             "title": "Deleted By"
           },
+          "deployment_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "edge",
+                  "connect",
+                  "sidecar"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical topology: edge, connect, or sidecar",
+            "title": "Deployment Mode"
+          },
           "display_name": {
             "title": "Display Name",
             "type": "string"
@@ -11480,6 +11831,12 @@
             "description": "Whether this gateway accepts deployments and syncs",
             "title": "Enabled",
             "type": "boolean"
+          },
+          "endpoints": {
+            "additionalProperties": true,
+            "description": "Logical endpoint map: public/internal/admin/health",
+            "title": "Endpoints",
+            "type": "object"
           },
           "environment": {
             "title": "Environment",
@@ -11491,6 +11848,8 @@
               "kong",
               "apigee",
               "aws_apigateway",
+              "azure_apim",
+              "gravitee",
               "stoa",
               "stoa_edge_mcp",
               "stoa_sidecar",
@@ -11598,6 +11957,28 @@
             "title": "Tags",
             "type": "array"
           },
+          "target_gateway_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stoa",
+                  "kong",
+                  "webmethods",
+                  "gravitee",
+                  "agentgateway",
+                  "apigee",
+                  "aws_apigateway",
+                  "azure_apim"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway technology fronted or controlled by STOA",
+            "title": "Target Gateway Type"
+          },
           "target_gateway_url": {
             "anyOf": [
               {
@@ -11620,6 +12001,23 @@
               }
             ],
             "title": "Tenant Id"
+          },
+          "topology": {
+            "anyOf": [
+              {
+                "enum": [
+                  "native-edge",
+                  "remote-agent",
+                  "same-pod"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Execution topology: native-edge, remote-agent, or same-pod",
+            "title": "Topology"
           },
           "ui_url": {
             "anyOf": [
@@ -11725,6 +12123,22 @@
             ],
             "title": "Capabilities"
           },
+          "deployment_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "edge",
+                  "connect",
+                  "sidecar"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Mode"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -11748,6 +12162,18 @@
             ],
             "description": "Enable/disable gateway for deployments",
             "title": "Enabled"
+          },
+          "endpoints": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoints"
           },
           "environment": {
             "anyOf": [
@@ -11773,6 +12199,18 @@
             "description": "Toggle deletion protection",
             "title": "Protected"
           },
+          "public_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Url"
+          },
           "tags": {
             "anyOf": [
               {
@@ -11786,6 +12224,67 @@
               }
             ],
             "title": "Tags"
+          },
+          "target_gateway_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stoa",
+                  "kong",
+                  "webmethods",
+                  "gravitee",
+                  "agentgateway",
+                  "apigee",
+                  "aws_apigateway",
+                  "azure_apim"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Gateway Type"
+          },
+          "target_gateway_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Gateway Url"
+          },
+          "topology": {
+            "anyOf": [
+              {
+                "enum": [
+                  "native-edge",
+                  "remote-agent",
+                  "same-pod"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topology"
+          },
+          "ui_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ui Url"
           },
           "visibility": {
             "anyOf": [
@@ -12063,6 +12562,33 @@
             "title": "Capabilities",
             "type": "array"
           },
+          "deployment_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical topology mode: edge, connect, or sidecar",
+            "title": "Deployment Mode"
+          },
+          "endpoints": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Structured endpoint map: public_url, internal_url, admin_url, health_url",
+            "title": "Endpoints"
+          },
           "environment": {
             "default": "dev",
             "description": "Deployment environment",
@@ -12075,7 +12601,7 @@
             "type": "string"
           },
           "mode": {
-            "description": "Gateway mode: edge_mcp, sidecar, proxy, shadow",
+            "description": "Gateway runtime mode: edge_mcp, sidecar, proxy, shadow, connect",
             "title": "Mode",
             "type": "string"
           },
@@ -12090,6 +12616,18 @@
             ],
             "description": "Public DNS URL of this gateway for Console display (CAB-1940)",
             "title": "Public Url"
+          },
+          "target_gateway_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway technology STOA fronts or controls",
+            "title": "Target Gateway Type"
           },
           "target_gateway_url": {
             "anyOf": [
@@ -12114,6 +12652,31 @@
             ],
             "description": "Optional tenant restriction",
             "title": "Tenant Id"
+          },
+          "topology": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Execution topology: native-edge, remote-agent, or same-pod",
+            "title": "Topology"
+          },
+          "topology_proof": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Evidence required for deployment_mode=sidecar same-pod classification",
+            "title": "Topology Proof"
           },
           "ui_url": {
             "anyOf": [
@@ -17041,6 +17604,38 @@
           "text_length"
         ],
         "title": "PIIScanResponse",
+        "type": "object"
+      },
+      "PaginatedConsoleDeployments": {
+        "description": "Paginated Console deployment contract.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConsoleDeploymentRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PaginatedConsoleDeployments",
         "type": "object"
       },
       "PaginatedGatewayDeployments": {
@@ -31083,6 +31678,121 @@
           }
         ],
         "summary": "List Catalog Entries",
+        "tags": [
+          "Gateway Deployments"
+        ]
+      }
+    },
+    "/v1/admin/deployments/console": {
+      "get": {
+        "description": "List the aggregated Console contract for /api-deployments.\n\nThis endpoint intentionally exposes deployment status and gateway health as\nseparate fields so transient gateway connectivity does not overwrite the\nruntime reconciliation state.",
+        "operationId": "list_console_deployments",
+        "parameters": [
+          {
+            "description": "Filter by gateway environment (dev/staging/production)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by gateway environment (dev/staging/production)",
+              "title": "Environment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gateway_instance_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gateway Instance Id"
+            }
+          },
+          {
+            "description": "Filter by API tenant id",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by API tenant id",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedConsoleDeployments"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Console Deployments",
         "tags": [
           "Gateway Deployments"
         ]
@@ -46639,7 +47349,7 @@
         ]
       },
       "post": {
-        "description": "Create a new API in the database catalog and emit event.\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires",
+        "description": "Create a new API in the database catalog and emit event.\n\nTrial tenants are subject to limits (CAB-1549):\n- Max 3 APIs (configurable via tenant.settings.max_apis)\n- 402 after 30-day trial expires\n\nGitOps create rewrite (CAB-2185 B-FLOW): when ``GITOPS_CREATE_API_ENABLED``\nis True AND ``tenant_id`` is in ``GITOPS_ELIGIBLE_TENANTS``, the request is\nrouted through :class:`GitOpsWriter` (Git-first, no Kafka emit, spec \u00a76.13).\nOtherwise the legacy DB-first path runs unchanged. Default flag value is\n``False`` and the eligible-tenant list is empty by default \u2014 production\nbehaviour is unchanged until Phase 6 strangler.",
         "operationId": "create_api",
         "parameters": [
           {
@@ -46985,6 +47695,71 @@
           }
         ],
         "summary": "Deploy To Environment",
+        "tags": [
+          "API Deployments"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/apis/{api_id}/deploy/validate": {
+      "post": {
+        "description": "Dry-run deployment validation for target gateway adapter contracts.\n\nThis endpoint performs the same API/gateway resolution as /deploy but stops\nbefore GatewayDeployment creation and before Kafka/SSE dispatch.",
+        "operationId": "validate_deploy_to_environment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeployToEnvRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Validate Deploy To Environment",
         "tags": [
           "API Deployments"
         ]
@@ -58259,7 +59034,7 @@
     },
     "/webhooks/github": {
       "post": {
-        "description": "Handle GitHub webhooks for GitOps.",
+        "description": "Handle GitHub webhooks for GitOps.\n\nCP-1 H.1: after signature verification, claim a dedup slot keyed on\nX-GitHub-Delivery. Claim is released on pipeline failure so the\nnext redelivery retries cleanly.",
         "operationId": "github_webhook",
         "parameters": [
           {
@@ -58293,6 +59068,22 @@
               ],
               "title": "X-Github-Event"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-GitHub-Delivery",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Github-Delivery"
+            }
           }
         ],
         "responses": {
@@ -58325,7 +59116,7 @@
     },
     "/webhooks/gitlab": {
       "post": {
-        "description": "Handle GitLab webhooks for GitOps with full pipeline tracing.\n\nCaptures the git author (who pushed) from the GitLab payload and stores\ntraces in PostgreSQL for persistent monitoring.",
+        "description": "Handle GitLab webhooks for GitOps with full pipeline tracing.\n\nCaptures the git author (who pushed) from the GitLab payload and stores\ntraces in PostgreSQL for persistent monitoring.\n\nCP-1 C.7: token verification happens BEFORE any DB write. Rejected\nrequests produce zero trace rows, eliminating the DoS amplification\nvector where an unauthenticated flood would burn 1 INSERT + 2 UPDATEs\nper request on the traces table.\n\nCP-1 H.1: after auth, we claim a dedup slot keyed on Idempotency-Key\n(preferred) or X-Gitlab-Webhook-UUID. X-Gitlab-Event-UUID is NEVER\nused as primary key because it is shared across recursive webhooks \u2014\ndeduping on it would drop legitimate events. The claim is released\non pipeline failure so the next redelivery retries cleanly instead\nof being answered with \"duplicate forever\".",
         "operationId": "gitlab_webhook",
         "parameters": [
           {
@@ -58358,6 +59149,38 @@
                 }
               ],
               "title": "X-Gitlab-Event"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Gitlab-Webhook-UUID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Gitlab-Webhook-Uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],

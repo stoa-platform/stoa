@@ -1044,6 +1044,10 @@ export type DeploymentSyncStatus =
 // `Record<string, unknown> | null` (additionalProperties). Narrow for consumers.
 export type GatewayInstance = Omit<Schemas['GatewayInstanceResponse'], 'visibility'> & {
   visibility?: { tenant_ids: string[] } | null;
+  deployment_mode?: 'edge' | 'connect' | 'sidecar' | null;
+  target_gateway_type?: string | null;
+  topology?: 'native-edge' | 'remote-agent' | 'same-pod' | null;
+  endpoints?: Record<string, string> | null;
 };
 
 export interface GatewayInstanceCreate {
@@ -1053,6 +1057,13 @@ export interface GatewayInstanceCreate {
   environment: string;
   tenant_id?: string;
   base_url: string;
+  target_gateway_url?: string;
+  public_url?: string;
+  ui_url?: string;
+  endpoints?: Record<string, string>;
+  deployment_mode?: 'edge' | 'connect' | 'sidecar';
+  target_gateway_type?: string;
+  topology?: 'native-edge' | 'remote-agent' | 'same-pod';
   auth_config?: Record<string, unknown>;
   capabilities?: string[];
   tags?: string[];
@@ -1061,6 +1072,13 @@ export interface GatewayInstanceCreate {
 export interface GatewayInstanceUpdate {
   display_name?: string;
   base_url?: string;
+  target_gateway_url?: string;
+  public_url?: string;
+  ui_url?: string;
+  endpoints?: Record<string, string>;
+  deployment_mode?: 'edge' | 'connect' | 'sidecar';
+  target_gateway_type?: string;
+  topology?: 'native-edge' | 'remote-agent' | 'same-pod';
   environment?: string;
   auth_config?: Record<string, unknown>;
   capabilities?: string[];

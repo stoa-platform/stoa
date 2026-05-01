@@ -1,6 +1,6 @@
 # Gateway Topology Normalization
 
-> **Status**: v0.1 — 2026-04-25.
+> **Status**: v0.2 — 2026-05-01.
 > **Purpose**: normalize existing data-plane gateways across dev, staging, and
 > prod so STOA can choose the correct deployment path for edge, connect, and
 > real sidecar gateways.
@@ -15,41 +15,41 @@ contract:
     deployment_mode:
       enum: [edge, connect, sidecar]
       meaning:
-        edge: "Native STOA Gateway / Edge MCP runtime."
-        connect: "Remote agent/link or standalone gateway connector."
-        sidecar: "Same-pod Kubernetes sidecar for a third-party gateway."
+        edge: 'Native STOA Gateway / Edge MCP runtime.'
+        connect: 'Remote agent/link or standalone gateway connector.'
+        sidecar: 'Same-pod Kubernetes sidecar for a third-party gateway.'
     target_gateway_type:
       enum: [stoa, kong, webmethods, gravitee, agentgateway]
-      meaning: "The gateway product STOA fronts, controls, or augments."
+      meaning: 'The gateway product STOA fronts, controls, or augments.'
     topology:
       enum: [native-edge, remote-agent, same-pod]
       meaning:
-        native-edge: "STOA is the gateway runtime."
-        remote-agent: "STOA agent/link talks to a remote gateway."
-        same-pod: "Gateway target and stoa-sidecar share one Kubernetes pod."
+        native-edge: 'STOA is the gateway runtime.'
+        remote-agent: 'STOA agent/link talks to a remote gateway.'
+        same-pod: 'Gateway target and stoa-sidecar share one Kubernetes pod.'
   forbidden_fields:
     - gateway_family
     - deployment_kind
   identity_model:
-    logical_gateway: "One GatewayInstance per logical gateway."
+    logical_gateway: 'One GatewayInstance per logical gateway.'
     endpoints:
-      public_url: "User/tenant reachable URL."
-      internal_url: "Cluster/service URL for in-cluster calls."
-      admin_url: "Control/admin endpoint."
-      health_url: "Health/readiness endpoint when different from admin_url."
+      public_url: 'User/tenant reachable URL.'
+      internal_url: 'Cluster/service URL for in-cluster calls.'
+      admin_url: 'Control/admin endpoint.'
+      health_url: 'Health/readiness endpoint when different from admin_url.'
   source_of_truth:
-    desired_state: "GitOps manifest"
-    reconciliation: "CP reconciles DB and Console from GitOps desired state."
-    db_patch_only: "Forbidden except emergency repair with follow-up desired-state PR."
+    desired_state: 'GitOps manifest'
+    reconciliation: 'CP reconciles DB and Console from GitOps desired state.'
+    db_patch_only: 'Forbidden except emergency repair with follow-up desired-state PR.'
 ```
 
 ## 2. Vocabulary
 
-| Term | Definition | Deployment path |
-|------|------------|-----------------|
-| `edge` | STOA Gateway native runtime, including Edge MCP. | Route registry / STOA Gateway. |
-| `connect` | Remote agent/link or standalone connector to a third-party gateway. | Pull agent + ack. |
-| `sidecar` | Real same-pod K8s sidecar: target gateway container + `stoa-sidecar`. | Same-pod local authz + ack. |
+| Term      | Definition                                                            | Deployment path                |
+| --------- | --------------------------------------------------------------------- | ------------------------------ |
+| `edge`    | STOA Gateway native runtime, including Edge MCP.                      | Route registry / STOA Gateway. |
+| `connect` | Remote agent/link or standalone connector to a third-party gateway.   | Pull agent + ack.              |
+| `sidecar` | Real same-pod K8s sidecar: target gateway container + `stoa-sidecar`. | Same-pod local authz + ack.    |
 
 Do not use `sidecar` as a generic term for "near a gateway". If same-pod proof
 is missing, classify as `connect`.
@@ -157,32 +157,32 @@ must be followed by a desired-state PR.
 
 ### 6.1 Production
 
-| Current gateway | Current label | Status | Target classification | Action |
-|-----------------|---------------|--------|-----------------------|--------|
-| `mcp.gostoa.dev` | STOA Edge MCP | Online | `edge/stoa/native-edge` | Merge as `public_url` of the logical prod edge if same runtime as internal service. |
-| `stoa-gateway.stoa-system.svc.cluster.local:80` | Edge MCP | Online | `edge/stoa/native-edge` | Merge as `internal_url` of the same logical prod edge if same runtime. |
-| `connect-kong:8090` | Connect | Online | `connect/kong/remote-agent` | Keep. |
-| `connect-webmethods-prod:8090` | Connect | Offline | `connect/webmethods/remote-agent` | Repair heartbeat or archive if superseded. |
-| `gravitee-stoa-link:8081` | STOA Link | Online | audit required | Sidecar only if same-pod proof exists; otherwise `connect/gravitee/remote-agent`. |
-| `webmethods-stoa-link:8081` | STOA Link | Online | audit required | Sidecar only if same-pod proof exists; otherwise `connect/webmethods/remote-agent`. |
-| `kong-stoa-link:8081` | STOA Link | Online | audit required | Sidecar only if same-pod proof exists; otherwise `connect/kong/remote-agent`. |
-| `agentgateway-stoa-link:8081` | STOA Link | Online | audit required | Sidecar only if same-pod proof exists; otherwise `connect/agentgateway/remote-agent`. |
-| `vps-wm-link-prod:9200` | STOA Link | Offline | `connect/webmethods/remote-agent` | Do not call sidecar; decide duplicate vs replacement for `connect-webmethods-prod`. |
+| Current gateway                                 | Current label | Status  | Target classification               | Action                                                                              |
+| ----------------------------------------------- | ------------- | ------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `mcp.gostoa.dev`                                | STOA Edge MCP | Online  | `edge/stoa/native-edge`             | Merge as `public_url` of the logical prod edge if same runtime as internal service. |
+| `stoa-gateway.stoa-system.svc.cluster.local:80` | Edge MCP      | Online  | `edge/stoa/native-edge`             | Merge as `internal_url` of the same logical prod edge if same runtime.              |
+| `connect-kong:8090`                             | Connect       | Online  | `connect/kong/remote-agent`         | Keep.                                                                               |
+| `connect-webmethods-prod:8090`                  | Connect       | Offline | `connect/webmethods/remote-agent`   | Repair heartbeat or archive if superseded.                                          |
+| `gravitee-stoa-link:8081`                       | STOA Link     | Online  | `connect/gravitee/remote-agent`     | Reclassified in desired state until same-pod proof exists.                          |
+| `webmethods-stoa-link:8081`                     | STOA Link     | Online  | `connect/webmethods/remote-agent`   | Reclassified in desired state until same-pod proof exists.                          |
+| `kong-stoa-link:8081`                           | STOA Link     | Online  | `connect/kong/remote-agent`         | Reclassified in desired state until same-pod proof exists.                          |
+| `agentgateway-stoa-link:8081`                   | STOA Link     | Online  | `connect/agentgateway/remote-agent` | Reclassified in desired state until same-pod proof exists.                          |
+| `vps-wm-link-prod:9200`                         | STOA Link     | Offline | `connect/webmethods/remote-agent`   | Do not call sidecar; decide duplicate vs replacement for `connect-webmethods-prod`. |
 
 ### 6.2 Staging
 
-| Current gateway | Current label | Status | Target classification | Action |
-|-----------------|---------------|--------|-----------------------|--------|
-| `connect-webmethods-staging:8090` | Connect | Online | `connect/webmethods/remote-agent` | Keep. |
-| `stoa-gateway-staging:8080` | Edge MCP | Online | `edge/stoa/native-edge` | Keep. |
-| `stoa-link-wm-staging:8080` | STOA Link | Online | audit required | Sidecar only if same-pod proof exists; otherwise `connect/webmethods/remote-agent`. |
+| Current gateway                   | Current label | Status | Target classification             | Action                                                     |
+| --------------------------------- | ------------- | ------ | --------------------------------- | ---------------------------------------------------------- |
+| `connect-webmethods-staging:8090` | Connect       | Online | `connect/webmethods/remote-agent` | Keep.                                                      |
+| `stoa-gateway-staging:8080`       | Edge MCP      | Online | `edge/stoa/native-edge`           | Keep.                                                      |
+| `stoa-link-wm-staging:8080`       | STOA Link     | Online | `connect/webmethods/remote-agent` | Reclassified in desired state until same-pod proof exists. |
 
 ### 6.3 Development
 
-| Current gateway | Current label | Status | Target classification | Action |
-|-----------------|---------------|--------|-----------------------|--------|
-| `connect-webmethods-dev:8090` | Connect | Online | `connect/webmethods/remote-agent` | Keep. |
-| `stoa-link-wm-dev:8080` | STOA Link | Online | audit required | Sidecar only if same-pod proof exists; otherwise `connect/webmethods/remote-agent`. |
+| Current gateway               | Current label | Status | Target classification             | Action                                                     |
+| ----------------------------- | ------------- | ------ | --------------------------------- | ---------------------------------------------------------- |
+| `connect-webmethods-dev:8090` | Connect       | Online | `connect/webmethods/remote-agent` | Keep.                                                      |
+| `stoa-link-wm-dev:8080`       | STOA Link     | Online | `connect/webmethods/remote-agent` | Reclassified in desired state until same-pod proof exists. |
 
 ## 7. Rollout Plan
 
@@ -254,26 +254,26 @@ must be followed by a desired-state PR.
 
 Use topology to select deployment behavior:
 
-| Classification | Deployment path |
-|----------------|-----------------|
-| `edge/stoa/native-edge` | Route registry / STOA Gateway. |
-| `connect/*/remote-agent` | Pull agent + route-sync ack. |
-| `sidecar/*/same-pod` | Same-pod local authz plus route-sync ack/proof. |
+| Classification           | Deployment path                                 |
+| ------------------------ | ----------------------------------------------- |
+| `edge/stoa/native-edge`  | Route registry / STOA Gateway.                  |
+| `connect/*/remote-agent` | Pull agent + route-sync ack.                    |
+| `sidecar/*/same-pod`     | Same-pod local authz plus route-sync ack/proof. |
 
 `/api-deployments` must not infer the path from display labels or URL shape.
 
 ## 8. Acceptance Tests
 
-| ID | Test | PASS condition |
-|----|------|----------------|
-| GTN-1 | Desired state parses canonical fields | `deployment_mode`, `target_gateway_type`, `topology`, and endpoint object validate. |
-| GTN-2 | No redundant field introduced | CP/API/Console do not add `gateway_family` or `deployment_kind` model fields. |
-| GTN-3 | Edge endpoint merge | `mcp.gostoa.dev` and internal service can be represented as one logical prod edge with multiple endpoints. |
-| GTN-4 | Sidecar proof gate | A gateway cannot be `sidecar` unless same-pod K8s proof passes. |
-| GTN-5 | False sidecar fallback | A `*-stoa-link` without same-pod proof becomes `connect/*/remote-agent`. |
-| GTN-6 | Console labels derive from canonical fields | UI labels match `Edge`, `Connect`, or `Sidecar` from canonical classification. |
-| GTN-7 | Deployment path derives from topology | `/api-deployments` selects edge registry, connect pull+ack, or sidecar same-pod path from canonical fields. |
-| GTN-8 | Offline prod gateways resolved | `connect-webmethods-prod` and `vps-wm-link-prod` are repaired, archived, or explicitly marked replaced. |
+| ID    | Test                                        | PASS condition                                                                                              |
+| ----- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| GTN-1 | Desired state parses canonical fields       | `deployment_mode`, `target_gateway_type`, `topology`, and endpoint object validate.                         |
+| GTN-2 | No redundant field introduced               | CP/API/Console do not add `gateway_family` or `deployment_kind` model fields.                               |
+| GTN-3 | Edge endpoint merge                         | `mcp.gostoa.dev` and internal service can be represented as one logical prod edge with multiple endpoints.  |
+| GTN-4 | Sidecar proof gate                          | A gateway cannot be `sidecar` unless same-pod K8s proof passes.                                             |
+| GTN-5 | False sidecar fallback                      | A `*-stoa-link` without same-pod proof becomes `connect/*/remote-agent`.                                    |
+| GTN-6 | Console labels derive from canonical fields | UI labels match `Edge`, `Connect`, or `Sidecar` from canonical classification.                              |
+| GTN-7 | Deployment path derives from topology       | `/api-deployments` selects edge registry, connect pull+ack, or sidecar same-pod path from canonical fields. |
+| GTN-8 | Offline prod gateways resolved              | `connect-webmethods-prod` and `vps-wm-link-prod` are repaired, archived, or explicitly marked replaced.     |
 
 ## 9. Non-Goals
 
@@ -285,9 +285,9 @@ Use topology to select deployment behavior:
 
 ## 10. Open Decisions
 
-| Decision | Options | Default |
-|----------|---------|---------|
-| Endpoint storage | Structured JSON column vs normalized endpoint table | Structured JSON first if compatible with current API. |
-| Prod edge identity | One logical gateway vs two independent runtimes | One logical gateway if health/version/runtime evidence matches. |
-| Offline webMethods prod | Repair vs archive duplicate | Repair `connect-webmethods-prod`; archive `vps-wm-link-prod` if duplicate. |
-| Sidecar proof persistence | Store proof snapshots in CP vs only compute live | Store last proof snapshot for Console and auditability. |
+| Decision                  | Options                                             | Default                                                                    |
+| ------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------- |
+| Endpoint storage          | Structured JSON column vs normalized endpoint table | Structured JSON first if compatible with current API.                      |
+| Prod edge identity        | One logical gateway vs two independent runtimes     | One logical gateway if health/version/runtime evidence matches.            |
+| Offline webMethods prod   | Repair vs archive duplicate                         | Repair `connect-webmethods-prod`; archive `vps-wm-link-prod` if duplicate. |
+| Sidecar proof persistence | Store proof snapshots in CP vs only compute live    | Store last proof snapshot for Console and auditability.                    |

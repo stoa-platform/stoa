@@ -702,6 +702,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/deployments/console": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Console Deployments
+         * @description List the aggregated Console contract for /api-deployments.
+         *
+         *     This endpoint intentionally exposes deployment status and gateway health as
+         *     separate fields so transient gateway connectivity does not overwrite the
+         *     runtime reconciliation state.
+         */
+        get: operations["list_console_deployments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/deployments/status": {
         parameters: {
             query?: never;
@@ -6168,6 +6192,13 @@ export interface paths {
          *     Trial tenants are subject to limits (CAB-1549):
          *     - Max 3 APIs (configurable via tenant.settings.max_apis)
          *     - 402 after 30-day trial expires
+         *
+         *     GitOps create rewrite (CAB-2185 B-FLOW): when ``GITOPS_CREATE_API_ENABLED``
+         *     is True AND ``tenant_id`` is in ``GITOPS_ELIGIBLE_TENANTS``, the request is
+         *     routed through :class:`GitOpsWriter` (Git-first, no Kafka emit, spec §6.13).
+         *     Otherwise the legacy DB-first path runs unchanged. Default flag value is
+         *     ``False`` and the eligible-tenant list is empty by default — production
+         *     behaviour is unchanged until Phase 6 strangler.
          */
         post: operations["create_api"];
         delete?: never;
@@ -6228,6 +6259,29 @@ export interface paths {
          *     If gateway_ids is omitted, uses auto-deploy assignments for the environment.
          */
         post: operations["deploy_to_environment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/apis/{api_id}/deploy/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Deploy To Environment
+         * @description Dry-run deployment validation for target gateway adapter contracts.
+         *
+         *     This endpoint performs the same API/gateway resolution as /deploy but stops
+         *     before GatewayDeployment creation and before Kafka/SSE dispatch.
+         */
+        post: operations["validate_deploy_to_environment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9067,6 +9121,10 @@ export interface paths {
         /**
          * Github Webhook
          * @description Handle GitHub webhooks for GitOps.
+         *
+         *     CP-1 H.1: after signature verification, claim a dedup slot keyed on
+         *     X-GitHub-Delivery. Claim is released on pipeline failure so the
+         *     next redelivery retries cleanly.
          */
         post: operations["github_webhook"];
         delete?: never;
@@ -9090,6 +9148,18 @@ export interface paths {
          *
          *     Captures the git author (who pushed) from the GitLab payload and stores
          *     traces in PostgreSQL for persistent monitoring.
+         *
+         *     CP-1 C.7: token verification happens BEFORE any DB write. Rejected
+         *     requests produce zero trace rows, eliminating the DoS amplification
+         *     vector where an unauthenticated flood would burn 1 INSERT + 2 UPDATEs
+         *     per request on the traces table.
+         *
+         *     CP-1 H.1: after auth, we claim a dedup slot keyed on Idempotency-Key
+         *     (preferred) or X-Gitlab-Webhook-UUID. X-Gitlab-Event-UUID is NEVER
+         *     used as primary key because it is shared across recursive webhooks —
+         *     deduping on it would drop legitimate events. The claim is released
+         *     on pipeline failure so the next redelivery retries cleanly instead
+         *     of being answered with "duplicate forever".
          */
         post: operations["gitlab_webhook"];
         delete?: never;
@@ -11195,6 +11265,101 @@ export interface components {
             sort_order: number;
             /** Transport */
             transport: string;
+        };
+        /**
+         * ConsoleDeploymentRow
+         * @description Aggregated deployment row for /api-deployments.
+         *
+         *     Deployment status and gateway health are intentionally separate axes.
+         *     A previously synced route can stay synced while its gateway is offline.
+         */
+        ConsoleDeploymentRow: {
+            /**
+             * Api Catalog Id
+             * Format: uuid
+             */
+            api_catalog_id: string;
+            /** Api Id */
+            api_id: string;
+            /** Api Name */
+            api_name: string;
+            /**
+             * Deployment Id
+             * Format: uuid
+             */
+            deployment_id: string;
+            /** Deployment Status */
+            deployment_status: string;
+            /** Desired Commit Sha */
+            desired_commit_sha?: string | null;
+            /** Desired Git Path */
+            desired_git_path?: string | null;
+            /**
+             * Desired Source
+             * @description Configuration source: git, db_shortcut, or unknown
+             */
+            desired_source: string;
+            /** Desired State */
+            desired_state: {
+                [key: string]: unknown;
+            };
+            /** Environment */
+            environment: string;
+            /** Gateway Health */
+            gateway_health: string;
+            gateway_target: components["schemas"]["ConsoleGatewayTarget"];
+            /**
+             * Git Sync Status
+             * @description Catalog freshness: up_to_date, missing_commit, git_sync_disabled, or unknown
+             */
+            git_sync_status: string;
+            /** Last Ack */
+            last_ack?: string | null;
+            /** Promotion State */
+            promotion_state?: string | null;
+            /** Sync Error */
+            sync_error?: string | null;
+            /** Tenant Id */
+            tenant_id: string;
+        };
+        /**
+         * ConsoleGatewayTarget
+         * @description Gateway target details for the Console API deployments table.
+         */
+        ConsoleGatewayTarget: {
+            /**
+             * Deployment Mode
+             * @description Canonical topology: edge, connect, or sidecar
+             * @enum {string}
+             */
+            deployment_mode: "edge" | "connect" | "sidecar";
+            /** Display Name */
+            display_name: string;
+            /** Environment */
+            environment: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Source
+             * @description Gateway source of truth: argocd, self_register, or manual
+             */
+            source: string;
+            /**
+             * Target Gateway Type
+             * @description Gateway technology: stoa, kong, webmethods, gravitee, ...
+             */
+            target_gateway_type: string;
+            /**
+             * Topology
+             * @description Execution topology: native-edge, remote-agent, same-pod
+             * @enum {string}
+             */
+            topology: "native-edge" | "remote-agent" | "same-pod";
         };
         /**
          * ConsumerCreate
@@ -14114,18 +14279,16 @@ export interface components {
              * Format: date-time
              */
             desired_at: string;
-            /** Desired State */
-            desired_state: {
-                [key: string]: unknown;
-            };
-            /** Desired Source */
-            desired_source?: string | null;
-            /** Git Sync Status */
-            git_sync_status?: string | null;
             /** Desired Commit Sha */
             desired_commit_sha?: string | null;
             /** Desired Git Path */
             desired_git_path?: string | null;
+            /** Desired Source */
+            desired_source?: string | null;
+            /** Desired State */
+            desired_state: {
+                [key: string]: unknown;
+            };
             /** Gateway Display Name */
             gateway_display_name?: string | null;
             /** Gateway Environment */
@@ -14141,6 +14304,8 @@ export interface components {
             gateway_resource_id?: string | null;
             /** Gateway Type */
             gateway_type?: string | null;
+            /** Git Sync Status */
+            git_sync_status?: string | null;
             /**
              * Id
              * Format: uuid
@@ -14219,8 +14384,20 @@ export interface components {
             base_url: string;
             /** Capabilities */
             capabilities?: string[];
+            /**
+             * Deployment Mode
+             * @description Canonical topology: edge, connect, or sidecar
+             */
+            deployment_mode?: ("edge" | "connect" | "sidecar") | null;
             /** Display Name */
             display_name: string;
+            /**
+             * Endpoints
+             * @description Logical endpoint map: public/internal/admin/health
+             */
+            endpoints?: {
+                [key: string]: unknown;
+            };
             /**
              * Environment
              * @description dev, staging, prod
@@ -14236,13 +14413,38 @@ export interface components {
              * @description Unique identifier (e.g. 'webmethods-prod')
              */
             name: string;
+            /**
+             * Public Url
+             * @description Public DNS URL for runtime APIs
+             */
+            public_url?: string | null;
             /** Tags */
             tags?: string[];
+            /**
+             * Target Gateway Type
+             * @description Gateway technology fronted or controlled by STOA
+             */
+            target_gateway_type?: ("stoa" | "kong" | "webmethods" | "gravitee" | "agentgateway" | "apigee" | "aws_apigateway" | "azure_apim") | null;
+            /**
+             * Target Gateway Url
+             * @description URL of the third-party gateway managed by Link/Connect
+             */
+            target_gateway_url?: string | null;
             /**
              * Tenant Id
              * @description null = platform-wide
              */
             tenant_id?: string | null;
+            /**
+             * Topology
+             * @description Execution topology: native-edge, remote-agent, or same-pod
+             */
+            topology?: ("native-edge" | "remote-agent" | "same-pod") | null;
+            /**
+             * Ui Url
+             * @description Third-party gateway web UI URL
+             */
+            ui_url?: string | null;
         };
         /**
          * GatewayInstanceResponse
@@ -14272,6 +14474,11 @@ export interface components {
              * @description User ID who deleted this gateway
              */
             deleted_by?: string | null;
+            /**
+             * Deployment Mode
+             * @description Canonical topology: edge, connect, or sidecar
+             */
+            deployment_mode?: ("edge" | "connect" | "sidecar") | null;
             /** Display Name */
             display_name: string;
             /**
@@ -14280,13 +14487,20 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Endpoints
+             * @description Logical endpoint map: public/internal/admin/health
+             */
+            endpoints?: {
+                [key: string]: unknown;
+            };
             /** Environment */
             environment: string;
             /**
              * Gateway Type
              * @enum {string}
              */
-            gateway_type: "webmethods" | "kong" | "apigee" | "aws_apigateway" | "stoa" | "stoa_edge_mcp" | "stoa_sidecar" | "stoa_proxy" | "stoa_shadow";
+            gateway_type: "webmethods" | "kong" | "apigee" | "aws_apigateway" | "azure_apim" | "gravitee" | "stoa" | "stoa_edge_mcp" | "stoa_sidecar" | "stoa_proxy" | "stoa_shadow";
             /** Health Details */
             health_details: {
                 [key: string]: unknown;
@@ -14331,12 +14545,22 @@ export interface components {
             /** Tags */
             tags: string[];
             /**
+             * Target Gateway Type
+             * @description Gateway technology fronted or controlled by STOA
+             */
+            target_gateway_type?: ("stoa" | "kong" | "webmethods" | "gravitee" | "agentgateway" | "apigee" | "aws_apigateway" | "azure_apim") | null;
+            /**
              * Target Gateway Url
              * @description URL of the third-party gateway managed by this Link/Connect instance
              */
             target_gateway_url?: string | null;
             /** Tenant Id */
             tenant_id: string | null;
+            /**
+             * Topology
+             * @description Execution topology: native-edge, remote-agent, or same-pod
+             */
+            topology?: ("native-edge" | "remote-agent" | "same-pod") | null;
             /**
              * Ui Url
              * @description Web UI URL of the third-party gateway (e.g. webMethods console at :9072)
@@ -14370,6 +14594,8 @@ export interface components {
             base_url?: string | null;
             /** Capabilities */
             capabilities?: string[] | null;
+            /** Deployment Mode */
+            deployment_mode?: ("edge" | "connect" | "sidecar") | null;
             /** Display Name */
             display_name?: string | null;
             /**
@@ -14377,6 +14603,10 @@ export interface components {
              * @description Enable/disable gateway for deployments
              */
             enabled?: boolean | null;
+            /** Endpoints */
+            endpoints?: {
+                [key: string]: unknown;
+            } | null;
             /** Environment */
             environment?: string | null;
             /**
@@ -14384,8 +14614,18 @@ export interface components {
              * @description Toggle deletion protection
              */
             protected?: boolean | null;
+            /** Public Url */
+            public_url?: string | null;
             /** Tags */
             tags?: string[] | null;
+            /** Target Gateway Type */
+            target_gateway_type?: ("stoa" | "kong" | "webmethods" | "gravitee" | "agentgateway" | "apigee" | "aws_apigateway" | "azure_apim") | null;
+            /** Target Gateway Url */
+            target_gateway_url?: string | null;
+            /** Topology */
+            topology?: ("native-edge" | "remote-agent" | "same-pod") | null;
+            /** Ui Url */
+            ui_url?: string | null;
             /**
              * Visibility
              * @description Restrict visibility to specific tenants (null = all)
@@ -14522,6 +14762,18 @@ export interface components {
              */
             capabilities?: string[];
             /**
+             * Deployment Mode
+             * @description Canonical topology mode: edge, connect, or sidecar
+             */
+            deployment_mode?: string | null;
+            /**
+             * Endpoints
+             * @description Structured endpoint map: public_url, internal_url, admin_url, health_url
+             */
+            endpoints?: {
+                [key: string]: string;
+            } | null;
+            /**
              * Environment
              * @description Deployment environment
              * @default dev
@@ -14534,7 +14786,7 @@ export interface components {
             hostname: string;
             /**
              * Mode
-             * @description Gateway mode: edge_mcp, sidecar, proxy, shadow
+             * @description Gateway runtime mode: edge_mcp, sidecar, proxy, shadow, connect
              */
             mode: string;
             /**
@@ -14542,6 +14794,11 @@ export interface components {
              * @description Public DNS URL of this gateway for Console display (CAB-1940)
              */
             public_url?: string | null;
+            /**
+             * Target Gateway Type
+             * @description Gateway technology STOA fronts or controls
+             */
+            target_gateway_type?: string | null;
             /**
              * Target Gateway Url
              * @description URL of the third-party gateway managed by this Link/Connect (e.g. webMethods admin URL)
@@ -14552,6 +14809,18 @@ export interface components {
              * @description Optional tenant restriction
              */
             tenant_id?: string | null;
+            /**
+             * Topology
+             * @description Execution topology: native-edge, remote-agent, or same-pod
+             */
+            topology?: string | null;
+            /**
+             * Topology Proof
+             * @description Evidence required for deployment_mode=sidecar same-pod classification
+             */
+            topology_proof?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Ui Url
              * @description Web UI URL of the third-party gateway (e.g. webMethods console at :9072)
@@ -16833,6 +17102,20 @@ export interface components {
             text_length: number;
             /** Total Pii Count */
             total_pii_count: number;
+        };
+        /**
+         * PaginatedConsoleDeployments
+         * @description Paginated Console deployment contract.
+         */
+        PaginatedConsoleDeployments: {
+            /** Items */
+            items: components["schemas"]["ConsoleDeploymentRow"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /**
          * PaginatedGatewayDeployments
@@ -23397,6 +23680,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["src__routers__gateway_deployments__CatalogEntry"][];
+                };
+            };
+        };
+    };
+    list_console_deployments: {
+        parameters: {
+            query?: {
+                /** @description Filter by gateway environment (dev/staging/production) */
+                environment?: string | null;
+                gateway_instance_id?: string | null;
+                /** @description Filter by API tenant id */
+                tenant_id?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedConsoleDeployments"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -32377,6 +32697,42 @@ export interface operations {
             };
         };
     };
+    validate_deploy_to_environment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                api_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeployToEnvRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_deployable_environments: {
         parameters: {
             query?: never;
@@ -38316,6 +38672,7 @@ export interface operations {
             header?: {
                 "X-Hub-Signature-256"?: string | null;
                 "X-GitHub-Event"?: string | null;
+                "X-GitHub-Delivery"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -38348,6 +38705,8 @@ export interface operations {
             header?: {
                 "X-Gitlab-Token"?: string | null;
                 "X-Gitlab-Event"?: string | null;
+                "X-Gitlab-Webhook-UUID"?: string | null;
+                "Idempotency-Key"?: string | null;
             };
             path?: never;
             cookie?: never;

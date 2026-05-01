@@ -50,6 +50,10 @@ def _make_gateway_instance(**overrides):
         "target_gateway_url": None,
         "public_url": None,
         "ui_url": None,
+        "endpoints": {},
+        "deployment_mode": "edge",
+        "target_gateway_type": "stoa",
+        "topology": "native-edge",
         "protected": False,
         "enabled": True,
         "visibility": None,
@@ -369,6 +373,53 @@ class TestGatewayRegistration:
             mock_repo.create.assert_not_called()
             # Verify it returned the ArgoCD entry
             assert resp.json()["name"] == "argocd-stoa-gateway"
+
+    def test_register_preserves_argocd_topology_when_payload_is_legacy(self, client):
+        """Legacy binaries must not downgrade GitOps topology fields during adoption."""
+        from src.models.gateway_instance import GatewayType
+
+        proof = {
+            "declared_in_kubernetes": True,
+            "containers": ["kong", "stoa-sidecar"],
+            "target_container": "kong",
+            "sidecar_container": "stoa-sidecar",
+            "authz_url": "http://localhost:8081/authz",
+        }
+        argocd_gw = _make_gateway_instance(
+            name="kong-sidecar-prod",
+            gateway_type=GatewayType.STOA_SIDECAR,
+            source="argocd",
+            mode="sidecar",
+            deployment_mode="sidecar",
+            target_gateway_type="kong",
+            topology="same-pod",
+            health_details={"topology_proof": proof},
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_name = AsyncMock(return_value=None)
+            mock_repo.get_by_name_including_deleted = AsyncMock(return_value=None)
+            mock_repo.find_self_registered_by_mode_env = AsyncMock(return_value=[])
+            mock_repo.get_by_source_and_type = AsyncMock(return_value=argocd_gw)
+            mock_repo.update = AsyncMock(return_value=argocd_gw)
+
+            resp = client.post(
+                REGISTER_URL,
+                json=_registration_payload(mode="sidecar", environment="prod"),
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+            assert resp.status_code == 201
+            assert argocd_gw.deployment_mode == "sidecar"
+            assert argocd_gw.target_gateway_type == "kong"
+            assert argocd_gw.topology == "same-pod"
 
     def test_register_prefers_name_match_over_argocd(self, client):
         """Re-registration by name takes priority over ArgoCD adoption."""

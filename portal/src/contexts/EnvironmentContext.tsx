@@ -25,7 +25,7 @@ export interface PortalEnvironmentEndpoints {
 }
 
 export interface PortalEnvironmentConfig {
-  name: string;
+  name: PortalEnvironment;
   label: string;
   mode: PortalEnvironmentMode;
   color: string;
@@ -47,6 +47,33 @@ function toEnvironmentKey(name: string): PortalEnvironment {
 
 function isValidEnvironment(value: string): value is PortalEnvironment {
   return value === 'dev' || value === 'staging' || value === 'prod';
+}
+
+function getStoredEnvironment(): PortalEnvironment | null {
+  const stored = localStorage.getItem(ACTIVE_ENV_KEY);
+  return stored && isValidEnvironment(stored) ? stored : null;
+}
+
+function isSameKeycloak(env: PortalEnvironmentConfig, keycloakUrl: string): boolean {
+  return !env.endpoints?.keycloak_url || env.endpoints.keycloak_url === keycloakUrl;
+}
+
+export function resolveInitialPortalEnvironment(
+  environments: PortalEnvironmentConfig[],
+  storedEnvironment: PortalEnvironment | null,
+  configuredEnvironment: PortalEnvironment,
+  keycloakUrl: string
+): PortalEnvironmentConfig | undefined {
+  const stored = storedEnvironment
+    ? environments.find((env) => env.name === storedEnvironment && isSameKeycloak(env, keycloakUrl))
+    : undefined;
+
+  return (
+    stored ??
+    environments.find((env) => env.is_current) ??
+    environments.find((env) => env.name === configuredEnvironment) ??
+    environments[0]
+  );
 }
 
 interface PortalEnvironmentContextType {
@@ -71,9 +98,7 @@ export function PortalEnvironmentProvider({ children }: { children: ReactNode })
   const [error, setError] = useState<string | null>(null);
 
   const [activeEnvironment, setActiveEnvironment] = useState<PortalEnvironment>(() => {
-    const stored = localStorage.getItem(ACTIVE_ENV_KEY);
-    if (stored && isValidEnvironment(stored)) return stored;
-    return 'dev';
+    return getStoredEnvironment() ?? toEnvironmentKey(config.app.environment);
   });
 
   useEffect(() => {
@@ -116,10 +141,15 @@ export function PortalEnvironmentProvider({ children }: { children: ReactNode })
         setEnvironments(mapped);
         setError(null);
 
-        // Set initial API base URL for the active environment
-        const stored = localStorage.getItem(ACTIVE_ENV_KEY);
-        const initialEnvName = stored && isValidEnvironment(stored) ? stored : 'dev';
-        const initialEnv = mapped.find((e) => e.name === initialEnvName) ?? mapped[0];
+        const initialEnv = resolveInitialPortalEnvironment(
+          mapped,
+          getStoredEnvironment(),
+          toEnvironmentKey(config.app.environment),
+          config.keycloak.url
+        );
+        if (initialEnv) {
+          setActiveEnvironment(initialEnv.name);
+        }
         if (initialEnv?.endpoints?.api_url) {
           setApiBaseUrl(initialEnv.endpoints.api_url);
         }

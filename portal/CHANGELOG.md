@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.3](https://github.com/stoa-platform/stoa/compare/portal-v1.3.2...portal-v1.3.3) (2026-05-01)
+
+
+### Bug Fixes
+
+* **portal:** default to current environment ([2b76238](https://github.com/stoa-platform/stoa/commit/2b762382dc9e221e8d172c6cd670f82213876642))
+* **subscriptions:** align Portal Console Gateway UAC flow ([61b8f2e](https://github.com/stoa-platform/stoa/commit/61b8f2edf5a8b40c714c39e938505d7198e94d72))
+
 ## [1.3.2](https://github.com/stoa-platform/stoa/compare/portal-v1.3.1...portal-v1.3.2) (2026-04-20)
 
 

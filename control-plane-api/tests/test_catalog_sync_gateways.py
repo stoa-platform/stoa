@@ -3,10 +3,12 @@
 Step 28 (Phase 5): Verifies that the `gateways:` block in api.yaml triggers
 automatic GatewayDeployment creation/update during catalog sync.
 """
-import pytest
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from src.models.gateway_deployment import DeploymentSyncStatus
 
@@ -25,6 +27,9 @@ class TestCatalogSyncGatewayReconciliation:
             "version": "2.1.0",
             "openapi_spec": {"openapi": "3.0.0"},
             "api_metadata": {"name": "Billing API"},
+            "target_gateways": [],
+            "git_path": "tenants/acme/apis/billing-api/api.yaml",
+            "git_commit_sha": "a" * 40,
         }
         defaults.update(overrides)
         mock = MagicMock()
@@ -54,7 +59,7 @@ class TestCatalogSyncGatewayReconciliation:
             "api_catalog_id": uuid4(),
             "gateway_instance_id": uuid4(),
             "desired_state": {"spec_hash": "old_hash", "activated": True},
-            "desired_at": datetime.now(timezone.utc),
+            "desired_at": datetime.now(UTC),
             "sync_status": DeploymentSyncStatus.SYNCED,
             "sync_error": None,
             "sync_attempts": 0,
@@ -91,21 +96,27 @@ class TestCatalogSyncGatewayReconciliation:
         mock_db.execute = AsyncMock(return_value=mock_execute_result)
 
         mock_gw_repo = MagicMock()
-        mock_gw_repo.get_by_name = AsyncMock(side_effect=lambda name: {
-            "webmethods-prod": gw1,
-            "stoa-dev": gw2,
-        }.get(name))
+        mock_gw_repo.get_by_name = AsyncMock(
+            side_effect=lambda name: {
+                "webmethods-prod": gw1,
+                "stoa-dev": gw2,
+            }.get(name)
+        )
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
         mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
 
-        with patch(
-            "src.services.catalog_sync_service.GatewayInstanceRepository",
-            return_value=mock_gw_repo,
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository",
-            return_value=mock_deploy_repo,
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
@@ -133,17 +144,21 @@ class TestCatalogSyncGatewayReconciliation:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
         mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
 
-        with patch(
-            "src.services.catalog_sync_service.GatewayInstanceRepository",
-            return_value=mock_gw_repo,
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository",
-            return_value=mock_deploy_repo,
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
@@ -152,7 +167,6 @@ class TestCatalogSyncGatewayReconciliation:
     async def test_create_deployment_pending(self):
         """New deployment is created with sync_status=PENDING."""
         from src.services.catalog_sync_service import CatalogSyncService
-        from src.models.gateway_deployment import GatewayDeployment
 
         mock_db = AsyncMock()
         mock_git = MagicMock()
@@ -172,18 +186,22 @@ class TestCatalogSyncGatewayReconciliation:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         created_deployments = []
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
         mock_deploy_repo.create = AsyncMock(side_effect=lambda d: (created_deployments.append(d), d)[1])
 
-        with patch(
-            "src.services.catalog_sync_service.GatewayInstanceRepository",
-            return_value=mock_gw_repo,
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository",
-            return_value=mock_deploy_repo,
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
@@ -214,19 +232,22 @@ class TestCatalogSyncGatewayReconciliation:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=None)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.create = AsyncMock()
 
-        with patch(
-            "src.services.catalog_sync_service.GatewayInstanceRepository",
-            return_value=mock_gw_repo,
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository",
-            return_value=mock_deploy_repo,
-        ), patch(
-            "src.services.catalog_sync_service.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
+            patch("src.services.catalog_deployment_reconciler.logger") as mock_logger,
+        ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
         mock_deploy_repo.create.assert_not_awaited()
@@ -246,17 +267,115 @@ class TestCatalogSyncGatewayReconciliation:
         mock_gw_repo = MagicMock()
         mock_deploy_repo = MagicMock()
 
-        with patch(
-            "src.services.catalog_sync_service.GatewayInstanceRepository",
-            return_value=mock_gw_repo,
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository",
-            return_value=mock_deploy_repo,
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "simple-api", api)
 
         # No DB calls should have been made — early return
         mock_db.execute.assert_not_awaited()
+
+    async def test_deployments_block_with_gateway_creates_deployment(self):
+        """deployments.dev.gateways is a materializable DR target."""
+        from src.services.catalog_sync_service import CatalogSyncService
+
+        mock_db = AsyncMock()
+        mock_git = MagicMock()
+        svc = CatalogSyncService(mock_db, mock_git)
+
+        catalog_entry = self._make_catalog_entry()
+        gw = self._make_gateway_instance(name="connect-webmethods-dev", environment="dev")
+
+        api = {
+            "name": "API",
+            "deployments": {
+                "dev": {
+                    "gateways": [{"instance": "connect-webmethods-dev", "activated": False}],
+                }
+            },
+        }
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = catalog_entry
+        mock_db.execute = AsyncMock(return_value=mock_execute_result)
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
+
+        created_deployments = []
+        mock_deploy_repo = MagicMock()
+        mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
+        mock_deploy_repo.create = AsyncMock(side_effect=lambda d: (created_deployments.append(d), d)[1])
+
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
+        ):
+            await svc._reconcile_gateway_deployments("acme", "billing-api", api)
+
+        assert len(created_deployments) == 1
+        assert catalog_entry.target_gateways == ["connect-webmethods-dev"]
+        assert created_deployments[0].desired_state["activated"] is False
+        assert created_deployments[0].desired_state["target_environment"] == "dev"
+        assert created_deployments[0].desired_state["target_source"] == "deployments"
+
+    async def test_resolve_self_registered_gateway_by_hostname(self):
+        """Catalog targets can use STOA_INSTANCE_NAME before CP suffixes the row name."""
+        from src.services.catalog_sync_service import CatalogSyncService
+
+        mock_db = AsyncMock()
+        mock_git = MagicMock()
+        svc = CatalogSyncService(mock_db, mock_git)
+
+        catalog_entry = self._make_catalog_entry()
+        gw = self._make_gateway_instance(name="connect-webmethods-dev-connect-dev", environment="dev")
+
+        api = {
+            "name": "API",
+            "gateways": [{"instance": "connect-webmethods-dev", "environment": "dev"}],
+        }
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = catalog_entry
+        mock_db.execute = AsyncMock(return_value=mock_execute_result)
+
+        mock_gw_repo = MagicMock()
+        mock_gw_repo.get_by_name = AsyncMock(return_value=None)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=gw)
+
+        mock_deploy_repo = MagicMock()
+        mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=None)
+        mock_deploy_repo.create = AsyncMock(side_effect=lambda d: d)
+
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
+        ):
+            await svc._reconcile_gateway_deployments("acme", "billing-api", api)
+
+        mock_gw_repo.get_by_name.assert_awaited_once_with("connect-webmethods-dev")
+        mock_gw_repo.get_self_registered_by_hostname.assert_awaited_once_with("connect-webmethods-dev")
+        mock_deploy_repo.create.assert_awaited_once()
 
     async def test_update_existing_deployment(self):
         """Existing deployment with changed state → reset to PENDING; unchanged → left alone."""
@@ -271,7 +390,14 @@ class TestCatalogSyncGatewayReconciliation:
 
         # Build the desired_state that the service would compute
         from src.services.gateway_deployment_service import GatewayDeploymentService
-        expected_desired = GatewayDeploymentService.build_desired_state(catalog_entry)
+
+        expected_desired = {
+            **GatewayDeploymentService.build_desired_state(catalog_entry),
+            "activated": True,
+            "target_gateway_name": "webmethods-prod",
+            "target_environment": None,
+            "target_source": "gateways",
+        }
 
         # Existing deployment with DIFFERENT desired_state (should be updated)
         existing_dep = self._make_deployment(
@@ -292,18 +418,22 @@ class TestCatalogSyncGatewayReconciliation:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=existing_dep)
         mock_deploy_repo.update = AsyncMock(return_value=existing_dep)
         mock_deploy_repo.create = AsyncMock()
 
-        with patch(
-            "src.services.catalog_sync_service.GatewayInstanceRepository",
-            return_value=mock_gw_repo,
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository",
-            return_value=mock_deploy_repo,
+        with (
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayInstanceRepository",
+                return_value=mock_gw_repo,
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository",
+                return_value=mock_deploy_repo,
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 

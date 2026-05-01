@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.models.catalog import APICatalog, CatalogSyncStatus, SyncStatus, SyncType
-from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.mcp_subscription import (
     MCPServer,
     MCPServerCategory,
@@ -19,9 +18,11 @@ from src.models.mcp_subscription import (
     MCPServerTool,
 )
 from src.models.tenant import Tenant, TenantProvisioningStatus, TenantStatus
-from src.repositories.gateway_deployment import GatewayDeploymentRepository
-from src.repositories.gateway_instance import GatewayInstanceRepository
-from src.services.gateway_deployment_service import GatewayDeploymentService
+from src.services.catalog_api_definition import (
+    extract_target_gateway_names,
+    normalize_api_definition,
+)
+from src.services.catalog_deployment_reconciler import CatalogDeploymentReconciler
 from src.services.git_provider import GitProvider
 
 logger = logging.getLogger(__name__)
@@ -270,20 +271,20 @@ class CatalogSyncService:
         commit_sha: str | None,
     ) -> None:
         """Upsert a single API into the catalog."""
+        api = normalize_api_definition(api)
         # CAB-2015: merge per-environment override if present
         override = await self.git.get_api_override(tenant_id, api_id, settings.ENVIRONMENT)
-        api = resolve_api_config(api, override)
+        api = normalize_api_definition(resolve_api_config(api, override))
 
         git_path = f"tenants/{tenant_id}/apis/{api_id}"
         tags = api.get("tags", [])
         promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
         portal_published = any(tag.lower() in promotion_tags for tag in tags)
 
-        # Extract target gateways from api.yaml gateways: block
-        gateways_block = api.get("gateways", [])
-        target_gateways = [
-            g.get("instance", g.get("name", "")) for g in gateways_block if g.get("instance") or g.get("name")
-        ]
+        # Extract explicit target gateways from api.yaml. Environment-only
+        # deployments (e.g. deployments.dev=true) are not enough to identify a
+        # runtime target, so they stay out of target_gateways.
+        target_gateways = extract_target_gateway_names(api)
 
         stmt = (
             insert(APICatalog)
@@ -326,89 +327,12 @@ class CatalogSyncService:
         await self.db.execute(stmt)
 
     async def _reconcile_gateway_deployments(self, tenant_id: str, api_id: str, api: dict) -> None:
-        """Create/update GatewayDeployment records from api.yaml gateways: block.
-
-        For each gateway entry, resolves the GatewayInstance by name and
-        creates a PENDING deployment. The Sync Engine periodic loop picks
-        up PENDING records automatically — no Kafka emission needed here.
-        """
-        gateways_block = api.get("gateways", [])
-        if not gateways_block:
-            return
-
-        gw_repo = GatewayInstanceRepository(self.db)
-        deploy_repo = GatewayDeploymentRepository(self.db)
-
-        # Resolve APICatalog record (just upserted)
-        result = await self.db.execute(
-            select(APICatalog).where(
-                APICatalog.tenant_id == tenant_id,
-                APICatalog.api_id == api_id,
-                APICatalog.deleted_at.is_(None),
-            )
+        """Create/update GatewayDeployment records from catalog targets."""
+        await CatalogDeploymentReconciler(self.db).reconcile_api(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            api_content=api,
         )
-        catalog_entry = result.scalar_one_or_none()
-        if not catalog_entry:
-            return
-
-        desired_state = GatewayDeploymentService.build_desired_state(catalog_entry)
-
-        for gw_entry in gateways_block:
-            instance_name = gw_entry.get("instance", gw_entry.get("name", ""))
-            if not instance_name:
-                continue
-
-            gateway = await gw_repo.get_by_name(instance_name)
-            if not gateway:
-                logger.warning(
-                    "GitOps: gateway instance '%s' not found for API %s/%s — skipping",
-                    instance_name,
-                    tenant_id,
-                    api_id,
-                )
-                continue
-
-            # Override activated from yaml if specified
-            if "activated" in gw_entry:
-                desired_state_copy = {**desired_state, "activated": gw_entry["activated"]}
-            else:
-                desired_state_copy = desired_state
-
-            # Check for existing deployment
-            existing = await deploy_repo.get_by_api_and_gateway(catalog_entry.id, gateway.id)
-            now = datetime.now(UTC)
-
-            if existing:
-                # Only reset to PENDING if desired_state actually changed
-                if existing.desired_state != desired_state_copy:
-                    existing.desired_state = desired_state_copy
-                    existing.desired_at = now
-                    existing.sync_status = DeploymentSyncStatus.PENDING
-                    existing.sync_error = None
-                    existing.sync_attempts = 0
-                    existing.desired_generation = (existing.desired_generation or 0) + 1
-                    await deploy_repo.update(existing)
-                    logger.info(
-                        "GitOps: updated deployment for %s/%s → %s",
-                        tenant_id,
-                        api_id,
-                        instance_name,
-                    )
-            else:
-                deployment = GatewayDeployment(
-                    api_catalog_id=catalog_entry.id,
-                    gateway_instance_id=gateway.id,
-                    desired_state=desired_state_copy,
-                    desired_at=now,
-                    sync_status=DeploymentSyncStatus.PENDING,
-                )
-                await deploy_repo.create(deployment)
-                logger.info(
-                    "GitOps: created deployment for %s/%s → %s",
-                    tenant_id,
-                    api_id,
-                    instance_name,
-                )
 
     async def _sync_tenant_apis(self, tenant_id: str, commit_sha: str | None, seen_apis: set[tuple[str, str]]) -> int:
         """Sync all APIs for a tenant (legacy sequential, used by sync_tenant)"""

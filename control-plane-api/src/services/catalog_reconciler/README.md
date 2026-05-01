@@ -18,6 +18,9 @@ is never started in production until a tenant is added to
 `specs/api-creation-gitops-rewrite.md` §6.5 step 14, §6.6, §6.9, §6.14, §11
 (CAB-2186 B-WORKER + CAB-2188 B12 + CAB-2180 B-CATALOG).
 
+Gateway runtime DR coverage is specified separately in
+`specs/catalog-gateway-dr-reconciliation.md`.
+
 ## Modules
 
 - `worker.py` — `CatalogReconcilerWorker.start()` loop. Each tick:
@@ -37,6 +40,10 @@ is never started in production until a tenant is added to
     `openapi_spec`, `metadata`, `id`)
   - `project_to_api_catalog()` — transactional upsert (preserves
     `target_gateways`, `openapi_spec`, `metadata`, `id` PK on UPDATE)
+- `../catalog_api_definition.py` — shared catalog API normalization and
+  gateway target extraction for flat and Kubernetes-style `api.yaml`
+- `../catalog_deployment_reconciler.py` — materializes explicit Git catalog
+  gateway targets into `GatewayDeployment(sync_status=PENDING)` rows
 
 ## What's NOT in this PR (out-of-scope, Phase 5+)
 

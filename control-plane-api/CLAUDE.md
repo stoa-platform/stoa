@@ -187,20 +187,38 @@ pydantic-settings source. Legacy usage emits at boot:
 - a Prometheus Counter `stoa_deprecated_config_used_total{name="STOA_SNAPSHOTS_*"}`
   (one-shot per `(key, process)` via `_METRIC_EMITTED_KEYS` set + Lock).
 
-**Conflict gate**: setting both prefixes for the same suffix with different
-values fails boot with `ValueError`. The conflict scanner reads BOTH
-`os.environ` AND the configured `.env` file (so a `.env`-only legacy setting
-also triggers the gate — verified by `test_conflict_between_new_env_and_old_dotenv_fails`).
+**Conflict gate** (Phase 3-B hardened): setting both prefixes for the same
+suffix with different values fails boot with `ValueError`. Behaviour:
 
-**Council Stage 2 #1+#2 secret masking**: env keys matching
-`*SECRET*` / `*KEY*` / `*TOKEN*` / `*PASSWORD*` (case-insensitive substring)
-have their VALUES redacted to `<REDACTED>` in BOTH:
-- the raised `ValueError` message (the part we control), and
-- the input-dict that Pydantic dumps as `input_value=` in
-  `ValidationError.__str__` (mutation in the validator scrubs the data
-  before the error wraps).
+- **Scoped to declared field suffixes.** The scanner enumerates
+  `SnapshotSettings.model_fields` and only checks suffixes
+  corresponding to real fields. Leftover env vars matching the prefix
+  but no declared field (e.g. `STOA_SNAPSHOTS_FOO_REMOVED_LAST_RELEASE`)
+  do NOT trigger spurious boot failures.
+- **Honors the `_env_file=` runtime override.** Pydantic-Settings
+  consumes that kwarg internally; `SnapshotSettings.__init__` stashes
+  it in a `ContextVar` so the validator scans the same dotenv used
+  for field resolution (not just the static cwd `.env`). Pass
+  `_env_file=None` to disable the dotenv pass entirely.
+- **Value-blind error format.** The `ValueError` message lists the
+  source key names only — never the conflicting values. Eliminates the
+  need for a substring-match secret heuristic at the error boundary
+  (which had known false negatives like `DB_DSN`/`JWT_SIG_INPUT`).
 
-The key NAMES remain visible — operator debugging needs them.
+Example error:
+
+```
+ValueError: Conflicting config for suffix 'STORAGE_BUCKET': sources
+['env:STOA_API_SNAPSHOT_STORAGE_BUCKET', 'env:STOA_SNAPSHOTS_STORAGE_BUCKET']
+have different values. Remove the legacy STOA_SNAPSHOTS_* key or align
+both prefixes to the same value. (Values are intentionally omitted
+from this message to avoid leaking secrets.)
+```
+
+**Defence-in-depth helpers** (`_is_secret_env_key`, `_redact_value`)
+remain available in the module for any future log path that includes
+values. They are NOT called by the Phase 3-B validator — the design
+contract is "values never leave the process via this path".
 
 **Sunset**: tracked on **CAB-2203** — the alias surface (per-field
 `AliasChoices`, conflict scanner, masking helpers) can be removed once the

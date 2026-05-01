@@ -1,0 +1,230 @@
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: stoa-gateway-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: edge
+    stoa.dev/target-gateway-type: stoa
+    stoa.dev/topology: native-edge
+spec:
+  displayName: STOA Gateway
+  gatewayType: stoa_edge_mcp
+  environment: prod
+  baseUrl: http://stoa-gateway.stoa-system.svc.cluster.local:80
+  deploymentMode: edge
+  targetGatewayType: stoa
+  topology: native-edge
+  endpoints:
+    publicUrl: https://mcp.gostoa.dev
+    internalUrl: http://stoa-gateway.stoa-system.svc.cluster.local:80
+    adminUrl: http://stoa-gateway.stoa-system.svc.cluster.local:80
+    healthUrl: http://stoa-gateway.stoa-system.svc.cluster.local:80/health
+  capabilities:
+    - mcp
+    - rest
+  mode: edge-mcp
+  tags:
+    - edge
+    - stoa
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: connect-kong-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: kong
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (connect)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://connect-kong:8090
+  deploymentMode: connect
+  targetGatewayType: kong
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://connect-kong:8090
+    healthUrl: http://connect-kong:8090/health
+  capabilities:
+    - rest
+    - discovery
+  mode: connect
+  tags:
+    - connect
+    - kong
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: connect-webmethods-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (connect)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://connect-webmethods-prod:8090
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://connect-webmethods-prod:8090
+    healthUrl: http://connect-webmethods-prod:8090/health
+  capabilities:
+    - rest
+    - discovery
+  mode: connect
+  tags:
+    - connect
+    - webmethods
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: gravitee-stoa-link-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: gravitee
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://gravitee-stoa-link:8081
+  deploymentMode: connect
+  targetGatewayType: gravitee
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://gravitee-stoa-link:8081
+    healthUrl: http://gravitee-stoa-link:8081/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - gravitee
+    - not-a-k8s-sidecar
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: webmethods-stoa-link-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://webmethods-stoa-link:8081
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://webmethods-stoa-link:8081
+    healthUrl: http://webmethods-stoa-link:8081/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - webmethods
+    - not-a-k8s-sidecar
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: kong-stoa-link-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: kong
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://kong-stoa-link:8081
+  deploymentMode: connect
+  targetGatewayType: kong
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://kong-stoa-link:8081
+    healthUrl: http://kong-stoa-link:8081/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - kong
+    - not-a-k8s-sidecar
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: agentgateway-stoa-link-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: agentgateway
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://agentgateway-stoa-link:8081
+  deploymentMode: connect
+  targetGatewayType: agentgateway
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://agentgateway-stoa-link:8081
+    healthUrl: http://agentgateway-stoa-link:8081/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - agentgateway
+    - not-a-k8s-sidecar
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: vps-wm-link-prod
+  labels:
+    stoa.dev/environment: prod
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: prod
+  baseUrl: http://vps-wm-link-prod:9200
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://vps-wm-link-prod:9200
+    healthUrl: http://vps-wm-link-prod:9200/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - webmethods
+    - not-a-k8s-sidecar

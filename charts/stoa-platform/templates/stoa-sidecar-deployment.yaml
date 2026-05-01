@@ -7,7 +7,7 @@
 # STOA Sidecar Deployment
 # ==============================================================================
 # Deploys STOA Gateway in sidecar mode alongside third-party gateways
-# (WebMethods, Kong, Envoy, etc.). The sidecar provides:
+# (WebMethods, Kong, Gravitee, AgentGateway, etc.). The sidecar provides:
 # - ext_authz endpoint for policy enforcement
 # - Rate limiting
 # - Usage metering (Kafka pipeline)
@@ -87,6 +87,14 @@ spec:
             # Sidecar mode configuration
             - name: STOA_GATEWAY_MODE
               value: "sidecar"
+            - name: STOA_DEPLOYMENT_MODE
+              value: "sidecar"
+            - name: STOA_TARGET_GATEWAY_TYPE
+              value: {{ .Values.stoaSidecar.targetGateway | default "generic" | quote }}
+            - name: STOA_TOPOLOGY
+              value: "same-pod"
+            - name: STOA_TOPOLOGY_PROOF
+              value: {{ dict "declared_in_kubernetes" true "namespace" .Release.Namespace "deployment" (printf "%s-with-stoa-sidecar" (.Values.stoaSidecar.targetGateway | default "third-party")) "containers" (list (.Values.stoaSidecar.targetGateway | default "gateway") "stoa-sidecar") "target_container" (.Values.stoaSidecar.targetGateway | default "gateway") "sidecar_container" "stoa-sidecar" "authz_url" "http://localhost:8081/authz" | toJson | quote }}
             - name: STOA_UPSTREAM_TYPE
               value: {{ .Values.stoaSidecar.targetGateway | default "generic" | quote }}
             - name: STOA_PORT

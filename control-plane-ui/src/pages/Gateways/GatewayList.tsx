@@ -109,10 +109,30 @@ const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
 
 const MODE_LABELS: Record<GatewayMode, string> = {
   'edge-mcp': 'Edge MCP',
-  sidecar: 'STOA Link',
+  sidecar: 'Runtime Sidecar',
   proxy: 'Proxy',
   shadow: 'Shadow',
   connect: 'Connect',
+};
+
+const DEPLOYMENT_LABELS: Record<string, string> = {
+  edge: 'Edge',
+  connect: 'Connect',
+  sidecar: 'Sidecar',
+};
+
+const TOPOLOGY_LABELS: Record<string, string> = {
+  'native-edge': 'Native edge',
+  'remote-agent': 'Remote agent',
+  'same-pod': 'Same pod',
+};
+
+const TARGET_LABELS: Record<string, string> = {
+  stoa: 'STOA',
+  kong: 'Kong',
+  webmethods: 'webMethods',
+  gravitee: 'Gravitee',
+  agentgateway: 'Agent Gateway',
 };
 
 // ---------------------------------------------------------------------------
@@ -130,6 +150,24 @@ function isLive(gw: GatewayInstance): boolean {
 
 function isStoa(type: string): boolean {
   return type.startsWith('stoa');
+}
+
+function deploymentLabel(gw: GatewayInstance): string | null {
+  if (gw.deployment_mode) return DEPLOYMENT_LABELS[gw.deployment_mode] ?? gw.deployment_mode;
+  if (gw.mode) return MODE_LABELS[gw.mode] ?? gw.mode;
+  return null;
+}
+
+function targetLabel(gw: GatewayInstance, fallback: string): string {
+  if (gw.target_gateway_type) {
+    return TARGET_LABELS[gw.target_gateway_type] ?? gw.target_gateway_type;
+  }
+  return fallback;
+}
+
+function topologyLabel(gw: GatewayInstance): string | null {
+  if (!gw.topology) return null;
+  return TOPOLOGY_LABELS[gw.topology] ?? gw.topology;
 }
 
 function formatUptime(seconds: number): string {
@@ -644,6 +682,9 @@ function GatewayRow({
   const TypeIcon = typeInfo.icon;
   const live = isLive(gw);
   const isDeleted = !!gw.deleted_at;
+  const modeLabel = deploymentLabel(gw);
+  const target = targetLabel(gw, typeInfo.label);
+  const topology = topologyLabel(gw);
 
   return (
     <div
@@ -685,9 +726,9 @@ function GatewayRow({
           >
             {gw.display_name}
           </span>
-          {gw.mode && (
+          {modeLabel && (
             <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-              {MODE_LABELS[gw.mode] ?? gw.mode}
+              {modeLabel}
             </span>
           )}
           {gw.source === 'argocd' && (
@@ -714,7 +755,13 @@ function GatewayRow({
           )}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-neutral-500 dark:text-neutral-400">{typeInfo.label}</span>
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">{target}</span>
+          {topology && (
+            <>
+              <span className="text-neutral-300 dark:text-neutral-600">&middot;</span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">{topology}</span>
+            </>
+          )}
           <span className="text-neutral-300 dark:text-neutral-600">&middot;</span>
           <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">
             {gw.base_url.replace(/^https?:\/\//, '')}
@@ -844,6 +891,9 @@ function GatewayDetailPanel({
   const status = STATUS_CONFIG[gw.status];
   const typeInfo = TYPE_DISPLAY[gw.gateway_type] ?? { label: gw.gateway_type, icon: Server };
   const live = isLive(gw);
+  const modeLabel = deploymentLabel(gw);
+  const target = targetLabel(gw, typeInfo.label);
+  const topology = topologyLabel(gw);
 
   return (
     <div
@@ -881,12 +931,13 @@ function GatewayDetailPanel({
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${status.badge}`}>
               {status.label}
             </span>
-            {gw.mode && (
+            {modeLabel && (
               <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-                {MODE_LABELS[gw.mode] ?? gw.mode}
+                {modeLabel}
               </span>
             )}
-            <span className="text-xs text-neutral-400">{typeInfo.label}</span>
+            <span className="text-xs text-neutral-400">{target}</span>
+            {topology && <span className="text-xs text-neutral-400">{topology}</span>}
             {gw.source === 'argocd' && (
               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-medium rounded bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
                 <GitBranch className="w-3 h-3" />

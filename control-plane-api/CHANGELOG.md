@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.12.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.3...control-plane-api-v1.12.0) (2026-05-01)
+
+
+### Features
+
+* **api:** add catalog release versioning ([e3bd495](https://github.com/stoa-platform/stoa/commit/e3bd4956623003945f4b7443f1e60af998ad6b18))
+
+
+### Bug Fixes
+
+* **api:** reconcile gateway deployment targets ([#2651](https://github.com/stoa-platform/stoa/issues/2651)) ([47ea94c](https://github.com/stoa-platform/stoa/commit/47ea94c81cbf71f2c4bf98c909eb6c4d398d9a70))
+* **gateway:** isolate webMethods URLs by environment ([c804b9b](https://github.com/stoa-platform/stoa/commit/c804b9b6b37fb3cf4d7cbc9aa74d107df40c4499))
+* **gateways:** surface external URLs for link and connect ([#2642](https://github.com/stoa-platform/stoa/issues/2642)) ([132de10](https://github.com/stoa-platform/stoa/commit/132de10d7515fc15d7c03a70ab38fa3753ee6a42))
+* **portal:** expose provider plans for subscriptions ([#2652](https://github.com/stoa-platform/stoa/issues/2652)) ([497bb7d](https://github.com/stoa-platform/stoa/commit/497bb7dbb674b829c06734ad4bc800aa10c8837e))
+* **sync:** enforce route ack step consistency ([#2654](https://github.com/stoa-platform/stoa/issues/2654)) ([4c7e1e6](https://github.com/stoa-platform/stoa/commit/4c7e1e641b5bf4497a349dc9e40c90a02b98290f))
+
 ## [1.11.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.2...control-plane-api-v1.11.3) (2026-05-01)
 
 

@@ -10,10 +10,26 @@ from tests.test_gateway_internal import GW_KEY_HEADER, VALID_KEY, _make_deployme
 def test_regression_route_sync_ack_failed_does_not_downgrade_stable_synced_deployment(client):
     """A transient failed re-ack must not turn an already applied route red."""
     last_success = datetime.now(UTC)
+    successful_steps = [
+        {"name": "event_emitted", "status": "success", "detail": "deployment dispatched to agent"},
+        {"name": "agent_received", "status": "success"},
+        {"name": "adapter_connected", "status": "success"},
+        {"name": "api_synced", "status": "success"},
+    ]
+    failed_reack_steps = [
+        {"name": "agent_received", "status": "success"},
+        {"name": "adapter_connected", "status": "success"},
+        {
+            "name": "api_synced",
+            "status": "failed",
+            "detail": "webmethods rebooting",
+        },
+    ]
     dep = _make_deployment(
         sync_status=DeploymentSyncStatus.SYNCED,
         last_sync_success=last_success,
         sync_error=None,
+        sync_steps=successful_steps,
         sync_attempts=0,
     )
     dep.desired_generation = 3
@@ -37,6 +53,7 @@ def test_regression_route_sync_ack_failed_does_not_downgrade_stable_synced_deplo
                         "deployment_id": str(dep.id),
                         "status": "failed",
                         "error": "webmethods rebooting",
+                        "steps": failed_reack_steps,
                         "generation": 3,
                     },
                 ],
@@ -51,5 +68,6 @@ def test_regression_route_sync_ack_failed_does_not_downgrade_stable_synced_deplo
         assert dep.sync_status == DeploymentSyncStatus.SYNCED
         assert dep.last_sync_success == last_success
         assert dep.sync_error is None
+        assert dep.sync_steps == successful_steps
         assert dep.sync_attempts == 0
         mock_deploy_repo.update.assert_awaited_once()

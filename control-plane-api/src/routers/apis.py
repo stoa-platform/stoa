@@ -36,6 +36,7 @@ from ..services.gitops_writer import (
     InvalidApiNameError,
     LegacyCollisionError,
 )
+from ..services.gitops_writer.eligibility import is_gitops_create_eligible
 from ..services.kafka_service import kafka_service
 
 # CAB-2159 BUG-4 — keep in sync with src/models/catalog.py:AudienceEnum
@@ -281,7 +282,11 @@ async def create_api(
     ``False`` and the eligible-tenant list is empty by default — production
     behaviour is unchanged until Phase 6 strangler.
     """
-    if settings.GITOPS_CREATE_API_ENABLED and tenant_id in settings.GITOPS_ELIGIBLE_TENANTS:
+    if is_gitops_create_eligible(
+        enabled=settings.GITOPS_CREATE_API_ENABLED,
+        tenant_id=tenant_id,
+        eligible_tenants=settings.GITOPS_ELIGIBLE_TENANTS,
+    ):
         return await _create_api_gitops(tenant_id=tenant_id, api=api, user=user, db=db)
 
     return await _create_api_legacy(tenant_id=tenant_id, api=api, user=user, db=db)

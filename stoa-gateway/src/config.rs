@@ -306,6 +306,12 @@ pub struct Config {
     #[serde(default)]
     pub gateway_public_url: Option<String>,
 
+    /// Web UI URL of the third-party gateway managed by this Link/sidecar instance.
+    /// Sent to Control Plane during auto-registration for Console display.
+    /// Env: STOA_GATEWAY_UI_URL
+    #[serde(default)]
+    pub gateway_ui_url: Option<String>,
+
     /// Canonical deployment mode sent to the Control Plane.
     /// Separate from `gateway_mode`: a runtime can expose sidecar routes while
     /// being deployed as a remote-agent topology.
@@ -945,6 +951,7 @@ impl fmt::Debug for Config {
             .field("heartbeat_interval_secs", &self.heartbeat_interval_secs)
             .field("target_gateway_url", &self.target_gateway_url)
             .field("gateway_public_url", &self.gateway_public_url)
+            .field("gateway_ui_url", &self.gateway_ui_url)
             .field("deployment_mode", &self.deployment_mode)
             .field("target_gateway_type", &self.target_gateway_type)
             .field("topology", &self.topology)

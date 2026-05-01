@@ -74,6 +74,36 @@ const { mockGateways } = vi.hoisted(() => ({
       created_at: '2024-03-01T00:00:00Z',
       updated_at: '2024-03-11T00:00:00Z',
     },
+    {
+      id: 'gw-4',
+      name: 'connect-webmethods-connect-production',
+      display_name: 'STOA Connect webMethods',
+      gateway_type: 'stoa',
+      environment: 'production',
+      base_url: 'http://localhost:8080',
+      target_gateway_url: null,
+      public_url: null,
+      ui_url: null,
+      endpoints: {
+        publicUrl: 'https://wm-runtime.gostoa.dev',
+        uiUrl: 'https://wm-ui.gostoa.dev',
+        targetGatewayUrl: 'https://vps-wm.gostoa.dev',
+      },
+      deployment_mode: 'connect',
+      target_gateway_type: 'webmethods',
+      topology: 'remote-agent',
+      auth_config: {},
+      status: 'online',
+      last_health_check: new Date().toISOString(),
+      health_details: {},
+      capabilities: ['rest'],
+      tags: ['auto-registered'],
+      source: 'self_register',
+      mode: 'connect',
+      version: '0.1.0',
+      created_at: '2024-03-01T00:00:00Z',
+      updated_at: '2024-03-11T00:00:00Z',
+    },
   ],
 }));
 
@@ -102,7 +132,7 @@ vi.mock('../../services/api', () => ({
   apiService: {
     getGatewayInstances: vi.fn().mockResolvedValue({
       items: mockGateways,
-      total: 3,
+      total: 4,
     }),
     checkGatewayHealth: vi.fn().mockResolvedValue({ status: 'online' }),
     deleteGatewayInstance: vi.fn().mockResolvedValue(undefined),
@@ -205,7 +235,7 @@ describe('GatewayList', () => {
   it('renders the gateway type labels', async () => {
     renderGatewayList();
     expect(await screen.findByText('STOA Edge MCP')).toBeInTheDocument();
-    expect(screen.getByText('webMethods')).toBeInTheDocument();
+    expect(screen.getAllByText('webMethods').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders gateway base URLs (protocol stripped)', async () => {
@@ -214,6 +244,25 @@ describe('GatewayList', () => {
     // New UI strips protocol from URLs in the row view
     expect(screen.getByText('mcp.gostoa.dev')).toBeInTheDocument();
     expect(screen.getByText('wm.example.com')).toBeInTheDocument();
+  });
+
+  it('renders external runtime, UI, and target URLs from endpoint aliases', async () => {
+    renderGatewayList();
+    expect(await screen.findByText('STOA Connect webMethods')).toBeInTheDocument();
+
+    expect(screen.getByText('wm-runtime.gostoa.dev')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /runtime/i })).toHaveAttribute(
+      'href',
+      'https://wm-runtime.gostoa.dev'
+    );
+    expect(screen.getByRole('link', { name: /^ui/i })).toHaveAttribute(
+      'href',
+      'https://wm-ui.gostoa.dev'
+    );
+    expect(screen.getByRole('link', { name: /target/i })).toHaveAttribute(
+      'href',
+      'https://vps-wm.gostoa.dev'
+    );
   });
 
   it('renders status dot with title for live gateway', async () => {

@@ -26,6 +26,9 @@ fn test_default_gateway_mode() {
 #[test]
 fn test_default_topology_registration_fields_absent() {
     let config = Config::default();
+    assert!(config.target_gateway_url.is_none());
+    assert!(config.gateway_public_url.is_none());
+    assert!(config.gateway_ui_url.is_none());
     assert!(config.deployment_mode.is_none());
     assert!(config.target_gateway_type.is_none());
     assert!(config.topology.is_none());

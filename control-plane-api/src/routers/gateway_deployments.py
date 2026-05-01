@@ -19,6 +19,7 @@ from src.schemas.gateway import (
     PaginatedConsoleDeployments,
     PaginatedGatewayDeployments,
 )
+from src.services.deployment_orchestration_service import DeploymentOrchestrationService
 from src.services.gateway_deployment_service import GatewayDeploymentService
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,23 @@ async def deploy_api(
     user=Depends(require_role(["cpi-admin"])),
 ):
     """Deploy an API to one or more gateways. Rejects if any target gateway is disabled (409)."""
+    orch = DeploymentOrchestrationService(db)
+    try:
+        preflight = await orch.preflight_api_to_gateways(data.api_catalog_id, data.gateway_instance_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    failed = [result for result in preflight if not result.deployable]
+    if failed:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "deployment_preflight_failed",
+                "message": "Deployment preflight failed before GatewayDeployment creation",
+                "targets": [result.as_dict() for result in failed],
+            },
+        )
+
     svc = GatewayDeploymentService(db)
     try:
         deployments = await svc.deploy_api(data.api_catalog_id, data.gateway_instance_ids)

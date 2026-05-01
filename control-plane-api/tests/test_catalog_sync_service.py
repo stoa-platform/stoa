@@ -6,6 +6,7 @@ _sync_tenant_apis, _soft_delete_missing_apis, get_last_sync_status,
 get_sync_history, sync_mcp_servers, _sync_tenant_mcp_servers,
 _upsert_mcp_server, _sync_server_tools, _mark_orphan_mcp_servers.
 """
+
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,7 +21,6 @@ from src.models.mcp_subscription import (
     MCPServerSyncStatus,
 )
 from src.services.catalog_sync_service import CatalogSyncService
-
 
 # ─────────────────────────────────────────────
 # Shared helpers / factories
@@ -70,6 +70,9 @@ def _make_catalog_entry(**overrides) -> MagicMock:
         "version": "1.0.0",
         "openapi_spec": {"openapi": "3.0.0"},
         "api_metadata": {"name": "Billing API"},
+        "target_gateways": [],
+        "git_path": "tenants/acme/apis/billing-api/api.yaml",
+        "git_commit_sha": "sha123",
     }
     defaults.update(overrides)
     mock = MagicMock()
@@ -142,11 +145,12 @@ class TestSyncAll:
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
 
-        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
-            svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))
-        ) as mock_parallel, patch.object(
-            svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)
-        ), patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})):
+        with (
+            patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)),
+            patch.object(svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))) as mock_parallel,
+            patch.object(svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)),
+            patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})),
+        ):
             status = await svc.sync_all()
 
         assert mock_parallel.await_count == 2
@@ -193,11 +197,12 @@ class TestSyncAll:
 
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
 
-        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
-            svc, "_sync_tenant_apis_parallel", side_effect=mock_parallel
-        ), patch.object(
-            svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)
-        ), patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})):
+        with (
+            patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)),
+            patch.object(svc, "_sync_tenant_apis_parallel", side_effect=mock_parallel),
+            patch.object(svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)),
+            patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})),
+        ):
             status = await svc.sync_all()
 
         assert call_count["n"] == 2
@@ -216,9 +221,11 @@ class TestSyncAll:
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
         mcp_mock = AsyncMock(return_value={"servers_synced": 3, "servers_failed": 0})
 
-        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
-            svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)
-        ), patch.object(svc, "sync_mcp_servers", mcp_mock):
+        with (
+            patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)),
+            patch.object(svc, "_soft_delete_missing_apis", AsyncMock(return_value=0)),
+            patch.object(svc, "sync_mcp_servers", mcp_mock),
+        ):
             await svc.sync_all()
 
         mcp_mock.assert_awaited_once()
@@ -234,11 +241,12 @@ class TestSyncAll:
         svc = CatalogSyncService(db, git, enable_gateway_reconciliation=False)
         delete_mock = AsyncMock(return_value=2)
 
-        with patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)), patch.object(
-            svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))
-        ), patch.object(
-            svc, "_soft_delete_missing_apis", delete_mock
-        ), patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})):
+        with (
+            patch.object(svc, "_ensure_tenant_from_git", AsyncMock(return_value=False)),
+            patch.object(svc, "_sync_tenant_apis_parallel", AsyncMock(return_value=(1, 0))),
+            patch.object(svc, "_soft_delete_missing_apis", delete_mock),
+            patch.object(svc, "sync_mcp_servers", AsyncMock(return_value={"servers_synced": 0, "servers_failed": 0})),
+        ):
             await svc.sync_all()
 
         delete_mock.assert_awaited_once()
@@ -293,9 +301,11 @@ class TestSyncTenant:
 
         svc = CatalogSyncService(db, git)
 
-        with patch.object(svc, "_sync_tenant_apis", AsyncMock(side_effect=RuntimeError("boom"))):
-            with pytest.raises(RuntimeError, match="boom"):
-                await svc.sync_tenant("acme")
+        with (
+            patch.object(svc, "_sync_tenant_apis", AsyncMock(side_effect=RuntimeError("boom"))),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            await svc.sync_tenant("acme")
 
         db.add.assert_called_once()
         db.commit.assert_called()
@@ -481,8 +491,9 @@ class TestSyncTenantApisParallel:
         reconcile_mock = AsyncMock()
         seen: set[tuple[str, str]] = set()
 
-        with patch.object(svc, "_upsert_api", AsyncMock()), patch.object(
-            svc, "_reconcile_gateway_deployments", reconcile_mock
+        with (
+            patch.object(svc, "_upsert_api", AsyncMock()),
+            patch.object(svc, "_reconcile_gateway_deployments", reconcile_mock),
         ):
             await svc._sync_tenant_apis_parallel("acme", ["api-1"], "sha", seen)
 
@@ -574,7 +585,6 @@ class TestReconcileGatewayDeployments:
 
     async def test_new_deployment_created_pending(self):
         """No existing deployment → create with PENDING status."""
-        from src.models.gateway_deployment import GatewayDeployment
 
         db = _make_db()
         git = _make_git()
@@ -587,6 +597,7 @@ class TestReconcileGatewayDeployments:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         created = []
         mock_deploy_repo = MagicMock()
@@ -595,9 +606,16 @@ class TestReconcileGatewayDeployments:
 
         api = {"name": "API", "gateways": [{"instance": "kong-prod"}]}
 
-        with patch("src.services.catalog_sync_service.GatewayInstanceRepository", return_value=mock_gw_repo), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository", return_value=mock_deploy_repo
-        ), patch("src.services.catalog_sync_service.GatewayDeploymentService.build_desired_state", return_value={"spec": "v1"}):
+        with (
+            patch("src.services.catalog_deployment_reconciler.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository", return_value=mock_deploy_repo
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentService.build_desired_state",
+                return_value={"spec": "v1"},
+            ),
+        ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
         assert len(created) == 1
@@ -622,6 +640,7 @@ class TestReconcileGatewayDeployments:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=existing_dep)
@@ -630,11 +649,15 @@ class TestReconcileGatewayDeployments:
 
         api = {"name": "API", "gateways": [{"instance": "kong-prod"}]}
 
-        with patch("src.services.catalog_sync_service.GatewayInstanceRepository", return_value=mock_gw_repo), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository", return_value=mock_deploy_repo
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentService.build_desired_state",
-            return_value={"spec": "new"},
+        with (
+            patch("src.services.catalog_deployment_reconciler.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository", return_value=mock_deploy_repo
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentService.build_desired_state",
+                return_value={"spec": "new"},
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
@@ -650,7 +673,14 @@ class TestReconcileGatewayDeployments:
 
         catalog_entry = _make_catalog_entry()
         gw = _make_gateway()
-        same_state = {"spec": "unchanged"}
+        base_state = {"spec": "unchanged"}
+        same_state = {
+            **base_state,
+            "activated": True,
+            "target_gateway_name": "kong-prod",
+            "target_environment": None,
+            "target_source": "gateways",
+        }
         existing_dep = _make_deployment(
             desired_state=same_state,
             sync_status=DeploymentSyncStatus.SYNCED,
@@ -660,6 +690,7 @@ class TestReconcileGatewayDeployments:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=gw)
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=existing_dep)
@@ -668,11 +699,15 @@ class TestReconcileGatewayDeployments:
 
         api = {"name": "API", "gateways": [{"instance": "kong-prod"}]}
 
-        with patch("src.services.catalog_sync_service.GatewayInstanceRepository", return_value=mock_gw_repo), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository", return_value=mock_deploy_repo
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentService.build_desired_state",
-            return_value=same_state,
+        with (
+            patch("src.services.catalog_deployment_reconciler.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository", return_value=mock_deploy_repo
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentService.build_desired_state",
+                return_value=base_state,
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
@@ -690,17 +725,22 @@ class TestReconcileGatewayDeployments:
 
         mock_gw_repo = MagicMock()
         mock_gw_repo.get_by_name = AsyncMock(return_value=None)  # not found
+        mock_gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=None)
 
         mock_deploy_repo = MagicMock()
         mock_deploy_repo.create = AsyncMock()
 
         api = {"name": "API", "gateways": [{"instance": "ghost-gw"}]}
 
-        with patch("src.services.catalog_sync_service.GatewayInstanceRepository", return_value=mock_gw_repo), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentRepository", return_value=mock_deploy_repo
-        ), patch(
-            "src.services.catalog_sync_service.GatewayDeploymentService.build_desired_state",
-            return_value={},
+        with (
+            patch("src.services.catalog_deployment_reconciler.GatewayInstanceRepository", return_value=mock_gw_repo),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentRepository", return_value=mock_deploy_repo
+            ),
+            patch(
+                "src.services.catalog_deployment_reconciler.GatewayDeploymentService.build_desired_state",
+                return_value={},
+            ),
         ):
             await svc._reconcile_gateway_deployments("acme", "billing-api", api)
 
@@ -825,14 +865,16 @@ class TestSyncMcpServers:
 
         svc = CatalogSyncService(db, git)
 
-        with patch.object(svc, "_list_tenants", AsyncMock(return_value=["acme", "beta"])), patch.object(
-            svc, "_sync_tenant_mcp_servers", AsyncMock(return_value=(2, 0))
-        ) as mock_sync, patch.object(svc, "_mark_orphan_mcp_servers", AsyncMock(return_value=0)):
+        with (
+            patch.object(svc, "_list_tenants", AsyncMock(return_value=["acme", "beta"])),
+            patch.object(svc, "_sync_tenant_mcp_servers", AsyncMock(return_value=(2, 0))) as mock_sync,
+            patch.object(svc, "_mark_orphan_mcp_servers", AsyncMock(return_value=0)),
+        ):
             stats = await svc.sync_mcp_servers()
 
         # Should sync _platform, acme, beta → 3 calls
         assert mock_sync.await_count == 3
-        assert stats["servers_synced"] == 6  # 2 × 3
+        assert stats["servers_synced"] == 6  # 2 x 3
 
     async def test_single_tenant_sync(self):
         """With tenant_id → only that tenant synced, no orphan check."""
@@ -843,8 +885,9 @@ class TestSyncMcpServers:
         svc = CatalogSyncService(db, git)
 
         orphan_mock = AsyncMock(return_value=0)
-        with patch.object(svc, "_sync_tenant_mcp_servers", AsyncMock(return_value=(1, 0))), patch.object(
-            svc, "_mark_orphan_mcp_servers", orphan_mock
+        with (
+            patch.object(svc, "_sync_tenant_mcp_servers", AsyncMock(return_value=(1, 0))),
+            patch.object(svc, "_mark_orphan_mcp_servers", orphan_mock),
         ):
             stats = await svc.sync_mcp_servers(tenant_id="acme")
 
@@ -867,9 +910,11 @@ class TestSyncMcpServers:
                 raise RuntimeError("platform error")
             return 1, 0
 
-        with patch.object(svc, "_list_tenants", AsyncMock(return_value=["acme"])), patch.object(
-            svc, "_sync_tenant_mcp_servers", side_effect=flaky_sync
-        ), patch.object(svc, "_mark_orphan_mcp_servers", AsyncMock(return_value=0)):
+        with (
+            patch.object(svc, "_list_tenants", AsyncMock(return_value=["acme"])),
+            patch.object(svc, "_sync_tenant_mcp_servers", side_effect=flaky_sync),
+            patch.object(svc, "_mark_orphan_mcp_servers", AsyncMock(return_value=0)),
+        ):
             stats = await svc.sync_mcp_servers()
 
         assert call_n["n"] == 2  # _platform + acme
@@ -885,9 +930,11 @@ class TestSyncMcpServers:
         svc = CatalogSyncService(db, git)
         orphan_mock = AsyncMock(return_value=3)
 
-        with patch.object(svc, "_list_tenants", AsyncMock(return_value=[])), patch.object(
-            svc, "_sync_tenant_mcp_servers", AsyncMock(return_value=(0, 0))
-        ), patch.object(svc, "_mark_orphan_mcp_servers", orphan_mock):
+        with (
+            patch.object(svc, "_list_tenants", AsyncMock(return_value=[])),
+            patch.object(svc, "_sync_tenant_mcp_servers", AsyncMock(return_value=(0, 0))),
+            patch.object(svc, "_mark_orphan_mcp_servers", orphan_mock),
+        ):
             stats = await svc.sync_mcp_servers()
 
         orphan_mock.assert_awaited_once()

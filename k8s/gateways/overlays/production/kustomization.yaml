@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stoa-system
+resources:
+  - ../../base
+  - gateway-instances.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: stoa-gateway
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_ENVIRONMENT
+          value: "prod"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_INSTANCE_NAME
+          value: "stoa-gateway-prod"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_GATEWAY_PUBLIC_URL
+          value: "https://mcp.gostoa.dev"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_DEPLOYMENT_MODE
+          value: "edge"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_TARGET_GATEWAY_TYPE
+          value: "stoa"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: STOA_TOPOLOGY
+          value: "native-edge"
+  - target:
+      kind: Deployment
+      name: stoa-link-wm
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: stoa-link-wm
+      spec:
+        template:
+          spec:
+            containers:
+              - name: stoa-gateway
+                env:
+                  - name: STOA_ENVIRONMENT
+                    value: "prod"
+                  - name: STOA_INSTANCE_NAME
+                    value: "webmethods-stoa-link-prod"
+                  - name: STOA_DEPLOYMENT_MODE
+                    value: "connect"
+                  - name: STOA_TARGET_GATEWAY_TYPE
+                    value: "webmethods"
+                  - name: STOA_TOPOLOGY
+                    value: "remote-agent"

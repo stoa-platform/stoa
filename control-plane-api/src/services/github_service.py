@@ -110,29 +110,9 @@ def _is_transient_github_error(exc: BaseException) -> bool:
 
 def _normalize_api_data(raw_data: dict) -> dict:
     """Normalize API data from GitHub YAML to the catalog sync format."""
-    if "apiVersion" in raw_data and "kind" in raw_data:
-        metadata = raw_data.get("metadata", {})
-        spec = raw_data.get("spec", {})
-        backend = spec.get("backend", {})
-        deployments = spec.get("deployments", {})
+    from src.services.catalog_api_definition import normalize_api_definition
 
-        return {
-            "id": metadata.get("name", ""),
-            "name": metadata.get("name", ""),
-            "display_name": spec.get("displayName", metadata.get("name", "")),
-            "version": metadata.get("version", "1.0.0"),
-            "description": spec.get("description", ""),
-            "backend_url": backend.get("url", ""),
-            "status": spec.get("status", "draft"),
-            "category": spec.get("category"),
-            "tags": spec.get("tags", []),
-            "deployments": {
-                "dev": deployments.get("dev", False),
-                "staging": deployments.get("staging", False),
-            },
-        }
-
-    return raw_data
+    return normalize_api_definition(raw_data)
 
 
 def _normalize_mcp_server_data(raw_data: dict, git_path: str) -> dict:

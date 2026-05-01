@@ -1,0 +1,57 @@
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: connect-webmethods-dev
+  labels:
+    stoa.dev/environment: dev
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (connect)
+  gatewayType: stoa
+  environment: dev
+  baseUrl: http://connect-webmethods-dev:8090
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    adminUrl: http://connect-webmethods-dev:8090
+    healthUrl: http://connect-webmethods-dev:8090/health
+  capabilities:
+    - rest
+    - discovery
+  mode: connect
+  tags:
+    - connect
+    - webmethods
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: GatewayInstance
+metadata:
+  name: stoa-link-wm-dev
+  labels:
+    stoa.dev/environment: dev
+    stoa.dev/deployment-mode: connect
+    stoa.dev/target-gateway-type: webmethods
+    stoa.dev/topology: remote-agent
+spec:
+  displayName: STOA Gateway (remote link)
+  gatewayType: stoa
+  environment: dev
+  baseUrl: http://stoa-link-wm-dev:8080
+  deploymentMode: connect
+  targetGatewayType: webmethods
+  topology: remote-agent
+  endpoints:
+    publicUrl: https://dev-wm-k3s.gostoa.dev
+    adminUrl: http://stoa-link-wm-dev:8080
+    healthUrl: http://stoa-link-wm-dev:8080/health
+  capabilities:
+    - rest
+    - ext_authz
+  mode: sidecar
+  tags:
+    - remote-agent
+    - webmethods
+    - not-a-k8s-sidecar

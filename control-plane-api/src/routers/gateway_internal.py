@@ -31,6 +31,7 @@ from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.repositories.gateway_policy import GatewayPolicyRepository
 from src.schemas.contract import McpToolDefinition, TenantToolsResponse
 from src.schemas.gateway import GatewayInstanceResponse
+from src.services.gateway_topology import GatewayTopology, normalize_gateway_topology
 from src.services.promotion_service import PromotionService
 from src.services.uac_tool_generator import UacToolGenerator
 
@@ -163,7 +164,7 @@ class GatewayRegistration(BaseModel):
     """Self-registration payload from gateway."""
 
     hostname: str = Field(..., description="Gateway hostname (e.g., 'stoa-gateway-7f8b9c')")
-    mode: str = Field(..., description="Gateway mode: edge_mcp, sidecar, proxy, shadow")
+    mode: str = Field(..., description="Gateway runtime mode: edge_mcp, sidecar, proxy, shadow, connect")
     version: str = Field(..., description="Gateway software version (e.g., '0.1.0')")
     environment: str = Field(default="dev", description="Deployment environment")
     capabilities: list[str] = Field(
@@ -183,6 +184,26 @@ class GatewayRegistration(BaseModel):
     ui_url: str | None = Field(
         default=None,
         description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)",
+    )
+    endpoints: dict[str, str] | None = Field(
+        default=None,
+        description="Structured endpoint map: public_url, internal_url, admin_url, health_url",
+    )
+    deployment_mode: str | None = Field(
+        default=None,
+        description="Canonical topology mode: edge, connect, or sidecar",
+    )
+    target_gateway_type: str | None = Field(
+        default=None,
+        description="Gateway technology STOA fronts or controls",
+    )
+    topology: str | None = Field(
+        default=None,
+        description="Execution topology: native-edge, remote-agent, or same-pod",
+    )
+    topology_proof: dict | None = Field(
+        default=None,
+        description="Evidence required for deployment_mode=sidecar same-pod classification",
     )
 
 
@@ -269,6 +290,44 @@ def _normalize_mode(mode: str) -> str:
     return mode_map.get(mode_lower, "edge-mcp")
 
 
+def _registration_topology(
+    payload: GatewayRegistration,
+    *,
+    gateway_type: GatewayType,
+    normalized_mode: str,
+    instance_name: str,
+    health_details: dict,
+    source: str,
+    base_url: str,
+    public_url: str | None,
+    ui_url: str | None,
+    target_gateway_url: str | None,
+    endpoints: dict | None = None,
+    deployment_mode: str | None = None,
+    target_gateway_type: str | None = None,
+    topology: str | None = None,
+) -> GatewayTopology:
+    """Normalize topology from registration payload plus preserved DB values."""
+    base_endpoints = endpoints if isinstance(endpoints, dict) else {}
+    merged_endpoints = {**base_endpoints, **(payload.endpoints or {})}
+    return normalize_gateway_topology(
+        gateway_type=gateway_type,
+        mode=normalized_mode,
+        source=source,
+        deployment_mode=payload.deployment_mode or deployment_mode,
+        target_gateway_type=payload.target_gateway_type or target_gateway_type,
+        topology=payload.topology or topology,
+        health_details=health_details,
+        endpoints=merged_endpoints,
+        base_url=base_url,
+        public_url=public_url,
+        ui_url=ui_url,
+        target_gateway_url=target_gateway_url,
+        tags=[f"mode:{normalized_mode}", "auto-registered"],
+        name=instance_name,
+    )
+
+
 # --- Endpoints ---
 
 
@@ -308,6 +367,21 @@ async def register_gateway(
         "mode": normalized_mode,
         "hostname": payload.hostname,
     }
+    if payload.topology_proof:
+        heartbeat_details["topology_proof"] = payload.topology_proof
+
+    normalized_topology = _registration_topology(
+        payload,
+        gateway_type=gateway_type,
+        normalized_mode=normalized_mode,
+        instance_name=instance_name,
+        health_details=heartbeat_details,
+        source="self_register",
+        base_url=payload.admin_url,
+        public_url=payload.public_url,
+        ui_url=payload.ui_url,
+        target_gateway_url=payload.target_gateway_url,
+    )
 
     # 1. Check if already registered by name (re-registration after restart)
     existing = await repo.get_by_name(instance_name)
@@ -327,6 +401,26 @@ async def register_gateway(
         existing.last_health_check = now
         existing.mode = normalized_mode
         existing.health_details = {**(existing.health_details or {}), **heartbeat_details}
+        existing_topology = _registration_topology(
+            payload,
+            gateway_type=gateway_type,
+            normalized_mode=normalized_mode,
+            instance_name=instance_name,
+            health_details=existing.health_details,
+            source=existing.source,
+            base_url=existing.base_url,
+            public_url=existing.public_url,
+            ui_url=existing.ui_url,
+            target_gateway_url=existing.target_gateway_url,
+            endpoints=existing.endpoints,
+            deployment_mode=existing.deployment_mode,
+            target_gateway_type=existing.target_gateway_type,
+            topology=existing.topology,
+        )
+        existing.deployment_mode = existing_topology.deployment_mode
+        existing.target_gateway_type = existing_topology.target_gateway_type
+        existing.topology = existing_topology.topology
+        existing.endpoints = existing_topology.endpoints
         instance = await repo.update(existing)
         await db.commit()
         logger.info("Gateway re-registered: id=%s, name=%s", instance.id, instance.name)
@@ -352,6 +446,26 @@ async def register_gateway(
         deleted_entry.last_health_check = now
         deleted_entry.mode = normalized_mode
         deleted_entry.health_details = {**(deleted_entry.health_details or {}), **heartbeat_details}
+        deleted_topology = _registration_topology(
+            payload,
+            gateway_type=gateway_type,
+            normalized_mode=normalized_mode,
+            instance_name=instance_name,
+            health_details=deleted_entry.health_details,
+            source=deleted_entry.source,
+            base_url=deleted_entry.base_url,
+            public_url=deleted_entry.public_url,
+            ui_url=deleted_entry.ui_url,
+            target_gateway_url=deleted_entry.target_gateway_url,
+            endpoints=deleted_entry.endpoints,
+            deployment_mode=deleted_entry.deployment_mode,
+            target_gateway_type=deleted_entry.target_gateway_type,
+            topology=deleted_entry.topology,
+        )
+        deleted_entry.deployment_mode = deleted_topology.deployment_mode
+        deleted_entry.target_gateway_type = deleted_topology.target_gateway_type
+        deleted_entry.topology = deleted_topology.topology
+        deleted_entry.endpoints = deleted_topology.endpoints
         instance = await repo.update(deleted_entry)
         await db.commit()
         logger.info(
@@ -368,6 +482,7 @@ async def register_gateway(
         mode=normalized_mode,
         environment=payload.environment,
         exclude_name=instance_name,
+        target_gateway_type=normalized_topology.target_gateway_type,
     )
     for stale in stale_entries:
         await repo.soft_delete(stale, deleted_by=f"replaced-by:{instance_name}")
@@ -399,6 +514,26 @@ async def register_gateway(
         argocd_entry.last_health_check = now
         argocd_entry.mode = normalized_mode
         argocd_entry.health_details = {**(argocd_entry.health_details or {}), **heartbeat_details}
+        argocd_topology = _registration_topology(
+            payload,
+            gateway_type=gateway_type,
+            normalized_mode=normalized_mode,
+            instance_name=argocd_entry.name,
+            health_details=argocd_entry.health_details,
+            source=argocd_entry.source,
+            base_url=argocd_entry.base_url,
+            public_url=argocd_entry.public_url,
+            ui_url=argocd_entry.ui_url,
+            target_gateway_url=argocd_entry.target_gateway_url,
+            endpoints=argocd_entry.endpoints,
+            deployment_mode=argocd_entry.deployment_mode,
+            target_gateway_type=argocd_entry.target_gateway_type,
+            topology=argocd_entry.topology,
+        )
+        argocd_entry.deployment_mode = argocd_topology.deployment_mode
+        argocd_entry.target_gateway_type = argocd_topology.target_gateway_type
+        argocd_entry.topology = argocd_topology.topology
+        argocd_entry.endpoints = argocd_topology.endpoints
         instance = await repo.update(argocd_entry)
         await db.commit()
         logger.info(
@@ -420,6 +555,10 @@ async def register_gateway(
         target_gateway_url=payload.target_gateway_url,
         public_url=payload.public_url,
         ui_url=payload.ui_url,
+        endpoints=normalized_topology.endpoints,
+        deployment_mode=normalized_topology.deployment_mode,
+        target_gateway_type=normalized_topology.target_gateway_type,
+        topology=normalized_topology.topology,
         auth_config={"type": "gateway_key"},
         status=GatewayInstanceStatus.ONLINE,
         last_health_check=now,
@@ -672,7 +811,10 @@ async def route_sync_ack(
             not_found += 1
             continue
 
-        # Store step trace — merge CP steps with agent steps (CAB-1947)
+        # Build the merged step trace, but only persist it once the ack is accepted
+        # as canonical. Failed re-acks for an already synced generation are
+        # connectivity observations, not deployment-state changes.
+        merged_steps = None
         if result.steps is not None:
             from src.services.sync_step_tracker import SyncStepTracker
 
@@ -681,7 +823,6 @@ async def route_sync_ack(
             cp_tracker.start("event_emitted")
             cp_tracker.complete("event_emitted", detail="deployment dispatched to agent")
             merged_steps = cp_tracker.to_list() + result.steps
-            deployment.sync_steps = merged_steps
 
         # CAB-1950: reject stale generation acks
         if result.generation is not None and result.generation < deployment.desired_generation:
@@ -693,12 +834,8 @@ async def route_sync_ack(
             )
             continue
 
-        desired_generation = (
-            deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
-        )
-        synced_generation = (
-            deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
-        )
+        desired_generation = deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
+        synced_generation = deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
 
         if (
             result.status == "failed"
@@ -722,6 +859,8 @@ async def route_sync_ack(
             deployment.sync_status = DeploymentSyncStatus.SYNCED
             deployment.last_sync_success = now
             deployment.sync_error = None
+            if merged_steps is not None:
+                deployment.sync_steps = merged_steps
             if result.generation is not None:
                 deployment.synced_generation = result.generation
                 deployment.attempted_generation = result.generation
@@ -729,9 +868,11 @@ async def route_sync_ack(
             deployment.sync_status = DeploymentSyncStatus.ERROR
             if result.generation is not None:
                 deployment.attempted_generation = result.generation
+            if merged_steps is not None:
+                deployment.sync_steps = merged_steps
             # Derive sync_error from step trace if available, else use scalar error
-            if result.steps:
-                tracker = SyncStepTracker.from_list(result.steps)
+            if merged_steps:
+                tracker = SyncStepTracker.from_list(merged_steps)
                 deployment.sync_error = tracker.first_error() or result.error
             else:
                 deployment.sync_error = result.error

@@ -77,6 +77,14 @@ class GatewayInstance(Base):
     target_gateway_url = Column(String(500), nullable=True)  # Third-party gateway URL (for Link/Connect)
     public_url = Column(String(500), nullable=True)  # Public DNS URL for Console display (CAB-1940)
     ui_url = Column(String(500), nullable=True)  # Web UI URL of third-party gateway (CAB-1953)
+    endpoints = Column(JSONB, nullable=False, default=dict, server_default="{}")
+    # endpoints schema (CAB-2173):
+    #   {
+    #     "public_url": "https://mcp.gostoa.dev",
+    #     "internal_url": "http://stoa-gateway.stoa-system.svc.cluster.local",
+    #     "admin_url": "http://stoa-gateway.stoa-system.svc.cluster.local/admin",
+    #     "health_url": "http://stoa-gateway.stoa-system.svc.cluster.local/health"
+    #   }
     auth_config = Column(JSONB, nullable=False, default=dict, server_default="{}")
     # auth_config examples:
     #   {"type": "oidc_proxy", "proxy_url": "https://apis.gostoa.dev/..."}
@@ -103,6 +111,13 @@ class GatewayInstance(Base):
 
     # STOA Gateway mode (ADR-024)
     mode = Column(String(50), nullable=True, index=True)  # edge-mcp, sidecar, proxy, shadow
+
+    # Canonical topology classification (CAB-2173 / gateway-topology-normalization).
+    # Runtime mode stays separate: a gateway can run the sidecar route profile while
+    # still being deployed as a remote-agent topology.
+    deployment_mode = Column(String(32), nullable=True, index=True)  # edge, connect, sidecar
+    target_gateway_type = Column(String(64), nullable=True, index=True)  # stoa, kong, webmethods, ...
+    topology = Column(String(64), nullable=True, index=True)  # native-edge, remote-agent, same-pod
 
     # Metadata
     version = Column(String(50), nullable=True)  # Gateway software version

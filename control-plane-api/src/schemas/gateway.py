@@ -5,7 +5,9 @@ from datetime import datetime
 from typing import Literal, get_args
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from src.services.gateway_topology import normalize_gateway_topology
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,18 @@ GatewayTypeLiteral = Literal[
     "stoa_shadow",
 ]
 GatewayModeLiteral = Literal["edge-mcp", "sidecar", "proxy", "shadow", "connect"]
+GatewayDeploymentModeLiteral = Literal["edge", "connect", "sidecar"]
+GatewayTargetGatewayTypeLiteral = Literal[
+    "stoa",
+    "kong",
+    "webmethods",
+    "gravitee",
+    "agentgateway",
+    "apigee",
+    "aws_apigateway",
+    "azure_apim",
+]
+GatewayTopologyLiteral = Literal["native-edge", "remote-agent", "same-pod"]
 GatewayStatusLiteral = Literal["online", "offline", "degraded", "maintenance"]
 GatewaySourceLiteral = Literal["argocd", "self_register", "manual"]
 
@@ -46,6 +60,21 @@ class GatewayInstanceCreate(BaseModel):
     environment: str = Field(..., max_length=50, description="dev, staging, prod")
     tenant_id: str | None = Field(None, max_length=255, description="null = platform-wide")
     base_url: str = Field(..., max_length=500, description="Admin API URL")
+    target_gateway_url: str | None = Field(
+        None, max_length=500, description="URL of the third-party gateway managed by Link/Connect"
+    )
+    public_url: str | None = Field(None, max_length=500, description="Public DNS URL for runtime APIs")
+    ui_url: str | None = Field(None, max_length=500, description="Third-party gateway web UI URL")
+    endpoints: dict = Field(default_factory=dict, description="Logical endpoint map: public/internal/admin/health")
+    deployment_mode: GatewayDeploymentModeLiteral | None = Field(
+        None, description="Canonical topology: edge, connect, or sidecar"
+    )
+    target_gateway_type: GatewayTargetGatewayTypeLiteral | None = Field(
+        None, description="Gateway technology fronted or controlled by STOA"
+    )
+    topology: GatewayTopologyLiteral | None = Field(
+        None, description="Execution topology: native-edge, remote-agent, or same-pod"
+    )
     auth_config: dict = Field(default_factory=dict, description="Auth config: {type, vault_path, ...}")
     capabilities: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
@@ -56,6 +85,13 @@ class GatewayInstanceUpdate(BaseModel):
 
     display_name: str | None = Field(None, max_length=255)
     base_url: str | None = Field(None, max_length=500)
+    target_gateway_url: str | None = Field(None, max_length=500)
+    public_url: str | None = Field(None, max_length=500)
+    ui_url: str | None = Field(None, max_length=500)
+    endpoints: dict | None = None
+    deployment_mode: GatewayDeploymentModeLiteral | None = None
+    target_gateway_type: GatewayTargetGatewayTypeLiteral | None = None
+    topology: GatewayTopologyLiteral | None = None
     auth_config: dict | None = None
     capabilities: list[str] | None = None
     tags: list[str] | None = None
@@ -87,6 +123,16 @@ class GatewayInstanceResponse(BaseModel):
     public_url: str | None = Field(None, description="Public DNS URL of this gateway (e.g. https://mcp.gostoa.dev)")
     ui_url: str | None = Field(
         None, description="Web UI URL of the third-party gateway (e.g. webMethods console at :9072)"
+    )
+    endpoints: dict = Field(default_factory=dict, description="Logical endpoint map: public/internal/admin/health")
+    deployment_mode: GatewayDeploymentModeLiteral | None = Field(
+        None, description="Canonical topology: edge, connect, or sidecar"
+    )
+    target_gateway_type: GatewayTargetGatewayTypeLiteral | None = Field(
+        None, description="Gateway technology fronted or controlled by STOA"
+    )
+    topology: GatewayTopologyLiteral | None = Field(
+        None, description="Execution topology: native-edge, remote-agent, or same-pod"
     )
     auth_config: dict
     status: GatewayStatusLiteral
@@ -124,6 +170,43 @@ class GatewayInstanceResponse(BaseModel):
         if not isinstance(v, list):
             return [str(v)]
         return list(v)
+
+    @field_validator("endpoints", mode="before")
+    @classmethod
+    def coerce_to_dict(cls, v: object) -> dict:
+        """Handle NULL JSONB or non-dict drift without failing whole list responses."""
+        return v if isinstance(v, dict) else {}
+
+    @field_validator("deployment_mode", "target_gateway_type", "topology", mode="before")
+    @classmethod
+    def coerce_topology_literal(cls, v: object) -> str | None:
+        """Treat absent legacy ORM/mock attributes as missing so normalization can backfill them."""
+        return v if isinstance(v, str) else None
+
+    @model_validator(mode="after")
+    def fill_canonical_topology(self) -> "GatewayInstanceResponse":
+        """Backfill canonical topology for rows created before CAB-2173 migration."""
+        normalized = normalize_gateway_topology(
+            gateway_type=self.gateway_type,
+            mode=self.mode,
+            source=self.source,
+            deployment_mode=self.deployment_mode,
+            target_gateway_type=self.target_gateway_type,
+            topology=self.topology,
+            health_details=self.health_details,
+            endpoints=self.endpoints,
+            base_url=self.base_url,
+            public_url=self.public_url,
+            ui_url=self.ui_url,
+            target_gateway_url=self.target_gateway_url,
+            tags=self.tags,
+            name=self.name,
+        )
+        self.deployment_mode = normalized.deployment_mode  # type: ignore[assignment]
+        self.target_gateway_type = normalized.target_gateway_type  # type: ignore[assignment]
+        self.topology = normalized.topology  # type: ignore[assignment]
+        self.endpoints = normalized.endpoints
+        return self
 
     @field_validator("mode", mode="before")
     @classmethod
@@ -252,8 +335,9 @@ class ConsoleGatewayTarget(BaseModel):
     name: str
     display_name: str
     environment: str
-    deployment_mode: str = Field(..., description="Canonical topology: edge, connect, or sidecar")
+    deployment_mode: GatewayDeploymentModeLiteral = Field(..., description="Canonical topology: edge, connect, or sidecar")
     target_gateway_type: str = Field(..., description="Gateway technology: stoa, kong, webmethods, gravitee, ...")
+    topology: GatewayTopologyLiteral = Field(..., description="Execution topology: native-edge, remote-agent, same-pod")
     source: str = Field(..., description="Gateway source of truth: argocd, self_register, or manual")
 
 

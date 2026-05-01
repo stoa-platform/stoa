@@ -49,6 +49,8 @@ def render_api_yaml(
     description: str | None = None,
     category: str | None = None,
     tags: list[str] | None = None,
+    status: str = "active",
+    deployments: dict[str, bool] | None = None,
 ) -> str:
     """Render the canonical ``api.yaml`` content per spec §6.9 mapping.
 
@@ -78,6 +80,8 @@ def render_api_yaml(
         raise ValueError("version must be non-empty")
     if not backend_url:
         raise ValueError("backend_url must be non-empty")
+    if not status:
+        raise ValueError("status must be non-empty")
 
     data: dict[str, object] = {
         "id": api_name,
@@ -85,8 +89,8 @@ def render_api_yaml(
         "display_name": display_name or api_name,
         "version": version,
         "backend_url": backend_url,
-        "status": "active",
-        "deployments": {"dev": True, "staging": False},
+        "status": status,
+        "deployments": deployments or {"dev": True, "staging": False},
     }
     if description:
         data["description"] = description

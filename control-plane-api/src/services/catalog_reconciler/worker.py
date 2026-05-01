@@ -21,6 +21,8 @@ import yaml
 from sqlalchemy import select, text
 
 from src.logging_config import get_logger
+from src.services.catalog_api_definition import normalize_api_definition
+from src.services.catalog_deployment_reconciler import CatalogDeploymentReconciler
 from src.services.gitops_writer.advisory_lock import advisory_lock_key
 from src.services.gitops_writer.hashing import compute_catalog_content_hash
 from src.services.gitops_writer.paths import is_uuid_shaped, parse_canonical_path
@@ -166,6 +168,7 @@ class CatalogReconcilerWorker:
         )
         if parsed is None:
             return (tenant_id, api_name)
+        parsed = normalize_api_definition(parsed)
 
         try:
             # ``render_api_catalog_projection`` is the schema-validation step
@@ -198,6 +201,7 @@ class CatalogReconcilerWorker:
             commit_sha=commit_sha,
             content_hash=content_hash,
             expected=expected,
+            api_content=parsed,
         )
         return (tenant_id, api_name)
 
@@ -253,6 +257,7 @@ class CatalogReconcilerWorker:
         commit_sha: str,
         content_hash: str,
         expected: Any,
+        api_content: dict[str, Any],
     ) -> None:
         """Apply the §6.6 per-row decision tree against the DB.
 
@@ -310,6 +315,13 @@ class CatalogReconcilerWorker:
             if category == LegacyCategory.ABSENT:
                 if await self._try_advisory_lock(session, tenant_id, api_name):
                     await project_to_api_catalog(session, expected)
+                    row = await self._get_catalog_row(session, tenant_id, api_name)
+                    await CatalogDeploymentReconciler(session).reconcile_api(
+                        tenant_id=tenant_id,
+                        api_id=api_name,
+                        api_content=api_content,
+                        catalog_entry=row,
+                    )
                     await session.commit()
                     self._log_sync_status(
                         tenant_id=tenant_id,
@@ -334,6 +346,13 @@ class CatalogReconcilerWorker:
                         last_error="projection drift",
                     )
                     await project_to_api_catalog(session, expected)
+                    row = await self._get_catalog_row(session, tenant_id, api_name)
+                    await CatalogDeploymentReconciler(session).reconcile_api(
+                        tenant_id=tenant_id,
+                        api_id=api_name,
+                        api_content=api_content,
+                        catalog_entry=row,
+                    )
                     await session.commit()
                     self._log_sync_status(
                         tenant_id=tenant_id,
@@ -352,6 +371,14 @@ class CatalogReconcilerWorker:
                     catalog_content_hash=content_hash,
                     git_path=git_path,
                 )
+                changed = await CatalogDeploymentReconciler(session).reconcile_api(
+                    tenant_id=tenant_id,
+                    api_id=api_name,
+                    api_content=api_content,
+                    catalog_entry=row,
+                )
+                if changed:
+                    await session.commit()
 
     async def _detect_legacy_orphans(self, seen_keys: set[tuple[str, str]]) -> None:
         """Iterate active DB rows not seen in the Git tree this tick.
@@ -410,10 +437,24 @@ class CatalogReconcilerWorker:
             "tags": list(row.tags or []),
             "portal_published": bool(row.portal_published),
             "audience": row.audience,
+            "api_metadata": dict(row.api_metadata or {}),
             "git_path": row.git_path,
             "git_commit_sha": row.git_commit_sha,
             "catalog_content_hash": row.catalog_content_hash,
         }
+
+    @staticmethod
+    async def _get_catalog_row(session: AsyncSession, tenant_id: str, api_id: str) -> Any:
+        from src.models.catalog import APICatalog
+
+        result = await session.execute(
+            select(APICatalog).where(
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.api_id == api_id,
+                APICatalog.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
 
     @staticmethod
     async def _try_advisory_lock(session: AsyncSession, tenant_id: str, api_id: str) -> bool:

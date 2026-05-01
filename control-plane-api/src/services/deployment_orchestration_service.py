@@ -21,6 +21,7 @@ from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus
 from ..repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
 from ..services.gateway_deployment_service import GatewayDeploymentService
+from ..services.gateway_topology import normalize_gateway_topology
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +286,30 @@ class DeploymentOrchestrationService:
         resolved_gateway_ids = await self._resolve_target_gateway_ids(api_catalog, environment, gateway_ids)
         return await self._preflight_gateway_ids(api_catalog, resolved_gateway_ids)
 
+    async def preflight_api_to_gateways(
+        self,
+        api_catalog_id: UUID,
+        gateway_ids: list[UUID],
+    ) -> list[DeploymentPreflightResult]:
+        """Validate an explicit API catalog entry against explicit gateway targets.
+
+        Used by admin-level deployment entrypoints that already resolve target
+        gateways in the request body. This keeps the ADF-G6/ADF-13b preflight
+        contract in front of GatewayDeploymentService even when the caller does
+        not go through the environment-aware /deploy route.
+        """
+        result = await self.db.execute(
+            select(APICatalog).where(
+                APICatalog.id == api_catalog_id,
+                APICatalog.deleted_at.is_(None),
+            )
+        )
+        api_catalog = result.scalar_one_or_none()
+        if not api_catalog:
+            raise ValueError("API catalog entry not found")
+
+        return await self._preflight_gateway_ids(api_catalog, gateway_ids)
+
     async def _preflight_gateway_ids(
         self,
         api_catalog: APICatalog,
@@ -295,7 +320,7 @@ class DeploymentOrchestrationService:
 
         for gateway_id in gateway_ids:
             gateway = await self._get_gateway_or_raise(gateway_id)
-            gateway_type = self._gateway_type_value(gateway.gateway_type)
+            gateway_type = self._target_gateway_type_value(gateway)
             errors = self._validate_desired_state_for_gateway(desired_state, gateway_type, gateway)
             results.append(
                 DeploymentPreflightResult(
@@ -387,6 +412,11 @@ class DeploymentOrchestrationService:
             return []
 
         gateway_ids = [a.gateway_id for a in assignments]
+        preflight = await self._preflight_gateway_ids(api_catalog, gateway_ids)
+        failed = [result for result in preflight if not result.deployable]
+        if failed:
+            raise ValueError(self._format_preflight_failure(failed))
+
         logger.info(
             "Auto-deploying api=%s to %d gateways in %s (triggered by promotion, approved by %s)",
             api_id,
@@ -506,6 +536,25 @@ class DeploymentOrchestrationService:
     @staticmethod
     def _gateway_type_value(gateway_type) -> str:
         return str(getattr(gateway_type, "value", gateway_type))
+
+    @staticmethod
+    def _target_gateway_type_value(gateway: GatewayInstance) -> str:
+        return normalize_gateway_topology(
+            gateway_type=gateway.gateway_type,
+            mode=gateway.mode,
+            source=gateway.source,
+            deployment_mode=gateway.deployment_mode,
+            target_gateway_type=gateway.target_gateway_type,
+            topology=gateway.topology,
+            health_details=gateway.health_details,
+            endpoints=gateway.endpoints,
+            base_url=gateway.base_url,
+            public_url=gateway.public_url,
+            ui_url=gateway.ui_url,
+            target_gateway_url=gateway.target_gateway_url,
+            tags=gateway.tags,
+            name=gateway.name,
+        ).target_gateway_type
 
     @staticmethod
     def _format_preflight_failure(failed_results: list[DeploymentPreflightResult]) -> str:

@@ -34,7 +34,19 @@ def _webmethods_gateway():
     gateway.id = uuid4()
     gateway.name = "connect-webmethods-dev"
     gateway.environment = "dev"
-    gateway.gateway_type = MagicMock(value="webmethods")
+    gateway.gateway_type = MagicMock(value="stoa")
+    gateway.mode = "connect"
+    gateway.source = "self_register"
+    gateway.deployment_mode = "connect"
+    gateway.target_gateway_type = "webmethods"
+    gateway.topology = "remote-agent"
+    gateway.health_details = {}
+    gateway.endpoints = {}
+    gateway.base_url = "http://connect-webmethods-dev:8090"
+    gateway.public_url = None
+    gateway.ui_url = None
+    gateway.target_gateway_url = "https://webmethods.gostoa.dev"
+    gateway.tags = ["connect", "webmethods"]
     gateway.enabled = True
     return gateway
 
@@ -106,3 +118,32 @@ async def test_regression_webmethods_preflight_reports_targeted_error():
     assert results[0].target_gateway_type == "webmethods"
     assert results[0].errors[0].code == "openapi_operation_responses_missing"
     assert results[0].errors[0].path.endswith(".responses")
+
+
+@pytest.mark.asyncio
+async def test_regression_admin_preflight_reports_targeted_error_for_explicit_gateways():
+    from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+    catalog = _catalog(
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "Alpha Vantage Stock Data", "version": "1.0.0"},
+            "paths": {"/query": {"get": {"summary": "Fetch stock data"}}},
+        }
+    )
+    gateway = _webmethods_gateway()
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[_result(catalog), _result(gateway)])
+    svc = DeploymentOrchestrationService(db)
+
+    results = await svc.preflight_api_to_gateways(
+        api_catalog_id=catalog.id,
+        gateway_ids=[gateway.id],
+    )
+
+    assert len(results) == 1
+    assert results[0].deployable is False
+    assert results[0].gateway_name == "connect-webmethods-dev"
+    assert results[0].target_gateway_type == "webmethods"
+    assert results[0].errors[0].code == "openapi_operation_responses_missing"

@@ -306,6 +306,28 @@ pub struct Config {
     #[serde(default)]
     pub gateway_public_url: Option<String>,
 
+    /// Canonical deployment mode sent to the Control Plane.
+    /// Separate from `gateway_mode`: a runtime can expose sidecar routes while
+    /// being deployed as a remote-agent topology.
+    /// Env: STOA_DEPLOYMENT_MODE (edge | connect | sidecar)
+    #[serde(default)]
+    pub deployment_mode: Option<String>,
+
+    /// Gateway technology STOA fronts or controls.
+    /// Env: STOA_TARGET_GATEWAY_TYPE (stoa | kong | webmethods | gravitee | agentgateway)
+    #[serde(default)]
+    pub target_gateway_type: Option<String>,
+
+    /// Execution topology sent to the Control Plane.
+    /// Env: STOA_TOPOLOGY (native-edge | remote-agent | same-pod)
+    #[serde(default)]
+    pub topology: Option<String>,
+
+    /// JSON evidence for `deployment_mode=sidecar`.
+    /// Env: STOA_TOPOLOGY_PROOF
+    #[serde(default)]
+    pub topology_proof: Option<String>,
+
     // === Native Tools (Phase 1) ===
     /// Enable native tool implementations (default: true)
     /// Set STOA_NATIVE_TOOLS_ENABLED=false to fallback to proxy mode
@@ -923,6 +945,10 @@ impl fmt::Debug for Config {
             .field("heartbeat_interval_secs", &self.heartbeat_interval_secs)
             .field("target_gateway_url", &self.target_gateway_url)
             .field("gateway_public_url", &self.gateway_public_url)
+            .field("deployment_mode", &self.deployment_mode)
+            .field("target_gateway_type", &self.target_gateway_type)
+            .field("topology", &self.topology)
+            .field("topology_proof", &self.topology_proof)
             .field("native_tools_enabled", &self.native_tools_enabled)
             .field("kafka_enabled", &self.kafka_enabled)
             .field("kafka_brokers", &self.kafka_brokers)

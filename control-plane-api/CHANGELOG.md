@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.1...control-plane-api-v1.11.2) (2026-05-01)
+
+
+### Bug Fixes
+
+* **api:** backfill API catalog GitOps state ([c16c0ae](https://github.com/stoa-platform/stoa/commit/c16c0aee7c85967e947b2fac04409c9361db57f4))
+* **api:** preflight admin gateway deployments ([#2628](https://github.com/stoa-platform/stoa/issues/2628)) ([6df062c](https://github.com/stoa-platform/stoa/commit/6df062c55ad56422c27595286eabd17f7fc299fc))
+* **api:** preserve synced route steps on failed re-ack ([#2626](https://github.com/stoa-platform/stoa/issues/2626)) ([f9e812d](https://github.com/stoa-platform/stoa/commit/f9e812d50aff0a3a4bf79e34de2baf32b50b1d73))
+* **api:** reconcile catalog gateway deployments ([#2632](https://github.com/stoa-platform/stoa/issues/2632)) ([6c01cae](https://github.com/stoa-platform/stoa/commit/6c01cae603d2a786189355923dc43eb0567b9727))
+
 ## [1.11.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.0...control-plane-api-v1.11.1) (2026-04-27)
 
 

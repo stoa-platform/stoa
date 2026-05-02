@@ -315,8 +315,9 @@ Reconstructible depuis `stoa-catalog` + `api_catalog`.
 10bis. Écrire aussi `tenants/{tenant_id}/apis/{api_id}/openapi.yaml`.
        Si le payload contient `openapi_spec`, sérialiser cette spec; sinon
        générer une spec OpenAPI 3.0 minimale depuis `display_name`, `version`
-       et `backend_url`. Ce fichier est la vérité configurationnelle de la
-       description API.
+       et `backend_url`. La spec générée doit rester compatible avec le
+       preflight webMethods, notamment sans `additionalProperties` booléen.
+       Ce fichier est la vérité configurationnelle de la description API.
 11. file_commit_sha = CatalogGitClient.latest_file_commit(git_path)
 12. Relire contenu depuis Git remote :
        committed_bytes = CatalogGitClient.read_at_commit(git_path, file_commit_sha)

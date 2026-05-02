@@ -7,6 +7,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.models.catalog import APICatalog
 
 
+def _contains_boolean_additional_properties(value) -> bool:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key == "additionalProperties" and isinstance(child, bool):
+                return True
+            if _contains_boolean_additional_properties(child):
+                return True
+    if isinstance(value, list):
+        return any(_contains_boolean_additional_properties(child) for child in value)
+    return False
+
+
 def _catalog_api(*, openapi_spec: dict | None = None) -> APICatalog:
     return APICatalog(
         tenant_id="acme",
@@ -101,3 +113,4 @@ def test_get_openapi_returns_marked_generated_fallback(client_as_tenant_admin):
     assert data["format"] == "openapi"
     assert data["spec"]["info"]["title"] == "Payment API"
     assert "/" in data["spec"]["paths"]
+    assert _contains_boolean_additional_properties(data["spec"]) is False

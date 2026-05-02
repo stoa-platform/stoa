@@ -8,14 +8,28 @@ without ``DATABASE_URL``). Spec §6.5 + §6.8.
 
 from __future__ import annotations
 
+from src.services.gitops_writer.models import ApiCreatePayload
 from src.services.gitops_writer.writer import (
     _ACTOR_MAX_LEN,
     _MAX_RACE_RETRIES,
     _catalog_release_branch_name,
     _catalog_release_id,
     _catalog_release_tag_name,
+    _generated_openapi_spec,
     _sanitize_actor,
 )
+
+
+def _contains_boolean_additional_properties(value) -> bool:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key == "additionalProperties" and isinstance(child, bool):
+                return True
+            if _contains_boolean_additional_properties(child):
+                return True
+    if isinstance(value, list):
+        return any(_contains_boolean_additional_properties(child) for child in value)
+    return False
 
 
 class TestSanitizeActor:
@@ -48,6 +62,21 @@ class TestRetryConstant:
     def test_max_retries_is_three(self) -> None:
         # Spec §6.5 step 10: exactly 3 attempts before raising 503.
         assert _MAX_RACE_RETRIES == 3
+
+
+class TestGeneratedOpenApiSpec:
+    def test_generated_spec_is_webmethods_compatible(self) -> None:
+        spec = _generated_openapi_spec(
+            ApiCreatePayload(
+                api_name="demo-petstore",
+                display_name="Demo Petstore",
+                version="1.0.0",
+                backend_url="https://petstore.example.invalid",
+            )
+        )
+
+        assert spec["openapi"] == "3.0.3"
+        assert _contains_boolean_additional_properties(spec) is False
 
 
 class TestCatalogReleaseNaming:

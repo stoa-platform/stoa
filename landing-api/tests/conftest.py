@@ -5,6 +5,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from control_plane.api.v1.invites import limiter
 from control_plane.config import settings
 from control_plane.database import get_db
 from control_plane.main import app
@@ -18,6 +19,14 @@ TEST_DATABASE_URL = settings.database_url.replace("/stoa", "/stoa_test")
 def anyio_backend():
     """Use asyncio as the async backend."""
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset in-memory rate limit state between tests."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture(scope="function")

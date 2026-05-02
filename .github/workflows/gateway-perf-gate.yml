@@ -109,7 +109,7 @@ jobs:
 
       # Try to download baseline from the most recent main push
       - name: Download baseline artifact
-        uses: dawidd6/action-download-artifact@v20
+        uses: dawidd6/action-download-artifact@v21
         with:
           name: perf-baseline-.*
           name_is_regexp: true
@@ -141,7 +141,7 @@ jobs:
 
       - name: Post PR comment
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');

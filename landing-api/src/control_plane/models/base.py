@@ -1,10 +1,11 @@
 """Base model with common fields."""
 
 from datetime import datetime
+from uuid import UUID as PythonUUID
 from uuid import uuid4
 
 from sqlalchemy import DateTime, MetaData
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Use 'stoa' schema to match existing init-db.sql convention
@@ -39,8 +40,8 @@ class TimestampMixin:
 class UUIDMixin:
     """Mixin that adds UUID primary key."""
 
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[PythonUUID] = mapped_column(
+        PGUUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )

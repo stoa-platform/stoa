@@ -68,7 +68,7 @@ patches:
                   - name: STOA_GATEWAY_PUBLIC_URL
                     value: "https://staging-wm-k3s.gostoa.dev"
                   - name: STOA_TARGET_GATEWAY_URL
-                    value: "https://staging-wm-k3s.gostoa.dev"
+                    value: "https://staging-wm.gostoa.dev"
                   - name: STOA_DEPLOYMENT_MODE
                     value: "connect"
                   - name: STOA_TARGET_GATEWAY_TYPE

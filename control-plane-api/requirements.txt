@@ -1,19 +1,19 @@
-fastapi==0.135.3
-uvicorn[standard]==0.44.0
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
 python-keycloak==7.1.1
-pydantic[email]==2.13.0
-pydantic-settings==2.13.1
+pydantic[email]==2.13.3
+pydantic-settings==2.14.0
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.26
+python-multipart==0.0.27
 httpx==0.28.1
 kafka-python==2.3.1
 python-snappy==0.7.3
-python-gitlab==8.2.0
+python-gitlab==8.3.0
 # GitHub integration (CAB-1890 — dual-provider migration)
-PyGithub>=2.0
+PyGithub>=2.9.1
 pyyaml==6.0.3
-sse-starlette==3.3.4
+sse-starlette==3.4.1
 aiocache==0.12.3
 prometheus-client==0.25.0
 structlog==25.5.0
@@ -21,28 +21,28 @@ structlog==25.5.0
 sqlalchemy[asyncio]==2.0.49
 asyncpg==0.31.0
 alembic==1.18.4
-psycopg2-binary==2.9.11
+psycopg2-binary==2.9.12
 # Certificate validation (CAB-313)
-cryptography>=42.0.0
+cryptography>=47.0.0
 # OpenSearch integration (CAB-307)
-opensearch-py[async]>=2.4.0
+opensearch-py[async]>=3.2.0
 # Rate limiting (CAB-298)
 slowapi==0.1.9
 # Error snapshots / MinIO storage (CAB-397)
-aioboto3>=12.0.0
+aioboto3>=15.5.0
 # Vault client for secure credential storage (CAB-879)
-hvac>=2.1.0
+hvac>=2.4.0
 # SSE client for MCP server tool discovery (CAB-1791)
-httpx-sse>=0.4.0
+httpx-sse>=0.4.3
 # OpenTelemetry distributed tracing (CAB-1088)
-opentelemetry-api>=1.27.0
-opentelemetry-sdk>=1.27.0
-opentelemetry-exporter-otlp-proto-grpc>=1.27.0
-opentelemetry-instrumentation-fastapi>=0.48b0
-opentelemetry-instrumentation-httpx>=0.48b0
-opentelemetry-instrumentation-sqlalchemy>=0.48b0
+opentelemetry-api>=1.41.1
+opentelemetry-sdk>=1.41.1
+opentelemetry-exporter-otlp-proto-grpc>=1.41.1
+opentelemetry-instrumentation-fastapi>=0.62b1
+opentelemetry-instrumentation-httpx>=0.62b1
+opentelemetry-instrumentation-sqlalchemy>=0.62b1
 # UAC JSON Schema validation (CAB-1350)
-jsonschema>=4.21.0
+jsonschema>=4.26.0
 # Transitive dep pins — CVE fixes (Container Scan)
-jaraco.context>=6.1.0
-wheel>=0.46.2
+jaraco.context>=6.1.2
+wheel>=0.47.0

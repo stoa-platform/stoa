@@ -178,18 +178,19 @@ def test_reconciler_uses_try_advisory_xact_lock() -> None:
     assert "pg_try_advisory_xact_lock" in raw, "Reconciler must use pg_try_advisory_xact_lock (non-blocking, spec §6.8)"
 
 
-def test_writer_does_not_write_target_gateways_or_openapi_spec() -> None:
-    """Spec §6.5 step 14 + §6.9: writer never writes preserved columns.
+def test_writer_does_not_write_target_gateways() -> None:
+    """Spec §6.5 step 14 + §6.9: writer never writes deployment-owned columns.
 
     Same invariant as Phase 3 but expanded to cover the now-orchestrating
-    writer which actually issues SQL via ``project_to_api_catalog``.
+    writer which actually issues SQL via ``project_to_api_catalog``. OpenAPI is
+    Git-owned now, so ``openapi_spec`` projection is allowed.
     """
-    forbidden = re.compile(r"(target_gateways|openapi_spec)\s*=")
+    forbidden = re.compile(r"target_gateways\s*=")
     offenders: list[str] = []
     for f in (NEW_MODULES_ROOT / "gitops_writer").rglob("*.py"):
         if forbidden.search(_code_only(f.read_text())):
             offenders.append(str(f))
-    assert not offenders, f"Writer mutates target_gateways/openapi_spec: {offenders}. Spec §6.9."
+    assert not offenders, f"Writer mutates target_gateways: {offenders}. Spec §6.9."
 
 
 def test_writer_max_retries_is_three() -> None:

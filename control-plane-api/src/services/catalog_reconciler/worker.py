@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
@@ -45,6 +46,15 @@ if TYPE_CHECKING:
     from ..catalog_git_client.protocol import CatalogGitClient
 
 logger = get_logger(__name__)
+
+_OPENAPI_FILENAMES = (
+    "openapi.yaml",
+    "openapi.yml",
+    "openapi.json",
+    "swagger.yaml",
+    "swagger.yml",
+    "swagger.json",
+)
 
 
 class CatalogReconcilerWorker:
@@ -94,6 +104,7 @@ class CatalogReconcilerWorker:
     async def _reconcile_iteration(self) -> None:
         """One pass: project cat A/ABSENT/GITOPS_CREATED, log drift for B/C/D."""
         files = await self._list_api_files("tenants/*/apis/*/api.yaml")
+        openapi_metadata_by_api_path = await self._list_openapi_metadata_by_api_path()
         seen_keys: set[tuple[str, str]] = set()
         current_paths = {remote.path for remote in files}
         for cached_path in list(self._last_seen_blob_sha):
@@ -103,15 +114,23 @@ class CatalogReconcilerWorker:
         for remote_file in files:
             git_path = remote_file.path
             try:
-                if remote_file.sha and self._last_seen_blob_sha.get(git_path) == remote_file.sha:
+                source_key = self._source_cache_key(
+                    remote_file,
+                    openapi_metadata_by_api_path.get(git_path),
+                )
+                if source_key and self._last_seen_blob_sha.get(git_path) == source_key:
                     key = self._seen_key_from_path(git_path)
                     if key is not None:
                         seen_keys.add(key)
                     continue
 
-                key = await self._reconcile_one_path(git_path, remote_metadata=remote_file)
-                if remote_file.sha:
-                    self._last_seen_blob_sha[git_path] = remote_file.sha
+                key = await self._reconcile_one_path(
+                    git_path,
+                    remote_metadata=remote_file,
+                    openapi_metadata=openapi_metadata_by_api_path.get(git_path),
+                )
+                if source_key:
+                    self._last_seen_blob_sha[git_path] = source_key
                 if key is not None:
                     seen_keys.add(key)
             except Exception:
@@ -124,6 +143,38 @@ class CatalogReconcilerWorker:
             await self._detect_legacy_orphans(seen_keys)
         except Exception:
             logger.exception("catalog_reconciler.orphan_detection_failed")
+
+    @staticmethod
+    def _source_cache_key(api_file: RemoteFileMetadata, openapi_file: RemoteFileMetadata | None) -> str:
+        """Return a cache key covering both ``api.yaml`` and its spec sibling."""
+        if not api_file.sha:
+            return ""
+        openapi_sha = openapi_file.sha if openapi_file is not None else "no-openapi"
+        return f"{api_file.sha}:{openapi_sha}"
+
+    async def _list_openapi_metadata_by_api_path(self) -> dict[str, RemoteFileMetadata]:
+        """Return the preferred OpenAPI/Swagger metadata keyed by sibling ``api.yaml`` path."""
+        all_api_dir_files = await self._list_api_files("tenants/*/apis/*/*")
+        filename_rank = {filename: index for index, filename in enumerate(_OPENAPI_FILENAMES)}
+        by_api_path: dict[str, RemoteFileMetadata] = {}
+
+        for remote in all_api_dir_files:
+            base_path, _, filename = remote.path.rpartition("/")
+            rank = filename_rank.get(filename)
+            if rank is None:
+                continue
+
+            api_yaml_path = f"{base_path}/api.yaml"
+            existing = by_api_path.get(api_yaml_path)
+            if existing is None:
+                by_api_path[api_yaml_path] = remote
+                continue
+
+            existing_filename = existing.path.rsplit("/", 1)[-1]
+            if rank < filename_rank[existing_filename]:
+                by_api_path[api_yaml_path] = remote
+
+        return by_api_path
 
     async def _list_api_files(self, glob_pattern: str) -> list[RemoteFileMetadata]:
         """List Git API files with blob metadata when the client supports it."""
@@ -155,6 +206,7 @@ class CatalogReconcilerWorker:
         git_path: str,
         *,
         remote_metadata: RemoteFileMetadata | None = None,
+        openapi_metadata: RemoteFileMetadata | None = None,
     ) -> tuple[str, str] | None:
         """Reconcile one Git path. Returns ``(tenant_id, api_id)`` if processed.
 
@@ -219,16 +271,19 @@ class CatalogReconcilerWorker:
         parsed = normalize_api_definition(parsed)
 
         try:
+            openapi_spec = await self._load_openapi_spec(git_path, openapi_metadata=openapi_metadata)
             # ``render_api_catalog_projection`` is the schema-validation step
             # that follows ``yaml.safe_load`` (spec §6.10): it asserts the
             # canonical layout, refuses ``id != name``, validates types, and
             # rejects UUID-shaped slugs. Any malformed Git content fails here
-            # before reaching the DB.
+            # before reaching the DB. The OpenAPI sibling is parsed first so
+            # the same Git generation is projected into ``api_catalog``.
             expected = render_api_catalog_projection(
                 parsed_content=parsed,
                 git_commit_sha=commit_sha,
                 catalog_content_hash=content_hash,
                 git_path=git_path,
+                openapi_spec=openapi_spec,
             )
         except ValueError as exc:
             self._log_sync_status(
@@ -252,6 +307,44 @@ class CatalogReconcilerWorker:
             api_content=parsed,
         )
         return (tenant_id, api_name)
+
+    async def _load_openapi_spec(
+        self,
+        api_git_path: str,
+        *,
+        openapi_metadata: RemoteFileMetadata | None,
+    ) -> dict[str, Any] | None:
+        """Parse the preferred OpenAPI/Swagger sibling for ``api.yaml``.
+
+        Missing spec files return ``None``. Present-but-invalid files raise
+        ``ValueError`` so the reconciler surfaces the Git contract error and
+        leaves the previous DB state untouched.
+        """
+        if openapi_metadata is None:
+            return None
+
+        spec_path = openapi_metadata.path
+        if not spec_path.startswith(api_git_path.rsplit("/", 1)[0] + "/"):
+            raise ValueError(f"OpenAPI sibling {spec_path!r} is not next to {api_git_path!r}")
+
+        filename = spec_path.rsplit("/", 1)[-1]
+        remote = await self._catalog_git_client.get(spec_path)
+        if remote is None:
+            return None
+
+        try:
+            if filename.endswith(".json"):
+                parsed = json.loads(remote.content.decode("utf-8"))
+            else:
+                parsed = yaml.safe_load(remote.content)
+        except (json.JSONDecodeError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            raise ValueError(f"{filename} parse error: {exc}") from exc
+
+        if not isinstance(parsed, dict):
+            raise ValueError(f"{filename} root is not a mapping")
+        if not parsed.get("openapi") and not parsed.get("swagger"):
+            raise ValueError(f"{filename} missing 'openapi' or 'swagger' version field")
+        return parsed
 
     def _parse_and_validate_yaml(
         self,
@@ -486,6 +579,7 @@ class CatalogReconcilerWorker:
             "portal_published": bool(row.portal_published),
             "audience": row.audience,
             "api_metadata": dict(row.api_metadata or {}),
+            "openapi_spec": row.openapi_spec,
             "git_path": row.git_path,
             "git_commit_sha": row.git_commit_sha,
             "catalog_content_hash": row.catalog_content_hash,

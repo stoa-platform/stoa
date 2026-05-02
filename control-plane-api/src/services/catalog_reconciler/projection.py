@@ -11,8 +11,10 @@ single async function on the DB side. The reconciler tick (Phase 4-2) feeds
 
 Contract:
 
-* The projection NEVER reads or writes ``target_gateways`` or ``openapi_spec``
-  (preserved fields, owned by deployment / UAC V2).
+* The projection NEVER reads or writes ``target_gateways`` (deployment-owned).
+* ``openapi_spec`` is Git-owned when an ``openapi.*`` or ``swagger.*`` sibling
+  exists next to ``api.yaml``. The reconciler materializes it into
+  ``api_catalog`` so runtime deployment sees the same contract as the Console.
 * ``metadata`` is projected from ``api.yaml`` because Console fields such as
   ``backend_url`` and ``display_name`` are read from that JSONB column.
 * The projection NEVER touches ``id`` (PK UUID) on UPDATE.
@@ -44,9 +46,9 @@ _DEFAULT_STATUS = "active"
 class ApiCatalogProjection:
     """Immutable projection of one ``api.yaml`` for ``api_catalog`` upsert.
 
-    Spec §6.9 mapping table. Fields ``target_gateways`` and ``openapi_spec``
-    are intentionally absent — they are owned by other flows and preserved on
-    UPDATE.
+    Spec §6.9 mapping table. ``target_gateways`` is intentionally absent
+    because it is deployment-owned and preserved on UPDATE. ``openapi_spec`` is
+    included because Git is the API-description source of truth.
     """
 
     tenant_id: str
@@ -62,6 +64,7 @@ class ApiCatalogProjection:
     git_path: str
     git_commit_sha: str
     catalog_content_hash: str
+    openapi_spec: dict[str, Any] | None = None
 
 
 def _coerce_tags(raw: Any) -> list[str]:
@@ -78,6 +81,7 @@ def render_api_catalog_projection(
     git_commit_sha: str,
     catalog_content_hash: str,
     git_path: str,
+    openapi_spec: dict[str, Any] | None = None,
 ) -> ApiCatalogProjection:
     """Render the ``ApiCatalogProjection`` for a parsed ``api.yaml`` dict.
 
@@ -180,6 +184,7 @@ def render_api_catalog_projection(
         git_path=git_path,
         git_commit_sha=git_commit_sha,
         catalog_content_hash=catalog_content_hash,
+        openapi_spec=openapi_spec,
     )
 
 
@@ -193,10 +198,10 @@ def row_matches_projection(
     ``api_id``, ``tenant_id``, ``api_name``, ``version``, ``status``,
     ``category``, ``tags``, ``portal_published``, ``audience``,
     ``api_metadata``, ``git_path``, ``git_commit_sha``,
-    ``catalog_content_hash``.
+    ``catalog_content_hash`` and ``openapi_spec``.
 
-    Fields ``target_gateways``, ``openapi_spec``, ``id``, ``synced_at`` and
-    ``deleted_at`` are ignored — they are not under GitOps write authority.
+    Fields ``target_gateways``, ``id``, ``synced_at`` and ``deleted_at`` are
+    ignored — they are not under GitOps write authority.
     """
     expected_tags = list(expected.tags)
     actual_tags = list(actual_row.get("tags") or [])
@@ -218,6 +223,7 @@ def row_matches_projection(
         and actual_row.get("git_path") == expected.git_path
         and actual_row.get("git_commit_sha") == expected.git_commit_sha
         and actual_row.get("catalog_content_hash") == expected.catalog_content_hash
+        and actual_row.get("openapi_spec") == expected.openapi_spec
     )
 
 
@@ -279,12 +285,13 @@ async def project_to_api_catalog(
     """Upsert ``projection`` into ``api_catalog`` transactionally.
 
     INSERT path: a new row is created with ``id = gen_random_uuid()`` (default),
-    ``metadata`` comes from ``api.yaml``, ``openapi_spec = NULL`` and
-    ``target_gateways = []`` (defaults from the schema).
+    ``metadata`` comes from ``api.yaml``, ``openapi_spec`` comes from the Git
+    sibling spec file when present and ``target_gateways = []`` (schema
+    default).
 
-    UPDATE path: only the projected columns are written. ``target_gateways``,
-    ``openapi_spec`` and the PK ``id`` are preserved by virtue of NOT being
-    listed in the ``.values()`` clause.
+    UPDATE path: only the projected columns are written. ``target_gateways`` and
+    the PK ``id`` are preserved by virtue of NOT being listed in the
+    ``.values()`` clause.
 
     Spec §6.5 step 14, §6.9. NOT wired to the HTTP handler in Phase 4-1.
 
@@ -338,6 +345,7 @@ async def project_to_api_catalog(
             portal_published=projection.portal_published,
             audience=projection.audience,
             api_metadata=dict(projection.api_metadata),
+            openapi_spec=projection.openapi_spec,
             git_path=projection.git_path,
             git_commit_sha=projection.git_commit_sha,
             catalog_content_hash=projection.catalog_content_hash,
@@ -369,6 +377,7 @@ async def project_to_api_catalog(
             portal_published=projection.portal_published,
             audience=projection.audience,
             api_metadata=dict(projection.api_metadata),
+            openapi_spec=projection.openapi_spec,
             git_path=projection.git_path,
             git_commit_sha=projection.git_commit_sha,
             catalog_content_hash=projection.catalog_content_hash,

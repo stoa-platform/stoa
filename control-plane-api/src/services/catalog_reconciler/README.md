@@ -25,6 +25,8 @@ Gateway runtime DR coverage is specified separately in
 
 - `worker.py` — `CatalogReconcilerWorker.start()` loop. Each tick:
   - lists `tenants/*/apis/*/api.yaml` from the Git remote
+  - reads the preferred sibling `openapi.*` / `swagger.*` file and
+    materializes it into `api_catalog.openapi_spec`
   - classifies each row via `classify_legacy()`
   - cat ABSENT / A / GITOPS_CREATED → projection (with
     `pg_try_advisory_xact_lock`)
@@ -37,9 +39,10 @@ Gateway runtime DR coverage is specified separately in
   - `ApiCatalogProjection` — frozen dataclass for §6.9 mapping
   - `render_api_catalog_projection()` — parsed YAML → projection
   - `row_matches_projection()` — drift detection (ignores `target_gateways`,
-    `openapi_spec`, `metadata`, `id`)
+    `id`, timestamps and soft-delete state)
   - `project_to_api_catalog()` — transactional upsert (preserves
-    `target_gateways`, `openapi_spec`, `metadata`, `id` PK on UPDATE)
+    `target_gateways` and `id` PK on UPDATE; projects `metadata` and
+    `openapi_spec` from Git)
 - `../catalog_api_definition.py` — shared catalog API normalization and
   gateway target extraction for flat and Kubernetes-style `api.yaml`
 - `../catalog_deployment_reconciler.py` — materializes explicit Git catalog

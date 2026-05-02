@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 from src.schemas.gateway import GatewayInstanceResponse
@@ -94,3 +95,35 @@ def test_top_level_urls_override_stale_endpoint_values():
     assert gateway.ui_url == "https://wm-ui.gostoa.dev"
     assert gateway.endpoints["public_url"] == "https://wm-runtime.gostoa.dev"
     assert gateway.endpoints["ui_url"] == "https://wm-ui.gostoa.dev"
+
+
+def test_nonprod_webmethods_registration_keeps_environment_specific_ui_url():
+    from src.routers.gateway_internal import GatewayRegistration, _apply_registration_urls
+
+    instance = SimpleNamespace(
+        name="connect-webmethods-dev-connect-dev",
+        environment="dev",
+        target_gateway_type="webmethods",
+        target_gateway_url=None,
+        public_url=None,
+        ui_url=None,
+        endpoints={},
+    )
+    payload = GatewayRegistration(
+        hostname="connect-webmethods-dev",
+        mode="connect",
+        version="0.3.9",
+        environment="dev",
+        capabilities=["rest"],
+        admin_url="http://connect-webmethods-dev:8090",
+        target_gateway_type="webmethods",
+        target_gateway_url="https://dev-wm.gostoa.dev",
+        public_url="https://dev-wm.gostoa.dev",
+        ui_url="https://dev-wm-ui.gostoa.dev",
+    )
+
+    _apply_registration_urls(instance, payload)
+
+    assert instance.public_url == "https://dev-wm.gostoa.dev"
+    assert instance.target_gateway_url == "https://dev-wm.gostoa.dev"
+    assert instance.ui_url == "https://dev-wm-ui.gostoa.dev"

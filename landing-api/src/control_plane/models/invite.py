@@ -1,8 +1,7 @@
 """Invite model for prospect tracking."""
 
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 
 from sqlalchemy import DateTime, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,7 +10,7 @@ from control_plane.config import settings
 from control_plane.models.base import Base, TimestampMixin, UUIDMixin
 
 
-class InviteStatus(str, Enum):
+class InviteStatus(StrEnum):
     """Status of an invite."""
 
     PENDING = "pending"  # Created, not yet clicked
@@ -56,12 +55,12 @@ class Invite(Base, UUIDMixin, TimestampMixin):
     @classmethod
     def calculate_expires_at(cls) -> datetime:
         """Calculate expiration date based on settings."""
-        return datetime.now(timezone.utc) + timedelta(days=settings.invite_expiry_days)
+        return datetime.now(UTC) + timedelta(days=settings.invite_expiry_days)
 
     @property
     def is_expired(self) -> bool:
         """Check if invite has expired."""
-        return datetime.now(timezone.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     @property
     def is_valid(self) -> bool:
@@ -71,7 +70,7 @@ class Invite(Base, UUIDMixin, TimestampMixin):
     def mark_opened(self) -> None:
         """Mark invite as opened."""
         self.status = InviteStatus.OPENED.value
-        self.opened_at = datetime.now(timezone.utc)
+        self.opened_at = datetime.now(UTC)
 
     def mark_converted(self) -> None:
         """Mark invite as converted (sandbox created)."""

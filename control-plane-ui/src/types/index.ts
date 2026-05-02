@@ -1776,6 +1776,7 @@ export interface Promotion {
   target_environment: string;
   source_deployment_id: string | null;
   target_deployment_id: string | null;
+  target_gateway_ids: string[] | null;
   status: PromotionStatus;
   spec_diff: Record<string, unknown> | null;
   message: string;

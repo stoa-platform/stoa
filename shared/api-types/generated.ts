@@ -17667,6 +17667,12 @@ export interface components {
              */
             message: string;
             /**
+             * Source Deployment Id
+             * Format: uuid
+             * @description Synced source GatewayDeployment UUID to promote
+             */
+            source_deployment_id: string;
+            /**
              * Source Environment
              * @description Source environment (dev, staging)
              */
@@ -17676,6 +17682,11 @@ export interface components {
              * @description Target environment (staging, production)
              */
             target_environment: string;
+            /**
+             * Target Gateway Ids
+             * @description Explicit target gateway UUIDs receiving the promoted API
+             */
+            target_gateway_ids: string[];
         };
         /** PromotionDiffResponse */
         PromotionDiffResponse: {
@@ -17754,6 +17765,8 @@ export interface components {
             target_deployment_id?: string | null;
             /** Target Environment */
             target_environment: string;
+            /** Target Gateway Ids */
+            target_gateway_ids?: string[] | null;
             /** Tenant Id */
             tenant_id: string;
             /**

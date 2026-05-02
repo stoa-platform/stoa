@@ -1,7 +1,7 @@
 """drop obsolete api_catalog full unique constraint
 
 Revision ID: 106_drop_api_catalog_full_unique
-Revises: 105_fix_webmethods_staging_target_urls
+Revises: 106_gateway_aware_promotions
 Create Date: 2026-05-02
 
 Migration 084 introduced the active-row-only uniqueness contract:
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "106_drop_api_catalog_full_unique"
-down_revision: str | tuple[str, ...] | None = "105_fix_webmethods_staging_target_urls"
+down_revision: str | tuple[str, ...] | None = "106_gateway_aware_promotions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

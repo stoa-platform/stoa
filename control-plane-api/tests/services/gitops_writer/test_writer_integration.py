@@ -35,6 +35,7 @@ def _payload(
     backend_url: str = "https://httpbin.org/anything",
     version: str = "1.0.0",
     tags: tuple[str, ...] = (),
+    openapi_spec: dict | None = None,
 ) -> ApiCreatePayload:
     return ApiCreatePayload(
         api_name=name,
@@ -42,6 +43,7 @@ def _payload(
         version=version,
         backend_url=backend_url,
         tags=tags,
+        openapi_spec=openapi_spec,
     )
 
 
@@ -88,12 +90,18 @@ class TestCaseACommit:
         assert parsed["id"] == "petstore"
         assert parsed["name"] == "petstore"
         assert parsed["backend_url"] == "https://httpbin.org/anything"
+        openapi_remote = await fake_git.get("tenants/demo-gitops/apis/petstore/openapi.yaml")
+        assert openapi_remote is not None
+        openapi_parsed = yaml.safe_load(openapi_remote.content)
+        assert openapi_parsed["openapi"] == "3.0.3"
+        assert openapi_parsed["servers"] == [{"url": "https://httpbin.org/anything"}]
         # DB side: projection persisted
         row = await _select_row(integration_db, "demo-gitops", "petstore")
         assert row is not None
         assert row.git_path == result.git_path
         assert row.git_commit_sha == result.git_commit_sha
         assert row.catalog_content_hash == result.catalog_content_hash
+        assert row.openapi_spec == openapi_parsed
 
 
 class TestPullRequestReleaseMode:
@@ -128,6 +136,8 @@ class TestPullRequestReleaseMode:
         assert row.catalog_pr_number == result.catalog_release.pull_request_number
         assert row.catalog_source_branch == result.catalog_release.source_branch
         assert row.catalog_merge_commit_sha == result.catalog_release.merge_commit_sha
+        assert row.openapi_spec is not None
+        assert row.openapi_spec["openapi"] == "3.0.3"
 
 
 class TestCaseBIdempotent:
@@ -284,9 +294,12 @@ class TestStep14PreservesNonProjectedColumns:
         )
         row = await _select_row(integration_db, "demo-gitops", "petstore")
         assert row is not None
-        # The reserved columns survive the upsert.
+        # Deployment-owned columns survive the upsert; API description is
+        # re-projected from the Git-owned openapi.yaml sibling.
         assert row.target_gateways == ["webmethods-prod", "kong-staging"]
-        assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Pet"}}
+        assert row.openapi_spec is not None
+        assert row.openapi_spec["openapi"] == "3.0.3"
+        assert row.openapi_spec["info"]["title"] == "Petstore"
 
 
 class TestStep7AntiCollision:

@@ -312,22 +312,27 @@ Reconstructible depuis `stoa-catalog` + `api_catalog`.
                                       message="create api {tid}/{name}")
        - race condition → relire, réévaluer Case A/B/C, retry max 3×
        - épuisement → 503, aucune projection
-10bis. Si le payload contient `openapi_spec`, écrire aussi
-       `tenants/{tenant_id}/apis/{api_id}/openapi.yaml`.
-       Ce fichier est la vérité configurationnelle de la description API.
+10bis. Écrire aussi `tenants/{tenant_id}/apis/{api_id}/openapi.yaml`.
+       Si le payload contient `openapi_spec`, sérialiser cette spec; sinon
+       générer une spec OpenAPI 3.0 minimale depuis `display_name`, `version`
+       et `backend_url`. Ce fichier est la vérité configurationnelle de la
+       description API.
 11. file_commit_sha = CatalogGitClient.latest_file_commit(git_path)
 12. Relire contenu depuis Git remote :
        committed_bytes = CatalogGitClient.read_at_commit(git_path, file_commit_sha)
        Vérifier non-null. Si null → 500, last_error="git_path 404 after commit"
        committed_content_hash = sha256_hex(committed_bytes)
        parsed_content = parse_yaml(committed_bytes)
+       openapi_spec = parse sibling openapi.yaml|yml|json ou swagger.yaml|yml|json
+                      si présent; fichier présent mais invalide => status=failed
 13. Vérification cohérence path ↔ contenu (cf. §6.10)
 14. project_to_api_catalog(parsed_content, file_commit_sha,
                            committed_content_hash, git_path,
+                           openapi_spec,
                            target="api_catalog")
        Mappings : cf. §6.9
        Transactionnel et idempotent
-       NE PAS écraser target_gateways ni openapi_spec (cf. §6.9)
+       NE PAS écraser target_gateways (cf. §6.9)
 15. update api_sync_status(target='api_catalog', status='synced', ...)
 16. Pas d'émission de l'event Kafka stoa.api.lifecycle (cf. §6.13)
 17. Relâcher le lock
@@ -339,8 +344,8 @@ Reconstructible depuis `stoa-catalog` + `api_catalog`.
 - **Étape 6.** `git_path` calculé depuis le slug, jamais depuis un UUID. Test scaffold Phase 3 vérifie qu'aucune fonction du nouveau code ne convertit `api_catalog.id` → `git_path`.
 - **Étape 7.** 3 catégories distinguées, pas binaire.
 - **Étape 12.** `read_at_commit` retourne null après push réussi → 500 explicite (bug d'infrastructure), pas dégradation silencieuse.
-- **Étape 10bis.** `openapi_spec` n'est pas sérialisé dans `api.yaml`; il vit dans le fichier Git canonique `openapi.yaml`.
-- **Étape 14.** La projection consomme le contenu Git relu, jamais le payload. **Jamais d'écrasement de `target_gateways` ni `openapi_spec`** (cache DB hydraté depuis `openapi.yaml` par le sync catalogue).
+- **Étape 10bis.** `openapi_spec` n'est pas sérialisé dans `api.yaml`; il vit dans le fichier Git canonique `openapi.yaml`, fourni ou généré minimalement à la création.
+- **Étape 14.** La projection consomme le contenu Git relu, jamais le payload. **Jamais d'écrasement de `target_gateways`**. `openapi_spec` est hydraté depuis le fichier Git frère (`openapi.*` ou `swagger.*`) et devient un cache runtime dérivé de Git.
 - **Étape 16.** Court-circuit explicite de l'event Kafka legacy.
 - **Reconciler.** La boucle utilise les blob SHA du tree Git pour ignorer les fichiers inchangés déjà réconciliés; elle ne doit pas relire chaque `api.yaml` à chaque tick.
 
@@ -432,8 +437,10 @@ async def start():
 
 **Pas dans la comparaison (champs préservés, gérés par d'autres flows)** :
 - `target_gateways` (déploiement)
-- `openapi_spec` (potentiellement géré par UAC V2)
 - `metadata` (réservé)
+
+`openapi_spec` est dans la comparaison: il est un cache runtime dérivé du
+fichier Git frère et doit être réconcilié comme drift de projection.
 
 `CATALOG_RECONCILE_INTERVAL_SECONDS=10`.
 
@@ -515,8 +522,8 @@ deployments:
 | `tags` | YAML `.tags` (jsonb) | sérialisation directe |
 | `portal_published` | dérivé : `"portal:published" in tags` | |
 | `audience` | YAML `.audience` ou `'public'` (default DB) | |
-| `metadata` | non écrit par GitOps en UPDATE ; `'{}'::jsonb` en CREATE | préservé en ré-adoption |
-| `openapi_spec` | cache DB hydraté depuis `tenants/{tenant_id}/apis/{api_id}/openapi.yaml` | la projection `api.yaml` ne l'écrit pas; Git reste la source de vérité |
+| `metadata` | projection de `api.yaml` | champs Console/runtime (`display_name`, `backend_url`, `description`, etc.) |
+| `openapi_spec` | fichier frère `openapi.yaml|yml|json` ou `swagger.yaml|yml|json` | cache runtime dérivé; Git reste la source de vérité |
 | `target_gateways` | **non écrit par GitOps** | préservé, géré par déploiement |
 | `git_path` | path réellement lu/committé | canonique, jamais UUID |
 | `git_commit_sha` | `latest_file_commit(git_path)` | |
@@ -741,7 +748,7 @@ psql -c "SELECT api_id FROM api_catalog WHERE tenant_id='demo' AND api_id='banki
 | Réparation accidentelle des UUID driftés (catégorie B) | Moyen | Critique | §6.14 explicite : détection seulement. Test Phase 5 vérifie. |
 | Suppression accidentelle d'orphelins (catégorie C) | Faible | Critique | §6.14 : pas de delete dans ce rewrite. Garde-fou §9.13. |
 | `git_path = UUID` re-introduit | Faible | Haut | §6.5 étape 2+6 + §6.6 : refus UUID-shaped. Test §7 étape 8. B10 fixé Phase 8 (in-scope partiel). |
-| Phase 6.5 mute des subscriptions/deployments par effet de bord | Faible | Critique | §6.14 catégorie A : `api_id` inchangé. §6.9 : `target_gateways`/`openapi_spec` non écrits. Test §7bis vérifie. |
+| Phase 6.5 mute des subscriptions/deployments par effet de bord | Faible | Critique | §6.14 catégorie A : `api_id` inchangé. §6.9 : `target_gateways` non écrit et `openapi_spec` dérivé uniquement de Git. Test §7bis vérifie. |
 | Confusion entre les 5 niveaux d'identité | Moyen | Haut | §6.4. Garde-fou §9.14. |
 | INSERT/adoption bloqué par `uq_api_catalog_tenant_api` après soft-delete précédent | Observé en prod `free-aech` le 2026-05-02 | P0 | Migration 106 supprime la contrainte globale et conserve `ix_api_catalog_tenant_api_active`. Test de régression: adoption avec slug canonique soft-deleted. |
 | Drift UUID systémique au-delà de `demo` | Inconnu (SQL b à lancer) | Haut | Hypothèse défensive γ Phase 10. Bascule limitée. |
@@ -851,7 +858,7 @@ La migration des catégories B sur `demo` et `free-aech` est hors scope du rewri
 | 2026-04-26 | v1.0 (refusée) | Claude après round 4 | Architecture théorique idéale, refusée car non alignée code réel |
 | 2026-04-26 | v0.4 DRAFT | Claude après audit Phase 1 + round 5 | `apis` → `api_catalog`, retrait UUID5, retrait worktree, layout conservateur, `CatalogGitClient` PyGithub-first, worker asyncio in-tree |
 | 2026-04-26 | v1.0 DRAFT (intermédiaire) | Claude après round 6 + diagnostic SQL terrain (drift 5/7/1) | §0 drift terrain, 6e invariant `git_path` réel, 4 niveaux d'identité, §6.14 3 catégories non-destructives, Phase 6.5, §7bis borné catégorie A, B10 backlog |
-| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` et `openapi_spec` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |
+| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |
 | 2026-05-02 | v1.1 | Codex après audit prod `free-aech` | B-INDEX résolu: migration 106 supprime `uq_api_catalog_tenant_api` global, garde l'unicité active-only et ajoute un test de régression pour l'adoption d'une row UUID active quand le slug canonique existe seulement en soft-delete. |
 
 ## 12.1 Phase 6 closure (LIVE 2026-04-27)

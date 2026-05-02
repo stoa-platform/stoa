@@ -272,6 +272,7 @@ class TestRowMatchesProjection:
             "portal_published": projection.portal_published,
             "audience": projection.audience,
             "api_metadata": dict(projection.api_metadata),
+            "openapi_spec": projection.openapi_spec,
             "git_path": projection.git_path,
             "git_commit_sha": projection.git_commit_sha,
             "catalog_content_hash": projection.catalog_content_hash,
@@ -283,11 +284,30 @@ class TestRowMatchesProjection:
     def test_target_gateways_ignored(self, projection: ApiCatalogProjection, matching_row: dict[str, Any]) -> None:
         # Add unrelated columns — projection ignores them.
         matching_row["target_gateways"] = ["webmethods-prod"]
-        matching_row["openapi_spec"] = {"openapi": "3.0.0"}
         matching_row["id"] = "00000000-0000-0000-0000-000000000001"
         matching_row["synced_at"] = "2026-04-27T00:00:00Z"
         matching_row["deleted_at"] = None
         assert row_matches_projection(matching_row, projection) is True
+
+    def test_openapi_spec_mismatch_returns_false(self, matching_row: dict[str, Any]) -> None:
+        projection = ApiCatalogProjection(
+            tenant_id="demo",
+            api_id="petstore",
+            api_name="petstore",
+            version="1.0.0",
+            status="active",
+            category="Banking",
+            tags=["portal:published"],
+            portal_published=True,
+            audience="public",
+            api_metadata=matching_row["api_metadata"],
+            git_path="tenants/demo/apis/petstore/api.yaml",
+            git_commit_sha="a" * 40,
+            catalog_content_hash="b" * 64,
+            openapi_spec={"openapi": "3.0.3", "info": {"title": "Git"}, "paths": {}},
+        )
+        matching_row["openapi_spec"] = {"openapi": "3.0.3", "info": {"title": "DB"}, "paths": {}}
+        assert row_matches_projection(matching_row, projection) is False
 
     def test_git_path_mismatch_returns_false(
         self, projection: ApiCatalogProjection, matching_row: dict[str, Any]

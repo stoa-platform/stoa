@@ -73,19 +73,18 @@ def test_helper_does_not_import_git_client_or_github() -> None:
 
 
 def test_projection_module_does_not_assign_target_gateways() -> None:
-    """``project_to_api_catalog`` must never write ``target_gateways`` or ``openapi_spec``.
+    """``project_to_api_catalog`` must never write deployment-owned targets.
 
-    Spec §6.9: those columns are owned by deployment / UAC V2. A static
-    assignment in the projection would re-introduce GitOps authority over
-    fields it must preserve.
+    Spec §6.9: ``target_gateways`` is owned by deployment. A static assignment
+    in the projection would re-introduce GitOps authority over a field it must
+    preserve. ``openapi_spec`` is intentionally not part of this guard anymore:
+    it is a runtime cache derived from the sibling Git OpenAPI/Swagger file.
     """
     assert PROJECTION_FILE.exists(), f"projection missing: {PROJECTION_FILE}"
     code = _code_only(PROJECTION_FILE.read_text())
     forbidden = [
         "target_gateways=",
         "target_gateways =",
-        "openapi_spec=",
-        "openapi_spec =",
     ]
     for fb in forbidden:
         assert fb not in code, f"Active code mutates {fb!r} in projection module. Forbidden by §6.9."

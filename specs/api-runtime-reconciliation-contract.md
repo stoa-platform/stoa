@@ -156,6 +156,14 @@ le contrat complet nécessaire à cette écriture: `id`, `name`, `display_name`,
 présent. Un événement réduit à `id/name/version` est invalide car il ne permet
 pas de maintenir `stoa-catalog` comme vérité configurationnelle.
 
+Le read model `api_catalog.openapi_spec` n'est pas une vérité autonome: il est
+un cache runtime matérialisé depuis le fichier Git frère `openapi.*` ou
+`swagger.*`. Une gateway reçoit donc la même description API que celle visible
+dans la Console, et une spec Git invalide doit échouer avant dispatch Kafka/SSE.
+À la création d'une API sans spec fournie, le control plane doit créer un
+`openapi.yaml` minimal mais valide dans Git; l'absence durable de fichier
+OpenAPI/Swagger dans `stoa-catalog` est un drift de contrat.
+
 Chaîne conceptuelle:
 
 ```text

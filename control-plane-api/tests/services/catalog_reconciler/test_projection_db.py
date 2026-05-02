@@ -4,13 +4,14 @@ Spec §6.5 step 14, §6.9 (CAB-2186 B-WORKER, CAB-2180 B-CATALOG).
 
 These tests use the ``integration_db`` fixture (PostgreSQL) and are skipped
 automatically when ``DATABASE_URL`` is not set. They verify the contract
-that GitOps writes NEVER touch ``target_gateways``, ``openapi_spec`` or
-``metadata`` on UPDATE.
+that GitOps writes NEVER touch ``target_gateways`` and always project
+``metadata`` / ``openapi_spec`` from Git on UPDATE.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -31,6 +32,7 @@ def _projection(
     git_commit_sha: str = "a" * 40,
     catalog_content_hash: str = "b" * 64,
     git_path: str | None = None,
+    openapi_spec: dict[str, Any] | None = None,
 ) -> ApiCatalogProjection:
     return ApiCatalogProjection(
         tenant_id=tenant_id,
@@ -57,6 +59,7 @@ def _projection(
         git_path=git_path or f"tenants/{tenant_id}/apis/{api_id}/api.yaml",
         git_commit_sha=git_commit_sha,
         catalog_content_hash=catalog_content_hash,
+        openapi_spec=openapi_spec,
     )
 
 
@@ -93,7 +96,7 @@ async def test_insert_creates_row_with_defaults(integration_db) -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_update_preserves_target_gateways(integration_db) -> None:
-    """A pre-existing row with target_gateways and openapi_spec keeps them on UPDATE."""
+    """A pre-existing row keeps target_gateways but takes openapi_spec from Git."""
     existing = APICatalog(
         tenant_id="demo-gitops",
         api_id="petstore",
@@ -111,7 +114,8 @@ async def test_update_preserves_target_gateways(integration_db) -> None:
     await integration_db.flush()
     original_id = existing.id
 
-    proj = _projection(git_commit_sha="c" * 40, catalog_content_hash="d" * 64)
+    projected_spec = {"openapi": "3.0.3", "info": {"title": "Petstore Git"}, "paths": {}}
+    proj = _projection(git_commit_sha="c" * 40, catalog_content_hash="d" * 64, openapi_spec=projected_spec)
     await project_to_api_catalog(integration_db, proj)
 
     result = await integration_db.execute(
@@ -126,11 +130,42 @@ async def test_update_preserves_target_gateways(integration_db) -> None:
     assert row.category == "Banking"
     assert row.tags == ["portal:published", "banking"]
     assert row.portal_published is True
-    # Non-projected fields preserved
+    # Deployment-owned field preserved; Git-owned OpenAPI is replaced.
     assert row.target_gateways == ["webmethods-prod", "kong-staging"]
-    assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Pet"}}
+    assert row.openapi_spec == projected_spec
     assert row.api_metadata["display_name"] == "petstore"
     assert row.api_metadata["backend_url"] == "http://example.invalid"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_update_clears_openapi_when_git_spec_missing(integration_db) -> None:
+    """A missing Git spec clears the DB cache so Git stays the source of truth."""
+    integration_db.add(
+        APICatalog(
+            tenant_id="demo-gitops",
+            api_id="petstore",
+            api_name="petstore",
+            version="1.0.0",
+            status="active",
+            tags=[],
+            portal_published=False,
+            audience="public",
+            api_metadata={"display_name": "Manually set", "backend_url": "http://legacy"},
+            openapi_spec={"openapi": "3.0.0", "info": {"title": "Stale DB"}},
+            target_gateways=["webmethods-prod"],
+        )
+    )
+    await integration_db.flush()
+
+    await project_to_api_catalog(integration_db, _projection())
+
+    result = await integration_db.execute(
+        select(APICatalog).where(APICatalog.tenant_id == "demo-gitops", APICatalog.api_id == "petstore")
+    )
+    row = result.scalar_one()
+    assert row.target_gateways == ["webmethods-prod"]
+    assert row.openapi_spec is None
 
 
 @pytest.mark.integration
@@ -173,7 +208,13 @@ async def test_update_adopts_legacy_uuid_identity_collision(integration_db) -> N
     await integration_db.flush()
     original_id = existing.id
 
-    proj = _projection(api_id="petstore", git_commit_sha="c" * 40, catalog_content_hash="d" * 64)
+    projected_spec = {"openapi": "3.0.3", "info": {"title": "Git Petstore"}, "paths": {}}
+    proj = _projection(
+        api_id="petstore",
+        git_commit_sha="c" * 40,
+        catalog_content_hash="d" * 64,
+        openapi_spec=projected_spec,
+    )
     await project_to_api_catalog(integration_db, proj)
 
     result = await integration_db.execute(
@@ -187,7 +228,7 @@ async def test_update_adopts_legacy_uuid_identity_collision(integration_db) -> N
     assert row.git_commit_sha == "c" * 40
     assert row.catalog_content_hash == "d" * 64
     assert row.target_gateways == ["webmethods-prod"]
-    assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Legacy Petstore"}}
+    assert row.openapi_spec == projected_spec
 
     deployment_result = await integration_db.execute(
         select(Deployment).where(Deployment.tenant_id == "demo-gitops", Deployment.api_id == "petstore")
@@ -249,6 +290,7 @@ async def test_update_adopts_legacy_uuid_when_soft_deleted_canonical_slug_exists
             git_path=f"tenants/{tenant_id}/apis/{api_id}/api.yaml",
             git_commit_sha="c" * 40,
             catalog_content_hash="d" * 64,
+            openapi_spec={"openapi": "3.0.3", "info": {"title": "Template OpenAPI"}, "paths": {}},
         ),
     )
 
@@ -262,7 +304,7 @@ async def test_update_adopts_legacy_uuid_when_soft_deleted_canonical_slug_exists
     assert row.git_path == f"tenants/{tenant_id}/apis/{api_id}/api.yaml"
     assert row.git_commit_sha == "c" * 40
     assert row.catalog_content_hash == "d" * 64
-    assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Template OpenAPI"}}
+    assert row.openapi_spec == {"openapi": "3.0.3", "info": {"title": "Template OpenAPI"}, "paths": {}}
 
 
 @pytest.mark.integration

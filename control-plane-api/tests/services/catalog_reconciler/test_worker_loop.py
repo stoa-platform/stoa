@@ -83,6 +83,16 @@ def _render_yaml(*, tenant_id: str, api_name: str, backend_url: str = "https://h
     ).encode("utf-8")
 
 
+def _render_openapi(title: str) -> bytes:
+    return (
+        "openapi: 3.0.3\n"
+        "info:\n"
+        f"  title: {title}\n"
+        "  version: 1.0.0\n"
+        "paths: {}\n"
+    ).encode()
+
+
 async def _select_row(factory, tenant_id: str, api_id: str) -> APICatalog | None:
     async with factory() as session:
         stmt = (
@@ -133,6 +143,41 @@ class TestProjectsAbsent:
         assert row.git_path == path
         assert row.git_commit_sha is not None
         assert row.catalog_content_hash is not None
+
+    async def test_iteration_materializes_openapi_sibling_from_git(self, session_factory) -> None:
+        tenant = f"{_TEST_TENANT_PREFIX}openapi"
+        fake_git = InMemoryCatalogGitClient()
+        path = f"tenants/{tenant}/apis/petstore/api.yaml"
+        fake_git.seed(path, _render_yaml(tenant_id=tenant, api_name="petstore"))
+        fake_git.seed(f"tenants/{tenant}/apis/petstore/openapi.yaml", _render_openapi("Petstore Git"))
+        worker = _new_worker(session_factory, fake_git)
+
+        await worker._reconcile_iteration()
+
+        row = await _select_row(session_factory, tenant, "petstore")
+        assert row is not None
+        assert row.openapi_spec == {
+            "openapi": "3.0.3",
+            "info": {"title": "Petstore Git", "version": "1.0.0"},
+            "paths": {},
+        }
+
+    async def test_iteration_reprojects_when_only_openapi_sibling_changes(self, session_factory) -> None:
+        tenant = f"{_TEST_TENANT_PREFIX}openapi-drift"
+        fake_git = InMemoryCatalogGitClient()
+        path = f"tenants/{tenant}/apis/petstore/api.yaml"
+        openapi_path = f"tenants/{tenant}/apis/petstore/openapi.yaml"
+        fake_git.seed(path, _render_yaml(tenant_id=tenant, api_name="petstore"))
+        fake_git.seed(openapi_path, _render_openapi("Petstore v1"))
+        worker = _new_worker(session_factory, fake_git)
+
+        await worker._reconcile_iteration()
+        fake_git.seed(openapi_path, _render_openapi("Petstore v2"))
+        await worker._reconcile_iteration()
+
+        row = await _select_row(session_factory, tenant, "petstore")
+        assert row is not None
+        assert row.openapi_spec["info"]["title"] == "Petstore v2"
 
     async def test_iteration_skips_unchanged_git_blobs_after_successful_reconcile(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}cache"

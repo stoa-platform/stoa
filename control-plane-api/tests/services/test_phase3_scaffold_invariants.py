@@ -238,20 +238,21 @@ def test_catalog_git_client_protocol_has_5_methods() -> None:
 # ``tests/services/catalog_reconciler/test_worker_loop.py``.
 
 
-def test_no_target_gateways_or_openapi_spec_writes_in_writer() -> None:
-    """Spec §6.5 step 14 + §6.9: GitOps writer never writes target_gateways or openapi_spec.
+def test_no_target_gateways_writes_in_writer() -> None:
+    """Spec §6.5 step 14 + §6.9: GitOps writer never writes target_gateways.
 
-    Phase 3 grep guards against accidental introduction in Phase 4.
+    ``openapi_spec`` is Git-owned as of the OpenAPI projection contract; it is
+    intentionally allowed so the writer can materialize ``openapi.yaml``.
     """
     forbidden = re.compile(
-        r"(target_gateways|openapi_spec)\s*=",
+        r"target_gateways\s*=",
     )
     offenders = []
     for f in (NEW_MODULES_ROOT / "gitops_writer").rglob("*.py"):
         if forbidden.search(_code_only(f.read_text())):
             offenders.append(str(f))
     assert not offenders, (
-        f"Mutation of target_gateways/openapi_spec in {offenders}. "
-        "Forbidden — those columns are owned by deployment / UAC V2 flows. "
+        f"Mutation of target_gateways in {offenders}. "
+        "Forbidden — that column is owned by deployment flows. "
         "Spec §6.9 mapping table."
     )

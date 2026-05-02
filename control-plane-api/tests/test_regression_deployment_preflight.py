@@ -147,3 +147,48 @@ async def test_regression_admin_preflight_reports_targeted_error_for_explicit_ga
     assert results[0].gateway_name == "connect-webmethods-dev"
     assert results[0].target_gateway_type == "webmethods"
     assert results[0].errors[0].code == "openapi_operation_responses_missing"
+
+
+@pytest.mark.asyncio
+async def test_regression_webmethods_preflight_blocks_boolean_additional_properties():
+    from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+    catalog = _catalog(
+        {
+            "openapi": "3.0.3",
+            "info": {"title": "Manual Test", "version": "1.0.0"},
+            "paths": {
+                "/": {
+                    "get": {
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"type": "object", "additionalProperties": True}
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    )
+    gateway = _webmethods_gateway()
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[_result(catalog), _result(gateway), _result(gateway)])
+    svc = DeploymentOrchestrationService(db)
+
+    results = await svc.preflight_deploy_api_to_env(
+        tenant_id="demo",
+        api_identifier=str(catalog.id),
+        environment="dev",
+        gateway_ids=[gateway.id],
+    )
+
+    assert len(results) == 1
+    assert results[0].deployable is False
+    assert results[0].errors[0].code == "openapi_schema_boolean_additional_properties"
+    assert results[0].errors[0].path.endswith(".schema.additionalProperties")

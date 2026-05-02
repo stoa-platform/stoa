@@ -1,10 +1,12 @@
 """STOA Control Plane - FastAPI Application."""
 
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -43,8 +45,12 @@ app.add_middleware(
 )
 
 # Configure rate limiter
+ExceptionHandler = Callable[[Request, Exception], Response | Awaitable[Response]]
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(
+    RateLimitExceeded,
+    cast(ExceptionHandler, _rate_limit_exceeded_handler),
+)
 
 
 @app.get(

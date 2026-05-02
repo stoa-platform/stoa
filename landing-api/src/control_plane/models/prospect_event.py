@@ -1,17 +1,18 @@
 """Prospect event model for tracking user actions."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, Index, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from control_plane.models.base import Base, UUIDMixin
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Types of events that can be tracked."""
 
     INVITE_OPENED = "invite_opened"  # GET /welcome/{token}

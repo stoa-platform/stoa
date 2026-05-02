@@ -57,7 +57,7 @@ jobs:
       - name: Download Trivy report (best-effort)
         id: trivy-download
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: trivy-report
           path: .
@@ -125,7 +125,7 @@ jobs:
 
       - name: Post results to PR
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload council-history.jsonl artifact
         if: always() && hashFiles('council-history.jsonl') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: council-history-pr-${{ github.event.pull_request.number }}
           path: council-history.jsonl

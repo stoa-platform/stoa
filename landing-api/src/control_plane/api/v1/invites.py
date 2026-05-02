@@ -136,7 +136,10 @@ async def get_invite(
     "/{invite_id}/metrics",
     response_model=MetricsResponse,
     summary="Get invite metrics",
-    description="Get calculated metrics for an invite including time-to-sandbox, time-to-first-tool, and event timeline.",
+    description=(
+        "Get calculated metrics for an invite including time-to-sandbox, "
+        "time-to-first-tool, and event timeline."
+    ),
 )
 async def get_invite_metrics(
     invite_id: UUID,

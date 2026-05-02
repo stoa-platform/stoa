@@ -816,6 +816,31 @@ class RouteSyncAckPayload(BaseModel):
     sync_timestamp: str = Field(..., description="ISO timestamp of sync completion")
 
 
+def _is_gateway_connectivity_error(error: str | None) -> bool:
+    """Return True when a sync failure is gateway reachability, not route drift."""
+    if not error:
+        return False
+    normalized = error.casefold()
+    return any(
+        marker in normalized
+        for marker in (
+            "connection reset",
+            "connection refused",
+            "connect: connection",
+            "clientconnectordnserror",
+            "context deadline exceeded",
+            "did not acknowledge",
+            "eof",
+            "gateway unreachable",
+            "i/o timeout",
+            "no route to host",
+            "temporarily unavailable",
+            "timed out",
+            "timeout",
+        )
+    )
+
+
 @router.post("/{gateway_id}/route-sync-ack", status_code=200)
 async def route_sync_ack(
     gateway_id: UUID,
@@ -909,11 +934,14 @@ async def route_sync_ack(
         desired_generation = deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
         synced_generation = deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
 
+        is_failed_connectivity_observation = effective_status == "failed" and _is_gateway_connectivity_error(
+            step_error or effective_error
+        )
         if (
             effective_status == "failed"
             and deployment.sync_status == DeploymentSyncStatus.SYNCED
             and deployment.last_sync_success is not None
-            and synced_generation >= desired_generation
+            and (synced_generation >= desired_generation or is_failed_connectivity_observation)
         ):
             logger.info(
                 "route-sync-ack: preserving synced deployment %s after failed re-ack for generation %s",

@@ -220,9 +220,7 @@ def _generated_openapi_fallback(api: APICatalog) -> dict[str, Any]:
                         "200": {
                             "description": "Successful response",
                             "content": {
-                                "application/json": {
-                                    "schema": {"type": "object", "additionalProperties": True}
-                                }
+                                "application/json": {"schema": {"type": "object"}}
                             },
                         }
                     },

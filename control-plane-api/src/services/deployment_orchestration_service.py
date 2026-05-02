@@ -726,6 +726,50 @@ class DeploymentOrchestrationService:
                         )
                     )
 
+        errors.extend(
+            DeploymentOrchestrationService._validate_no_boolean_additional_properties(
+                openapi_spec,
+                error=error,
+            )
+        )
+        return errors
+
+    @staticmethod
+    def _validate_no_boolean_additional_properties(
+        value,
+        *,
+        error,
+        path: str = "openapi_spec",
+    ) -> list[DeploymentPreflightError]:
+        errors: list[DeploymentPreflightError] = []
+        if isinstance(value, dict):
+            for key, child in value.items():
+                child_path = f"{path}.{key}"
+                if key == "additionalProperties" and isinstance(child, bool):
+                    errors.append(
+                        error(
+                            "openapi_schema_boolean_additional_properties",
+                            "webMethods rejects boolean additionalProperties; omit it or use an explicit schema object",
+                            child_path,
+                        )
+                    )
+                    continue
+                errors.extend(
+                    DeploymentOrchestrationService._validate_no_boolean_additional_properties(
+                        child,
+                        error=error,
+                        path=child_path,
+                    )
+                )
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                errors.extend(
+                    DeploymentOrchestrationService._validate_no_boolean_additional_properties(
+                        child,
+                        error=error,
+                        path=f"{path}.{index}",
+                    )
+                )
         return errors
 
     async def _has_active_promotion(self, api_id: str, tenant_id: str, target_environment: str) -> bool:

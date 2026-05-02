@@ -96,7 +96,7 @@ def _generated_openapi_spec(contract_payload: ApiCreatePayload) -> dict[str, Any
                             "description": "Successful response",
                             "content": {
                                 "application/json": {
-                                    "schema": {"type": "object", "additionalProperties": True},
+                                    "schema": {"type": "object"},
                                 },
                             },
                         },

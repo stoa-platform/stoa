@@ -561,7 +561,10 @@ Pour `target_gateway_type=webmethods`, le preflight minimal est strict:
 - `openapi` ou `swagger` doit être présent;
 - `info.title` et `info.version` doivent être présents;
 - `paths` doit contenir au moins une route;
-- chaque opération HTTP déclarée doit contenir un objet `responses` non vide.
+- chaque opération HTTP déclarée doit contenir un objet `responses` non vide;
+- aucun schéma ne doit utiliser `additionalProperties` booléen (`true` ou
+  `false`), car webMethods le rejette; omettre le champ ou utiliser un schéma
+  objet explicite.
 
 Une spec OpenAPI générique peut donc être valide pour STOA mais non déployable
 vers webMethods. Dans ce cas le statut utilisateur est `invalid_desired_state`
@@ -767,11 +770,13 @@ des modes gateway acquittés.
 
 Déployer une API vers `target_gateway_type=webmethods` avec une spec OpenAPI
 syntaxiquement parseable mais incomplète pour WebMethods, par exemple une
-opération sans `responses`.
+opération sans `responses` ou un schéma contenant
+`additionalProperties: true`.
 
 PASS si:
 - `POST /deploy/validate` retourne `deployable=false` pour la gateway
-  webMethods avec `code=openapi_operation_responses_missing`;
+  webMethods avec `code=openapi_operation_responses_missing` ou
+  `code=openapi_schema_boolean_additional_properties`;
 - `POST /deploy` retourne une erreur 400 actionnable avant `event_emitted`;
 - aucun `GatewayDeployment` n'est créé et aucun event Kafka/SSE n'est émis.
 

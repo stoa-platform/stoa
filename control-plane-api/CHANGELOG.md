@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.0...control-plane-api-v1.12.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* **api:** backfill gateway external urls ([#2662](https://github.com/stoa-platform/stoa/issues/2662)) ([7871024](https://github.com/stoa-platform/stoa/commit/7871024a67752779a442b036d63cd240df1fc5f7))
+
 ## [1.12.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.11.3...control-plane-api-v1.12.0) (2026-05-01)
 
 

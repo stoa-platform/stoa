@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -112,6 +112,15 @@ class APIResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class APIOpenAPISpecResponse(BaseModel):
+    spec: dict[str, Any]
+    source: Literal["git", "db_cache", "generated_fallback"]
+    git_path: str
+    git_commit_sha: str | None = None
+    format: Literal["openapi", "swagger", "unknown"] = "unknown"
+    is_authoritative: bool = False
+
+
 class APIVersionEntry(BaseModel):
     """A single version entry from git history."""
 
@@ -167,6 +176,63 @@ def _parse_openapi_spec(spec_str: str | None) -> dict | None:
     except (json.JSONDecodeError, yaml.YAMLError, TypeError):
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _detect_spec_format(spec: dict[str, Any]) -> Literal["openapi", "swagger", "unknown"]:
+    if spec.get("openapi"):
+        return "openapi"
+    if spec.get("swagger"):
+        return "swagger"
+    return "unknown"
+
+
+def _is_usable_openapi_spec(value: Any) -> bool:
+    return isinstance(value, dict) and _detect_spec_format(value) != "unknown" and isinstance(value.get("paths"), dict)
+
+
+def _canonical_openapi_git_path(tenant_id: str, api_id: str, api: APICatalog | None = None) -> str:
+    raw_path = getattr(api, "git_path", None) if api is not None else None
+    if isinstance(raw_path, str) and raw_path:
+        base = raw_path.removesuffix("/api.yaml").rstrip("/")
+        if base.endswith(f"/apis/{api_id}"):
+            return f"{base}/openapi.yaml"
+    return f"tenants/{tenant_id}/apis/{api_id}/openapi.yaml"
+
+
+def _generated_openapi_fallback(api: APICatalog) -> dict[str, Any]:
+    metadata = api.api_metadata or {}
+    title = metadata.get("display_name") or api.api_name or api.api_id
+    version = api.version or metadata.get("version") or "1.0.0"
+    description = metadata.get("description") or "Generated fallback because no Git OpenAPI file was found."
+    backend_url = metadata.get("backend_url")
+    spec: dict[str, Any] = {
+        "openapi": "3.0.3",
+        "info": {
+            "title": title,
+            "version": version,
+            "description": description,
+        },
+        "paths": {
+            "/": {
+                "get": {
+                    "summary": "Fallback operation",
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"type": "object", "additionalProperties": True}
+                                }
+                            },
+                        }
+                    },
+                }
+            }
+        },
+    }
+    if isinstance(backend_url, str) and backend_url:
+        spec["servers"] = [{"url": backend_url}]
+    return spec
 
 
 def _api_from_catalog(api: APICatalog) -> APIResponse:
@@ -278,6 +344,73 @@ async def get_api(
     except Exception as e:
         logger.error(f"Failed to get API {api_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve API")
+
+
+@router.get("/{api_id}/openapi", response_model=APIOpenAPISpecResponse)
+@require_tenant_access
+async def get_api_openapi_spec(
+    tenant_id: str,
+    api_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the API description document, preferring Git over DB cache.
+
+    Git is the configuration source of truth. ``api_catalog.openapi_spec`` is
+    treated only as a compatibility cache for legacy rows and never overrides a
+    readable ``tenants/{tenant}/apis/{api}/openapi.yaml`` file.
+    """
+    try:
+        repo = CatalogRepository(db)
+        api = await repo.get_api_by_id(tenant_id, api_id)
+        if not api:
+            raise HTTPException(status_code=404, detail="API not found")
+
+        git_path = _canonical_openapi_git_path(tenant_id, api_id, api)
+        try:
+            git_spec = await git_service.get_api_openapi_spec(tenant_id, api_id)
+        except Exception as exc:
+            logger.warning(
+                "api_openapi_git_read_failed",
+                extra={"tenant_id": tenant_id, "api_id": api_id, "error": str(exc)},
+            )
+            git_spec = None
+
+        if _is_usable_openapi_spec(git_spec):
+            return APIOpenAPISpecResponse(
+                spec=git_spec,
+                source="git",
+                git_path=git_path,
+                git_commit_sha=getattr(api, "git_commit_sha", None),
+                format=_detect_spec_format(git_spec),
+                is_authoritative=True,
+            )
+
+        db_spec = getattr(api, "openapi_spec", None)
+        if _is_usable_openapi_spec(db_spec):
+            return APIOpenAPISpecResponse(
+                spec=db_spec,
+                source="db_cache",
+                git_path=git_path,
+                git_commit_sha=getattr(api, "git_commit_sha", None),
+                format=_detect_spec_format(db_spec),
+                is_authoritative=False,
+            )
+
+        fallback = _generated_openapi_fallback(api)
+        return APIOpenAPISpecResponse(
+            spec=fallback,
+            source="generated_fallback",
+            git_path=git_path,
+            git_commit_sha=getattr(api, "git_commit_sha", None),
+            format="openapi",
+            is_authoritative=False,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get OpenAPI spec for {api_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve OpenAPI specification")
 
 
 @router.post("", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
@@ -465,6 +598,7 @@ async def _create_api_gitops(
         backend_url=api.backend_url,
         description=api.description,
         tags=tuple(api.tags or ()),
+        openapi_spec=_parse_openapi_spec(api.openapi_spec),
     )
 
     try:

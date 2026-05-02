@@ -11,15 +11,11 @@ import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import {
   RefreshCw,
-  Activity,
   Server,
   ChevronRight,
   ExternalLink,
   Trash2,
   HeartPulse,
-  Shield,
-  Globe,
-  Zap,
   RotateCcw,
   Lock,
   Eye,
@@ -27,9 +23,19 @@ import {
   GitBranch,
 } from 'lucide-react';
 import { Button } from '@stoa/shared/components/Button';
-import type { GatewayInstance, GatewayInstanceStatus, GatewayMode } from '../../types';
+import type { GatewayInstance, GatewayInstanceStatus } from '../../types';
 import { SubNav } from '../../components/SubNav';
 import { gatewayTabs } from '../../components/subNavGroups';
+import {
+  TYPE_DISPLAY,
+  deploymentLabel,
+  displayUrl,
+  externalUrl,
+  gatewayExternalLinks,
+  gatewayUrls,
+  targetLabel,
+  topologyLabel,
+} from './gatewayDisplay';
 
 // ---------------------------------------------------------------------------
 // Constants — colors from shared constants (green=dev, amber=staging, red=prod)
@@ -92,49 +98,6 @@ const STATUS_CONFIG: Record<GatewayInstanceStatus, { dot: string; label: string;
     },
   };
 
-const TYPE_DISPLAY: Record<string, { label: string; icon: typeof Server }> = {
-  stoa: { label: 'STOA', icon: Zap },
-  stoa_edge_mcp: { label: 'STOA Edge MCP', icon: Zap },
-  stoa_sidecar: { label: 'STOA Link', icon: Shield },
-  stoa_proxy: { label: 'STOA Proxy', icon: Globe },
-  stoa_shadow: { label: 'STOA Shadow', icon: Activity },
-  webmethods: { label: 'webMethods', icon: Server },
-  kong: { label: 'Kong', icon: Server },
-  apigee: { label: 'Apigee', icon: Server },
-  aws_apigateway: { label: 'AWS API GW', icon: Server },
-  azure_apim: { label: 'Azure APIM', icon: Server },
-  gravitee: { label: 'Gravitee', icon: Server },
-  stoa_connect: { label: 'STOA Connect', icon: GitBranch },
-};
-
-const MODE_LABELS: Record<GatewayMode, string> = {
-  'edge-mcp': 'Edge MCP',
-  sidecar: 'Runtime Sidecar',
-  proxy: 'Proxy',
-  shadow: 'Shadow',
-  connect: 'Connect',
-};
-
-const DEPLOYMENT_LABELS: Record<string, string> = {
-  edge: 'Edge',
-  connect: 'Connect',
-  sidecar: 'Sidecar',
-};
-
-const TOPOLOGY_LABELS: Record<string, string> = {
-  'native-edge': 'Native edge',
-  'remote-agent': 'Remote agent',
-  'same-pod': 'Same pod',
-};
-
-const TARGET_LABELS: Record<string, string> = {
-  stoa: 'STOA',
-  kong: 'Kong',
-  webmethods: 'webMethods',
-  gravitee: 'Gravitee',
-  agentgateway: 'Agent Gateway',
-};
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -150,24 +113,6 @@ function isLive(gw: GatewayInstance): boolean {
 
 function isStoa(type: string): boolean {
   return type.startsWith('stoa');
-}
-
-function deploymentLabel(gw: GatewayInstance): string | null {
-  if (gw.deployment_mode) return DEPLOYMENT_LABELS[gw.deployment_mode] ?? gw.deployment_mode;
-  if (gw.mode) return MODE_LABELS[gw.mode] ?? gw.mode;
-  return null;
-}
-
-function targetLabel(gw: GatewayInstance, fallback: string): string {
-  if (gw.target_gateway_type) {
-    return TARGET_LABELS[gw.target_gateway_type] ?? gw.target_gateway_type;
-  }
-  return fallback;
-}
-
-function topologyLabel(gw: GatewayInstance): string | null {
-  if (!gw.topology) return null;
-  return TOPOLOGY_LABELS[gw.topology] ?? gw.topology;
 }
 
 function formatUptime(seconds: number): string {
@@ -186,95 +131,6 @@ function timeAgo(dateStr: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
-}
-
-const ENDPOINT_ALIASES: Record<string, string[]> = {
-  public_url: ['public_url', 'publicUrl', 'public', 'runtime_url', 'runtimeUrl', 'external_url'],
-  ui_url: ['ui_url', 'uiUrl', 'console_url', 'consoleUrl', 'web_ui_url', 'webUiUrl'],
-  target_gateway_url: ['target_gateway_url', 'targetGatewayUrl', 'target_url', 'targetUrl'],
-  admin_url: ['admin_url', 'adminUrl', 'admin', 'base_url', 'baseUrl'],
-  internal_url: ['internal_url', 'internalUrl', 'internal'],
-};
-
-type GatewayUrls = {
-  publicUrl: string | null;
-  uiUrl: string | null;
-  targetUrl: string | null;
-  baseUrl: string | null;
-  primaryUrl: string | null;
-};
-
-function cleanUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
-function endpointValue(gw: GatewayInstance, canonicalKey: string): string | null {
-  const endpoints = gw.endpoints ?? {};
-  for (const key of ENDPOINT_ALIASES[canonicalKey] ?? [canonicalKey]) {
-    const value = cleanUrl(endpoints[key]);
-    if (value) return value;
-  }
-  return null;
-}
-
-function isInternalUrl(value: string): boolean {
-  if (!/^https?:\/\//i.test(value)) return true;
-  try {
-    const host = new URL(value).hostname.toLowerCase();
-    return (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host === '0.0.0.0' ||
-      host.endsWith('.svc') ||
-      host.includes('.svc.cluster.local') ||
-      host.endsWith('.cluster.local')
-    );
-  } catch {
-    return true;
-  }
-}
-
-function externalUrl(value: unknown): string | null {
-  const url = cleanUrl(value);
-  return url && !isInternalUrl(url) ? url : null;
-}
-
-function displayUrl(value: string | null): string {
-  return value?.replace(/^https?:\/\//, '') ?? '--';
-}
-
-function gatewayUrls(gw: GatewayInstance): GatewayUrls {
-  const publicUrl = externalUrl(gw.public_url) ?? externalUrl(endpointValue(gw, 'public_url'));
-  const uiUrl = externalUrl(gw.ui_url) ?? externalUrl(endpointValue(gw, 'ui_url'));
-  const targetUrl =
-    externalUrl(gw.target_gateway_url) ?? externalUrl(endpointValue(gw, 'target_gateway_url'));
-  const baseUrl = cleanUrl(gw.base_url) ?? endpointValue(gw, 'admin_url');
-  const externalBaseUrl = baseUrl ? externalUrl(baseUrl) : null;
-
-  return {
-    publicUrl,
-    uiUrl,
-    targetUrl,
-    baseUrl,
-    primaryUrl: publicUrl ?? targetUrl ?? uiUrl ?? externalBaseUrl ?? baseUrl,
-  };
-}
-
-function gatewayExternalLinks(
-  urls: GatewayUrls
-): { label: string; href: string; icon: typeof Zap }[] {
-  const seen = new Set<string>();
-  return [
-    { label: 'Runtime', href: urls.publicUrl, icon: Zap },
-    { label: 'UI', href: urls.uiUrl, icon: Globe },
-    { label: 'Target', href: urls.targetUrl, icon: Server },
-  ].flatMap((link) => {
-    if (!link.href || seen.has(link.href)) return [];
-    seen.add(link.href);
-    return [{ ...link, href: link.href }];
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,12 +934,14 @@ function GatewayDetailPanel({
               <DetailRow label="Environment" value={gw.environment} />
               <DetailRow label="Base URL" value={<UrlValue url={urls.baseUrl} />} />
               {urls.publicUrl && (
-                <DetailRow label="Runtime URL" value={<UrlValue url={urls.publicUrl} />} />
+                <DetailRow label="STOA Runtime" value={<UrlValue url={urls.publicUrl} />} />
               )}
               {urls.targetUrl && (
                 <DetailRow label="Target Gateway" value={<UrlValue url={urls.targetUrl} />} />
               )}
-              {urls.uiUrl && <DetailRow label="Gateway UI" value={<UrlValue url={urls.uiUrl} />} />}
+              {urls.uiUrl && (
+                <DetailRow label="Third-party UI" value={<UrlValue url={urls.uiUrl} />} />
+              )}
               {gw.source && (
                 <DetailRow
                   label="Source"

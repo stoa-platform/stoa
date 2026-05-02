@@ -20,6 +20,9 @@ import {
   Pencil,
   Trash2,
   ExternalLink,
+  Copy,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -372,15 +375,90 @@ function OverviewTab({ api }: { api: API }) {
 }
 
 function SpecTab({ api }: { api: API }) {
-  // The OpenAPI spec is not directly in the API response — it's stored in the Git repository.
-  // For now show a placeholder directing users to the spec file.
+  const [copied, setCopied] = useState(false);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['api-openapi', api.tenant_id, api.name],
+    queryFn: () => apiService.getApiOpenApiSpec(api.tenant_id, api.name),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-16 bg-neutral-100 dark:bg-neutral-800 rounded animate-pulse" />
+        <div className="h-80 bg-neutral-100 dark:bg-neutral-800 rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="py-12 text-center text-neutral-500 dark:text-neutral-400">
+        <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-400" />
+        <p className="text-sm">OpenAPI specification is unavailable.</p>
+        <p className="text-xs mt-1 font-mono">
+          tenants/{api.tenant_id}/apis/{api.name}/openapi.yaml
+        </p>
+      </div>
+    );
+  }
+
+  const sourceLabel =
+    data.source === 'git'
+      ? 'Git source'
+      : data.source === 'db_cache'
+        ? 'DB cache'
+        : 'Generated fallback';
+  const sourceClass =
+    data.source === 'git'
+      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      : data.source === 'db_cache'
+        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+  const prettySpec = JSON.stringify(data.spec, null, 2);
+
+  const copySpec = async () => {
+    await navigator.clipboard.writeText(prettySpec);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
-    <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
-      <FileJson className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
-      <p className="text-sm">OpenAPI specification is stored in the GitOps repository.</p>
-      <p className="text-xs mt-1 font-mono">
-        tenants/{api.tenant_id}/apis/{api.name}/openapi.yaml
-      </p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sourceClass}`}>
+              {sourceLabel}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+              {data.format}
+            </span>
+          </div>
+          <div className="text-xs text-neutral-500 dark:text-neutral-400 space-y-1">
+            <p className="font-mono break-all">{data.git_path}</p>
+            {data.git_commit_sha && <p className="font-mono break-all">{data.git_commit_sha}</p>}
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={copySpec}>
+          {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+
+      {!data.is_authoritative && (
+        <div className="flex items-start gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:border-yellow-900/60 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <span>
+            This view is not backed by the canonical Git OpenAPI file. The Git source must be
+            restored for runtime reconciliation.
+          </span>
+        </div>
+      )}
+
+      <pre className="max-h-[560px] overflow-auto rounded-lg border border-neutral-200 bg-neutral-950 p-4 text-xs leading-5 text-neutral-100 dark:border-neutral-700">
+        {prettySpec}
+      </pre>
     </div>
   );
 }

@@ -48,6 +48,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../services/api', () => ({
   apiService: {
     getApi: vi.fn(),
+    getApiOpenApiSpec: vi.fn(),
     getApiVersions: vi.fn(),
     updateApi: vi.fn(),
     deleteApi: vi.fn(),
@@ -126,6 +127,18 @@ function setupMocks(role: PersonaRole = 'cpi-admin') {
     isReadOnly: false,
   });
   vi.mocked(apiService.getApi).mockResolvedValue(baseApi);
+  vi.mocked(apiService.getApiOpenApiSpec).mockResolvedValue({
+    spec: {
+      openapi: '3.0.3',
+      info: { title: 'Payment API', version: '2.0.0' },
+      paths: { '/payments': { post: { responses: { '200': { description: 'ok' } } } } },
+    },
+    source: 'git',
+    git_path: 'tenants/oasis-gunters/apis/payment-api/openapi.yaml',
+    git_commit_sha: 'a'.repeat(40),
+    format: 'openapi',
+    is_authoritative: true,
+  });
   vi.mocked(apiService.getApiVersions).mockResolvedValue([]);
   vi.mocked(apiService.listDeployments).mockResolvedValue({
     items: [],
@@ -285,8 +298,10 @@ describe('APIDetail', () => {
       await user.click(screen.getByText('Spec'));
 
       await waitFor(() => {
-        expect(screen.getByText(/OpenAPI specification is stored/)).toBeInTheDocument();
+        expect(screen.getByText('Git source')).toBeInTheDocument();
+        expect(screen.getByText(/"openapi": "3.0.3"/)).toBeInTheDocument();
       });
+      expect(apiService.getApiOpenApiSpec).toHaveBeenCalledWith('oasis-gunters', 'payment-api');
     });
 
     it('switches to Versions tab on click', async () => {

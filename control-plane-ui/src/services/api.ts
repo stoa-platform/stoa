@@ -2,6 +2,7 @@ import type {
   Tenant,
   TenantCreate,
   API,
+  APIOpenAPISpec,
   APICreate,
   Application,
   ApplicationCreate,
@@ -276,6 +277,10 @@ class ApiService {
 
   async getApi(tenantId: string, apiId: string): Promise<API> {
     return apisClient.get(tenantId, apiId);
+  }
+
+  async getApiOpenApiSpec(tenantId: string, apiId: string): Promise<APIOpenAPISpec> {
+    return apisClient.getOpenApiSpec(tenantId, apiId);
   }
 
   async createApi(tenantId: string, api: APICreate): Promise<API> {

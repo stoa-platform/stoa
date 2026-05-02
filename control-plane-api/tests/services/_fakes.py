@@ -13,6 +13,7 @@ slice of the GitHub Contents API behaviour without touching PyGithub:
 * ``latest_file_commit`` returns the most recent commit SHA recorded for
   the path.
 * ``list`` returns paths matching ``fnmatch.fnmatch(glob, path)``.
+* ``list_file_metadata`` returns matching paths with blob + commit SHAs.
 
 The fake is deterministic: blob and commit SHAs are derived from a
 monotonic counter so tests can assert exact values when needed.
@@ -25,7 +26,13 @@ import hashlib
 from dataclasses import dataclass
 
 from src.services.catalog_git_client.github_contents import CatalogShaConflictError
-from src.services.catalog_git_client.models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
+from src.services.catalog_git_client.models import (
+    RemoteCommit,
+    RemoteFile,
+    RemoteFileMetadata,
+    RemotePullRequest,
+    RemoteTag,
+)
 
 
 @dataclass
@@ -173,6 +180,13 @@ class InMemoryCatalogGitClient:
 
     async def list(self, glob_pattern: str) -> list[str]:
         return [p for p in self._files if fnmatch.fnmatch(p, glob_pattern)]
+
+    async def list_file_metadata(self, glob_pattern: str) -> list[RemoteFileMetadata]:
+        return [
+            RemoteFileMetadata(path=p, sha=entry.file_sha, commit_sha=entry.commit_sha)
+            for p, entry in self._files.items()
+            if fnmatch.fnmatch(p, glob_pattern)
+        ]
 
 
 class _RaceOnceCatalogGitClient(InMemoryCatalogGitClient):

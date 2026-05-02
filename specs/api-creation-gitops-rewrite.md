@@ -308,6 +308,9 @@ Reconstructible depuis `stoa-catalog` + `api_catalog`.
                                       message="create api {tid}/{name}")
        - race condition → relire, réévaluer Case A/B/C, retry max 3×
        - épuisement → 503, aucune projection
+10bis. Si le payload contient `openapi_spec`, écrire aussi
+       `tenants/{tenant_id}/apis/{api_id}/openapi.yaml`.
+       Ce fichier est la vérité configurationnelle de la description API.
 11. file_commit_sha = CatalogGitClient.latest_file_commit(git_path)
 12. Relire contenu depuis Git remote :
        committed_bytes = CatalogGitClient.read_at_commit(git_path, file_commit_sha)
@@ -332,8 +335,10 @@ Reconstructible depuis `stoa-catalog` + `api_catalog`.
 - **Étape 6.** `git_path` calculé depuis le slug, jamais depuis un UUID. Test scaffold Phase 3 vérifie qu'aucune fonction du nouveau code ne convertit `api_catalog.id` → `git_path`.
 - **Étape 7.** 3 catégories distinguées, pas binaire.
 - **Étape 12.** `read_at_commit` retourne null après push réussi → 500 explicite (bug d'infrastructure), pas dégradation silencieuse.
-- **Étape 14.** La projection consomme le contenu Git relu, jamais le payload. **Jamais d'écrasement de `target_gateways` ni `openapi_spec`** (champs gérés par d'autres flows).
+- **Étape 10bis.** `openapi_spec` n'est pas sérialisé dans `api.yaml`; il vit dans le fichier Git canonique `openapi.yaml`.
+- **Étape 14.** La projection consomme le contenu Git relu, jamais le payload. **Jamais d'écrasement de `target_gateways` ni `openapi_spec`** (cache DB hydraté depuis `openapi.yaml` par le sync catalogue).
 - **Étape 16.** Court-circuit explicite de l'event Kafka legacy.
+- **Reconciler.** La boucle utilise les blob SHA du tree Git pour ignorer les fichiers inchangés déjà réconciliés; elle ne doit pas relire chaque `api.yaml` à chaque tick.
 
 ### 6.6 Reconciler in-tree — pattern asyncio existant
 
@@ -349,7 +354,8 @@ Boucle (extraits clés) :
 async def start():
     while not shutdown:
         try:
-            for git_path in await catalog_git_client.list("tenants/*/apis/*/api.yaml"):
+            for remote_file in await catalog_git_client.list_file_metadata("tenants/*/apis/*/api.yaml"):
+                git_path = remote_file.path
                 tenant_id, api_name = parse_path(git_path)
 
                 # Refus si api_name UUID-shaped (corruption Git)
@@ -357,9 +363,13 @@ async def start():
                     await update_status(failed, "uuid-shaped api_name in git_path")
                     continue
 
+                if blob_cache[git_path] == remote_file.sha:
+                    seen.add((tenant_id, api_name))
+                    continue
+
                 content_bytes = await catalog_git_client.get(git_path)
                 content_hash = sha256_hex(content_bytes)
-                commit_sha = await catalog_git_client.latest_file_commit(git_path)
+                commit_sha = remote_file.commit_sha or await catalog_git_client.latest_file_commit(git_path)
                 parsed = parse_yaml(content_bytes)
 
                 # Validation cohérence path ↔ contenu (§6.10)
@@ -502,7 +512,7 @@ deployments:
 | `portal_published` | dérivé : `"portal:published" in tags` | |
 | `audience` | YAML `.audience` ou `'public'` (default DB) | |
 | `metadata` | non écrit par GitOps en UPDATE ; `'{}'::jsonb` en CREATE | préservé en ré-adoption |
-| `openapi_spec` | **non écrit par GitOps** | préservé, géré par UAC V2 ou ailleurs |
+| `openapi_spec` | cache DB hydraté depuis `tenants/{tenant_id}/apis/{api_id}/openapi.yaml` | la projection `api.yaml` ne l'écrit pas; Git reste la source de vérité |
 | `target_gateways` | **non écrit par GitOps** | préservé, géré par déploiement |
 | `git_path` | path réellement lu/committé | canonique, jamais UUID |
 | `git_commit_sha` | `latest_file_commit(git_path)` | |

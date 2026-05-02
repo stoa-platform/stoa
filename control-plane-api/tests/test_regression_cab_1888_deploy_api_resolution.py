@@ -24,7 +24,10 @@ class TestRegressionCAB1888DeployApiResolution:
             "api_id": "payments-v2",
             "tenant_id": "acme",
             "version": "2.0.0",
-            "openapi_spec": {"openapi": "3.0.0"},
+            "openapi_spec": {
+                "openapi": "3.0.0",
+                "paths": {"/payments": {"post": {"responses": {"200": {"description": "ok"}}}}},
+            },
             "api_metadata": None,
             "status": "active",
         }
@@ -132,3 +135,49 @@ class TestRegressionCAB1888DeployApiResolution:
 
         result = await svc._resolve_api_catalog("acme", str(catalog_id))
         assert result == catalog
+
+    @pytest.mark.asyncio
+    async def test_existing_row_with_missing_openapi_refreshes_from_git(self):
+        """Existing DB rows with stale/null specs must be hydrated before preflight."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        stale = self._make_catalog(openapi_spec=None)
+        refreshed = self._make_catalog()
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        mock_found = MagicMock()
+        mock_found.scalar_one_or_none.return_value = stale
+        db.execute = AsyncMock(return_value=mock_found)
+
+        with patch.object(svc, "_sync_api_from_git", new_callable=AsyncMock) as mock_sync:
+            mock_sync.return_value = refreshed
+
+            result = await svc._resolve_api_catalog("acme", "payments-v2")
+
+            assert result == refreshed
+            mock_sync.assert_called_once_with("acme", "payments-v2")
+
+    @pytest.mark.asyncio
+    async def test_legacy_uuid_api_id_refreshes_using_api_name(self):
+        """Legacy UUID api_id rows should re-adopt the Git slug before deployment."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        legacy = self._make_catalog(api_id=str(uuid4()), api_name="payments")
+        refreshed = self._make_catalog(api_id="payments", api_name="payments")
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        mock_none = MagicMock()
+        mock_none.scalar_one_or_none.return_value = None
+        mock_found = MagicMock()
+        mock_found.scalar_one_or_none.return_value = legacy
+        db.execute = AsyncMock(side_effect=[mock_none, mock_found])
+
+        with patch.object(svc, "_sync_api_from_git", new_callable=AsyncMock) as mock_sync:
+            mock_sync.return_value = refreshed
+
+            result = await svc._resolve_api_catalog("acme", "payments")
+
+            assert result == refreshed
+            mock_sync.assert_called_once_with("acme", "payments")

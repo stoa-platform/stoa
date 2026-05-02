@@ -2,14 +2,15 @@
 
 Spec §6.7 (CAB-2184 B-CLIENT).
 
-Five methods, runtime-checkable so tests can assert isinstance() on stubs.
+Runtime-checkable so tests can assert isinstance() on stubs.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
-from .models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
+from .models import RemoteCommit, RemoteFile, RemoteFileMetadata, RemotePullRequest, RemoteTag
 
 
 @runtime_checkable
@@ -94,5 +95,13 @@ class CatalogGitClient(Protocol):
         """Return paths matching ``glob_pattern`` (e.g. ``tenants/*/apis/*/api.yaml``).
 
         Used by the reconciler tick (spec §6.6).
+        """
+        ...
+
+    async def list_file_metadata(self, glob_pattern: str) -> Sequence[RemoteFileMetadata]:
+        """Return matching file paths with Git blob metadata.
+
+        Reconciler callers use this as the preferred read path to avoid
+        refetching unchanged files every tick.
         """
         ...

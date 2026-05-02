@@ -23,6 +23,20 @@ class RemoteFile:
 
 
 @dataclass(frozen=True)
+class RemoteFileMetadata:
+    """A file entry discovered from the Git tree.
+
+    ``sha`` is the Git blob SHA. ``commit_sha`` is the HEAD commit that
+    produced the tree entry, so callers can avoid one extra history lookup per
+    file when a tree listing already established the source generation.
+    """
+
+    path: str
+    sha: str
+    commit_sha: str | None = None
+
+
+@dataclass(frozen=True)
 class RemoteCommit:
     """A commit produced by ``create_or_update``.
 

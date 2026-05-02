@@ -89,6 +89,7 @@ La Console affiche desired vs observed, jamais un simple état UI.
 | Objet | Rôle | Source de vérité |
 |-------|------|------------------|
 | Git/UAC JSON | contrats UAC JSON déclaratifs, overlays par environnement, gouvernance | vérité configurationnelle |
+| Git/OpenAPI ou Swagger | description API déployable et visualisable (`tenants/{tenant}/apis/{api}/openapi.yaml`) | vérité configurationnelle de la spec API |
 | CP matérialisé | cache DB/API du desired state résolu | projection réconciliable, pas source primaire prod |
 | GatewayDeployment | cible d'exécution par gateway et génération de desired state | vérité runtime/exécution |
 | Gateway observed state | état réellement observé/reporté par Link/gateway | preuve d'application ou drift |
@@ -108,6 +109,11 @@ Toute projection Console ou API de déploiement doit exposer:
 | `desired_source` | `git`, `db_shortcut`, `unknown` | provenance du desired state matérialisé |
 | `git_sync_status` | `up_to_date`, `missing_commit`, `git_sync_disabled`, `unknown` | fraîcheur du catalog Git pour cette génération |
 | `desired_commit_sha` | SHA Git ou `null` | commit exact qui porte le desired state |
+
+La Console ne doit jamais afficher uniquement un chemin Git supposé pour la
+description API. L'onglet `Spec` doit lire le fichier Git canonique, afficher sa
+provenance (`git`, `db_cache`, `generated_fallback`) et marquer tout fallback
+comme non autoritaire.
 | `desired_git_path` | chemin catalog ou `null` | fichier/dossier Git attendu |
 | `catalog_release_tag` | tag Git ou `null` | version rollbackable du desired state accepté |
 

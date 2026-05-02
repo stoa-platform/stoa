@@ -73,6 +73,12 @@ _CATALOG_WRITE_MODES = {"direct", "pull_request"}
 _RELEASE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
+def _render_openapi_yaml(openapi_spec: dict[str, Any] | None) -> bytes | None:
+    if not openapi_spec:
+        return None
+    return yaml.safe_dump(openapi_spec, sort_keys=False, default_flow_style=False, allow_unicode=True).encode("utf-8")
+
+
 def _sanitize_actor(actor: str) -> str:
     """Defense-in-depth: strip control chars + cap length before commit message use.
 
@@ -191,8 +197,10 @@ class GitOpsWriter:
         )
         api_yaml_bytes = api_yaml_str.encode("utf-8")
         attempted_hash = compute_catalog_content_hash(api_yaml_bytes)
+        openapi_yaml_bytes = _render_openapi_yaml(contract_payload.openapi_spec)
 
         git_path = canonical_catalog_path(tenant_id, api_name)
+        openapi_git_path = git_path.removesuffix("/api.yaml") + "/openapi.yaml"
 
         await self._check_legacy_collision(tenant_id=tenant_id, api_name=api_name)
 
@@ -203,6 +211,8 @@ class GitOpsWriter:
                 file_commit_sha, case, catalog_release = await self._commit_or_noop_via_pull_request(
                     git_path=git_path,
                     api_yaml_bytes=api_yaml_bytes,
+                    openapi_git_path=openapi_git_path,
+                    openapi_yaml_bytes=openapi_yaml_bytes,
                     attempted_hash=attempted_hash,
                     actor=actor,
                     tenant_id=tenant_id,
@@ -219,6 +229,14 @@ class GitOpsWriter:
                     api_name=api_name,
                 )
                 catalog_release = None
+                if openapi_yaml_bytes is not None:
+                    await self._commit_openapi_spec(
+                        openapi_git_path=openapi_git_path,
+                        openapi_yaml_bytes=openapi_yaml_bytes,
+                        actor=actor,
+                        tenant_id=tenant_id,
+                        api_name=api_name,
+                    )
 
             committed_bytes = await self._catalog_git_client.read_at_commit(git_path, file_commit_sha)
             if committed_bytes is None:
@@ -380,11 +398,33 @@ class GitOpsWriter:
             attempts=_MAX_RACE_RETRIES,
         ) from last_exc
 
+    async def _commit_openapi_spec(
+        self,
+        *,
+        openapi_git_path: str,
+        openapi_yaml_bytes: bytes,
+        actor: str,
+        tenant_id: str,
+        api_name: str,
+    ) -> None:
+        existing = await self._catalog_git_client.get(openapi_git_path)
+        if existing is not None and existing.content == openapi_yaml_bytes:
+            return
+        await self._catalog_git_client.create_or_update(
+            path=openapi_git_path,
+            content=openapi_yaml_bytes,
+            expected_sha=existing.sha if existing is not None else None,
+            actor=actor,
+            message=f"update openapi spec {tenant_id}/{api_name}",
+        )
+
     async def _commit_or_noop_via_pull_request(
         self,
         *,
         git_path: str,
         api_yaml_bytes: bytes,
+        openapi_git_path: str,
+        openapi_yaml_bytes: bytes | None,
         attempted_hash: str,
         actor: str,
         tenant_id: str,
@@ -419,6 +459,15 @@ class GitOpsWriter:
             message=f"create api {tenant_id}/{api_name}",
             branch=source_branch,
         )
+        if openapi_yaml_bytes is not None:
+            await self._catalog_git_client.create_or_update(
+                path=openapi_git_path,
+                content=openapi_yaml_bytes,
+                expected_sha=None,
+                actor=actor,
+                message=f"create openapi spec {tenant_id}/{api_name}",
+                branch=source_branch,
+            )
 
         pr_body = (
             "Automated STOA catalog release.\n\n"

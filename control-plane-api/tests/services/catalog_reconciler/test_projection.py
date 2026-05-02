@@ -111,6 +111,34 @@ class TestRenderApiCatalogProjection:
         )
         assert proj.category == "Banking"
 
+    def test_kubernetes_style_api_definition_is_normalized(self) -> None:
+        proj = render_api_catalog_projection(
+            parsed_content={
+                "apiVersion": "stoa.cab-i.com/v1",
+                "kind": "API",
+                "metadata": {"name": "billing-api", "version": "3.0.0"},
+                "spec": {
+                    "displayName": "Billing & Invoicing API",
+                    "description": "Generate invoices and manage subscriptions",
+                    "status": "published",
+                    "category": "integration",
+                    "tags": ["rest", "billing"],
+                    "backend": {"url": "https://billing.example.invalid/api/v3"},
+                    "deployments": {"dev": True, "staging": True},
+                    "documentation": {"openapi": "openapi.yaml"},
+                },
+            },
+            git_commit_sha="a" * 40,
+            catalog_content_hash="b" * 64,
+            git_path="tenants/acme-corp/apis/billing-api/api.yaml",
+        )
+        assert proj.tenant_id == "acme-corp"
+        assert proj.api_id == "billing-api"
+        assert proj.version == "3.0.0"
+        assert proj.status == "published"
+        assert proj.category == "integration"
+        assert proj.api_metadata["backend_url"] == "https://billing.example.invalid/api/v3"
+
     def test_audience_explicit_overrides_default(self) -> None:
         proj = render_api_catalog_projection(
             parsed_content=_minimal_yaml(audience="internal"),

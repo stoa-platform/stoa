@@ -1,6 +1,6 @@
 import { httpClient, path, extractList } from '../http';
 import type { Schemas } from '@stoa/shared/api-types';
-import type { API, APICreate, Environment } from '../../types';
+import type { API, APICreate, APIOpenAPISpec, Environment } from '../../types';
 
 export const apisClient = {
   async list(tenantId: string, environment?: Environment): Promise<API[]> {
@@ -20,6 +20,13 @@ export const apisClient = {
 
   async get(tenantId: string, apiId: string): Promise<API> {
     const { data } = await httpClient.get(path('v1', 'tenants', tenantId, 'apis', apiId));
+    return data;
+  },
+
+  async getOpenApiSpec(tenantId: string, apiId: string): Promise<APIOpenAPISpec> {
+    const { data } = await httpClient.get(
+      path('v1', 'tenants', tenantId, 'apis', apiId, 'openapi')
+    );
     return data;
   },
 

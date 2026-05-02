@@ -107,8 +107,16 @@ Doctrine résultante :
 
 **Cycle migration legacy** :
 - Migration destructive des 7 rows catégorie B (UUID drifté) du tenant `demo`
-- Migration légale d'un `api_id` UUID vers slug (impacte FKs subscriptions/deployments/keys)
+- Migration de masse d'un `api_id` UUID vers slug sans fichier Git canonique
 - Migration globale legacy → GitOps de tenants existants
+
+Exception in-scope après audit prod du 2026-05-02 : si le reconciler lit un
+fichier Git canonique `tenants/{tenant}/apis/{slug}/api.yaml`, qu'aucune row
+active `(tenant, api_id=slug)` n'existe, et qu'une seule row active
+`(tenant, api_name=slug, version)` existe, cette row peut être adoptée en place.
+Le PK `api_catalog.id` est conservé et les références souples connues
+(`deployments`, `promotions`, `subscriptions`, `credential_mappings`,
+`pipeline_traces`) sont déplacées dans la même transaction.
 
 **Cycle promotion / multi-env** :
 - Promotion dev/staging/prod
@@ -503,7 +511,7 @@ deployments:
 |---|---|---|
 | `id` (PK) | non écrite par GitOps | gen_random_uuid() pour un nouveau INSERT, préservé pour un UPDATE |
 | `tenant_id` | tenant du `git_path` | |
-| `api_id` | YAML `.id` (= slug) | **jamais UUID** |
+| `api_id` | YAML `.id` (= slug) | **jamais UUID**; peut remplacer un ancien UUID en adoption contrôlée par `(tenant, api_name, version)` |
 | `api_name` | YAML `.name` | |
 | `version` | YAML `.version` | |
 | `status` | YAML `.status` | |
@@ -569,14 +577,22 @@ api_id = UUID string  OU  git_path UUID-shaped
 fichier Git réel = sous le slug
 ```
 
-**Action** : **détection seulement, aucune réparation automatique**.
+**Action par défaut** : **détection seulement, aucune réparation automatique**.
 
 Justification : `subscriptions.api_id`, `deployments.api_id`, gateway routes, API keys référencent potentiellement le UUID. La migration relève d'un cycle séparé qui devra identifier toutes les FK et choisir une stratégie.
+
+**Exception reconciler 2026-05-02** : lorsque le fichier Git canonique existe et
+que la DB n'a pas de row `(tenant, api_id=slug)` mais a une unique row active
+`(tenant, api_name=slug, version)`, le reconciler adopte cette row en place :
+`api_catalog.id` reste stable, `api_id/git_path/git_commit_sha/catalog_content_hash`
+deviennent canoniques, et les références souples connues sont mises à jour dans
+la même transaction. Ce cas évite les `UNIQUE (tenant_id, api_name, version)` en
+prod sans créer une seconde API.
 
 Comportement reconciler :
 - `update_status(drift_detected, "uuid hard drift")`
 - `last_error` documente : `api_id={UUID}, real_git_name={slug}`
-- **aucune mutation `api_catalog`, aucune écriture Git**
+- hors exception ci-dessus : **aucune mutation `api_catalog`, aucune écriture Git**
 
 #### Catégorie C — Orphelin DB (1 API `demo` : banking-services-v1-2)
 

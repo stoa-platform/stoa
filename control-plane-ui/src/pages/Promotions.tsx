@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -6,8 +6,16 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { Button } from '@stoa/shared/components/Button';
-import type { Promotion, PromotionStatus, Tenant, API } from '../types';
+import type {
+  Promotion,
+  PromotionStatus,
+  Tenant,
+  API,
+  GatewayDeployment,
+  GatewayInstance,
+} from '../types';
 import type { Schemas } from '@stoa/shared/api-types';
+import { normalizeEnvironment } from '@stoa/shared/constants/environments';
 import {
   ArrowRight,
   CheckCircle2,
@@ -88,6 +96,26 @@ const VALID_CHAINS: [string, string][] = [
   ['dev', 'staging'],
   ['staging', 'production'],
 ];
+
+function sameEnvironment(left?: string, right?: string): boolean {
+  if (!left || !right) return false;
+  return normalizeEnvironment(left) === normalizeEnvironment(right);
+}
+
+function gatewayFamily(gateway?: GatewayInstance | null): string {
+  return String(gateway?.target_gateway_type || gateway?.gateway_type || '').toLowerCase();
+}
+
+function gatewayTopology(gateway?: GatewayInstance | null): string {
+  return String(gateway?.topology || '').toLowerCase();
+}
+
+function deploymentMatchesApi(deployment: GatewayDeployment, apiId: string): boolean {
+  const desired = deployment.desired_state || {};
+  return [deployment.api_catalog_id, desired.api_catalog_id, desired.api_id, desired.api_name].some(
+    (value) => String(value || '') === apiId
+  );
+}
 
 // =============================================================================
 // PROMOTION PIPELINE INDICATOR
@@ -196,24 +224,133 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
   const [selectedApi, setSelectedApi] = useState('');
   const [source, setSource] = useState('dev');
   const [target, setTarget] = useState('staging');
+  const [gateways, setGateways] = useState<GatewayInstance[]>([]);
+  const [sourceDeployments, setSourceDeployments] = useState<GatewayDeployment[]>([]);
+  const [selectedSourceDeploymentId, setSelectedSourceDeploymentId] = useState('');
+  const [selectedTargetGatewayIds, setSelectedTargetGatewayIds] = useState<string[]>([]);
   const [message, setMessage] = useState('');
+  const [loadingTargets, setLoadingTargets] = useState(true);
+  const [loadingSourceDeployments, setLoadingSourceDeployments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isValidChain = VALID_CHAINS.some(([s, t]) => s === source && t === target);
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadGateways() {
+      try {
+        setLoadingTargets(true);
+        const result = await apiService.getGatewayInstances({ page_size: 100 });
+        if (!cancelled) setGateways(result.items);
+      } catch (err: unknown) {
+        if (!cancelled) setError(extractErrorMessage(err));
+      } finally {
+        if (!cancelled) setLoadingTargets(false);
+      }
+    }
+    loadGateways();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (source === 'dev') setTarget('staging');
     else if (source === 'staging') setTarget('production');
   }, [source]);
 
+  useEffect(() => {
+    setSelectedSourceDeploymentId('');
+    setSelectedTargetGatewayIds([]);
+    if (!selectedApi) {
+      setSourceDeployments([]);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadSourceDeployments() {
+      try {
+        setLoadingSourceDeployments(true);
+        const result = await apiService.getGatewayDeployments({
+          environment: source,
+          page_size: 100,
+        });
+        if (!cancelled) setSourceDeployments(result.items);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setSourceDeployments([]);
+          setError(extractErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) setLoadingSourceDeployments(false);
+      }
+    }
+
+    loadSourceDeployments();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedApi, source]);
+
+  const matchingSourceDeployments = useMemo(
+    () =>
+      sourceDeployments.filter(
+        (deployment) =>
+          deployment.sync_status === 'synced' &&
+          sameEnvironment(deployment.gateway_environment, source) &&
+          deploymentMatchesApi(deployment, selectedApi)
+      ),
+    [sourceDeployments, selectedApi, source]
+  );
+
+  const selectedSourceDeployment = useMemo(
+    () =>
+      matchingSourceDeployments.find((deployment) => deployment.id === selectedSourceDeploymentId),
+    [matchingSourceDeployments, selectedSourceDeploymentId]
+  );
+
+  const selectedSourceGateway = useMemo(
+    () => gateways.find((gateway) => gateway.id === selectedSourceDeployment?.gateway_instance_id),
+    [gateways, selectedSourceDeployment]
+  );
+
+  const targetGatewayCandidates = useMemo(() => {
+    if (!selectedSourceGateway) return [];
+    const sourceFamily = gatewayFamily(selectedSourceGateway);
+    const sourceTopology = gatewayTopology(selectedSourceGateway);
+    return gateways.filter((gateway) => {
+      if (gateway.id === selectedSourceGateway.id) return false;
+      if (gateway.enabled === false) return false;
+      if (!sameEnvironment(gateway.environment, target)) return false;
+      if (gatewayFamily(gateway) !== sourceFamily) return false;
+      const targetTopology = gatewayTopology(gateway);
+      return !sourceTopology || !targetTopology || targetTopology === sourceTopology;
+    });
+  }, [gateways, selectedSourceGateway, target]);
+
+  useEffect(() => {
+    setSelectedTargetGatewayIds((current) =>
+      current.filter((id) => targetGatewayCandidates.some((gateway) => gateway.id === id))
+    );
+  }, [targetGatewayCandidates]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedApi || !message.trim()) return;
+    if (
+      !selectedApi ||
+      !selectedSourceDeploymentId ||
+      selectedTargetGatewayIds.length === 0 ||
+      !message.trim()
+    ) {
+      return;
+    }
     try {
       setSubmitting(true);
       setError(null);
       await apiService.createPromotion(tenantId, selectedApi, {
+        source_deployment_id: selectedSourceDeploymentId,
+        target_gateway_ids: selectedTargetGatewayIds,
         source_environment: source,
         target_environment: target,
         message: message.trim(),
@@ -235,7 +372,7 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg mx-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-700 px-6 py-4">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
             Create Promotion
@@ -266,6 +403,7 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
               onChange={(e) => setSelectedApi(e.target.value)}
               className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
               required
+              data-testid="promotion-api-select"
             >
               <option value="">Select an API...</option>
               {apis.map((api) => (
@@ -307,6 +445,106 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
             )}
           </div>
 
+          {/* Source deployment */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Source Deployment
+            </label>
+            <select
+              value={selectedSourceDeploymentId}
+              onChange={(e) => {
+                setSelectedSourceDeploymentId(e.target.value);
+                setSelectedTargetGatewayIds([]);
+              }}
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+              disabled={!selectedApi || loadingSourceDeployments}
+              required
+              data-testid="source-deployment-select"
+            >
+              <option value="">
+                {loadingSourceDeployments
+                  ? 'Loading synced deployments...'
+                  : 'Select a synced source deployment...'}
+              </option>
+              {matchingSourceDeployments.map((deployment) => (
+                <option key={deployment.id} value={deployment.id}>
+                  {deployment.gateway_display_name ||
+                    deployment.gateway_name ||
+                    deployment.gateway_instance_id}{' '}
+                  · {deployment.gateway_type || 'gateway'} · {deployment.id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+            {selectedApi && !loadingSourceDeployments && matchingSourceDeployments.length === 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                No synced {source} gateway deployment exists for this API.
+              </p>
+            )}
+          </div>
+
+          {/* Target gateways */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Target Gateways
+              </label>
+              {selectedSourceGateway && (
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                  {gatewayFamily(selectedSourceGateway)}
+                  {gatewayTopology(selectedSourceGateway)
+                    ? ` · ${gatewayTopology(selectedSourceGateway)}`
+                    : ''}
+                </span>
+              )}
+            </div>
+            <div
+              className="border border-neutral-200 dark:border-neutral-700 rounded-lg divide-y divide-neutral-200 dark:divide-neutral-700 overflow-hidden"
+              data-testid="target-gateway-list"
+            >
+              {loadingTargets ? (
+                <div className="px-3 py-3 text-sm text-neutral-500 dark:text-neutral-400">
+                  Loading gateways...
+                </div>
+              ) : !selectedSourceDeploymentId ? (
+                <div className="px-3 py-3 text-sm text-neutral-500 dark:text-neutral-400">
+                  Select a source deployment first.
+                </div>
+              ) : targetGatewayCandidates.length === 0 ? (
+                <div className="px-3 py-3 text-sm text-amber-600 dark:text-amber-400">
+                  No compatible {target} gateway found for the selected source gateway.
+                </div>
+              ) : (
+                targetGatewayCandidates.map((gateway) => (
+                  <label
+                    key={gateway.id}
+                    className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTargetGatewayIds.includes(gateway.id)}
+                      onChange={(e) => {
+                        setSelectedTargetGatewayIds((current) =>
+                          e.target.checked
+                            ? [...current, gateway.id]
+                            : current.filter((id) => id !== gateway.id)
+                        );
+                      }}
+                      className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium text-neutral-900 dark:text-white truncate">
+                        {gateway.display_name || gateway.name}
+                      </span>
+                      <span className="block text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                        {gateway.name} · {gateway.environment}
+                      </span>
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Message */}
           <div>
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
@@ -331,7 +569,14 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
             </Button>
             <Button
               type="submit"
-              disabled={submitting || !selectedApi || !message.trim() || !isValidChain}
+              disabled={
+                submitting ||
+                !selectedApi ||
+                !selectedSourceDeploymentId ||
+                selectedTargetGatewayIds.length === 0 ||
+                !message.trim() ||
+                !isValidChain
+              }
             >
               {submitting ? (
                 <>
@@ -426,16 +671,16 @@ function PromotionRow({
 
   const handleComplete = async () => {
     const ok = await confirm({
-      title: 'Mark as Deployed',
-      message: `Confirm that ${promotion.source_environment} → ${promotion.target_environment} deployment is complete?`,
-      confirmLabel: 'Mark Deployed',
+      title: 'Verify Promotion Completion',
+      message: `Complete this promotion only if all linked gateway deployments are synced for ${promotion.source_environment} → ${promotion.target_environment}.`,
+      confirmLabel: 'Verify Complete',
       variant: 'default',
     });
     if (!ok) return;
     try {
       setActionLoading(true);
       await apiService.completePromotion(tenantId, promotion.id);
-      toast.success('Promotion completed', 'Marked as deployed');
+      toast.success('Promotion completed', 'All linked deployments are synced');
       onRefresh();
     } catch (err: unknown) {
       toast.error('Complete failed', extractErrorMessage(err));
@@ -511,6 +756,11 @@ function PromotionRow({
           >
             {promotion.target_environment.toUpperCase()}
           </span>
+          {promotion.target_gateway_ids?.length ? (
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">
+              {promotion.target_gateway_ids.length} gw
+            </span>
+          ) : null}
         </div>
 
         {/* Status */}
@@ -569,7 +819,7 @@ function PromotionRow({
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Mark Deployed
+              Verify Complete
             </button>
           )}
           {canRollback && (

@@ -61,6 +61,8 @@ class TestRegression_AutoDeployOnPromotion:
         mock_promotion.target_environment = "staging"
         mock_promotion.api_id = "api-123"
         mock_promotion.source_environment = "dev"
+        target_gateway_id = uuid4()
+        mock_promotion.target_gateway_ids = [str(target_gateway_id)]
 
         svc.repo = MagicMock()
         svc.repo.get_by_id_and_tenant = AsyncMock(return_value=mock_promotion)
@@ -74,7 +76,7 @@ class TestRegression_AutoDeployOnPromotion:
             patch(
                 "src.services.deployment_orchestration_service.DeploymentOrchestrationService",
                 return_value=mock_orch,
-            ) as mock_orch_cls,
+            ),
             patch("src.services.promotion_service.notify_promotion_event", new_callable=AsyncMock),
         ):
             mock_kafka.publish = AsyncMock()
@@ -99,6 +101,8 @@ class TestRegression_AutoDeployOnPromotion:
                 tenant_id="acme",
                 target_environment="staging",
                 approved_by="admin",
+                promotion_id=mock_promotion.id,
+                gateway_ids=[target_gateway_id],
             )
 
 

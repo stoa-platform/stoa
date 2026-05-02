@@ -423,8 +423,9 @@ class DeploymentOrchestrationService:
         target_environment: str,
         approved_by: str,
         promotion_id: UUID | None = None,
+        gateway_ids: list[UUID] | None = None,
     ) -> list:
-        """Triggered by promotion event — auto-deploy to assigned gateways."""
+        """Triggered by promotion event — auto-deploy to explicit or assigned gateways."""
         # Resolve the catalog entry
         try:
             api_catalog = await self._resolve_api_catalog(tenant_id, api_id)
@@ -436,16 +437,18 @@ class DeploymentOrchestrationService:
             )
             return []
 
-        # Get auto-deploy assignments
         target_environment = normalize_deployment_environment(target_environment) or target_environment
-        assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, target_environment)
-        if not assignments:
-            raise ValueError(
-                f"Promotion to {target_environment} cannot be marked deployed: no auto-deploy gateway "
-                f"assignments exist for API '{api_catalog.api_name}'. Configure at least one target gateway."
-            )
+        if gateway_ids is None:
+            assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, target_environment)
+            if not assignments:
+                raise ValueError(
+                    f"Promotion to {target_environment} cannot be marked deployed: no auto-deploy gateway "
+                    f"assignments exist for API '{api_catalog.api_name}'. Configure at least one target gateway."
+                )
+            gateway_ids = [a.gateway_id for a in assignments]
+        else:
+            await self._validate_gateways_for_env(gateway_ids, target_environment)
 
-        gateway_ids = [a.gateway_id for a in assignments]
         preflight = await self._preflight_gateway_ids(api_catalog, gateway_ids)
         failed = [result for result in preflight if not result.deployable]
         if failed:

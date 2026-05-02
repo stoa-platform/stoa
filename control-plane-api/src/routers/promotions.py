@@ -38,6 +38,8 @@ async def create_promotion(
         promotion = await service.create_promotion(
             tenant_id=tenant_id,
             api_id=api_id,
+            source_deployment_id=request.source_deployment_id,
+            target_gateway_ids=request.target_gateway_ids,
             source_environment=request.source_environment,
             target_environment=request.target_environment,
             message=request.message,

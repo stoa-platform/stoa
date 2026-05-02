@@ -19094,6 +19094,12 @@
             "title": "Message",
             "type": "string"
           },
+          "source_deployment_id": {
+            "description": "Synced source GatewayDeployment UUID to promote",
+            "format": "uuid",
+            "title": "Source Deployment Id",
+            "type": "string"
+          },
           "source_environment": {
             "description": "Source environment (dev, staging)",
             "title": "Source Environment",
@@ -19103,9 +19109,21 @@
             "description": "Target environment (staging, production)",
             "title": "Target Environment",
             "type": "string"
+          },
+          "target_gateway_ids": {
+            "description": "Explicit target gateway UUIDs receiving the promoted API",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Target Gateway Ids",
+            "type": "array"
           }
         },
         "required": [
+          "source_deployment_id",
+          "target_gateway_ids",
           "source_environment",
           "target_environment",
           "message"
@@ -19298,6 +19316,21 @@
           "target_environment": {
             "title": "Target Environment",
             "type": "string"
+          },
+          "target_gateway_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Gateway Ids"
           },
           "tenant_id": {
             "title": "Tenant Id",

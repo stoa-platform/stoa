@@ -149,15 +149,21 @@ class TestPromotionChainIntegration:
         gw = _make_gateway()
         assignment = _make_assignment(api.id, gw.id)
         promo = _make_promotion(api_id=str(api.id))
+        source_deployment_id = uuid4()
+        promo.source_deployment_id = source_deployment_id
+        promo.target_gateway_ids = [str(gw.id)]
 
         # --- Step 1: Create promotion ---
         promo_svc = PromotionService(mock_db)
+        promo_svc._validate_gateway_aware_request = AsyncMock(return_value=api)
         promo_svc.repo.get_active_for_target = AsyncMock(return_value=None)
         promo_svc.repo.create = AsyncMock(return_value=promo)
 
         created = await promo_svc.create_promotion(
             tenant_id="acme",
             api_id=str(api.id),
+            source_deployment_id=source_deployment_id,
+            target_gateway_ids=[gw.id],
             source_environment="dev",
             target_environment="staging",
             message="QA release",
@@ -170,12 +176,17 @@ class TestPromotionChainIntegration:
         promo_svc.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
         promo_svc.repo.update = AsyncMock(side_effect=lambda p: p)
 
-        approved = await promo_svc.approve_promotion(
-            tenant_id="acme",
-            promotion_id=promo.id,
-            approved_by="user-approver",
-            user_id="uid-2",
-        )
+        with patch(
+            "src.services.deployment_orchestration_service.DeploymentOrchestrationService.auto_deploy_on_promotion",
+            new_callable=AsyncMock,
+        ) as mock_approve_deploy:
+            mock_approve_deploy.return_value = [MagicMock()]
+            approved = await promo_svc.approve_promotion(
+                tenant_id="acme",
+                promotion_id=promo.id,
+                approved_by="user-approver",
+                user_id="uid-2",
+            )
         assert approved.status == PromotionStatus.PROMOTING.value
         assert approved.approved_by == "user-approver"
 
@@ -232,15 +243,21 @@ class TestPromotionChainIntegration:
         assignment1 = _make_assignment(api.id, gw1.id)
         assignment2 = _make_assignment(api.id, gw2.id)
         promo = _make_promotion(api_id=str(api.id))
+        source_deployment_id = uuid4()
+        promo.source_deployment_id = source_deployment_id
+        promo.target_gateway_ids = [str(gw1.id), str(gw2.id)]
 
         # Create + approve promotion
         promo_svc = PromotionService(mock_db)
+        promo_svc._validate_gateway_aware_request = AsyncMock(return_value=api)
         promo_svc.repo.get_active_for_target = AsyncMock(return_value=None)
         promo_svc.repo.create = AsyncMock(return_value=promo)
 
         await promo_svc.create_promotion(
             tenant_id="acme",
             api_id=str(api.id),
+            source_deployment_id=source_deployment_id,
+            target_gateway_ids=[gw1.id, gw2.id],
             source_environment="dev",
             target_environment="staging",
             message="QA release",
@@ -251,12 +268,17 @@ class TestPromotionChainIntegration:
         promo_svc.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
         promo_svc.repo.update = AsyncMock(side_effect=lambda p: p)
 
-        await promo_svc.approve_promotion(
-            tenant_id="acme",
-            promotion_id=promo.id,
-            approved_by="user-approver",
-            user_id="uid-2",
-        )
+        with patch(
+            "src.services.deployment_orchestration_service.DeploymentOrchestrationService.auto_deploy_on_promotion",
+            new_callable=AsyncMock,
+        ) as mock_approve_deploy:
+            mock_approve_deploy.return_value = [MagicMock()]
+            await promo_svc.approve_promotion(
+                tenant_id="acme",
+                promotion_id=promo.id,
+                approved_by="user-approver",
+                user_id="uid-2",
+            )
         assert promo.status == PromotionStatus.PROMOTING.value
 
         # auto_deploy → 2 deployments PENDING

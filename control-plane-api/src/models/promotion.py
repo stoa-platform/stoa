@@ -1,4 +1,5 @@
 """Promotion SQLAlchemy model for GitOps promotion flow (CAB-1706)"""
+
 import enum
 import uuid
 from datetime import datetime
@@ -35,10 +36,7 @@ def validate_promotion_chain(source: str, target: str) -> None:
         raise ValueError(f"Cannot promote to the same environment: {source}")
     if (source, target) not in VALID_PROMOTION_CHAINS:
         allowed = ", ".join(f"{s}→{t}" for s, t in sorted(VALID_PROMOTION_CHAINS))
-        raise ValueError(
-            f"Invalid promotion chain: {source}→{target}. "
-            f"Allowed chains: {allowed}"
-        )
+        raise ValueError(f"Invalid promotion chain: {source}→{target}. " f"Allowed chains: {allowed}")
 
 
 class Promotion(Base):
@@ -53,17 +51,14 @@ class Promotion(Base):
     target_environment = Column(String(50), nullable=False)
     source_deployment_id = Column(UUID(as_uuid=True), nullable=True)
     target_deployment_id = Column(UUID(as_uuid=True), nullable=True)
-    status = Column(
-        String(50), nullable=False, default=PromotionStatus.PENDING.value
-    )
+    target_gateway_ids = Column(JSONB, nullable=True)
+    status = Column(String(50), nullable=False, default=PromotionStatus.PENDING.value)
     spec_diff = Column(JSONB, nullable=True)
     message = Column(Text, nullable=False)
     requested_by = Column(String(255), nullable=False)
     approved_by = Column(String(255), nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow
-    )
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime,
         nullable=False,
@@ -90,8 +85,4 @@ class Promotion(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<Promotion {self.id} "
-            f"{self.source_environment}→{self.target_environment} "
-            f"status={self.status}>"
-        )
+        return f"<Promotion {self.id} " f"{self.source_environment}→{self.target_environment} " f"status={self.status}>"

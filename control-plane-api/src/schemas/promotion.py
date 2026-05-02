@@ -16,15 +16,14 @@ class PromotionStatusEnum(StrEnum):
 
 
 class PromotionCreate(BaseModel):
-    source_environment: str = Field(
-        ..., description="Source environment (dev, staging)"
+    source_deployment_id: UUID = Field(..., description="Synced source GatewayDeployment UUID to promote")
+    target_gateway_ids: list[UUID] = Field(
+        ..., min_length=1, description="Explicit target gateway UUIDs receiving the promoted API"
     )
-    target_environment: str = Field(
-        ..., description="Target environment (staging, production)"
-    )
+    source_environment: str = Field(..., description="Source environment (dev, staging)")
+    target_environment: str = Field(..., description="Target environment (staging, production)")
     message: str = Field(
-        ..., min_length=1, max_length=1000,
-        description="Mandatory audit trail message explaining the promotion reason"
+        ..., min_length=1, max_length=1000, description="Mandatory audit trail message explaining the promotion reason"
     )
 
 
@@ -38,6 +37,7 @@ class PromotionResponse(BaseModel):
     target_environment: str
     source_deployment_id: UUID | None = None
     target_deployment_id: UUID | None = None
+    target_gateway_ids: list[UUID] | None = None
     status: str
     spec_diff: dict | None = None
     message: str
@@ -57,8 +57,7 @@ class PromotionListResponse(BaseModel):
 
 class PromotionRollbackRequest(BaseModel):
     message: str = Field(
-        ..., min_length=1, max_length=1000,
-        description="Mandatory audit trail message explaining the rollback reason"
+        ..., min_length=1, max_length=1000, description="Mandatory audit trail message explaining the rollback reason"
     )
 
 

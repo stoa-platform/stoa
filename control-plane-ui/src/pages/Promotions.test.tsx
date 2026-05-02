@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Promotions } from './Promotions';
 import { createAuthMock, renderWithProviders, type PersonaRole } from '../test/helpers';
-import type { Promotion, Tenant, API } from '../types';
+import type { Promotion, Tenant, API, GatewayDeployment, GatewayInstance } from '../types';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,8 @@ vi.mock('../services/api', () => ({
     completePromotion: vi.fn(),
     rollbackPromotion: vi.fn(),
     getPromotionDiff: vi.fn(),
+    getGatewayInstances: vi.fn(),
+    getGatewayDeployments: vi.fn(),
   },
 }));
 
@@ -73,6 +75,7 @@ const mockPromotion: Promotion = {
   target_environment: 'staging',
   source_deployment_id: 'deploy-1',
   target_deployment_id: null,
+  target_gateway_ids: ['gw-staging'],
   status: 'pending',
   spec_diff: null,
   message: 'Ready for staging validation',
@@ -82,6 +85,81 @@ const mockPromotion: Promotion = {
   created_at: '2026-03-08T10:00:00Z',
   updated_at: '2026-03-08T10:00:00Z',
 };
+
+const mockGateways: GatewayInstance[] = [
+  {
+    id: 'gw-dev',
+    name: 'stoa-gateway-dev',
+    display_name: 'STOA Gateway Dev',
+    gateway_type: 'stoa_edge_mcp',
+    environment: 'dev',
+    tenant_id: 'tenant-1',
+    base_url: 'https://dev.example.com',
+    auth_config: {},
+    capabilities: [],
+    status: 'online',
+    health_details: null,
+    last_health_check: null,
+    source: 'self_register',
+    protected: false,
+    enabled: true,
+    tags: [],
+    version: null,
+    endpoints: {},
+    target_gateway_type: 'stoa',
+    topology: 'native-edge',
+    deployment_mode: 'edge',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'gw-staging',
+    name: 'stoa-gateway-staging',
+    display_name: 'STOA Gateway Staging',
+    gateway_type: 'stoa_edge_mcp',
+    environment: 'staging',
+    tenant_id: 'tenant-1',
+    base_url: 'https://staging.example.com',
+    auth_config: {},
+    capabilities: [],
+    status: 'online',
+    health_details: null,
+    last_health_check: null,
+    source: 'self_register',
+    protected: false,
+    enabled: true,
+    tags: [],
+    version: null,
+    endpoints: {},
+    target_gateway_type: 'stoa',
+    topology: 'native-edge',
+    deployment_mode: 'edge',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
+const mockSourceDeployments: GatewayDeployment[] = [
+  {
+    id: 'deploy-1',
+    api_catalog_id: 'catalog-1',
+    gateway_instance_id: 'gw-dev',
+    desired_state: {
+      api_id: 'api-1',
+      api_name: 'orders-api',
+      api_catalog_id: 'catalog-1',
+    },
+    desired_at: '2026-03-08T09:00:00Z',
+    sync_status: 'synced',
+    sync_attempts: 0,
+    created_at: '2026-03-08T09:00:00Z',
+    updated_at: '2026-03-08T09:00:00Z',
+    gateway_name: 'stoa-gateway-dev',
+    gateway_display_name: 'STOA Gateway Dev',
+    gateway_type: 'stoa_edge_mcp',
+    gateway_environment: 'dev',
+  },
+];
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -93,6 +171,18 @@ function setupMocks(role: PersonaRole = 'cpi-admin') {
   vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
   vi.mocked(apiService.getTenants).mockResolvedValue(mockTenants);
   vi.mocked(apiService.getApis).mockResolvedValue(mockApis);
+  vi.mocked(apiService.getGatewayInstances).mockResolvedValue({
+    items: mockGateways,
+    total: mockGateways.length,
+    page: 1,
+    page_size: 100,
+  });
+  vi.mocked(apiService.getGatewayDeployments).mockResolvedValue({
+    items: mockSourceDeployments,
+    total: mockSourceDeployments.length,
+    page: 1,
+    page_size: 100,
+  });
   vi.mocked(apiService.listPromotions).mockResolvedValue({
     items: [mockPromotion],
     total: 1,
@@ -233,8 +323,8 @@ describe('Promotions', () => {
     });
   });
 
-  describe('Mark Deployed', () => {
-    it('shows Mark Deployed button for promoting promotions', async () => {
+  describe('Verify Complete', () => {
+    it('shows Verify Complete button for promoting promotions', async () => {
       const promotingPromotion: Promotion = {
         ...mockPromotion,
         status: 'promoting',
@@ -250,11 +340,11 @@ describe('Promotions', () => {
       renderWithProviders(<Promotions />);
 
       await waitFor(() => {
-        expect(screen.getByText('Mark Deployed')).toBeInTheDocument();
+        expect(screen.getByText('Verify Complete')).toBeInTheDocument();
       });
     });
 
-    it('calls completePromotion when Mark Deployed is clicked', async () => {
+    it('calls completePromotion when Verify Complete is clicked', async () => {
       const promotingPromotion: Promotion = {
         ...mockPromotion,
         status: 'promoting',
@@ -273,17 +363,17 @@ describe('Promotions', () => {
       const user = userEvent.setup();
 
       await waitFor(() => {
-        expect(screen.getByText('Mark Deployed')).toBeInTheDocument();
+        expect(screen.getByText('Verify Complete')).toBeInTheDocument();
       });
 
-      await user.click(screen.getByText('Mark Deployed'));
+      await user.click(screen.getByText('Verify Complete'));
 
       await waitFor(() => {
         expect(apiService.completePromotion).toHaveBeenCalledWith('tenant-1', 'promo-1');
       });
     });
 
-    it('hides Mark Deployed for viewers', async () => {
+    it('hides Verify Complete for viewers', async () => {
       const promotingPromotion: Promotion = {
         ...mockPromotion,
         status: 'promoting',
@@ -301,7 +391,7 @@ describe('Promotions', () => {
       await waitFor(() => {
         expect(screen.getByText('Promoting')).toBeInTheDocument();
       });
-      expect(screen.queryByText('Mark Deployed')).not.toBeInTheDocument();
+      expect(screen.queryByText('Verify Complete')).not.toBeInTheDocument();
     });
   });
 
@@ -344,6 +434,48 @@ describe('Promotions', () => {
       // Dialog has a heading "Create Promotion" and a submit button with same text
       expect(screen.getByRole('heading', { name: 'Create Promotion' })).toBeInTheDocument();
       expect(screen.getByText('Promotion Path')).toBeInTheDocument();
+    });
+
+    it('creates a gateway-aware promotion with source deployment and target gateways', async () => {
+      setupMocks('cpi-admin');
+      vi.mocked(apiService.createPromotion).mockResolvedValue(mockPromotion);
+      renderWithProviders(<Promotions />);
+
+      const user = userEvent.setup();
+
+      await waitFor(() => {
+        expect(screen.getByText('New Promotion')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('New Promotion'));
+      await user.selectOptions(screen.getByTestId('promotion-api-select'), 'api-1');
+
+      await waitFor(() => {
+        expect(apiService.getGatewayDeployments).toHaveBeenCalledWith({
+          environment: 'dev',
+          page_size: 100,
+        });
+      });
+
+      await user.selectOptions(screen.getByTestId('source-deployment-select'), 'deploy-1');
+
+      await waitFor(() => {
+        expect(screen.getByText('STOA Gateway Staging')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByLabelText(/STOA Gateway Staging/));
+      await user.type(screen.getByPlaceholderText(/Why are you promoting/), 'Ready for staging');
+      await user.click(screen.getByRole('button', { name: /Create Promotion/ }));
+
+      await waitFor(() => {
+        expect(apiService.createPromotion).toHaveBeenCalledWith('tenant-1', 'api-1', {
+          source_deployment_id: 'deploy-1',
+          target_gateway_ids: ['gw-staging'],
+          source_environment: 'dev',
+          target_environment: 'staging',
+          message: 'Ready for staging',
+        });
+      });
     });
   });
 

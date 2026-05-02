@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -29,6 +29,11 @@ class TestPromotionServiceCreate:
     @patch("src.services.promotion_service.kafka_service")
     async def test_create_valid(self, mock_kafka, service):
         mock_kafka.emit_audit_event = AsyncMock()
+        source_deployment_id = uuid.uuid4()
+        target_gateway_id = uuid.uuid4()
+        api_catalog = MagicMock()
+        api_catalog.api_id = "api-1"
+        service._validate_gateway_aware_request = AsyncMock(return_value=api_catalog)
         service.repo.get_active_for_target = AsyncMock(return_value=None)
         created = Promotion()
         created.id = uuid.uuid4()
@@ -44,6 +49,8 @@ class TestPromotionServiceCreate:
         result = await service.create_promotion(
             tenant_id="acme",
             api_id="api-1",
+            source_deployment_id=source_deployment_id,
+            target_gateway_ids=[target_gateway_id],
             source_environment="dev",
             target_environment="staging",
             message="QA release",
@@ -61,6 +68,8 @@ class TestPromotionServiceCreate:
             await service.create_promotion(
                 tenant_id="acme",
                 api_id="api-1",
+                source_deployment_id=uuid.uuid4(),
+                target_gateway_ids=[uuid.uuid4()],
                 source_environment="dev",
                 target_environment="production",
                 message="Skip staging",
@@ -70,15 +79,20 @@ class TestPromotionServiceCreate:
 
     @pytest.mark.asyncio
     async def test_create_active_conflict(self, service):
+        api_catalog = MagicMock()
+        api_catalog.api_id = "api-1"
         existing = Promotion()
         existing.id = uuid.uuid4()
         existing.status = PromotionStatus.PENDING.value
+        service._validate_gateway_aware_request = AsyncMock(return_value=api_catalog)
         service.repo.get_active_for_target = AsyncMock(return_value=existing)
 
         with pytest.raises(ValueError, match="Active promotion already exists"):
             await service.create_promotion(
                 tenant_id="acme",
                 api_id="api-1",
+                source_deployment_id=uuid.uuid4(),
+                target_gateway_ids=[uuid.uuid4()],
                 source_environment="dev",
                 target_environment="staging",
                 message="Duplicate",
@@ -98,8 +112,10 @@ class TestPromotionServiceApprove:
 
     @pytest.mark.asyncio
     @patch("src.services.promotion_service.kafka_service")
-    async def test_approve_pending(self, mock_kafka, service):
+    @patch("src.services.deployment_orchestration_service.DeploymentOrchestrationService.auto_deploy_on_promotion")
+    async def test_approve_pending(self, mock_auto_deploy, mock_kafka, service):
         mock_kafka.publish = AsyncMock()
+        mock_auto_deploy.return_value = [MagicMock()]
         promo = Promotion()
         promo.id = uuid.uuid4()
         promo.tenant_id = "acme"
@@ -107,6 +123,7 @@ class TestPromotionServiceApprove:
         promo.source_environment = "dev"
         promo.target_environment = "staging"
         promo.status = PromotionStatus.PENDING.value
+        promo.target_gateway_ids = [str(uuid.uuid4())]
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
         service.repo.update = AsyncMock(return_value=promo)
 
@@ -119,7 +136,28 @@ class TestPromotionServiceApprove:
 
         assert result.status == PromotionStatus.PROMOTING.value
         assert result.approved_by == "admin"
+        mock_auto_deploy.assert_awaited_once()
         mock_kafka.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_approve_without_target_gateways_rejected(self, service):
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.tenant_id = "acme"
+        promo.api_id = "api-1"
+        promo.source_environment = "dev"
+        promo.target_environment = "staging"
+        promo.status = PromotionStatus.PENDING.value
+        promo.target_gateway_ids = None
+        service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
+
+        with pytest.raises(ValueError, match="explicit target gateways"):
+            await service.approve_promotion(
+                tenant_id="acme",
+                promotion_id=promo.id,
+                approved_by="admin",
+                user_id="uid-2",
+            )
 
     @pytest.mark.asyncio
     async def test_approve_not_found(self, service):
@@ -234,6 +272,17 @@ class TestPromotionServiceComplete:
         assert result.spec_diff == {"changed": ["version"]}
 
     @pytest.mark.asyncio
+    async def test_complete_requires_linked_deployments(self, service):
+        promo = Promotion()
+        promo.id = uuid.uuid4()
+        promo.status = PromotionStatus.PROMOTING.value
+        service.repo.get_by_id = AsyncMock(return_value=promo)
+        service.gw_deploy_repo.list_by_promotion = AsyncMock(return_value=[])
+
+        with pytest.raises(ValueError, match="linked gateway deployments"):
+            await service.complete_promotion(promotion_id=promo.id)
+
+    @pytest.mark.asyncio
     async def test_fail_promotion(self, service):
         promo = Promotion()
         promo.id = uuid.uuid4()
@@ -319,9 +368,11 @@ class TestPromotionSelfApproveGuard:
 
     @pytest.mark.asyncio
     @patch("src.services.promotion_service.kafka_service")
-    async def test_self_approve_allowed_for_staging(self, mock_kafka, service):
+    @patch("src.services.deployment_orchestration_service.DeploymentOrchestrationService.auto_deploy_on_promotion")
+    async def test_self_approve_allowed_for_staging(self, mock_auto_deploy, mock_kafka, service):
         """2-eyes principle: requester can self-approve dev→staging promotions."""
         mock_kafka.publish = AsyncMock()
+        mock_auto_deploy.return_value = [MagicMock()]
         promo = Promotion()
         promo.id = uuid.uuid4()
         promo.tenant_id = "acme"
@@ -330,6 +381,7 @@ class TestPromotionSelfApproveGuard:
         promo.target_environment = "staging"
         promo.status = PromotionStatus.PENDING.value
         promo.requested_by = "alice@acme.com"
+        promo.target_gateway_ids = [str(uuid.uuid4())]
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
         service.repo.update = AsyncMock(return_value=promo)
 
@@ -345,9 +397,11 @@ class TestPromotionSelfApproveGuard:
 
     @pytest.mark.asyncio
     @patch("src.services.promotion_service.kafka_service")
-    async def test_different_user_can_approve(self, mock_kafka, service):
+    @patch("src.services.deployment_orchestration_service.DeploymentOrchestrationService.auto_deploy_on_promotion")
+    async def test_different_user_can_approve(self, mock_auto_deploy, mock_kafka, service):
         """A different user can approve the promotion."""
         mock_kafka.publish = AsyncMock()
+        mock_auto_deploy.return_value = [MagicMock()]
         promo = Promotion()
         promo.id = uuid.uuid4()
         promo.tenant_id = "acme"
@@ -356,6 +410,7 @@ class TestPromotionSelfApproveGuard:
         promo.target_environment = "staging"
         promo.status = PromotionStatus.PENDING.value
         promo.requested_by = "alice@acme.com"
+        promo.target_gateway_ids = [str(uuid.uuid4())]
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
         service.repo.update = AsyncMock(return_value=promo)
 
@@ -537,6 +592,11 @@ class TestPromotionServiceNotifications:
     async def test_create_sends_slack_notification(self, mock_kafka, mock_notify, service):
         mock_kafka.emit_audit_event = AsyncMock()
         mock_notify.return_value = None
+        source_deployment_id = uuid.uuid4()
+        target_gateway_id = uuid.uuid4()
+        api_catalog = MagicMock()
+        api_catalog.api_id = "api-1"
+        service._validate_gateway_aware_request = AsyncMock(return_value=api_catalog)
         service.repo.get_active_for_target = AsyncMock(return_value=None)
         created = Promotion()
         created.id = uuid.uuid4()
@@ -552,6 +612,8 @@ class TestPromotionServiceNotifications:
         await service.create_promotion(
             tenant_id="acme",
             api_id="api-1",
+            source_deployment_id=source_deployment_id,
+            target_gateway_ids=[target_gateway_id],
             source_environment="dev",
             target_environment="staging",
             message="QA release",
@@ -570,9 +632,11 @@ class TestPromotionServiceNotifications:
     @pytest.mark.asyncio
     @patch("src.services.promotion_service.notify_promotion_event")
     @patch("src.services.promotion_service.kafka_service")
-    async def test_approve_sends_slack_notification(self, mock_kafka, mock_notify, service):
+    @patch("src.services.deployment_orchestration_service.DeploymentOrchestrationService.auto_deploy_on_promotion")
+    async def test_approve_sends_slack_notification(self, mock_auto_deploy, mock_kafka, mock_notify, service):
         mock_kafka.publish = AsyncMock()
         mock_notify.return_value = None
+        mock_auto_deploy.return_value = [MagicMock()]
         promo = Promotion()
         promo.id = uuid.uuid4()
         promo.tenant_id = "acme"
@@ -581,6 +645,7 @@ class TestPromotionServiceNotifications:
         promo.target_environment = "staging"
         promo.status = PromotionStatus.PENDING.value
         promo.requested_by = "torpedo"
+        promo.target_gateway_ids = [str(uuid.uuid4())]
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
         service.repo.update = AsyncMock(return_value=promo)
 

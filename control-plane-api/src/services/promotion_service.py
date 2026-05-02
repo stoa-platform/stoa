@@ -4,15 +4,20 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
+from ..models.catalog import APICatalog
 from ..models.gateway_deployment import DeploymentSyncStatus
+from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus, validate_promotion_chain
 from ..notifications.promotion_notifier import notify_promotion_event
 from ..repositories.deployment import DeploymentRepository
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.promotion import PromotionRepository
+from ..services.environment_aliases import deployment_environment_matches
+from ..services.gateway_topology import normalize_gateway_topology
 from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,8 @@ class PromotionService:
         self,
         tenant_id: str,
         api_id: str,
+        source_deployment_id: UUID,
+        target_gateway_ids: list[UUID],
         source_environment: str,
         target_environment: str,
         message: str,
@@ -38,18 +45,29 @@ class PromotionService:
         """Create a new promotion request after validating the chain."""
         validate_promotion_chain(source_environment, target_environment)
 
-        active = await self.repo.get_active_for_target(api_id, target_environment)
+        api_catalog = await self._validate_gateway_aware_request(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            source_deployment_id=source_deployment_id,
+            target_gateway_ids=target_gateway_ids,
+            source_environment=source_environment,
+            target_environment=target_environment,
+        )
+
+        active = await self.repo.get_active_for_target(api_catalog.api_id, target_environment)
         if active:
             raise ValueError(
-                f"Active promotion already exists for {api_id} → {target_environment} "
+                f"Active promotion already exists for {api_catalog.api_id} → {target_environment} "
                 f"(id={active.id}, status={active.status})"
             )
 
         promotion = Promotion(
             tenant_id=tenant_id,
-            api_id=api_id,
+            api_id=api_catalog.api_id,
             source_environment=source_environment,
             target_environment=target_environment,
+            source_deployment_id=source_deployment_id,
+            target_gateway_ids=[str(gateway_id) for gateway_id in target_gateway_ids],
             status=PromotionStatus.PENDING.value,
             message=message,
             requested_by=requested_by,
@@ -60,7 +78,7 @@ class PromotionService:
             "Promotion created: %s → %s for api=%s tenant=%s",
             source_environment,
             target_environment,
-            api_id,
+            api_catalog.api_id,
             tenant_id,
         )
 
@@ -71,9 +89,11 @@ class PromotionService:
             resource_id=str(promotion.id),
             user_id=user_id,
             details={
-                "api_id": api_id,
+                "api_id": api_catalog.api_id,
                 "source_environment": source_environment,
                 "target_environment": target_environment,
+                "source_deployment_id": str(source_deployment_id),
+                "target_gateway_ids": [str(gateway_id) for gateway_id in target_gateway_ids],
             },
         )
 
@@ -81,7 +101,7 @@ class PromotionService:
             "promotion.pending_approval",
             {
                 "tenant_id": tenant_id,
-                "api_id": api_id,
+                "api_id": api_catalog.api_id,
                 "source_environment": source_environment,
                 "target_environment": target_environment,
                 "requested_by": requested_by,
@@ -91,6 +111,148 @@ class PromotionService:
         )
 
         return promotion
+
+    async def _validate_gateway_aware_request(
+        self,
+        *,
+        tenant_id: str,
+        api_id: str,
+        source_deployment_id: UUID,
+        target_gateway_ids: list[UUID],
+        source_environment: str,
+        target_environment: str,
+    ) -> APICatalog:
+        """Validate that a promotion maps one synced source lane to equivalent target lanes."""
+        if not target_gateway_ids:
+            raise ValueError("Promotion requires at least one target gateway")
+
+        source_deployment = await self.gw_deploy_repo.get_by_id(source_deployment_id)
+        if not source_deployment:
+            raise ValueError(f"Source gateway deployment {source_deployment_id} not found")
+
+        result = await self.db.execute(
+            select(APICatalog).where(
+                APICatalog.id == source_deployment.api_catalog_id,
+                APICatalog.deleted_at.is_(None),
+            )
+        )
+        api_catalog = result.scalar_one_or_none()
+        if not api_catalog:
+            raise ValueError("Source gateway deployment API catalog entry not found")
+        if api_catalog.tenant_id != tenant_id:
+            raise ValueError("Source gateway deployment belongs to another tenant")
+        if api_id not in {api_catalog.api_id, api_catalog.api_name, str(api_catalog.id)}:
+            raise ValueError(f"Source gateway deployment belongs to API '{api_catalog.api_id}', not '{api_id}'")
+
+        source_gateway = await self._get_gateway_or_raise(source_deployment.gateway_instance_id)
+        self._validate_gateway_tenant(source_gateway, tenant_id)
+        if not deployment_environment_matches(source_gateway.environment, source_environment):
+            raise ValueError(
+                f"Source gateway '{source_gateway.name}' is in environment "
+                f"'{source_gateway.environment}', not '{source_environment}'"
+            )
+
+        if self._wire_value(source_deployment.sync_status) != DeploymentSyncStatus.SYNCED.value:
+            raise ValueError(
+                f"Source deployment {source_deployment_id} is '{self._wire_value(source_deployment.sync_status)}'. "
+                "Only synced gateway deployments can be promoted."
+            )
+
+        target_gateways = []
+        for target_gateway_id in target_gateway_ids:
+            gateway = await self._get_gateway_or_raise(target_gateway_id)
+            self._validate_gateway_tenant(gateway, tenant_id)
+            if getattr(gateway, "deleted_at", None):
+                raise ValueError(f"Target gateway '{gateway.name}' has been deleted")
+            if getattr(gateway, "enabled", True) is False:
+                raise ValueError(f"Target gateway '{gateway.name}' is disabled")
+            if not deployment_environment_matches(gateway.environment, target_environment):
+                raise ValueError(
+                    f"Target gateway '{gateway.name}' is in environment '{gateway.environment}', "
+                    f"not '{target_environment}'"
+                )
+            target_gateways.append(gateway)
+
+        source_family = self._target_gateway_type_value(source_gateway)
+        source_topology = self._topology_value(source_gateway)
+        for gateway in target_gateways:
+            target_family = self._target_gateway_type_value(gateway)
+            if target_family != source_family:
+                raise ValueError(
+                    f"Target gateway '{gateway.name}' is '{target_family}', but the source gateway "
+                    f"'{source_gateway.name}' is '{source_family}'. Select an equivalent target gateway."
+                )
+            target_topology = self._topology_value(gateway)
+            if source_topology and target_topology and target_topology != source_topology:
+                raise ValueError(
+                    f"Target gateway '{gateway.name}' topology is '{target_topology}', but the source gateway "
+                    f"'{source_gateway.name}' topology is '{source_topology}'."
+                )
+
+        from ..services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        orchestration_svc = DeploymentOrchestrationService(self.db)
+        preflight = await orchestration_svc.preflight_api_to_gateways(api_catalog.id, target_gateway_ids)
+        failed = [result for result in preflight if not result.deployable]
+        if failed:
+            raise ValueError(orchestration_svc._format_preflight_failure(failed))
+
+        return api_catalog
+
+    async def _get_gateway_or_raise(self, gateway_id: UUID) -> GatewayInstance:
+        result = await self.db.execute(select(GatewayInstance).where(GatewayInstance.id == gateway_id))
+        gateway = result.scalar_one_or_none()
+        if not gateway:
+            raise ValueError(f"Gateway {gateway_id} not found")
+        return gateway
+
+    @staticmethod
+    def _validate_gateway_tenant(gateway: GatewayInstance, tenant_id: str) -> None:
+        gateway_tenant = getattr(gateway, "tenant_id", None)
+        if gateway_tenant and gateway_tenant != tenant_id:
+            raise ValueError(f"Gateway '{gateway.name}' belongs to another tenant")
+
+    @staticmethod
+    def _wire_value(value) -> str:
+        return str(getattr(value, "value", value))
+
+    @staticmethod
+    def _target_gateway_type_value(gateway: GatewayInstance) -> str:
+        return normalize_gateway_topology(
+            gateway_type=gateway.gateway_type,
+            mode=gateway.mode,
+            source=gateway.source,
+            deployment_mode=gateway.deployment_mode,
+            target_gateway_type=gateway.target_gateway_type,
+            topology=gateway.topology,
+            health_details=gateway.health_details,
+            endpoints=gateway.endpoints,
+            base_url=gateway.base_url,
+            public_url=gateway.public_url,
+            ui_url=gateway.ui_url,
+            target_gateway_url=gateway.target_gateway_url,
+            tags=gateway.tags,
+            name=gateway.name,
+        ).target_gateway_type
+
+    @staticmethod
+    def _topology_value(gateway: GatewayInstance) -> str:
+        return normalize_gateway_topology(
+            gateway_type=gateway.gateway_type,
+            mode=gateway.mode,
+            source=gateway.source,
+            deployment_mode=gateway.deployment_mode,
+            target_gateway_type=gateway.target_gateway_type,
+            topology=gateway.topology,
+            health_details=gateway.health_details,
+            endpoints=gateway.endpoints,
+            base_url=gateway.base_url,
+            public_url=gateway.public_url,
+            ui_url=gateway.ui_url,
+            target_gateway_url=gateway.target_gateway_url,
+            tags=gateway.tags,
+            name=gateway.name,
+        ).topology
 
     async def get_promotion(self, tenant_id: str, promotion_id: UUID) -> Promotion | None:
         return await self.repo.get_by_id_and_tenant(promotion_id, tenant_id)
@@ -136,31 +298,40 @@ class PromotionService:
                 "A different team member must approve production deployments."
             )
 
+        target_gateway_ids = self._parse_target_gateway_ids(promotion.target_gateway_ids)
+        if not target_gateway_ids:
+            raise ValueError(
+                "Cannot approve promotion without explicit target gateways. " "Create a new gateway-aware promotion."
+            )
+
+        # Trigger deployment before the state transition so no promotion can
+        # enter PROMOTING without at least one linked GatewayDeployment.
+        from ..services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        orchestration_svc = DeploymentOrchestrationService(self.db)
+        deployments = await orchestration_svc.auto_deploy_on_promotion(
+            api_id=promotion.api_id,
+            tenant_id=tenant_id,
+            target_environment=promotion.target_environment,
+            approved_by=approved_by,
+            promotion_id=promotion.id,
+            gateway_ids=target_gateway_ids,
+        )
+        if not deployments:
+            raise ValueError(
+                "Promotion approval did not create any gateway deployment. " "Check the selected target gateways."
+            )
+
         promotion.status = PromotionStatus.PROMOTING.value
         promotion.approved_by = approved_by
         promotion = await self.repo.update(promotion)
 
-        logger.info("Promotion %s approved by %s", promotion_id, approved_by)
-
-        # Trigger auto-deploy to assigned gateways (CAB-1917)
-        from ..services.deployment_orchestration_service import DeploymentOrchestrationService
-
-        orchestration_svc = DeploymentOrchestrationService(self.db)
-        try:
-            deployments = await orchestration_svc.auto_deploy_on_promotion(
-                api_id=promotion.api_id,
-                tenant_id=tenant_id,
-                target_environment=promotion.target_environment,
-                approved_by=approved_by,
-            )
-            if deployments:
-                logger.info(
-                    "Auto-deploy triggered for promotion %s: %d deployments",
-                    promotion_id,
-                    len(deployments),
-                )
-        except Exception as e:
-            logger.error("Auto-deploy failed for promotion %s: %s", promotion_id, e)
+        logger.info(
+            "Promotion %s approved by %s; %d gateway deployments linked",
+            promotion_id,
+            approved_by,
+            len(deployments),
+        )
 
         await kafka_service.publish(
             topic=Topics.DEPLOY_REQUESTS,
@@ -188,6 +359,17 @@ class PromotionService:
 
         return promotion
 
+    @staticmethod
+    def _parse_target_gateway_ids(raw_ids: object) -> list[UUID]:
+        if not raw_ids:
+            return []
+        if not isinstance(raw_ids, list):
+            raise ValueError("Promotion target gateways must be a list")
+        try:
+            return [value if isinstance(value, UUID) else UUID(str(value)) for value in raw_ids]
+        except ValueError as exc:
+            raise ValueError("Promotion contains an invalid target gateway ID") from exc
+
     async def complete_promotion(
         self,
         promotion_id: UUID,
@@ -203,6 +385,20 @@ class PromotionService:
                 f"Cannot complete promotion in status '{promotion.status}' "
                 f"(expected '{PromotionStatus.PROMOTING.value}')"
             )
+
+        if target_deployment_id is None:
+            linked_deployments = await self.gw_deploy_repo.list_by_promotion(promotion_id)
+            if not linked_deployments:
+                raise ValueError("Cannot complete promotion without linked gateway deployments")
+            not_synced = [
+                dep
+                for dep in linked_deployments
+                if self._wire_value(dep.sync_status) != DeploymentSyncStatus.SYNCED.value
+            ]
+            if not_synced:
+                raise ValueError("Cannot complete promotion until all linked gateway deployments are synced")
+            if len(linked_deployments) == 1:
+                target_deployment_id = linked_deployments[0].id
 
         promotion.status = PromotionStatus.PROMOTED.value
         promotion.target_deployment_id = target_deployment_id
@@ -238,10 +434,7 @@ class PromotionService:
             return  # No deployments linked — nothing to do
 
         statuses = [d.sync_status for d in deployments]
-        pending_or_syncing = [
-            s for s in statuses
-            if s in (DeploymentSyncStatus.PENDING, DeploymentSyncStatus.SYNCING)
-        ]
+        pending_or_syncing = [s for s in statuses if s in (DeploymentSyncStatus.PENDING, DeploymentSyncStatus.SYNCING)]
 
         if pending_or_syncing:
             return  # Still waiting for some gateways

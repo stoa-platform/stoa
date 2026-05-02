@@ -18,6 +18,7 @@ spec:
   endpoints:
     publicUrl: https://staging-wm.gostoa.dev
     targetGatewayUrl: https://staging-wm.gostoa.dev
+    uiUrl: https://staging-wm-ui.gostoa.dev
     adminUrl: http://connect-webmethods-staging:8090
     healthUrl: http://connect-webmethods-staging:8090/health
   capabilities:
@@ -77,6 +78,7 @@ spec:
   endpoints:
     publicUrl: https://staging-wm-k3s.gostoa.dev
     targetGatewayUrl: https://staging-wm.gostoa.dev
+    uiUrl: https://staging-wm-ui.gostoa.dev
     adminUrl: http://stoa-link-wm-staging:8080
     healthUrl: http://stoa-link-wm-staging:8080/health
   capabilities:

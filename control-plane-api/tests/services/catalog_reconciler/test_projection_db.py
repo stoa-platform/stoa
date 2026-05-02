@@ -10,6 +10,8 @@ that GitOps writes NEVER touch ``target_gateways``, ``openapi_spec`` or
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 
@@ -192,6 +194,75 @@ async def test_update_adopts_legacy_uuid_identity_collision(integration_db) -> N
     )
     deployment = deployment_result.scalar_one()
     assert deployment.api_name == "petstore"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_update_adopts_legacy_uuid_when_soft_deleted_canonical_slug_exists(integration_db) -> None:
+    """Soft-deleted canonical rows must not block Git identity reuse.
+
+    Prod had rows like ``api_id=template-openapi`` already soft-deleted and
+    active UUID rows with the same ``(tenant, api_name, version)``. The source
+    of truth is the current Git path, so the active row must be able to take
+    the canonical slug.
+    """
+    tenant_id = "free-aech"
+    api_id = "template-openapi"
+    legacy_api_id = "68a8ce45-3c0e-430e-beb5-9bb99dd32fa7"
+    integration_db.add(
+        APICatalog(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            api_name=api_id,
+            version="1.0.0",
+            status="draft",
+            tags=[],
+            portal_published=False,
+            audience="public",
+            api_metadata={"display_name": "Deleted canonical"},
+            git_path=f"tenants/{tenant_id}/apis/{api_id}",
+            deleted_at=datetime.now(UTC),
+        )
+    )
+    active_legacy = APICatalog(
+        tenant_id=tenant_id,
+        api_id=legacy_api_id,
+        api_name=api_id,
+        version="1.0.0",
+        status="draft",
+        tags=[],
+        portal_published=False,
+        audience="public",
+        api_metadata={"display_name": "Active legacy"},
+        git_path=f"tenants/{tenant_id}/apis/{legacy_api_id}",
+        openapi_spec={"openapi": "3.0.0", "info": {"title": "Template OpenAPI"}},
+    )
+    integration_db.add(active_legacy)
+    await integration_db.flush()
+    active_legacy_pk = active_legacy.id
+
+    await project_to_api_catalog(
+        integration_db,
+        _projection(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            git_path=f"tenants/{tenant_id}/apis/{api_id}/api.yaml",
+            git_commit_sha="c" * 40,
+            catalog_content_hash="d" * 64,
+        ),
+    )
+
+    result = await integration_db.execute(
+        select(APICatalog)
+        .where(APICatalog.tenant_id == tenant_id, APICatalog.api_id == api_id)
+        .where(APICatalog.deleted_at.is_(None))
+    )
+    row = result.scalar_one()
+    assert row.id == active_legacy_pk
+    assert row.git_path == f"tenants/{tenant_id}/apis/{api_id}/api.yaml"
+    assert row.git_commit_sha == "c" * 40
+    assert row.catalog_content_hash == "d" * 64
+    assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Template OpenAPI"}}
 
 
 @pytest.mark.integration

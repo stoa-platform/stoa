@@ -255,7 +255,7 @@ describe('GatewayList', () => {
       'href',
       'https://wm-runtime.gostoa.dev'
     );
-    expect(screen.getByRole('link', { name: /^ui/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /third-party ui/i })).toHaveAttribute(
       'href',
       'https://wm-ui.gostoa.dev'
     );
@@ -263,6 +263,8 @@ describe('GatewayList', () => {
       'href',
       'https://vps-wm.gostoa.dev'
     );
+    expect(screen.getByText('Connect VPS')).toBeInTheDocument();
+    expect(screen.getByText('Remote link')).toBeInTheDocument();
   });
 
   it('renders status dot with title for live gateway', async () => {

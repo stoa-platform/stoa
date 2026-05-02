@@ -42,7 +42,7 @@ exports[`GatewayList > snapshot: cpi-admin persona > matches structural snapshot
     },
     {
       "href": "https://wm-ui.gostoa.dev",
-      "text": "UI",
+      "text": "Third-party UI",
     },
     {
       "href": "https://vps-wm.gostoa.dev",
@@ -93,7 +93,7 @@ exports[`GatewayList > snapshot: devops persona > matches structural snapshot 1`
     },
     {
       "href": "https://wm-ui.gostoa.dev",
-      "text": "UI",
+      "text": "Third-party UI",
     },
     {
       "href": "https://vps-wm.gostoa.dev",
@@ -144,7 +144,7 @@ exports[`GatewayList > snapshot: tenant-admin persona > matches structural snaps
     },
     {
       "href": "https://wm-ui.gostoa.dev",
-      "text": "UI",
+      "text": "Third-party UI",
     },
     {
       "href": "https://vps-wm.gostoa.dev",
@@ -195,7 +195,7 @@ exports[`GatewayList > snapshot: viewer persona > matches structural snapshot 1`
     },
     {
       "href": "https://wm-ui.gostoa.dev",
-      "text": "UI",
+      "text": "Third-party UI",
     },
     {
       "href": "https://vps-wm.gostoa.dev",

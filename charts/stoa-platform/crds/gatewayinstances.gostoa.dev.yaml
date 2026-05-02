@@ -80,7 +80,13 @@ spec:
                   properties:
                     publicUrl:
                       type: string
-                      description: User or tenant reachable runtime URL
+                      description: User or tenant reachable runtime URL for this STOA runtime
+                    targetGatewayUrl:
+                      type: string
+                      description: Third-party gateway admin/runtime URL controlled by STOA Link or STOA Connect
+                    uiUrl:
+                      type: string
+                      description: Third-party gateway web UI URL; never use the STOA Link runtime URL here
                     internalUrl:
                       type: string
                       description: Cluster/service URL for in-cluster calls

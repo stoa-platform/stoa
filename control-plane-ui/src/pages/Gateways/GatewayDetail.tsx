@@ -25,6 +25,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import type { GatewayInstance } from '../../types';
+import { deploymentLabel, gatewayUrls, topologyLabel } from './gatewayDisplay';
 
 interface DiscoveredAPI {
   name: string;
@@ -35,26 +36,6 @@ interface DiscoveredAPI {
   annotations?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
-
-const MODE_LABELS: Record<string, string> = {
-  'edge-mcp': 'Edge MCP',
-  sidecar: 'Runtime Sidecar',
-  proxy: 'Proxy',
-  shadow: 'Shadow',
-  connect: 'Connect',
-};
-
-const DEPLOYMENT_LABELS: Record<string, string> = {
-  edge: 'Edge',
-  connect: 'Connect',
-  sidecar: 'Sidecar',
-};
-
-const TOPOLOGY_LABELS: Record<string, string> = {
-  'native-edge': 'Native edge',
-  'remote-agent': 'Remote agent',
-  'same-pod': 'Same pod',
-};
 
 const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
   online: { color: 'text-green-600 bg-green-50', icon: CheckCircle2 },
@@ -153,14 +134,9 @@ export function GatewayDetail() {
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
   const discoveredApis = toolsData || [];
-  const modeLabel = gateway.deployment_mode
-    ? DEPLOYMENT_LABELS[gateway.deployment_mode] || gateway.deployment_mode
-    : gateway.mode
-      ? MODE_LABELS[gateway.mode] || gateway.mode
-      : null;
-  const topologyLabel = gateway.topology
-    ? TOPOLOGY_LABELS[gateway.topology] || gateway.topology
-    : null;
+  const urls = gatewayUrls(gateway);
+  const modeLabel = deploymentLabel(gateway);
+  const topologyText = topologyLabel(gateway);
   const hasVisibilityRestriction =
     gateway.visibility && Array.isArray(gateway.visibility.tenant_ids);
 
@@ -194,9 +170,9 @@ export function GatewayDetail() {
                 {modeLabel}
               </span>
             )}
-            {topologyLabel && (
+            {topologyText && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-50 text-slate-700">
-                {topologyLabel}
+                {topologyText}
               </span>
             )}
             {gateway.source === 'argocd' && (
@@ -235,9 +211,9 @@ export function GatewayDetail() {
               </button>
             </>
           )}
-          {gateway.public_url && (
+          {urls.publicUrl && (
             <a
-              href={gateway.public_url}
+              href={urls.publicUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -271,14 +247,10 @@ export function GatewayDetail() {
           Configuration
         </h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-          <ConfigItem label="Admin URL" value={gateway.base_url} isLink />
-          {gateway.public_url && (
-            <ConfigItem label="Public URL" value={gateway.public_url} isLink />
-          )}
-          {gateway.target_gateway_url && (
-            <ConfigItem label="Target Gateway" value={gateway.target_gateway_url} isLink />
-          )}
-          {gateway.ui_url && <ConfigItem label="Gateway UI" value={gateway.ui_url} isLink />}
+          <ConfigItem label="Admin URL" value={urls.baseUrl ?? '--'} isLink={!!urls.baseUrl} />
+          {urls.publicUrl && <ConfigItem label="STOA Runtime" value={urls.publicUrl} isLink />}
+          {urls.targetUrl && <ConfigItem label="Target Gateway" value={urls.targetUrl} isLink />}
+          {urls.uiUrl && <ConfigItem label="Third-party UI" value={urls.uiUrl} isLink />}
           <ConfigItem label="Environment" value={gateway.environment} />
           <ConfigItem label="Type" value={gateway.gateway_type} />
           {gateway.target_gateway_type && (

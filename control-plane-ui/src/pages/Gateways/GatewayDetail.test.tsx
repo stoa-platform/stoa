@@ -22,6 +22,10 @@ const { mockGateway, mockDeployments, mockTools } = vi.hoisted(() => ({
     public_url: 'https://mcp.gostoa.dev',
     target_gateway_url: null,
     ui_url: null,
+    endpoints: null,
+    deployment_mode: null,
+    target_gateway_type: null,
+    topology: null,
     auth_config: {},
     status: 'online',
     enabled: true,
@@ -129,6 +133,14 @@ describe('GatewayDetail', () => {
     // Reset gateway to enabled state
     mockGateway.enabled = true;
     mockGateway.visibility = null;
+    mockGateway.public_url = 'https://mcp.gostoa.dev';
+    mockGateway.target_gateway_url = null;
+    mockGateway.ui_url = null;
+    mockGateway.endpoints = null;
+    mockGateway.deployment_mode = null;
+    mockGateway.target_gateway_type = null;
+    mockGateway.topology = null;
+    mockGateway.mode = 'edge-mcp';
   });
 
   it('renders gateway display name', async () => {
@@ -167,6 +179,56 @@ describe('GatewayDetail', () => {
     await screen.findByText('STOA Edge MCP Gateway');
     const openBtn = screen.getByText('Open Gateway');
     expect(openBtn.closest('a')).toHaveAttribute('href', 'https://mcp.gostoa.dev');
+  });
+
+  it('renders endpoint-map URLs for a remote WebMethods link', async () => {
+    const { apiService } = await import('../../services/api');
+    vi.mocked(apiService.getGatewayInstance).mockResolvedValueOnce({
+      ...mockGateway,
+      id: 'gw-link',
+      name: 'stoa-link-wm-staging',
+      display_name: 'STOA Link webMethods Staging',
+      gateway_type: 'stoa',
+      base_url: 'http://stoa-link-wm-staging:8080',
+      public_url: null,
+      target_gateway_url: null,
+      ui_url: null,
+      endpoints: {
+        publicUrl: 'https://staging-wm-k3s.gostoa.dev',
+        targetGatewayUrl: 'https://staging-wm.gostoa.dev',
+        uiUrl: 'https://staging-wm-ui.gostoa.dev',
+      },
+      mode: 'sidecar',
+      deployment_mode: 'connect',
+      target_gateway_type: 'webmethods',
+      topology: 'remote-agent',
+      tags: ['remote-agent', 'webmethods', 'not-a-k8s-sidecar'],
+    });
+
+    renderGatewayDetail('gw-link');
+    await screen.findByText('STOA Link webMethods Staging');
+
+    expect(screen.getByText('Link K8s')).toBeInTheDocument();
+    expect(screen.getByText('Remote link')).toBeInTheDocument();
+    expect(screen.getByText('STOA Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Target Gateway')).toBeInTheDocument();
+    expect(screen.getByText('Third-party UI')).toBeInTheDocument();
+    expect(screen.getByText('Open Gateway').closest('a')).toHaveAttribute(
+      'href',
+      'https://staging-wm-k3s.gostoa.dev'
+    );
+    expect(screen.getByText('https://staging-wm-k3s.gostoa.dev').closest('a')).toHaveAttribute(
+      'href',
+      'https://staging-wm-k3s.gostoa.dev'
+    );
+    expect(screen.getByText('https://staging-wm.gostoa.dev').closest('a')).toHaveAttribute(
+      'href',
+      'https://staging-wm.gostoa.dev'
+    );
+    expect(screen.getByText('https://staging-wm-ui.gostoa.dev').closest('a')).toHaveAttribute(
+      'href',
+      'https://staging-wm-ui.gostoa.dev'
+    );
   });
 
   it('renders health metrics', async () => {

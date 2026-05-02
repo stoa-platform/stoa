@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEV_OVERLAY = REPO_ROOT / "k8s" / "gateways" / "overlays" / "dev"
 STAGING_OVERLAY = REPO_ROOT / "k8s" / "gateways" / "overlays" / "staging"
 PROD_OVERLAY = REPO_ROOT / "k8s" / "gateways" / "overlays" / "production"
+GATEWAY_INSTANCE_CRD = REPO_ROOT / "charts" / "stoa-platform" / "crds" / "gatewayinstances.gostoa.dev.yaml"
 MIGRATION = (
     REPO_ROOT
     / "control-plane-api"
@@ -136,6 +137,16 @@ def test_regression_cab_2240_gateway_instances_expose_webmethods_ui_urls_for_all
         assert endpoints["publicUrl"] == public_url
         assert endpoints["targetGatewayUrl"] == target_gateway_url
         assert endpoints["uiUrl"] == ui_url
+
+
+def test_regression_cab_2240_crd_declares_gateway_url_contract() -> None:
+    crd = _load_yaml(GATEWAY_INSTANCE_CRD)[0]
+    schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+    endpoints = schema["properties"]["spec"]["properties"]["endpoints"]["properties"]
+
+    assert endpoints["publicUrl"]["description"].startswith("User or tenant reachable runtime URL")
+    assert "Third-party gateway" in endpoints["targetGatewayUrl"]["description"]
+    assert "never use the STOA Link runtime URL" in endpoints["uiUrl"]["description"]
 
 
 def test_regression_cab_2240_migration_repairs_all_staging_webmethods_rows() -> None:

@@ -102,6 +102,21 @@ def _new_worker(session_factory, fake_git: InMemoryCatalogGitClient) -> CatalogR
     )
 
 
+class CountingCatalogGitClient(InMemoryCatalogGitClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.get_calls = 0
+        self.latest_file_commit_calls = 0
+
+    async def get(self, path: str):
+        self.get_calls += 1
+        return await super().get(path)
+
+    async def latest_file_commit(self, path: str) -> str:
+        self.latest_file_commit_calls += 1
+        return await super().latest_file_commit(path)
+
+
 class TestProjectsAbsent:
     async def test_iteration_creates_row_for_absent_db_when_git_present(self, session_factory) -> None:
         tenant = f"{_TEST_TENANT_PREFIX}absent"
@@ -117,6 +132,19 @@ class TestProjectsAbsent:
         assert row.git_path == path
         assert row.git_commit_sha is not None
         assert row.catalog_content_hash is not None
+
+    async def test_iteration_skips_unchanged_git_blobs_after_successful_reconcile(self, session_factory) -> None:
+        tenant = f"{_TEST_TENANT_PREFIX}cache"
+        fake_git = CountingCatalogGitClient()
+        path = f"tenants/{tenant}/apis/petstore/api.yaml"
+        fake_git.seed(path, _render_yaml(tenant_id=tenant, api_name="petstore"))
+        worker = _new_worker(session_factory, fake_git)
+
+        await worker._reconcile_iteration()
+        await worker._reconcile_iteration()
+
+        assert fake_git.get_calls == 1
+        assert fake_git.latest_file_commit_calls == 0
 
 
 class TestUuidHardDriftCatB:

@@ -338,6 +338,7 @@ Reconstructible depuis `stoa-catalog` + `api_catalog`.
 - **Étape 10bis.** `openapi_spec` n'est pas sérialisé dans `api.yaml`; il vit dans le fichier Git canonique `openapi.yaml`.
 - **Étape 14.** La projection consomme le contenu Git relu, jamais le payload. **Jamais d'écrasement de `target_gateways` ni `openapi_spec`** (cache DB hydraté depuis `openapi.yaml` par le sync catalogue).
 - **Étape 16.** Court-circuit explicite de l'event Kafka legacy.
+- **Reconciler.** La boucle utilise les blob SHA du tree Git pour ignorer les fichiers inchangés déjà réconciliés; elle ne doit pas relire chaque `api.yaml` à chaque tick.
 
 ### 6.6 Reconciler in-tree — pattern asyncio existant
 
@@ -353,7 +354,8 @@ Boucle (extraits clés) :
 async def start():
     while not shutdown:
         try:
-            for git_path in await catalog_git_client.list("tenants/*/apis/*/api.yaml"):
+            for remote_file in await catalog_git_client.list_file_metadata("tenants/*/apis/*/api.yaml"):
+                git_path = remote_file.path
                 tenant_id, api_name = parse_path(git_path)
 
                 # Refus si api_name UUID-shaped (corruption Git)
@@ -361,9 +363,13 @@ async def start():
                     await update_status(failed, "uuid-shaped api_name in git_path")
                     continue
 
+                if blob_cache[git_path] == remote_file.sha:
+                    seen.add((tenant_id, api_name))
+                    continue
+
                 content_bytes = await catalog_git_client.get(git_path)
                 content_hash = sha256_hex(content_bytes)
-                commit_sha = await catalog_git_client.latest_file_commit(git_path)
+                commit_sha = remote_file.commit_sha or await catalog_git_client.latest_file_commit(git_path)
                 parsed = parse_yaml(content_bytes)
 
                 # Validation cohérence path ↔ contenu (§6.10)

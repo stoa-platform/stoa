@@ -166,6 +166,19 @@ class TestDeploymentOrchestrationService:
             assert len(result) == 1
 
     @pytest.mark.asyncio
+    async def test_validate_gateways_accepts_prod_alias_for_production(self):
+        """prod gateway rows satisfy production deployment requests."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        gateway = self._make_gateway(environment="prod")
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        with patch.object(svc, "_get_gateway_or_raise", new_callable=AsyncMock) as mock_gateway:
+            mock_gateway.return_value = gateway
+            await svc._validate_gateways_for_env([gateway.id], "production")
+
+    @pytest.mark.asyncio
     async def test_deploy_uses_assignments_when_no_gateway_ids(self):
         """When gateway_ids is None, should use auto-deploy assignments."""
         from src.services.deployment_orchestration_service import DeploymentOrchestrationService
@@ -284,6 +297,45 @@ class TestDeploymentOrchestrationService:
             )
 
             assert len(result) == 1
+            mock_preflight.assert_awaited_once_with(catalog, [gw_id])
+            mock_deploy.assert_called_once_with(catalog.id, [gw_id])
+
+    @pytest.mark.asyncio
+    async def test_auto_deploy_on_promotion_uses_explicit_gateway_ids(self):
+        """gateway-aware promotions bypass assignments and deploy to selected targets."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        catalog = self._make_catalog()
+        gw_id = uuid4()
+        deployments = [MagicMock(id=uuid4())]
+
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        with (
+            patch.object(svc.assignment_repo, "list_auto_deploy", new_callable=AsyncMock) as mock_assign,
+            patch.object(svc, "_validate_gateways_for_env", new_callable=AsyncMock) as mock_validate,
+            patch.object(svc, "_preflight_gateway_ids", new_callable=AsyncMock) as mock_preflight,
+            patch.object(svc.deploy_svc, "deploy_api", new_callable=AsyncMock) as mock_deploy,
+        ):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute.return_value = mock_result
+
+            mock_preflight.return_value = [MagicMock(deployable=True)]
+            mock_deploy.return_value = deployments
+
+            result = await svc.auto_deploy_on_promotion(
+                api_id="payments-v2",
+                tenant_id="acme",
+                target_environment="staging",
+                approved_by="admin",
+                gateway_ids=[gw_id],
+            )
+
+            assert len(result) == 1
+            mock_assign.assert_not_awaited()
+            mock_validate.assert_awaited_once_with([gw_id], "staging")
             mock_preflight.assert_awaited_once_with(catalog, [gw_id])
             mock_deploy.assert_called_once_with(catalog.id, [gw_id])
 

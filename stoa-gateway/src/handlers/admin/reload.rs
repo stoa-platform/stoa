@@ -8,7 +8,7 @@
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -112,6 +112,12 @@ pub async fn reload_routes_from_cp(state: &AppState) -> Result<usize, ReloadErro
     );
 
     let mut request = state.http_client.get(&url);
+    if let Some(gateway_name) = current_gateway_name(&state.config) {
+        request = request.query(&[("gateway_name", gateway_name.as_str())]);
+    } else {
+        warn!("Route reload is unfiltered because the gateway name could not be derived");
+    }
+
     if let Some(ref token) = state.config.control_plane_api_key {
         request = request.header("X-Gateway-Key", token.as_str());
     }
@@ -129,9 +135,43 @@ pub async fn reload_routes_from_cp(state: &AppState) -> Result<usize, ReloadErro
     Ok(count)
 }
 
+fn current_gateway_name(config: &crate::config::Config) -> Option<String> {
+    let hostname = std::env::var("STOA_INSTANCE_NAME")
+        .ok()
+        .filter(|name| !name.is_empty())
+        .or_else(|| {
+            hostname::get()
+                .ok()
+                .map(|hostname| hostname.to_string_lossy().to_string())
+        })?;
+
+    Some(derive_gateway_name(
+        &hostname,
+        &config.gateway_mode.to_string(),
+        &config.environment.to_string(),
+    ))
+}
+
+fn derive_gateway_name(hostname: &str, mode: &str, environment: &str) -> String {
+    let mode_clean = mode.replace('_', "");
+    format!("{hostname}-{mode_clean}-{environment}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn regression_route_reload_gateway_name_matches_control_plane_registration() {
+        assert_eq!(
+            derive_gateway_name("stoa-gateway", "edge-mcp", "prod"),
+            "stoa-gateway-edge-mcp-prod"
+        );
+        assert_eq!(
+            derive_gateway_name("wm-link", "edge_mcp", "dev"),
+            "wm-link-edgemcp-dev"
+        );
+    }
 
     #[test]
     fn test_not_configured_maps_to_503_and_generic_message() {

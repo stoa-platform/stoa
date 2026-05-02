@@ -100,6 +100,13 @@ class PromotionDeployConsumer:
                 return  # Not our event
 
             payload = data.get("payload", {})
+            if payload.get("gateway_deployments_created"):
+                logger.info(
+                    "Skipping legacy promotion auto-deploy for promotion=%s; gateway deployments already created",
+                    payload.get("promotion_id"),
+                )
+                return
+
             api_id = payload.get("api_id")
             target_env = payload.get("target_environment")
             approved_by = payload.get("approved_by", "system")

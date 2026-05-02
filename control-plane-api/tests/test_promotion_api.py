@@ -138,6 +138,9 @@ class TestPromotionServiceApprove:
         assert result.approved_by == "admin"
         mock_auto_deploy.assert_awaited_once()
         mock_kafka.publish.assert_awaited_once()
+        published_payload = mock_kafka.publish.await_args.kwargs["payload"]
+        assert published_payload["gateway_deployments_created"] is True
+        assert published_payload["target_gateway_ids"] == promo.target_gateway_ids
 
     @pytest.mark.asyncio
     async def test_approve_without_target_gateways_rejected(self, service):

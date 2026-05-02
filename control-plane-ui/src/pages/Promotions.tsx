@@ -387,7 +387,7 @@ function CreatePromotionDialog({
     async function loadGateways() {
       try {
         setLoadingTargets(true);
-        const result = await apiService.getGatewayInstances({ page_size: 100 });
+        const result = await apiService.getGatewayInstances({ page_size: PAGE_SIZE_MAX });
         if (!cancelled) setGateways(result.items);
       } catch (err: unknown) {
         if (!cancelled) setError(extractErrorMessage(err));

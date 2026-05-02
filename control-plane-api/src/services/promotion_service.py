@@ -343,6 +343,9 @@ class PromotionService:
                 "source_environment": promotion.source_environment,
                 "target_environment": promotion.target_environment,
                 "approved_by": approved_by,
+                "target_gateway_ids": [str(gateway_id) for gateway_id in target_gateway_ids],
+                "gateway_deployment_ids": [str(getattr(deployment, "id", deployment)) for deployment in deployments],
+                "gateway_deployments_created": True,
             },
             user_id=user_id,
         )

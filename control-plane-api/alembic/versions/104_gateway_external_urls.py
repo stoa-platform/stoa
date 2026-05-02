@@ -101,7 +101,7 @@ _URL_BACKFILLS = (
         "prod",
         "https://agentgateway.gostoa.dev",
         "https://agentgateway-ui.gostoa.dev",
-        "https://agentgateway-ui.gostoa.dev",
+        "https://agentgateway-ui.gostoa.dev/ui/",
     ),
 )
 

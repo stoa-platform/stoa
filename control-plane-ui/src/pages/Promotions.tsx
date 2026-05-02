@@ -97,6 +97,12 @@ const VALID_CHAINS: [string, string][] = [
   ['staging', 'production'],
 ];
 
+const PAGE_SIZE_MAX = 100;
+
+function pathKey(source: string, target: string): string {
+  return `${source}->${target}`;
+}
+
 function sameEnvironment(left?: string, right?: string): boolean {
   if (!left || !right) return false;
   return normalizeEnvironment(left) === normalizeEnvironment(right);
@@ -115,6 +121,129 @@ function deploymentMatchesApi(deployment: GatewayDeployment, apiId: string): boo
   return [deployment.api_catalog_id, desired.api_catalog_id, desired.api_id, desired.api_name].some(
     (value) => String(value || '') === apiId
   );
+}
+
+function deploymentTenantId(deployment: GatewayDeployment): string {
+  return String(deployment.desired_state?.tenant_id || '');
+}
+
+function compatibleTargetGateways(
+  sourceGateway: GatewayInstance,
+  gateways: GatewayInstance[],
+  target: string
+): GatewayInstance[] {
+  const sourceFamily = gatewayFamily(sourceGateway);
+  const sourceTopology = gatewayTopology(sourceGateway);
+  return gateways.filter((gateway) => {
+    if (gateway.id === sourceGateway.id) return false;
+    if (gateway.enabled === false) return false;
+    if (!sameEnvironment(gateway.environment, target)) return false;
+    if (gatewayFamily(gateway) !== sourceFamily) return false;
+    const targetTopology = gatewayTopology(gateway);
+    return !sourceTopology || !targetTopology || targetTopology === sourceTopology;
+  });
+}
+
+function deploymentIsEligibleForPath(
+  deployment: GatewayDeployment,
+  gateways: GatewayInstance[],
+  source: string,
+  target: string
+): boolean {
+  if (deployment.sync_status !== 'synced') return false;
+  if (!sameEnvironment(deployment.gateway_environment, source)) return false;
+  const sourceGateway = gateways.find((gateway) => gateway.id === deployment.gateway_instance_id);
+  if (!sourceGateway) return false;
+  return compatibleTargetGateways(sourceGateway, gateways, target).length > 0;
+}
+
+function apiMatchesDeployment(api: API, deployment: GatewayDeployment, tenantId: string): boolean {
+  const sourceTenant = deploymentTenantId(deployment);
+  if (sourceTenant && sourceTenant !== tenantId) return false;
+  return deploymentMatchesApi(deployment, api.id);
+}
+
+function buildEligibility(
+  apisByTenant: Record<string, API[]>,
+  deployments: GatewayDeployment[],
+  gateways: GatewayInstance[]
+): Record<string, Record<string, string[]>> {
+  const result: Record<string, Record<string, Set<string>>> = {};
+
+  for (const [tenantId, tenantApis] of Object.entries(apisByTenant)) {
+    for (const [source, target] of VALID_CHAINS) {
+      const key = pathKey(source, target);
+      for (const api of tenantApis) {
+        const eligible = deployments.some(
+          (deployment) =>
+            apiMatchesDeployment(api, deployment, tenantId) &&
+            deploymentIsEligibleForPath(deployment, gateways, source, target)
+        );
+        if (!eligible) continue;
+        result[tenantId] ??= {};
+        result[tenantId][key] ??= new Set<string>();
+        result[tenantId][key].add(api.id);
+      }
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(result).map(([tenantId, byPath]) => [
+      tenantId,
+      Object.fromEntries(Object.entries(byPath).map(([key, apiIds]) => [key, Array.from(apiIds)])),
+    ])
+  );
+}
+
+function eligibleApiIdsForTenant(
+  eligibilityByTenant: Record<string, Record<string, string[]>>,
+  tenantId: string
+): Set<string> {
+  return new Set(Object.values(eligibilityByTenant[tenantId] ?? {}).flat());
+}
+
+function eligibleApisForTenant(
+  apisByTenant: Record<string, API[]>,
+  eligibilityByTenant: Record<string, Record<string, string[]>>,
+  tenantId: string
+): API[] {
+  const eligibleIds = eligibleApiIdsForTenant(eligibilityByTenant, tenantId);
+  return (apisByTenant[tenantId] ?? []).filter((api) => eligibleIds.has(api.id));
+}
+
+async function fetchAllGatewayInstances(): Promise<GatewayInstance[]> {
+  const items: GatewayInstance[] = [];
+  let page = 1;
+  let total = 0;
+  do {
+    const result = await apiService.getGatewayInstances({ page, page_size: PAGE_SIZE_MAX });
+    items.push(...result.items);
+    total = result.total;
+    page += 1;
+  } while (items.length < total);
+  return items;
+}
+
+async function fetchAllSyncedSourceDeployments(): Promise<GatewayDeployment[]> {
+  const deployments: GatewayDeployment[] = [];
+  for (const [source] of VALID_CHAINS) {
+    const sourceItems: GatewayDeployment[] = [];
+    let page = 1;
+    let total = 0;
+    do {
+      const result = await apiService.getGatewayDeployments({
+        environment: source,
+        sync_status: 'synced',
+        page,
+        page_size: PAGE_SIZE_MAX,
+      });
+      sourceItems.push(...result.items);
+      total = result.total;
+      page += 1;
+    } while (sourceItems.length < total);
+    deployments.push(...sourceItems);
+  }
+  return deployments;
 }
 
 // =============================================================================
@@ -216,11 +345,18 @@ function DiffViewer({ diff }: { diff: Schemas['PromotionDiffResponse'] }) {
 interface CreatePromotionDialogProps {
   tenantId: string;
   apis: API[];
+  eligibleApiIdsByPath: Record<string, string[]>;
   onClose: () => void;
   onCreated: () => void;
 }
 
-function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePromotionDialogProps) {
+function CreatePromotionDialog({
+  tenantId,
+  apis,
+  eligibleApiIdsByPath,
+  onClose,
+  onCreated,
+}: CreatePromotionDialogProps) {
   const [selectedApi, setSelectedApi] = useState('');
   const [source, setSource] = useState('dev');
   const [target, setTarget] = useState('staging');
@@ -235,6 +371,16 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
   const [error, setError] = useState<string | null>(null);
 
   const isValidChain = VALID_CHAINS.some(([s, t]) => s === source && t === target);
+  const eligibleApisForPath = useMemo(() => {
+    const eligibleIds = new Set(eligibleApiIdsByPath[pathKey(source, target)] ?? []);
+    return apis.filter((api) => eligibleIds.has(api.id));
+  }, [apis, eligibleApiIdsByPath, source, target]);
+
+  useEffect(() => {
+    if (selectedApi && !eligibleApisForPath.some((api) => api.id === selectedApi)) {
+      setSelectedApi('');
+    }
+  }, [eligibleApisForPath, selectedApi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -274,7 +420,8 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
         setLoadingSourceDeployments(true);
         const result = await apiService.getGatewayDeployments({
           environment: source,
-          page_size: 100,
+          sync_status: 'synced',
+          page_size: PAGE_SIZE_MAX,
         });
         if (!cancelled) setSourceDeployments(result.items);
       } catch (err: unknown) {
@@ -317,16 +464,7 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
 
   const targetGatewayCandidates = useMemo(() => {
     if (!selectedSourceGateway) return [];
-    const sourceFamily = gatewayFamily(selectedSourceGateway);
-    const sourceTopology = gatewayTopology(selectedSourceGateway);
-    return gateways.filter((gateway) => {
-      if (gateway.id === selectedSourceGateway.id) return false;
-      if (gateway.enabled === false) return false;
-      if (!sameEnvironment(gateway.environment, target)) return false;
-      if (gatewayFamily(gateway) !== sourceFamily) return false;
-      const targetTopology = gatewayTopology(gateway);
-      return !sourceTopology || !targetTopology || targetTopology === sourceTopology;
-    });
+    return compatibleTargetGateways(selectedSourceGateway, gateways, target);
   }, [gateways, selectedSourceGateway, target]);
 
   useEffect(() => {
@@ -402,11 +540,16 @@ function CreatePromotionDialog({ tenantId, apis, onClose, onCreated }: CreatePro
               value={selectedApi}
               onChange={(e) => setSelectedApi(e.target.value)}
               className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+              disabled={!isValidChain || eligibleApisForPath.length === 0}
               required
               data-testid="promotion-api-select"
             >
-              <option value="">Select an API...</option>
-              {apis.map((api) => (
+              <option value="">
+                {eligibleApisForPath.length === 0
+                  ? 'No eligible APIs for this path'
+                  : 'Select an eligible API...'}
+              </option>
+              {eligibleApisForPath.map((api) => (
                 <option key={api.id} value={api.id}>
                   {api.display_name} ({api.name})
                 </option>
@@ -871,17 +1014,31 @@ export function Promotions() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [apis, setApis] = useState<API[]>([]);
+  const [apisByTenant, setApisByTenant] = useState<Record<string, API[]>>({});
+  const [eligibilityByTenant, setEligibilityByTenant] = useState<
+    Record<string, Record<string, string[]>>
+  >({});
   const [selectedTenant, setSelectedTenant] = useState('');
   const [selectedApi, setSelectedApi] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [eligibilityLoading, setEligibilityLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const canPromote = hasPermission('apis:deploy');
   const pageSize = 20;
+  const eligibleTenants = useMemo(
+    () =>
+      tenants.filter((tenant) => eligibleApiIdsForTenant(eligibilityByTenant, tenant.id).size > 0),
+    [tenants, eligibilityByTenant]
+  );
+  const apis = useMemo(
+    () => eligibleApisForTenant(apisByTenant, eligibilityByTenant, selectedTenant),
+    [apisByTenant, eligibilityByTenant, selectedTenant]
+  );
+  const selectedTenantEligibility = eligibilityByTenant[selectedTenant] ?? {};
 
   const loadPromotions = useCallback(async () => {
     if (!selectedTenant) return;
@@ -905,46 +1062,78 @@ export function Promotions() {
     }
   }, [selectedTenant, selectedApi, selectedStatus, page]);
 
-  useEffect(() => {
-    if (isReady) loadTenants();
-  }, [isReady]);
+  const loadPromotionEligibility = useCallback(async () => {
+    try {
+      setLoading(true);
+      setEligibilityLoading(true);
+      const tenantData = await apiService.getTenants();
+      const apiEntries = await Promise.all(
+        tenantData.map(async (tenant) => [tenant.id, await apiService.getApis(tenant.id)] as const)
+      );
+      const nextApisByTenant = Object.fromEntries(apiEntries);
+      const [gatewayData, deploymentData] = await Promise.all([
+        fetchAllGatewayInstances(),
+        fetchAllSyncedSourceDeployments(),
+      ]);
+      const nextEligibilityByTenant = buildEligibility(
+        nextApisByTenant,
+        deploymentData,
+        gatewayData
+      );
+      const firstEligibleTenant = tenantData.find(
+        (tenant) => eligibleApiIdsForTenant(nextEligibilityByTenant, tenant.id).size > 0
+      );
+
+      setTenants(tenantData);
+      setApisByTenant(nextApisByTenant);
+      setEligibilityByTenant(nextEligibilityByTenant);
+      setSelectedTenant((current) =>
+        current && eligibleApiIdsForTenant(nextEligibilityByTenant, current).size > 0
+          ? current
+          : (firstEligibleTenant?.id ?? '')
+      );
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load promotion eligibility');
+      setTenants([]);
+      setApisByTenant({});
+      setEligibilityByTenant({});
+      setSelectedTenant('');
+      setPromotions([]);
+      setTotalCount(0);
+    } finally {
+      setEligibilityLoading(false);
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (selectedTenant) {
-      loadApis(selectedTenant);
-      setPage(1);
-    }
+    if (isReady) loadPromotionEligibility();
+  }, [isReady, loadPromotionEligibility]);
+
+  useEffect(() => {
+    setPage(1);
   }, [selectedTenant]);
+
+  useEffect(() => {
+    if (selectedApi && !apis.some((api) => api.id === selectedApi)) {
+      setSelectedApi('');
+    }
+  }, [apis, selectedApi]);
 
   useEffect(() => {
     if (selectedTenant) loadPromotions();
   }, [loadPromotions, selectedTenant]);
 
-  async function loadTenants() {
-    try {
-      const data = await apiService.getTenants();
-      setTenants(data);
-      if (data.length > 0) setSelectedTenant(data[0].id);
-      setLoading(false);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load tenants');
-      setLoading(false);
-    }
-  }
-
-  async function loadApis(tenantId: string) {
-    try {
-      const data = await apiService.getApis(tenantId);
-      setApis(data);
-    } catch {
-      // non-fatal
-    }
-  }
-
   const handleCreated = () => {
     setShowCreateDialog(false);
     toast.success('Promotion created', 'Promotion request submitted for approval');
     loadPromotions();
+  };
+
+  const handleRefresh = async () => {
+    await loadPromotionEligibility();
+    if (selectedTenant) await loadPromotions();
   };
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -960,7 +1149,10 @@ export function Promotions() {
           </p>
         </div>
         {canPromote && (
-          <Button onClick={() => setShowCreateDialog(true)} disabled={!selectedTenant}>
+          <Button
+            onClick={() => setShowCreateDialog(true)}
+            disabled={!selectedTenant || eligibilityLoading || apis.length === 0}
+          >
             <Plus className="h-4 w-4" />
             New Promotion
           </Button>
@@ -983,9 +1175,10 @@ export function Promotions() {
           value={selectedTenant}
           onChange={(e) => setSelectedTenant(e.target.value)}
           className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+          data-testid="promotion-tenant-filter"
         >
           <option value="">Select tenant...</option>
-          {tenants.map((t) => (
+          {eligibleTenants.map((t) => (
             <option key={t.id} value={t.id}>
               {t.display_name}
             </option>
@@ -998,6 +1191,8 @@ export function Promotions() {
             setPage(1);
           }}
           className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
+          disabled={!selectedTenant || apis.length === 0}
+          data-testid="promotion-api-filter"
         >
           <option value="">All APIs</option>
           {apis.map((api) => (
@@ -1022,7 +1217,7 @@ export function Promotions() {
           <option value="rolled_back">Rolled Back</option>
         </select>
         <button
-          onClick={loadPromotions}
+          onClick={handleRefresh}
           className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 text-sm"
         >
           <RefreshCw className="h-4 w-4" />
@@ -1044,6 +1239,11 @@ export function Promotions() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 overflow-hidden">
         {loading ? (
           <TableSkeleton rows={5} columns={6} />
+        ) : !selectedTenant ? (
+          <EmptyState
+            variant="deployments"
+            description="No APIs are eligible for promotion right now."
+          />
         ) : promotions.length === 0 ? (
           <EmptyState
             variant="deployments"
@@ -1105,6 +1305,7 @@ export function Promotions() {
         <CreatePromotionDialog
           tenantId={selectedTenant}
           apis={apis}
+          eligibleApiIdsByPath={selectedTenantEligibility}
           onClose={() => setShowCreateDialog(false)}
           onCreated={handleCreated}
         />

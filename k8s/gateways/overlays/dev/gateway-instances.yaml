@@ -18,6 +18,7 @@ spec:
   endpoints:
     publicUrl: https://dev-wm.gostoa.dev
     targetGatewayUrl: https://dev-wm.gostoa.dev
+    uiUrl: https://dev-wm-ui.gostoa.dev
     adminUrl: http://connect-webmethods-dev:8090
     healthUrl: http://connect-webmethods-dev:8090/health
   capabilities:
@@ -48,6 +49,7 @@ spec:
   endpoints:
     publicUrl: https://dev-wm-k3s.gostoa.dev
     targetGatewayUrl: https://dev-wm.gostoa.dev
+    uiUrl: https://dev-wm-ui.gostoa.dev
     adminUrl: http://stoa-link-wm-dev:8080
     healthUrl: http://stoa-link-wm-dev:8080/health
   capabilities:

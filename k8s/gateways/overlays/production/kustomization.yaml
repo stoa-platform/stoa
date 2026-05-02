@@ -57,6 +57,14 @@ patches:
                     value: "prod"
                   - name: STOA_INSTANCE_NAME
                     value: "webmethods-stoa-link-prod"
+                  - name: STOA_GATEWAY_EXTERNAL_URL
+                    value: "https://vps-wm-link.gostoa.dev"
+                  - name: STOA_GATEWAY_PUBLIC_URL
+                    value: "https://vps-wm-link.gostoa.dev"
+                  - name: STOA_TARGET_GATEWAY_URL
+                    value: "https://vps-wm.gostoa.dev"
+                  - name: STOA_GATEWAY_UI_URL
+                    value: "https://vps-wm-ui.gostoa.dev"
                   - name: STOA_DEPLOYMENT_MODE
                     value: "connect"
                   - name: STOA_TARGET_GATEWAY_TYPE

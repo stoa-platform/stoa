@@ -74,6 +74,9 @@ spec:
   targetGatewayType: webmethods
   topology: remote-agent
   endpoints:
+    publicUrl: https://vps-wm.gostoa.dev
+    targetGatewayUrl: https://vps-wm.gostoa.dev
+    uiUrl: https://vps-wm-ui.gostoa.dev
     adminUrl: http://connect-webmethods-prod:8090
     healthUrl: http://connect-webmethods-prod:8090/health
   capabilities:
@@ -218,6 +221,9 @@ spec:
   targetGatewayType: webmethods
   topology: remote-agent
   endpoints:
+    publicUrl: https://vps-wm-link.gostoa.dev
+    targetGatewayUrl: https://vps-wm.gostoa.dev
+    uiUrl: https://vps-wm-ui.gostoa.dev
     adminUrl: http://vps-wm-link-prod:9200
     healthUrl: http://vps-wm-link-prod:9200/health
   capabilities:

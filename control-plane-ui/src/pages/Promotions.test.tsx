@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Promotions } from './Promotions';
 import { createAuthMock, renderWithProviders, type PersonaRole } from '../test/helpers';
@@ -48,6 +48,14 @@ const mockTenants: Tenant[] = [
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
+  {
+    id: 'tenant-2',
+    name: 'globex',
+    display_name: 'Globex',
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
 ];
 
 const mockApis: API[] = [
@@ -61,6 +69,37 @@ const mockApis: API[] = [
     backend_url: 'https://api.example.com',
     status: 'published',
     deployed_dev: true,
+    deployed_staging: false,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'api-2',
+    tenant_id: 'tenant-1',
+    name: 'billing-api',
+    display_name: 'Billing API',
+    version: '1.0.0',
+    description: 'Billing management',
+    backend_url: 'https://billing.example.com',
+    status: 'published',
+    deployed_dev: false,
+    deployed_staging: false,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
+const mockTenantTwoApis: API[] = [
+  {
+    id: 'api-3',
+    tenant_id: 'tenant-2',
+    name: 'inventory-api',
+    display_name: 'Inventory API',
+    version: '1.0.0',
+    description: 'Inventory management',
+    backend_url: 'https://inventory.example.com',
+    status: 'published',
+    deployed_dev: false,
     deployed_staging: false,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -148,6 +187,7 @@ const mockSourceDeployments: GatewayDeployment[] = [
       api_id: 'api-1',
       api_name: 'orders-api',
       api_catalog_id: 'catalog-1',
+      tenant_id: 'tenant-1',
     },
     desired_at: '2026-03-08T09:00:00Z',
     sync_status: 'synced',
@@ -170,7 +210,9 @@ function setupMocks(role: PersonaRole = 'cpi-admin') {
   vi.clearAllMocks();
   vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
   vi.mocked(apiService.getTenants).mockResolvedValue(mockTenants);
-  vi.mocked(apiService.getApis).mockResolvedValue(mockApis);
+  vi.mocked(apiService.getApis).mockImplementation(async (tenantId: string) =>
+    tenantId === 'tenant-1' ? mockApis : mockTenantTwoApis
+  );
   vi.mocked(apiService.getGatewayInstances).mockResolvedValue({
     items: mockGateways,
     total: mockGateways.length,
@@ -219,6 +261,30 @@ describe('Promotions', () => {
   });
 
   describe('Promotion list', () => {
+    it('limits tenant and API filters to promotion-eligible APIs', async () => {
+      setupMocks();
+      renderWithProviders(<Promotions />);
+
+      await waitFor(() => {
+        expect(apiService.getGatewayDeployments).toHaveBeenCalled();
+      });
+
+      const tenantFilter = screen.getByTestId('promotion-tenant-filter');
+      expect(within(tenantFilter).getByRole('option', { name: 'ACME Corp' })).toBeInTheDocument();
+      expect(
+        within(tenantFilter).queryByRole('option', { name: 'Globex' })
+      ).not.toBeInTheDocument();
+
+      const apiFilter = screen.getByTestId('promotion-api-filter');
+      expect(within(apiFilter).getByRole('option', { name: 'Orders API' })).toBeInTheDocument();
+      expect(
+        within(apiFilter).queryByRole('option', { name: 'Billing API' })
+      ).not.toBeInTheDocument();
+      expect(
+        within(apiFilter).queryByRole('option', { name: 'Inventory API' })
+      ).not.toBeInTheDocument();
+    });
+
     it('loads and displays promotions after tenant selection', async () => {
       setupMocks();
       renderWithProviders(<Promotions />);
@@ -425,11 +491,13 @@ describe('Promotions', () => {
 
       const user = userEvent.setup();
 
+      let newPromotionButton: HTMLElement | null = null;
       await waitFor(() => {
-        expect(screen.getByText('New Promotion')).toBeInTheDocument();
+        newPromotionButton = screen.getByText('New Promotion');
+        expect(newPromotionButton).toBeEnabled();
       });
 
-      await user.click(screen.getByText('New Promotion'));
+      await user.click(newPromotionButton!);
 
       // Dialog has a heading "Create Promotion" and a submit button with same text
       expect(screen.getByRole('heading', { name: 'Create Promotion' })).toBeInTheDocument();
@@ -443,16 +511,29 @@ describe('Promotions', () => {
 
       const user = userEvent.setup();
 
+      let newPromotionButton: HTMLElement | null = null;
       await waitFor(() => {
-        expect(screen.getByText('New Promotion')).toBeInTheDocument();
+        newPromotionButton = screen.getByText('New Promotion');
+        expect(newPromotionButton).toBeEnabled();
       });
 
-      await user.click(screen.getByText('New Promotion'));
+      await user.click(newPromotionButton!);
+      expect(
+        within(screen.getByTestId('promotion-api-select')).getByRole('option', {
+          name: 'Orders API (orders-api)',
+        })
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('promotion-api-select')).queryByRole('option', {
+          name: 'Billing API (billing-api)',
+        })
+      ).not.toBeInTheDocument();
       await user.selectOptions(screen.getByTestId('promotion-api-select'), 'api-1');
 
       await waitFor(() => {
         expect(apiService.getGatewayDeployments).toHaveBeenCalledWith({
           environment: 'dev',
+          sync_status: 'synced',
           page_size: 100,
         });
       });

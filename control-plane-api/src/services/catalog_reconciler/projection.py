@@ -16,6 +16,10 @@ Contract:
 * ``metadata`` is projected from ``api.yaml`` because Console fields such as
   ``backend_url`` and ``display_name`` are read from that JSONB column.
 * The projection NEVER touches ``id`` (PK UUID) on UPDATE.
+* The projection may canonicalize ``api_id`` from a legacy UUID to the Git
+  slug when the active row is uniquely identified by ``(tenant, api_name,
+  version)``. This makes Git the identity source of truth without losing DB
+  references that point at the row PK.
 * The projection rejects ``id != name`` content (§6.10) and UUID-shaped names.
 """
 
@@ -24,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.catalog import APICatalog
@@ -217,6 +221,57 @@ def row_matches_projection(
     )
 
 
+async def _canonicalize_soft_api_references(
+    db_session: AsyncSession,
+    *,
+    tenant_id: str,
+    old_api_id: str,
+    new_api_id: str,
+    api_name: str,
+) -> None:
+    """Move known soft string references when adopting a legacy catalog row.
+
+    Runtime deployment/policy rows use ``api_catalog.id`` and are preserved
+    naturally when the catalog row is updated in place. Older lifecycle tables
+    still keep a soft ``tenant_id + api_id`` reference, so canonicalizing only
+    ``api_catalog.api_id`` would detach history from the Git identity.
+    """
+    if old_api_id == new_api_id:
+        return
+
+    params = {
+        "tenant_id": tenant_id,
+        "old_api_id": old_api_id,
+        "new_api_id": new_api_id,
+        "api_name": api_name,
+    }
+    statements = (
+        "UPDATE deployments SET api_id = :new_api_id, api_name = :api_name "
+        "WHERE tenant_id = :tenant_id AND api_id = :old_api_id",
+        "UPDATE promotions SET api_id = :new_api_id "
+        "WHERE tenant_id = :tenant_id AND api_id = :old_api_id "
+        "AND NOT (status IN ('pending', 'promoting') AND EXISTS ("
+        "SELECT 1 FROM promotions dst "
+        "WHERE dst.api_id = :new_api_id "
+        "AND dst.target_environment = promotions.target_environment "
+        "AND dst.status IN ('pending', 'promoting')"
+        "))",
+        "UPDATE subscriptions SET api_id = :new_api_id, api_name = :api_name "
+        "WHERE tenant_id = :tenant_id AND api_id = :old_api_id",
+        "UPDATE credential_mappings SET api_id = :new_api_id "
+        "WHERE tenant_id = :tenant_id AND api_id = :old_api_id "
+        "AND NOT EXISTS ("
+        "SELECT 1 FROM credential_mappings dst "
+        "WHERE dst.consumer_id = credential_mappings.consumer_id "
+        "AND dst.api_id = :new_api_id"
+        ")",
+        "UPDATE pipeline_traces SET api_id = :new_api_id, api_name = :api_name "
+        "WHERE tenant_id = :tenant_id AND api_id = :old_api_id",
+    )
+    for statement in statements:
+        await db_session.execute(text(statement), params)
+
+
 async def project_to_api_catalog(
     db_session: AsyncSession,
     projection: ApiCatalogProjection,
@@ -261,6 +316,17 @@ async def project_to_api_catalog(
     existing = result.scalar_one_or_none()
 
     if existing is None:
+        identity_collision_stmt = (
+            select(APICatalog)
+            .where(APICatalog.tenant_id == projection.tenant_id)
+            .where(APICatalog.api_name == projection.api_name)
+            .where(APICatalog.version == projection.version)
+            .where(APICatalog.deleted_at.is_(None))
+        )
+        result = await db_session.execute(identity_collision_stmt)
+        existing = result.scalar_one_or_none()
+
+    if existing is None:
         new_row = APICatalog(
             tenant_id=projection.tenant_id,
             api_id=projection.api_id,
@@ -280,10 +346,21 @@ async def project_to_api_catalog(
         await db_session.flush()
         return
 
+    old_api_id = str(existing.api_id)
+    if old_api_id != projection.api_id:
+        await _canonicalize_soft_api_references(
+            db_session,
+            tenant_id=projection.tenant_id,
+            old_api_id=old_api_id,
+            new_api_id=projection.api_id,
+            api_name=projection.api_name,
+        )
+
     update_stmt = (
         update(APICatalog)
         .where(APICatalog.id == existing.id)
         .values(
+            api_id=projection.api_id,
             api_name=projection.api_name,
             version=projection.version,
             status=projection.status,

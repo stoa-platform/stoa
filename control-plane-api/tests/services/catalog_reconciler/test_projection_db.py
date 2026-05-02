@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import select
 
 from src.models.catalog import APICatalog
+from src.models.deployment import Deployment
 from src.services.catalog_reconciler.projection import (
     ApiCatalogProjection,
     project_to_api_catalog,
@@ -128,6 +129,69 @@ async def test_update_preserves_target_gateways(integration_db) -> None:
     assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Pet"}}
     assert row.api_metadata["display_name"] == "petstore"
     assert row.api_metadata["backend_url"] == "http://example.invalid"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_update_adopts_legacy_uuid_identity_collision(integration_db) -> None:
+    """A canonical Git row adopts a unique legacy UUID row by name/version.
+
+    Prod observed this as ``UNIQUE (tenant_id, api_name, version)`` failures:
+    the canonical ``tenants/{tenant}/apis/{name}/api.yaml`` file existed, but
+    the DB row still used a UUID ``api_id`` from the pre-GitOps writer. The
+    reconciler must update that row in place so Git becomes the identity truth
+    and PK-based references survive.
+    """
+    existing = APICatalog(
+        tenant_id="demo-gitops",
+        api_id="4d678b27-6691-43c9-9d23-c51c02176049",
+        api_name="petstore",
+        version="1.0.0",
+        status="draft",
+        tags=[],
+        portal_published=False,
+        audience="public",
+        api_metadata={"display_name": "Legacy Petstore", "backend_url": "http://legacy"},
+        openapi_spec={"openapi": "3.0.0", "info": {"title": "Legacy Petstore"}},
+        target_gateways=["webmethods-prod"],
+        git_path="tenants/demo-gitops/apis/4d678b27-6691-43c9-9d23-c51c02176049",
+    )
+    integration_db.add(existing)
+    integration_db.add(
+        Deployment(
+            tenant_id="demo-gitops",
+            api_id="4d678b27-6691-43c9-9d23-c51c02176049",
+            api_name="Legacy Petstore",
+            environment="dev",
+            version="1.0.0",
+            status="pending",
+            deployed_by="test",
+        )
+    )
+    await integration_db.flush()
+    original_id = existing.id
+
+    proj = _projection(api_id="petstore", git_commit_sha="c" * 40, catalog_content_hash="d" * 64)
+    await project_to_api_catalog(integration_db, proj)
+
+    result = await integration_db.execute(
+        select(APICatalog).where(APICatalog.tenant_id == "demo-gitops", APICatalog.api_id == "petstore")
+    )
+    row = result.scalar_one()
+    assert row.id == original_id
+    assert row.api_id == "petstore"
+    assert row.api_name == "petstore"
+    assert row.git_path == "tenants/demo-gitops/apis/petstore/api.yaml"
+    assert row.git_commit_sha == "c" * 40
+    assert row.catalog_content_hash == "d" * 64
+    assert row.target_gateways == ["webmethods-prod"]
+    assert row.openapi_spec == {"openapi": "3.0.0", "info": {"title": "Legacy Petstore"}}
+
+    deployment_result = await integration_db.execute(
+        select(Deployment).where(Deployment.tenant_id == "demo-gitops", Deployment.api_id == "petstore")
+    )
+    deployment = deployment_result.scalar_one()
+    assert deployment.api_name == "petstore"
 
 
 @pytest.mark.integration

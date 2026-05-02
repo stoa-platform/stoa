@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from structlog.testing import capture_logs
 
 from src.models.catalog import APICatalog
+from src.models.deployment import Deployment
 from src.services.catalog.write_api_yaml import render_api_yaml
 from src.services.catalog_reconciler.worker import CatalogReconcilerWorker
 from src.services.gitops_writer.advisory_lock import advisory_lock_key
@@ -314,6 +315,64 @@ class TestProjectionDriftRepair:
         assert row.git_path == path  # canonical path preserved
         assert row.git_commit_sha != "cafe" * 10  # Git's actual SHA replaced the drift
         assert row.catalog_content_hash != "cafe" * 16
+
+
+class TestIdentityCollisionAdoption:
+    async def test_iteration_adopts_uuid_api_id_row_by_name_version(self, session_factory) -> None:
+        tenant = f"{_TEST_TENANT_PREFIX}identity-adopt"
+        legacy_api_id = "4d678b27-6691-43c9-9d23-c51c02176049"
+        path = f"tenants/{tenant}/apis/petstore/api.yaml"
+        fake_git = InMemoryCatalogGitClient()
+        fake_git.seed(path, _render_yaml(tenant_id=tenant, api_name="petstore"))
+
+        async with session_factory() as session:
+            session.add(
+                APICatalog(
+                    tenant_id=tenant,
+                    api_id=legacy_api_id,
+                    api_name="petstore",
+                    version="1.0.0",
+                    status="draft",
+                    tags=[],
+                    portal_published=False,
+                    audience="public",
+                    api_metadata={},
+                    git_path=f"tenants/{tenant}/apis/{legacy_api_id}",
+                    git_commit_sha="dead" * 10,
+                )
+            )
+            session.add(
+                Deployment(
+                    tenant_id=tenant,
+                    api_id=legacy_api_id,
+                    api_name="Legacy Petstore",
+                    environment="dev",
+                    version="1.0.0",
+                    status="pending",
+                    deployed_by="test",
+                )
+            )
+            await session.commit()
+
+        worker = _new_worker(session_factory, fake_git)
+        await worker._reconcile_iteration()
+
+        row = await _select_row(session_factory, tenant, "petstore")
+        assert row is not None
+        assert row.git_path == path
+        assert row.git_commit_sha is not None
+        assert row.catalog_content_hash is not None
+
+        old_row = await _select_row(session_factory, tenant, legacy_api_id)
+        assert old_row is None
+
+        async with session_factory() as session:
+            deployment = (
+                await session.execute(
+                    select(Deployment).where(Deployment.tenant_id == tenant, Deployment.api_id == "petstore")
+                )
+            ).scalar_one()
+            assert deployment.api_name == "petstore"
 
 
 class TestNonCanonicalPaths:

@@ -11,9 +11,11 @@ Three idempotent cases per spec §6.2:
 * ``C`` — file present with different hash → :class:`GitOpsConflictError`
 
 The 4th-class side-effect — Kafka emission — is **not** performed (spec §6.13).
-``target_gateways``, ``openapi_spec`` and ``metadata`` columns are preserved on
-UPDATE (spec §6.9). The writer never derives ``git_path`` from any UUID source
-(garde-fou §9.10, CAB-2187 B10).
+``target_gateways`` is preserved on UPDATE (deployment-owned). ``openapi_spec``
+is projected from Git, so the writer always commits an ``openapi.yaml`` sibling
+using either the supplied OpenAPI/Swagger body or a generated minimal contract.
+The writer never derives ``git_path`` from any UUID source (garde-fou §9.10,
+CAB-2187 B10).
 """
 
 from __future__ import annotations
@@ -73,9 +75,46 @@ _CATALOG_WRITE_MODES = {"direct", "pull_request"}
 _RELEASE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
-def _render_openapi_yaml(openapi_spec: dict[str, Any] | None) -> bytes | None:
-    if not openapi_spec:
-        return None
+def _generated_openapi_spec(contract_payload: ApiCreatePayload) -> dict[str, Any]:
+    """Return the minimal Git-owned API description when the user provides none."""
+    info: dict[str, Any] = {
+        "title": contract_payload.display_name or contract_payload.api_name,
+        "version": contract_payload.version or "1.0.0",
+    }
+    if contract_payload.description:
+        info["description"] = contract_payload.description
+    return {
+        "openapi": "3.0.3",
+        "info": info,
+        "servers": [{"url": contract_payload.backend_url}],
+        "paths": {
+            "/": {
+                "get": {
+                    "summary": f"{contract_payload.display_name or contract_payload.api_name} root endpoint",
+                    "responses": {
+                        "200": {
+                            "description": "Successful response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"type": "object", "additionalProperties": True},
+                                },
+                            },
+                        },
+                    },
+                    "x-stoa-generated": True,
+                },
+            },
+        },
+    }
+
+
+def _openapi_spec_for_payload(contract_payload: ApiCreatePayload) -> dict[str, Any]:
+    if contract_payload.openapi_spec:
+        return contract_payload.openapi_spec
+    return _generated_openapi_spec(contract_payload)
+
+
+def _render_openapi_yaml(openapi_spec: dict[str, Any]) -> bytes:
     return yaml.safe_dump(openapi_spec, sort_keys=False, default_flow_style=False, allow_unicode=True).encode("utf-8")
 
 
@@ -197,7 +236,8 @@ class GitOpsWriter:
         )
         api_yaml_bytes = api_yaml_str.encode("utf-8")
         attempted_hash = compute_catalog_content_hash(api_yaml_bytes)
-        openapi_yaml_bytes = _render_openapi_yaml(contract_payload.openapi_spec)
+        openapi_spec = _openapi_spec_for_payload(contract_payload)
+        openapi_yaml_bytes = _render_openapi_yaml(openapi_spec)
 
         git_path = canonical_catalog_path(tenant_id, api_name)
         openapi_git_path = git_path.removesuffix("/api.yaml") + "/openapi.yaml"
@@ -229,14 +269,13 @@ class GitOpsWriter:
                     api_name=api_name,
                 )
                 catalog_release = None
-                if openapi_yaml_bytes is not None:
-                    await self._commit_openapi_spec(
-                        openapi_git_path=openapi_git_path,
-                        openapi_yaml_bytes=openapi_yaml_bytes,
-                        actor=actor,
-                        tenant_id=tenant_id,
-                        api_name=api_name,
-                    )
+                await self._commit_openapi_spec(
+                    openapi_git_path=openapi_git_path,
+                    openapi_yaml_bytes=openapi_yaml_bytes,
+                    actor=actor,
+                    tenant_id=tenant_id,
+                    api_name=api_name,
+                )
 
             committed_bytes = await self._catalog_git_client.read_at_commit(git_path, file_commit_sha)
             if committed_bytes is None:
@@ -252,6 +291,7 @@ class GitOpsWriter:
                 git_commit_sha=file_commit_sha,
                 catalog_content_hash=committed_hash,
                 git_path=git_path,
+                openapi_spec=openapi_spec,
             )
             await project_to_api_catalog(self._db_session, projection)
             if catalog_release is not None:

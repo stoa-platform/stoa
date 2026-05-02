@@ -337,7 +337,7 @@ class TestTargetGatewaysPreservedOnReadoption:
         from src.services.catalog.write_api_yaml import render_api_yaml
 
         tenant_id = f"{_TEST_TENANT_PREFIX}preserve"
-        # Pre-populate a row with target_gateways + openapi_spec.
+        # Pre-populate a row with target_gateways + stale DB-only openapi_spec.
         async with integration_session_factory() as session:
             session.add(
                 APICatalog(
@@ -393,6 +393,9 @@ class TestTargetGatewaysPreservedOnReadoption:
                 .where(APICatalog.deleted_at.is_(None))
             )
             row = (await session.execute(stmt)).scalar_one()
-            # The reserved columns are untouched by the GitOps re-adoption.
+            # Deployment-owned columns are untouched; API description is
+            # re-projected from the Git-owned openapi.yaml sibling.
             assert row.target_gateways == ["webmethods-prod"]
-            assert row.openapi_spec == {"openapi": "3.0.0"}
+            assert row.openapi_spec is not None
+            assert row.openapi_spec["openapi"] == "3.0.3"
+            assert row.openapi_spec["info"]["title"] == "Petstore"

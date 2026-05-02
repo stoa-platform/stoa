@@ -3,7 +3,7 @@
 > **Statut**: v1.0 — 2026-04-26. Audit-informed + drift-justified + schema-confirmed. Validée pour exécution Phase 2 puis Phase 3.
 > **Owner**: humain (Christophe). Les agents n'élargissent pas ce scope sans décision écrite.
 > **Périmètre**: rewrite ciblé de la création d'API (`POST /v1/tenants/{tid}/apis`) vers un modèle Git-first avec `stoa-catalog` comme source de vérité, et **ré-adoption contrôlée non-destructive** des APIs saines du tenant `demo`.
-> **Hors périmètre**: update, publish, promote, delete, prune ; migration destructive des UUID driftés ; suppression d'orphelins DB ; soft-delete inverse Git→DB ; conversion de format YAML→JSON ; multi-env ; cleanup de `uq_api_catalog_tenant_api`.
+> **Hors périmètre**: update, publish, promote, delete, prune ; migration destructive des UUID driftés ; suppression d'orphelins DB ; soft-delete inverse Git→DB ; conversion de format YAML→JSON ; multi-env. `uq_api_catalog_tenant_api` est retiré par migration 106 pour respecter le contrat soft-delete actif-only.
 > **Invariant directeur**: à chaque phase, `./scripts/demo-smoke-test.sh` doit rester `REAL_PASS — DEMO READY`. Cf. [`rewrite-guardrails.md`](./rewrite-guardrails.md) §1.
 
 ## 0. Contexte — pourquoi cette spec existe
@@ -15,7 +15,7 @@ L'audit Phase 1 et 4 requêtes SQL diagnostiques sur `api_catalog` ont révélé
 | **B-CATALOG** | Le code utilise `api_catalog`, pas `apis`. La spec v0.3.1 parlait à côté. | Corrigé (mapping aligné) |
 | **B10** | `git_sync_worker` produit `git_path = "tenants/{tid}/apis/{UUID}/api.yaml"` au lieu de `"…/{slug}/api.yaml"`. 7 rows tenant `demo` 404 sur Git. | **In-scope partiel** : le nouveau chemin GitOps ne reproduit jamais ce bug. La migration destructive des 7 rows existantes reste hors scope. |
 | **B11** | Le sync engine ne propage pas la disparition Git en soft-delete DB. `banking-services-v1-2` synced 2026-04-18, absent Git HEAD au 2026-04-26, row active. | **Out-of-scope complet** : cycle delete/prune séparé. Documenté dans le backlog Phase 2, jamais fixé dans ce rewrite. |
-| **B-INDEX** | `uq_api_catalog_tenant_api` UNIQUE complet (sans `WHERE deleted_at IS NULL`) en doublon avec `ix_api_catalog_tenant_api_active`. Bloque la recréation après soft-delete (contredit CAB-1938). | **Out-of-scope complet** : cleanup d'index hérité, cycle séparé. Le rewrite documente le risque mais ne touche pas à l'index. |
+| **B-INDEX** | `uq_api_catalog_tenant_api` UNIQUE complet (sans `WHERE deleted_at IS NULL`) en doublon avec `ix_api_catalog_tenant_api_active`. Bloque la recréation après soft-delete (contredit CAB-1938). | **Résolu 2026-05-02** : migration 106 supprime la contrainte globale et garde l'unicité active-only. |
 | **B-SPEC-HASH** | `_compute_spec_hash` privé tronqué à 16 chars sur OpenAPI dict. `demo-httpbin.uac.json` portait un hash 64 chars opaque. | **Résolu** : hash supprimé du fixture en commit `0aba7f4a9` (non utilisé). UAC V2 (cycle séparé) tranchera si hash UAC public nécessaire. |
 
 État `api_catalog` du tenant `demo` au 2026-04-26 (13 rows actives) :
@@ -70,7 +70,7 @@ Doctrine résultante :
 | `GET /v1/tenants/{tid}/apis/{id}` → 200 + `{id, name, backend_url}` | [`architecture-rules.md`](./architecture-rules.md) §2.1 | AT-1 du smoke en dépend |
 | Format public de `api_catalog.api_id` (string actuel) | Audit Phase 1 §03 + diagnostic SQL | Subscriptions, deployments, gateway routes y référencent |
 | Schéma `api_catalog` existant (cf. §6.3) | `\d api_catalog` 2026-04-26 | 18 colonnes, 9 index, 0 FK. Migration additive seulement. |
-| Index `uq_api_catalog_tenant_api` (résiduel hérité) | Schéma DB | Dangereux mais hors scope. Cleanup = cycle séparé. |
+| Index actif-only `ix_api_catalog_tenant_api_active` | CAB-1938 + migration 106 | Garantit l'unicité de routage active sans bloquer la réutilisation d'un slug soft-deleted. |
 | Format `api.yaml` actuel (cf. §6.9 — référence : `payment-api/api.yaml`) | Inspection terrain 2026-04-26 | 12 APIs réelles l'utilisent |
 | Fixture `specs/uac/demo-httpbin.uac.json` (forme depuis commit `0aba7f4a9`, sans `spec_hash`) | [`architecture-rules.md`](./architecture-rules.md) §2.2bis | Contrat UAC démo figé |
 | Verdict `REAL_PASS — DEMO READY` du smoke | [`demo-acceptance-tests.md`](./demo-acceptance-tests.md) | Garde-fou universel |
@@ -123,10 +123,6 @@ Le PK `api_catalog.id` est conservé et les références souples connues
 - Migration du layout Git vers `environments/{env}/`
 - Décision d'identité multi-env
 
-**Cycle cleanup DB** :
-- Suppression de l'index `uq_api_catalog_tenant_api` hérité
-- Modification de la définition de soft-delete (CAB-1938)
-
 **Cycle UAC V2** :
 - Création d'une fonction publique `compute_uac_spec_hash`
 - Modification de `_compute_spec_hash` privé existant
@@ -160,7 +156,7 @@ Si pendant l'exécution une question type *« et si on en profitait pour... »* 
 | 6 | Strangler sur tenant `demo-gitops` propre | Sur tenant `demo-gitops`, POST commit Git via PyGithub puis projette `api_catalog`. Tenant `demo` historique inchangé. AT-1 vert sur les deux. | 1-2 jours |
 | **6.5** | **Ré-adoption contrôlée des 5 APIs saines (catégorie A) du tenant `demo`** | Pour chaque API `account-management-api`, `customer-360-api`, `fraud-detection-api`, `payment-api`, `petstore` : `git_path` confirmé/corrigé canonique, `git_commit_sha` rempli, `catalog_content_hash` rempli, `read_at_commit` non-null, projection cohérente. **Catégories B et C non touchées.** Aucune mutation de subscriptions/deployments/keys. Smoke historique reste `REAL_PASS`. | 1 jour |
 | 7 | Re-run smoke + tests GitOps | `GITOPS_CREATE_API_ENABLED=true ./scripts/demo-smoke-test.sh` = `REAL_PASS` sur `demo-gitops`. §7 et §7bis passent. | 1 jour |
-| 8 | Fix du backlog Phase 2 | **100% des tickets in-scope sont fixed avec test de régression.** Tickets out-of-scope (B11, B-INDEX, migration B, prune C) sont closed-documented/deferred avec cycle cible explicite. | variable |
+| 8 | Fix du backlog Phase 2 | **100% des tickets in-scope sont fixed avec test de régression.** B-INDEX est résolu par migration 106. Tickets encore out-of-scope (B11, migration B, prune C) sont closed-documented/deferred avec cycle cible explicite. | variable |
 | 9 | Re-run smoke + régression + §7/§7bis | Toutes métriques Phase 7 maintenues | ½ jour |
 | 10 | Bascule limitée aux tenants éligibles | Flag ON par défaut **uniquement** sur (i) tenants GitOps-initialized (`demo-gitops` + nouveaux), et (ii) tenants explicitement classés clean par audit SQL préalable. **Tenants contenant des catégories B ou C non résolues restent sur l'ancien chemin.** Doc de rollback. | ½ jour |
 
@@ -242,7 +238,7 @@ audience             varchar(20) not null default 'public'
 
 UNIQUE (tenant_id, api_name, version) WHERE deleted_at IS NULL
 UNIQUE (tenant_id, api_id) WHERE deleted_at IS NULL
-UNIQUE (tenant_id, api_id)                          ← dangereux, B-INDEX
+-- migration 106: aucun UNIQUE global (tenant_id, api_id) sans deleted_at
 ```
 
 **Migration additive Phase 3** (une seule colonne) :
@@ -587,7 +583,8 @@ que la DB n'a pas de row `(tenant, api_id=slug)` mais a une unique row active
 `api_catalog.id` reste stable, `api_id/git_path/git_commit_sha/catalog_content_hash`
 deviennent canoniques, et les références souples connues sont mises à jour dans
 la même transaction. Ce cas évite les `UNIQUE (tenant_id, api_name, version)` en
-prod sans créer une seconde API.
+prod sans créer une seconde API. La migration 106 garantit que les anciennes rows
+soft-deleted portant déjà le slug canonique ne bloquent pas cette adoption.
 
 Comportement reconciler :
 - `update_status(drift_detected, "uuid hard drift")`
@@ -746,7 +743,7 @@ psql -c "SELECT api_id FROM api_catalog WHERE tenant_id='demo' AND api_id='banki
 | `git_path = UUID` re-introduit | Faible | Haut | §6.5 étape 2+6 + §6.6 : refus UUID-shaped. Test §7 étape 8. B10 fixé Phase 8 (in-scope partiel). |
 | Phase 6.5 mute des subscriptions/deployments par effet de bord | Faible | Critique | §6.14 catégorie A : `api_id` inchangé. §6.9 : `target_gateways`/`openapi_spec` non écrits. Test §7bis vérifie. |
 | Confusion entre les 5 niveaux d'identité | Moyen | Haut | §6.4. Garde-fou §9.14. |
-| INSERT bloqué par `uq_api_catalog_tenant_api` après soft-delete précédent | Faible (0 soft-delete vu sur `demo`) | P0 si arrive | Test §7 utilise `manual-test-${TIMESTAMP}` unique. B-INDEX out-of-scope, deferred CAB-1938. |
+| INSERT/adoption bloqué par `uq_api_catalog_tenant_api` après soft-delete précédent | Observé en prod `free-aech` le 2026-05-02 | P0 | Migration 106 supprime la contrainte globale et conserve `ix_api_catalog_tenant_api_active`. Test de régression: adoption avec slug canonique soft-deleted. |
 | Drift UUID systémique au-delà de `demo` | Inconnu (SQL b à lancer) | Haut | Hypothèse défensive γ Phase 10. Bascule limitée. |
 | Sync engine ne soft-delete pas les fichiers Git disparus (B11) | Confirmé | Moyen | Out-of-scope complet. Documenté dans §0. Cycle delete/prune séparé. |
 | Le rewrite déborde sur update/delete sous pression | Haut | Haut | Règle §4.3 + §4.2 out-of-scope étendu. |
@@ -768,7 +765,7 @@ psql -c "SELECT api_id FROM api_catalog WHERE tenant_id='demo' AND api_id='banki
 13. **Pas de delete dans ce rewrite.** Aucune suppression de row, même catégorie C. Status `drift_orphan`, jamais `DELETE`.
 14. **Aucun ID gateway/runtime/PK interne ne devient `api_id` catalogue.**
 15. **Pas de réparation automatique des catégories B et C.** Détection + ticket Phase 2 uniquement.
-16. **Pas de touche à `uq_api_catalog_tenant_api`** ni au sync engine pour B11. Documenté, non fixé.
+16. **Unicité catalogue active-only.** `uq_api_catalog_tenant_api` global est interdit ; seul `ix_api_catalog_tenant_api_active` peut porter l'unicité de routage. Le sync engine B11 reste hors scope.
 
 ## 10. Liens avec l'écosystème specs
 
@@ -792,7 +789,7 @@ Conditions pour clôturer cette spec et la passer en statut *Référence* :
 4. Aucun rollback déclenché pendant ces 7 jours
 5. Le backlog `api-creation-rewrite-backlog` :
    - Tickets in-scope **fixed** avec test de régression (B10, bugs runtime)
-   - Tickets out-of-scope **closed-documented/deferred** avec cycle cible (B11, B-INDEX, migration B, prune C, backfill D)
+   - Tickets out-of-scope **closed-documented/deferred** avec cycle cible (B11, migration B, prune C, backfill D)
 6. Les 5 APIs catégorie A du tenant `demo` ont `git_path` canonique, `git_commit_sha` rempli, `catalog_content_hash` rempli, `read_at_commit` non-null
 7. Les 7 catégorie B du tenant `demo`, les 3 catégorie B du tenant `free-aech`, l'orphelin C, et les 13 rows catégorie D sont marqués `drift_detected`, `drift_orphan` ou `drift_pre_gitops` avec `last_error` documenté
 8. **B11** est référencé par un ticket explicite dans le backlog du futur cycle delete/prune
@@ -854,7 +851,10 @@ La migration des catégories B sur `demo` et `free-aech` est hors scope du rewri
 | 2026-04-26 | v1.0 (refusée) | Claude après round 4 | Architecture théorique idéale, refusée car non alignée code réel |
 | 2026-04-26 | v0.4 DRAFT | Claude après audit Phase 1 + round 5 | `apis` → `api_catalog`, retrait UUID5, retrait worktree, layout conservateur, `CatalogGitClient` PyGithub-first, worker asyncio in-tree |
 | 2026-04-26 | v1.0 DRAFT (intermédiaire) | Claude après round 6 + diagnostic SQL terrain (drift 5/7/1) | §0 drift terrain, 6e invariant `git_path` réel, 4 niveaux d'identité, §6.14 3 catégories non-destructives, Phase 6.5, §7bis borné catégorie A, B10 backlog |
-| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` et `openapi_spec` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |## §12 — Phase 6 closure (LIVE 2026-04-27)
+| 2026-04-26 | **v1.0 (finale)** | Claude après `\d api_catalog` réel + round 7 | (1) Schéma `api_catalog` réel intégré §6.3 — `git_path` et `git_commit_sha` existent déjà, seule colonne ajoutée = `catalog_content_hash` ; (2) 5 niveaux d'identité §6.4 (ajout `api_catalog.id` PK UUID interne, probable source du bug B10 si fuite) ; (3) B11 (sync engine ne soft-delete pas les fichiers Git disparus) cadré out-of-scope complet ; (4) B-INDEX (`uq_api_catalog_tenant_api` dangereux, hérité) cadré out-of-scope complet ; (5) Phase 8 reformulée : "in-scope fixed + out-of-scope deferred" pour ne pas bloquer le rewrite sur B11 ; (6) §6.5 étape 14 : non-écrasement explicite de `target_gateways` et `openapi_spec` ; (7) §6.9 mapping enrichi avec colonnes réelles (`audience`, `portal_published`, `metadata`, etc.) ; (8) §7 test utilise `manual-test-${TIMESTAMP}` unique pour contourner B-INDEX ; (9) §0 drift terrain documenté avec 5 bugs structurels nommés ; (10) Hypothèse défensive γ par défaut sur Phase 10 (à ajuster après SQL globale lancée en parallèle). **Spec exécutable Phase 2 → Phase 3.** |
+| 2026-05-02 | v1.1 | Codex après audit prod `free-aech` | B-INDEX résolu: migration 106 supprime `uq_api_catalog_tenant_api` global, garde l'unicité active-only et ajoute un test de régression pour l'adoption d'une row UUID active quand le slug canonique existe seulement en soft-delete. |
+
+## 12.1 Phase 6 closure (LIVE 2026-04-27)
 
 Phase 6 strangler activated on OVH prod for tenant `demo-gitops`. The full chain
 (stoa-catalog GitHub → reconciler tick → `api_catalog` projection) is proven in
@@ -933,8 +933,6 @@ on both replicas, 0 restarts.
 - **B11** (CAB-2191) — sync engine no soft-delete. Out-of-scope of this
   rewrite; required for the eventual delete/prune cycle. The §7 fixture row
   becomes a natural test input.
-- **B-INDEX** (CAB-2192) — `uq_api_catalog_tenant_api` UNIQUE incompatible with
-  soft-delete intent. Deferred separate cycle.
 - Code follow-up on `control-plane-api/src/config.py:269-278` — drop the
   misleading "Comma-separated env var" claim from the
   `GITOPS_ELIGIBLE_TENANTS` docstring or wire a custom env source if CSV is

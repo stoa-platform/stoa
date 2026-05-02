@@ -13,7 +13,7 @@ license = "Apache-2.0"
 
 [dependencies]
 # === Existing (keep these) ===
-axum = { version = "0.8", features = ["macros", "ws"] }
+axum = { version = "0.7", features = ["macros", "ws"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -21,9 +21,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
-prometheus = { version = "0.14", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
+prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
-reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===
@@ -124,4 +124,3 @@ harness = false
 [[bench]]
 name = "proxy_bench"
 harness = false
-

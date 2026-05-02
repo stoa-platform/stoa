@@ -16,7 +16,13 @@ from src.services.catalog_git_client.github_contents import (
     CatalogShaConflictError,
     GitHubContentsCatalogClient,
 )
-from src.services.catalog_git_client.models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
+from src.services.catalog_git_client.models import (
+    RemoteCommit,
+    RemoteFile,
+    RemoteFileMetadata,
+    RemotePullRequest,
+    RemoteTag,
+)
 
 
 @pytest.fixture
@@ -326,6 +332,46 @@ class TestList:
     ) -> None:
         fake_repo.get_git_ref.side_effect = GithubException(404, {"message": "Not Found"}, None)
         result = await client.list("tenants/*/apis/*/api.yaml")
+        assert result == []
+
+
+class TestListFileMetadata:
+    @pytest.mark.asyncio
+    async def test_lists_paths_with_blob_and_head_sha(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        ref = MagicMock(name="ref")
+        ref.object.sha = "head-sha"
+        fake_repo.get_git_ref.return_value = ref
+        tree = MagicMock(name="tree")
+        tree.tree = [
+            MagicMock(type="blob", path="tenants/demo/apis/petstore/api.yaml", sha="blob-a"),
+            MagicMock(type="blob", path="tenants/demo/apis/petstore/openapi.yaml", sha="blob-b"),
+            MagicMock(type="blob", path="tenants/demo/apis/payment-api/api.yaml", sha="blob-c"),
+        ]
+        fake_repo.get_git_tree.return_value = tree
+
+        result = await client.list_file_metadata("tenants/*/apis/*/api.yaml")
+
+        assert result == [
+            RemoteFileMetadata(
+                path="tenants/demo/apis/petstore/api.yaml",
+                sha="blob-a",
+                commit_sha="head-sha",
+            ),
+            RemoteFileMetadata(
+                path="tenants/demo/apis/payment-api/api.yaml",
+                sha="blob-c",
+                commit_sha="head-sha",
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_metadata_on_missing_ref(
+        self, client: GitHubContentsCatalogClient, fake_repo: MagicMock
+    ) -> None:
+        fake_repo.get_git_ref.side_effect = GithubException(404, {"message": "Not Found"}, None)
+        result = await client.list_file_metadata("tenants/*/apis/*/api.yaml")
         assert result == []
 
 

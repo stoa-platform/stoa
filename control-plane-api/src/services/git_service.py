@@ -558,7 +558,14 @@ settings:
 
         def _fetch() -> dict | None:
             try:
-                for filename in ("openapi.yaml", "openapi.yml", "openapi.json"):
+                for filename in (
+                    "openapi.yaml",
+                    "openapi.yml",
+                    "openapi.json",
+                    "swagger.yaml",
+                    "swagger.yml",
+                    "swagger.json",
+                ):
                     try:
                         file = project.files.get(f"{base}/{filename}", ref=default_ref)
                         content = file.decode()

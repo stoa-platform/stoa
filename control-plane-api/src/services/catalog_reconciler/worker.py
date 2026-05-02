@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import TYPE_CHECKING, Any
+from collections.abc import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 import yaml
 from sqlalchemy import select, text
@@ -36,11 +37,11 @@ from .projection import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from ..catalog_git_client.models import RemoteFileMetadata
     from ..catalog_git_client.protocol import CatalogGitClient
 
 logger = get_logger(__name__)
@@ -69,6 +70,7 @@ class CatalogReconcilerWorker:
         self._db_session_factory = db_session_factory
         self._interval_seconds = interval_seconds
         self._shutdown = asyncio.Event()
+        self._last_seen_blob_sha: dict[str, str] = {}
 
     async def start(self) -> None:
         """Run the reconciler loop until :meth:`stop` is called."""
@@ -91,12 +93,25 @@ class CatalogReconcilerWorker:
 
     async def _reconcile_iteration(self) -> None:
         """One pass: project cat A/ABSENT/GITOPS_CREATED, log drift for B/C/D."""
-        paths = await self._catalog_git_client.list("tenants/*/apis/*/api.yaml")
+        files = await self._list_api_files("tenants/*/apis/*/api.yaml")
         seen_keys: set[tuple[str, str]] = set()
+        current_paths = {remote.path for remote in files}
+        for cached_path in list(self._last_seen_blob_sha):
+            if cached_path not in current_paths:
+                self._last_seen_blob_sha.pop(cached_path, None)
 
-        for git_path in paths:
+        for remote_file in files:
+            git_path = remote_file.path
             try:
-                key = await self._reconcile_one_path(git_path)
+                if remote_file.sha and self._last_seen_blob_sha.get(git_path) == remote_file.sha:
+                    key = self._seen_key_from_path(git_path)
+                    if key is not None:
+                        seen_keys.add(key)
+                    continue
+
+                key = await self._reconcile_one_path(git_path, remote_metadata=remote_file)
+                if remote_file.sha:
+                    self._last_seen_blob_sha[git_path] = remote_file.sha
                 if key is not None:
                     seen_keys.add(key)
             except Exception:
@@ -110,7 +125,37 @@ class CatalogReconcilerWorker:
         except Exception:
             logger.exception("catalog_reconciler.orphan_detection_failed")
 
-    async def _reconcile_one_path(self, git_path: str) -> tuple[str, str] | None:
+    async def _list_api_files(self, glob_pattern: str) -> list[RemoteFileMetadata]:
+        """List Git API files with blob metadata when the client supports it."""
+        from ..catalog_git_client.models import RemoteFileMetadata
+
+        list_file_metadata = getattr(self._catalog_git_client, "list_file_metadata", None)
+        if callable(list_file_metadata):
+            typed_list_file_metadata = cast(
+                Callable[[str], Awaitable[Sequence[RemoteFileMetadata]]],
+                list_file_metadata,
+            )
+            return list(await typed_list_file_metadata(glob_pattern))
+
+        paths = await self._catalog_git_client.list(glob_pattern)
+        return [RemoteFileMetadata(path=path, sha="", commit_sha=None) for path in paths]
+
+    def _seen_key_from_path(self, git_path: str) -> tuple[str, str] | None:
+        """Return the canonical ``(tenant, api)`` key for an already-seen path."""
+        parts = git_path.rstrip("/").split("/")
+        if len(parts) >= 5 and parts[0] == "tenants" and parts[2] == "apis" and is_uuid_shaped(parts[3]):
+            return None
+        try:
+            return parse_canonical_path(git_path)
+        except ValueError:
+            return None
+
+    async def _reconcile_one_path(
+        self,
+        git_path: str,
+        *,
+        remote_metadata: RemoteFileMetadata | None = None,
+    ) -> tuple[str, str] | None:
         """Reconcile one Git path. Returns ``(tenant_id, api_id)`` if processed.
 
         Implements spec §6.6 lines 352-402 for a single canonical path. The
@@ -153,10 +198,13 @@ class CatalogReconcilerWorker:
 
         content_bytes = remote.content
         content_hash = compute_catalog_content_hash(content_bytes)
-        try:
-            commit_sha = await self._catalog_git_client.latest_file_commit(git_path)
-        except FileNotFoundError:
-            return None
+        if remote_metadata is not None and remote_metadata.commit_sha:
+            commit_sha = remote_metadata.commit_sha
+        else:
+            try:
+                commit_sha = await self._catalog_git_client.latest_file_commit(git_path)
+            except FileNotFoundError:
+                return None
 
         parsed = self._parse_and_validate_yaml(
             content_bytes=content_bytes,

@@ -19,7 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-thiserror = "1"
+thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
@@ -124,4 +124,3 @@ harness = false
 [[bench]]
 name = "proxy_bench"
 harness = false
-

@@ -58,6 +58,15 @@ export type API = Schemas['APIResponse'] & {
   catalog_merge_commit_sha?: string | null;
 };
 
+export interface APIOpenAPISpec {
+  spec: Record<string, unknown>;
+  source: 'git' | 'db_cache' | 'generated_fallback';
+  git_path: string;
+  git_commit_sha?: string | null;
+  format: 'openapi' | 'swagger' | 'unknown';
+  is_authoritative: boolean;
+}
+
 export interface APICreate {
   name: string;
   display_name: string;

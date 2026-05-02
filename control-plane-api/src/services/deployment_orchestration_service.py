@@ -83,6 +83,32 @@ class DeploymentOrchestrationService:
         self.deploy_svc = GatewayDeploymentService(db)
         self.assignment_repo = ApiGatewayAssignmentRepository(db)
 
+    @staticmethod
+    def _has_deployable_openapi_spec(entry: APICatalog) -> bool:
+        spec = entry.openapi_spec
+        return (
+            isinstance(spec, dict)
+            and bool(spec.get("openapi") or spec.get("swagger"))
+            and isinstance(spec.get("paths"), dict)
+            and bool(spec.get("paths"))
+        )
+
+    @staticmethod
+    def _has_legacy_uuid_identity(entry: APICatalog) -> bool:
+        try:
+            UUID(str(entry.api_id))
+            return True
+        except ValueError:
+            return False
+
+    async def _refresh_from_git_if_needed(self, tenant_id: str, api_identifier: str, entry: APICatalog) -> APICatalog:
+        if self._has_deployable_openapi_spec(entry) and not self._has_legacy_uuid_identity(entry):
+            return entry
+
+        git_identifier = entry.api_name if self._has_legacy_uuid_identity(entry) else api_identifier
+        refreshed = await self._sync_api_from_git(tenant_id, git_identifier)
+        return refreshed or entry
+
     async def _resolve_api_catalog(self, tenant_id: str, api_identifier: str) -> APICatalog:
         """Resolve an API identifier to a catalog entry.
 
@@ -102,7 +128,7 @@ class DeploymentOrchestrationService:
             )
             entry = result.scalar_one_or_none()
             if entry:
-                return entry
+                return await self._refresh_from_git_if_needed(tenant_id, entry.api_id, entry)
         except ValueError:
             pass  # Not a UUID — treat as Git API name
 
@@ -116,7 +142,7 @@ class DeploymentOrchestrationService:
         )
         entry = result.scalar_one_or_none()
         if entry:
-            return entry
+            return await self._refresh_from_git_if_needed(tenant_id, api_identifier, entry)
 
         # Also try by api_name (display name used as ID in some contexts)
         result = await self.db.execute(
@@ -128,7 +154,7 @@ class DeploymentOrchestrationService:
         )
         entry = result.scalar_one_or_none()
         if entry:
-            return entry
+            return await self._refresh_from_git_if_needed(tenant_id, api_identifier, entry)
 
         # Not in catalog — sync from Git on-demand
         logger.info(

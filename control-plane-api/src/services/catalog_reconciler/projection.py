@@ -28,6 +28,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.catalog import APICatalog
+from src.services.catalog_api_definition import normalize_api_definition
 from src.services.gitops_writer.paths import is_uuid_shaped, parse_canonical_path
 
 _PORTAL_PUBLISHED_TAG = "portal:published"
@@ -87,6 +88,7 @@ def render_api_catalog_projection(
         ValueError: on §6.10 violation, missing required fields or bad types.
     """
     tenant_id, api_name_from_path = parse_canonical_path(git_path)
+    parsed_content = normalize_api_definition(parsed_content)
 
     if "name" not in parsed_content:
         raise ValueError("api.yaml missing required field 'name'")

@@ -16,6 +16,7 @@ re-introduce sync-in-async blocking.
 from __future__ import annotations
 
 import fnmatch
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from github import GithubException
@@ -27,7 +28,7 @@ from src.services.git_executor import (
     run_sync,
 )
 
-from .models import RemoteCommit, RemoteFile, RemotePullRequest, RemoteTag
+from .models import RemoteCommit, RemoteFile, RemoteFileMetadata, RemotePullRequest, RemoteTag
 
 if TYPE_CHECKING:
     from src.services.github_service import GitHubService
@@ -400,4 +401,45 @@ class GitHubContentsCatalogClient:
             _list,
             semaphore=GITHUB_READ_SEMAPHORE,
             op_name="catalog_git_client.list",
+        )
+
+    async def list_file_metadata(self, glob_pattern: str) -> Sequence[RemoteFileMetadata]:
+        """Return matching files with their blob SHA from the default tree.
+
+        This is the same Git tree walk as :meth:`list`, but keeps the blob SHA
+        and branch HEAD SHA so the reconciler can skip files already processed
+        from the same Git object.
+        """
+        gh = self._github_service._require_gh()
+        project_id = self._project_id
+        branch = self._default_branch
+
+        def _list_file_metadata() -> Sequence[RemoteFileMetadata]:
+            repo = gh.get_repo(project_id)
+            try:
+                ref = repo.get_git_ref(f"heads/{branch}")
+                head_sha = ref.object.sha
+                tree = repo.get_git_tree(head_sha, recursive=True)
+            except GithubException as exc:
+                if exc.status == 404:
+                    return []
+                raise
+            files: list[RemoteFileMetadata] = []
+            for entry in tree.tree:
+                if entry.type != "blob":
+                    continue
+                if fnmatch.fnmatch(entry.path, glob_pattern):
+                    files.append(
+                        RemoteFileMetadata(
+                            path=entry.path,
+                            sha=entry.sha,
+                            commit_sha=head_sha,
+                        )
+                    )
+            return files
+
+        return await run_sync(
+            _list_file_metadata,
+            semaphore=GITHUB_READ_SEMAPHORE,
+            op_name="catalog_git_client.list_file_metadata",
         )

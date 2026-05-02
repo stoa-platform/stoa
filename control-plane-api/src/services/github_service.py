@@ -571,7 +571,7 @@ class GitHubService(GitProvider):
         project_id = self._catalog_project_id()
         base_path = self._get_api_path(tenant_id, api_name)
 
-        for filename in ("openapi.yaml", "openapi.yml", "openapi.json"):
+        for filename in ("openapi.yaml", "openapi.yml", "openapi.json", "swagger.yaml", "swagger.yml", "swagger.json"):
             try:
                 content = await self.get_file_content(project_id, f"{base_path}/{filename}")
             except FileNotFoundError:

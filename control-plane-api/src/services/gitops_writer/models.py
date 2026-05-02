@@ -40,6 +40,7 @@ class ApiCreatePayload:
     category: str | None = None
     tags: tuple[str, ...] = ()
     audience: str = "public"
+    openapi_spec: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

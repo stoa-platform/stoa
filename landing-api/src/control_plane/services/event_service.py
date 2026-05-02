@@ -1,6 +1,6 @@
 """Event service for tracking prospect actions."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -28,7 +28,7 @@ async def record_event(
         invite_id=event_data.invite_id,
         event_type=event_data.event_type.value,
         event_data=event_data.metadata,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     db.add(event)
@@ -61,7 +61,7 @@ async def record_event_simple(
         invite_id=invite_id,
         event_type=event_type.value,
         event_data=metadata or {},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     db.add(event)

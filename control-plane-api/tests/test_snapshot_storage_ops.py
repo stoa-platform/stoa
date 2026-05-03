@@ -10,14 +10,18 @@ from src.features.error_snapshots.storage import SnapshotStorage
 
 
 def _make_settings(**overrides):
-    """Create SnapshotSettings with test defaults."""
+    """Create SnapshotSettings with test defaults.
+
+    Phase 3-D — migrated from legacy STOA_SNAPSHOTS_* to canonical
+    STOA_API_SNAPSHOT_* per CAB-2199 plan §2.6.d (closes BH-INFRA1a-010).
+    """
     defaults = {
-        "STOA_SNAPSHOTS_STORAGE_BUCKET": "test-bucket",
-        "STOA_SNAPSHOTS_STORAGE_ACCESS_KEY": "test-key",
-        "STOA_SNAPSHOTS_STORAGE_SECRET_KEY": "test-secret",
-        "STOA_SNAPSHOTS_STORAGE_ENDPOINT": "localhost:9000",
-        "STOA_SNAPSHOTS_STORAGE_REGION": "us-east-1",
-        "STOA_SNAPSHOTS_RETENTION_DAYS": "30",
+        "STOA_API_SNAPSHOT_STORAGE_BUCKET": "test-bucket",
+        "STOA_API_SNAPSHOT_STORAGE_ACCESS_KEY": "test-key",
+        "STOA_API_SNAPSHOT_STORAGE_SECRET_KEY": "test-secret",
+        "STOA_API_SNAPSHOT_STORAGE_ENDPOINT": "localhost:9000",
+        "STOA_API_SNAPSHOT_STORAGE_REGION": "us-east-1",
+        "STOA_API_SNAPSHOT_RETENTION_DAYS": "30",
     }
     defaults.update(overrides)
     with patch.dict("os.environ", defaults, clear=False):
@@ -294,7 +298,7 @@ class TestSnapshotSettings:
         assert settings.storage_url == "http://localhost:9000"
 
     def test_storage_url_https(self):
-        settings = _make_settings(STOA_SNAPSHOTS_STORAGE_USE_SSL="true")
+        settings = _make_settings(STOA_API_SNAPSHOT_STORAGE_USE_SSL="true")
         assert settings.storage_url.startswith("https://")
 
     def test_exclude_paths_list(self):
@@ -316,8 +320,8 @@ class TestSnapshotSettings:
 
     def test_masking_config_with_extras(self):
         settings = _make_settings(
-            STOA_SNAPSHOTS_MASKING_EXTRA_HEADERS='["X-Custom"]',
-            STOA_SNAPSHOTS_MASKING_EXTRA_BODY_PATHS='["$.secret"]',
+            STOA_API_SNAPSHOT_MASKING_EXTRA_HEADERS='["X-Custom"]',
+            STOA_API_SNAPSHOT_MASKING_EXTRA_BODY_PATHS='["$.secret"]',
         )
         config = settings.masking_config
         assert "X-Custom" in config.headers
@@ -337,3 +341,16 @@ class TestSnapshotSettings:
     def test_parse_exclude_paths_string_input(self):
         result = SnapshotSettings.parse_exclude_paths('["/health"]')
         assert result == '["/health"]'
+
+    def test_legacy_prefix_still_works_via_alias(self):
+        """Phase 3-D — keep ONE regression test on the legacy prefix so
+        the AliasChoices surface stays exercised until CAB-2203 sunset.
+        """
+        env = {
+            "STOA_SNAPSHOTS_STORAGE_BUCKET": "legacy-bucket",
+            "STOA_SNAPSHOTS_STORAGE_USE_SSL": "true",
+        }
+        with patch.dict("os.environ", env, clear=True):
+            settings = SnapshotSettings()
+        assert settings.storage_bucket == "legacy-bucket"
+        assert settings.storage_use_ssl is True

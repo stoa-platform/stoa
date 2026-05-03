@@ -25,13 +25,20 @@ class TestSnapshotSettingsDefaults:
         assert settings.async_capture is True
 
     def test_custom_env(self):
+        """Phase 3-D — uses canonical STOA_API_SNAPSHOT_* prefix.
+
+        Migrated from legacy STOA_SNAPSHOTS_* per CAB-2199 plan §2.6.d.
+        Closes BH-INFRA1a-010 — pre-Phase-3-D this test passed only via
+        the AliasChoices alias path, leaving the canonical prefix
+        unexercised by the bulk of the snapshot test suite.
+        """
         env = {
-            "STOA_SNAPSHOTS_ENABLED": "false",
-            "STOA_SNAPSHOTS_CAPTURE_ON_4XX": "true",
-            "STOA_SNAPSHOTS_RETENTION_DAYS": "7",
-            "STOA_SNAPSHOTS_STORAGE_TYPE": "s3",
-            "STOA_SNAPSHOTS_STORAGE_USE_SSL": "true",
-            "STOA_SNAPSHOTS_MAX_BODY_SIZE": "50000",
+            "STOA_API_SNAPSHOT_ENABLED": "false",
+            "STOA_API_SNAPSHOT_CAPTURE_ON_4XX": "true",
+            "STOA_API_SNAPSHOT_RETENTION_DAYS": "7",
+            "STOA_API_SNAPSHOT_STORAGE_TYPE": "s3",
+            "STOA_API_SNAPSHOT_STORAGE_USE_SSL": "true",
+            "STOA_API_SNAPSHOT_MAX_BODY_SIZE": "50000",
         }
         with patch.dict("os.environ", env, clear=True):
             settings = SnapshotSettings()
@@ -41,6 +48,18 @@ class TestSnapshotSettingsDefaults:
         assert settings.storage_type == "s3"
         assert settings.storage_use_ssl is True
         assert settings.max_body_size == 50000
+
+    def test_legacy_prefix_still_works_via_alias(self):
+        """Phase 3-D — keep ONE regression test on the legacy prefix so
+        the AliasChoices surface stays exercised until CAB-2203 sunset."""
+        env = {
+            "STOA_SNAPSHOTS_ENABLED": "false",
+            "STOA_SNAPSHOTS_RETENTION_DAYS": "14",
+        }
+        with patch.dict("os.environ", env, clear=True):
+            settings = SnapshotSettings()
+        assert settings.enabled is False
+        assert settings.retention_days == 14
 
 
 class TestExcludePaths:

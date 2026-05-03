@@ -120,18 +120,36 @@ def test_model_dump_excludes_flat_opensearch_fields():
     assert sub["password"].get_secret_value() == "leaky-test-value"
 
 
-def test_get_settings_returns_consolidated_submodel():
+def test_get_settings_returns_consolidated_submodel(monkeypatch):
     """``opensearch.opensearch_integration.get_settings()`` is a back-compat
-    accessor that now returns the consolidated ``Settings.opensearch_audit``
-    sub-model. Legacy importers ``from ...opensearch_integration import
-    get_settings`` keep working without code change."""
-    from src.opensearch.opensearch_integration import get_settings
+    accessor that returns the consolidated ``Settings.opensearch_audit``
+    sub-model. Legacy importers
+    ``from ...opensearch_integration import get_settings`` keep working
+    without code change.
 
-    s = get_settings()
-    # Must be the OpenSearchAuditConfig type, not the legacy OpenSearchSettings
+    Phase 3-D BH-INFRA1a-008 — the test now patches the module-level
+    ``settings`` singleton with a fresh ``Settings()`` instantiated under
+    the fixture's controlled env so the assertions actually exercise the
+    Phase 2 consolidation contract under known config (rather than
+    asserting only the type of the boot-time singleton).
+    """
+    import src.opensearch.opensearch_integration as opensearch_integration
+
+    monkeypatch.setenv("OPENSEARCH_HOST", "https://controlled.example.io")
+    monkeypatch.setenv("AUDIT_BUFFER_SIZE", "42")
+    fresh = Settings()
+    monkeypatch.setattr(opensearch_integration, "settings", fresh)
+
+    s = opensearch_integration.get_settings()
+
+    # Must be the OpenSearchAuditConfig type, not the legacy OpenSearchSettings.
     assert isinstance(s, OpenSearchAuditConfig)
-    # Same field shape as before, post-rename: host/user/password/etc.
+    # Field shape preserved (consumer contract).
     assert hasattr(s, "host")
     assert hasattr(s, "user")
     assert hasattr(s, "password")
     assert hasattr(s, "audit_enabled")
+    # Behaviour under controlled env: flat-env hydration reflected in the
+    # sub-model returned by get_settings().
+    assert s.host == "https://controlled.example.io"
+    assert s.audit_buffer_size == 42

@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.12.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.1...control-plane-api-v1.12.2) (2026-05-02)
+
+
+### Bug Fixes
+
+* adopt catalog git identity collisions ([#2665](https://github.com/stoa-platform/stoa/issues/2665)) ([8a28158](https://github.com/stoa-platform/stoa/commit/8a2815886a35dd7412d8d0c4a6829e26558deffa))
+* allow catalog identity reuse after soft delete ([9b1026a](https://github.com/stoa-platform/stoa/commit/9b1026a7a36af3e27b408e5fc932900f682c2e20))
+* **api:** block webMethods-incompatible OpenAPI schemas ([11b519a](https://github.com/stoa-platform/stoa/commit/11b519a84db7ca1ea5eb1a1b2d84eb8ebcac22f3))
+* **api:** preserve deployment status during gateway outages ([2275757](https://github.com/stoa-platform/stoa/commit/227575753281387150abe4891421e7c58a7067bd))
+* **gateways:** expose webMethods URLs for all envs ([#2668](https://github.com/stoa-platform/stoa/issues/2668)) ([e23f5e2](https://github.com/stoa-platform/stoa/commit/e23f5e26756abf276063bcf7545fee0a0b96ff42))
+* **gateways:** isolate webMethods staging target ([#2664](https://github.com/stoa-platform/stoa/issues/2664)) ([15ed930](https://github.com/stoa-platform/stoa/commit/15ed930ee77e8269ddc2655533f8b4ee97c521c3))
+* project catalog OpenAPI specs from Git ([754a687](https://github.com/stoa-platform/stoa/commit/754a687c6e8e3c6579ce24e37df84c493cd9b15b))
+* reconcile prod promotion migrations ([149396c](https://github.com/stoa-platform/stoa/commit/149396c0ecae26ea3129e6592072c43ba72ee332))
+* **ui:** clarify gateway URL surfaces (CAB-2240) ([0665591](https://github.com/stoa-platform/stoa/commit/0665591e0e0e8d11b544ab560a683d94ddbd4041))
+* use Git OpenAPI specs as API truth ([0f6c2ca](https://github.com/stoa-platform/stoa/commit/0f6c2cae7d9ae0e83e696bdf3c5525a8839280a7))
+
 ## [1.12.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.0...control-plane-api-v1.12.1) (2026-05-02)
 
 

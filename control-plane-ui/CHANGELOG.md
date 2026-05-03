@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.6.0...control-plane-ui-v1.6.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* reconcile prod promotion migrations ([149396c](https://github.com/stoa-platform/stoa/commit/149396c0ecae26ea3129e6592072c43ba72ee332))
+* **ui:** clarify gateway URL surfaces (CAB-2240) ([0665591](https://github.com/stoa-platform/stoa/commit/0665591e0e0e8d11b544ab560a683d94ddbd4041))
+* use Git OpenAPI specs as API truth ([0f6c2ca](https://github.com/stoa-platform/stoa/commit/0f6c2cae7d9ae0e83e696bdf3c5525a8839280a7))
+
 ## [1.6.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.5.8...control-plane-ui-v1.6.0) (2026-05-01)
 
 

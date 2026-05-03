@@ -23,7 +23,8 @@ from ..schemas.catalog import (
     SyncStatusResponse,
     SyncTriggerResponse,
 )
-from ..services.catalog_sync_service import CatalogSyncService
+from ..services.api_lifecycle.portal_tags import strip_legacy_portal_publication_tags
+from ..services.catalog_sync_service import CatalogSyncService, metadata_update_preserving_lifecycle
 from ..services.git_provider import GitProvider, get_git_provider
 
 logger = logging.getLogger(__name__)
@@ -361,9 +362,16 @@ async def seed_catalog_directly(
 
     for api_entry in data.apis:
         api_id = _slugify(api_entry.name)
-        tags = api_entry.tags
-        promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
-        portal_published = any(tag.lower() in promotion_tags for tag in tags)
+        tags, ignored_portal_tags = strip_legacy_portal_publication_tags(api_entry.tags)
+        if ignored_portal_tags:
+            logger.warning(
+                "catalog_admin.portal_publication_tags_ignored",
+                extra={
+                    "tenant_id": data.tenant_id,
+                    "api_id": api_id,
+                    "ignored_tags": ignored_portal_tags,
+                },
+            )
 
         # Build metadata dict (same shape as GitLab api.yaml)
         api_metadata = {
@@ -396,7 +404,7 @@ async def seed_catalog_directly(
                     status="active",
                     category=api_entry.category,
                     tags=tags,
-                    portal_published=portal_published,
+                    portal_published=False,
                     api_metadata=api_metadata,
                     openapi_spec=openapi_spec,
                     git_path=None,
@@ -413,8 +421,7 @@ async def seed_catalog_directly(
                         "status": "active",
                         "category": api_entry.category,
                         "tags": tags,
-                        "portal_published": portal_published,
-                        "metadata": api_metadata,
+                        APICatalog.api_metadata: metadata_update_preserving_lifecycle(api_metadata),
                         "openapi_spec": openapi_spec,
                         "synced_at": datetime.now(UTC),
                         "deleted_at": None,
@@ -431,7 +438,7 @@ async def seed_catalog_directly(
 
     await db.commit()
 
-    logger.info(f"Catalog seed by {user.username}: {seeded} seeded, {failed} failed " f"(tenant: {data.tenant_id})")
+    logger.info(f"Catalog seed by {user.username}: {seeded} seeded, {failed} failed (tenant: {data.tenant_id})")
 
     return CatalogSeedResponse(seeded=seeded, failed=failed, results=results)
 

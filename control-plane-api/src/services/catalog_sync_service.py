@@ -4,8 +4,8 @@ import logging
 import time
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import cast, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -18,6 +18,7 @@ from src.models.mcp_subscription import (
     MCPServerTool,
 )
 from src.models.tenant import Tenant, TenantProvisioningStatus, TenantStatus
+from src.services.api_lifecycle.portal_tags import strip_legacy_portal_publication_tags
 from src.services.catalog_api_definition import (
     extract_target_gateway_names,
     normalize_api_definition,
@@ -36,6 +37,20 @@ def resolve_api_config(base: dict, override: dict | None) -> dict:
     if not override:
         return {**base}
     return {**base, **override}
+
+
+def metadata_update_preserving_lifecycle(projected_metadata: dict):
+    """Return a JSONB update expression that preserves lifecycle-owned metadata.
+
+    Catalog sync owns the Git-projected metadata fields, but lifecycle
+    publication state is runtime-owned and stored under
+    ``metadata.lifecycle``. On conflict updates must not drop that subtree.
+    """
+    return func.jsonb_strip_nulls(
+        cast(projected_metadata, JSONB).op("||")(
+            func.jsonb_build_object("lifecycle", APICatalog.api_metadata["lifecycle"])
+        )
+    )
 
 
 class CatalogSyncService:
@@ -277,9 +292,17 @@ class CatalogSyncService:
         api = normalize_api_definition(resolve_api_config(api, override))
 
         git_path = f"tenants/{tenant_id}/apis/{api_id}"
-        tags = api.get("tags", [])
-        promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
-        portal_published = any(tag.lower() in promotion_tags for tag in tags)
+        tags, ignored_portal_tags = strip_legacy_portal_publication_tags(api.get("tags", []))
+        if ignored_portal_tags:
+            logger.warning(
+                "catalog_sync.portal_publication_tags_ignored",
+                extra={
+                    "tenant_id": tenant_id,
+                    "api_id": api_id,
+                    "ignored_tags": ignored_portal_tags,
+                },
+            )
+        api = {**api, "tags": tags}
 
         # Extract explicit target gateways from api.yaml. Environment-only
         # deployments (e.g. deployments.dev=true) are not enough to identify a
@@ -296,7 +319,7 @@ class CatalogSyncService:
                 status=api.get("status", "active"),
                 category=api.get("category"),
                 tags=tags,
-                portal_published=portal_published,
+                portal_published=False,
                 api_metadata=api,
                 openapi_spec=openapi_spec,
                 git_path=git_path,
@@ -314,8 +337,7 @@ class CatalogSyncService:
                     APICatalog.status: api.get("status", "active"),
                     APICatalog.category: api.get("category"),
                     APICatalog.tags: tags,
-                    APICatalog.portal_published: portal_published,
-                    APICatalog.api_metadata: api,
+                    APICatalog.api_metadata: metadata_update_preserving_lifecycle(api),
                     APICatalog.openapi_spec: openapi_spec,
                     APICatalog.git_commit_sha: commit_sha,
                     APICatalog.target_gateways: target_gateways,

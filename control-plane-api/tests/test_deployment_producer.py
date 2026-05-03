@@ -1,4 +1,5 @@
 """Tests for deployment lifecycle event producer (CAB-1410)."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 

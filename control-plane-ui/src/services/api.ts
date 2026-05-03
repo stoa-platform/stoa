@@ -98,6 +98,7 @@ import { platformClient } from './api/platform';
 import { chatClient } from './api/chat';
 import { llmClient } from './api/llm';
 import { monitoringClient } from './api/monitoring';
+import { apiLifecycleClient } from './api/apiLifecycle';
 
 // Imports internes des types co-localisés (nécessaires pour les signatures de
 // la classe ApiService ci-dessous). Ré-exports publics : voir en bas de fichier.
@@ -129,6 +130,18 @@ import type {
   MonitoringTransactionDetail,
   MonitoringStats,
 } from './api/monitoring';
+import type {
+  ApiLifecycleCreateDraftRequest,
+  ApiLifecycleState,
+  ApiLifecycleValidateDraftRequest,
+  ApiLifecycleValidateDraftResponse,
+  ApiLifecycleDeploymentRequest,
+  ApiLifecycleDeployResponse,
+  ApiLifecyclePublicationRequest,
+  ApiLifecyclePublishResponse,
+  ApiLifecyclePromotionRequest,
+  ApiLifecyclePromotionResponse,
+} from './api/apiLifecycle';
 
 // ── Type re-exports (historiquement inline en bas de api.ts) ─────────────────
 // Ces types sont désormais co-localisés avec leur client de domaine.
@@ -169,6 +182,18 @@ export type {
   MonitoringTransactionDetail,
   MonitoringStats,
 } from './api/monitoring';
+export type {
+  ApiLifecycleCreateDraftRequest,
+  ApiLifecycleState,
+  ApiLifecycleValidateDraftRequest,
+  ApiLifecycleValidateDraftResponse,
+  ApiLifecycleDeploymentRequest,
+  ApiLifecycleDeployResponse,
+  ApiLifecyclePublicationRequest,
+  ApiLifecyclePublishResponse,
+  ApiLifecyclePromotionRequest,
+  ApiLifecyclePromotionResponse,
+} from './api/apiLifecycle';
 
 // =============================================================================
 // Façade ApiService — agrège le core transport (services/http) et tous les
@@ -313,6 +338,50 @@ class ApiService {
 
   async triggerCatalogSync(tenantId: string): Promise<void> {
     return apisClient.triggerCatalogSync(tenantId);
+  }
+
+  // Canonical API lifecycle
+  async createLifecycleDraft(
+    tenantId: string,
+    request: ApiLifecycleCreateDraftRequest
+  ): Promise<ApiLifecycleState> {
+    return apiLifecycleClient.createDraft(tenantId, request);
+  }
+
+  async getApiLifecycleState(tenantId: string, apiId: string): Promise<ApiLifecycleState> {
+    return apiLifecycleClient.getState(tenantId, apiId);
+  }
+
+  async validateLifecycleDraft(
+    tenantId: string,
+    apiId: string,
+    request: ApiLifecycleValidateDraftRequest = {}
+  ): Promise<ApiLifecycleValidateDraftResponse> {
+    return apiLifecycleClient.validateDraft(tenantId, apiId, request);
+  }
+
+  async deployLifecycleApi(
+    tenantId: string,
+    apiId: string,
+    request: ApiLifecycleDeploymentRequest
+  ): Promise<ApiLifecycleDeployResponse> {
+    return apiLifecycleClient.deploy(tenantId, apiId, request);
+  }
+
+  async publishLifecycleApi(
+    tenantId: string,
+    apiId: string,
+    request: ApiLifecyclePublicationRequest
+  ): Promise<ApiLifecyclePublishResponse> {
+    return apiLifecycleClient.publish(tenantId, apiId, request);
+  }
+
+  async promoteLifecycleApi(
+    tenantId: string,
+    apiId: string,
+    request: ApiLifecyclePromotionRequest
+  ): Promise<ApiLifecyclePromotionResponse> {
+    return apiLifecycleClient.promote(tenantId, apiId, request);
   }
 
   // Applications

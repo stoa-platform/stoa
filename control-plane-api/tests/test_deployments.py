@@ -164,6 +164,33 @@ class TestCreateDeployment:
             )
         assert resp.status_code == 201
 
+    @pytest.mark.asyncio
+    async def test_lifecycle_managed_api_is_rejected(self, app_with_tenant_admin, client_as_tenant_admin):
+        from src.services.deployment_service import LifecycleDeploymentPathError
+        from src.services.git_provider import get_git_provider
+
+        mock_git = _make_mock_git(
+            get_api=AsyncMock(return_value=None),
+            update_api=AsyncMock(return_value=None),
+        )
+        app_with_tenant_admin.dependency_overrides[get_git_provider] = lambda: mock_git
+        with patch(SERVICE_PATH) as MockSvc:
+            MockSvc.return_value.create_deployment = AsyncMock(
+                side_effect=LifecycleDeploymentPathError(
+                    "Cannot create legacy deployment for lifecycle-managed API 'payments-api'. "
+                    "Use POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments instead."
+                )
+            )
+            resp = client_as_tenant_admin.post(
+                "/v1/tenants/acme/deployments",
+                json={"api_id": "payments-api", "environment": "dev"},
+            )
+
+        app_with_tenant_admin.dependency_overrides.pop(get_git_provider, None)
+
+        assert resp.status_code == 409
+        assert "lifecycle/deployments" in resp.json()["detail"]
+
 
 class TestRollbackDeployment:
     @pytest.mark.asyncio
@@ -197,6 +224,25 @@ class TestRollbackDeployment:
                 json={},
             )
         assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_managed_api_is_rejected(self, client_as_tenant_admin):
+        from src.services.deployment_service import LifecycleDeploymentPathError
+
+        with patch(SERVICE_PATH) as MockSvc:
+            MockSvc.return_value.rollback_deployment = AsyncMock(
+                side_effect=LifecycleDeploymentPathError(
+                    "Cannot rollback legacy deployment for lifecycle-managed API 'payments-api'. "
+                    "Use POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments instead."
+                )
+            )
+            resp = client_as_tenant_admin.post(
+                f"/v1/tenants/acme/deployments/{uuid4()}/rollback",
+                json={},
+            )
+
+        assert resp.status_code == 409
+        assert "lifecycle/deployments" in resp.json()["detail"]
 
 
 class TestUpdateStatus:
@@ -242,6 +288,25 @@ class TestUpdateStatus:
                 json={"status": "success"},
             )
         assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_managed_api_is_rejected(self, client_as_tenant_admin):
+        from src.services.deployment_service import LifecycleDeploymentPathError
+
+        with patch(SERVICE_PATH) as MockSvc:
+            MockSvc.return_value.update_status = AsyncMock(
+                side_effect=LifecycleDeploymentPathError(
+                    "Cannot update legacy deployment status for lifecycle-managed API 'payments-api'. "
+                    "Use POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments instead."
+                )
+            )
+            resp = client_as_tenant_admin.patch(
+                f"/v1/tenants/acme/deployments/{uuid4()}/status",
+                json={"status": "success"},
+            )
+
+        assert resp.status_code == 409
+        assert "lifecycle/deployments" in resp.json()["detail"]
 
 
 class TestDeploymentLogs:
@@ -327,6 +392,41 @@ class TestDeploymentServiceCreate:
             mock_kafka.publish.assert_called_once()
             mock_kafka.emit_audit_event.assert_called_once()
             mock_emit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_lifecycle_managed_api_before_legacy_deployment(self):
+        from src.models.catalog import APICatalog
+        from src.services.deployment_service import DeploymentService, LifecycleDeploymentPathError
+
+        mock_db = AsyncMock()
+        api = APICatalog(
+            tenant_id="acme",
+            api_id="payments-api",
+            api_name="Payments API",
+            version="1.0.0",
+            status="ready",
+            api_metadata={"lifecycle": {"catalog_status": "ready"}},
+        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=api)))
+        with (
+            patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
+            patch("src.services.deployment_service.DeploymentLogRepository"),
+        ):
+            MockRepo.return_value.create = AsyncMock()
+            svc = DeploymentService(mock_db)
+
+            with pytest.raises(LifecycleDeploymentPathError, match="lifecycle/deployments"):
+                await svc.create_deployment(
+                    "acme",
+                    "payments-api",
+                    "Payments API",
+                    "dev",
+                    "1.0.0",
+                    "admin",
+                    "user-123",
+                )
+
+            MockRepo.return_value.create.assert_not_awaited()
 
 
 class TestDeploymentServiceUpdateStatus:

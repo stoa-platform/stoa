@@ -26,6 +26,7 @@ from ..repositories.catalog import CatalogRepository
 from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services import git_service
+from ..services.api_lifecycle.portal_tags import find_legacy_portal_publication_tags
 from ..services.catalog_git_client.github_contents import GitHubContentsCatalogClient
 from ..services.gitops_writer import (
     ApiCreatePayload,
@@ -96,7 +97,7 @@ class APIResponse(BaseModel):
     deployed_dev: bool = False
     deployed_staging: bool = False
     tags: list[str] = []
-    portal_promoted: bool = False  # True if API has portal:published tag
+    portal_promoted: bool = False  # True when lifecycle publication set portal_published
     audience: AudienceLiteral = "public"
     catalog_release_id: str | None = None
     catalog_release_tag: str | None = None
@@ -233,12 +234,23 @@ def _generated_openapi_fallback(api: APICatalog) -> dict[str, Any]:
     return spec
 
 
+def _reject_implicit_portal_publication_tags(tags: list[str] | None) -> None:
+    forbidden = find_legacy_portal_publication_tags(tags)
+    if forbidden:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Portal publication must use POST "
+                "/v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/publications, not tags: " + ", ".join(forbidden)
+            ),
+        )
+
+
 def _api_from_catalog(api: APICatalog) -> APIResponse:
     """Convert APICatalog DB model to APIResponse."""
     metadata = api.api_metadata or {}
     tags = api.tags or []
-    promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
-    portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
+    portal_promoted = bool(api.portal_published)
     deployments = metadata.get("deployments", {})
     # CAB-2159 BUG-4 — audience column has a non-null default in the DB; coerce
     # any unexpected stored value back into the Literal set so Pydantic validation
@@ -434,6 +446,8 @@ async def create_api(
     ``False`` and the eligible-tenant list is empty by default — production
     behaviour is unchanged until Phase 6 strangler.
     """
+    _reject_implicit_portal_publication_tags(api.tags)
+
     if is_gitops_create_eligible(
         enabled=settings.GITOPS_CREATE_API_ENABLED,
         tenant_id=tenant_id,
@@ -475,8 +489,6 @@ async def _create_api_legacy(
         _validate_openapi_spec(api.openapi_spec)
 
     tags = api.tags or []
-    promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
-    portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
 
     # Generate URL-safe slug from name (CAB-1938)
     api_id = _slugify(api.name)
@@ -502,7 +514,7 @@ async def _create_api_legacy(
             version=api.version,
             status="draft",
             tags=tags,
-            portal_published=portal_promoted,
+            portal_published=False,
             api_metadata=api_metadata,
             openapi_spec=openapi_spec,
             synced_at=datetime.now(UTC),
@@ -550,7 +562,7 @@ async def _create_api_legacy(
             deployed_dev=False,
             deployed_staging=False,
             tags=tags,
-            portal_promoted=portal_promoted,
+            portal_promoted=False,
         )
 
     except Exception as e:
@@ -667,6 +679,8 @@ async def update_api(
 
         if not updates:
             return _api_from_catalog(current)
+        if "tags" in updates:
+            _reject_implicit_portal_publication_tags(updates["tags"])
 
         # Apply updates to model fields
         metadata = dict(current.api_metadata or {})
@@ -683,8 +697,6 @@ async def update_api(
         if "tags" in updates:
             current.tags = updates["tags"]
             metadata["tags"] = updates["tags"]
-            promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
-            current.portal_published = any(tag.lower() in promotion_tags for tag in updates["tags"])
         if "openapi_spec" in updates:
             current.openapi_spec = _parse_openapi_spec(updates["openapi_spec"])
 

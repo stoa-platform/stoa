@@ -55,6 +55,12 @@ vi.mock('../services/api', () => ({
     createDeployment: vi.fn(),
     listDeployments: vi.fn(),
     listPromotions: vi.fn(),
+    getGatewayDeployments: vi.fn(),
+    getApiLifecycleState: vi.fn(),
+    validateLifecycleDraft: vi.fn(),
+    deployLifecycleApi: vi.fn(),
+    publishLifecycleApi: vi.fn(),
+    promoteLifecycleApi: vi.fn(),
   },
 }));
 
@@ -114,6 +120,38 @@ const baseApi = mockAPI({
   portal_promoted: false,
 });
 
+const baseLifecycleState = {
+  catalog_id: 'api-1',
+  tenant_id: 'oasis-gunters',
+  api_id: 'api-1',
+  api_name: 'payment-api',
+  display_name: 'Payment API',
+  version: '2.0.0',
+  description: 'Handles all payment processing',
+  backend_url: 'https://payments.example.com',
+  catalog_status: 'ready',
+  lifecycle_phase: 'ready',
+  portal_published: false,
+  tags: ['payments'],
+  spec: {
+    source: 'inline',
+    has_openapi_spec: true,
+  },
+  deployments: [],
+  promotions: [],
+  last_error: null,
+  portal: {
+    published: false,
+    status: 'not_published',
+    publications: [],
+    last_result: null,
+    last_environment: null,
+    last_gateway_instance_id: null,
+    last_deployment_id: null,
+    last_published_at: null,
+  },
+};
+
 // ── Setup helpers ─────────────────────────────────────────────────────────────
 
 function setupMocks(role: PersonaRole = 'cpi-admin') {
@@ -152,6 +190,13 @@ function setupMocks(role: PersonaRole = 'cpi-admin') {
     page: 1,
     page_size: 20,
   });
+  vi.mocked(apiService.getGatewayDeployments).mockResolvedValue({
+    items: [],
+    total: 0,
+    page: 1,
+    page_size: 100,
+  });
+  vi.mocked(apiService.getApiLifecycleState).mockResolvedValue(baseLifecycleState);
 }
 
 function renderAPIDetail() {
@@ -341,16 +386,16 @@ describe('APIDetail', () => {
 
   describe('RBAC — action buttons', () => {
     describe('cpi-admin', () => {
-      it('shows portal toggle button', async () => {
+      it('shows the lifecycle panel', async () => {
         setupMocks('cpi-admin');
         renderAPIDetail();
 
         await waitFor(() => {
-          expect(screen.getByText(/Portal:/)).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-panel')).toBeInTheDocument();
         });
       });
 
-      it('shows Deploy DEV button when not deployed to dev', async () => {
+      it('does not show legacy Deploy DEV button when not deployed to dev', async () => {
         setupMocks('cpi-admin');
         vi.mocked(apiService.getApi).mockResolvedValue({
           ...baseApi,
@@ -360,17 +405,19 @@ describe('APIDetail', () => {
         renderAPIDetail();
 
         await waitFor(() => {
-          expect(screen.getByText('Deploy DEV')).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-deploy')).toBeInTheDocument();
         });
+        expect(screen.queryByText('Deploy DEV')).not.toBeInTheDocument();
       });
 
-      it('shows Deploy STG button when deployed to dev but not staging', async () => {
+      it('does not show legacy Deploy STG button when deployed to dev but not staging', async () => {
         setupMocks('cpi-admin');
         renderAPIDetail(); // baseApi has deployed_dev=true, deployed_staging=false
 
         await waitFor(() => {
-          expect(screen.getByText('Deploy STG')).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-deploy')).toBeInTheDocument();
         });
+        expect(screen.queryByText('Deploy STG')).not.toBeInTheDocument();
       });
 
       it('shows edit button', async () => {
@@ -401,21 +448,22 @@ describe('APIDetail', () => {
     });
 
     describe('tenant-admin', () => {
-      it('shows portal toggle button', async () => {
+      it('shows lifecycle publish action instead of portal tag toggle', async () => {
         setupMocks('tenant-admin');
         renderAPIDetail();
 
         await waitFor(() => {
-          expect(screen.getByText(/Portal:/)).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-publish')).toBeInTheDocument();
         });
+        expect(screen.queryByText(/Portal:/)).not.toBeInTheDocument();
       });
 
-      it('shows deploy button (has apis:deploy permission)', async () => {
+      it('shows lifecycle deploy action (has apis:deploy permission)', async () => {
         setupMocks('tenant-admin');
         renderAPIDetail();
 
         await waitFor(() => {
-          expect(screen.getByText('Deploy STG')).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-deploy')).toBeInTheDocument();
         });
       });
     });
@@ -429,21 +477,20 @@ describe('APIDetail', () => {
         // (canRemove = apis:delete && canDelete)
       });
 
-      it('shows Deploy STG button (has apis:deploy)', async () => {
+      it('shows lifecycle deploy action (has apis:deploy)', async () => {
         renderAPIDetail();
 
         await waitFor(() => {
-          expect(screen.getByText('Deploy STG')).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-deploy')).toBeInTheDocument();
         });
       });
 
-      it('does NOT show portal toggle (no apis:update... wait devops has apis:update)', async () => {
+      it('shows lifecycle publish action through apis:update permission', async () => {
         // devops permissions include 'apis:update' so canManage=true in full mode
-        // This confirms devops CAN see portal toggle
         renderAPIDetail();
 
         await waitFor(() => {
-          expect(screen.getByText(/Portal:/)).toBeInTheDocument();
+          expect(screen.getByTestId('api-lifecycle-publish')).toBeInTheDocument();
         });
       });
 
@@ -461,7 +508,7 @@ describe('APIDetail', () => {
         // The Trash2 delete button is gated on canRemove = hasPermission('apis:delete') && canDelete
         // Since apis:delete is absent for devops, the delete button should not render
         // There's no text label on the delete button (icon only), so we check the total
-        // action-area buttons: only portal toggle, deploy STG, and edit (pencil) should be present
+        // action-area buttons include lifecycle buttons and edit, but not the delete action.
         const buttons = screen.getAllByRole('button');
         const buttonTexts = buttons.map((b) => b.textContent?.trim());
         // Must NOT have an empty button that comes after the edit button (Trash2 renders after Pencil)
@@ -565,8 +612,8 @@ describe('APIDetail', () => {
 
   // ── Portal toggle ────────────────────────────────────────────────────────
 
-  describe('Portal toggle', () => {
-    it('shows "Portal: Private" when portal_promoted is false', async () => {
+  describe('Portal publication', () => {
+    it('does not expose the legacy portal tag toggle when portal_promoted is false', async () => {
       setupMocks('cpi-admin');
       vi.mocked(apiService.getApi).mockResolvedValue({
         ...baseApi,
@@ -575,20 +622,31 @@ describe('APIDetail', () => {
       renderAPIDetail();
 
       await waitFor(() => {
-        expect(screen.getByText(/Portal: Private/)).toBeInTheDocument();
+        expect(screen.getByTestId('api-lifecycle-publish')).toBeInTheDocument();
       });
+      expect(screen.queryByText(/Portal: Private/)).not.toBeInTheDocument();
     });
 
-    it('shows "Portal: Published" when portal_promoted is true', async () => {
+    it('still shows portal state in lifecycle summary when published', async () => {
       setupMocks('cpi-admin');
       vi.mocked(apiService.getApi).mockResolvedValue({
         ...baseApi,
         portal_promoted: true,
       });
+      vi.mocked(apiService.getApiLifecycleState).mockResolvedValue({
+        ...baseLifecycleState,
+        portal_published: true,
+        lifecycle_phase: 'published',
+        portal: {
+          ...baseLifecycleState.portal,
+          published: true,
+          status: 'published',
+        },
+      });
       renderAPIDetail();
 
       await waitFor(() => {
-        expect(screen.getByText(/Portal: Published/)).toBeInTheDocument();
+        expect(screen.getByTestId('api-lifecycle-portal')).toHaveTextContent('published');
       });
     });
   });

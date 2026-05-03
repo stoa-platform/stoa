@@ -5,7 +5,8 @@ Spec §6.5 step 14, §6.9 (CAB-2186 B-WORKER, CAB-2180 B-CATALOG).
 These tests use the ``integration_db`` fixture (PostgreSQL) and are skipped
 automatically when ``DATABASE_URL`` is not set. They verify the contract
 that GitOps writes NEVER touch ``target_gateways`` and always project
-``metadata`` / ``openapi_spec`` from Git on UPDATE.
+``metadata`` / ``openapi_spec`` from Git on UPDATE while preserving
+``portal_published`` and lifecycle metadata.
 """
 
 from __future__ import annotations
@@ -41,8 +42,8 @@ def _projection(
         version=version,
         status="active",
         category="Banking",
-        tags=["portal:published", "banking"],
-        portal_published=True,
+        tags=["banking"],
+        portal_published=False,
         audience="public",
         api_metadata={
             "name": api_id,
@@ -52,7 +53,7 @@ def _projection(
             "backend_url": "http://example.invalid",
             "status": "active",
             "deployments": {"dev": True, "staging": False},
-            "tags": ["portal:published", "banking"],
+            "tags": ["banking"],
             "category": "Banking",
             "audience": "public",
         },
@@ -82,8 +83,8 @@ async def test_insert_creates_row_with_defaults(integration_db) -> None:
     assert row.version == "1.0.0"
     assert row.status == "active"
     assert row.category == "Banking"
-    assert row.tags == ["portal:published", "banking"]
-    assert row.portal_published is True
+    assert row.tags == ["banking"]
+    assert row.portal_published is False
     assert row.audience == "public"
     assert row.git_path == "tenants/demo-gitops/apis/petstore/api.yaml"
     assert row.git_commit_sha == "a" * 40
@@ -95,18 +96,30 @@ async def test_insert_creates_row_with_defaults(integration_db) -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_update_preserves_target_gateways(integration_db) -> None:
-    """A pre-existing row keeps target_gateways but takes openapi_spec from Git."""
+async def test_update_preserves_runtime_and_portal_fields(integration_db) -> None:
+    """A pre-existing row keeps lifecycle-owned fields on UPDATE."""
     existing = APICatalog(
         tenant_id="demo-gitops",
         api_id="petstore",
         api_name="petstore",
         version="1.0.0",
         status="active",
-        tags=[],
-        portal_published=False,
+        tags=["old"],
+        portal_published=True,
         audience="public",
-        api_metadata={"display_name": "Manually set", "backend_url": "http://legacy"},
+        api_metadata={
+            "display_name": "Manually set",
+            "backend_url": "http://legacy",
+            "lifecycle": {
+                "catalog_status": "ready",
+                "portal_publications": {
+                    "dev:00000000-0000-4000-8000-000000000001": {
+                        "publication_status": "published",
+                        "source": "api_lifecycle",
+                    }
+                },
+            },
+        },
         openapi_spec={"openapi": "3.0.0", "info": {"title": "Pet"}},
         target_gateways=["webmethods-prod", "kong-staging"],
     )
@@ -128,13 +141,18 @@ async def test_update_preserves_target_gateways(integration_db) -> None:
     assert row.git_commit_sha == "c" * 40
     assert row.catalog_content_hash == "d" * 64
     assert row.category == "Banking"
-    assert row.tags == ["portal:published", "banking"]
+    assert row.tags == ["banking"]
     assert row.portal_published is True
     # Deployment-owned field preserved; Git-owned OpenAPI is replaced.
     assert row.target_gateways == ["webmethods-prod", "kong-staging"]
     assert row.openapi_spec == projected_spec
     assert row.api_metadata["display_name"] == "petstore"
     assert row.api_metadata["backend_url"] == "http://example.invalid"
+    assert row.api_metadata["lifecycle"]["catalog_status"] == "ready"
+    assert (
+        row.api_metadata["lifecycle"]["portal_publications"]["dev:00000000-0000-4000-8000-000000000001"]["source"]
+        == "api_lifecycle"
+    )
 
 
 @pytest.mark.integration

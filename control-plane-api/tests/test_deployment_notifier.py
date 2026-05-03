@@ -7,7 +7,6 @@ import pytest
 from src.notifications import templates
 from src.notifications.deployment_notifier import notify_deployment_event
 
-
 # ---------------------------------------------------------------------------
 # templates.py unit tests
 # ---------------------------------------------------------------------------

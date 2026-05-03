@@ -36,7 +36,7 @@ def validate_promotion_chain(source: str, target: str) -> None:
         raise ValueError(f"Cannot promote to the same environment: {source}")
     if (source, target) not in VALID_PROMOTION_CHAINS:
         allowed = ", ".join(f"{s}→{t}" for s, t in sorted(VALID_PROMOTION_CHAINS))
-        raise ValueError(f"Invalid promotion chain: {source}→{target}. " f"Allowed chains: {allowed}")
+        raise ValueError(f"Invalid promotion chain: {source}→{target}. Allowed chains: {allowed}")
 
 
 class Promotion(Base):
@@ -85,4 +85,4 @@ class Promotion(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Promotion {self.id} " f"{self.source_environment}→{self.target_environment} " f"status={self.status}>"
+        return f"<Promotion {self.id} {self.source_environment}→{self.target_environment} status={self.status}>"

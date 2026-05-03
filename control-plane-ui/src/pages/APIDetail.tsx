@@ -15,8 +15,6 @@ import {
   GitCommit,
   Rocket,
   ArrowUpRight,
-  Globe,
-  GlobeLock,
   Pencil,
   Trash2,
   ExternalLink,
@@ -34,7 +32,7 @@ import { Button } from '@stoa/shared/components/Button';
 import { EnvironmentPipeline } from '../components/EnvironmentPipeline';
 import type { API, GatewayDeployment } from '../types';
 import type { Schemas } from '@stoa/shared/api-types';
-import { DeployAPIDialog } from './GatewayDeployments/DeployAPIDialog';
+import { ApiLifecyclePanel } from './ApiLifecyclePanel';
 
 type TabId = 'overview' | 'spec' | 'versions' | 'deployments' | 'promotions';
 
@@ -50,7 +48,6 @@ export function APIDetail() {
   const { hasPermission } = useAuth();
   const { canEdit, canDelete, canDeploy } = useEnvironmentMode();
   const toast = useToastActions();
-  const queryClient = useQueryClient();
   const [confirm, ConfirmDialog] = useConfirm();
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
@@ -75,46 +72,6 @@ export function APIDetail() {
     enabled: !!tenantId && !!apiId && activeTab === 'versions',
   });
 
-  // Portal toggle mutation
-  const portalToggle = useMutation({
-    mutationFn: async (promoted: boolean) => {
-      if (!api) return;
-      const currentTags = api.tags || [];
-      const newTags = promoted
-        ? [...currentTags.filter((t) => t !== 'portal:published'), 'portal:published']
-        : currentTags.filter((t) => t !== 'portal:published');
-      await apiService.updateApi(tenantId!, apiId!, { tags: newTags });
-      // Trigger catalog sync so the Portal DB picks up the change
-      await apiService.triggerCatalogSync(tenantId!).catch(() => {
-        /* sync is best-effort — tag update already succeeded */
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api', tenantId, apiId] });
-      toast.success(api?.portal_promoted ? 'Removed from portal' : 'Published to portal');
-    },
-    onError: () => toast.error('Failed to update portal status'),
-  });
-
-  // Deploy mutation
-  const deployMutation = useMutation({
-    mutationFn: async (environment: 'dev' | 'staging') => {
-      await apiService.createDeployment(tenantId!, {
-        api_id: apiId!,
-        api_name: api?.name || apiId!,
-        environment,
-        version: api?.version || '1.0.0',
-      });
-      // Sync catalog so deployment flags are reflected in Portal
-      await apiService.triggerCatalogSync(tenantId!).catch(() => {});
-    },
-    onSuccess: (_data, environment) => {
-      queryClient.invalidateQueries({ queryKey: ['api', tenantId, apiId] });
-      toast.success(`Deployment to ${environment} initiated`);
-    },
-    onError: () => toast.error('Deployment failed'),
-  });
-
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: () => apiService.deleteApi(tenantId!, apiId!),
@@ -133,15 +90,6 @@ export function APIDetail() {
       variant: 'danger',
     });
     if (confirmed) deleteMutation.mutate();
-  };
-
-  const handleDeploy = async (env: 'dev' | 'staging') => {
-    const confirmed = await confirm({
-      title: `Deploy to ${env.toUpperCase()}`,
-      message: `Deploy "${api?.display_name}" v${api?.version} to ${env}?`,
-      confirmLabel: 'Deploy',
-    });
-    if (confirmed) deployMutation.mutate(env);
   };
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -227,54 +175,6 @@ export function APIDetail() {
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Portal toggle */}
-            {canManage && (
-              <Button
-                variant={api.portal_promoted ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => portalToggle.mutate(!api.portal_promoted)}
-                disabled={portalToggle.isPending}
-              >
-                {api.portal_promoted ? (
-                  <>
-                    <Globe className="h-4 w-4 mr-1" />
-                    Portal: Published
-                  </>
-                ) : (
-                  <>
-                    <GlobeLock className="h-4 w-4 mr-1" />
-                    Portal: Private
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Deploy buttons */}
-            {canDeploy && (
-              <>
-                {!api.deployed_dev && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeploy('dev')}
-                    disabled={deployMutation.isPending}
-                  >
-                    Deploy DEV
-                  </Button>
-                )}
-                {api.deployed_dev && !api.deployed_staging && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeploy('staging')}
-                    disabled={deployMutation.isPending}
-                  >
-                    Deploy STG
-                  </Button>
-                )}
-              </>
-            )}
-
             {canManage && (
               <Button variant="ghost" size="sm" onClick={() => navigate(`/apis?edit=${api.id}`)}>
                 <Pencil className="h-4 w-4" />
@@ -296,6 +196,13 @@ export function APIDetail() {
           />
         </div>
       </div>
+
+      <ApiLifecyclePanel
+        tenantId={tenantId!}
+        apiId={apiId!}
+        canManage={canManage}
+        canDeploy={canDeploy}
+      />
 
       {/* Tabs */}
       <div className="border-b border-neutral-200 dark:border-neutral-700">
@@ -322,7 +229,7 @@ export function APIDetail() {
         {activeTab === 'overview' && <OverviewTab api={api} />}
         {activeTab === 'spec' && <SpecTab api={api} />}
         {activeTab === 'versions' && <VersionsTab versions={versions} loading={versionsLoading} />}
-        {activeTab === 'deployments' && <DeploymentsTab api={api} tenantId={tenantId!} />}
+        {activeTab === 'deployments' && <DeploymentsTab api={api} />}
         {activeTab === 'promotions' && <PromotionsTab api={api} tenantId={tenantId!} />}
       </div>
     </div>
@@ -526,10 +433,9 @@ function VersionsTab({
   );
 }
 
-function DeploymentsTab({ api, tenantId }: { api: API; tenantId: string }) {
+function DeploymentsTab({ api }: { api: API }) {
   const toast = useToastActions();
   const queryClient = useQueryClient();
-  const [showDeployDialog, setShowDeployDialog] = useState(false);
 
   // Query gateway deployments for this specific API
   const { data, isLoading } = useQuery({
@@ -572,19 +478,13 @@ function DeploymentsTab({ api, tenantId }: { api: API; tenantId: string }) {
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
           {deployments.length} gateway deployment{deployments.length !== 1 ? 's' : ''}
         </p>
-        <button
-          onClick={() => setShowDeployDialog(true)}
-          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700"
-        >
-          + Deploy
-        </button>
       </div>
 
       {deployments.length === 0 ? (
         <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
           <Rocket className="h-12 w-12 mx-auto mb-4 text-neutral-300 dark:text-neutral-600" />
           <p className="text-sm">No gateway deployments yet for this API.</p>
-          <p className="text-xs mt-1">Click + Deploy to deploy to gateways.</p>
+          <p className="text-xs mt-1">Use the lifecycle panel to request a deployment.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -638,17 +538,9 @@ function DeploymentsTab({ api, tenantId }: { api: API; tenantId: string }) {
         </div>
       )}
 
-      {showDeployDialog && (
-        <DeployAPIDialog
-          onClose={() => setShowDeployDialog(false)}
-          onDeployed={() => {
-            setShowDeployDialog(false);
-            queryClient.invalidateQueries({ queryKey: ['gateway-deployments', api.id] });
-            toast.success('Deployment initiated');
-          }}
-          preselectedApiKey={`${tenantId}:${api.name || api.id}`}
-        />
-      )}
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        Runtime writes for lifecycle APIs are controlled by the lifecycle panel.
+      </p>
     </div>
   );
 }

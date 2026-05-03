@@ -9,16 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..models.catalog import APICatalog
-from ..models.gateway_deployment import DeploymentSyncStatus
+from ..models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus, validate_promotion_chain
 from ..notifications.promotion_notifier import notify_promotion_event
-from ..repositories.deployment import DeploymentRepository
 from ..repositories.gateway_deployment import GatewayDeploymentRepository
 from ..repositories.promotion import PromotionRepository
 from ..services.environment_aliases import deployment_environment_matches
 from ..services.gateway_topology import normalize_gateway_topology
-from ..services.kafka_service import Topics, kafka_service
+from ..services.kafka_service import kafka_service
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,6 @@ class PromotionService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = PromotionRepository(db)
-        self.deployment_repo = DeploymentRepository(db)
         self.gw_deploy_repo = GatewayDeploymentRepository(db)
 
     async def create_promotion(
@@ -288,8 +286,7 @@ class PromotionService:
             raise ValueError(f"Promotion {promotion_id} not found")
         if promotion.status != PromotionStatus.PENDING.value:
             raise ValueError(
-                f"Cannot approve promotion in status '{promotion.status}' "
-                f"(expected '{PromotionStatus.PENDING.value}')"
+                f"Cannot approve promotion in status '{promotion.status}' (expected '{PromotionStatus.PENDING.value}')"
             )
         # 4-eyes principle: self-approval blocked for production promotions
         if promotion.requested_by == approved_by and promotion.target_environment == "production":
@@ -301,25 +298,7 @@ class PromotionService:
         target_gateway_ids = self._parse_target_gateway_ids(promotion.target_gateway_ids)
         if not target_gateway_ids:
             raise ValueError(
-                "Cannot approve promotion without explicit target gateways. " "Create a new gateway-aware promotion."
-            )
-
-        # Trigger deployment before the state transition so no promotion can
-        # enter PROMOTING without at least one linked GatewayDeployment.
-        from ..services.deployment_orchestration_service import DeploymentOrchestrationService
-
-        orchestration_svc = DeploymentOrchestrationService(self.db)
-        deployments = await orchestration_svc.auto_deploy_on_promotion(
-            api_id=promotion.api_id,
-            tenant_id=tenant_id,
-            target_environment=promotion.target_environment,
-            approved_by=approved_by,
-            promotion_id=promotion.id,
-            gateway_ids=target_gateway_ids,
-        )
-        if not deployments:
-            raise ValueError(
-                "Promotion approval did not create any gateway deployment. " "Check the selected target gateways."
+                "Cannot approve promotion without explicit target gateways. Create a new gateway-aware promotion."
             )
 
         promotion.status = PromotionStatus.PROMOTING.value
@@ -327,27 +306,9 @@ class PromotionService:
         promotion = await self.repo.update(promotion)
 
         logger.info(
-            "Promotion %s approved by %s; %d gateway deployments linked",
+            "Promotion %s approved by %s; deployment execution is owned by ApiLifecycleService",
             promotion_id,
             approved_by,
-            len(deployments),
-        )
-
-        await kafka_service.publish(
-            topic=Topics.DEPLOY_REQUESTS,
-            event_type="promotion-approved",
-            tenant_id=tenant_id,
-            payload={
-                "promotion_id": str(promotion.id),
-                "api_id": promotion.api_id,
-                "source_environment": promotion.source_environment,
-                "target_environment": promotion.target_environment,
-                "approved_by": approved_by,
-                "target_gateway_ids": [str(gateway_id) for gateway_id in target_gateway_ids],
-                "gateway_deployment_ids": [str(getattr(deployment, "id", deployment)) for deployment in deployments],
-                "gateway_deployments_created": True,
-            },
-            user_id=user_id,
         )
 
         await notify_promotion_event(
@@ -538,17 +499,42 @@ class PromotionService:
         }
 
     async def _get_deployment_spec(self, tenant_id: str, api_id: str, environment: str) -> dict | None:
-        """Fetch the latest successful deployment spec for an environment."""
-        deployment = await self.deployment_repo.get_latest_success(
-            tenant_id=tenant_id, api_id=api_id, environment=environment
+        """Fetch the latest synced GatewayDeployment snapshot for an environment."""
+        result = await self.db.execute(
+            select(GatewayDeployment, GatewayInstance, APICatalog)
+            .join(APICatalog, GatewayDeployment.api_catalog_id == APICatalog.id)
+            .join(GatewayInstance, GatewayDeployment.gateway_instance_id == GatewayInstance.id)
+            .where(
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.api_id == api_id,
+                APICatalog.deleted_at.is_(None),
+                GatewayInstance.deleted_at.is_(None),
+            )
         )
-        if not deployment:
+        candidates = [
+            (deployment, gateway, catalog)
+            for deployment, gateway, catalog in result.all()
+            if deployment_environment_matches(gateway.environment, environment)
+            and self._wire_value(deployment.sync_status) == DeploymentSyncStatus.SYNCED.value
+        ]
+        if not candidates:
             return None
+        deployment, gateway, catalog = max(
+            candidates,
+            key=lambda item: item[0].last_sync_success or item[0].desired_at or item[0].created_at,
+        )
+        desired_state = deployment.desired_state if isinstance(deployment.desired_state, dict) else {}
         return {
             "deployment_id": str(deployment.id),
-            "version": deployment.version,
-            "spec_hash": deployment.spec_hash,
-            "commit_sha": deployment.commit_sha,
-            "deployed_by": deployment.deployed_by,
-            "completed_at": deployment.completed_at.isoformat() if deployment.completed_at else None,
+            "gateway_instance_id": str(gateway.id),
+            "gateway_name": gateway.name,
+            "environment": gateway.environment,
+            "api_catalog_id": str(catalog.id),
+            "version": catalog.version,
+            "spec_hash": desired_state.get("spec_hash") or desired_state.get("openapi_spec_hash"),
+            "desired_generation": deployment.desired_generation,
+            "synced_generation": deployment.synced_generation,
+            "sync_status": self._wire_value(deployment.sync_status),
+            "gateway_resource_id": deployment.gateway_resource_id,
+            "last_sync_success": (deployment.last_sync_success.isoformat() if deployment.last_sync_success else None),
         }

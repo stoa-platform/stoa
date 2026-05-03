@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createAuthMock } from '../test/helpers';
@@ -100,6 +101,7 @@ vi.mock('../services/api', () => ({
       },
     ]),
     createApi: vi.fn(),
+    createLifecycleDraft: vi.fn(),
     updateApi: vi.fn(),
     deleteApi: vi.fn(),
     deployApi: vi.fn(),
@@ -159,6 +161,8 @@ vi.mock('../hooks/useEnvironmentMode', () => ({
 }));
 
 import { APIs } from './APIs';
+
+const { apiService } = await import('../services/api');
 
 const READ_ONLY_MODE = {
   canCreate: false,
@@ -264,23 +268,118 @@ describe('APIs', () => {
     expect(screen.queryByText('Delete')).not.toBeInTheDocument();
   });
 
-  it('links writable users to the deployment workflow', async () => {
+  it('links writable users to the lifecycle detail', async () => {
     renderAPIs();
     await screen.findByText('Payment API');
-    const deploymentLinks = screen.getAllByRole('link', { name: 'Open Deployments' });
-    expect(deploymentLinks[0]).toHaveAttribute(
-      'href',
-      '/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters'
-    );
+    const lifecycleLinks = screen.getAllByRole('link', { name: 'Open Lifecycle' });
+    expect(lifecycleLinks[0]).toHaveAttribute('href', '/apis/oasis-gunters/payment-api');
   });
 
-  it('hides deployment workflow links in read-only mode', async () => {
+  it('creates lifecycle drafts through the canonical endpoint', async () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('tenant-admin'));
+    vi.mocked(apiService.createLifecycleDraft).mockResolvedValue({
+      catalog_id: 'api-new',
+      tenant_id: 'oasis-gunters',
+      api_id: 'payments-api',
+      api_name: 'payments-api',
+      display_name: 'Payments API',
+      version: '1.0.0',
+      description: 'Payments',
+      backend_url: 'https://payments.internal',
+      catalog_status: 'draft',
+      lifecycle_phase: 'draft',
+      portal_published: false,
+      tags: [],
+      spec: { source: 'inline', has_openapi_spec: true },
+      deployments: [],
+      promotions: [],
+      last_error: null,
+      portal: {
+        published: false,
+        status: 'not_published',
+        publications: [],
+        last_result: null,
+        last_environment: null,
+        last_gateway_instance_id: null,
+        last_deployment_id: null,
+        last_published_at: null,
+      },
+    });
+
+    renderAPIs();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Create API' }));
+    await user.type(screen.getByTestId('api-form-name'), 'payments-api');
+    await user.type(screen.getByTestId('api-form-display-name'), 'Payments API');
+    await user.type(screen.getByTestId('api-form-description'), 'Payments');
+    await user.type(screen.getByTestId('api-form-backend-url'), 'https://payments.internal');
+    fireEvent.change(screen.getByTestId('api-form-openapi-spec'), {
+      target: {
+        value: JSON.stringify({
+          openapi: '3.0.3',
+          info: { title: 'Payments API', version: '1.0.0' },
+          paths: { '/payments': { get: { responses: { '200': { description: 'ok' } } } } },
+        }),
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Create lifecycle draft' }));
+
+    await waitFor(() => {
+      expect(apiService.createLifecycleDraft).toHaveBeenCalledWith(
+        'oasis-gunters',
+        expect.objectContaining({
+          name: 'payments-api',
+          display_name: 'Payments API',
+          backend_url: 'https://payments.internal',
+          tags: [],
+          spec_reference: null,
+        })
+      );
+    });
+  });
+
+  it('does not expose legacy deployment workflow links in read-only mode', async () => {
     mockUseEnvironmentMode.mockReturnValue(READ_ONLY_MODE);
     renderAPIs();
     await screen.findByText('Payment API');
     expect(screen.queryByText('Deploy DEV')).not.toBeInTheDocument();
     expect(screen.queryByText('Deploy STG')).not.toBeInTheDocument();
     expect(screen.queryByText('Open Deployments')).not.toBeInTheDocument();
+  });
+
+  it('removes legacy portal tags before legacy create/update submits', async () => {
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('tenant-admin'));
+    renderAPIs();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Create API' }));
+    await user.click(screen.getByRole('button', { name: 'Manual Entry' }));
+    await user.type(screen.getByTestId('api-form-name'), 'manual-api');
+    await user.type(screen.getByTestId('api-form-display-name'), 'Manual API');
+    await user.type(screen.getByTestId('api-form-backend-url'), 'https://manual.internal');
+    const submitButtons = screen.getAllByRole('button', { name: 'Create API' });
+    await user.click(submitButtons[submitButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(apiService.createApi).toHaveBeenCalledWith(
+        'oasis-gunters',
+        expect.objectContaining({
+          tags: [],
+          portal_promoted: false,
+        })
+      );
+    });
+  });
+
+  it('keeps existing deployment route href out of the API list', async () => {
+    renderAPIs();
+    await screen.findByText('Payment API');
+    const links = screen.getAllByRole('link', { name: 'Open Lifecycle' });
+    expect(links[0]).not.toHaveAttribute(
+      'href',
+      '/api-deployments?api_id=api-1&api_name=payment-api&environment=dev&open_deploy=true&tenant_id=oasis-gunters'
+    );
   });
 
   // 4-persona coverage

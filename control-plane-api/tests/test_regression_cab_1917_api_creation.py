@@ -3,7 +3,7 @@ Regression tests for CAB-1917 — Fix API creation and deployment pipeline.
 
 Covers:
 1. Legacy deployment endpoint returns deprecation headers
-2. auto_deploy_on_promotion() is called on promotion approval
+2. promotion approval no longer auto-deploys directly
 3. list_apis returns 503 on errors (not empty list)
 4. OpenAPI spec validation rejects invalid specs
 """
@@ -37,15 +37,15 @@ class TestRegression_LegacyDeployDeprecation:
 
 
 # ---------------------------------------------------------------------------
-# 2. auto_deploy_on_promotion wired to approval flow
+# 2. approval flow does not double-trigger deployment
 # ---------------------------------------------------------------------------
 
 
 class TestRegression_AutoDeployOnPromotion:
-    """CAB-1917: approve_promotion() must trigger auto_deploy_on_promotion()."""
+    """CAB-1917: approve_promotion() must not bypass ApiLifecycleService."""
 
     @pytest.mark.asyncio
-    async def test_approve_calls_auto_deploy(self):
+    async def test_approve_does_not_call_auto_deploy(self):
         from uuid import uuid4
 
         from src.services.promotion_service import PromotionService
@@ -96,14 +96,7 @@ class TestRegression_AutoDeployOnPromotion:
                     user_id="user-1",
                 )
 
-            mock_orch.auto_deploy_on_promotion.assert_called_once_with(
-                api_id="api-123",
-                tenant_id="acme",
-                target_environment="staging",
-                approved_by="admin",
-                promotion_id=mock_promotion.id,
-                gateway_ids=[target_gateway_id],
-            )
+            mock_orch.auto_deploy_on_promotion.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

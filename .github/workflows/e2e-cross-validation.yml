@@ -50,21 +50,24 @@ jobs:
       - name: Run auth setup
         working-directory: e2e
         env:
-          STOA_CONSOLE_URL: ${{ secrets.STOA_CONSOLE_URL }}
-          STOA_PORTAL_URL: ${{ secrets.STOA_PORTAL_URL }}
-          STOA_API_URL: ${{ secrets.STOA_API_URL }}
-          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL }}
+          STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL }}
+          STOA_API_URL: ${{ secrets.E2E_GATEWAY_URL }}
+          KEYCLOAK_URL: ${{ secrets.E2E_KEYCLOAK_URL }}
+          PARZIVAL_USER: ${{ secrets.PARZIVAL_USER }}
           PARZIVAL_PASSWORD: ${{ secrets.PARZIVAL_PASSWORD }}
+          ANORAK_USER: ${{ secrets.ANORAK_USER }}
           ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
         run: npx playwright test --project=auth-setup
 
       - name: Run cross-validation tests
         working-directory: e2e
         env:
-          STOA_CONSOLE_URL: ${{ secrets.STOA_CONSOLE_URL }}
-          STOA_PORTAL_URL: ${{ secrets.STOA_PORTAL_URL }}
-          STOA_API_URL: ${{ secrets.STOA_API_URL }}
-          STOA_AUTH_URL: ${{ secrets.KEYCLOAK_URL }}
+          STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL }}
+          STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL }}
+          STOA_API_URL: ${{ secrets.E2E_GATEWAY_URL }}
+          STOA_AUTH_URL: ${{ secrets.E2E_KEYCLOAK_URL }}
+          ANORAK_USER: ${{ secrets.ANORAK_USER }}
           ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
         run: >
           npx playwright test

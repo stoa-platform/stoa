@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.20](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.19...stoa-gateway-v0.9.20) (2026-05-03)
+
+
+### Bug Fixes
+
+* **gateway:** filter route reload by gateway name ([#2675](https://github.com/stoa-platform/stoa/issues/2675)) ([1a46ad2](https://github.com/stoa-platform/stoa/commit/1a46ad21a6920da043517b1349fcf5382f147d5b))
+
 ## [0.9.19](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.18...stoa-gateway-v0.9.19) (2026-05-01)
 
 

@@ -23,6 +23,8 @@ from src.services.sync_step_tracker import SyncStepTracker
 
 logger = logging.getLogger(__name__)
 
+LIFECYCLE_DEPLOYMENT_ENDPOINT = "POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments"
+
 
 class GatewayDeploymentService:
     """Business logic for deploying APIs to gateways."""
@@ -131,6 +133,10 @@ class GatewayDeploymentService:
         api_catalog = result.scalar_one_or_none()
         if not api_catalog:
             raise ValueError("API catalog entry not found")
+        if _is_lifecycle_managed_catalog(api_catalog):
+            raise PermissionError(
+                f"API '{api_catalog.api_id}' is lifecycle-managed. Use {LIFECYCLE_DEPLOYMENT_ENDPOINT} instead."
+            )
 
         now = datetime.now(UTC)
         deployments: list[GatewayDeployment] = []
@@ -140,7 +146,7 @@ class GatewayDeploymentService:
             if not gateway:
                 raise ValueError(f"Gateway instance {gw_id} not found")
             if not gateway.enabled:
-                raise PermissionError(f"Gateway '{gateway.name}' is disabled. " f"Enable it before deploying.")
+                raise PermissionError(f"Gateway '{gateway.name}' is disabled. Enable it before deploying.")
             if self._requires_git_backed_desired_state(gateway) and not getattr(api_catalog, "git_commit_sha", None):
                 raise PermissionError(
                     "Production deployment requires a Git-backed UAC/catalog desired state "
@@ -151,6 +157,9 @@ class GatewayDeploymentService:
             desired_state = self.build_desired_state_for_gateway(api_catalog, gateway, target_source="direct")
 
             if existing:
+                if existing.desired_state == desired_state:
+                    deployments.append(existing)
+                    continue
                 existing.desired_state = desired_state
                 existing.desired_at = now
                 existing.sync_status = DeploymentSyncStatus.PENDING
@@ -204,6 +213,7 @@ class GatewayDeploymentService:
         deployment = await self.deploy_repo.get_by_id(deployment_id)
         if not deployment:
             raise ValueError("Deployment not found")
+        await self._raise_if_lifecycle_managed_deployment(deployment)
 
         if deployment.gateway_resource_id:
             deployment.sync_status = DeploymentSyncStatus.DELETING
@@ -217,6 +227,7 @@ class GatewayDeploymentService:
         deployment = await self.deploy_repo.get_by_id(deployment_id)
         if not deployment:
             raise ValueError("Deployment not found")
+        await self._raise_if_lifecycle_managed_deployment(deployment)
 
         deployment.sync_status = DeploymentSyncStatus.PENDING
         deployment.sync_error = None
@@ -273,3 +284,17 @@ class GatewayDeploymentService:
                 )
             except Exception as e:
                 logger.warning("Failed to emit SSE event for deployment %s: %s", dep.id, e)
+
+    async def _raise_if_lifecycle_managed_deployment(self, deployment: GatewayDeployment) -> None:
+        result = await self.db.execute(select(APICatalog).where(APICatalog.id == deployment.api_catalog_id))
+        api_catalog = result.scalar_one_or_none()
+        if _is_lifecycle_managed_catalog(api_catalog):
+            raise ValueError(
+                f"GatewayDeployment '{deployment.id}' belongs to lifecycle-managed API "
+                f"'{api_catalog.api_id}'. Use lifecycle operations instead."
+            )
+
+
+def _is_lifecycle_managed_catalog(api_catalog: object) -> bool:
+    metadata = getattr(api_catalog, "api_metadata", None)
+    return isinstance(metadata, dict) and isinstance(metadata.get("lifecycle"), dict)

@@ -15,8 +15,11 @@ Contract:
 * ``openapi_spec`` is Git-owned when an ``openapi.*`` or ``swagger.*`` sibling
   exists next to ``api.yaml``. The reconciler materializes it into
   ``api_catalog`` so runtime deployment sees the same contract as the Console.
+* Existing portal publication state is preserved and never derived from Git
+  tags. The lifecycle publication endpoint owns that state.
 * ``metadata`` is projected from ``api.yaml`` because Console fields such as
-  ``backend_url`` and ``display_name`` are read from that JSONB column.
+  ``backend_url`` and ``display_name`` are read from that JSONB column. The
+  lifecycle-owned ``metadata.lifecycle`` subtree is preserved on UPDATE.
 * The projection NEVER touches ``id`` (PK UUID) on UPDATE.
 * The projection may canonicalize ``api_id`` from a legacy UUID to the Git
   slug when the active row is uniquely identified by ``(tenant, api_name,
@@ -34,10 +37,10 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.catalog import APICatalog
+from src.services.api_lifecycle.portal_tags import strip_legacy_portal_publication_tags
 from src.services.catalog_api_definition import normalize_api_definition
 from src.services.gitops_writer.paths import is_uuid_shaped, parse_canonical_path
 
-_PORTAL_PUBLISHED_TAG = "portal:published"
 _DEFAULT_AUDIENCE = "public"
 _DEFAULT_STATUS = "active"
 
@@ -49,6 +52,8 @@ class ApiCatalogProjection:
     Spec §6.9 mapping table. ``target_gateways`` is intentionally absent
     because it is deployment-owned and preserved on UPDATE. ``openapi_spec`` is
     included because Git is the API-description source of truth.
+    ``portal_published`` is false on INSERT and preserved on UPDATE; Git tags
+    never publish an API.
     """
 
     tenant_id: str
@@ -128,8 +133,8 @@ def render_api_catalog_projection(
     if category is not None and not isinstance(category, str):
         raise ValueError("api.yaml 'category' must be a string when present")
 
-    tags = _coerce_tags(parsed_content.get("tags"))
-    portal_published = _PORTAL_PUBLISHED_TAG in tags
+    tags, _ignored_portal_tags = strip_legacy_portal_publication_tags(_coerce_tags(parsed_content.get("tags")))
+    portal_published = False
 
     audience = parsed_content.get("audience", _DEFAULT_AUDIENCE)
     if not isinstance(audience, str) or not audience:
@@ -196,12 +201,14 @@ def row_matches_projection(
 
     Compares only the projected fields (spec §6.6 + §6.9):
     ``api_id``, ``tenant_id``, ``api_name``, ``version``, ``status``,
-    ``category``, ``tags``, ``portal_published``, ``audience``,
-    ``api_metadata``, ``git_path``, ``git_commit_sha``,
-    ``catalog_content_hash`` and ``openapi_spec``.
+    ``category``, ``tags``, ``audience``, ``api_metadata``, ``git_path``,
+    ``git_commit_sha``, ``catalog_content_hash`` and ``openapi_spec``.
 
     Fields ``target_gateways``, ``id``, ``synced_at`` and ``deleted_at`` are
-    ignored — they are not under GitOps write authority.
+    ignored — they are not under GitOps write authority. ``portal_published`` is
+    also ignored because lifecycle publication owns it. The lifecycle-owned
+    ``api_metadata.lifecycle`` subtree is ignored because GitOps projections
+    preserve it on UPDATE.
     """
     expected_tags = list(expected.tags)
     actual_tags = list(actual_row.get("tags") or [])
@@ -217,9 +224,8 @@ def row_matches_projection(
         and actual_row.get("status") == expected.status
         and actual_row.get("category") == expected.category
         and actual_tags == expected_tags
-        and bool(actual_row.get("portal_published")) == expected.portal_published
         and actual_row.get("audience") == expected.audience
-        and actual_metadata == expected.api_metadata
+        and _without_lifecycle_metadata(actual_metadata) == _without_lifecycle_metadata(expected.api_metadata)
         and actual_row.get("git_path") == expected.git_path
         and actual_row.get("git_commit_sha") == expected.git_commit_sha
         and actual_row.get("catalog_content_hash") == expected.catalog_content_hash
@@ -286,12 +292,14 @@ async def project_to_api_catalog(
 
     INSERT path: a new row is created with ``id = gen_random_uuid()`` (default),
     ``metadata`` comes from ``api.yaml``, ``openapi_spec`` comes from the Git
-    sibling spec file when present and ``target_gateways = []`` (schema
-    default).
+    sibling spec file when present, ``portal_published = false`` and
+    ``target_gateways = []`` (schema default).
 
     UPDATE path: only the projected columns are written. ``target_gateways`` and
     the PK ``id`` are preserved by virtue of NOT being listed in the
-    ``.values()`` clause.
+    ``.values()`` clause. ``portal_published`` is likewise preserved. The
+    lifecycle-owned ``metadata.lifecycle`` subtree is merged back into the
+    projected metadata before the update is flushed.
 
     Spec §6.5 step 14, §6.9. NOT wired to the HTTP handler in Phase 4-1.
 
@@ -342,7 +350,7 @@ async def project_to_api_catalog(
             status=projection.status,
             category=projection.category,
             tags=list(projection.tags),
-            portal_published=projection.portal_published,
+            portal_published=False,
             audience=projection.audience,
             api_metadata=dict(projection.api_metadata),
             openapi_spec=projection.openapi_spec,
@@ -364,6 +372,7 @@ async def project_to_api_catalog(
             api_name=projection.api_name,
         )
 
+    metadata = _metadata_preserving_lifecycle(projection.api_metadata, existing.api_metadata)
     update_stmt = (
         update(APICatalog)
         .where(APICatalog.id == existing.id)
@@ -374,9 +383,8 @@ async def project_to_api_catalog(
             status=projection.status,
             category=projection.category,
             tags=list(projection.tags),
-            portal_published=projection.portal_published,
             audience=projection.audience,
-            api_metadata=dict(projection.api_metadata),
+            api_metadata=metadata,
             openapi_spec=projection.openapi_spec,
             git_path=projection.git_path,
             git_commit_sha=projection.git_commit_sha,
@@ -385,6 +393,21 @@ async def project_to_api_catalog(
     )
     await db_session.execute(update_stmt)
     await db_session.flush()
+
+
+def _metadata_preserving_lifecycle(projected: dict[str, Any], existing: Any) -> dict[str, Any]:
+    metadata = dict(projected)
+    if isinstance(existing, dict) and isinstance(existing.get("lifecycle"), dict):
+        metadata["lifecycle"] = dict(existing["lifecycle"])
+    return metadata
+
+
+def _without_lifecycle_metadata(metadata: Any) -> Any:
+    if not isinstance(metadata, dict):
+        return metadata
+    metadata = dict(metadata)
+    metadata.pop("lifecycle", None)
+    return metadata
 
 
 __all__ = [

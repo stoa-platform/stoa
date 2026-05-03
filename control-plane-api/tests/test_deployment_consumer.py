@@ -82,13 +82,13 @@ class TestHandleMessage:
             ),
             patch("asyncio.run_coroutine_threadsafe") as mock_rcts,
         ):
-                mock_future = MagicMock()
-                mock_rcts.return_value = mock_future
+            mock_future = MagicMock()
+            mock_rcts.return_value = mock_future
 
-                consumer._handle(message)
+            consumer._handle(message)
 
-                mock_rcts.assert_called_once()
-                mock_future.result.assert_called_once_with(timeout=10)
+            mock_rcts.assert_called_once()
+            mock_future.result.assert_called_once_with(timeout=10)
 
         loop.close()
 

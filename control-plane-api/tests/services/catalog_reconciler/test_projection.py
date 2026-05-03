@@ -83,15 +83,17 @@ class TestRenderApiCatalogProjection:
         assert proj.git_commit_sha == "a" * 40
         assert proj.catalog_content_hash == "b" * 64
 
-    def test_portal_published_tag_promoted(self) -> None:
+    @pytest.mark.parametrize("portal_tag", ["portal:published", "promoted:portal", "portal-promoted"])
+    def test_portal_publication_tags_are_stripped_and_do_not_publish(self, portal_tag: str) -> None:
         proj = render_api_catalog_projection(
-            parsed_content=_minimal_yaml(tags=["portal:published", "banking"]),
+            parsed_content=_minimal_yaml(tags=[portal_tag, "banking"]),
             git_commit_sha="a" * 40,
             catalog_content_hash="b" * 64,
             git_path="tenants/demo/apis/petstore/api.yaml",
         )
-        assert proj.portal_published is True
-        assert proj.tags == ["portal:published", "banking"]
+        assert proj.portal_published is False
+        assert proj.tags == ["banking"]
+        assert proj.api_metadata["tags"] == ["banking"]
 
     def test_portal_not_published_when_tag_absent(self) -> None:
         proj = render_api_catalog_projection(
@@ -240,8 +242,8 @@ class TestRowMatchesProjection:
             version="1.0.0",
             status="active",
             category="Banking",
-            tags=["portal:published"],
-            portal_published=True,
+            tags=["banking"],
+            portal_published=False,
             audience="public",
             api_metadata={
                 "name": "petstore",
@@ -251,7 +253,7 @@ class TestRowMatchesProjection:
                 "backend_url": "http://example.invalid",
                 "status": "active",
                 "deployments": {"dev": True, "staging": False},
-                "tags": ["portal:published"],
+                "tags": ["banking"],
                 "audience": "public",
             },
             git_path="tenants/demo/apis/petstore/api.yaml",
@@ -321,6 +323,22 @@ class TestRowMatchesProjection:
         matching_row["api_metadata"] = {**projection.api_metadata, "backend_url": "https://other.example"}
         assert row_matches_projection(matching_row, projection) is False
 
+    def test_lifecycle_metadata_is_ignored_by_gitops_projection(
+        self, projection: ApiCatalogProjection, matching_row: dict[str, Any]
+    ) -> None:
+        matching_row["api_metadata"] = {
+            **projection.api_metadata,
+            "lifecycle": {
+                "portal_publications": {
+                    "dev:00000000-0000-4000-8000-000000000001": {
+                        "publication_status": "published",
+                        "source": "api_lifecycle",
+                    }
+                }
+            },
+        }
+        assert row_matches_projection(matching_row, projection) is True
+
     def test_catalog_content_hash_mismatch_returns_false(
         self, projection: ApiCatalogProjection, matching_row: dict[str, Any]
     ) -> None:
@@ -329,8 +347,8 @@ class TestRowMatchesProjection:
 
     def test_tags_order_matters(self, projection: ApiCatalogProjection, matching_row: dict[str, Any]) -> None:
         # Add a second tag in projection
-        proj = ApiCatalogProjection(**{**projection.__dict__, "tags": ["portal:published", "banking"]})
-        matching_row["tags"] = ["banking", "portal:published"]
+        proj = ApiCatalogProjection(**{**projection.__dict__, "tags": ["banking", "regulated"]})
+        matching_row["tags"] = ["regulated", "banking"]
         assert row_matches_projection(matching_row, proj) is False
 
     def test_status_mismatch_returns_false(
@@ -339,11 +357,11 @@ class TestRowMatchesProjection:
         matching_row["status"] = "draft"
         assert row_matches_projection(matching_row, projection) is False
 
-    def test_portal_published_mismatch_returns_false(
+    def test_portal_published_is_ignored_by_gitops_projection(
         self, projection: ApiCatalogProjection, matching_row: dict[str, Any]
     ) -> None:
-        matching_row["portal_published"] = False
-        assert row_matches_projection(matching_row, projection) is False
+        matching_row["portal_published"] = True
+        assert row_matches_projection(matching_row, projection) is True
 
     def test_missing_field_returns_false(self, projection: ApiCatalogProjection, matching_row: dict[str, Any]) -> None:
         del matching_row["catalog_content_hash"]

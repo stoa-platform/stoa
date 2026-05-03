@@ -1,7 +1,9 @@
 """Deployment service — business logic for deployment lifecycle (CAB-1353, CAB-1410)"""
 
 import logging
+from contextlib import suppress
 from datetime import datetime
+from inspect import isawaitable
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -27,6 +29,12 @@ from src.services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
 
+LIFECYCLE_DEPLOYMENT_ENDPOINT = "POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments"
+
+
+class LifecycleDeploymentPathError(ValueError):
+    """Raised when the legacy Deployment path is used for a lifecycle-managed API."""
+
 
 class DeploymentService:
     def __init__(self, db: AsyncSession):
@@ -45,6 +53,12 @@ class DeploymentService:
         user_id: str,
         gateway_id: str | None = None,
     ) -> Deployment:
+        await self._raise_if_lifecycle_managed_api(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            api_name=api_name,
+            action="create legacy deployment",
+        )
         deployment = Deployment(
             tenant_id=tenant_id,
             api_id=api_id,
@@ -151,6 +165,12 @@ class DeploymentService:
         original = await self.repo.get_by_id_and_tenant(deployment_id, tenant_id)
         if not original:
             raise ValueError(f"Deployment {deployment_id} not found")
+        await self._raise_if_lifecycle_managed_api(
+            tenant_id=tenant_id,
+            api_id=original.api_id,
+            api_name=original.api_name,
+            action="rollback legacy deployment",
+        )
         if not target_version:
             prev = await self.repo.get_latest_success(tenant_id, original.api_id, original.environment)
             target_version = prev.version if prev else "previous"
@@ -201,6 +221,12 @@ class DeploymentService:
         deployment = await self.repo.get_by_id_and_tenant(deployment_id, tenant_id)
         if not deployment:
             raise ValueError(f"Deployment {deployment_id} not found")
+        await self._raise_if_lifecycle_managed_api(
+            tenant_id=tenant_id,
+            api_id=deployment.api_id,
+            api_name=deployment.api_name,
+            action="update legacy deployment status",
+        )
         deployment.status = status
         deployment.updated_at = datetime.utcnow()
         if error_message is not None:
@@ -336,3 +362,48 @@ class DeploymentService:
             after_seq=after_seq,
             limit=limit,
         )
+
+    async def _raise_if_lifecycle_managed_api(
+        self,
+        *,
+        tenant_id: str,
+        api_id: str,
+        api_name: str | None = None,
+        action: str,
+    ) -> None:
+        api = await self._find_lifecycle_catalog_entry(tenant_id=tenant_id, api_id=api_id, api_name=api_name)
+        if not api:
+            return
+        raise LifecycleDeploymentPathError(
+            f"Cannot {action} for lifecycle-managed API '{api.api_id}'. Use {LIFECYCLE_DEPLOYMENT_ENDPOINT} instead."
+        )
+
+    async def _find_lifecycle_catalog_entry(
+        self,
+        *,
+        tenant_id: str,
+        api_id: str,
+        api_name: str | None = None,
+    ) -> APICatalog | None:
+        matches = [APICatalog.api_id == api_id, APICatalog.api_name == api_id]
+        if api_name:
+            matches.extend([APICatalog.api_id == api_name, APICatalog.api_name == api_name])
+        with suppress(ValueError):
+            matches.append(APICatalog.id == UUID(str(api_id)))
+
+        result = await self.db.execute(
+            select(APICatalog).where(
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.deleted_at.is_(None),
+                or_(*matches),
+            )
+        )
+        api = result.scalar_one_or_none()
+        if isawaitable(api):
+            api = await api
+        return api if _is_lifecycle_managed_catalog(api) else None
+
+
+def _is_lifecycle_managed_catalog(api: object) -> bool:
+    metadata = getattr(api, "api_metadata", None)
+    return isinstance(metadata, dict) and isinstance(metadata.get("lifecycle"), dict)

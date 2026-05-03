@@ -1,8 +1,8 @@
-"""Kafka consumer for auto-deploy on promotion (CAB-1888).
+"""Kafka consumer for legacy promotion-approved events (CAB-1888).
 
 Listens to deploy-requests topic for promotion-approved events.
-When a promotion is approved and the target environment has auto-deploy
-assignments, triggers deployment to those gateways.
+Promotion deployments are now executed by ApiLifecycleService; repeated legacy
+events are intentionally ignored to prevent double deployment.
 
 Topic:   stoa.deploy.requests
 Group:   promotion-deploy-consumer
@@ -18,8 +18,6 @@ from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
 from ..config import settings
-from ..database import _get_session_factory
-from ..services.deployment_orchestration_service import DeploymentOrchestrationService
 from ..services.kafka_service import Topics
 
 logger = logging.getLogger(__name__)
@@ -28,7 +26,7 @@ GROUP_ID = "promotion-deploy-consumer"
 
 
 class PromotionDeployConsumer:
-    """Consumes promotion-approved events and triggers auto-deploy.
+    """Consumes promotion-approved events without executing deployment.
 
     Uses kafka-python in a background thread (same pattern as DeploymentConsumer).
     """
@@ -63,12 +61,14 @@ class PromotionDeployConsumer:
                 "value_deserializer": lambda m: json.loads(m.decode("utf-8")),
             }
             if hasattr(settings, "KAFKA_SASL_USERNAME") and settings.KAFKA_SASL_USERNAME:
-                kafka_config.update({
-                    "security_protocol": "SASL_PLAINTEXT",
-                    "sasl_mechanism": "SCRAM-SHA-256",
-                    "sasl_plain_username": settings.KAFKA_SASL_USERNAME,
-                    "sasl_plain_password": settings.KAFKA_SASL_PASSWORD,
-                })
+                kafka_config.update(
+                    {
+                        "security_protocol": "SASL_PLAINTEXT",
+                        "sasl_mechanism": "SCRAM-SHA-256",
+                        "sasl_plain_username": settings.KAFKA_SASL_USERNAME,
+                        "sasl_plain_password": settings.KAFKA_SASL_PASSWORD,
+                    }
+                )
 
             self._consumer = KafkaConsumer(Topics.DEPLOY_REQUESTS, **kafka_config)
             logger.info("PromotionDeployConsumer Kafka consumer connected")
@@ -119,7 +119,9 @@ class PromotionDeployConsumer:
 
             logger.info(
                 "Received promotion-approved: api=%s env=%s approved_by=%s",
-                api_id, target_env, approved_by,
+                api_id,
+                target_env,
+                approved_by,
             )
 
             if self._loop:
@@ -133,28 +135,28 @@ class PromotionDeployConsumer:
             logger.error("Failed to handle promotion-approved event: %s", e, exc_info=True)
 
     async def _auto_deploy(
-        self, api_id: str, tenant_id: str, target_env: str, approved_by: str,
+        self,
+        api_id: str,
+        tenant_id: str,
+        target_env: str,
+        approved_by: str,
         promotion_id: str | None = None,
     ) -> None:
-        """Execute auto-deploy in an async context with its own DB session."""
-        from uuid import UUID as _UUID
+        """Ignore legacy promotion-approved events.
 
-        promo_uuid = _UUID(promotion_id) if promotion_id else None
-        async with _get_session_factory()() as session:
-            svc = DeploymentOrchestrationService(session)
-            deployments = await svc.auto_deploy_on_promotion(
-                api_id=api_id,
-                tenant_id=tenant_id,
-                target_environment=target_env,
-                approved_by=approved_by,
-                promotion_id=promo_uuid,
-            )
-            if deployments:
-                await session.commit()
-                logger.info(
-                    "Auto-deployed api=%s to %d gateways in %s",
-                    api_id, len(deployments), target_env,
-                )
+        Promotion deployment execution is now owned by ApiLifecycleService. This
+        consumer stays subscribed for backward compatibility but must not create
+        or reset GatewayDeployment rows.
+        """
+        logger.info(
+            "Ignoring promotion-approved event for api=%s tenant=%s env=%s promotion=%s approved_by=%s; "
+            "deployment execution is owned by ApiLifecycleService",
+            api_id,
+            tenant_id,
+            target_env,
+            promotion_id,
+            approved_by,
+        )
 
     @staticmethod
     def _deploy_callback(future) -> None:

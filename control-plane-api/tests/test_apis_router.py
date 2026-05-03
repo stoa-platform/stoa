@@ -4,6 +4,8 @@ import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from src.models.catalog import APICatalog
 
 KAFKA_PATH = "src.routers.apis.kafka_service"
@@ -207,7 +209,10 @@ paths:
         app_with_tenant_admin.dependency_overrides.pop(get_db, None)
         assert resp.status_code == 409
 
-    def test_portal_promoted_tag(self, app_with_tenant_admin, client_as_tenant_admin):
+    @pytest.mark.parametrize("portal_tag", ["portal:published", "promoted:portal", "portal-promoted"])
+    def test_create_rejects_implicit_portal_publication_tag(
+        self, app_with_tenant_admin, client_as_tenant_admin, portal_tag
+    ):
         with patch(CATALOG_REPO_PATH), patch(KAFKA_PATH) as mock_kafka:
             mock_kafka.emit_api_created = AsyncMock(return_value="evt-1")
             mock_kafka.emit_audit_event = AsyncMock(return_value="evt-2")
@@ -217,12 +222,13 @@ paths:
                     "name": "portal-api",
                     "display_name": "Portal API",
                     "backend_url": "https://api.example.com",
-                    "tags": ["portal:published", "v1"],
+                    "tags": [portal_tag, "v1"],
                 },
             )
 
-        body = resp.json()
-        assert body["portal_promoted"] is True
+        assert resp.status_code == 422
+        assert "lifecycle/publications" in resp.json()["detail"]
+        mock_kafka.emit_api_created.assert_not_called()
 
 
 class TestUpdateAPI:
@@ -251,6 +257,26 @@ class TestUpdateAPI:
 
         assert resp.status_code == 404
 
+    @pytest.mark.parametrize("portal_tag", ["portal:published", "promoted:portal", "portal-promoted"])
+    def test_update_rejects_implicit_portal_publication_tag(
+        self, app_with_tenant_admin, client_as_tenant_admin, portal_tag
+    ):
+        mock_api = _mock_catalog_api()
+        with patch(CATALOG_REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_api_by_id = AsyncMock(return_value=mock_api)
+            with patch(KAFKA_PATH) as mock_kafka:
+                mock_kafka.emit_api_updated = AsyncMock(return_value="evt-1")
+                mock_kafka.emit_audit_event = AsyncMock(return_value="evt-2")
+                resp = client_as_tenant_admin.put(
+                    "/v1/tenants/acme/apis/weather-api",
+                    json={"tags": [portal_tag, "v1"]},
+                )
+
+        assert resp.status_code == 422
+        assert "lifecycle/publications" in resp.json()["detail"]
+        assert mock_api.portal_published is False
+        mock_kafka.emit_api_updated.assert_not_called()
+
 
 class TestDeleteAPI:
     def test_delete_success(self, app_with_tenant_admin, client_as_tenant_admin):
@@ -274,17 +300,17 @@ class TestDeleteAPI:
 
 
 class TestApiFromCatalog:
-    def test_portal_promoted_detection(self):
+    def test_portal_promoted_detection_uses_catalog_field(self):
         from src.routers.apis import _api_from_catalog
 
-        api = _mock_catalog_api(tags=["portal:published", "v1"])
+        api = _mock_catalog_api(tags=["v1"], portal_published=True)
         result = _api_from_catalog(api)
         assert result.portal_promoted is True
 
-    def test_no_portal_tag(self):
+    def test_portal_tag_alone_does_not_mark_portal_promoted(self):
         from src.routers.apis import _api_from_catalog
 
-        api = _mock_catalog_api(tags=["v1"])
+        api = _mock_catalog_api(tags=["portal:published", "v1"], portal_published=False)
         result = _api_from_catalog(api)
         assert result.portal_promoted is False
 

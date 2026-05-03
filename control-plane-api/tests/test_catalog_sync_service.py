@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from src.models.catalog import CatalogSyncStatus, SyncStatus, SyncType
 from src.models.gateway_deployment import DeploymentSyncStatus
@@ -519,8 +520,9 @@ class TestUpsertApi:
 
         db.execute.assert_awaited_once()
 
-    async def test_portal_published_detection(self):
-        """Tags matching portal promotion markers set portal_published=True."""
+    @pytest.mark.parametrize("portal_tag", ["portal:published", "promoted:portal", "portal-promoted"])
+    async def test_portal_publication_tags_are_stripped_without_publishing(self, portal_tag):
+        """Catalog sync does not publish APIs from legacy portal tags."""
         db = _make_db()
         git = _make_git()
         svc = CatalogSyncService(db, git)
@@ -533,17 +535,19 @@ class TestUpsertApi:
 
         db.execute = capture_execute
 
-        # Use "portal:published" tag
-        api = {"name": "Published API", "tags": ["portal:published", "internal"]}
+        api = {"name": "Published API", "tags": [portal_tag, "internal"]}
         await svc._upsert_api("acme", "pub-api", api, None, "sha")
 
-        # Verify db.execute was called with the INSERT statement
         assert "stmt" in captured_stmt
-        # The _upsert_api method builds the stmt with portal_published=True
-        # for tags containing "portal:published". We verify the method completed
-        # without error, which means the statement was built correctly.
-        # Direct value inspection requires SQLAlchemy compilation internals
-        # that vary across versions, so we verify via integration instead.
+        compiled = captured_stmt["stmt"].compile(dialect=postgresql.dialect())
+        params = compiled.params
+        assert params["tags"] == ["internal"]
+        assert params["metadata"]["tags"] == ["internal"]
+        assert params["portal_published"] is False
+        update_clause = str(compiled).split("DO UPDATE SET", maxsplit=1)[1]
+        assert "portal_published =" not in update_clause
+        assert "jsonb_strip_nulls" in update_clause
+        assert "jsonb_build_object" in update_clause
 
     async def test_target_gateways_extraction(self):
         """gateways: block in api.yaml populates target_gateways list."""

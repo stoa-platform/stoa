@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { apiService } from '../services/api';
+import { apiService, type ApiLifecycleCreateDraftRequest } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
@@ -29,12 +29,30 @@ const statusColors: Record<string, string> = {
 };
 
 const ALL_TENANTS = '__all__';
+const LEGACY_PORTAL_TAGS = new Set(['portal:published', 'promoted:portal', 'portal-promoted']);
+
+function sanitizedApiTags(tags: string[] | undefined): string[] {
+  return (tags || []).filter((tag) => !LEGACY_PORTAL_TAGS.has(tag));
+}
+
+function parseSpecDocument(content: string): Record<string, unknown> {
+  let spec: unknown;
+  try {
+    spec = JSON.parse(content);
+  } catch {
+    spec = yaml.load(content);
+  }
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+    throw new Error('OpenAPI/Swagger spec must be a JSON or YAML object');
+  }
+  return spec as Record<string, unknown>;
+}
 
 export function APIs() {
   const { isReady, hasRole } = useAuth();
   const isAdmin = hasRole('cpi-admin');
   const { activeEnvironment } = useEnvironment();
-  const { canCreate, canEdit, canDelete, canDeploy, isReadOnly } = useEnvironmentMode();
+  const { canCreate, canEdit, canDelete, isReadOnly } = useEnvironmentMode();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const toast = useToastActions();
   const queryClient = useQueryClient();
@@ -135,52 +153,28 @@ export function APIs() {
     queryClient.invalidateQueries({ queryKey: ['apis', selectedTenant, activeEnvironment] });
   }, [queryClient, selectedTenant, activeEnvironment]);
 
-  const getDeploymentWorkflowHref = useCallback(
+  const getApiDetailHref = useCallback(
     (api: { id: string; name: string; tenant_id?: string }) => {
-      const params = new URLSearchParams({
-        api_id: api.id,
-        api_name: api.name,
-        environment: activeEnvironment,
-        open_deploy: 'true',
-      });
       const tenantId = api.tenant_id || (selectedTenant !== ALL_TENANTS ? selectedTenant : '');
-      if (tenantId) {
-        params.set('tenant_id', tenantId);
-      }
-      return `/api-deployments?${params.toString()}`;
+      return tenantId ? `/apis/${tenantId}/${api.name}` : `/apis/${api.id}`;
     },
-    [activeEnvironment, selectedTenant]
+    [selectedTenant]
   );
 
   // Memoized handlers to prevent unnecessary re-renders
   const handleCreate = useCallback(
-    async (api: APICreate, openDeploymentWorkflow: boolean) => {
+    async (api: APICreate, _openDeploymentWorkflow: boolean) => {
       try {
         const wasFirstApi = isFirstApi;
-        const created = await apiService.createApi(selectedTenant, api);
+        await apiService.createApi(selectedTenant, api);
 
         setShowCreateModal(false);
         invalidateApis();
 
-        if (openDeploymentWorkflow) {
-          navigate(
-            getDeploymentWorkflowHref({
-              id: created.id,
-              name: api.name,
-              tenant_id: selectedTenant !== ALL_TENANTS ? selectedTenant : undefined,
-            })
-          );
-        }
-
         // Celebrate first API creation
         if (wasFirstApi) {
           celebrate();
-          toast.success(
-            'Welcome!',
-            openDeploymentWorkflow
-              ? 'You created your first API. Complete deployment from the Deployments page.'
-              : 'You created your first API. Explore the Deployments page next.'
-          );
+          toast.success('Welcome!', 'You created your first API. Open its lifecycle to continue.');
         } else {
           toast.success('API created', `${api.display_name || api.name} has been created`);
         }
@@ -188,15 +182,26 @@ export function APIs() {
         toast.error('Creation failed', err.message || 'Failed to create API');
       }
     },
-    [
-      selectedTenant,
-      isFirstApi,
-      celebrate,
-      toast,
-      invalidateApis,
-      navigate,
-      getDeploymentWorkflowHref,
-    ]
+    [selectedTenant, isFirstApi, celebrate, toast, invalidateApis]
+  );
+
+  const handleCreateLifecycleDraft = useCallback(
+    async (draft: ApiLifecycleCreateDraftRequest) => {
+      try {
+        if (selectedTenant === ALL_TENANTS) {
+          throw new Error('Select a concrete tenant before creating a lifecycle draft');
+        }
+        const state = await apiService.createLifecycleDraft(selectedTenant, draft);
+        setShowCreateModal(false);
+        invalidateApis();
+        toast.success('Lifecycle draft created', `${state.display_name} is ready for validation`);
+        navigate(`/apis/${state.tenant_id}/${state.api_id}`);
+      } catch (err: any) {
+        toast.error('Draft creation failed', err.message || 'Failed to create lifecycle draft');
+        throw err;
+      }
+    },
+    [selectedTenant, invalidateApis, toast, navigate]
   );
 
   const handleUpdate = useCallback(
@@ -429,7 +434,7 @@ export function APIs() {
                   >
                     {api.status}
                   </span>
-                  {(api.portal_promoted || api.tags?.includes('portal:published')) && (
+                  {api.portal_promoted && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                       Portal
                     </span>
@@ -447,14 +452,12 @@ export function APIs() {
                 </div>
 
                 <div className="flex flex-wrap gap-3 pt-1">
-                  {canDeploy && (
-                    <a
-                      href={getDeploymentWorkflowHref(api)}
-                      className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm py-1"
-                    >
-                      Open Deployments
-                    </a>
-                  )}
+                  <a
+                    href={getApiDetailHref(api)}
+                    className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm py-1"
+                  >
+                    Open Lifecycle
+                  </a>
                   {canEdit && (
                     <button
                       onClick={() => setEditingApi(api)}
@@ -538,7 +541,7 @@ export function APIs() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {api.portal_promoted || api.tags?.includes('portal:published') ? (
+                      {api.portal_promoted ? (
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                             <path
@@ -574,15 +577,13 @@ export function APIs() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex gap-2">
-                        {canDeploy && (
-                          <a
-                            href={getDeploymentWorkflowHref(api)}
-                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                            title="Open deployment workflow"
-                          >
-                            Open Deployments
-                          </a>
-                        )}
+                        <a
+                          href={getApiDetailHref(api)}
+                          className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                          title="Open lifecycle"
+                        >
+                          Open Lifecycle
+                        </a>
                         {canEdit && (
                           <button
                             onClick={() => setEditingApi(api)}
@@ -646,6 +647,7 @@ export function APIs() {
         <APIFormModal
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreate}
+          onLifecycleSubmit={handleCreateLifecycleDraft}
           title="Create New API"
         />
       )}
@@ -671,16 +673,24 @@ interface APIFormModalProps {
   api?: API;
   onClose: () => void;
   onSubmit: (data: APICreate, openDeploymentWorkflow: boolean) => Promise<void>;
+  onLifecycleSubmit?: (data: ApiLifecycleCreateDraftRequest) => Promise<void>;
   title: string;
   isEdit?: boolean;
 }
 
-type CreateMode = 'manual' | 'openapi';
+type CreateMode = 'lifecycle' | 'manual' | 'openapi';
 
-function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalProps) {
-  const [mode, setMode] = useState<CreateMode>('manual');
-  const [openDeploymentWorkflow, setOpenDeploymentWorkflow] = useState(!isEdit);
+function APIFormModal({
+  api,
+  onClose,
+  onSubmit,
+  onLifecycleSubmit,
+  title,
+  isEdit,
+}: APIFormModalProps) {
+  const [mode, setMode] = useState<CreateMode>(isEdit ? 'manual' : 'lifecycle');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [specReference, setSpecReference] = useState('');
   const [formData, setFormData] = useState<APICreate>({
     name: api?.name || '',
     display_name: api?.display_name || '',
@@ -692,7 +702,7 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
         ? JSON.stringify(api.openapi_spec, null, 2)
         : (api?.openapi_spec as string) || '',
     tags: api?.tags || [],
-    portal_promoted: api?.portal_promoted || api?.tags?.includes('portal:published') || false,
+    portal_promoted: api?.portal_promoted || false,
   });
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -712,14 +722,7 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
   const parseOpenApiSpec = (content: string, _filename?: string) => {
     try {
       setParseError(null);
-      let spec: any;
-
-      // Try to parse as JSON first, then YAML
-      try {
-        spec = JSON.parse(content);
-      } catch {
-        spec = yaml.load(content);
-      }
+      const spec: any = parseSpecDocument(content);
 
       if (!spec) {
         throw new Error('Could not parse OpenAPI/Swagger specification');
@@ -763,6 +766,8 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
         description,
         backend_url: backendUrl,
         openapi_spec: content,
+        tags: sanitizedApiTags(formData.tags),
+        portal_promoted: false,
       });
     } catch (err: any) {
       setParseError(err.message || 'Failed to parse OpenAPI specification');
@@ -773,20 +778,58 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     e.preventDefault();
     if (isSubmitting) return;
 
-    // Build tags array based on portal_promoted flag
-    const tags = [...(formData.tags || [])].filter((tag) => tag !== 'portal:published');
-    if (formData.portal_promoted) {
-      tags.push('portal:published');
+    const tags = sanitizedApiTags(formData.tags);
+
+    if (mode === 'lifecycle' && !isEdit && onLifecycleSubmit) {
+      setParseError(null);
+      let openapiSpec: Record<string, unknown> | undefined;
+      const specContent = formData.openapi_spec?.trim();
+      if (specContent) {
+        try {
+          openapiSpec = parseSpecDocument(specContent);
+        } catch (err: any) {
+          setParseError(err.message || 'Failed to parse OpenAPI specification');
+          return;
+        }
+      }
+
+      const reference = specReference.trim();
+      if (!openapiSpec && !reference) {
+        setParseError(
+          'Lifecycle drafts require an inline OpenAPI/Swagger spec or a spec reference'
+        );
+        return;
+      }
+
+      const draft: ApiLifecycleCreateDraftRequest = {
+        name: formData.name,
+        display_name: formData.display_name,
+        version: formData.version,
+        description: formData.description,
+        backend_url: formData.backend_url,
+        openapi_spec: openapiSpec,
+        spec_reference: reference || null,
+        tags,
+      };
+
+      setIsSubmitting(true);
+      try {
+        await onLifecycleSubmit(draft);
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
     }
 
     const submitData: APICreate = {
       ...formData,
       tags,
+      portal_promoted: false,
     };
 
     setIsSubmitting(true);
     try {
-      await onSubmit(submitData, openDeploymentWorkflow);
+      await onSubmit(submitData, false);
     } finally {
       setIsSubmitting(false);
     }
@@ -816,6 +859,17 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
         {!isEdit && (
           <div className="px-6 pt-4">
             <div className="flex rounded-lg bg-neutral-100 dark:bg-neutral-700 p-1">
+              <button
+                type="button"
+                onClick={() => setMode('lifecycle')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  mode === 'lifecycle'
+                    ? 'bg-white dark:bg-neutral-600 text-neutral-900 dark:text-white shadow'
+                    : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
+                }`}
+              >
+                Lifecycle Draft
+              </button>
               <button
                 type="button"
                 onClick={() => setMode('manual')}
@@ -938,6 +992,7 @@ paths:
                     Name (slug)
                   </label>
                   <input
+                    data-testid="api-form-name"
                     type="text"
                     value={formData.name}
                     onChange={(e) =>
@@ -971,6 +1026,7 @@ paths:
                   Display Name
                 </label>
                 <input
+                  data-testid="api-form-display-name"
                   type="text"
                   value={formData.display_name}
                   onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
@@ -985,6 +1041,7 @@ paths:
                   Description
                 </label>
                 <textarea
+                  data-testid="api-form-description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full border border-neutral-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1007,6 +1064,7 @@ paths:
                 Backend URL
               </label>
               <input
+                data-testid="api-form-backend-url"
                 type="url"
                 value={formData.backend_url}
                 onChange={(e) => setFormData({ ...formData, backend_url: e.target.value })}
@@ -1020,95 +1078,69 @@ paths:
             </div>
           </Collapsible>
 
-          {/* OpenAPI Spec for manual mode */}
-          {mode === 'manual' && (
+          {/* OpenAPI Spec for manual/lifecycle modes */}
+          {(mode === 'manual' || mode === 'lifecycle') && (
             <Collapsible
-              title="OpenAPI Specification"
+              title={mode === 'lifecycle' ? 'Lifecycle Contract' : 'OpenAPI Specification'}
               icon={<Code2 className="h-4 w-4" />}
-              badge="Optional"
-              defaultExpanded={false}
+              badge={mode === 'lifecycle' ? 'Required' : 'Optional'}
+              defaultExpanded={mode === 'lifecycle'}
               variant="bordered"
             >
-              <div>
+              <div className="space-y-3">
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                   OpenAPI Spec
                 </label>
                 <textarea
+                  data-testid="api-form-openapi-spec"
                   value={formData.openapi_spec}
                   onChange={(e) => setFormData({ ...formData, openapi_spec: e.target.value })}
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                   rows={6}
                   placeholder="Paste OpenAPI/Swagger spec here (YAML or JSON)..."
                 />
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                  Adding an OpenAPI spec enables API documentation and validation
+                {mode === 'lifecycle' && (
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">
+                      Spec reference
+                    </span>
+                    <input
+                      data-testid="lifecycle-spec-reference"
+                      type="text"
+                      value={specReference}
+                      onChange={(e) => setSpecReference(e.target.value)}
+                      className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="optional Git/catalog reference"
+                    />
+                  </label>
+                )}
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  {mode === 'lifecycle'
+                    ? 'Validation uses this persisted contract. A reference-only draft may fail validation until the backend can resolve it.'
+                    : 'Adding an OpenAPI spec enables API documentation and validation.'}
                 </p>
+                {parseError && mode === 'lifecycle' && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+                    {parseError}
+                  </div>
+                )}
               </div>
             </Collapsible>
           )}
 
-          {/* Portal & Deployment Settings */}
-          <Collapsible
-            title="Portal & Deployment"
-            icon={<Settings className="h-4 w-4" />}
-            defaultExpanded={!isEdit}
-            variant="bordered"
-          >
-            <div className="space-y-4">
-              {/* Portal Promotion Toggle */}
-              <div className="flex items-start gap-3">
-                <div className="flex items-center h-5">
-                  <input
-                    type="checkbox"
-                    id="portalPromoted"
-                    checked={formData.portal_promoted}
-                    onChange={(e) =>
-                      setFormData({ ...formData, portal_promoted: e.target.checked })
-                    }
-                    className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label
-                    htmlFor="portalPromoted"
-                    className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                  >
-                    Promote to Developer Portal
-                  </label>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    When enabled, this API will be visible in the Developer Portal for consumers to
-                    discover and subscribe.
-                  </p>
-                </div>
-              </div>
-
-              {/* Deployment workflow shortcut */}
-              {!isEdit && (
-                <div className="flex items-start gap-3 pt-3 border-t dark:border-neutral-700">
-                  <div className="flex items-center h-5">
-                    <input
-                      type="checkbox"
-                      id="openDeploymentWorkflow"
-                      checked={openDeploymentWorkflow}
-                      onChange={(e) => setOpenDeploymentWorkflow(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-neutral-300 rounded focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label
-                      htmlFor="openDeploymentWorkflow"
-                      className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                    >
-                      Open deployment workflow after creation
-                    </label>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                      Choose the target environment and gateway from the dedicated Deployments page.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Collapsible>
+          {!isEdit && mode !== 'lifecycle' && (
+            <Collapsible
+              title="Lifecycle"
+              icon={<Settings className="h-4 w-4" />}
+              defaultExpanded={false}
+              variant="bordered"
+            >
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                Portal publication and gateway deployment are controlled from the API lifecycle
+                panel after creation.
+              </p>
+            </Collapsible>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t dark:border-neutral-700 mt-6">
             <Button variant="secondary" type="button" onClick={onClose}>
@@ -1117,8 +1149,8 @@ paths:
             <Button type="submit" loading={isSubmitting}>
               {isEdit
                 ? 'Update API'
-                : openDeploymentWorkflow
-                  ? 'Create & Open Deployments'
+                : mode === 'lifecycle'
+                  ? 'Create lifecycle draft'
                   : 'Create API'}
             </Button>
           </div>

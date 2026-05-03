@@ -11,7 +11,9 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 SYNC_SVC_PATH = "src.routers.catalog_admin.CatalogSyncService"
 CATALOG_REPO_PATH = "src.routers.catalog_admin.CatalogRepository"
@@ -155,7 +157,6 @@ class TestTriggerMcpServersSync:
         assert resp.status_code == 403
 
 
-
 class TestTriggerTenantSync:
     """Tests for POST /v1/admin/catalog/sync/tenant/{tenant_id}."""
 
@@ -197,7 +198,6 @@ class TestTriggerTenantSync:
             resp = client.post("/v1/admin/catalog/sync/tenant/acme")
 
         assert resp.status_code == 403
-
 
 
 class TestGetSyncStatus:
@@ -553,7 +553,8 @@ class TestSeedCatalog:
         assert data["seeded"] == 2
         assert data["failed"] == 1
 
-    def test_seed_catalog_portal_published_tags(self, app_with_cpi_admin, mock_db_session):
+    @pytest.mark.parametrize("portal_tag", ["portal:published", "promoted:portal", "portal-promoted"])
+    def test_seed_catalog_portal_publication_tags_are_stripped(self, app_with_cpi_admin, mock_db_session, portal_tag):
         mock_db_session.execute = AsyncMock(return_value=MagicMock())
         mock_db_session.commit = AsyncMock()
 
@@ -564,7 +565,7 @@ class TestSeedCatalog:
                     "name": "promoted-api",
                     "display_name": "Promoted",
                     "version": "1.0.0",
-                    "tags": ["portal:published", "v2"],
+                    "tags": [portal_tag, "v2"],
                 }
             ],
         }
@@ -574,6 +575,16 @@ class TestSeedCatalog:
 
         assert resp.status_code == 200
         assert resp.json()["seeded"] == 1
+        stmt = mock_db_session.execute.await_args.args[0]
+        compiled = stmt.compile(dialect=postgresql.dialect())
+        params = compiled.params
+        assert params["tags"] == ["v2"]
+        assert params["metadata"]["tags"] == ["v2"]
+        assert params["portal_published"] is False
+        update_clause = str(compiled).split("DO UPDATE SET", maxsplit=1)[1]
+        assert "portal_published =" not in update_clause
+        assert "jsonb_strip_nulls" in update_clause
+        assert "jsonb_build_object" in update_clause
 
     def test_seed_catalog_403_viewer(self, app_with_no_tenant_user, mock_db_session):
         with TestClient(app_with_no_tenant_user) as client:

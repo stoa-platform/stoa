@@ -171,7 +171,7 @@ class TestListDeployments:
             TestClient(app_with_tenant_admin) as client,
         ):
             resp = client.get(
-                "/v1/tenants/acme/deployments" "?api_id=api-1&environment=staging&status=pending&page=2&page_size=10"
+                "/v1/tenants/acme/deployments?api_id=api-1&environment=staging&status=pending&page=2&page_size=10"
             )
 
         assert resp.status_code == 200

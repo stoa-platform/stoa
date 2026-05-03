@@ -39,6 +39,7 @@ from .routers import (
     admin_logs,
     admin_prospects,
     api_gateway_assignments,
+    api_lifecycle,
     apis,
     applications,
     argocd_admin,
@@ -758,6 +759,9 @@ app.add_middleware(AuditMiddleware)
 
 # Routers
 app.include_router(tenants.router)
+# Canonical API lifecycle routes must be registered before apis.router because
+# both share /v1/tenants/{tenant_id}/apis/{api_id}.
+app.include_router(api_lifecycle.router)
 # api_gateway_assignments MUST be before apis — both share /v1/tenants/{tenant_id}/apis/{api_id}
 # prefix, and FastAPI resolves in registration order. Without this, /deploy and
 # /deployable-environments are swallowed by the apis router's /{api_id} catch-all.

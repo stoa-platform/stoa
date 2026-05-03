@@ -1,13 +1,15 @@
 """Tests for DeploymentService (CAB-1291)"""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.models.catalog import APICatalog
 from src.models.deployment import Deployment, DeploymentStatus
-from src.services.deployment_service import DeploymentService
+from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
+from src.services.deployment_service import DeploymentService, LifecycleDeploymentPathError
 
 
 def _make_deployment(**overrides) -> Deployment:
@@ -22,8 +24,8 @@ def _make_deployment(**overrides) -> Deployment:
         "status": DeploymentStatus.PENDING.value,
         "deployed_by": "alice",
         "attempt_count": 0,
-        "created_at": datetime(2026, 2, 1),
-        "updated_at": datetime(2026, 2, 1),
+        "created_at": datetime(2026, 2, 1, tzinfo=UTC),
+        "updated_at": datetime(2026, 2, 1, tzinfo=UTC),
     }
     defaults.update(overrides)
     deployment = MagicMock(spec=Deployment)
@@ -88,7 +90,7 @@ class TestCreateDeployment:
             patch("src.services.deployment_service.kafka_service", _mock_kafka()),
             patch("src.services.webhook_service.emit_deployment_started", new_callable=AsyncMock),
         ):
-            result = await service.create_deployment(
+            await service.create_deployment(
                 tenant_id="acme",
                 api_id="api-1",
                 api_name="Test",
@@ -102,6 +104,31 @@ class TestCreateDeployment:
         # Verify the Deployment object passed to repo.create has gateway_id
         call_args = service.repo.create.call_args[0][0]
         assert call_args.gateway_id == "gw-1"
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_managed_api_is_rejected_before_legacy_create(self, service, mock_db):
+        api = APICatalog(
+            tenant_id="acme",
+            api_id="payments-api",
+            api_name="Payments API",
+            version="1.0.0",
+            status="ready",
+            api_metadata={"lifecycle": {"catalog_status": "ready"}},
+        )
+        mock_db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=api))
+
+        with pytest.raises(LifecycleDeploymentPathError, match="lifecycle/deployments"):
+            await service.create_deployment(
+                tenant_id="acme",
+                api_id="payments-api",
+                api_name="Payments API",
+                environment="dev",
+                version="1.0.0",
+                deployed_by="alice",
+                user_id="user-1",
+            )
+
+        service.repo.create.assert_not_called()
 
 
 class TestRollbackDeployment:
@@ -134,7 +161,7 @@ class TestRollbackDeployment:
         service.repo.create.return_value = _make_deployment(version="2.0.0")
 
         with patch("src.services.deployment_service.kafka_service", _mock_kafka()):
-            result = await service.rollback_deployment(
+            await service.rollback_deployment(
                 tenant_id="acme",
                 deployment_id=original.id,
                 target_version=None,
@@ -154,7 +181,7 @@ class TestRollbackDeployment:
         service.repo.create.return_value = _make_deployment(version="previous")
 
         with patch("src.services.deployment_service.kafka_service", _mock_kafka()):
-            result = await service.rollback_deployment(
+            await service.rollback_deployment(
                 tenant_id="acme",
                 deployment_id=original.id,
                 target_version=None,
@@ -187,7 +214,7 @@ class TestUpdateStatus:
         service.repo.update.return_value = deployment
 
         with patch("src.services.webhook_service.emit_deployment_succeeded", new_callable=AsyncMock) as mock_webhook:
-            result = await service.update_status(
+            await service.update_status(
                 tenant_id="acme",
                 deployment_id=deployment.id,
                 status=DeploymentStatus.SUCCESS.value,
@@ -204,7 +231,7 @@ class TestUpdateStatus:
         service.repo.update.return_value = deployment
 
         with patch("src.services.webhook_service.emit_deployment_failed", new_callable=AsyncMock) as mock_webhook:
-            result = await service.update_status(
+            await service.update_status(
                 tenant_id="acme",
                 deployment_id=deployment.id,
                 status=DeploymentStatus.FAILED.value,
@@ -223,7 +250,7 @@ class TestUpdateStatus:
         service.repo.update.return_value = deployment
 
         with patch("src.services.webhook_service.emit_deployment_rolled_back", new_callable=AsyncMock) as mock_webhook:
-            result = await service.update_status(
+            await service.update_status(
                 tenant_id="acme",
                 deployment_id=deployment.id,
                 status=DeploymentStatus.ROLLED_BACK.value,
@@ -281,7 +308,7 @@ class TestListAndGet:
         deployments = [_make_deployment(), _make_deployment()]
         service.repo.list_by_tenant.return_value = (deployments, 2)
 
-        result, total = await service.list_deployments("acme")
+        _result, total = await service.list_deployments("acme")
 
         assert total == 2
         service.repo.list_by_tenant.assert_called_once_with(
@@ -353,7 +380,7 @@ class TestEnvironmentStatus:
         ]
         service.repo.get_environment_summary.return_value = deps
 
-        result, healthy = await service.get_environment_status("acme", "staging")
+        _result, healthy = await service.get_environment_status("acme", "staging")
 
         assert healthy is False
 
@@ -363,3 +390,71 @@ class TestEnvironmentStatus:
         result, healthy = await service.get_environment_status("acme", "dev")
         assert healthy is True
         assert result == []
+
+
+class TestGatewayDeploymentServiceHardening:
+    @pytest.mark.asyncio
+    async def test_deploy_api_rejects_lifecycle_managed_catalog(self, mock_db):
+        from src.services.gateway_deployment_service import GatewayDeploymentService
+
+        api = APICatalog(
+            id=uuid.uuid4(),
+            tenant_id="acme",
+            api_id="payments-api",
+            api_name="Payments API",
+            version="1.0.0",
+            status="ready",
+            api_metadata={"lifecycle": {"catalog_status": "ready"}},
+        )
+        mock_db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=api))
+        svc = GatewayDeploymentService(mock_db)
+        svc.gw_repo.get_by_id = AsyncMock()
+        svc.deploy_repo.create = AsyncMock()
+
+        with pytest.raises(PermissionError, match="lifecycle/deployments"):
+            await svc.deploy_api(api.id, [uuid.uuid4()], emit_sync_requests=False)
+
+        svc.gw_repo.get_by_id.assert_not_awaited()
+        svc.deploy_repo.create.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unchanged_synced_gateway_deployment_is_not_reset_to_pending(self, mock_db):
+        from src.services.gateway_deployment_service import GatewayDeploymentService
+
+        api = APICatalog(
+            id=uuid.uuid4(),
+            tenant_id="acme",
+            api_id="legacy-api",
+            api_name="Legacy API",
+            version="1.0.0",
+            status="active",
+            api_metadata={},
+            openapi_spec={"openapi": "3.0.3", "info": {"title": "Legacy", "version": "1"}, "paths": {}},
+        )
+        gateway_id = uuid.uuid4()
+        gateway = MagicMock(id=gateway_id, enabled=True, name="stoa-dev", environment="dev")
+        svc = GatewayDeploymentService(mock_db)
+        desired_state = svc.build_desired_state_for_gateway(api, gateway, target_source="direct")
+        deployment = GatewayDeployment(
+            id=uuid.uuid4(),
+            api_catalog_id=api.id,
+            gateway_instance_id=gateway_id,
+            desired_state=desired_state,
+            desired_at=datetime.now(UTC),
+            desired_generation=3,
+            synced_generation=3,
+            attempted_generation=3,
+            sync_status=DeploymentSyncStatus.SYNCED,
+            sync_attempts=1,
+        )
+        mock_db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=api))
+        svc.gw_repo.get_by_id = AsyncMock(return_value=gateway)
+        svc.deploy_repo.get_by_api_and_gateway = AsyncMock(return_value=deployment)
+        svc.deploy_repo.update = AsyncMock(return_value=deployment)
+        svc._emit_sse_events = AsyncMock()
+
+        result = await svc.deploy_api(api.id, [gateway_id], emit_sync_requests=False)
+
+        assert result == [deployment]
+        assert deployment.sync_status == DeploymentSyncStatus.SYNCED
+        assert deployment.desired_generation == 3

@@ -31,6 +31,7 @@ from ..services.gateway_topology import normalize_gateway_topology
 logger = logging.getLogger(__name__)
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+LIFECYCLE_DEPLOYMENT_ENDPOINT = "POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments"
 
 
 @dataclass(frozen=True)
@@ -167,8 +168,7 @@ class DeploymentOrchestrationService:
             return entry
 
         raise ValueError(
-            f"API '{api_identifier}' not found for tenant '{tenant_id}'. "
-            f"Ensure the API exists in the Git repository."
+            f"API '{api_identifier}' not found for tenant '{tenant_id}'. Ensure the API exists in the Git repository."
         )
 
     async def _sync_api_from_git(self, tenant_id: str, api_id: str) -> APICatalog | None:
@@ -256,6 +256,10 @@ class DeploymentOrchestrationService:
 
         # 1. Resolve API to catalog entry (sync from Git if needed)
         api_catalog = await self._resolve_api_catalog(tenant_id, api_identifier)
+        if _is_lifecycle_managed_catalog(api_catalog):
+            raise ValueError(
+                f"API '{api_catalog.api_id}' is lifecycle-managed. Use {LIFECYCLE_DEPLOYMENT_ENDPOINT} instead."
+            )
 
         # 2. Validate promotion prerequisite (staging/prod only — dev is no-ceremony)
         if environment != "dev":
@@ -436,8 +440,16 @@ class DeploymentOrchestrationService:
                 tenant_id,
             )
             return []
-
         target_environment = normalize_deployment_environment(target_environment) or target_environment
+        if _is_lifecycle_managed_catalog(api_catalog):
+            logger.info(
+                "Auto-deploy skipped for lifecycle-managed api=%s tenant=%s env=%s",
+                api_catalog.api_id,
+                tenant_id,
+                target_environment,
+            )
+            return []
+
         if gateway_ids is None:
             assignments = await self.assignment_repo.list_auto_deploy(api_catalog.id, target_environment)
             if not assignments:
@@ -807,3 +819,8 @@ class DeploymentOrchestrationService:
                     f"Gateway '{gateway.name}' is in environment '{gateway.environment}', "
                     f"not '{environment}'. Select gateways matching the target environment."
                 )
+
+
+def _is_lifecycle_managed_catalog(api_catalog: object) -> bool:
+    metadata = getattr(api_catalog, "api_metadata", None)
+    return isinstance(metadata, dict) and isinstance(metadata.get("lifecycle"), dict)

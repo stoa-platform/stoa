@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models.deployment import Deployment
+from src.models.catalog import APICatalog
+from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
+from src.models.gateway_instance import GatewayInstance
 from src.models.promotion import Promotion, PromotionStatus
 from src.notifications.templates import format_message
 from src.services.promotion_service import PromotionService
@@ -136,11 +138,8 @@ class TestPromotionServiceApprove:
 
         assert result.status == PromotionStatus.PROMOTING.value
         assert result.approved_by == "admin"
-        mock_auto_deploy.assert_awaited_once()
-        mock_kafka.publish.assert_awaited_once()
-        published_payload = mock_kafka.publish.await_args.kwargs["payload"]
-        assert published_payload["gateway_deployments_created"] is True
-        assert published_payload["target_gateway_ids"] == promo.target_gateway_ids
+        mock_auto_deploy.assert_not_awaited()
+        mock_kafka.publish.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_approve_without_target_gateways_rejected(self, service):
@@ -317,7 +316,7 @@ class TestPromotionServiceDiff:
         promo.target_environment = "staging"
         promo.spec_diff = {"changed_fields": ["version"]}
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
-        service.deployment_repo.get_latest_success = AsyncMock(return_value=None)
+        service.db.execute = AsyncMock(return_value=MagicMock(all=MagicMock(return_value=[])))
 
         result = await service.get_diff("acme", promo.id)
 
@@ -448,31 +447,50 @@ class TestPromotionComputedDiff:
         promo.spec_diff = {"changed_fields": ["version"]}
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
 
-        source_deploy = Deployment()
+        source_deploy = GatewayDeployment()
         source_deploy.id = uuid.uuid4()
-        source_deploy.version = "2.0.0"
-        source_deploy.spec_hash = "abc123"
-        source_deploy.commit_sha = "def456"
-        source_deploy.deployed_by = "alice"
-        source_deploy.completed_at = datetime(2026, 3, 8, 10, 0, 0, tzinfo=UTC)
+        source_deploy.desired_state = {"spec_hash": "abc123"}
+        source_deploy.desired_generation = 2
+        source_deploy.synced_generation = 2
+        source_deploy.sync_status = DeploymentSyncStatus.SYNCED
+        source_deploy.last_sync_success = datetime(2026, 3, 8, 10, 0, 0, tzinfo=UTC)
 
-        target_deploy = Deployment()
+        target_deploy = GatewayDeployment()
         target_deploy.id = uuid.uuid4()
-        target_deploy.version = "1.0.0"
-        target_deploy.spec_hash = "xyz789"
-        target_deploy.commit_sha = "uvw012"
-        target_deploy.deployed_by = "bob"
-        target_deploy.completed_at = datetime(2026, 3, 7, 10, 0, 0, tzinfo=UTC)
+        target_deploy.desired_state = {"spec_hash": "xyz789"}
+        target_deploy.desired_generation = 1
+        target_deploy.synced_generation = 1
+        target_deploy.sync_status = DeploymentSyncStatus.SYNCED
+        target_deploy.last_sync_success = datetime(2026, 3, 7, 10, 0, 0, tzinfo=UTC)
 
-        env_map = {"dev": source_deploy, "staging": target_deploy}
-        service.deployment_repo.get_latest_success = AsyncMock(
-            side_effect=lambda **kwargs: env_map.get(kwargs.get("environment"))
+        source_gateway = GatewayInstance()
+        source_gateway.id = uuid.uuid4()
+        source_gateway.name = "stoa-dev"
+        source_gateway.environment = "dev"
+        source_gateway.deleted_at = None
+        target_gateway = GatewayInstance()
+        target_gateway.id = uuid.uuid4()
+        target_gateway.name = "stoa-staging"
+        target_gateway.environment = "staging"
+        target_gateway.deleted_at = None
+        catalog = APICatalog()
+        catalog.id = uuid.uuid4()
+        catalog.version = "2.0.0"
+        service.db.execute = AsyncMock(
+            return_value=MagicMock(
+                all=MagicMock(
+                    return_value=[
+                        (source_deploy, source_gateway, catalog),
+                        (target_deploy, target_gateway, catalog),
+                    ]
+                )
+            )
         )
 
         result = await service.get_diff("acme", promo.id)
 
-        assert result["source_spec"]["version"] == "2.0.0"
-        assert result["target_spec"]["version"] == "1.0.0"
+        assert result["source_spec"]["spec_hash"] == "abc123"
+        assert result["target_spec"]["spec_hash"] == "xyz789"
         assert result["diff_summary"] == {"changed_fields": ["version"]}
 
     @pytest.mark.asyncio
@@ -486,17 +504,24 @@ class TestPromotionComputedDiff:
         promo.spec_diff = None
         service.repo.get_by_id_and_tenant = AsyncMock(return_value=promo)
 
-        source_deploy = Deployment()
+        source_deploy = GatewayDeployment()
         source_deploy.id = uuid.uuid4()
-        source_deploy.version = "1.0.0"
-        source_deploy.spec_hash = "abc123"
-        source_deploy.commit_sha = "def456"
-        source_deploy.deployed_by = "alice"
-        source_deploy.completed_at = datetime(2026, 3, 8, 10, 0, 0, tzinfo=UTC)
+        source_deploy.desired_state = {"spec_hash": "abc123"}
+        source_deploy.desired_generation = 1
+        source_deploy.synced_generation = 1
+        source_deploy.sync_status = DeploymentSyncStatus.SYNCED
+        source_deploy.last_sync_success = datetime(2026, 3, 8, 10, 0, 0, tzinfo=UTC)
 
-        env_map = {"dev": source_deploy}
-        service.deployment_repo.get_latest_success = AsyncMock(
-            side_effect=lambda **kwargs: env_map.get(kwargs.get("environment"))
+        source_gateway = GatewayInstance()
+        source_gateway.id = uuid.uuid4()
+        source_gateway.name = "stoa-dev"
+        source_gateway.environment = "dev"
+        source_gateway.deleted_at = None
+        catalog = APICatalog()
+        catalog.id = uuid.uuid4()
+        catalog.version = "1.0.0"
+        service.db.execute = AsyncMock(
+            return_value=MagicMock(all=MagicMock(return_value=[(source_deploy, source_gateway, catalog)]))
         )
 
         result = await service.get_diff("acme", promo.id)

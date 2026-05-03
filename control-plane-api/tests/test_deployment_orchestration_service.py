@@ -110,6 +110,32 @@ class TestDeploymentOrchestrationService:
             mock_deploy.assert_called_once_with(catalog.id, [gw.id])
 
     @pytest.mark.asyncio
+    async def test_deploy_to_env_rejects_lifecycle_managed_api(self):
+        """Deprecated deploy path must not mutate lifecycle-managed APIs."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        catalog = self._make_catalog(api_metadata={"lifecycle": {"catalog_status": "ready"}})
+
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        with patch.object(svc.deploy_svc, "deploy_api", new_callable=AsyncMock) as mock_deploy:
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute.return_value = mock_result
+
+            with pytest.raises(ValueError, match="lifecycle/deployments"):
+                await svc.deploy_api_to_env(
+                    tenant_id="acme",
+                    api_identifier=str(catalog.id),
+                    environment="dev",
+                    gateway_ids=[uuid4()],
+                    deployed_by="admin",
+                )
+
+            mock_deploy.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_deploy_to_staging_requires_promotion(self):
         """Staging deployment should fail without an active promotion."""
         from src.services.deployment_orchestration_service import DeploymentOrchestrationService
@@ -301,6 +327,35 @@ class TestDeploymentOrchestrationService:
             mock_deploy.assert_called_once_with(catalog.id, [gw_id])
 
     @pytest.mark.asyncio
+    async def test_auto_deploy_on_promotion_skips_lifecycle_managed_api(self):
+        """Legacy promotion auto-deploy must not mutate lifecycle-managed APIs."""
+        from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+
+        catalog = self._make_catalog(api_metadata={"lifecycle": {"catalog_status": "ready"}})
+
+        db = AsyncMock()
+        svc = DeploymentOrchestrationService(db)
+
+        with (
+            patch.object(svc.assignment_repo, "list_auto_deploy", new_callable=AsyncMock) as mock_assign,
+            patch.object(svc.deploy_svc, "deploy_api", new_callable=AsyncMock) as mock_deploy,
+        ):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = catalog
+            db.execute.return_value = mock_result
+
+            result = await svc.auto_deploy_on_promotion(
+                api_id="payments-v2",
+                tenant_id="acme",
+                target_environment="staging",
+                approved_by="admin",
+            )
+
+            assert result == []
+            mock_assign.assert_not_awaited()
+            mock_deploy.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_auto_deploy_on_promotion_uses_explicit_gateway_ids(self):
         """gateway-aware promotions bypass assignments and deploy to selected targets."""
         from src.services.deployment_orchestration_service import DeploymentOrchestrationService
@@ -425,7 +480,9 @@ class TestDeploymentOrchestrationService:
         db = AsyncMock()
         svc = DeploymentOrchestrationService(db)
 
-        with (patch.object(svc, "_get_latest_promotion", new_callable=AsyncMock) as mock_promo,):
+        with (
+            patch.object(svc, "_get_latest_promotion", new_callable=AsyncMock) as mock_promo,
+        ):
             mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = catalog
             db.execute.return_value = mock_result
@@ -483,6 +540,6 @@ class TestRegressionCab1889:
             mock_git.get_head_commit_sha.assert_awaited_once_with()
             # _project must never be touched — if it is, this attribute access would work on MagicMock
             # so we assert that only the interface methods were called.
-            assert not any(
-                "_project" in str(call) for call in mock_git.mock_calls
-            ), f"_project leaked into calls: {mock_git.mock_calls}"
+            assert not any("_project" in str(call) for call in mock_git.mock_calls), (
+                f"_project leaked into calls: {mock_git.mock_calls}"
+            )

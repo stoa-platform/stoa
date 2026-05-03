@@ -257,7 +257,9 @@ class TestDeploymentLogsRouter:
         log1.id = uuid4()
         log1.created_at = "2026-02-23T10:00:00"
 
-        with (patch("src.routers.deployments.DeploymentService") as MockSvc,):
+        with (
+            patch("src.routers.deployments.DeploymentService") as MockSvc,
+        ):
             instance = MockSvc.return_value
             instance.get_deployment = AsyncMock(return_value=mock_deployment)
             instance.get_logs = AsyncMock(return_value=[log1])

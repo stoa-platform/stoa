@@ -20,7 +20,7 @@ from ..schemas.deployment import (
     EnvironmentStatusResponse,
     RollbackCreate,
 )
-from ..services.deployment_service import DeploymentService
+from ..services.deployment_service import DeploymentService, LifecycleDeploymentPathError
 from ..services.git_provider import GitProvider, get_git_provider, git_provider_factory
 
 logger = logging.getLogger(__name__)
@@ -119,16 +119,19 @@ async def create_deployment(
         logger.warning("Failed to lookup API in git for %s/%s: %s", tenant_id, lookup_key, e)
 
     service = DeploymentService(db)
-    deployment = await service.create_deployment(
-        tenant_id=tenant_id,
-        api_id=request.api_id,
-        api_name=api_name,
-        environment=request.environment.value,
-        version=version,
-        deployed_by=user.username,
-        user_id=user.id,
-        gateway_id=request.gateway_id,
-    )
+    try:
+        deployment = await service.create_deployment(
+            tenant_id=tenant_id,
+            api_id=request.api_id,
+            api_name=api_name,
+            environment=request.environment.value,
+            version=version,
+            deployed_by=user.username,
+            user_id=user.id,
+            gateway_id=request.gateway_id,
+        )
+    except LifecycleDeploymentPathError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     await db.commit()
 
     if _demo_mode_enabled(http_request) and request.gateway_id:
@@ -175,6 +178,8 @@ async def rollback_deployment(
             deployed_by=user.username,
             user_id=user.id,
         )
+    except LifecycleDeploymentPathError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     await db.commit()
@@ -202,6 +207,8 @@ async def update_deployment_status(
             commit_sha=request.commit_sha,
             metadata=request.metadata,
         )
+    except LifecycleDeploymentPathError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     await db.commit()

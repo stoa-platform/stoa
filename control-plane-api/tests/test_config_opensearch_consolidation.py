@@ -86,8 +86,9 @@ def test_opensearch_password_secret_unwrapped_for_client():
 def test_explicit_opensearch_audit_submodel_wins_over_flat_env(monkeypatch):
     """Council Stage 2 #8 nuance: an explicit
     ``Settings(opensearch_audit=OpenSearchAuditConfig(...))`` instance wins
-    over the flat env fields. Detection compares ``model_dump()`` to a fresh
-    default-factory instance."""
+    over the flat env fields. Phase 3-C detection uses ``model_fields_set``
+    so any explicit kwarg short-circuits the flat-env hydration regardless
+    of whether the value matches the default-factory shape."""
     monkeypatch.setenv("OPENSEARCH_HOST", "https://from-env.io")
     explicit = OpenSearchAuditConfig(host="https://explicit.io")
 
@@ -97,6 +98,53 @@ def test_explicit_opensearch_audit_submodel_wins_over_flat_env(monkeypatch):
     assert s.opensearch_audit.host == "https://explicit.io"
     # Flat env did NOT bleed in
     assert s.opensearch_audit.host != "https://from-env.io"
+
+
+def test_explicit_default_factory_submodel_wins_over_flat_env(monkeypatch):
+    """Phase 3-C BH-INFRA1a-002 — passing a default-factory instance
+    explicitly (``opensearch_audit=OpenSearchAuditConfig()``) is treated
+    as "explicit" and short-circuits the flat-env hydration.
+
+    Pre-Phase-3-C, the validator compared ``model_dump()`` outputs to a
+    fresh default-factory instance — they matched, the explicit sub-model
+    was misclassified as "default", and flat env vars (``OPENSEARCH_HOST``)
+    silently overrode the caller's intent. ``model_fields_set`` lists
+    every field name the caller supplied at construction, so the explicit
+    kwarg is now correctly classified.
+    """
+    monkeypatch.setenv("OPENSEARCH_HOST", "https://from-env.example.io")
+    monkeypatch.setenv("AUDIT_BUFFER_SIZE", "999")
+
+    s = Settings(opensearch_audit=OpenSearchAuditConfig())
+
+    # Default-factory values preserved (NOT overridden by env)
+    assert s.opensearch_audit.host == "https://opensearch.gostoa.dev"
+    assert s.opensearch_audit.audit_buffer_size == 100
+
+
+def test_explicit_path_emits_debug_log(caplog):
+    """Phase 3-C BH-INFRA1a-012 — operator debug breadcrumb. The validator
+    logs a ``DEBUG`` line each path so operators can tell whether
+    ``opensearch_audit.host`` came from an explicit sub-model or from
+    flat env hydration."""
+    with caplog.at_level("DEBUG", logger="src.config"):
+        Settings(opensearch_audit=OpenSearchAuditConfig(host="https://x.io"))
+    matching = [
+        r for r in caplog.records
+        if "opensearch_audit" in r.message and "explicit" in r.message
+    ]
+    assert matching, f"expected explicit-path debug log, got: {[r.message for r in caplog.records]}"
+
+
+def test_flat_env_path_emits_debug_log(caplog):
+    """Phase 3-C BH-INFRA1a-012 — counter-test of the debug breadcrumb."""
+    with caplog.at_level("DEBUG", logger="src.config"):
+        Settings()
+    matching = [
+        r for r in caplog.records
+        if "opensearch_audit" in r.message and "hydrating from flat" in r.message
+    ]
+    assert matching, f"expected flat-env-path debug log, got: {[r.message for r in caplog.records]}"
 
 
 def test_model_dump_excludes_flat_opensearch_fields():

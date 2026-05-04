@@ -736,22 +736,35 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hydrate_opensearch_audit(self) -> "Settings":
-        """CAB-2199 / INFRA-1a S3 — hydrate ``settings.opensearch_audit`` from flat env.
+        """CAB-2199 / INFRA-1a S3 + Phase 3-C — hydrate ``settings.opensearch_audit``.
 
-        Mirrors the ``_hydrate_and_validate_git`` pattern. Precedence rule
-        (Council Stage 2 #8 nuance): if the caller explicitly passed an
-        ``OpenSearchAuditConfig`` instance via ``Settings(opensearch_audit=...)``
-        (i.e. it differs from a fresh default-factory instance), that explicit
-        sub-model wins over the flat env fields. Otherwise the flat fields
-        hydrate the sub-model.
+        Mirrors the ``_hydrate_and_validate_git`` pattern. Precedence rule:
+        if the caller explicitly passed ``opensearch_audit=...`` to
+        ``Settings(...)`` — regardless of whether the value matches the
+        default-factory shape — the explicit sub-model wins. Otherwise
+        the flat env fields hydrate the sub-model.
 
-        Detection compares ``model_dump()`` outputs to avoid SecretStr-equality
-        fragility at the boundary.
+        Phase 3-C detection (CAB-2199 BH-INFRA1a-002): use
+        ``model_fields_set`` instead of comparing ``model_dump()`` outputs.
+        ``model_fields_set`` lists the field names supplied at construction
+        time, including a default-factory instance passed explicitly:
+        ``Settings(opensearch_audit=OpenSearchAuditConfig())`` is now
+        correctly classified as "explicit" (the dump-equality check used
+        to misclassify it as "default" and let flat env override). Pydantic
+        v2 tracks this for free; the helper is robust to ``SecretStr``
+        equality quirks too.
         """
-        default_dump = OpenSearchAuditConfig().model_dump()
-        if self.opensearch_audit.model_dump() != default_dump:
-            return self  # explicit sub-model — leave untouched
+        if "opensearch_audit" in self.model_fields_set:
+            _logger.debug(
+                "opensearch_audit: explicit sub-model passed by caller — "
+                "leaving untouched (flat OPENSEARCH_*/AUDIT_* env vars ignored "
+                "for this sub-model)."
+            )
+            return self
 
+        _logger.debug(
+            "opensearch_audit: hydrating from flat OPENSEARCH_*/AUDIT_* env vars."
+        )
         self.opensearch_audit = OpenSearchAuditConfig(
             host=self.OPENSEARCH_HOST,
             user=self.OPENSEARCH_USER,

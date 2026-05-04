@@ -111,6 +111,70 @@ class TestRegressionCAB1916HeartbeatDiscoveryRace:
         assert gw.health_details["discovered_apis_count"] == 0
         assert "discovered_apis" not in gw.health_details
 
+    def test_sidecar_heartbeat_stores_tools_count_not_api_discovery_count(self, client):
+        """Sidecar heartbeat also reports runtime tools in the legacy field."""
+        from src.models.gateway_instance import GatewayType
+
+        gw = _make_gateway_instance(
+            gateway_type=GatewayType.STOA_SIDECAR,
+            mode="sidecar",
+            health_details={"discovered_apis_count": 15},
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            client.post(
+                f"/v1/internal/gateways/{gw.id}/heartbeat",
+                json={"uptime_seconds": 60, "routes_count": 2, "discovered_apis": 15},
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert gw.health_details["mcp_tools_count"] == 15
+        assert gw.health_details["discovered_apis_count"] == 0
+        assert "discovered_apis" not in gw.health_details
+
+    def test_sidecar_heartbeat_preserves_discovery_array_count(self, client):
+        """Runtime tool heartbeat must not replace a real discovery report."""
+        from src.models.gateway_instance import GatewayType
+
+        gw = _make_gateway_instance(
+            gateway_type=GatewayType.STOA_SIDECAR,
+            mode="sidecar",
+            health_details={
+                "discovered_apis_count": 2,
+                "discovered_apis": [
+                    {"name": "manual-test-1777312098", "is_active": True},
+                    {"name": "fapi-banking", "is_active": True},
+                ],
+            },
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            client.post(
+                f"/v1/internal/gateways/{gw.id}/heartbeat",
+                json={"uptime_seconds": 60, "routes_count": 2, "discovered_apis": 15},
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert gw.health_details["mcp_tools_count"] == 15
+        assert gw.health_details["discovered_apis_count"] == 2
+        assert len(gw.health_details["discovered_apis"]) == 2
+
     def test_heartbeat_after_discovery_preserves_api_array(self, client):
         """Heartbeat after discovery must not overwrite the `discovered_apis` array.
 

@@ -131,6 +131,8 @@ describe('GatewayDetail', () => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     // Reset gateway to enabled state
+    mockGateway.name = 'stoa-gateway-edge-mcp-dev';
+    mockGateway.display_name = 'STOA Edge MCP Gateway';
     mockGateway.enabled = true;
     mockGateway.visibility = null;
     mockGateway.public_url = 'https://mcp.gostoa.dev';
@@ -142,6 +144,7 @@ describe('GatewayDetail', () => {
     mockGateway.topology = null;
     mockGateway.mode = 'edge-mcp';
     mockGateway.gateway_type = 'stoa_edge_mcp';
+    mockGateway.health_details.discovered_apis_count = 3;
   });
 
   it('renders gateway display name', async () => {
@@ -244,7 +247,22 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('1.0%')).toBeInTheDocument(); // error rate
   });
 
-  it('keeps Discovered APIs label for non edge-mcp gateways', async () => {
+  it('uses deployed APIs label for native sidecar gateways', async () => {
+    mockGateway.mode = 'sidecar';
+    mockGateway.gateway_type = 'stoa_sidecar';
+    mockGateway.display_name = 'STOA Gateway (sidecar)';
+    mockGateway.health_details.discovered_apis_count = 15;
+
+    renderGatewayDetail();
+    await screen.findByText('STOA Gateway (sidecar)');
+
+    const deployedMetric = screen.getByText('Deployed APIs').closest('div');
+    expect(deployedMetric).not.toBeNull();
+    expect(within(deployedMetric!).getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('Discovered APIs')).not.toBeInTheDocument();
+  });
+
+  it('keeps Discovered APIs label for connect gateways', async () => {
     mockGateway.mode = 'connect';
     mockGateway.gateway_type = 'webmethods';
     renderGatewayDetail();

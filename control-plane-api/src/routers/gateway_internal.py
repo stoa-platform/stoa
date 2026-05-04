@@ -53,12 +53,17 @@ _UI_ENDPOINT_KEYS = {"ui_url", "uiUrl", "console_url", "consoleUrl", "web_ui_url
 _TARGET_ENDPOINT_KEYS = {"target_gateway_url", "targetGatewayUrl", "target_url", "targetUrl"}
 
 
-def _is_edge_mcp_instance(instance: GatewayInstance) -> bool:
-    """Return true for the native STOA edge MCP gateway mode."""
+def _reports_runtime_tools_in_discovered_apis(instance: GatewayInstance) -> bool:
+    """Return true when the legacy heartbeat field carries runtime tools, not API discovery."""
     gateway_type = (
         instance.gateway_type.value if hasattr(instance.gateway_type, "value") else str(instance.gateway_type)
     )
-    return instance.mode == "edge-mcp" or gateway_type == GatewayType.STOA_EDGE_MCP.value
+    return (instance.mode or "").lower() in {"edge-mcp", "sidecar", "proxy", "shadow"} or gateway_type in {
+        GatewayType.STOA_EDGE_MCP.value,
+        GatewayType.STOA_SIDECAR.value,
+        GatewayType.STOA_PROXY.value,
+        GatewayType.STOA_SHADOW.value,
+    }
 
 
 # --- Route Reload Endpoint (CAB-1828) ---
@@ -675,8 +680,8 @@ async def gateway_heartbeat(
 
     # Store metrics in health_details.
     # CAB-1916: heartbeat stores counts only; `discovered_apis` remains
-    # reserved for the discovery array. Native edge-mcp heartbeats report
-    # MCP tool registry size in the legacy `discovered_apis` payload field,
+    # reserved for the discovery array. Native STOA runtime heartbeats report
+    # tool registry size in the legacy `discovered_apis` payload field,
     # so keep it under `mcp_tools_count` and do not inflate API discovery.
     existing_health = instance.health_details or {}
     heartbeat_details = {
@@ -688,7 +693,7 @@ async def gateway_heartbeat(
         "requests_total": payload.requests_total,
         "error_rate": payload.error_rate,
     }
-    if _is_edge_mcp_instance(instance):
+    if _reports_runtime_tools_in_discovered_apis(instance):
         heartbeat_details["mcp_tools_count"] = payload.discovered_apis
         discovered_apis = existing_health.get("discovered_apis")
         heartbeat_details["discovered_apis_count"] = len(discovered_apis) if isinstance(discovered_apis, list) else 0

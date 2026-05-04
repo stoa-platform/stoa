@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-04-25. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-05-04. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-05-04
+
+- Hotfix gateway discovery count: `stoa-gateway` no longer falls back to the global API catalog when scoped `gateway_id` discovery returns empty, and skips catalog discovery until auto-registration has a gateway ID. Console labels the edge-MCP heartbeat count as "MCP Tools" instead of "Discovered APIs" because it comes from `tool_registry`. This prevents gateway details from implying global tools/APIs (e.g. 51) are deployed APIs when routes are zero. Regression coverage added for coarse/per-operation discovery and the UI label.
 
 ## ✅ FREEZE LEVÉ (2026-04-19)
 

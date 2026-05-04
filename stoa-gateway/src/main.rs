@@ -302,36 +302,44 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
         let cp_url = state.control_plane.base_url().to_string();
         let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
 
-        // Read gateway_id if registration has completed (may be None at startup)
-        let gw_id = match &registrar {
+        let expansion_mode = state.config.tool_expansion_mode;
+        let gw_id = match registrar.as_ref() {
             Some(r) => r.gateway_id().await,
             None => None,
         };
 
-        let expansion_mode = state.config.tool_expansion_mode;
-        let discovery = match expansion_mode {
-            stoa_gateway::config::ExpansionMode::Coarse => {
-                api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client, gw_id)
+        if registrar.is_some() && gw_id.is_none() {
+            info!("Skipping API catalog discovery until gateway registration completes");
+        } else {
+            let discovery = match expansion_mode {
+                stoa_gateway::config::ExpansionMode::Coarse => {
+                    api_bridge::discover_api_tools(
+                        &state.tool_registry,
+                        &cp_url,
+                        &http_client,
+                        gw_id,
+                    )
                     .await
-            }
-            stoa_gateway::config::ExpansionMode::PerOp => {
-                api_bridge::discover_expanded_api_tools(
-                    &state.tool_registry,
-                    &cp_url,
-                    &http_client,
-                    gw_id,
-                )
-                .await
-            }
-        };
-        match discovery {
-            Ok(count) => {
-                if count > 0 {
-                    info!(count, mode = ?expansion_mode, "API catalog tools registered");
                 }
-            }
-            Err(e) => {
-                warn!(error = %e, mode = ?expansion_mode, "API catalog discovery failed (will retry in background)");
+                stoa_gateway::config::ExpansionMode::PerOp => {
+                    api_bridge::discover_expanded_api_tools(
+                        &state.tool_registry,
+                        &cp_url,
+                        &http_client,
+                        gw_id,
+                    )
+                    .await
+                }
+            };
+            match discovery {
+                Ok(count) => {
+                    if count > 0 {
+                        info!(count, mode = ?expansion_mode, "API catalog tools registered");
+                    }
+                }
+                Err(e) => {
+                    warn!(error = %e, mode = ?expansion_mode, "API catalog discovery failed (will retry in background)");
+                }
             }
         }
 

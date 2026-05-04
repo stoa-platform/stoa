@@ -13,7 +13,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 use super::dynamic_tool::DynamicTool;
@@ -79,8 +79,7 @@ struct ExpandedToolsResponse {
 /// to its backend_url. Tools are named after the API slug (e.g. "payments").
 ///
 /// When `gateway_id` is provided, only APIs assigned to this gateway are returned.
-/// If the filtered query returns 0 APIs, falls back to unfiltered (backward compat
-/// for gateways without assignments configured yet — CAB-1940 adjustment #1).
+/// An empty scoped result is authoritative: the gateway has no assigned APIs.
 ///
 /// Returns the number of API tools registered.
 pub async fn discover_api_tools(
@@ -90,19 +89,6 @@ pub async fn discover_api_tools(
     gateway_id: Option<Uuid>,
 ) -> Result<usize, String> {
     let catalog = fetch_catalog(cp_base_url, client, gateway_id).await?;
-
-    // CAB-1940 fallback: if gateway_id filter returned 0 APIs, retry unfiltered.
-    // This handles gateways that have no api_gateway_assignments rows yet.
-    let catalog = match gateway_id {
-        Some(gw_id) if catalog.apis.is_empty() => {
-            warn!(
-                gateway_id = %gw_id,
-                "No APIs found for gateway — falling back to unfiltered catalog"
-            );
-            fetch_catalog(cp_base_url, client, None).await?
-        }
-        _ => catalog,
-    };
 
     let mut count = 0;
     for api in &catalog.apis {
@@ -188,8 +174,8 @@ pub async fn discover_api_tools(
 /// with its pre-built input schema and path pattern; `DynamicTool` handles
 /// path-param substitution + query/body routing at invocation time.
 ///
-/// Falls back silently to zero tools on transport errors — the background
-/// refresh task retries, consistent with `discover_api_tools`.
+/// Returns transport and parse errors to the caller; the background refresh
+/// task retries while keeping the existing registry state.
 pub async fn discover_expanded_api_tools(
     registry: &ToolRegistry,
     cp_base_url: &str,
@@ -197,17 +183,6 @@ pub async fn discover_expanded_api_tools(
     gateway_id: Option<Uuid>,
 ) -> Result<usize, String> {
     let catalog = fetch_expanded_catalog(cp_base_url, client, gateway_id).await?;
-
-    let catalog = match gateway_id {
-        Some(gw_id) if catalog.tools.is_empty() => {
-            warn!(
-                gateway_id = %gw_id,
-                "No expanded tools found for gateway — falling back to unfiltered catalog"
-            );
-            fetch_expanded_catalog(cp_base_url, client, None).await?
-        }
-        _ => catalog,
-    };
 
     let mut count = 0;
     for tool in catalog.tools {
@@ -349,7 +324,13 @@ pub fn start_api_tool_refresh_task(
             tokio::time::sleep(API_TOOL_REFRESH_INTERVAL).await;
 
             let gw_id = match &registrar {
-                Some(r) => r.gateway_id().await,
+                Some(r) => match r.gateway_id().await {
+                    Some(id) => Some(id),
+                    None => {
+                        debug!("Skipping API tool refresh until gateway registration completes");
+                        continue;
+                    }
+                },
                 None => None,
             };
 
@@ -610,9 +591,11 @@ mod tests {
         assert!(registry.get("scoped").is_some());
     }
 
-    /// CAB-1940 Phase 3: fallback to unfiltered when gateway_id filter returns 0 APIs.
+    /// Regression: a scoped empty catalog means this gateway has no assigned APIs.
+    /// It must not fall back to the global catalog, otherwise Console shows
+    /// unrelated APIs as discovered for gateways with zero deployments.
     #[tokio::test]
-    async fn regression_cab_1940_fallback_to_unfiltered_on_empty() {
+    async fn regression_cab_1940_scoped_empty_does_not_fallback() {
         let gw_id = Uuid::new_v4();
         let mock = MockServer::start().await;
 
@@ -621,15 +604,7 @@ mod tests {
             .and(path("/v1/internal/catalog/apis"))
             .and(query_param("gateway_id", gw_id.to_string()))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"apis": []})))
-            .mount(&mock)
-            .await;
-
-        // Unfiltered request returns APIs
-        Mock::given(method("GET"))
-            .and(path("/v1/internal/catalog/apis"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "apis": [{"id": "fallback", "name": "Fallback API", "backend_url": "http://b:80"}]
-            })))
+            .expect(1)
             .mount(&mock)
             .await;
 
@@ -639,8 +614,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(count, 1, "Should fallback to unfiltered catalog");
-        assert!(registry.get("fallback").is_some());
+        assert_eq!(count, 0, "Scoped empty catalog must remain empty");
+        assert_eq!(registry.count(), 0);
     }
 
     /// CAB-1940 Phase 3: no fallback when gateway_id is None (unfiltered is the only call).
@@ -753,7 +728,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cab_2113_gateway_id_scope_and_fallback() {
+    async fn cab_2113_gateway_id_scope_empty_does_not_fallback() {
         let gw_id = Uuid::new_v4();
         let mock = MockServer::start().await;
 
@@ -764,15 +739,7 @@ mod tests {
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(serde_json::json!({"tools": []})),
             )
-            .mount(&mock)
-            .await;
-
-        // Unfiltered fallback: returns tools
-        Mock::given(method("GET"))
-            .and(path("/v1/internal/catalog/apis/expanded"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "tools": [expanded_tool_json("demo:bank:op", "http://bank:8080", "GET", None)]
-            })))
+            .expect(1)
             .mount(&mock)
             .await;
 
@@ -782,10 +749,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            count, 1,
-            "must fallback to unfiltered catalog when scoped is empty"
-        );
+        assert_eq!(count, 0, "Scoped empty expanded catalog must remain empty");
+        assert_eq!(registry.count(), 0);
     }
 
     #[tokio::test]

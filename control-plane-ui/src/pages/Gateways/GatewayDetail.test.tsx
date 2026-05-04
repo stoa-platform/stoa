@@ -141,6 +141,7 @@ describe('GatewayDetail', () => {
     mockGateway.target_gateway_type = null;
     mockGateway.topology = null;
     mockGateway.mode = 'edge-mcp';
+    mockGateway.gateway_type = 'stoa_edge_mcp';
   });
 
   it('renders gateway display name', async () => {
@@ -236,8 +237,19 @@ describe('GatewayDetail', () => {
     await screen.findByText('STOA Edge MCP Gateway');
     expect(screen.getByText('2h 0m')).toBeInTheDocument(); // 7200s
     expect(screen.getByText('5')).toBeInTheDocument(); // routes
-    expect(screen.getByText('3')).toBeInTheDocument(); // discovered APIs
+    expect(screen.getByText('3')).toBeInTheDocument(); // MCP tools
+    expect(screen.getByText('MCP Tools')).toBeInTheDocument();
+    expect(screen.queryByText('Discovered APIs')).not.toBeInTheDocument();
     expect(screen.getByText('1.0%')).toBeInTheDocument(); // error rate
+  });
+
+  it('keeps Discovered APIs label for non edge-mcp gateways', async () => {
+    mockGateway.mode = 'connect';
+    mockGateway.gateway_type = 'webmethods';
+    renderGatewayDetail();
+    await screen.findByText('STOA Edge MCP Gateway');
+    expect(screen.getByText('Discovered APIs')).toBeInTheDocument();
+    expect(screen.queryByText('MCP Tools')).not.toBeInTheDocument();
   });
 
   it('renders deployed APIs table', async () => {
@@ -282,7 +294,7 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('payment_charge')).toBeInTheDocument();
     expect(screen.getByText('crm_contacts')).toBeInTheDocument();
     expect(screen.getByText('Get weather forecast for a location')).toBeInTheDocument();
-    expect(screen.getByText('MCP Tools')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /MCP Tools/ })).toBeInTheDocument();
   });
 
   it('renders empty state when no deployments and no tools', async () => {
@@ -304,7 +316,7 @@ describe('GatewayDetail', () => {
     expect(await screen.findByText('weather_forecast')).toBeInTheDocument();
     expect(screen.getByText('Payments API')).toBeInTheDocument();
     expect(screen.getByText('APIs Deployed')).toBeInTheDocument();
-    expect(screen.getByText('MCP Tools')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /MCP Tools/ })).toBeInTheDocument();
   });
 
   // --- Enabled/Disabled ---

@@ -292,7 +292,7 @@ Unchanged from v1 plan — committed in commit 1, deleted post-validation. Conte
 | 1 | `docs(ops): announce AI-Factory pause for CI-1 phase 2d` | `docs/ops/ai-factory-pause.md` (new) | Pause marker visible. |
 | 2 | `ci(ai-factory): rewire workflow to events with dispatch-stage smoke` | `.github/workflows/claude-issue-to-pr-v2.yml` | All §B + §C + §D + §E changes. |
 | 3 | `ci(ai-factory): retire legacy + rename v2 to canonical name` | `git rm claude-issue-to-pr.yml` then `git mv claude-issue-to-pr-v2.yml claude-issue-to-pr.yml` | Single-commit cutover. |
-| 4 | `docs: update .github/README.md post phase 2d` | `.github/README.md` | Reflect single workflow + dispatch usage. |
+| 4 | `docs: update .github/CI-SURFACE.md post phase 2d` | `.github/CI-SURFACE.md` | Reflect single workflow + dispatch usage. |
 
 Commit 2 is large (~80 LOC delta in one file); to keep it reviewable, the diff should be ordered: triggers/concurrency → prepare bypass → council-validate guards → plan-validate guards + Stage 1 step → implement guards → label-gating fixes → fast-path /go-plan restore.
 

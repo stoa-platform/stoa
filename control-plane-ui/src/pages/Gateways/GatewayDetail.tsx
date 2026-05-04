@@ -44,6 +44,21 @@ const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle2 }
   maintenance: { color: 'text-blue-600 bg-blue-50', icon: Clock },
 };
 
+const NATIVE_STOA_RUNTIME_MODES = new Set(['edge-mcp', 'sidecar', 'proxy', 'shadow']);
+const NATIVE_STOA_GATEWAY_TYPES = new Set([
+  'stoa_edge_mcp',
+  'stoa_sidecar',
+  'stoa_proxy',
+  'stoa_shadow',
+]);
+
+function reportsRuntimeTools(gateway: GatewayInstance): boolean {
+  return (
+    NATIVE_STOA_RUNTIME_MODES.has(gateway.mode ?? '') ||
+    NATIVE_STOA_GATEWAY_TYPES.has(gateway.gateway_type ?? '')
+  );
+}
+
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
@@ -134,10 +149,10 @@ export function GatewayDetail() {
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
   const discoveredApis = toolsData || [];
-  const isEdgeMcp = gateway.mode === 'edge-mcp' || gateway.gateway_type === 'stoa_edge_mcp';
+  const usesDeploymentMetric = reportsRuntimeTools(gateway);
   const syncedDeployments = deployments.filter((deployment) => deployment.sync_status === 'synced');
-  const discoveryMetricLabel = isEdgeMcp ? 'Deployed APIs' : 'Discovered APIs';
-  const discoveryMetricValue = isEdgeMcp
+  const discoveryMetricLabel = usesDeploymentMetric ? 'Deployed APIs' : 'Discovered APIs';
+  const discoveryMetricValue = usesDeploymentMetric
     ? deploymentsData
       ? String(syncedDeployments.length)
       : '-'

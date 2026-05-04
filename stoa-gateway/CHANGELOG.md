@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.21](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.20...stoa-gateway-v0.9.21) (2026-05-04)
+
+
+### Bug Fixes
+
+* **gateway:** keep scoped discovery counts authoritative ([#2684](https://github.com/stoa-platform/stoa/issues/2684)) ([7acfd7d](https://github.com/stoa-platform/stoa/commit/7acfd7d0b00e1e5ddb2897a5cf869bc72874f5eb))
+
 ## [0.9.20](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.19...stoa-gateway-v0.9.20) (2026-05-03)
 
 

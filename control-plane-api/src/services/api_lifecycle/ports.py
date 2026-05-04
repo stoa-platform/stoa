@@ -223,6 +223,9 @@ class PromotionState:
     requested_by: str
     approved_by: str | None = None
     completed_at: datetime | None = None
+    source_deployment_id: UUID | None = None
+    target_deployment_id: UUID | None = None
+    target_gateway_ids: list[UUID] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,9 @@ class PromotionSnapshot:
     requested_by: str
     approved_by: str | None = None
     completed_at: datetime | None = None
+    source_deployment_id: UUID | None = None
+    target_deployment_id: UUID | None = None
+    target_gateway_ids: list[UUID] = field(default_factory=list)
 
 
 class ApiLifecycleRepository(Protocol):

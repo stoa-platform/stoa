@@ -73,6 +73,9 @@ export interface ApiLifecyclePromotion {
   requested_by: string;
   approved_by?: string | null;
   completed_at?: string | null;
+  source_deployment_id?: string | null;
+  target_deployment_id?: string | null;
+  target_gateway_ids?: string[];
 }
 
 export interface ApiLifecyclePortalPublication {

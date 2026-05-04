@@ -56,7 +56,21 @@ export type API = Schemas['APIResponse'] & {
   catalog_pr_number?: number | null;
   catalog_source_branch?: string | null;
   catalog_merge_commit_sha?: string | null;
+  runtime_deployments?: APIRuntimeDeploymentSummary[];
 };
+
+export interface APIRuntimeDeploymentSummary {
+  environment: string;
+  status: string;
+  gateway_count: number;
+  synced_count: number;
+  error_count: number;
+  pending_count: number;
+  drifted_count: number;
+  latest_error?: string | null;
+  last_sync_success?: string | null;
+  gateway_names?: string[];
+}
 
 export interface APIOpenAPISpec {
   spec: Record<string, unknown>;

@@ -9504,6 +9504,8 @@ export interface components {
              * @default false
              */
             portal_promoted: boolean;
+            /** Runtime Deployments */
+            runtime_deployments?: components["schemas"]["APIRuntimeDeploymentSummary"][];
             /**
              * Status
              * @default draft
@@ -9520,6 +9522,44 @@ export interface components {
             updated_at?: string | null;
             /** Version */
             version: string;
+        };
+        /** APIRuntimeDeploymentSummary */
+        APIRuntimeDeploymentSummary: {
+            /**
+             * Drifted Count
+             * @default 0
+             */
+            drifted_count: number;
+            /** Environment */
+            environment: string;
+            /**
+             * Error Count
+             * @default 0
+             */
+            error_count: number;
+            /**
+             * Gateway Count
+             * @default 0
+             */
+            gateway_count: number;
+            /** Gateway Names */
+            gateway_names?: string[];
+            /** Last Sync Success */
+            last_sync_success?: string | null;
+            /** Latest Error */
+            latest_error?: string | null;
+            /**
+             * Pending Count
+             * @default 0
+             */
+            pending_count: number;
+            /** Status */
+            status: string;
+            /**
+             * Synced Count
+             * @default 0
+             */
+            synced_count: number;
         };
         /** APIUpdate */
         APIUpdate: {
@@ -9718,6 +9758,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Runtime Deployments */
+            runtime_deployments?: components["schemas"]["AdminAPIRuntimeDeploymentSummary"][];
             /**
              * Status
              * @default draft
@@ -9732,6 +9774,44 @@ export interface components {
             tenant_id: string;
             /** Version */
             version: string;
+        };
+        /** AdminAPIRuntimeDeploymentSummary */
+        AdminAPIRuntimeDeploymentSummary: {
+            /**
+             * Drifted Count
+             * @default 0
+             */
+            drifted_count: number;
+            /** Environment */
+            environment: string;
+            /**
+             * Error Count
+             * @default 0
+             */
+            error_count: number;
+            /**
+             * Gateway Count
+             * @default 0
+             */
+            gateway_count: number;
+            /** Gateway Names */
+            gateway_names?: string[];
+            /** Last Sync Success */
+            last_sync_success?: string | null;
+            /** Latest Error */
+            latest_error?: string | null;
+            /**
+             * Pending Count
+             * @default 0
+             */
+            pending_count: number;
+            /** Status */
+            status: string;
+            /**
+             * Synced Count
+             * @default 0
+             */
+            synced_count: number;
         };
         /**
          * AdminApplicationResponse

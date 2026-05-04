@@ -438,13 +438,12 @@ export function ApiLifecyclePanel({
 function LifecycleSummary({ lifecycle }: { lifecycle: ApiLifecycleState }) {
   return (
     <div className="space-y-4">
-      <dl className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <CompactStatus label="Catalog status" value={lifecycle.catalog_status} />
         <CompactStatus label="Lifecycle phase" value={lifecycle.lifecycle_phase} />
         <CompactStatus label="Portal" value={lifecycle.portal.status} />
-        <CompactStatus label="Spec source" value={lifecycle.spec.source} />
-        <CompactStatus label="Spec present" value={lifecycle.spec.has_openapi_spec} />
       </dl>
+      <SpecStateSummary lifecycle={lifecycle} />
 
       {lifecycle.last_error && (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-200">
@@ -465,7 +464,7 @@ function LifecycleSummary({ lifecycle }: { lifecycle: ApiLifecycleState }) {
           }))}
         />
         <SummaryList
-          title="Promotions"
+          title="Promotion summary"
           empty="No promotion"
           items={lifecycle.promotions.map((promotion) => ({
             id: promotion.id,
@@ -479,10 +478,58 @@ function LifecycleSummary({ lifecycle }: { lifecycle: ApiLifecycleState }) {
   );
 }
 
+function SpecStateSummary({ lifecycle }: { lifecycle: ApiLifecycleState }) {
+  const isGitAuthoritative = lifecycle.spec.source === 'git' && lifecycle.spec.has_openapi_spec;
+  const sourceClass = isGitAuthoritative
+    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+    : lifecycle.spec.source === 'generated_fallback'
+      ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+  const sourceLabel = isGitAuthoritative
+    ? 'Git authoritative'
+    : lifecycle.spec.source === 'generated_fallback'
+      ? 'Generated fallback'
+      : lifecycle.spec.source;
+
+  return (
+    <div className="rounded border border-neutral-200 p-3 text-sm dark:border-neutral-700">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sourceClass}`}>
+          {sourceLabel}
+        </span>
+        {lifecycle.spec.has_openapi_spec ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-green-200 dark:bg-green-900/20 dark:text-green-300 dark:ring-green-800">
+            <CheckCircle2 className="h-3 w-3" />
+            OpenAPI present
+          </span>
+        ) : (
+          <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200 dark:bg-red-900/20 dark:text-red-300 dark:ring-red-800">
+            OpenAPI missing
+          </span>
+        )}
+      </div>
+      <div className="mt-2 space-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+        {lifecycle.spec.git_path && (
+          <p className="break-all font-mono">{lifecycle.spec.git_path}</p>
+        )}
+        {lifecycle.spec.git_commit_sha && (
+          <p className="break-all font-mono">{lifecycle.spec.git_commit_sha}</p>
+        )}
+        {lifecycle.spec.reference && (
+          <p className="break-all">reference: {lifecycle.spec.reference}</p>
+        )}
+        {lifecycle.spec.fallback_reason && (
+          <p className="text-red-700 dark:text-red-300">{lifecycle.spec.fallback_reason}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DeploymentSummary({ deployments }: { deployments: ApiLifecycleGatewayDeployment[] }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Deployments</h3>
+      <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Deployment summary</h3>
       {deployments.length === 0 ? (
         <p className="rounded border border-dashed border-neutral-300 p-3 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
           No gateway deployment

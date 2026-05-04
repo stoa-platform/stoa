@@ -327,6 +327,48 @@ class TestApiFromCatalog:
         assert result.deployed_dev is True
         assert result.deployed_staging is True
 
+    def test_runtime_deployment_summary_overrides_legacy_metadata(self):
+        from src.routers.apis import _api_from_catalog
+
+        api = _mock_catalog_api(
+            api_metadata={
+                **_mock_catalog_api().api_metadata,
+                "deployments": {"dev": False, "staging": False},
+            }
+        )
+        result = _api_from_catalog(
+            api,
+            [
+                {
+                    "environment": "dev",
+                    "status": "synced",
+                    "gateway_count": 1,
+                    "synced_count": 1,
+                    "error_count": 0,
+                    "pending_count": 0,
+                    "drifted_count": 0,
+                    "latest_error": None,
+                    "gateway_names": ["stoa-dev"],
+                },
+                {
+                    "environment": "staging",
+                    "status": "error",
+                    "gateway_count": 1,
+                    "synced_count": 0,
+                    "error_count": 1,
+                    "pending_count": 0,
+                    "drifted_count": 0,
+                    "latest_error": "activation failed",
+                    "gateway_names": ["webmethods-staging"],
+                },
+            ],
+        )
+
+        assert result.deployed_dev is True
+        assert result.deployed_staging is False
+        assert result.runtime_deployments[0].status == "synced"
+        assert result.runtime_deployments[1].latest_error == "activation failed"
+
     def test_catalog_release_metadata_exposed(self):
         from src.routers.apis import _api_from_catalog
 

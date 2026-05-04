@@ -73,6 +73,24 @@ describe('ApiLifecyclePanel', () => {
     expect(screen.getByTestId('api-lifecycle-catalog-status')).toHaveTextContent('draft');
   });
 
+  it('highlights Git authoritative spec state without rendering raw booleans', async () => {
+    vi.mocked(apiService.getApiLifecycleState).mockResolvedValue({
+      ...baseLifecycleState,
+      spec: {
+        source: 'git',
+        has_openapi_spec: true,
+        git_path: 'tenants/tenant-1/apis/payments-api/openapi.yaml',
+        git_commit_sha: 'abc123',
+      },
+    });
+
+    renderPanel();
+
+    expect(await screen.findByText('Git authoritative')).toBeInTheDocument();
+    expect(screen.getByText('OpenAPI present')).toBeInTheDocument();
+    expect(screen.queryByTestId('api-lifecycle-spec-present')).not.toBeInTheDocument();
+  });
+
   it('validates a draft and refreshes state', async () => {
     const readyState = { ...baseLifecycleState, catalog_status: 'ready', lifecycle_phase: 'ready' };
     vi.mocked(apiService.validateLifecycleDraft).mockResolvedValue({

@@ -107,6 +107,7 @@ class GatewayRouteItem(BaseModel):
     id: str
     api_id: str = ""
     deployment_id: str = ""
+    gateway_instance_id: str = ""
     name: str
     tenant_id: str
     path_prefix: str
@@ -161,7 +162,12 @@ async def list_gateway_routes(
         tenant_id = ds.get("tenant_id", "")
         route = map_api_spec_to_stoa(ds, tenant_id)
         if route.get("backend_url"):  # Skip routes without a backend
-            item = GatewayRouteItem(**route, deployment_id=str(dep.id), generation=dep.desired_generation or 1)
+            item = GatewayRouteItem(
+                **route,
+                deployment_id=str(dep.id),
+                gateway_instance_id=str(dep.gateway_instance_id),
+                generation=dep.desired_generation or 1,
+            )
             routes.append(item)
 
     return routes

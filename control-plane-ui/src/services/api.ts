@@ -184,6 +184,7 @@ export type {
 } from './api/monitoring';
 export type {
   ApiLifecycleCreateDraftRequest,
+  ApiLifecycleGatewayDeployment,
   ApiLifecycleState,
   ApiLifecycleValidateDraftRequest,
   ApiLifecycleValidateDraftResponse,

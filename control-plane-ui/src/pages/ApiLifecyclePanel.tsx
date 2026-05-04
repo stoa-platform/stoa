@@ -2,7 +2,11 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowUpRight, CheckCircle2, RefreshCw, Rocket, Send } from 'lucide-react';
-import { apiService, type ApiLifecycleState } from '../services/api';
+import {
+  apiService,
+  type ApiLifecycleGatewayDeployment,
+  type ApiLifecycleState,
+} from '../services/api';
 
 interface ApiLifecyclePanelProps {
   tenantId: string;
@@ -50,6 +54,13 @@ function statusBadgeClass(status: string): string {
     return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
   }
   return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300';
+}
+
+function formatTimestamp(value?: string | null): string | null {
+  if (!value) return null;
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return value;
+  return timestamp.toLocaleString();
 }
 
 function CompactStatus({ label, value }: { label: string; value: string | boolean | null }) {
@@ -442,16 +453,7 @@ function LifecycleSummary({ lifecycle }: { lifecycle: ApiLifecycleState }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <SummaryList
-          title="Deployments"
-          empty="No gateway deployment"
-          items={lifecycle.deployments.map((deployment) => ({
-            id: deployment.id,
-            title: `${deployment.environment} / ${deployment.gateway_name}`,
-            status: deployment.sync_status,
-            detail: deployment.sync_error || deployment.gateway_instance_id,
-          }))}
-        />
+        <DeploymentSummary deployments={lifecycle.deployments} />
         <SummaryList
           title="Portal publications"
           empty="Not published"
@@ -473,6 +475,143 @@ function LifecycleSummary({ lifecycle }: { lifecycle: ApiLifecycleState }) {
           }))}
         />
       </div>
+    </div>
+  );
+}
+
+function DeploymentSummary({ deployments }: { deployments: ApiLifecycleGatewayDeployment[] }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Deployments</h3>
+      {deployments.length === 0 ? (
+        <p className="rounded border border-dashed border-neutral-300 p-3 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+          No gateway deployment
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {deployments.map((deployment) => {
+            const failedSteps = (deployment.sync_steps || []).filter(
+              (step) => step.status.toLowerCase() === 'failed'
+            );
+            const lastAttempt = formatTimestamp(deployment.last_sync_attempt);
+            const lastSuccess = formatTimestamp(deployment.last_sync_success);
+
+            return (
+              <div
+                data-testid="api-lifecycle-deployments-item"
+                key={deployment.id}
+                className="rounded border border-neutral-200 p-3 dark:border-neutral-700"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 text-sm font-medium text-neutral-900 dark:text-white">
+                    {deployment.environment} / {deployment.gateway_name}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded px-2 py-1 text-xs ${statusBadgeClass(
+                      deployment.sync_status
+                    )}`}
+                  >
+                    {deployment.sync_status}
+                  </span>
+                </div>
+
+                <dl className="mt-2 grid gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  <div>
+                    <dt className="font-medium text-neutral-700 dark:text-neutral-300">
+                      Gateway instance
+                    </dt>
+                    <dd className="break-all font-mono">{deployment.gateway_instance_id}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-neutral-700 dark:text-neutral-300">
+                      Generation
+                    </dt>
+                    <dd>
+                      synced {deployment.synced_generation} / desired{' '}
+                      {deployment.desired_generation}
+                    </dd>
+                  </div>
+                  {(lastAttempt || lastSuccess) && (
+                    <div>
+                      <dt className="font-medium text-neutral-700 dark:text-neutral-300">
+                        Sync timestamps
+                      </dt>
+                      <dd>
+                        {lastAttempt ? `last attempt: ${lastAttempt}` : null}
+                        {lastAttempt && lastSuccess ? ' · ' : null}
+                        {lastSuccess ? `last success: ${lastSuccess}` : null}
+                      </dd>
+                    </div>
+                  )}
+                  {deployment.public_url && (
+                    <div>
+                      <dt className="font-medium text-neutral-700 dark:text-neutral-300">
+                        Public URL
+                      </dt>
+                      <dd className="break-all font-mono">{deployment.public_url}</dd>
+                    </div>
+                  )}
+                </dl>
+
+                {deployment.sync_error && (
+                  <div
+                    data-testid="api-lifecycle-deployment-error"
+                    className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-200"
+                  >
+                    <div className="mb-1 font-semibold">Gateway deployment error</div>
+                    <p className="whitespace-pre-wrap break-words font-mono">
+                      {deployment.sync_error}
+                    </p>
+                  </div>
+                )}
+
+                {deployment.policy_sync_error && (
+                  <div
+                    data-testid="api-lifecycle-deployment-policy-error"
+                    className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200"
+                  >
+                    <div className="mb-1 font-semibold">
+                      Policy sync {deployment.policy_sync_status || 'error'}
+                    </div>
+                    <p className="whitespace-pre-wrap break-words font-mono">
+                      {deployment.policy_sync_error}
+                    </p>
+                  </div>
+                )}
+
+                {failedSteps.length > 0 && (
+                  <div className="mt-3 space-y-2" data-testid="api-lifecycle-deployment-steps">
+                    <div className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Failed sync steps
+                    </div>
+                    {failedSteps.map((step) => (
+                      <div
+                        data-testid="api-lifecycle-deployment-step"
+                        key={`${deployment.id}:${step.name}`}
+                        className="rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-800"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-neutral-900 dark:text-white">
+                            {step.name}
+                          </span>
+                          <span className={`rounded px-2 py-0.5 ${statusBadgeClass(step.status)}`}>
+                            {step.status}
+                          </span>
+                        </div>
+                        {step.detail && (
+                          <p className="mt-1 whitespace-pre-wrap break-words font-mono text-neutral-600 dark:text-neutral-300">
+                            {step.detail}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

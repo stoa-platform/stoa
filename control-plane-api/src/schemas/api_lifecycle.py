@@ -68,6 +68,14 @@ class ApiLifecycleSpecResponse(BaseModel):
     fallback_reason: str | None = None
 
 
+class ApiLifecycleSyncStepResponse(BaseModel):
+    name: str
+    status: str
+    detail: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
 class ApiLifecycleGatewayDeploymentResponse(BaseModel):
     id: UUID
     environment: str
@@ -80,7 +88,11 @@ class ApiLifecycleGatewayDeploymentResponse(BaseModel):
     gateway_resource_id: str | None = None
     public_url: str | None = None
     sync_error: str | None = None
+    last_sync_attempt: datetime | None = None
     last_sync_success: datetime | None = None
+    policy_sync_status: str | None = None
+    policy_sync_error: str | None = None
+    sync_steps: list[ApiLifecycleSyncStepResponse] = Field(default_factory=list)
 
 
 class ApiLifecyclePromotionResponse(BaseModel):

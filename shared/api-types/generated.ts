@@ -14867,6 +14867,11 @@ export interface components {
              */
             deployment_id: string;
             /**
+             * Gateway Instance Id
+             * @default
+             */
+            gateway_instance_id: string;
+            /**
              * Generation
              * @default 1
              */

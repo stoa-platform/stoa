@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from src.models.catalog import APICatalog
-from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
+from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment, PolicySyncStatus
 from src.services.api_lifecycle.errors import (
     ApiLifecycleGatewayAmbiguousError,
     ApiLifecycleGatewayNotFoundError,
@@ -20,6 +20,7 @@ from src.services.api_lifecycle.errors import (
 from src.services.api_lifecycle.ports import (
     DeployApiCommand,
     GatewayDeploymentSnapshot,
+    GatewayDeploymentSyncStep,
     GatewayTarget,
     LifecycleActor,
     PromotionSnapshot,
@@ -79,7 +80,20 @@ class InMemoryApiLifecycleRepository:
                     gateway_resource_id=deployment.gateway_resource_id,
                     public_url=gateway.public_url,
                     sync_error=deployment.sync_error,
+                    last_sync_attempt=deployment.last_sync_attempt,
                     last_sync_success=deployment.last_sync_success,
+                    policy_sync_status=str(deployment.policy_sync_status) if deployment.policy_sync_status else None,
+                    policy_sync_error=deployment.policy_sync_error,
+                    sync_steps=[
+                        GatewayDeploymentSyncStep(
+                            name=step["name"],
+                            status=step["status"],
+                            detail=step.get("detail"),
+                            started_at=step.get("started_at"),
+                            completed_at=step.get("completed_at"),
+                        )
+                        for step in deployment.sync_steps or []
+                    ],
                 )
             )
         return snapshots
@@ -252,6 +266,39 @@ async def test_get_lifecycle_after_deploy_returns_gateway_deployment() -> None:
     assert len(state.deployments) == 1
     assert state.deployments[0].environment == "dev"
     assert state.deployments[0].sync_status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_exposes_gateway_deployment_diagnostics() -> None:
+    service, repository, _ = _service(api=_api(), gateways=[_gateway()])
+    await service.deploy_to_environment(_deploy_command(), _actor())
+    deployment = next(iter(repository.deployments.values()))
+    attempted_at = datetime.now(UTC)
+    deployment.sync_status = DeploymentSyncStatus.ERROR
+    deployment.sync_error = "webmethods verifyAndActivate failed: activation failed (500)"
+    deployment.last_sync_attempt = attempted_at
+    deployment.policy_sync_status = PolicySyncStatus.ERROR
+    deployment.policy_sync_error = "webmethods API not found: default-rate-limit"
+    deployment.sync_steps = [
+        {"name": "agent_received", "status": "success", "detail": "sync request received"},
+        {
+            "name": "api_synced",
+            "status": "failed",
+            "detail": "webmethods verifyAndActivate failed: activation failed (500)",
+        },
+    ]
+
+    state = await service.get_lifecycle_state("acme", "payments-api")
+    diagnostic = state.deployments[0]
+
+    assert diagnostic.sync_status == "error"
+    assert diagnostic.sync_error == "webmethods verifyAndActivate failed: activation failed (500)"
+    assert diagnostic.last_sync_attempt == attempted_at
+    assert diagnostic.policy_sync_status == "error"
+    assert diagnostic.policy_sync_error == "webmethods API not found: default-rate-limit"
+    assert diagnostic.sync_steps[-1].name == "api_synced"
+    assert diagnostic.sync_steps[-1].status == "failed"
+    assert diagnostic.sync_steps[-1].detail == "webmethods verifyAndActivate failed: activation failed (500)"
 
 
 @pytest.mark.asyncio

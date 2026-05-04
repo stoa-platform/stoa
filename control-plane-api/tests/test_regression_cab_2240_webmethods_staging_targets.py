@@ -43,7 +43,7 @@ def test_regression_cab_2240_staging_link_targets_real_webmethods_gateway() -> N
 
     assert env["STOA_GATEWAY_PUBLIC_URL"] == "https://staging-wm-k3s.gostoa.dev"
     assert env["STOA_TARGET_GATEWAY_URL"] == "https://staging-wm.gostoa.dev"
-    assert env["STOA_GATEWAY_UI_URL"] == "https://staging-wm-ui.gostoa.dev"
+    assert env["STOA_GATEWAY_UI_URL"] == "https://staging-wm-ui.gostoa.dev/apigatewayui/"
 
 
 def test_regression_cab_2240_link_registration_urls_are_explicit_for_all_envs() -> None:
@@ -51,17 +51,17 @@ def test_regression_cab_2240_link_registration_urls_are_explicit_for_all_envs() 
         DEV_OVERLAY: {
             "STOA_GATEWAY_PUBLIC_URL": "https://dev-wm-k3s.gostoa.dev",
             "STOA_TARGET_GATEWAY_URL": "https://dev-wm.gostoa.dev",
-            "STOA_GATEWAY_UI_URL": "https://dev-wm-ui.gostoa.dev",
+            "STOA_GATEWAY_UI_URL": "https://dev-wm-ui.gostoa.dev/apigatewayui/",
         },
         STAGING_OVERLAY: {
             "STOA_GATEWAY_PUBLIC_URL": "https://staging-wm-k3s.gostoa.dev",
             "STOA_TARGET_GATEWAY_URL": "https://staging-wm.gostoa.dev",
-            "STOA_GATEWAY_UI_URL": "https://staging-wm-ui.gostoa.dev",
+            "STOA_GATEWAY_UI_URL": "https://staging-wm-ui.gostoa.dev/apigatewayui/",
         },
         PROD_OVERLAY: {
             "STOA_GATEWAY_PUBLIC_URL": "https://vps-wm-link.gostoa.dev",
             "STOA_TARGET_GATEWAY_URL": "https://vps-wm.gostoa.dev",
-            "STOA_GATEWAY_UI_URL": "https://vps-wm-ui.gostoa.dev",
+            "STOA_GATEWAY_UI_URL": "https://vps-wm-ui.gostoa.dev/apigatewayui/",
         },
     }
 
@@ -77,12 +77,12 @@ def test_regression_cab_2240_gateway_instances_keep_runtime_and_target_urls_sepa
     connect_endpoints = instances["connect-webmethods-staging"]["spec"]["endpoints"]
     assert connect_endpoints["publicUrl"] == "https://staging-wm.gostoa.dev"
     assert connect_endpoints["targetGatewayUrl"] == "https://staging-wm.gostoa.dev"
-    assert connect_endpoints["uiUrl"] == "https://staging-wm-ui.gostoa.dev"
+    assert connect_endpoints["uiUrl"] == "https://staging-wm-ui.gostoa.dev/apigatewayui/"
 
     link_endpoints = instances["stoa-link-wm-staging"]["spec"]["endpoints"]
     assert link_endpoints["publicUrl"] == "https://staging-wm-k3s.gostoa.dev"
     assert link_endpoints["targetGatewayUrl"] == "https://staging-wm.gostoa.dev"
-    assert link_endpoints["uiUrl"] == "https://staging-wm-ui.gostoa.dev"
+    assert link_endpoints["uiUrl"] == "https://staging-wm-ui.gostoa.dev/apigatewayui/"
 
 
 def test_regression_cab_2240_gateway_instances_expose_webmethods_ui_urls_for_all_envs() -> None:
@@ -92,42 +92,42 @@ def test_regression_cab_2240_gateway_instances_expose_webmethods_ui_urls_for_all
             "connect-webmethods-dev",
             "https://dev-wm.gostoa.dev",
             "https://dev-wm.gostoa.dev",
-            "https://dev-wm-ui.gostoa.dev",
+            "https://dev-wm-ui.gostoa.dev/apigatewayui/",
         ),
         (
             DEV_OVERLAY,
             "stoa-link-wm-dev",
             "https://dev-wm-k3s.gostoa.dev",
             "https://dev-wm.gostoa.dev",
-            "https://dev-wm-ui.gostoa.dev",
+            "https://dev-wm-ui.gostoa.dev/apigatewayui/",
         ),
         (
             STAGING_OVERLAY,
             "connect-webmethods-staging",
             "https://staging-wm.gostoa.dev",
             "https://staging-wm.gostoa.dev",
-            "https://staging-wm-ui.gostoa.dev",
+            "https://staging-wm-ui.gostoa.dev/apigatewayui/",
         ),
         (
             STAGING_OVERLAY,
             "stoa-link-wm-staging",
             "https://staging-wm-k3s.gostoa.dev",
             "https://staging-wm.gostoa.dev",
-            "https://staging-wm-ui.gostoa.dev",
+            "https://staging-wm-ui.gostoa.dev/apigatewayui/",
         ),
         (
             PROD_OVERLAY,
             "connect-webmethods-prod",
             "https://vps-wm.gostoa.dev",
             "https://vps-wm.gostoa.dev",
-            "https://vps-wm-ui.gostoa.dev",
+            "https://vps-wm-ui.gostoa.dev/apigatewayui/",
         ),
         (
             PROD_OVERLAY,
             "vps-wm-link-prod",
             "https://vps-wm-link.gostoa.dev",
             "https://vps-wm.gostoa.dev",
-            "https://vps-wm-ui.gostoa.dev",
+            "https://vps-wm-ui.gostoa.dev/apigatewayui/",
         ),
     )
 

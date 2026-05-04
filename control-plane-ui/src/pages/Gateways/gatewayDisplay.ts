@@ -152,6 +152,13 @@ export function deploymentLabel(gw: GatewayInstance): string | null {
   return gw.mode ? (MODE_LABELS[gw.mode] ?? gw.mode) : null;
 }
 
+export function deploymentModeValue(gw: GatewayInstance): string | null {
+  if (gw.mode === 'sidecar' || gw.gateway_type === 'stoa_sidecar') return 'sidecar';
+  if (gw.mode === 'edge-mcp' || gw.gateway_type === 'stoa_edge_mcp') return 'edge';
+  if (gw.mode === 'connect') return 'connect';
+  return gw.deployment_mode ?? null;
+}
+
 export function targetLabel(gw: GatewayInstance, fallback: string): string {
   if (gw.target_gateway_type) {
     return TARGET_LABELS[gw.target_gateway_type] ?? gw.target_gateway_type;

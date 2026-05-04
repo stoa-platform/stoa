@@ -25,7 +25,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import type { GatewayInstance } from '../../types';
-import { deploymentLabel, gatewayUrls, topologyLabel } from './gatewayDisplay';
+import { deploymentLabel, deploymentModeValue, gatewayUrls, topologyLabel } from './gatewayDisplay';
 
 interface DiscoveredAPI {
   name: string;
@@ -159,6 +159,7 @@ export function GatewayDetail() {
     : String(hd.discovered_apis_count ?? '-');
   const urls = gatewayUrls(gateway);
   const modeLabel = deploymentLabel(gateway);
+  const configDeploymentMode = deploymentModeValue(gateway);
   const topologyText = topologyLabel(gateway);
   const hasVisibilityRestriction =
     gateway.visibility && Array.isArray(gateway.visibility.tenant_ids);
@@ -279,8 +280,8 @@ export function GatewayDetail() {
           {gateway.target_gateway_type && (
             <ConfigItem label="Target Type" value={gateway.target_gateway_type} />
           )}
-          {gateway.deployment_mode && (
-            <ConfigItem label="Deployment Mode" value={gateway.deployment_mode} />
+          {configDeploymentMode && (
+            <ConfigItem label="Deployment Mode" value={configDeploymentMode} />
           )}
           {gateway.topology && <ConfigItem label="Topology" value={gateway.topology} />}
           {gateway.version && <ConfigItem label="Version" value={gateway.version} />}

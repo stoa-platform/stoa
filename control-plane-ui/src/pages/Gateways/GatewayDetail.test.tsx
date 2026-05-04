@@ -235,6 +235,38 @@ describe('GatewayDetail', () => {
     );
   });
 
+  it('renders STOA sidecar runtime mode instead of remote-agent deployment mode', async () => {
+    const { apiService } = await import('../../services/api');
+    vi.mocked(apiService.getGatewayInstance).mockResolvedValueOnce({
+      ...mockGateway,
+      id: 'gw-sidecar',
+      name: 'stoa-link-wm-dev-sidecar-dev',
+      display_name: 'STOA Gateway (sidecar)',
+      gateway_type: 'stoa_sidecar',
+      base_url: 'https://dev-wm-k3s.gostoa.dev',
+      public_url: 'https://dev-wm-k3s.gostoa.dev',
+      target_gateway_url: 'https://dev-wm.gostoa.dev',
+      ui_url: 'https://dev-wm.gostoa.dev/apigatewayui/',
+      endpoints: {
+        public_url: 'https://dev-wm-k3s.gostoa.dev',
+        target_gateway_url: 'https://dev-wm.gostoa.dev',
+        ui_url: 'https://dev-wm.gostoa.dev/apigatewayui/',
+      },
+      mode: 'sidecar',
+      deployment_mode: 'connect',
+      target_gateway_type: 'webmethods',
+      topology: 'remote-agent',
+      tags: ['mode:sidecar', 'auto-registered'],
+    });
+
+    renderGatewayDetail('gw-sidecar');
+    await screen.findByText('STOA Gateway (sidecar)');
+
+    expect(screen.getByText('Deployment Mode')).toBeInTheDocument();
+    expect(screen.getByText('sidecar')).toBeInTheDocument();
+    expect(screen.queryByText('connect')).not.toBeInTheDocument();
+  });
+
   it('renders health metrics', async () => {
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');

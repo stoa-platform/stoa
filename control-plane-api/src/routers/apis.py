@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from ..repositories.tenant import TenantRepository
 from ..schemas.pagination import PaginatedResponse
 from ..services import git_service
 from ..services.api_lifecycle.portal_tags import find_legacy_portal_publication_tags
+from ..services.api_runtime_summary import load_api_runtime_deployment_summaries
 from ..services.catalog_git_client.github_contents import GitHubContentsCatalogClient
 from ..services.gitops_writer import (
     ApiCreatePayload,
@@ -85,6 +86,19 @@ class APIUpdate(BaseModel):
     tags: list[str] | None = None  # Tags for categorization and portal promotion
 
 
+class APIRuntimeDeploymentSummary(BaseModel):
+    environment: str
+    status: str
+    gateway_count: int = 0
+    synced_count: int = 0
+    error_count: int = 0
+    pending_count: int = 0
+    drifted_count: int = 0
+    latest_error: str | None = None
+    last_sync_success: datetime | None = None
+    gateway_names: list[str] = Field(default_factory=list)
+
+
 class APIResponse(BaseModel):
     id: str
     tenant_id: str
@@ -111,6 +125,7 @@ class APIResponse(BaseModel):
     # separately (migration scope).
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    runtime_deployments: list[APIRuntimeDeploymentSummary] = Field(default_factory=list)
 
 
 class APIOpenAPISpecResponse(BaseModel):
@@ -220,9 +235,7 @@ def _generated_openapi_fallback(api: APICatalog) -> dict[str, Any]:
                     "responses": {
                         "200": {
                             "description": "Successful response",
-                            "content": {
-                                "application/json": {"schema": {"type": "object"}}
-                            },
+                            "content": {"application/json": {"schema": {"type": "object"}}},
                         }
                     },
                 }
@@ -246,7 +259,10 @@ def _reject_implicit_portal_publication_tags(tags: list[str] | None) -> None:
         )
 
 
-def _api_from_catalog(api: APICatalog) -> APIResponse:
+def _api_from_catalog(
+    api: APICatalog,
+    runtime_deployments: list[dict[str, Any]] | None = None,
+) -> APIResponse:
     """Convert APICatalog DB model to APIResponse."""
     metadata = api.api_metadata or {}
     tags = api.tags or []
@@ -266,6 +282,17 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
     if not isinstance(catalog_pr_number, int):
         catalog_pr_number = None
 
+    runtime_items = [APIRuntimeDeploymentSummary.model_validate(item) for item in runtime_deployments or []]
+
+    def _is_runtime_synced(environment: str) -> bool | None:
+        matching = [item for item in runtime_items if item.environment == environment]
+        if not matching:
+            return None
+        return any(item.status == "synced" for item in matching)
+
+    deployed_dev = _is_runtime_synced("dev")
+    deployed_staging = _is_runtime_synced("staging")
+
     return APIResponse(
         id=api.api_id,
         tenant_id=api.tenant_id,
@@ -275,8 +302,8 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
         description=metadata.get("description", ""),
         backend_url=metadata.get("backend_url", ""),
         status=api.status or "draft",
-        deployed_dev=deployments.get("dev", False),
-        deployed_staging=deployments.get("staging", False),
+        deployed_dev=deployed_dev if deployed_dev is not None else deployments.get("dev", False),
+        deployed_staging=deployed_staging if deployed_staging is not None else deployments.get("staging", False),
         tags=tags,
         portal_promoted=portal_promoted,
         audience=audience,
@@ -288,7 +315,25 @@ def _api_from_catalog(api: APICatalog) -> APIResponse:
         catalog_merge_commit_sha=_optional_str_attr("catalog_merge_commit_sha"),
         created_at=api.synced_at,
         updated_at=api.synced_at,
+        runtime_deployments=runtime_items,
     )
+
+
+def _api_matches_environment(api: APIResponse, environment: str) -> bool:
+    """Filter by runtime deployment summary first, then legacy catalog metadata."""
+
+    if api.runtime_deployments:
+        if environment == "prod":
+            return any(item.environment in {"prod", "production"} for item in api.runtime_deployments)
+        return any(item.environment == environment for item in api.runtime_deployments)
+
+    if environment == "dev":
+        return api.deployed_dev or (not api.deployed_dev and not api.deployed_staging)
+    if environment == "staging":
+        return api.deployed_staging
+    if environment == "prod":
+        return api.deployed_dev and api.deployed_staging
+    return False
 
 
 @router.get("", response_model=PaginatedResponse[APIResponse])
@@ -313,17 +358,16 @@ async def list_apis(
             page=page,
             page_size=page_size,
         )
-        all_items = [_api_from_catalog(api) for api in apis]
+        runtime_summaries = await load_api_runtime_deployment_summaries(db, [api.id for api in apis])
+        all_items = [_api_from_catalog(api, runtime_summaries.get(api.id)) for api in apis]
         # Filter by environment if specified (post-filter since catalog doesn't support this natively)
         if environment:
             if environment == "dev":
-                all_items = [
-                    api for api in all_items if api.deployed_dev or (not api.deployed_dev and not api.deployed_staging)
-                ]
+                all_items = [api for api in all_items if _api_matches_environment(api, "dev")]
             elif environment == "staging":
-                all_items = [api for api in all_items if api.deployed_staging]
+                all_items = [api for api in all_items if _api_matches_environment(api, "staging")]
             elif environment == "prod":
-                all_items = [api for api in all_items if api.deployed_dev and api.deployed_staging]
+                all_items = [api for api in all_items if _api_matches_environment(api, "prod")]
             total = len(all_items)
         return PaginatedResponse(items=all_items, total=total, page=page, page_size=page_size)
     except Exception as e:
@@ -348,7 +392,8 @@ async def get_api(
         api = await repo.get_api_by_id(tenant_id, api_id)
         if not api:
             raise HTTPException(status_code=404, detail="API not found")
-        return _api_from_catalog(api)
+        runtime_summaries = await load_api_runtime_deployment_summaries(db, [api.id])
+        return _api_from_catalog(api, runtime_summaries.get(api.id))
     except HTTPException:
         raise
     except Exception as e:

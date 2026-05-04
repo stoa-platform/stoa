@@ -343,7 +343,8 @@ describe('APIDetail', () => {
       await user.click(screen.getByText('Spec'));
 
       await waitFor(() => {
-        expect(screen.getByText('Git source')).toBeInTheDocument();
+        expect(screen.getByText('Git authoritative')).toBeInTheDocument();
+        expect(screen.getByText('Authoritative')).toBeInTheDocument();
         expect(screen.getByText(/"openapi": "3.0.3"/)).toBeInTheDocument();
       });
       expect(apiService.getApiOpenApiSpec).toHaveBeenCalledWith('oasis-gunters', 'payment-api');
@@ -378,7 +379,85 @@ describe('APIDetail', () => {
 
       await waitFor(() => {
         expect(screen.getByText('No promotions yet for this API.')).toBeInTheDocument();
+        expect(screen.getByText(/Use the lifecycle panel to promote/)).toBeInTheDocument();
       });
+    });
+
+    it('shows deployments from the aggregate lifecycle state', async () => {
+      setupMocks();
+      vi.mocked(apiService.getApiLifecycleState).mockResolvedValue({
+        ...baseLifecycleState,
+        deployments: [
+          {
+            id: 'deployment-1',
+            environment: 'dev',
+            gateway_instance_id: 'gateway-1',
+            gateway_name: 'stoa-dev',
+            gateway_type: 'stoa',
+            sync_status: 'error',
+            desired_generation: 3,
+            synced_generation: 2,
+            gateway_resource_id: null,
+            public_url: null,
+            sync_error: 'webMethods activation failed',
+            last_sync_attempt: '2026-05-04T10:00:00Z',
+            last_sync_success: null,
+            policy_sync_status: null,
+            policy_sync_error: null,
+            sync_steps: [
+              {
+                name: 'api_activate',
+                status: 'failed',
+                detail: 'activate failed',
+              },
+            ],
+          },
+        ],
+      });
+      renderAPIDetail();
+      const user = userEvent.setup();
+
+      await user.click(await screen.findByText('Deployments'));
+
+      await waitFor(() => {
+        expect(screen.getAllByText('dev / stoa-dev').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('webMethods activation failed').length).toBeGreaterThan(0);
+        expect(screen.getByText(/api_activate: activate failed/)).toBeInTheDocument();
+      });
+      expect(apiService.getGatewayDeployments).not.toHaveBeenCalled();
+    });
+
+    it('shows promotions from the aggregate lifecycle state', async () => {
+      setupMocks();
+      vi.mocked(apiService.getApiLifecycleState).mockResolvedValue({
+        ...baseLifecycleState,
+        promotions: [
+          {
+            id: 'promotion-1',
+            source_environment: 'dev',
+            target_environment: 'staging',
+            status: 'promoting',
+            message: 'Waiting for target deployment sync',
+            requested_by: 'ops@example.com',
+            approved_by: null,
+            completed_at: null,
+            source_deployment_id: 'source-deployment',
+            target_deployment_id: 'target-deployment',
+            target_gateway_ids: ['target-gateway'],
+          },
+        ],
+      });
+      renderAPIDetail();
+      const user = userEvent.setup();
+
+      await user.click(await screen.findByText('Promotions'));
+
+      await waitFor(() => {
+        expect(screen.getByText('dev → staging')).toBeInTheDocument();
+        expect(screen.getAllByText('Waiting for target deployment sync').length).toBeGreaterThan(0);
+        expect(screen.getByText('target target-deployment')).toBeInTheDocument();
+      });
+      expect(apiService.listPromotions).not.toHaveBeenCalled();
     });
   });
 

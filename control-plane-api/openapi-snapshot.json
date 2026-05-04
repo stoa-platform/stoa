@@ -560,6 +560,13 @@
             "title": "Portal Promoted",
             "type": "boolean"
           },
+          "runtime_deployments": {
+            "items": {
+              "$ref": "#/components/schemas/APIRuntimeDeploymentSummary"
+            },
+            "title": "Runtime Deployments",
+            "type": "array"
+          },
           "status": {
             "default": "draft",
             "title": "Status",
@@ -604,6 +611,79 @@
           "backend_url"
         ],
         "title": "APIResponse",
+        "type": "object"
+      },
+      "APIRuntimeDeploymentSummary": {
+        "properties": {
+          "drifted_count": {
+            "default": 0,
+            "title": "Drifted Count",
+            "type": "integer"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "error_count": {
+            "default": 0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "gateway_count": {
+            "default": 0,
+            "title": "Gateway Count",
+            "type": "integer"
+          },
+          "gateway_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gateway Names",
+            "type": "array"
+          },
+          "last_sync_success": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Success"
+          },
+          "latest_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Error"
+          },
+          "pending_count": {
+            "default": 0,
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "synced_count": {
+            "default": 0,
+            "title": "Synced Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "environment",
+          "status"
+        ],
+        "title": "APIRuntimeDeploymentSummary",
         "type": "object"
       },
       "APIUpdate": {
@@ -1073,6 +1153,13 @@
             "title": "Name",
             "type": "string"
           },
+          "runtime_deployments": {
+            "items": {
+              "$ref": "#/components/schemas/AdminAPIRuntimeDeploymentSummary"
+            },
+            "title": "Runtime Deployments",
+            "type": "array"
+          },
           "status": {
             "default": "draft",
             "title": "Status",
@@ -1104,6 +1191,79 @@
           "description"
         ],
         "title": "AdminAPIResponse",
+        "type": "object"
+      },
+      "AdminAPIRuntimeDeploymentSummary": {
+        "properties": {
+          "drifted_count": {
+            "default": 0,
+            "title": "Drifted Count",
+            "type": "integer"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "error_count": {
+            "default": 0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "gateway_count": {
+            "default": 0,
+            "title": "Gateway Count",
+            "type": "integer"
+          },
+          "gateway_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gateway Names",
+            "type": "array"
+          },
+          "last_sync_success": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Success"
+          },
+          "latest_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Error"
+          },
+          "pending_count": {
+            "default": 0,
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "synced_count": {
+            "default": 0,
+            "title": "Synced Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "environment",
+          "status"
+        ],
+        "title": "AdminAPIRuntimeDeploymentSummary",
         "type": "object"
       },
       "AdminApplicationResponse": {

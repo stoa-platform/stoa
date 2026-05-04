@@ -154,6 +154,9 @@ class SqlAlchemyApiLifecycleRepository:
                 requested_by=promotion.requested_by,
                 approved_by=promotion.approved_by,
                 completed_at=promotion.completed_at,
+                source_deployment_id=promotion.source_deployment_id,
+                target_deployment_id=promotion.target_deployment_id,
+                target_gateway_ids=_uuid_list_from_json(promotion.target_gateway_ids),
             )
             for promotion in result.scalars().all()
         ]
@@ -274,3 +277,15 @@ def _sync_steps_from_model(raw_steps: object) -> list[GatewayDeploymentSyncStep]
             )
         )
     return steps
+
+
+def _uuid_list_from_json(raw_value: object) -> list[UUID]:
+    if not isinstance(raw_value, list):
+        return []
+    values: list[UUID] = []
+    for item in raw_value:
+        try:
+            values.append(item if isinstance(item, UUID) else UUID(str(item)))
+        except (TypeError, ValueError):
+            continue
+    return values

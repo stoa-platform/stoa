@@ -9,7 +9,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from ..schemas.catalog import (
     SyncTriggerResponse,
 )
 from ..services.api_lifecycle.portal_tags import strip_legacy_portal_publication_tags
+from ..services.api_runtime_summary import load_api_runtime_deployment_summaries
 from ..services.catalog_sync_service import CatalogSyncService, metadata_update_preserving_lifecycle
 from ..services.git_provider import GitProvider, get_git_provider
 
@@ -513,6 +514,19 @@ async def update_api_audience(
 # ============================================================================
 
 
+class AdminAPIRuntimeDeploymentSummary(BaseModel):
+    environment: str
+    status: str
+    gateway_count: int = 0
+    synced_count: int = 0
+    error_count: int = 0
+    pending_count: int = 0
+    drifted_count: int = 0
+    latest_error: str | None = None
+    last_sync_success: datetime | None = None
+    gateway_names: list[str] = Field(default_factory=list)
+
+
 class AdminAPIResponse(BaseModel):
     """API response for cross-tenant admin listing."""
 
@@ -524,6 +538,7 @@ class AdminAPIResponse(BaseModel):
     description: str
     status: str = "draft"
     tags: list[str] = []
+    runtime_deployments: list[AdminAPIRuntimeDeploymentSummary] = Field(default_factory=list)
 
 
 class AdminAPIPaginatedResponse(BaseModel):
@@ -554,6 +569,7 @@ async def list_all_apis(
         page=page,
         page_size=page_size,
     )
+    runtime_summaries = await load_api_runtime_deployment_summaries(db, [api.id for api in apis])
     items = [
         AdminAPIResponse(
             id=api.api_id,
@@ -564,6 +580,7 @@ async def list_all_apis(
             description=(api.api_metadata or {}).get("description", ""),
             status=api.status or "draft",
             tags=api.tags or [],
+            runtime_deployments=runtime_summaries.get(api.id, []),
         )
         for api in apis
     ]

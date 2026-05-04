@@ -755,6 +755,9 @@ class ApiLifecycleService:
                 requested_by=item.requested_by,
                 approved_by=item.approved_by,
                 completed_at=item.completed_at,
+                source_deployment_id=item.source_deployment_id,
+                target_deployment_id=item.target_deployment_id,
+                target_gateway_ids=item.target_gateway_ids,
             )
             for item in promotions
         ]

@@ -149,10 +149,16 @@ is a **separate** field for docs/embedding search. The two endpoints can —
 and in prod often do — point at different OpenSearch clusters. **Do not
 conflate.**
 
-**Precedence rule**: explicit `Settings(opensearch_audit=OpenSearchAuditConfig(...))`
-wins over the flat env fields. Absence of an explicit sub-model triggers
-flat-field hydration. Detection compares `model_dump()` outputs to avoid
-SecretStr-equality fragility.
+**Precedence rule** (Phase 3-C): explicit
+`Settings(opensearch_audit=OpenSearchAuditConfig(...))` wins over the
+flat env fields. Detection now uses `self.model_fields_set` rather than
+the Phase 2 `model_dump()` comparison — passing a default-factory
+instance explicitly
+(`Settings(opensearch_audit=OpenSearchAuditConfig())`) is correctly
+classified as "explicit" and short-circuits the flat-env hydration.
+Absence of the kwarg triggers flat-field hydration. The validator emits
+a `DEBUG`-level breadcrumb on each path so operators can tell which
+branch fired during boot.
 
 **SecretStr boundary**: `opensearch_audit.password` is a `SecretStr` (CAB-2199
 §3.1). Consumer code passing it to OpenSearch client must unwrap with

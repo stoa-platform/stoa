@@ -134,6 +134,8 @@ export function GatewayDetail() {
   const StatusIcon = statusCfg.icon;
   const deployments = deploymentsData?.items || [];
   const discoveredApis = toolsData || [];
+  const isEdgeMcp = gateway.mode === 'edge-mcp' || gateway.gateway_type === 'stoa_edge_mcp';
+  const discoveryMetricLabel = isEdgeMcp ? 'MCP Tools' : 'Discovered APIs';
   const urls = gatewayUrls(gateway);
   const modeLabel = deploymentLabel(gateway);
   const topologyText = topologyLabel(gateway);
@@ -318,7 +320,10 @@ export function GatewayDetail() {
             value={hd.uptime_seconds ? formatUptime(hd.uptime_seconds as number) : '-'}
           />
           <MetricCard label="Routes" value={String(hd.routes_count ?? '-')} />
-          <MetricCard label="Discovered APIs" value={String(hd.discovered_apis_count ?? '-')} />
+          <MetricCard
+            label={discoveryMetricLabel}
+            value={String(hd.discovered_apis_count ?? '-')}
+          />
           <MetricCard
             label="Error Rate"
             value={hd.error_rate != null ? `${((hd.error_rate as number) * 100).toFixed(1)}%` : '-'}

@@ -53,6 +53,14 @@ _UI_ENDPOINT_KEYS = {"ui_url", "uiUrl", "console_url", "consoleUrl", "web_ui_url
 _TARGET_ENDPOINT_KEYS = {"target_gateway_url", "targetGatewayUrl", "target_url", "targetUrl"}
 
 
+def _is_edge_mcp_instance(instance: GatewayInstance) -> bool:
+    """Return true for the native STOA edge MCP gateway mode."""
+    gateway_type = (
+        instance.gateway_type.value if hasattr(instance.gateway_type, "value") else str(instance.gateway_type)
+    )
+    return instance.mode == "edge-mcp" or gateway_type == GatewayType.STOA_EDGE_MCP.value
+
+
 # --- Route Reload Endpoint (CAB-1828) ---
 
 
@@ -666,18 +674,28 @@ async def gateway_heartbeat(
     instance.status = GatewayInstanceStatus.ONLINE
 
     # Store metrics in health_details.
-    # CAB-1916: heartbeat stores `discovered_apis_count` (int), never
-    # `discovered_apis` — that key is reserved for the discovery array.
-    instance.health_details = {
-        **(instance.health_details or {}),
+    # CAB-1916: heartbeat stores counts only; `discovered_apis` remains
+    # reserved for the discovery array. Native edge-mcp heartbeats report
+    # MCP tool registry size in the legacy `discovered_apis` payload field,
+    # so keep it under `mcp_tools_count` and do not inflate API discovery.
+    existing_health = instance.health_details or {}
+    heartbeat_details = {
+        **existing_health,
         "last_heartbeat": now.isoformat(),
         "uptime_seconds": payload.uptime_seconds,
         "routes_count": payload.routes_count,
         "policies_count": payload.policies_count,
-        "discovered_apis_count": payload.discovered_apis,
         "requests_total": payload.requests_total,
         "error_rate": payload.error_rate,
     }
+    if _is_edge_mcp_instance(instance):
+        heartbeat_details["mcp_tools_count"] = payload.discovered_apis
+        discovered_apis = existing_health.get("discovered_apis")
+        heartbeat_details["discovered_apis_count"] = len(discovered_apis) if isinstance(discovered_apis, list) else 0
+    else:
+        heartbeat_details["discovered_apis_count"] = payload.discovered_apis
+
+    instance.health_details = heartbeat_details
 
     await repo.update(instance)
     await db.commit()

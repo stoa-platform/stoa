@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createAuthMock } from '../../test/helpers';
@@ -237,8 +237,9 @@ describe('GatewayDetail', () => {
     await screen.findByText('STOA Edge MCP Gateway');
     expect(screen.getByText('2h 0m')).toBeInTheDocument(); // 7200s
     expect(screen.getByText('5')).toBeInTheDocument(); // routes
-    expect(screen.getByText('3')).toBeInTheDocument(); // MCP tools
-    expect(screen.getByText('MCP Tools')).toBeInTheDocument();
+    const deployedMetric = screen.getByText('Deployed APIs').closest('div');
+    expect(deployedMetric).not.toBeNull();
+    expect(within(deployedMetric!).getByText('1')).toBeInTheDocument(); // synced deployments
     expect(screen.queryByText('Discovered APIs')).not.toBeInTheDocument();
     expect(screen.getByText('1.0%')).toBeInTheDocument(); // error rate
   });
@@ -249,7 +250,6 @@ describe('GatewayDetail', () => {
     renderGatewayDetail();
     await screen.findByText('STOA Edge MCP Gateway');
     expect(screen.getByText('Discovered APIs')).toBeInTheDocument();
-    expect(screen.queryByText('MCP Tools')).not.toBeInTheDocument();
   });
 
   it('renders deployed APIs table', async () => {
@@ -315,7 +315,7 @@ describe('GatewayDetail', () => {
     renderGatewayDetail();
     expect(await screen.findByText('weather_forecast')).toBeInTheDocument();
     expect(screen.getByText('Payments API')).toBeInTheDocument();
-    expect(screen.getByText('APIs Deployed')).toBeInTheDocument();
+    expect(screen.getByText('API Deployments')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /MCP Tools/ })).toBeInTheDocument();
   });
 

@@ -664,7 +664,10 @@ class ApiLifecycleService:
 
         promotion.target_deployment_id = target_deployment.id
         promotion.target_gateway_ids = [str(target_gateway.id)]
-        if promotion.status == PromotionStatus.PENDING.value:
+        if _deployment_synced_to_desired_generation(target_deployment):
+            promotion.status = PromotionStatus.PROMOTED.value
+            promotion.completed_at = promotion.completed_at or datetime.now(UTC)
+        elif promotion.status == PromotionStatus.PENDING.value:
             promotion.status = PromotionStatus.PROMOTING.value
         saved_promotion = await self.repository.save_promotion(promotion)
 
@@ -1245,6 +1248,15 @@ def _normalize_deployment_environment(value: str) -> str:
 
 def _wire_value(value: object) -> str:
     return str(getattr(value, "value", value))
+
+
+def _deployment_synced_to_desired_generation(deployment: GatewayDeployment) -> bool:
+    return (
+        _wire_value(deployment.sync_status) == DeploymentSyncStatus.SYNCED.value
+        and deployment.desired_generation is not None
+        and deployment.synced_generation is not None
+        and deployment.synced_generation >= deployment.desired_generation
+    )
 
 
 def _promotion_result(promotion_action: str, deployment_action: str) -> str:

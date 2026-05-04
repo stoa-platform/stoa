@@ -1,7 +1,7 @@
 <p align="center">
-  <strong>STOA Platform</strong><br>
-  The European Agent Gateway<br>
-  <em>Bridge enterprise APIs to AI agents. Define once, expose everywhere.</em>
+  <strong>STOA</strong><br>
+  <span>The open-source Agent Gateway for governed AI-to-API traffic</span><br>
+  <em>Keep your gateway. Add MCP. Govern every agent call.</em>
 </p>
 
 <p align="center">
@@ -10,161 +10,249 @@
   <a href="https://github.com/stoa-platform/stoa/stargazers"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
   <a href="https://discord.gg/j8tHSSes"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
+
 <p align="center">
-  <a href="https://gostoa.dev">Website</a> · <a href="https://docs.gostoa.dev">Docs</a> · <a href="https://discord.gg/j8tHSSes">Community</a> · <a href="https://status.gostoa.dev">Status</a>
+  <a href="https://gostoa.dev">Website</a> ·
+  <a href="https://docs.gostoa.dev">Docs</a> ·
+  <a href="https://github.com/stoa-platform/stoa/discussions">Discussions</a> ·
+  <a href="https://discord.gg/j8tHSSes">Discord</a> ·
+  <a href="https://status.gostoa.dev">Status</a>
 </p>
 
 ---
 
-**STOA** is an open-source API management platform that bridges enterprise APIs to AI agents. Define your API once, expose it everywhere — REST + MCP.
+## APIs are becoming AI tools. Who governs the calls?
 
-> **Universal API Contract (UAC):** Define Once, Expose Everywhere.
+AI agents are starting to call internal systems: billing, CRM, identity, logistics, support, legacy SOAP services, and private REST APIs.
+
+The hard part is not only making an API callable by an agent. The hard part is answering:
+
+> Which agent called which API, under which identity, through which policy, with which quota, and with what audit trail?
+
+**STOA** is an open-source **Agent Gateway** that sits next to your existing API gateway and exposes enterprise APIs as governed **Model Context Protocol (MCP)** tools.
+
+No gateway replacement. No duplicated API catalog. No untracked agent traffic.
 
 <p align="center">
-  <img src="docs/assets/screenshot-call-flow.png" alt="STOA Console — Call Flow Dashboard with live traces and traffic heatmap" width="800">
+  <img src="docs/assets/screenshot-call-flow.png" alt="STOA Console — Call Flow Dashboard with live traces and traffic heatmap" width="860">
 </p>
 
-<details>
-<summary>More screenshots</summary>
+---
 
-<p align="center">
-  <img src="docs/assets/screenshot-gateway.png" alt="STOA Console — Gateway Overview, 3 gateways online" width="800">
-</p>
+## What you can do with STOA
 
-</details>
+| In your platform today | With STOA |
+| --- | --- |
+| APIs live behind Kong, Gravitee, Apigee, Azure APIM, AWS API Gateway, or webMethods | Keep them where they are and add an MCP layer for agents |
+| Developers wait for access, credentials, and onboarding | Use a self-service portal for discovery, subscription, and testing |
+| API catalogs drift between specs, spreadsheets, and gateways | Define APIs once and expose them as REST endpoints and MCP tools |
+| AI agents call tools without enterprise-grade controls | Apply OAuth, mTLS, rate limits, RBAC, quotas, and audit trails |
+| Teams lack visibility into AI-to-API traffic | Observe calls with Prometheus, Grafana, Loki, and OpenSearch |
 
-## Why STOA?
+---
 
-| Problem | STOA Solution |
-|---------|--------------|
-| 5 days to get API access | Self-service portal, instant credentials |
-| API catalog in Excel | Searchable catalog with OpenAPI specs |
-| Gateway = vendor lock-in | Open-source, full observability, Rust performance |
-| AI agents can't use enterprise APIs | MCP bridge: legacy API → AI agent tool |
-| Multi-org identity is a nightmare | Keycloak federation across organizations |
-| Locked into one gateway vendor | Multi-gateway adapters: Kong, Gravitee, Apigee, Azure APIM, AWS, webMethods |
+## Quick start
 
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         STOA Platform                            │
-│                                                                  │
-│  Console ──── Control Plane API ──── Keycloak ──── Portal        │
-│  (React 19)    (Python/FastAPI)      (OIDC)      (React 19)     │
-│                       │                                          │
-│             ┌─────────┴─────────┐                                │
-│             │   Rust Gateway    │ ◄── MCP + JWT + mTLS + Quotas  │
-│             │  (Tokio + axum)   │                                │
-│             └─────────┬─────────┘                                │
-│                       │                                          │
-│   ┌───────────────────┼───────────────────┐                      │
-│   │                   │                   │                      │
-│   ▼                   ▼                   ▼                      │
-│  Kong            Gravitee            webMethods    ◄── Adapters  │
-│  Apigee          Azure APIM         AWS API GW                   │
-│                                                                  │
-│  Prometheus ── Grafana ── Loki ── OpenSearch                     │
-│  (Metrics)   (Dashboards) (Logs) (Error Tracking)                │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-## Quick Start
+Run the full local stack with Docker Compose.
 
 ```bash
 # Clone
 git clone https://github.com/stoa-platform/stoa.git
 cd stoa/deploy/docker-compose
 
-# Start (21 services, ~3GB RAM)
+# Start the demo stack
 cp .env.example .env
 docker compose up -d
 
-# Wait for healthy
+# Wait for services to become healthy
 ../../scripts/demo/check-health.sh --wait
 
 # Seed demo data
 ../../scripts/demo/seed-all.sh --skip-traffic
 ```
 
-Open http://localhost — login as `halliday` / `readyplayerone`.
+Open `http://localhost` and log in with:
 
-For component-by-component local development (without Docker), see [DEVELOPMENT.md](DEVELOPMENT.md).
+```text
+username: halliday
+password: readyplayerone
+```
 
 | Service | URL |
-|---------|-----|
-| Console | http://localhost |
-| Portal | http://localhost/portal |
-| API Docs | http://localhost/api/docs |
-| Grafana | http://localhost/grafana |
-| Keycloak | http://localhost/auth |
-| Gateway | http://localhost/gateway/health |
+| --- | --- |
+| Console | `http://localhost` |
+| Developer Portal | `http://localhost/portal` |
+| API Docs | `http://localhost/api/docs` |
+| Grafana | `http://localhost/grafana` |
+| Keycloak | `http://localhost/auth` |
+| Gateway health | `http://localhost/gateway/health` |
 
-## Features
+For local component-by-component development, see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
-### API Management
-- **Self-Service Portal** — developers discover, subscribe, and test APIs without tickets
-- **Admin Console** — manage tenants, APIs, consumers, and subscriptions
-- **Multi-Tenant** — full isolation between organizations with RBAC
-- **Multi-Gateway** — 7 adapter integrations (Kong, Gravitee, Apigee, Azure APIM, AWS, webMethods, STOA native)
+---
 
-### Rust Gateway (93K LOC, 2,300+ tests)
-- **Sub-millisecond proxy** — built with Tokio + axum for maximum throughput
-- **JWT validation** — Keycloak OIDC integration with JWKS caching
-- **Per-consumer rate limiting** — plan-based quotas with 429 responses
-- **mTLS support** — RFC 8705 certificate-bound tokens
-- **MCP OAuth 2.1** — RFC 9728 discovery, PKCE, dynamic client registration
-- **4-mode architecture** — edge-mcp (active), sidecar, proxy, shadow
+## From API to agent tool in 3 steps
 
-### MCP Bridge (AI-Native)
-- **Universal API Contract** — define an API once, expose it as REST + MCP tool
-- **Tool discovery** — AI agents discover available tools via MCP protocol
-- **SSE transport** — real-time streaming for agent communication
-- **Governance** — authentication, rate limiting, and audit trail for AI calls
-- **5 CRDs** — Tools, ToolSets, Skills, Gateways, GatewayBindings (Kubernetes-native)
+```mermaid
+graph LR
+  A[Import or define an API] --> B[Attach auth, quotas, policies]
+  B --> C[Publish REST + MCP]
+  C --> D[Agents discover tools]
+  C --> E[Humans keep using REST]
+  D --> F[Audit, metrics, traces]
+  E --> F
+```
 
-### Observability
-- **Grafana dashboards** — gateway metrics, tenant analytics, error tracking, arena benchmarks
-- **OpenSearch integration** — error snapshots with trace ID correlation
-- **Loki log aggregation** — centralized logs from all components
-- **Prometheus metrics** — p50/p90/p99 latency, request rates, error rates
+1. **Define once** — import OpenAPI or describe the API through STOA's Universal API Contract.
+2. **Govern once** — attach identity, plans, rate limits, scopes, and tenant policies.
+3. **Expose everywhere** — publish for human developers through REST and for AI agents through MCP.
 
-### Identity Federation
-- **Multi-org Keycloak 26** — federate Active Directory, LDAP, SAML, OIDC
-- **Cross-realm token isolation** — zero-trust between organizations
-- **Self-registration** — developers onboard without admin intervention
-- **FAPI 2.0 architecture** — financial-grade API security (ADR-056)
+---
 
-## Components
+## Why teams choose STOA
 
-| Component | Tech | Purpose |
-|-----------|------|---------|
-| Control Plane API | Python 3.11, FastAPI, SQLAlchemy 2.0 | Backend API with RBAC, multi-gateway adapters |
-| Console UI | React 19, TypeScript, Vite, TanStack Query | Admin interface |
-| Developer Portal | React 19, TypeScript, Vite, TanStack Query | Developer self-service |
-| Rust Gateway | Rust (stable), Tokio, axum 0.7 | API proxy + MCP bridge (93K LOC) |
-| stoactl | Go 1.25, Cobra | GitOps CLI + VPS connect agent |
-| Keycloak | Keycloak 26.5 | Authentication + federation |
-| K8s Operator | Python, Kopf | CRD controller for MCP resources |
-| Helm Chart | Helm 3 (5 CRDs, 33 templates) | Kubernetes deployment |
+### MCP-native, not MCP as an afterthought
 
-## Test Suite
+STOA is built for AI agents that need to discover and call enterprise APIs safely. Agents connect through MCP; platform teams keep control over identity, authorization, rate limiting, and audit.
 
-| Component | Framework | Tests | Coverage |
-|-----------|-----------|-------|----------|
-| Control Plane API | pytest + pytest-asyncio | 7,100+ | 70% min |
-| Rust Gateway | cargo test | 2,300+ | Unit + contract + integration + security |
-| Console UI | vitest + React Testing Library | Per-component | Persona-based (4 RBAC roles) |
-| Portal | vitest + React Testing Library | Per-component | Persona-based (4 RBAC roles) |
-| E2E | Playwright + BDD (Gherkin) | 77 feature files | @smoke, @critical, @portal, @console, @gateway |
+### Sidecar by design
 
-## Deployment
+STOA does not force a big-bang gateway migration. Existing REST traffic continues through your current gateway while STOA adds a governed MCP path for agents.
 
-### Docker Compose (Development)
+### Open source and self-hostable
 
-See [deploy/docker-compose/README.md](deploy/docker-compose/README.md) for the full quick-start guide.
+The core platform is Apache 2.0. Run it locally, in Kubernetes, on-premise, or in a hybrid setup. Fork it, inspect it, extend it, or contribute back.
 
-### Kubernetes (Production)
+### Built for European and regulated environments
+
+STOA is designed for teams that care about sovereignty, auditability, data residency, and operational control. It supports self-hosted deployments and keeps governance close to your infrastructure.
+
+---
+
+## Architecture
+
+```text
+                         STOA Control Plane
+        ┌──────────────────────────────────────────────────┐
+        │ Console · Portal · Control Plane API · Keycloak  │
+        │ Observability · Tenants · Subscriptions · Audit  │
+        └───────────────────────┬──────────────────────────┘
+                                │ sync
+             ┌──────────────────┴──────────────────┐
+             │                                     │
+             ▼                                     ▼
+┌──────────────────────────┐        ┌─────────────────────────────┐
+│ STOA Agent Gateway       │        │ Existing API Gateway         │
+│ Rust · MCP · REST bridge │        │ Kong · Gravitee · Apigee     │
+│ OAuth · mTLS · quotas    │        │ Azure APIM · AWS · webMethods│
+│ Tool discovery · audit   │        │ Existing REST clients stay   │
+└─────────────┬────────────┘        └──────────────┬──────────────┘
+              │                                    │
+              ▼                                    ▼
+       AI agents via MCP                    Existing backends
+```
+
+**Core idea:** STOA adds a governed agent layer without taking ownership of your whole API estate.
+
+---
+
+## Platform capabilities
+
+| Capability | What it gives you |
+| --- | --- |
+| **MCP Gateway** | Governed tool discovery and execution for AI agents |
+| **Universal API Contract** | One definition for REST and MCP exposure |
+| **Self-Service Portal** | API discovery, subscriptions, credentials, and testing |
+| **Admin Console** | Tenants, consumers, APIs, plans, subscriptions, and policies |
+| **Multi-Gateway Adapters** | Sync with Kong, Gravitee, Apigee, Azure APIM, AWS API Gateway, webMethods, and STOA native |
+| **Identity Federation** | Keycloak-based OIDC, SAML, LDAP, Active Directory, and cross-realm isolation |
+| **Security Controls** | OAuth 2.1, PKCE, mTLS, JWT validation, RBAC, quotas, and per-consumer rate limiting |
+| **Observability** | Prometheus metrics, Grafana dashboards, Loki logs, OpenSearch error snapshots, traces, and audit history |
+| **Kubernetes Native** | Helm deployment, operator support, and CRDs for tools, toolsets, skills, gateways, and bindings |
+
+---
+
+## Demo scenarios
+
+After seeding the demo stack, try these flows:
+
+| Scenario | What to look for |
+| --- | --- |
+| **Developer discovers an API** | Open the Portal, browse the API catalog, inspect specs, and request access |
+| **Admin approves and governs access** | Use the Console to manage consumers, plans, subscriptions, tenants, and quotas |
+| **Agent calls an API as a tool** | Observe how MCP traffic is authenticated, rate-limited, traced, and audited |
+| **Platform team monitors usage** | Open Grafana and inspect latency, request rate, errors, quotas, and gateway health |
+
+<details>
+<summary>More screenshots</summary>
+
+<p align="center">
+  <img src="docs/assets/screenshot-gateway.png" alt="STOA Console — Gateway Overview" width="860">
+</p>
+
+</details>
+
+---
+
+## Who is STOA for?
+
+**Platform teams** who already run API gateways and want an AI agent layer without replacing their infrastructure.
+
+**Integration teams** modernizing legacy REST, SOAP, and webMethods APIs for agentic workflows.
+
+**AI teams** that need real enterprise tools, not toy demos, with authentication, quotas, and audit from day one.
+
+**Open-source builders** who believe the agentic web needs inspectable, self-hostable, standards-based infrastructure.
+
+---
+
+## Under the hood
+
+| Component | Stack | Purpose |
+| --- | --- | --- |
+| Control Plane API | Python, FastAPI, SQLAlchemy | Backend API, RBAC, adapters, tenants, subscriptions |
+| Console UI | React, TypeScript, Vite | Admin experience for platform teams |
+| Developer Portal | React, TypeScript, Vite | Self-service API discovery and onboarding |
+| STOA Gateway | Rust, Tokio, axum | API proxy, MCP bridge, auth, quotas, audit |
+| `stoactl` | Go, Cobra | CLI and GitOps-style operations |
+| Keycloak | OIDC, SAML, LDAP | Identity, federation, realms, authentication |
+| Kubernetes Operator | Python, Kopf | CRD controller for MCP resources |
+| Helm Chart | Helm 3 | Kubernetes installation and production deployment |
+
+---
+
+## Quality and security
+
+STOA is built as infrastructure, not a demo script.
+
+| Area | Practice |
+| --- | --- |
+| Gateway tests | Unit, contract, integration, and security tests |
+| Control plane tests | Async API tests with coverage threshold |
+| E2E tests | Playwright + BDD feature files for smoke, critical, portal, console, and gateway flows |
+| Supply chain | SAST, dependency scanning, container scanning, SBOM generation, signed commits, and regression guards |
+
+See [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), and [`docs/`](docs/) for details.
+
+---
+
+## Deploying STOA
+
+### Docker Compose
+
+Use Docker Compose for local demos, development, and evaluation.
+
+```bash
+cd deploy/docker-compose
+cp .env.example .env
+docker compose up -d
+```
+
+See [`deploy/docker-compose/README.md`](deploy/docker-compose/README.md).
+
+### Kubernetes
+
+Use Helm for Kubernetes deployments.
 
 ```bash
 helm install stoa-platform ./charts/stoa-platform \
@@ -172,75 +260,79 @@ helm install stoa-platform ./charts/stoa-platform \
   -f charts/stoa-platform/values.yaml
 ```
 
-Production runs on ArgoCD with GitOps. See [deployment docs](https://docs.gostoa.dev/docs/deployment/hybrid).
+See the deployment documentation for production and hybrid environments.
 
-## Repository Structure
+---
 
-```
+## Repository map
+
+```text
 stoa/
-├── control-plane-api/     # FastAPI backend (Python 3.11)
-├── control-plane-ui/      # React 19 admin console
-├── portal/                # React 19 developer portal
-├── stoa-gateway/          # Rust API gateway + MCP bridge
-├── stoa-go/               # Go CLI (stoactl) + connect agent
-├── stoa-operator/         # Kubernetes operator (Python/Kopf)
-├── charts/                # Helm chart (5 CRDs, 33 templates)
-├── deploy/docker-compose/ # Quick-start setup
-├── e2e/                   # Playwright BDD tests
-├── scripts/               # Demo, seed, benchmarks
-└── docs/                  # Runbooks + methodology
+├── control-plane-api/       # FastAPI backend
+├── control-plane-ui/        # React admin console
+├── portal/                  # React developer portal
+├── stoa-gateway/            # Rust gateway + MCP bridge
+├── stoa-go/                 # Go CLI and connect agent
+├── stoa-operator/           # Kubernetes operator
+├── charts/                  # Helm chart and CRDs
+├── deploy/docker-compose/   # Local quick start
+├── e2e/                     # Playwright BDD tests
+├── scripts/                 # Demo, seed, benchmarks
+└── docs/                    # Runbooks, ADRs, methodology
 ```
 
-## Related Repositories
-
-| Repository | Purpose |
-|------------|---------|
-| [stoa-docs](https://github.com/stoa-platform/stoa-docs) | Documentation site ([docs.gostoa.dev](https://docs.gostoa.dev)) — 57+ ADRs, guides, API ref |
-| [stoa-web](https://github.com/stoa-platform/stoa-web) | Landing page ([gostoa.dev](https://gostoa.dev)) |
-| [stoa-quickstart](https://github.com/stoa-platform/stoa-quickstart) | Self-hosted quickstart (Docker Compose) |
-| [stoactl](https://github.com/stoa-platform/stoactl) | CLI tool (Go) — kubectl-style API management |
-
-## Benchmark
-
-STOA includes **Gateway Arena**, an open benchmark suite comparing API gateways on proxy throughput and AI-native capabilities (MCP, guardrails, governance). See [methodology](docs/BENCHMARK-METHODOLOGY.md) and [latest results](docs/BENCHMARK-RESULTS.md).
-
-## Documentation
-
-- **Docs**: [docs.gostoa.dev](https://docs.gostoa.dev) — 100+ pages
-- **Architecture Decisions**: [57+ ADRs](https://docs.gostoa.dev/docs/architecture/adr/)
-- **API Reference**: [Control Plane API](https://docs.gostoa.dev/docs/api/control-plane)
-- **Guides**: [Quick Start](https://docs.gostoa.dev/docs/guides/quickstart) · [Migration guides](https://docs.gostoa.dev/docs/guides/migration/) (Kong, Apigee, webMethods)
-
-## Security
-
-STOA runs SAST, dependency scanning, container scanning, and SBOM generation on every PR. 4 checks are required for merge: License Compliance, SBOM Generation, Signed Commits, and Regression Test Guard. See [`SECURITY.md`](SECURITY.md) for details.
+---
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+STOA is early, open, and looking for builders who care about making AI-to-API traffic safe, observable, and self-hostable.
 
-- **Commits**: `type(scope): description` (commitlint enforced)
-- **PRs**: Squash merge to main, < 300 LOC per PR
-- **License**: Apache 2.0 with [DCO sign-off](CLA.md)
+Great places to contribute:
+
+- **Gateway adapters** — Kong, Gravitee, Apigee, Azure APIM, AWS API Gateway, webMethods, and more.
+- **MCP examples** — agent clients, tool definitions, demo workflows, Claude/Cursor integrations.
+- **Security hardening** — OAuth, mTLS, RBAC, policy evaluation, audit, threat modeling.
+- **Observability** — dashboards, traces, error snapshots, benchmark scenarios.
+- **Docs and tutorials** — quick starts, migration guides, architecture notes, real-world examples.
+- **Developer experience** — `stoactl`, local setup, test ergonomics, CI, Helm values.
+
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the community on Discord.
 
 <a href="https://github.com/stoa-platform/stoa/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stoa-platform/stoa" alt="Contributors" />
 </a>
 
-## Community & Support
+---
 
-- [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions) — questions, ideas, show & tell
-- [Discord](https://discord.gg/j8tHSSes) — real-time chat
-- [Documentation](https://docs.gostoa.dev) — guides, ADRs, API reference
-- [Status Page](https://status.gostoa.dev) — platform uptime monitoring
-- [Support](SUPPORT.md) — how to get help and report issues
+## Documentation and community
 
-## License
-
-[Apache License 2.0](LICENSE)
+| Resource | Link |
+| --- | --- |
+| Documentation | <https://docs.gostoa.dev> |
+| Website | <https://gostoa.dev> |
+| GitHub Discussions | <https://github.com/stoa-platform/stoa/discussions> |
+| Discord | <https://discord.gg/j8tHSSes> |
+| Status | <https://status.gostoa.dev> |
+| Support | [`SUPPORT.md`](SUPPORT.md) |
+| Roadmap | [`ROADMAP.md`](ROADMAP.md) |
 
 ---
 
+## Related repositories
+
+| Repository | Purpose |
+| --- | --- |
+| [`stoa-docs`](https://github.com/stoa-platform/stoa-docs) | Documentation site, ADRs, guides, API reference |
+| [`stoa-web`](https://github.com/stoa-platform/stoa-web) | Public website |
+| [`stoa-quickstart`](https://github.com/stoa-platform/stoa-quickstart) | Self-hosted quick start |
+| [`stoactl`](https://github.com/stoa-platform/stoactl) | CLI for API management workflows |
+
+---
+
+## License
+
+STOA is released under the [Apache License 2.0](LICENSE).
+
 <p align="center">
-  <em>Built by <a href="https://cabingenierie.com">CAB Ingenierie</a> — Paris, France</em>
+  <em>Built by <a href="https://cabingenierie.com">CAB Ingénierie</a> — Paris, France.</em>
 </p>

@@ -135,7 +135,13 @@ export function GatewayDetail() {
   const deployments = deploymentsData?.items || [];
   const discoveredApis = toolsData || [];
   const isEdgeMcp = gateway.mode === 'edge-mcp' || gateway.gateway_type === 'stoa_edge_mcp';
-  const discoveryMetricLabel = isEdgeMcp ? 'MCP Tools' : 'Discovered APIs';
+  const syncedDeployments = deployments.filter((deployment) => deployment.sync_status === 'synced');
+  const discoveryMetricLabel = isEdgeMcp ? 'Deployed APIs' : 'Discovered APIs';
+  const discoveryMetricValue = isEdgeMcp
+    ? deploymentsData
+      ? String(syncedDeployments.length)
+      : '-'
+    : String(hd.discovered_apis_count ?? '-');
   const urls = gatewayUrls(gateway);
   const modeLabel = deploymentLabel(gateway);
   const topologyText = topologyLabel(gateway);
@@ -320,10 +326,7 @@ export function GatewayDetail() {
             value={hd.uptime_seconds ? formatUptime(hd.uptime_seconds as number) : '-'}
           />
           <MetricCard label="Routes" value={String(hd.routes_count ?? '-')} />
-          <MetricCard
-            label={discoveryMetricLabel}
-            value={String(hd.discovered_apis_count ?? '-')}
-          />
+          <MetricCard label={discoveryMetricLabel} value={discoveryMetricValue} />
           <MetricCard
             label="Error Rate"
             value={hd.error_rate != null ? `${((hd.error_rate as number) * 100).toFixed(1)}%` : '-'}
@@ -332,12 +335,12 @@ export function GatewayDetail() {
         </div>
       </section>
 
-      {/* APIs Deployed */}
+      {/* API Deployments */}
       {deployments.length > 0 && (
         <section className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Zap className="h-5 w-5 text-gray-400" />
-            APIs Deployed
+            API Deployments
             <span className="ml-auto text-sm font-normal text-gray-400">
               {deployments.length} API{deployments.length !== 1 ? 's' : ''}
             </span>

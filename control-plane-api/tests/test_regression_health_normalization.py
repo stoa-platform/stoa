@@ -52,7 +52,7 @@ class TestRegressionCAB1916HeartbeatDiscoveryRace:
     """CAB-1916: heartbeat must not overwrite discovery's `discovered_apis` array."""
 
     def test_heartbeat_stores_discovered_apis_count_not_discovered_apis(self, client):
-        """Heartbeat must store `discovered_apis_count` (int), never `discovered_apis`.
+        """Non-edge heartbeat must store `discovered_apis_count` (int), never `discovered_apis`.
 
         Before the fix, heartbeat stored `discovered_apis: 5` (int) which
         would overwrite the discovery array `discovered_apis: [{...}]`.
@@ -81,6 +81,35 @@ class TestRegressionCAB1916HeartbeatDiscoveryRace:
         assert "discovered_apis" not in gw.health_details or isinstance(
             gw.health_details.get("discovered_apis"), list
         )
+
+    def test_edge_mcp_heartbeat_stores_tools_count_not_api_discovery_count(self, client):
+        """Edge MCP heartbeat reports MCP tools, not discovered/deployed APIs."""
+        from src.models.gateway_instance import GatewayType
+
+        gw = _make_gateway_instance(
+            gateway_type=GatewayType.STOA_EDGE_MCP,
+            mode="edge-mcp",
+            health_details={"discovered_apis_count": 51},
+        )
+
+        with (
+            patch("src.routers.gateway_internal.settings") as mock_settings,
+            patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockRepo,
+        ):
+            mock_settings.gateway_api_keys_list = [VALID_KEY]
+            mock_repo = MockRepo.return_value
+            mock_repo.get_by_id = AsyncMock(return_value=gw)
+            mock_repo.update = AsyncMock(return_value=gw)
+
+            client.post(
+                f"/v1/internal/gateways/{gw.id}/heartbeat",
+                json={"uptime_seconds": 60, "discovered_apis": 51},
+                headers={GW_KEY_HEADER: VALID_KEY},
+            )
+
+        assert gw.health_details["mcp_tools_count"] == 51
+        assert gw.health_details["discovered_apis_count"] == 0
+        assert "discovered_apis" not in gw.health_details
 
     def test_heartbeat_after_discovery_preserves_api_array(self, client):
         """Heartbeat after discovery must not overwrite the `discovered_apis` array.

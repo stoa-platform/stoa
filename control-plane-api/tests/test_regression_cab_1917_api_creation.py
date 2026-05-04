@@ -99,6 +99,47 @@ class TestRegression_AutoDeployOnPromotion:
             mock_orch.auto_deploy_on_promotion.assert_not_called()
 
 
+class TestRegression_PromotionReplayCompletion:
+    """CAB-1917: replayed lifecycle promotions must not stay promoting forever."""
+
+    @pytest.mark.asyncio
+    async def test_replayed_promoting_deployment_completes_when_already_synced(self):
+        from datetime import UTC, datetime
+
+        from src.models.gateway_deployment import DeploymentSyncStatus
+        from src.models.promotion import PromotionStatus
+        from tests.test_api_lifecycle_promotion import (
+            _actor,
+            _api,
+            _deploy_sync_publish_source,
+            _gateway,
+            _promote_command,
+            _service,
+        )
+
+        api = _api()
+        dev_gateway = _gateway(environment="dev")
+        staging_gateway = _gateway(environment="staging")
+        service, repository, audit, _ = _service(api=api, gateways=[dev_gateway, staging_gateway])
+        await _deploy_sync_publish_source(service, repository)
+
+        first = await service.promote_to_environment(_promote_command(), _actor())
+        target_deployment = repository.deployments[(api.id, staging_gateway.id)]
+        target_deployment.sync_status = DeploymentSyncStatus.SYNCED
+        target_deployment.synced_generation = target_deployment.desired_generation
+        target_deployment.last_sync_success = datetime.now(UTC)
+
+        second = await service.promote_to_environment(_promote_command(), _actor())
+
+        stored_promotion = repository.promotions[first.promotion_id]
+        assert second.result == "unchanged"
+        assert second.promotion_id == first.promotion_id
+        assert second.promotion_status == PromotionStatus.PROMOTED.value
+        assert stored_promotion.target_deployment_id == target_deployment.id
+        assert stored_promotion.completed_at is not None
+        assert audit.events[-1]["details"]["promotion_status"] == PromotionStatus.PROMOTED.value
+
+
 # ---------------------------------------------------------------------------
 # 3. list_apis error handling
 # ---------------------------------------------------------------------------

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.6.1...control-plane-ui-v1.6.2) (2026-05-04)
+
+
+### Bug Fixes
+
+* **gateway:** keep scoped discovery counts authoritative ([#2684](https://github.com/stoa-platform/stoa/issues/2684)) ([7acfd7d](https://github.com/stoa-platform/stoa/commit/7acfd7d0b00e1e5ddb2897a5cf869bc72874f5eb))
+
 ## [1.6.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.6.0...control-plane-ui-v1.6.1) (2026-05-03)
 
 

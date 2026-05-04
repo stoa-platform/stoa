@@ -104,6 +104,9 @@ class ApiLifecyclePromotionResponse(BaseModel):
     requested_by: str
     approved_by: str | None = None
     completed_at: datetime | None = None
+    source_deployment_id: UUID | None = None
+    target_deployment_id: UUID | None = None
+    target_gateway_ids: list[UUID] = Field(default_factory=list)
 
 
 class ApiLifecyclePortalPublicationResponse(BaseModel):

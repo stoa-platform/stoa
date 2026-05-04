@@ -31,8 +31,73 @@ const statusColors: Record<string, string> = {
 const ALL_TENANTS = '__all__';
 const LEGACY_PORTAL_TAGS = new Set(['portal:published', 'promoted:portal', 'portal-promoted']);
 
+const runtimeStatusColors: Record<string, string> = {
+  synced: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  syncing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  drifted: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  none: 'bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400',
+};
+
 function sanitizedApiTags(tags: string[] | undefined): string[] {
   return (tags || []).filter((tag) => !LEGACY_PORTAL_TAGS.has(tag));
+}
+
+function RuntimeDeploymentBadges({ api }: { api: API }) {
+  const summaries =
+    api.runtime_deployments && api.runtime_deployments.length > 0
+      ? api.runtime_deployments
+      : [
+          {
+            environment: 'dev',
+            status: api.deployed_dev ? 'synced' : 'none',
+            gateway_count: api.deployed_dev ? 1 : 0,
+            synced_count: api.deployed_dev ? 1 : 0,
+            error_count: 0,
+            pending_count: 0,
+            drifted_count: 0,
+            latest_error: null,
+            gateway_names: [],
+          },
+          {
+            environment: 'staging',
+            status: api.deployed_staging ? 'synced' : 'none',
+            gateway_count: api.deployed_staging ? 1 : 0,
+            synced_count: api.deployed_staging ? 1 : 0,
+            error_count: 0,
+            pending_count: 0,
+            drifted_count: 0,
+            latest_error: null,
+            gateway_names: [],
+          },
+        ];
+
+  return (
+    <div className="flex flex-wrap gap-1.5" data-testid="api-runtime-deployments">
+      {summaries.map((summary) => {
+        const title = [
+          `${summary.environment}: ${summary.status}`,
+          summary.gateway_count ? `${summary.gateway_count} gateway target(s)` : null,
+          summary.gateway_names?.length ? summary.gateway_names.join(', ') : null,
+          summary.latest_error ? `Error: ${summary.latest_error}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <span
+            key={`${summary.environment}:${summary.status}:${summary.gateway_names?.join(',') || ''}`}
+            title={title}
+            className={`px-2 py-1 rounded text-xs font-medium ${
+              runtimeStatusColors[summary.status] || runtimeStatusColors.none
+            }`}
+          >
+            {summary.environment.toUpperCase()} {summary.status}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function parseSpecDocument(content: string): Record<string, unknown> {
@@ -439,16 +504,7 @@ export function APIs() {
                       Portal
                     </span>
                   )}
-                  <span
-                    className={`px-2 py-1 rounded text-xs ${api.deployed_dev ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'}`}
-                  >
-                    DEV
-                  </span>
-                  <span
-                    className={`px-2 py-1 rounded text-xs ${api.deployed_staging ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'}`}
-                  >
-                    STG
-                  </span>
+                  <RuntimeDeploymentBadges api={api} />
                 </div>
 
                 <div className="flex flex-wrap gap-3 pt-1">
@@ -559,18 +615,7 @@ export function APIs() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex gap-2">
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${api.deployed_dev ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'}`}
-                        >
-                          DEV
-                        </span>
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${api.deployed_staging ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-400'}`}
-                        >
-                          STG
-                        </span>
-                      </div>
+                      <RuntimeDeploymentBadges api={api} />
                     </td>
                     <td
                       className="px-6 py-4 whitespace-nowrap text-sm"

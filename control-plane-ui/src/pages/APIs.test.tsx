@@ -52,6 +52,30 @@ vi.mock('../services/api', () => ({
         status: 'published',
         deployed_dev: true,
         deployed_staging: false,
+        runtime_deployments: [
+          {
+            environment: 'dev',
+            status: 'synced',
+            gateway_count: 1,
+            synced_count: 1,
+            error_count: 0,
+            pending_count: 0,
+            drifted_count: 0,
+            latest_error: null,
+            gateway_names: ['stoa-dev'],
+          },
+          {
+            environment: 'staging',
+            status: 'error',
+            gateway_count: 1,
+            synced_count: 0,
+            error_count: 1,
+            pending_count: 0,
+            drifted_count: 0,
+            latest_error: 'activation failed',
+            gateway_names: ['webmethods-staging'],
+          },
+        ],
         tags: ['payments'],
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-15T00:00:00Z',
@@ -84,6 +108,30 @@ vi.mock('../services/api', () => ({
         status: 'published',
         deployed_dev: true,
         deployed_staging: false,
+        runtime_deployments: [
+          {
+            environment: 'dev',
+            status: 'synced',
+            gateway_count: 1,
+            synced_count: 1,
+            error_count: 0,
+            pending_count: 0,
+            drifted_count: 0,
+            latest_error: null,
+            gateway_names: ['stoa-dev'],
+          },
+          {
+            environment: 'staging',
+            status: 'error',
+            gateway_count: 1,
+            synced_count: 0,
+            error_count: 1,
+            pending_count: 0,
+            drifted_count: 0,
+            latest_error: 'activation failed',
+            gateway_names: ['webmethods-staging'],
+          },
+        ],
         tags: ['payments'],
       },
       {
@@ -239,6 +287,13 @@ describe('APIs', () => {
     renderAPIs();
     expect(await screen.findByText('published')).toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
+  });
+
+  it('renders runtime deployment statuses from GatewayDeployment summaries', async () => {
+    renderAPIs();
+    expect(await screen.findByText('DEV synced')).toBeInTheDocument();
+    expect(screen.getByText('STAGING error')).toBeInTheDocument();
+    expect(screen.getByTitle(/activation failed/)).toBeInTheDocument();
   });
 
   it('renders API backend URLs', async () => {

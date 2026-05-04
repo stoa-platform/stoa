@@ -87,6 +87,7 @@ class InMemoryApiLifecycleRepository:
                     gateway_resource_id=deployment.gateway_resource_id,
                     public_url=gateway.public_url,
                     sync_error=deployment.sync_error,
+                    last_sync_attempt=deployment.last_sync_attempt,
                     last_sync_success=deployment.last_sync_success,
                 )
             )

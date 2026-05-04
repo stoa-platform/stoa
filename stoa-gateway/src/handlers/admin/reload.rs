@@ -7,6 +7,9 @@
 //! message plus the id.
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
 use tracing::{error, warn};
 use uuid::Uuid;
@@ -25,6 +28,10 @@ pub enum ReloadError {
     CpStatus(u16),
     #[error("Failed to parse control plane response")]
     ParseFailed(#[source] reqwest::Error),
+    #[error("Route reload ack request to control plane failed")]
+    AckUnreachable(#[source] reqwest::Error),
+    #[error("Control plane route reload ack returned non-success status {0}")]
+    AckStatus(u16),
 }
 
 impl ReloadError {
@@ -32,9 +39,11 @@ impl ReloadError {
     fn http_status(&self) -> StatusCode {
         match self {
             Self::NotConfigured => StatusCode::SERVICE_UNAVAILABLE,
-            Self::CpUnreachable(_) | Self::CpStatus(_) | Self::ParseFailed(_) => {
-                StatusCode::BAD_GATEWAY
-            }
+            Self::CpUnreachable(_)
+            | Self::CpStatus(_)
+            | Self::ParseFailed(_)
+            | Self::AckUnreachable(_)
+            | Self::AckStatus(_) => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -45,8 +54,44 @@ impl ReloadError {
             Self::CpUnreachable(_) => "Route reload failed: control plane unreachable",
             Self::CpStatus(_) => "Route reload failed: control plane returned an error",
             Self::ParseFailed(_) => "Route reload failed: control plane response malformed",
+            Self::AckUnreachable(_) => "Route reload failed: control plane ack unreachable",
+            Self::AckStatus(_) => "Route reload failed: control plane rejected route ack",
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ControlPlaneRoute {
+    #[serde(flatten)]
+    route: crate::routes::ApiRoute,
+    #[serde(default)]
+    deployment_id: String,
+    #[serde(default)]
+    gateway_instance_id: String,
+    #[serde(default)]
+    generation: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct RouteSyncAckPayload {
+    synced_routes: Vec<RouteSyncAckResult>,
+    sync_timestamp: String,
+}
+
+#[derive(Debug, Serialize)]
+struct RouteSyncAckResult {
+    deployment_id: String,
+    status: &'static str,
+    error: Option<String>,
+    steps: Vec<RouteSyncAckStep>,
+    generation: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct RouteSyncAckStep {
+    name: &'static str,
+    status: &'static str,
+    detail: &'static str,
 }
 
 /// Trigger a route table reload from the Control Plane.
@@ -128,11 +173,79 @@ pub async fn reload_routes_from_cp(state: &AppState) -> Result<usize, ReloadErro
         return Err(ReloadError::CpStatus(response.status().as_u16()));
     }
 
-    let routes: Vec<crate::routes::ApiRoute> =
+    let control_plane_routes: Vec<ControlPlaneRoute> =
         response.json().await.map_err(ReloadError::ParseFailed)?;
 
+    let acks = build_route_sync_acks(&control_plane_routes);
+    let routes = control_plane_routes
+        .into_iter()
+        .map(|item| item.route)
+        .collect();
     let count = state.route_registry.swap_all(routes);
+    send_route_sync_acks(state, cp_url, acks).await?;
     Ok(count)
+}
+
+fn build_route_sync_acks(routes: &[ControlPlaneRoute]) -> HashMap<String, Vec<RouteSyncAckResult>> {
+    let mut acks: HashMap<String, Vec<RouteSyncAckResult>> = HashMap::new();
+    for route in routes {
+        if route.deployment_id.is_empty() || route.gateway_instance_id.is_empty() {
+            continue;
+        }
+        acks.entry(route.gateway_instance_id.clone())
+            .or_default()
+            .push(RouteSyncAckResult {
+                deployment_id: route.deployment_id.clone(),
+                status: "applied",
+                error: None,
+                steps: vec![
+                    RouteSyncAckStep {
+                        name: "gateway_routes_fetched",
+                        status: "success",
+                        detail: "route loaded from control plane",
+                    },
+                    RouteSyncAckStep {
+                        name: "gateway_routes_applied",
+                        status: "success",
+                        detail: "route table swapped in stoa-gateway",
+                    },
+                ],
+                generation: route.generation,
+            });
+    }
+    acks
+}
+
+async fn send_route_sync_acks(
+    state: &AppState,
+    cp_url: &str,
+    acks: HashMap<String, Vec<RouteSyncAckResult>>,
+) -> Result<(), ReloadError> {
+    if acks.is_empty() {
+        return Ok(());
+    }
+
+    for (gateway_id, synced_routes) in acks {
+        let url = format!(
+            "{}/v1/internal/gateways/{}/route-sync-ack",
+            cp_url.trim_end_matches('/'),
+            gateway_id
+        );
+        let payload = RouteSyncAckPayload {
+            synced_routes,
+            sync_timestamp: Utc::now().to_rfc3339(),
+        };
+        let mut request = state.http_client.post(&url).json(&payload);
+        if let Some(ref token) = state.config.control_plane_api_key {
+            request = request.header("X-Gateway-Key", token.as_str());
+        }
+        let response = request.send().await.map_err(ReloadError::AckUnreachable)?;
+        if !response.status().is_success() {
+            return Err(ReloadError::AckStatus(response.status().as_u16()));
+        }
+    }
+
+    Ok(())
 }
 
 fn current_gateway_name(config: &crate::config::Config) -> Option<String> {
@@ -160,6 +273,8 @@ fn derive_gateway_name(hostname: &str, mode: &str, environment: &str) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{body_string_contains, header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn regression_route_reload_gateway_name_matches_control_plane_registration() {
@@ -189,12 +304,114 @@ mod tests {
         assert!(!err.client_message().contains("418"));
     }
 
+    #[tokio::test]
+    async fn reload_routes_posts_route_sync_ack_for_loaded_deployments() {
+        let mock_server = MockServer::start().await;
+        let deployment_id = Uuid::new_v4();
+        let gateway_id = Uuid::new_v4();
+
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/gateways/routes"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "route-1",
+                    "api_id": "payments-api",
+                    "deployment_id": deployment_id.to_string(),
+                    "gateway_instance_id": gateway_id.to_string(),
+                    "generation": 7,
+                    "name": "Payments API",
+                    "tenant_id": "acme",
+                    "path_prefix": "/apis/acme/payments",
+                    "backend_url": "https://backend.test",
+                    "methods": ["GET"],
+                    "spec_hash": "abc123",
+                    "activated": true
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/v1/internal/gateways/{gateway_id}/route-sync-ack"
+            )))
+            .and(header("X-Gateway-Key", "test-key"))
+            .and(body_string_contains(deployment_id.to_string()))
+            .and(body_string_contains("\"status\":\"applied\""))
+            .and(body_string_contains("\"generation\":7"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "processed": 1,
+                "not_found": 0
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let config = crate::config::Config {
+            control_plane_url: Some(mock_server.uri()),
+            control_plane_api_key: Some("test-key".to_string()),
+            ..crate::config::Config::default()
+        };
+        let state = AppState::new(config);
+
+        let count = reload_routes_from_cp(&state)
+            .await
+            .expect("reload succeeds");
+
+        assert_eq!(count, 1);
+        assert_eq!(state.route_registry.count(), 1);
+    }
+
+    #[tokio::test]
+    async fn reload_routes_keeps_routes_without_deployment_metadata_but_skips_ack() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/gateways/routes"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "legacy-route",
+                    "name": "Legacy API",
+                    "tenant_id": "acme",
+                    "path_prefix": "/legacy",
+                    "backend_url": "https://legacy.test",
+                    "methods": ["GET"],
+                    "spec_hash": "abc123",
+                    "activated": true
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/ignored/route-sync-ack"))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let config = crate::config::Config {
+            control_plane_url: Some(mock_server.uri()),
+            control_plane_api_key: Some("test-key".to_string()),
+            ..crate::config::Config::default()
+        };
+        let state = AppState::new(config);
+
+        let count = reload_routes_from_cp(&state)
+            .await
+            .expect("reload succeeds");
+
+        assert_eq!(count, 1);
+        assert_eq!(state.route_registry.count(), 1);
+    }
+
     #[test]
     fn regression_reload_client_messages_are_static_and_non_leaky() {
         // None of the generic messages should reveal reqwest/serde/DNS internals.
         for msg in [
             ReloadError::NotConfigured.client_message(),
             ReloadError::CpStatus(500).client_message(),
+            ReloadError::AckStatus(500).client_message(),
         ] {
             for needle in ["reqwest", "connection refused", "dns", "expected field"] {
                 assert!(

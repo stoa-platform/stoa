@@ -12793,6 +12793,11 @@
             "title": "Deployment Id",
             "type": "string"
           },
+          "gateway_instance_id": {
+            "default": "",
+            "title": "Gateway Instance Id",
+            "type": "string"
+          },
           "generation": {
             "default": 1,
             "title": "Generation",

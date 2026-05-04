@@ -123,6 +123,51 @@ describe('ApiLifecyclePanel', () => {
     );
   });
 
+  it('renders gateway deployment diagnostics without truncating the runtime error', async () => {
+    const webmethodsError =
+      'webmethods verifyAndActivate failed: API created but activation failed on webMethods: stoa-demo-api2 (def76d06-20dd-442e-a7b4-fc11ecbaddbf): webmethods api activate failed (500)';
+    vi.mocked(apiService.getApiLifecycleState).mockResolvedValue({
+      ...baseLifecycleState,
+      catalog_status: 'ready',
+      lifecycle_phase: 'failed',
+      deployments: [
+        {
+          id: 'deployment-1',
+          environment: 'dev',
+          gateway_instance_id: 'gateway-1',
+          gateway_name: 'connect-webmethods-dev-connect-dev',
+          gateway_type: 'webmethods',
+          sync_status: 'error',
+          desired_generation: 5,
+          synced_generation: 0,
+          gateway_resource_id: 'def76d06-20dd-442e-a7b4-fc11ecbaddbf',
+          public_url: 'https://vps-wm.gostoa.dev',
+          sync_error: webmethodsError,
+          last_sync_attempt: '2026-05-04T07:53:20Z',
+          last_sync_success: null,
+          policy_sync_status: 'error',
+          policy_sync_error: 'webmethods API not found: default-rate-limit-demo-gitops',
+          sync_steps: [
+            { name: 'agent_received', status: 'success', detail: 'sync request received' },
+            { name: 'api_synced', status: 'failed', detail: webmethodsError },
+          ],
+        },
+      ],
+    });
+
+    renderPanel();
+
+    expect(await screen.findByTestId('api-lifecycle-deployment-error')).toHaveTextContent(
+      webmethodsError
+    );
+    expect(screen.getByText('synced 0 / desired 5')).toBeInTheDocument();
+    expect(screen.getByTestId('api-lifecycle-deployment-policy-error')).toHaveTextContent(
+      'default-rate-limit-demo-gitops'
+    );
+    expect(screen.getByTestId('api-lifecycle-deployment-step')).toHaveTextContent('api_synced');
+    expect(screen.getByTestId('api-lifecycle-deployment-step')).toHaveTextContent(webmethodsError);
+  });
+
   it('sends publication and promotion requests through lifecycle actions', async () => {
     const readyState = { ...baseLifecycleState, catalog_status: 'ready', lifecycle_phase: 'ready' };
     vi.mocked(apiService.getApiLifecycleState).mockResolvedValue(readyState);

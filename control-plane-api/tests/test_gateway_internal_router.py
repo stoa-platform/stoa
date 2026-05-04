@@ -659,6 +659,7 @@ def _make_deployment(desired_state: dict):
     """Build a minimal mock GatewayDeployment."""
     m = MagicMock()
     m.id = uuid4()
+    m.gateway_instance_id = uuid4()
     m.desired_generation = 1
     m.desired_state = desired_state
     return m
@@ -695,6 +696,9 @@ class TestListGatewayRoutes:
         assert len(routes) == 1
         assert routes[0]["api_id"] == "petstore"
         assert routes[0]["name"] == "petstore"
+        assert routes[0]["deployment_id"] == str(dep.id)
+        assert routes[0]["gateway_instance_id"] == str(dep.gateway_instance_id)
+        assert routes[0]["generation"] == 1
         assert routes[0]["spec_hash"] == "abc123"
         assert routes[0]["openapi_spec"] is None
 

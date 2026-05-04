@@ -37,6 +37,14 @@ export interface ApiLifecycleSpecState {
   fallback_reason?: string | null;
 }
 
+export interface ApiLifecycleSyncStep {
+  name: string;
+  status: string;
+  detail?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
 export interface ApiLifecycleGatewayDeployment {
   id: string;
   environment: string;
@@ -49,7 +57,11 @@ export interface ApiLifecycleGatewayDeployment {
   gateway_resource_id?: string | null;
   public_url?: string | null;
   sync_error?: string | null;
+  last_sync_attempt?: string | null;
   last_sync_success?: string | null;
+  policy_sync_status?: string | null;
+  policy_sync_error?: string | null;
+  sync_steps?: ApiLifecycleSyncStep[];
 }
 
 export interface ApiLifecyclePromotion {

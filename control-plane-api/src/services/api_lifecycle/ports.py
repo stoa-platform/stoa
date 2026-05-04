@@ -185,6 +185,15 @@ class ApiSpecState:
 
 
 @dataclass(frozen=True)
+class GatewayDeploymentSyncStep:
+    name: str
+    status: str
+    detail: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
+@dataclass(frozen=True)
 class GatewayDeploymentState:
     id: UUID
     environment: str
@@ -197,7 +206,11 @@ class GatewayDeploymentState:
     gateway_resource_id: str | None = None
     public_url: str | None = None
     sync_error: str | None = None
+    last_sync_attempt: datetime | None = None
     last_sync_success: datetime | None = None
+    policy_sync_status: str | None = None
+    policy_sync_error: str | None = None
+    sync_steps: list[GatewayDeploymentSyncStep] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -246,7 +259,11 @@ class GatewayDeploymentSnapshot:
     gateway_resource_id: str | None = None
     public_url: str | None = None
     sync_error: str | None = None
+    last_sync_attempt: datetime | None = None
     last_sync_success: datetime | None = None
+    policy_sync_status: str | None = None
+    policy_sync_error: str | None = None
+    sync_steps: list[GatewayDeploymentSyncStep] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

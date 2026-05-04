@@ -734,7 +734,11 @@ class ApiLifecycleService:
                 gateway_resource_id=item.gateway_resource_id,
                 public_url=item.public_url,
                 sync_error=item.sync_error,
+                last_sync_attempt=item.last_sync_attempt,
                 last_sync_success=item.last_sync_success,
+                policy_sync_status=item.policy_sync_status,
+                policy_sync_error=item.policy_sync_error,
+                sync_steps=item.sync_steps,
             )
             for item in deployments
         ]

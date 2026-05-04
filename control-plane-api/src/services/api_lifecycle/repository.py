@@ -13,7 +13,7 @@ from src.models.gateway_instance import GatewayInstance
 from src.models.promotion import Promotion, PromotionStatus
 from src.services.catalog_api_definition import environment_matches
 
-from .ports import GatewayDeploymentSnapshot, GatewayTarget, PromotionSnapshot
+from .ports import GatewayDeploymentSnapshot, GatewayDeploymentSyncStep, GatewayTarget, PromotionSnapshot
 
 
 class SqlAlchemyApiLifecycleRepository:
@@ -79,7 +79,11 @@ class SqlAlchemyApiLifecycleRepository:
                     gateway_resource_id=deployment.gateway_resource_id,
                     public_url=gateway.public_url,
                     sync_error=deployment.sync_error,
+                    last_sync_attempt=deployment.last_sync_attempt,
                     last_sync_success=deployment.last_sync_success,
+                    policy_sync_status=str(deployment.policy_sync_status) if deployment.policy_sync_status else None,
+                    policy_sync_error=deployment.policy_sync_error,
+                    sync_steps=_sync_steps_from_model(deployment.sync_steps),
                 )
             )
         return deployments
@@ -243,3 +247,30 @@ def _gateway_target_from_model(gateway: GatewayInstance) -> GatewayTarget:
         enabled=bool(gateway.enabled),
         public_url=gateway.public_url,
     )
+
+
+def _sync_steps_from_model(raw_steps: object) -> list[GatewayDeploymentSyncStep]:
+    if not isinstance(raw_steps, list):
+        return []
+
+    steps: list[GatewayDeploymentSyncStep] = []
+    for raw_step in raw_steps:
+        if not isinstance(raw_step, dict):
+            continue
+        name = raw_step.get("name")
+        status = raw_step.get("status")
+        if not isinstance(name, str) or not isinstance(status, str):
+            continue
+        detail = raw_step.get("detail")
+        started_at = raw_step.get("started_at")
+        completed_at = raw_step.get("completed_at")
+        steps.append(
+            GatewayDeploymentSyncStep(
+                name=name,
+                status=status,
+                detail=detail if isinstance(detail, str) else None,
+                started_at=started_at if isinstance(started_at, str) else None,
+                completed_at=completed_at if isinstance(completed_at, str) else None,
+            )
+        )
+    return steps

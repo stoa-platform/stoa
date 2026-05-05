@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.12.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.2...control-plane-api-v1.12.3) (2026-05-04)
+
+
+### Bug Fixes
+
+* **console:** surface lifecycle runtime status ([f527e6b](https://github.com/stoa-platform/stoa/commit/f527e6b55fec5682da6eb1b252c21650b4af0566))
+* **control-plane-api:** CAB-1917 complete synced replayed promotions ([f07c040](https://github.com/stoa-platform/stoa/commit/f07c040aed194536dacfac446f8dd65b663b28b4))
+* **gateway:** decouple edge MCP tools from API discovery ([#2687](https://github.com/stoa-platform/stoa/issues/2687)) ([6e91a66](https://github.com/stoa-platform/stoa/commit/6e91a66bf6dfdded69cac8389388409a77ca7964))
+* **gateway:** decouple native runtime tools from API discovery ([#2690](https://github.com/stoa-platform/stoa/issues/2690)) ([155d2bc](https://github.com/stoa-platform/stoa/commit/155d2bc7d6e7c2dc6d8aeead79fd53127c1d8967))
+* **gateways:** CAB-2240 canonicalize webMethods UI URLs ([c84a597](https://github.com/stoa-platform/stoa/commit/c84a597692d3659ec99c014deb266aaa29a8e1d6))
+
 ## [1.12.2](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.1...control-plane-api-v1.12.2) (2026-05-02)
 
 

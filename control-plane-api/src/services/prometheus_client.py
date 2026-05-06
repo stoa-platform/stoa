@@ -432,11 +432,13 @@ class PrometheusClient:
     def _build_labels(
         self, subscription_id: str | None = None, user_id: str | None = None, tenant_id: str | None = None
     ) -> str:
-        """Build PromQL label selector.
+        """Build PromQL label selector for legacy helper paths.
 
-        Maps API field names to gateway metric labels:
-        - tenant_id -> tenant (gateway uses 'tenant' label, with fallback to 'default')
-        - user_id not emitted by gateway, omitted from PromQL
+        Maps API field names to currently emitted gateway metric labels:
+        - tenant_id -> tenant
+        - user_id is not emitted by gateway, omitted from PromQL
+
+        Do not add tenant fallback/default behavior here.
         """
         labels = []
         if subscription_id:

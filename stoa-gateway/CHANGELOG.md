@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.23](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.22...stoa-gateway-v0.9.23) (2026-05-06)
+
+
+### Bug Fixes
+
+* **observability:** add gateway trace log correlation ([#2707](https://github.com/stoa-platform/stoa/issues/2707)) ([ea3fd19](https://github.com/stoa-platform/stoa/commit/ea3fd192fd06dbd759b2dab05d295f51bf22772f))
+
 ## [0.9.22](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.21...stoa-gateway-v0.9.22) (2026-05-06)
 
 

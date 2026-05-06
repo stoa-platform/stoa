@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.22](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.21...stoa-gateway-v0.9.22) (2026-05-06)
+
+
+### Bug Fixes
+
+* **gateway:** reduce Prometheus metric cardinality ([#2705](https://github.com/stoa-platform/stoa/issues/2705)) ([101411f](https://github.com/stoa-platform/stoa/commit/101411fe154e267ea94f20129a77dc4df92a8f75))
+
 ## [0.9.21](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.20...stoa-gateway-v0.9.21) (2026-05-04)
 
 

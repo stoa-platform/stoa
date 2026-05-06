@@ -8,7 +8,7 @@ describe('observabilityPath', () => {
 
   it('returns path with encoded target URL', () => {
     expect(observabilityPath('https://grafana.gostoa.dev/d/abc')).toBe(
-      '/observability?url=https%3A%2F%2Fgrafana.gostoa.dev%2Fd%2Fabc'
+      '/observability/grafana?url=https%3A%2F%2Fgrafana.gostoa.dev%2Fd%2Fabc'
     );
   });
 });

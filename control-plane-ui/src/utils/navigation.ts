@@ -3,10 +3,10 @@
  * Converts external links into internal iframe routes with deep-link support.
  */
 
-/** Build a path to the Observability iframe, optionally with a target URL. */
+/** Build a path to the product Observability page, or Grafana expert mode with a target URL. */
 export function observabilityPath(targetUrl?: string): string {
   if (!targetUrl) return '/observability';
-  return `/observability?url=${encodeURIComponent(targetUrl)}`;
+  return `/observability/grafana?url=${encodeURIComponent(targetUrl)}`;
 }
 
 /** Build a path to the Logs iframe, optionally with a target URL. */

@@ -207,7 +207,7 @@ It is not yet the full migration plan.
 | `tool`, `tool_id`, `tool_name` mismatch | canonical `tool_name` | API readers support current names, then migrate to canonical projection. | platform/gateway | TBD |
 | `mcp_request_duration_seconds` queries | emitted STOA MCP duration metric or recording rule | Add alias or update reader after metric audit. | platform | TBD |
 | OpenSearch `resource.attributes.tenant@id` filters | canonical tenant filter | Do not assume tenant is a resource attribute unless the collector sets it. | platform | TBD |
-| Grafana URL token authentication | backend-mediated session/proxy | Replace in Console productization PR. | console/platform | TBD |
+| Grafana URL token authentication | backend-mediated session/proxy | Console expert route MUST NOT append JWTs to URLs; backend/proxy/session authorization remains the target. | console/platform | backend session/proxy TBD |
 
 ## 9. Tenant-Safety Requirements
 

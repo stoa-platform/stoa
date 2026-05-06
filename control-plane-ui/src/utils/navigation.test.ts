@@ -8,7 +8,7 @@ describe('observabilityPath', () => {
 
   it('returns path with encoded target URL', () => {
     expect(observabilityPath('https://grafana.gostoa.dev/d/abc')).toBe(
-      '/observability?url=https%3A%2F%2Fgrafana.gostoa.dev%2Fd%2Fabc'
+      '/observability/grafana?url=https%3A%2F%2Fgrafana.gostoa.dev%2Fd%2Fabc'
     );
   });
 });
@@ -42,8 +42,17 @@ describe('isAllowedEmbedUrl', () => {
     expect(isAllowedEmbedUrl('https://evil.com/steal')).toBe(false);
   });
 
-  it('allows relative paths', () => {
-    expect(isAllowedEmbedUrl('/d/dashboard')).toBe(true);
+  it('allows known relative observability embed paths', () => {
+    expect(isAllowedEmbedUrl('/grafana/d/stoa-gateway-overview')).toBe(true);
+    expect(isAllowedEmbedUrl('/prometheus/graph')).toBe(true);
+  });
+
+  it('rejects protocol-relative embed URLs', () => {
+    expect(isAllowedEmbedUrl('//evil.example/d/stoa')).toBe(false);
+  });
+
+  it('rejects unknown relative embed paths', () => {
+    expect(isAllowedEmbedUrl('/not-grafana/dashboard')).toBe(false);
   });
 
   it('rejects non-relative invalid URLs', () => {

@@ -20,8 +20,10 @@ from src.schemas.gateway import (
     PaginatedGatewayInstances,
 )
 from src.schemas.gateway_import import ImportPreviewResponse, ImportResultResponse
+from src.schemas.gateway_overview import GatewayOverviewResponse
 from src.services.gateway_import_service import GatewayImportService
 from src.services.gateway_instance_service import GatewayInstanceService
+from src.services.gateway_overview_service import GatewayOverviewService
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +157,17 @@ async def get_gateway(
     if not instance:
         raise HTTPException(status_code=404, detail="Gateway instance not found")
     return instance
+
+
+@router.get("/{gateway_id}/overview", response_model=GatewayOverviewResponse)
+async def get_gateway_overview(
+    gateway_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["cpi-admin", "tenant-admin"])),
+):
+    """Get the read-only Control Plane overview for a gateway detail page."""
+    svc = GatewayOverviewService(db)
+    return await svc.get_overview(gateway_id, user)
 
 
 @router.get("/{gateway_id}/tools")

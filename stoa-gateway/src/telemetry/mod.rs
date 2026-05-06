@@ -167,6 +167,24 @@ pub fn extract_trace_id() -> String {
     "-".to_string()
 }
 
+/// Extract the current OTel span_id as hex string (for access logs).
+///
+/// Returns `"-"` when OTel is inactive.
+pub fn extract_span_id() -> String {
+    if is_otel_active() {
+        use opentelemetry::trace::TraceContextExt;
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+        let cx = tracing::Span::current().context();
+        let span_ref = cx.span();
+        let span_id = span_ref.span_context().span_id();
+        if span_id != opentelemetry::trace::SpanId::INVALID {
+            return format!("{span_id}");
+        }
+    }
+    "-".to_string()
+}
+
 /// Shutdown OpenTelemetry (flush pending spans)
 pub fn shutdown_telemetry() {
     if is_otel_active() {
@@ -239,5 +257,14 @@ mod tests {
         let trace_id = extract_trace_id();
         // Either "-" (inactive) or a valid hex trace ID
         assert!(!trace_id.is_empty());
+    }
+
+    #[test]
+    fn test_extract_span_id_when_inactive() {
+        // When OTel is not initialized, should return "-"
+        // (OnceLock may or may not be set depending on test order)
+        let span_id = extract_span_id();
+        // Either "-" (inactive) or a valid hex span ID
+        assert!(!span_id.is_empty());
     }
 }

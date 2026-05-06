@@ -5,6 +5,7 @@ Uses httpx.AsyncClient with context managers following existing patterns.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -13,6 +14,13 @@ import httpx
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+MCP_TOOL_CALLS_METRIC = "stoa_mcp_tools_calls_total"
+MCP_TOOL_DURATION_METRIC = "stoa_mcp_tool_duration_seconds"
+LEGACY_MCP_REQUEST_DURATION_METRIC = "mcp_request_duration_seconds"
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+_TIME_RANGE_RE = re.compile(r"^[1-9][0-9]*(s|m|h|d|w)$")
 
 
 class PrometheusClient:
@@ -118,6 +126,18 @@ class PrometheusClient:
             logger.warning(f"Prometheus range query error: {e}")
             return None
 
+    async def _query(self, promql: str) -> list[dict[str, Any]]:
+        """Execute an instant query and return the raw Prometheus result vector.
+
+        Older router code uses this thin wrapper directly. Keep it as a
+        compatibility shim over query() so all Prometheus HTTP behavior remains
+        centralized in one method.
+        """
+        data = await self.query(promql)
+        if data is None:
+            raise ConnectionError("Prometheus query failed")
+        return cast(list[dict[str, Any]], data.get("result", []))
+
     # ===== Specific Query Methods =====
 
     async def get_request_count(
@@ -128,8 +148,11 @@ class PrometheusClient:
         time_range: str = "24h",
     ) -> int:
         """Get total request count for given filters."""
-        labels = self._build_labels(subscription_id, user_id, tenant_id)
-        query = f"sum(increase(stoa_mcp_tools_calls_total{{{labels}}}[{time_range}])) or vector(0)"
+        label_sets = self._mcp_call_label_sets(
+            subscription_id=subscription_id,
+            tenant_id=tenant_id,
+        )
+        query = self._sum_increase_query(MCP_TOOL_CALLS_METRIC, label_sets, time_range)
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -141,10 +164,12 @@ class PrometheusClient:
         time_range: str = "24h",
     ) -> int:
         """Get successful request count."""
-        labels = self._build_labels(subscription_id, user_id, tenant_id)
-        if labels:
-            labels += ","
-        query = f'sum(increase(stoa_mcp_tools_calls_total{{{labels}status="success"}}[{time_range}])) or vector(0)'
+        label_sets = self._mcp_call_label_sets(
+            subscription_id=subscription_id,
+            tenant_id=tenant_id,
+            status_selector='status="success"',
+        )
+        query = self._sum_increase_query(MCP_TOOL_CALLS_METRIC, label_sets, time_range)
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -156,12 +181,12 @@ class PrometheusClient:
         time_range: str = "24h",
     ) -> int:
         """Get error request count."""
-        labels = self._build_labels(subscription_id, user_id, tenant_id)
-        if labels:
-            labels += ","
-        query = (
-            f'sum(increase(stoa_mcp_tools_calls_total{{{labels}status=~"error|timeout"}}[{time_range}])) or vector(0)'
+        label_sets = self._mcp_call_label_sets(
+            subscription_id=subscription_id,
+            tenant_id=tenant_id,
+            status_selector='status=~"error|timeout"',
         )
+        query = self._sum_increase_query(MCP_TOOL_CALLS_METRIC, label_sets, time_range)
         result = await self.query(query)
         return self._extract_scalar(result, default=0)
 
@@ -173,13 +198,27 @@ class PrometheusClient:
         time_range: str = "24h",
     ) -> int:
         """Get average latency in milliseconds."""
-        labels = self._build_labels(subscription_id, user_id, tenant_id)
-        # Use rate to get average latency over the time range
+        label_sets = self._mcp_call_label_sets(
+            subscription_id=subscription_id,
+            tenant_id=tenant_id,
+        )
+        sum_query = self._sum_rate_query(
+            [MCP_TOOL_DURATION_METRIC, LEGACY_MCP_REQUEST_DURATION_METRIC],
+            "sum",
+            label_sets,
+            time_range,
+        )
+        count_query = self._sum_rate_query(
+            [MCP_TOOL_DURATION_METRIC, LEGACY_MCP_REQUEST_DURATION_METRIC],
+            "count",
+            label_sets,
+            time_range,
+        )
         query = f"""
             (
-                sum(rate(mcp_request_duration_seconds_sum{{{labels}}}[{time_range}]))
+                ({sum_query})
                 /
-                sum(rate(mcp_request_duration_seconds_count{{{labels}}}[{time_range}]))
+                ({count_query})
             ) * 1000
         """.strip().replace("\n", " ").replace("  ", " ")
         result = await self.query(query)
@@ -193,11 +232,14 @@ class PrometheusClient:
         self, user_id: str, tenant_id: str, limit: int = 5, time_range: str = "30d"
     ) -> list[dict[str, Any]]:
         """Get top tools by usage count."""
+        legacy_labels = self._join_labels([self._label("tenant", tenant_id)])
+        canonical_labels = self._join_labels([self._label("tenant_id", tenant_id)])
         query = f"""
             topk({limit},
-                sum by (tool_id, tool_name) (
-                    increase(stoa_mcp_tools_calls_total{{tenant=~"{tenant_id}|default"}}[{time_range}])
-                )
+                {self._compat_or([
+                    f'sum by (tool_name) (label_replace(increase({MCP_TOOL_CALLS_METRIC}{{{legacy_labels}}}[{time_range}]), "tool_name", "$1", "tool", "(.+)"))',
+                    f'sum by (tool_name) (increase({MCP_TOOL_CALLS_METRIC}{{{canonical_labels}}}[{time_range}]))',
+                ], default_zero=False)}
             )
         """.strip().replace("\n", " ").replace("  ", " ")
         result = await self.query(query)
@@ -207,19 +249,30 @@ class PrometheusClient:
         """Get daily call counts for the last N days."""
         end = datetime.utcnow()
         start = end - timedelta(days=days)
-        query = f'sum(increase(stoa_mcp_tools_calls_total{{tenant=~"{tenant_id}|default"}}[1d]))'
+        label_sets = self._mcp_call_label_sets(tenant_id=tenant_id)
+        query = self._sum_increase_query(MCP_TOOL_CALLS_METRIC, label_sets, "1d")
 
         result = await self.query_range(query, start, end, step="1d")
         return self._extract_daily_stats(result)
 
     async def get_tool_success_rate(self, tool_id: str, user_id: str, tenant_id: str, time_range: str = "30d") -> float:
         """Get success rate for a specific tool."""
-        labels = f'tool_id="{tool_id}",user_id="{user_id}",tenant_id="{tenant_id}"'
+        success_label_sets = self._mcp_call_label_sets(
+            tenant_id=tenant_id,
+            tool_name=tool_id,
+            status_selector='status="success"',
+        )
+        total_label_sets = self._mcp_call_label_sets(
+            tenant_id=tenant_id,
+            tool_name=tool_id,
+        )
+        success_query = self._sum_increase_query(MCP_TOOL_CALLS_METRIC, success_label_sets, time_range)
+        total_query = self._sum_increase_query(MCP_TOOL_CALLS_METRIC, total_label_sets, time_range)
         query = f"""
             (
-                sum(increase(stoa_mcp_tools_calls_total{{{labels},status="success"}}[{time_range}]))
+                ({success_query})
                 /
-                sum(increase(stoa_mcp_tools_calls_total{{{labels}}}[{time_range}]))
+                ({total_query})
             ) * 100
         """.strip().replace("\n", " ").replace("  ", " ")
         result = await self.query(query)
@@ -231,12 +284,27 @@ class PrometheusClient:
 
     async def get_tool_avg_latency(self, tool_id: str, user_id: str, tenant_id: str, time_range: str = "30d") -> int:
         """Get average latency for a specific tool."""
-        labels = f'tool_id="{tool_id}",user_id="{user_id}",tenant_id="{tenant_id}"'
+        label_sets = self._mcp_call_label_sets(
+            tenant_id=tenant_id,
+            tool_name=tool_id,
+        )
+        sum_query = self._sum_rate_query(
+            [MCP_TOOL_DURATION_METRIC, LEGACY_MCP_REQUEST_DURATION_METRIC],
+            "sum",
+            label_sets,
+            time_range,
+        )
+        count_query = self._sum_rate_query(
+            [MCP_TOOL_DURATION_METRIC, LEGACY_MCP_REQUEST_DURATION_METRIC],
+            "count",
+            label_sets,
+            time_range,
+        )
         query = f"""
             (
-                sum(rate(mcp_request_duration_seconds_sum{{{labels}}}[{time_range}]))
+                ({sum_query})
                 /
-                sum(rate(mcp_request_duration_seconds_count{{{labels}}}[{time_range}]))
+                ({count_query})
             ) * 1000
         """.strip().replace("\n", " ").replace("  ", " ")
         result = await self.query(query)
@@ -372,10 +440,90 @@ class PrometheusClient:
         """
         labels = []
         if subscription_id:
-            labels.append(f'subscription_id="{subscription_id}"')
+            labels.append(self._label("subscription_id", subscription_id))
         if tenant_id:
-            labels.append(f'tenant="{tenant_id}"')
+            labels.append(self._label("tenant", tenant_id))
         return ",".join(labels)
+
+    def _validate_identifier(self, value: str, field_name: str) -> str:
+        """Validate a Prometheus label value used by router-level metrics endpoints."""
+        if not _IDENTIFIER_RE.fullmatch(value):
+            raise ValueError(f"Invalid {field_name}: {value}")
+        return value
+
+    def _validate_time_range(self, value: str) -> str:
+        """Validate compact Prometheus time ranges used by public usage endpoints."""
+        if not _TIME_RANGE_RE.fullmatch(value):
+            raise ValueError(f"Invalid time range: {value}")
+        return value
+
+    def _label(self, name: str, value: str) -> str:
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'{name}="{escaped}"'
+
+    def _join_labels(self, labels: list[str]) -> str:
+        return ",".join(label for label in labels if label)
+
+    def _dedupe(self, values: list[str]) -> list[str]:
+        deduped: list[str] = []
+        for value in values:
+            if value not in deduped:
+                deduped.append(value)
+        return deduped
+
+    def _compat_or(self, queries: list[str], default_zero: bool = True) -> str:
+        parts = self._dedupe([query for query in queries if query])
+        if default_zero:
+            parts.append("vector(0)")
+        return " or ".join(parts)
+
+    def _mcp_call_label_sets(
+        self,
+        subscription_id: str | None = None,
+        tenant_id: str | None = None,
+        tool_name: str | None = None,
+        status_selector: str | None = None,
+    ) -> list[str]:
+        legacy_labels: list[str] = []
+        canonical_labels: list[str] = []
+
+        if subscription_id:
+            legacy_labels.append(self._label("subscription_id", subscription_id))
+            canonical_labels.append(self._label("subscription_id", subscription_id))
+        if tenant_id:
+            legacy_labels.append(self._label("tenant", tenant_id))
+            canonical_labels.append(self._label("tenant_id", tenant_id))
+        if tool_name:
+            legacy_labels.append(self._label("tool", tool_name))
+            canonical_labels.append(self._label("tool_name", tool_name))
+        if status_selector:
+            legacy_labels.append(status_selector)
+            canonical_labels.append(status_selector)
+
+        return self._dedupe(
+            [
+                self._join_labels(legacy_labels),
+                self._join_labels(canonical_labels),
+            ]
+        )
+
+    def _sum_increase_query(self, metric: str, label_sets: list[str], time_range: str) -> str:
+        return self._compat_or([f"sum(increase({metric}{{{labels}}}[{time_range}]))" for labels in label_sets])
+
+    def _sum_rate_query(
+        self,
+        metric_bases: list[str],
+        suffix: str,
+        label_sets: list[str],
+        time_range: str,
+    ) -> str:
+        return self._compat_or(
+            [
+                f"sum(rate({metric}_{suffix}{{{labels}}}[{time_range}]))"
+                for metric in metric_bases
+                for labels in label_sets
+            ]
+        )
 
     def _extract_scalar(self, result: dict | None, default: int = 0) -> int:
         """Extract scalar value from Prometheus result."""
@@ -421,10 +569,11 @@ class PrometheusClient:
                 value = float(item.get("value", [0, 0])[1])
                 if value != value:  # NaN check
                     value = 0
+                tool_name = metric.get("tool_name") or metric.get("tool") or "Unknown Tool"
                 tools.append(
                     {
-                        "tool_id": metric.get("tool_id", "unknown"),
-                        "tool_name": metric.get("tool_name", "Unknown Tool"),
+                        "tool_id": metric.get("tool_id") or tool_name,
+                        "tool_name": tool_name,
                         "call_count": int(value),
                     }
                 )

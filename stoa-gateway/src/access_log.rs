@@ -164,7 +164,7 @@ mod tests {
     use tower::ServiceExt;
 
     #[test]
-    fn test_resolve_trace_id_prefers_response_extension() {
+    fn regression_access_log_prefers_captured_trace_id_extension() {
         let mut response = Response::new(Body::empty());
         response.extensions_mut().insert(CapturedTraceId(
             "abc123def456abc123def456abc123de".to_string(),
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_trace_id_falls_back_to_header() {
+    fn regression_access_log_trace_id_falls_back_to_x_stoa_trace_id_header() {
         let mut response = Response::new(Body::empty());
         response.headers_mut().insert(
             "x-stoa-trace-id",
@@ -195,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_span_id_from_response_extension() {
+    fn regression_access_log_resolves_span_id_from_response_extension() {
         let mut response = Response::new(Body::empty());
         response
             .extensions_mut()

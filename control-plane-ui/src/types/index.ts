@@ -1123,6 +1123,142 @@ export interface PaginatedGatewayInstances {
   page_size: number;
 }
 
+export type GatewayOverviewSyncStatus = 'in_sync' | 'pending' | 'drift' | 'failed' | 'unknown';
+
+export type GatewayOverviewRuntimeStatus = 'healthy' | 'degraded' | 'stale' | 'offline' | 'unknown';
+
+export type GatewayOverviewMetricsStatus = 'available' | 'partial' | 'unavailable';
+export type GatewayOverviewRuntimeFreshness = 'fresh' | 'stale' | 'missing';
+export type GatewayOverviewDataQualitySeverity = 'info' | 'warning' | 'error';
+
+export interface GatewayOverviewWarning {
+  code: string;
+  severity: GatewayOverviewDataQualitySeverity;
+  message: string;
+}
+
+export interface GatewayOverviewApiSource {
+  git_path?: string | null;
+  git_commit_sha?: string | null;
+  spec_hash?: string | null;
+}
+
+export interface GatewayOverviewRoutePreview {
+  method: string;
+  path: string;
+  backend?: string | null;
+}
+
+export interface GatewayOverviewApi {
+  tenant_id: string;
+  api_id: string;
+  api_catalog_id: string;
+  name: string;
+  version: string;
+  source: GatewayOverviewApiSource;
+  routes_count: number;
+  routes_preview: GatewayOverviewRoutePreview[];
+  backend?: string | null;
+  policies_count: number;
+  sync_status: GatewayOverviewSyncStatus;
+  last_sync_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface GatewayOverviewPolicyTarget {
+  type: string;
+  id?: string | null;
+  name?: string | null;
+}
+
+export interface GatewayOverviewPolicyBindingSource {
+  id: string;
+  scope: string;
+  target_id?: string | null;
+}
+
+export interface GatewayOverviewPolicy {
+  id: string;
+  name: string;
+  type: string;
+  scope: string;
+  target: GatewayOverviewPolicyTarget;
+  enabled: boolean;
+  priority: number;
+  summary: string;
+  sync_status: GatewayOverviewSyncStatus;
+  source_binding: GatewayOverviewPolicyBindingSource;
+}
+
+export interface GatewayOverviewResponse {
+  schema_version: string;
+  generated_at: string;
+  gateway: {
+    id: string;
+    name: string;
+    display_name: string;
+    gateway_type: string;
+    environment: string;
+    status: string;
+    mode?: string | null;
+    version?: string | null;
+  };
+  visibility: {
+    rbac_scope: string;
+    tenant_id?: string | null;
+    filtered: boolean;
+  };
+  source: {
+    control_plane_revision?: string | null;
+    last_loaded_at?: string | null;
+  };
+  summary: {
+    sync_status: GatewayOverviewSyncStatus;
+    runtime_status: GatewayOverviewRuntimeStatus;
+    metrics_status: GatewayOverviewMetricsStatus;
+    apis_count: number;
+    expected_routes_count: number;
+    reported_routes_count?: number | null;
+    effective_policies_count: number;
+    reported_policies_count?: number | null;
+    failed_policies_count: number;
+  };
+  resolved_config: {
+    apis: GatewayOverviewApi[];
+    policies: GatewayOverviewPolicy[];
+  };
+  sync: {
+    desired_generation?: number | null;
+    applied_generation?: number | null;
+    status: GatewayOverviewSyncStatus;
+    drift: boolean;
+    last_reconciled_at?: string | null;
+    last_error?: string | null;
+    steps: Record<string, unknown>[];
+  };
+  runtime: {
+    status: GatewayOverviewRuntimeStatus;
+    last_heartbeat_at?: string | null;
+    heartbeat_age_seconds?: number | null;
+    version?: string | null;
+    mode?: string | null;
+    uptime_seconds?: number | null;
+    reported_routes_count?: number | null;
+    reported_policies_count?: number | null;
+    mcp_tools_count?: number | null;
+    requests_total?: number | null;
+    error_rate?: number | null;
+    memory_usage_bytes?: number | null;
+  };
+  data_quality: {
+    runtime_freshness: GatewayOverviewRuntimeFreshness;
+    heartbeat_stale_after_seconds: number;
+    metrics_status: GatewayOverviewMetricsStatus;
+    metrics_window_seconds?: number | null;
+    warnings: GatewayOverviewWarning[];
+  };
+}
+
 export interface SyncStep {
   name: string;
   status: 'running' | 'success' | 'failed' | 'skipped';

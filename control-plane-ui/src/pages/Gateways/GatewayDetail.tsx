@@ -188,6 +188,9 @@ export function GatewayDetail() {
   const hasOverview = Boolean(overview);
   const showLegacyGatewayData = !overviewLoading && !hasOverview;
   const overviewWarnings = overview?.data_quality.warnings ?? [];
+  const prominentOverviewWarnings = overviewWarnings.filter(
+    (warning) => warning.severity !== 'info'
+  );
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -330,7 +333,7 @@ export function GatewayDetail() {
             />
           </div>
 
-          {(overview.visibility.filtered || overviewWarnings.length > 0) && (
+          {(overview.visibility.filtered || prominentOverviewWarnings.length > 0) && (
             <div className="space-y-2">
               {overview.visibility.filtered && (
                 <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -338,7 +341,7 @@ export function GatewayDetail() {
                   Vue filtrée selon vos permissions.
                 </div>
               )}
-              {overviewWarnings.map((warning) => (
+              {prominentOverviewWarnings.map((warning) => (
                 <div
                   key={warning.code}
                   className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
@@ -882,6 +885,23 @@ function GatewayOverviewRuntime({ overview }: { overview: GatewayOverviewRespons
           <div className="mt-4 flex items-center gap-2 text-xs text-gray-500">
             <FileText className="h-3.5 w-3.5" />
             Revision {overview.source.control_plane_revision}
+          </div>
+        )}
+        {overview.data_quality.warnings.length > 0 && (
+          <div className="mt-4 rounded-lg border border-gray-100">
+            <div className="border-b border-gray-100 px-3 py-2 text-xs font-medium text-gray-500">
+              Data quality
+            </div>
+            <div className="space-y-2 p-3">
+              {overview.data_quality.warnings.map((warning) => (
+                <div key={warning.code} className="text-xs text-gray-600">
+                  <span className="font-medium text-gray-800">
+                    {formatStatusLabel(warning.severity)}:
+                  </span>{' '}
+                  {warning.message}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

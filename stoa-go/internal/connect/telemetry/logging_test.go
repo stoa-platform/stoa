@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func TestStructuredLoggerWritesContractFields(t *testing.T) {
+func TestRegressionStoaConnectStructuredLoggerWritesContractFields(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewStructuredLogger(LogConfig{
 		ServiceName:  "stoa-connect",

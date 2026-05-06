@@ -44,12 +44,15 @@ fn resolve_trace_id(response: &Response) -> String {
     response
         .extensions()
         .get::<CapturedTraceId>()
-        .map(|t| t.0.clone())
+        .map(|t| t.0.as_str())
+        .filter(|trace_id| !trace_id.is_empty() && *trace_id != "-")
+        .map(str::to_owned)
         .or_else(|| {
             response
                 .headers()
                 .get("x-stoa-trace-id")
                 .and_then(|v| v.to_str().ok())
+                .filter(|trace_id| !trace_id.is_empty() && *trace_id != "-")
                 .map(str::to_owned)
         })
         .unwrap_or_else(|| "-".to_string())
@@ -183,6 +186,23 @@ mod tests {
     #[test]
     fn regression_access_log_trace_id_falls_back_to_x_stoa_trace_id_header() {
         let mut response = Response::new(Body::empty());
+        response.headers_mut().insert(
+            "x-stoa-trace-id",
+            axum::http::HeaderValue::from_static("4bf92f3577b34da6a3ce929d0e0e4736"),
+        );
+
+        assert_eq!(
+            resolve_trace_id(&response),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
+    }
+
+    #[test]
+    fn regression_access_log_ignores_dash_captured_trace_id_and_falls_back_to_header() {
+        let mut response = Response::new(Body::empty());
+        response
+            .extensions_mut()
+            .insert(CapturedTraceId("-".to_string()));
         response.headers_mut().insert(
             "x-stoa-trace-id",
             axum::http::HeaderValue::from_static("4bf92f3577b34da6a3ce929d0e0e4736"),

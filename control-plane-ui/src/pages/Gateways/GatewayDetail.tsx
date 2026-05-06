@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { filterProminentOverviewWarnings } from './gatewayOverviewWarnings';
 import {
   ArrowLeft,
   ExternalLink,
@@ -188,9 +189,7 @@ export function GatewayDetail() {
   const hasOverview = Boolean(overview);
   const showLegacyGatewayData = !overviewLoading && !hasOverview;
   const overviewWarnings = overview?.data_quality.warnings ?? [];
-  const prominentOverviewWarnings = overviewWarnings.filter(
-    (warning) => warning.severity !== 'info'
-  );
+  const prominentOverviewWarnings = filterProminentOverviewWarnings(overviewWarnings);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.10](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.9...stoa-go-v0.3.10) (2026-05-06)
+
+
+### Bug Fixes
+
+* **observability:** wire sidecar and stoa-connect telemetry ([#2709](https://github.com/stoa-platform/stoa/issues/2709)) ([bfa4510](https://github.com/stoa-platform/stoa/commit/bfa45107790dd5215efd9fa1d62fd504b1e20e66))
+
 ## [0.3.9](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.8...stoa-go-v0.3.9) (2026-05-01)
 
 

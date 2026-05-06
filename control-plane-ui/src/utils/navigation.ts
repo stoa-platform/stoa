@@ -3,10 +3,10 @@
  * Converts external links into internal iframe routes with deep-link support.
  */
 
-/** Build a path to the Observability iframe, optionally with a target URL. */
+/** Build a path to the product Observability page, or Grafana expert mode with a target URL. */
 export function observabilityPath(targetUrl?: string): string {
   if (!targetUrl) return '/observability';
-  return `/observability?url=${encodeURIComponent(targetUrl)}`;
+  return `/observability/grafana?url=${encodeURIComponent(targetUrl)}`;
 }
 
 /** Build a path to the Logs iframe, optionally with a target URL. */
@@ -18,6 +18,9 @@ export function logsPath(targetUrl?: string): string {
 /** Allowed hostnames for embedded iframe URLs. */
 const ALLOWED_HOSTS = ['grafana.gostoa.dev', 'prometheus.gostoa.dev', 'localhost'];
 
+/** Allowed same-origin paths for observability embeds. */
+const ALLOWED_RELATIVE_PREFIXES = ['/grafana/', '/prometheus/'];
+
 /** Validate that a URL is safe to embed in an iframe (no open redirect). */
 export function isAllowedEmbedUrl(url: string): boolean {
   try {
@@ -26,7 +29,6 @@ export function isAllowedEmbedUrl(url: string): boolean {
       (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
     );
   } catch {
-    // Relative URL or invalid — allow relative paths
-    return url.startsWith('/');
+    return ALLOWED_RELATIVE_PREFIXES.some((prefix) => url.startsWith(prefix));
   }
 }

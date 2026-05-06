@@ -42,16 +42,17 @@ describe('GrafanaEmbed', () => {
 
   it('renders title heading', () => {
     render(<GrafanaEmbed />);
-    expect(screen.getByRole('heading', { name: 'STOA Observability' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Grafana Expert' })).toBeInTheDocument();
   });
 
-  it('renders iframe with auth_token in src', () => {
+  it('renders iframe without auth_token in src', () => {
     render(<GrafanaEmbed />);
     const iframe = screen.getByTitle('STOA Observability - Grafana');
     expect(iframe).toBeInTheDocument();
     const src = iframe.getAttribute('src')!;
     expect(src).toContain('/grafana/');
-    expect(src).toContain('auth_token=mock-jwt-token-for-grafana');
+    expect(src).not.toContain('auth_token=');
+    expect(src).not.toContain('var-tenant_id=');
   });
 
   it('shows loading state initially', () => {
@@ -85,12 +86,17 @@ describe('GrafanaEmbed', () => {
     expect(rootDiv.className).not.toContain('fixed');
   });
 
-  it('open in new tab calls window.open with auth_token', () => {
+  it('open in new tab does not include auth_token', () => {
     render(<GrafanaEmbed />);
     const openButton = screen.getByTitle('Open in new tab');
     fireEvent.click(openButton);
     expect(window.open).toHaveBeenCalledWith(
       expect.stringContaining('/grafana/'),
+      '_blank',
+      'noopener,noreferrer'
+    );
+    expect(window.open).not.toHaveBeenCalledWith(
+      expect.stringContaining('auth_token='),
       '_blank',
       'noopener,noreferrer'
     );
@@ -114,31 +120,32 @@ describe('GrafanaEmbed', () => {
     expect(iframe).toHaveAttribute('referrerPolicy', 'no-referrer-when-downgrade');
   });
 
-  it('uses deep-link URL from search params with auth_token appended', () => {
+  it('uses deep-link URL from search params without token query params', () => {
     mockSearchParams.set('url', 'https://grafana.gostoa.dev/d/custom-dashboard');
     render(<GrafanaEmbed />);
     const iframe = screen.getByTitle('STOA Observability - Grafana');
     const src = iframe.getAttribute('src')!;
     expect(src).toContain('https://grafana.gostoa.dev/d/custom-dashboard');
-    expect(src).toContain('auth_token=mock-jwt-token-for-grafana');
+    expect(src).not.toContain('auth_token=');
+    expect(src).not.toContain('var-tenant_id=');
   });
 
-  // CAB-2032: tenant-admin iframe URL includes var-tenant_id
-  it('tenant-admin iframe includes var-tenant_id', () => {
+  it('regression does not put Keycloak tokens in Grafana iframe or new-tab URLs', () => {
+    render(<GrafanaEmbed />);
+    const iframe = screen.getByTitle('STOA Observability - Grafana');
+    expect(iframe.getAttribute('src')).not.toContain('mock-jwt-token-for-grafana');
+
+    fireEvent.click(screen.getByTitle('Open in new tab'));
+    const openedUrl = vi.mocked(window.open).mock.calls.at(-1)?.[0] as string;
+    expect(openedUrl).not.toContain('mock-jwt-token-for-grafana');
+    expect(openedUrl).not.toContain('auth_token=');
+  });
+
+  it('denies tenant-admin access to expert mode', () => {
     vi.mocked(useAuth).mockReturnValue(createAuthMock('tenant-admin'));
     render(<GrafanaEmbed />);
-    const iframe = screen.getByTitle('STOA Observability - Grafana');
-    const src = iframe.getAttribute('src')!;
-    expect(src).toContain('var-tenant_id=oasis-gunters');
-  });
-
-  // CAB-2032: cpi-admin iframe does NOT include var-tenant_id (sees all)
-  it('cpi-admin iframe does not include var-tenant_id', () => {
-    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
-    render(<GrafanaEmbed />);
-    const iframe = screen.getByTitle('STOA Observability - Grafana');
-    const src = iframe.getAttribute('src')!;
-    expect(src).not.toContain('var-tenant_id');
+    expect(screen.getByRole('heading', { name: 'Grafana Expert Mode' })).toBeInTheDocument();
+    expect(screen.queryByTitle('STOA Observability - Grafana')).not.toBeInTheDocument();
   });
 
   // 4-persona coverage
@@ -148,7 +155,11 @@ describe('GrafanaEmbed', () => {
       it('renders the page', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         render(<GrafanaEmbed />);
-        expect(screen.getByRole('heading', { name: 'STOA Observability' })).toBeInTheDocument();
+        if (role === 'cpi-admin' || role === 'devops') {
+          expect(screen.getByRole('heading', { name: 'Grafana Expert' })).toBeInTheDocument();
+        } else {
+          expect(screen.getByRole('heading', { name: 'Grafana Expert Mode' })).toBeInTheDocument();
+        }
       });
     }
   );

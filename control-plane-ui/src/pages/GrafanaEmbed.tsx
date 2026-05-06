@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { config } from '../config';
 import { isAllowedEmbedUrl } from '../utils/navigation';
-import { ExternalLink, RefreshCw, Maximize2, Minimize2, Gauge } from 'lucide-react';
+import { ExternalLink, RefreshCw, Maximize2, Minimize2, Gauge, Shield } from 'lucide-react';
 import { useServiceHealth } from '../hooks/useServiceHealth';
 import { ServiceUnavailable } from '../components/ServiceUnavailable';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,7 +19,7 @@ export function GrafanaEmbed() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [key, setKey] = useState(0);
-  const { accessToken, user } = useAuth();
+  const { hasRole } = useAuth();
 
   const targetUrl = searchParams.get('url');
   const baseIframeUrl =
@@ -28,20 +28,11 @@ export function GrafanaEmbed() {
   const isPrometheus = baseIframeUrl.includes('prometheus');
   const serviceLabel = isPrometheus ? 'Prometheus' : 'Grafana';
 
-  // Append Keycloak JWT for Grafana [auth.jwt] url_login (not for Prometheus)
-  // CAB-2032: Inject tenant_id as Grafana variable to scope dashboards
+  // Grafana is expert/operator mode. Do not append JWTs or tenant variables to
+  // URLs; auth and tenant scoping must be handled by the backend/proxy/session.
   const iframeUrl = useMemo(() => {
-    if (!accessToken || isPrometheus) return baseIframeUrl;
-    const params = new URLSearchParams();
-    params.set('auth_token', accessToken);
-    // Scope dashboards by tenant (cpi-admin sees all — no filter)
-    const isCpiAdmin = user?.roles?.includes('cpi-admin');
-    if (user?.tenant_id && !isCpiAdmin) {
-      params.set('var-tenant_id', user.tenant_id);
-    }
-    const separator = baseIframeUrl.includes('?') ? '&' : '?';
-    return `${baseIframeUrl}${separator}${params.toString()}`;
-  }, [baseIframeUrl, accessToken, isPrometheus, user]);
+    return baseIframeUrl;
+  }, [baseIframeUrl]);
 
   const { status: serviceStatus, retry: retryHealth } = useServiceHealth(baseIframeUrl);
 
@@ -57,6 +48,25 @@ export function GrafanaEmbed() {
   const handleOpenExternal = () => {
     window.open(iframeUrl, '_blank', 'noopener,noreferrer');
   };
+
+  const canAccessExpertMode = hasRole('cpi-admin') || hasRole('devops');
+
+  if (!canAccessExpertMode) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center">
+        <div className="max-w-md rounded-lg border border-neutral-200 bg-white p-6 text-center shadow dark:border-neutral-700 dark:bg-neutral-900">
+          <Shield className="mx-auto mb-3 h-8 w-8 text-neutral-400" />
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
+            Grafana Expert Mode
+          </h1>
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+            Grafana access is limited to platform operators. Use the product observability views for
+            tenant-scoped health, calls, and guardrail events.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (serviceStatus === 'unavailable') {
     return (
@@ -80,11 +90,9 @@ export function GrafanaEmbed() {
         className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-neutral-200 dark:border-neutral-700' : ''}`}
       >
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-            STOA Observability
-          </h1>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Grafana Expert</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">
-            Platform metrics, dashboards, and monitoring
+            Operator dashboards for deep debugging
           </p>
         </div>
         <div className="flex items-center gap-2">

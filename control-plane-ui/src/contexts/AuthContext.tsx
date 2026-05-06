@@ -25,12 +25,11 @@ interface AuthContextType {
    * in the allowlist below. Adding new consumers requires a security review
    * (track token leak surface).
    *
-   * Known consumers (2026-04-24):
-   * - src/pages/GrafanaEmbed.tsx (Grafana iframe auth injection)
+   * Known consumers (2026-05-06):
+   * - none
    *
-   * P2-4 (WONT-FIX, documented): the long-term fix is a backend-signed URL
-   * flow (tracked separately); until then keep the surface minimal and
-   * document every new reader.
+   * Grafana expert mode MUST use backend/proxy/session authorization rather
+   * than URL token injection.
    */
   accessToken: string | null;
   login: () => void;

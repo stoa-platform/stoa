@@ -430,8 +430,8 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('2 effective')).toBeInTheDocument();
     expect(screen.getByText('0 failed')).toBeInTheDocument();
     expect(
-      screen.getByText('Some runtime metrics are not available for this gateway')
-    ).toBeInTheDocument();
+      screen.queryByText('Some runtime metrics are not available for this gateway')
+    ).not.toBeInTheDocument();
   });
 
   it('uses deployed APIs label for native sidecar gateways', async () => {
@@ -500,6 +500,10 @@ describe('GatewayDetail', () => {
     expect(screen.getByText('129')).toBeInTheDocument();
     expect(screen.getByText('partial / 300s')).toBeInTheDocument();
     expect(screen.getByText('5 expected / 5 reported')).toBeInTheDocument();
+    expect(screen.getByText('Data quality')).toBeInTheDocument();
+    expect(
+      screen.getByText('Some runtime metrics are not available for this gateway')
+    ).toBeInTheDocument();
   });
 
   it('renders RBAC filtered overview notice', async () => {

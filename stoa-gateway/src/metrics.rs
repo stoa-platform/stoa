@@ -14,12 +14,12 @@ use prometheus::{
 
 // === HTTP Metrics (all requests) ===
 
-/// Counter of all HTTP requests by method, path, and status code.
+/// Counter of all HTTP requests by method, normalized route, and status code.
 pub static HTTP_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "stoa_http_requests_total",
         "Total number of HTTP requests",
-        &["method", "path", "status"]
+        &["method", "http_route", "status"]
     )
     .expect("Failed to create stoa_http_requests_total metric")
 });
@@ -29,7 +29,7 @@ pub static HTTP_REQUEST_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "stoa_http_request_duration_seconds",
         "Duration of HTTP requests in seconds",
-        &["method", "path"],
+        &["method", "http_route"],
         vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
     )
     .expect("Failed to create stoa_http_request_duration_seconds metric")
@@ -48,12 +48,12 @@ pub static MCP_TOOL_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to create stoa_mcp_tool_duration_seconds metric")
 });
 
-/// Counter of MCP tool calls (includes consumer_id for per-consumer analytics, CAB-1782)
+/// Counter of MCP tool calls.
 pub static MCP_TOOL_CALLS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "stoa_mcp_tools_calls_total",
         "Total number of MCP tool calls",
-        &["tool", "tenant", "status", "consumer_id"]
+        &["tool", "tenant", "status"]
     )
     .expect("Failed to create stoa_mcp_tools_calls_total metric")
 });
@@ -166,18 +166,6 @@ pub static CIRCUIT_BREAKER_STATE: Lazy<GaugeVec> = Lazy::new(|| {
         &["upstream"]
     )
     .expect("Failed to create stoa_circuit_breaker_state metric")
-});
-
-// === Quota Metrics (ADR-022) ===
-
-/// Gauge of remaining quota per consumer and period.
-pub static QUOTA_REMAINING: Lazy<GaugeVec> = Lazy::new(|| {
-    register_gauge_vec!(
-        "stoa_quota_remaining",
-        "Remaining quota requests per consumer and period",
-        &["consumer", "period"]
-    )
-    .expect("Failed to create stoa_quota_remaining metric")
 });
 
 // === mTLS Metrics (CAB-864) ===
@@ -643,7 +631,7 @@ pub fn record_tool_call(
     tenant: &str,
     status: &str,
     duration_secs: f64,
-    consumer_id: &str,
+    _consumer_id: &str,
 ) {
     let histogram = MCP_TOOL_DURATION.with_label_values(&[tool, tenant, status]);
 
@@ -651,9 +639,9 @@ pub fn record_tool_call(
     // (observe_with_exemplar not available in 0.13; track upstream PR)
     histogram.observe(duration_secs);
 
-    // CAB-1782: consumer_id on CounterVec only (not HistogramVec — cardinality guard)
+    // Per-consumer identifiers belong in traces/logs, not Prometheus labels.
     MCP_TOOL_CALLS_TOTAL
-        .with_label_values(&[tool, tenant, status, consumer_id])
+        .with_label_values(&[tool, tenant, status])
         .inc();
 }
 
@@ -1054,10 +1042,11 @@ pub fn update_circuit_breaker_state(upstream: &str, state: f64) {
 // === Quota metrics helpers ===
 
 /// Update remaining quota for a consumer.
-pub fn update_quota_remaining(consumer: &str, period: &str, remaining: f64) {
-    QUOTA_REMAINING
-        .with_label_values(&[consumer, period])
-        .set(remaining);
+///
+/// Per-consumer quota values are intentionally not exported as Prometheus
+/// labels. They should be exposed through tenant-safe APIs, traces, or logs.
+pub fn update_quota_remaining(_consumer: &str, _period: &str, _remaining: f64) {
+    // No-op by design: consumer IDs are forbidden as Prometheus labels.
 }
 
 // === Guardrails metrics helpers ===
@@ -1244,14 +1233,14 @@ pub fn record_api_proxy_circuit_open(backend: &str) {
 
 // === HTTP metrics helpers ===
 
-/// Record an HTTP request with method, path, status, and duration.
-pub fn record_http_request(method: &str, path: &str, status: u16, duration_secs: f64) {
+/// Record an HTTP request with method, normalized route, status, and duration.
+pub fn record_http_request(method: &str, http_route: &str, status: u16, duration_secs: f64) {
     let status_str = status.to_string();
     HTTP_REQUESTS_TOTAL
-        .with_label_values(&[method, path, &status_str])
+        .with_label_values(&[method, http_route, &status_str])
         .inc();
     HTTP_REQUEST_DURATION
-        .with_label_values(&[method, path])
+        .with_label_values(&[method, http_route])
         .observe(duration_secs);
 }
 
@@ -1330,7 +1319,6 @@ pub fn init_all_metrics() {
     Lazy::force(&RATE_LIMIT_HITS);
     Lazy::force(&RATE_LIMIT_BUCKETS);
     Lazy::force(&CIRCUIT_BREAKER_STATE);
-    Lazy::force(&QUOTA_REMAINING);
     Lazy::force(&GUARDRAILS_PII_DETECTED);
     Lazy::force(&GUARDRAILS_INJECTION_BLOCKED);
     Lazy::force(&GUARDRAILS_CONTENT_FILTERED);
@@ -1478,6 +1466,72 @@ mod tests {
     }
 
     #[test]
+    fn regression_http_metrics_use_normalized_route_label() {
+        let route = normalize_path("/admin/apis/550e8400-e29b-41d4-a716-446655440000");
+        record_http_request("GET", &route, 200, 0.001);
+
+        let body = encode_metrics();
+
+        assert!(
+            body.contains(r#"http_route="/admin/apis/:id""#),
+            "stoa_http_requests_total must expose normalized http_route, got:\n{}",
+            body
+        );
+        assert!(
+            !body.contains(r#"path="/admin/apis/550e8400-e29b-41d4-a716-446655440000""#),
+            "raw paths must not be exported as Prometheus labels:\n{}",
+            body
+        );
+    }
+
+    #[test]
+    fn regression_tool_call_metric_does_not_export_consumer_id_label() {
+        record_tool_call(
+            "cardinality_tool",
+            "tenant-cardinality",
+            "success",
+            0.01,
+            "consumer-forbidden",
+        );
+
+        let body = encode_metrics();
+
+        assert!(
+            body.contains(r#"stoa_mcp_tools_calls_total"#),
+            "expected tool call metric in /metrics body:\n{}",
+            body
+        );
+        assert!(
+            !body.contains("consumer_id="),
+            "consumer_id is forbidden as a Prometheus label:\n{}",
+            body
+        );
+        assert!(
+            !body.contains("consumer-forbidden"),
+            "consumer identifiers must not leak into Prometheus output:\n{}",
+            body
+        );
+    }
+
+    #[test]
+    fn regression_quota_remaining_does_not_export_consumer_label() {
+        update_quota_remaining("consumer-forbidden", "daily", 42.0);
+
+        let body = encode_metrics();
+
+        assert!(
+            !body.contains("stoa_quota_remaining"),
+            "per-consumer quota remaining must not be exported as Prometheus metrics:\n{}",
+            body
+        );
+        assert!(
+            !body.contains("consumer-forbidden"),
+            "consumer identifiers must not leak into Prometheus output:\n{}",
+            body
+        );
+    }
+
+    #[test]
     fn regression_demo_smoke_exports_proxy_requests_total() {
         record_proxy_request("demo", "demo-api-smoke", "GET", 200);
 
@@ -1559,5 +1613,14 @@ mod tests {
     fn test_init_all_metrics_no_panic() {
         // Should not panic — forces all Lazy statics to initialize
         init_all_metrics();
+    }
+
+    fn encode_metrics() -> String {
+        let metric_families = prometheus::gather();
+        let mut buffer = Vec::new();
+        let encoder = prometheus::TextEncoder::new();
+        prometheus::Encoder::encode(&encoder, &metric_families, &mut buffer)
+            .expect("encode prometheus metrics");
+        String::from_utf8(buffer).expect("prometheus metrics should be utf-8")
     }
 }

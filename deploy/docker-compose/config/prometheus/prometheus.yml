@@ -48,9 +48,9 @@ scrape_configs:
     scrape_interval: 10s
 
   # -------------------------------------------------------------------------
-  # STOA Gateway — Connect Mode
+  # STOA Gateway — Rust connect-mode simulation
   # -------------------------------------------------------------------------
-  - job_name: 'stoa-connect'
+  - job_name: 'stoa-gateway-connect-mode'
     static_configs:
       - targets: ['stoa-gateway-connect:8083']
         labels:

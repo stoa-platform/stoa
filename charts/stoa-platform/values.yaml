@@ -233,6 +233,17 @@ stoaSidecar:
   logLevel: info
   logFormat: json
 
+  # OpenTelemetry Collector endpoint (Grafana Alloy in stoa-monitoring namespace)
+  # Set to enable distributed tracing export via OTLP gRPC.
+  otelEndpoint: 'http://stoa-alloy-otlp.stoa-monitoring:4317'
+
+  # ServiceMonitor for explicit sidecar metrics scraping.
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+  clusterName: default
+
   # Service configuration
   service:
     type: ClusterIP

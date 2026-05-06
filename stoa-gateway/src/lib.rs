@@ -607,7 +607,7 @@ async fn http_metrics_middleware(
                 .map(|s| s.to_string())
         })
         .unwrap_or_else(|| remote_ip.clone());
-    let (response, captured_trace_id) = if tracing_enabled {
+    let (response, captured_trace_id, captured_span_id) = if tracing_enabled {
         let deployment_mode = state.config.gateway_mode.to_string();
         let request_span = tracing::span!(
             tracing::Level::INFO,
@@ -630,11 +630,11 @@ async fn http_metrics_middleware(
         request_span.record("process.rss_bytes", crate::memory::read_rss_bytes());
         request_span.record("process.fd_count", crate::memory::read_fd_count());
         request_span.record("process.thread_count", crate::memory::read_thread_count());
-        // CAB-1866: capture trace_id inside the span so access_log_middleware can read it.
+        // CAB-1866/PR3: capture trace/span IDs inside the span so access_log_middleware can read them.
         // access_log is an outer layer — by the time it sees the response, this span has
         // already closed and tracing::Span::current() returns Span::none().
         // Status code + OTel status are recorded inside the span before it closes.
-        let (resp, trace_id) = async {
+        let (resp, trace_id, span_id) = async {
             let r = next.run(request).await;
             let status = r.status().as_u16();
             let current = tracing::Span::current();
@@ -646,19 +646,23 @@ async fn http_metrics_middleware(
                 current.record("otel.status_code", "OK");
             }
             let tid = crate::telemetry::extract_trace_id();
-            (r, tid)
+            let sid = crate::telemetry::extract_span_id();
+            (r, tid, sid)
         }
         .instrument(request_span)
         .await;
-        (resp, trace_id)
+        (resp, trace_id, span_id)
     } else {
         let resp = next.run(request).await;
-        (resp, "-".to_string())
+        (resp, "-".to_string(), "-".to_string())
     };
     let mut response = response;
     response
         .extensions_mut()
         .insert(crate::access_log::CapturedTraceId(captured_trace_id));
+    response
+        .extensions_mut()
+        .insert(crate::access_log::CapturedSpanId(captured_span_id));
 
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();

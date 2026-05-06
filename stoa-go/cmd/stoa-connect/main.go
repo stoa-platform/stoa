@@ -17,6 +17,7 @@ import (
 	"github.com/stoa-platform/stoa-go/internal/connect/adapters"
 	"github.com/stoa-platform/stoa-go/internal/connect/telemetry"
 	"github.com/stoa-platform/stoa-go/pkg/config"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Version and Commit are set via ldflags at build time.
@@ -26,6 +27,9 @@ var (
 )
 
 func main() {
+	agentCfg := connect.ConfigFromEnv(Version)
+	logger := telemetry.ConfigureStructuredLogging(telemetry.LogConfigFromEnv(Version, agentCfg.InstanceName, agentCfg.Environment))
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Printf("warning: could not load config: %v", err)
@@ -42,7 +46,6 @@ func main() {
 	}
 
 	// Set up CP registration agent
-	agentCfg := connect.ConfigFromEnv(Version)
 	agent := connect.New(agentCfg)
 
 	// Initialize OpenTelemetry (no-op if OTEL_EXPORTER_OTLP_ENDPOINT is not set)
@@ -135,14 +138,15 @@ func main() {
 			http.Error(w, "invalid payload", http.StatusBadRequest)
 			return
 		}
-		log.Printf("received %d telemetry events via webhook", len(events))
+		logger.Info(r.Context(), "received telemetry events via webhook", "accepted", len(events))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, `{"accepted":%d}`, len(events))
 	})
 
+	handler := otelhttp.NewHandler(mux, "stoa-connect.http")
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

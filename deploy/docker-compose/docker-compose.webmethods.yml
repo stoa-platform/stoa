@@ -54,6 +54,7 @@ services:
       STOA_INSTANCE_NAME: "stoa-connect-wm-local"
       STOA_ENVIRONMENT: "dev"
       STOA_GATEWAY_MODE: "connect"
+      STOA_LOG_FORMAT: "json"
       # Target gateway (webMethods)
       STOA_GATEWAY_ADMIN_URL: http://apigateway:5555
       STOA_GATEWAY_TYPE: webmethods

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.13.0...control-plane-api-v1.13.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **observability:** add PromQL compatibility readers ([#2703](https://github.com/stoa-platform/stoa/issues/2703)) ([5eae10d](https://github.com/stoa-platform/stoa/commit/5eae10daa24731539f528afb05a4f5bffc264cec))
+
 ## [1.13.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.3...control-plane-api-v1.13.0) (2026-05-06)
 
 

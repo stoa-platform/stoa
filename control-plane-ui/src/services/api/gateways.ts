@@ -9,6 +9,7 @@ import type {
   GatewayInstanceMetrics,
   GatewayInstanceUpdate,
   GatewayModeStats,
+  GatewayOverviewResponse,
   GatewayPolicy,
   PaginatedGatewayInstances,
 } from '../../types';
@@ -36,6 +37,11 @@ export const gatewaysClient = {
 
   async getInstance(id: string): Promise<GatewayInstance> {
     const { data } = await httpClient.get(path('v1', 'admin', 'gateways', id));
+    return data;
+  },
+
+  async getOverview(id: string): Promise<GatewayOverviewResponse> {
+    const { data } = await httpClient.get(path('v1', 'admin', 'gateways', id, 'overview'));
     return data;
   },
 

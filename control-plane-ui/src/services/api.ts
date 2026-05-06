@@ -63,6 +63,7 @@ import type {
   GatewayInstanceMetrics,
   GatewayInstanceUpdate,
   GatewayModeStats,
+  GatewayOverviewResponse,
   GatewayPolicy,
   PaginatedGatewayDeployments,
   PaginatedGatewayInstances,
@@ -732,6 +733,10 @@ class ApiService {
 
   async getGatewayInstance(id: string): Promise<GatewayInstance> {
     return gatewaysClient.getInstance(id);
+  }
+
+  async getGatewayOverview(id: string): Promise<GatewayOverviewResponse> {
+    return gatewaysClient.getOverview(id);
   }
 
   async getGatewayTools(id: string): Promise<Schemas['ListToolsResponse']['tools']> {

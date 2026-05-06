@@ -218,6 +218,7 @@ describe('UI-2 S2d domain clients', () => {
   it('covers gatewaysClient request delegation', async () => {
     const gatewayList = { items: [{ id: 'gw-1' }], total: 1, page: 1, page_size: 20 };
     const gateway = { id: 'gw-1', mode: 'edge-mcp' };
+    const overview = { schema_version: '1.0', gateway: { id: 'gw-1' } };
     const tools = [{ id: 'tool-1' }];
     const modeStats = { modes: [{ mode: 'edge-mcp', total: 1 }], total_gateways: 1 };
     const metrics = { requests_total: 42 };
@@ -230,6 +231,7 @@ describe('UI-2 S2d domain clients', () => {
     mockHttpClient.get
       .mockResolvedValueOnce({ data: gatewayList })
       .mockResolvedValueOnce({ data: gateway })
+      .mockResolvedValueOnce({ data: overview })
       .mockResolvedValueOnce({ data: tools })
       .mockResolvedValueOnce({ data: modeStats })
       .mockResolvedValueOnce({ data: metrics })
@@ -262,6 +264,7 @@ describe('UI-2 S2d domain clients', () => {
       })
     ).resolves.toBe(gatewayList);
     await expect(gatewaysClient.getInstance('gw-1')).resolves.toBe(gateway);
+    await expect(gatewaysClient.getOverview('gw-1')).resolves.toBe(overview);
     await expect(gatewaysClient.listTools('gw-1')).resolves.toBe(tools);
     await expect(
       gatewaysClient.createInstance({
@@ -317,7 +320,8 @@ describe('UI-2 S2d domain clients', () => {
       },
     });
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(2, '/v1/admin/gateways/gw-1');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(3, '/v1/admin/gateways/gw-1/tools');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(3, '/v1/admin/gateways/gw-1/overview');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(4, '/v1/admin/gateways/gw-1/tools');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(1, '/v1/admin/gateways', {
       name: 'Gateway 1',
     });
@@ -327,16 +331,16 @@ describe('UI-2 S2d domain clients', () => {
     expect(mockHttpClient.delete).toHaveBeenNthCalledWith(1, '/v1/admin/gateways/gw-1');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(2, '/v1/admin/gateways/gw-1/restore');
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(3, '/v1/admin/gateways/gw-1/health');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(4, '/v1/admin/gateways/modes/stats');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(5, '/v1/admin/gateways/metrics');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(5, '/v1/admin/gateways/modes/stats');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(6, '/v1/admin/gateways/metrics');
     expect(mockHttpClient.get).toHaveBeenNthCalledWith(
-      6,
+      7,
       '/v1/admin/gateways/metrics/guardrails/events',
       { params: { limit: 15 } }
     );
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(7, '/v1/admin/gateways/health-summary');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(8, '/v1/admin/gateways/gw-1/metrics');
-    expect(mockHttpClient.get).toHaveBeenNthCalledWith(9, '/v1/admin/policies', {
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(8, '/v1/admin/gateways/health-summary');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(9, '/v1/admin/gateways/gw-1/metrics');
+    expect(mockHttpClient.get).toHaveBeenNthCalledWith(10, '/v1/admin/policies', {
       params: { tenant_id: 'tenant-1', environment: 'prod' },
     });
     expect(mockHttpClient.post).toHaveBeenNthCalledWith(4, '/v1/admin/policies', {

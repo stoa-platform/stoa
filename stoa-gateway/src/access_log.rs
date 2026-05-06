@@ -21,6 +21,13 @@ use crate::diagnostics::latency::{new_shared_tracker, to_server_timing, Stage};
 #[derive(Clone, Debug)]
 pub struct CapturedTraceId(pub String);
 
+/// Span ID captured inside the OTel span by `http_metrics_middleware`.
+///
+/// Injected into response extensions with `CapturedTraceId` so access logs can
+/// correlate directly to the Tempo span that handled the request.
+#[derive(Clone, Debug)]
+pub struct CapturedSpanId(pub String);
+
 /// Paths to skip from access logging (noisy health/metrics endpoints).
 const SKIP_PATHS: &[&str] = &[
     "/health",
@@ -29,6 +36,32 @@ const SKIP_PATHS: &[&str] = &[
     "/ready",
     "/metrics",
 ];
+
+const SERVICE_NAME: &str = "stoa-gateway";
+const SERVICE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn resolve_trace_id(response: &Response) -> String {
+    response
+        .extensions()
+        .get::<CapturedTraceId>()
+        .map(|t| t.0.clone())
+        .or_else(|| {
+            response
+                .headers()
+                .get("x-stoa-trace-id")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn resolve_span_id(response: &Response) -> String {
+    response
+        .extensions()
+        .get::<CapturedSpanId>()
+        .map(|s| s.0.clone())
+        .unwrap_or_else(|| "-".to_string())
+}
 
 /// Access log middleware — emits structured JSON for each request.
 ///
@@ -92,18 +125,8 @@ pub async fn access_log_middleware(mut request: Request, next: Next) -> Response
     //
     // Reading from request extensions before next.run() doesn't work: trace_context_middleware
     // (inner layer) hasn't set RequestTraceContext yet when access_log (outer layer) starts.
-    let trace_id = response
-        .extensions()
-        .get::<CapturedTraceId>()
-        .map(|t| t.0.clone())
-        .or_else(|| {
-            response
-                .headers()
-                .get("x-stoa-trace-id")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned)
-        })
-        .unwrap_or_else(|| "-".to_string());
+    let trace_id = resolve_trace_id(&response);
+    let span_id = resolve_span_id(&response);
 
     tracing::info!(
         target: "access_log",
@@ -115,6 +138,9 @@ pub async fn access_log_middleware(mut request: Request, next: Next) -> Response
         consumer_id = %consumer_id,
         user_agent = %user_agent,
         trace_id = %trace_id,
+        span_id = %span_id,
+        "service.name" = %SERVICE_NAME,
+        "service.version" = %SERVICE_VERSION,
         log_type = "access_log",
         server_timing = %server_timing,
         "request completed"
@@ -136,6 +162,55 @@ mod tests {
     use super::*;
     use axum::{body::Body, http::StatusCode, routing::get, Router};
     use tower::ServiceExt;
+
+    #[test]
+    fn test_resolve_trace_id_prefers_response_extension() {
+        let mut response = Response::new(Body::empty());
+        response.extensions_mut().insert(CapturedTraceId(
+            "abc123def456abc123def456abc123de".to_string(),
+        ));
+        response.headers_mut().insert(
+            "x-stoa-trace-id",
+            axum::http::HeaderValue::from_static("4bf92f3577b34da6a3ce929d0e0e4736"),
+        );
+
+        assert_eq!(
+            resolve_trace_id(&response),
+            "abc123def456abc123def456abc123de"
+        );
+    }
+
+    #[test]
+    fn test_resolve_trace_id_falls_back_to_header() {
+        let mut response = Response::new(Body::empty());
+        response.headers_mut().insert(
+            "x-stoa-trace-id",
+            axum::http::HeaderValue::from_static("4bf92f3577b34da6a3ce929d0e0e4736"),
+        );
+
+        assert_eq!(
+            resolve_trace_id(&response),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
+    }
+
+    #[test]
+    fn test_resolve_span_id_from_response_extension() {
+        let mut response = Response::new(Body::empty());
+        response
+            .extensions_mut()
+            .insert(CapturedSpanId("00f067aa0ba902b7".to_string()));
+
+        assert_eq!(resolve_span_id(&response), "00f067aa0ba902b7");
+    }
+
+    #[test]
+    fn test_resolve_correlation_ids_fallback_to_dash() {
+        let response = Response::new(Body::empty());
+
+        assert_eq!(resolve_trace_id(&response), "-");
+        assert_eq!(resolve_span_id(&response), "-");
+    }
 
     #[tokio::test]
     async fn test_access_log_skips_health() {
@@ -180,6 +255,9 @@ mod tests {
             response.extensions_mut().insert(CapturedTraceId(
                 "abc123def456abc123def456abc123de".to_string(),
             ));
+            response
+                .extensions_mut()
+                .insert(CapturedSpanId("00f067aa0ba902b7".to_string()));
             response
         }
 

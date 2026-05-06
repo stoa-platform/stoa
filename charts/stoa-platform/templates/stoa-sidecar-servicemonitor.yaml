@@ -1,0 +1,59 @@
+{{- if and .Values.stoaSidecar.enabled (default false .Values.stoaSidecar.serviceMonitor.enabled) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.stoaSidecar.targetGateway | default "third-party" }}-stoa-sidecar
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-sidecar
+    app.kubernetes.io/component: sidecar
+    stoa.io/observability-target: stoa-sidecar
+    stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8081
+      targetPort: authz
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: stoa-sidecar
+    stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.stoaSidecar.targetGateway | default "third-party" }}-stoa-sidecar
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-sidecar
+    app.kubernetes.io/component: sidecar
+    stoa.io/observability-target: stoa-sidecar
+    stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-sidecar
+      stoa.io/observability-target: stoa-sidecar
+      stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.stoaSidecar.serviceMonitor.interval | default "15s" }}
+      scrapeTimeout: {{ .Values.stoaSidecar.serviceMonitor.scrapeTimeout | default "10s" }}
+      metricRelabelings:
+        - targetLabel: cluster
+          replacement: {{ .Values.stoaSidecar.serviceMonitor.clusterName | default "default" }}
+        - targetLabel: environment
+          replacement: {{ .Values.stoaSidecar.environment | default "dev" }}
+        - targetLabel: deployment_mode
+          replacement: sidecar
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}

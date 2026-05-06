@@ -143,6 +143,10 @@ spec:
               value: {{ .Values.stoaSidecar.logLevel | default "info" | quote }}
             - name: STOA_LOG_FORMAT
               value: {{ .Values.stoaSidecar.logFormat | default "json" | quote }}
+            {{- if .Values.stoaSidecar.otelEndpoint }}
+            - name: STOA_OTEL_ENDPOINT
+              value: {{ .Values.stoaSidecar.otelEndpoint | quote }}
+            {{- end }}
 
             {{- with .Values.stoaSidecar.extraEnv }}
             {{- toYaml . | nindent 12 }}

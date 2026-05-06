@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.0...control-plane-ui-v1.7.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **ui:** remove Grafana URL token embedding ([#2711](https://github.com/stoa-platform/stoa/issues/2711)) ([4c0813b](https://github.com/stoa-platform/stoa/commit/4c0813b30d2a6ae6b02f067fd132573631414967))
+
 ## [1.7.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.6.3...control-plane-ui-v1.7.0) (2026-05-06)
 
 

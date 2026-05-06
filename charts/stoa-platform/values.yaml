@@ -242,7 +242,7 @@ stoaSidecar:
     enabled: true
     interval: 15s
     scrapeTimeout: 10s
-  clusterName: default
+    clusterName: default
 
   # Service configuration
   service:

@@ -48,7 +48,7 @@ spec:
       scrapeTimeout: {{ .Values.stoaSidecar.serviceMonitor.scrapeTimeout | default "10s" }}
       metricRelabelings:
         - targetLabel: cluster
-          replacement: {{ .Values.stoaSidecar.clusterName | default "default" }}
+          replacement: {{ .Values.stoaSidecar.serviceMonitor.clusterName | default "default" }}
         - targetLabel: environment
           replacement: {{ .Values.stoaSidecar.environment | default "dev" }}
         - targetLabel: deployment_mode

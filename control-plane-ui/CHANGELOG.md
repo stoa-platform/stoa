@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.6.3...control-plane-ui-v1.7.0) (2026-05-06)
+
+
+### Features
+
+* **ui:** add gateway overview tabs ([ee38ad7](https://github.com/stoa-platform/stoa/commit/ee38ad7c49802ba87ddd94487778423f4107dd21))
+
+
+### Bug Fixes
+
+* **ui:** reduce gateway metrics warning noise ([#2701](https://github.com/stoa-platform/stoa/issues/2701)) ([f7c24ef](https://github.com/stoa-platform/stoa/commit/f7c24efb546d336658d0494a71c8397ff2345e22))
+
 ## [1.6.3](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.6.2...control-plane-ui-v1.6.3) (2026-05-05)
 
 

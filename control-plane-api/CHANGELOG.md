@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.3...control-plane-api-v1.13.0) (2026-05-06)
+
+
+### Features
+
+* **api:** add gateway overview read model ([#2697](https://github.com/stoa-platform/stoa/issues/2697)) ([7796397](https://github.com/stoa-platform/stoa/commit/779639737f40b473ed4a3e8dde2837e5e331a9ea))
+
 ## [1.12.3](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.12.2...control-plane-api-v1.12.3) (2026-05-04)
 
 

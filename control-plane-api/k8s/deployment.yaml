@@ -37,6 +37,10 @@ spec:
           env:
             - name: LOG_TRACE_EXPORT_ENDPOINT
               value: "http://stoa-alloy-otlp.stoa-monitoring:4317"
+            - name: ENABLE_AUDIT_TRAIL_CONSUMER
+              value: "true"
+            - name: AUDIT_TRAIL_DLQ_TOPIC
+              value: "stoa.audit.trail.dlq"
             # Shared internal keys (CAB-1863)
             - name: CHAT_GATEWAY_API_KEY
               valueFrom:

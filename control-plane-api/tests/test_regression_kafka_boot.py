@@ -47,6 +47,7 @@ def test_per_consumer_flags_respect_master_gate() -> None:
         "ENABLE_SYNC_ENGINE",
         "ENABLE_CHAT_METERING_CONSUMER",
         "ENABLE_BILLING_METERING_CONSUMER",
+        "ENABLE_AUDIT_TRAIL_CONSUMER",
         "ENABLE_GIT_SYNC_WORKER",
     )
     for flag in kafka_backed_flags:

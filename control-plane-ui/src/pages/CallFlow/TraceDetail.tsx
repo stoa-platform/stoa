@@ -440,6 +440,7 @@ function TraceContextGrid({
       'resource.attributes.service.version',
     ]);
   const spanId = firstMetadataValue(detail.spans, ['span_id', 'span.id', 'spanId']);
+  const httpRoute = firstMetadataValue(detail.spans, ['http.route', 'http_route', 'route']);
 
   const fields = [
     { label: 'trace_id', value: detail.trace_id },
@@ -447,7 +448,7 @@ function TraceContextGrid({
     { label: 'tenant_id', value: detail.tenant_id ?? undefined },
     { label: 'service.name', value: serviceName },
     { label: 'service.version', value: serviceVersion },
-    { label: 'http_route', value: detail.path },
+    { label: httpRoute ? 'http_route' : 'http.path', value: httpRoute || detail.path },
     { label: 'status_code', value: String(detail.status_code) },
     { label: 'status_class', value: statusClass(detail.status_code) },
     { label: 'latency', value: fmtDuration(detail.total_duration_ms) },

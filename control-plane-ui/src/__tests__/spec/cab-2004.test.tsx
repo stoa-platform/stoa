@@ -156,6 +156,34 @@ describe('spec/CAB-2004: LogExplorer', () => {
       });
     });
 
+    it('encodes trace IDs when navigating to Live Calls trace detail', async () => {
+      mockApiSuccess({
+        ...mockLogsResponse,
+        logs: [
+          {
+            ...mockLogsResponse.logs[0],
+            message: 'route sensitive trace',
+            trace_id: 'abc/123?x=1',
+          },
+        ],
+      });
+      await renderLogExplorer();
+
+      await waitFor(() => {
+        expect(screen.getByText('route sensitive trace')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('route sensitive trace'));
+
+      await waitFor(() => {
+        const traceLink = screen.getByText('abc/123?x=1');
+        fireEvent.click(traceLink);
+        expect(mockNavigate).toHaveBeenCalledWith(
+          '/observability/live-calls/trace/abc%2F123%3Fx%3D1'
+        );
+      });
+    });
+
     it('initializes log search from Live Calls trace links', async () => {
       mockApiSuccess();
       await renderLogExplorer(['/logs?service=gateway&trace_id=abc123']);

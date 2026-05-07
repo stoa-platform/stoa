@@ -177,6 +177,8 @@ export function LogExplorer() {
     );
   }
 
+  const selectedTraceId = selectedLog?.trace_id;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -390,21 +392,23 @@ export function LogExplorer() {
               <DetailRow label="Tenant ID" value={selectedLog.tenant_id} />
 
               {/* Trace ID with navigation link */}
-              {selectedLog.trace_id && selectedLog.trace_id !== '-' ? (
+              {selectedTraceId && selectedTraceId !== '-' ? (
                 <div className="flex items-center justify-between py-1">
                   <span className="text-neutral-500 dark:text-neutral-400">Trace ID</span>
                   <button
                     onClick={() =>
-                      navigate(`/observability/live-calls/trace/${selectedLog.trace_id}`)
+                      navigate(
+                        `/observability/live-calls/trace/${encodeURIComponent(selectedTraceId)}`
+                      )
                     }
                     className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-xs font-mono"
                   >
-                    {selectedLog.trace_id}
+                    {selectedTraceId}
                     <ChevronRight className="h-3 w-3" />
                   </button>
                 </div>
               ) : (
-                <DetailRow label="Trace ID" value={selectedLog.trace_id} />
+                <DetailRow label="Trace ID" value={selectedTraceId} />
               )}
             </div>
           </div>

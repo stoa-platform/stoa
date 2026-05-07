@@ -51,7 +51,7 @@ const MOCK_DETAIL = {
       start_offset_ms: 0,
       duration_ms: 5,
       status: 'success',
-      metadata: { span_id: 'span-test0001' },
+      metadata: { span_id: 'span-test0001', route: '/v4/latest/{base}' },
     },
     {
       name: 'auth_validation',
@@ -156,6 +156,7 @@ describe('TraceDetail', () => {
       expect(screen.getByText('service.version')).toBeInTheDocument();
       expect(screen.getByText('0.9.23')).toBeInTheDocument();
       expect(screen.getByText('http_route')).toBeInTheDocument();
+      expect(screen.getByText('/v4/latest/{base}')).toBeInTheDocument();
       expect(screen.getByText('status_class')).toBeInTheDocument();
       expect(screen.getByText('2xx')).toBeInTheDocument();
     });

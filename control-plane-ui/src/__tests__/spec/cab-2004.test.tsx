@@ -139,7 +139,7 @@ describe('spec/CAB-2004: LogExplorer', () => {
   });
 
   describe('AC11: Trace link navigation', () => {
-    it('clicking trace_id navigates to /call-flow/trace/{trace_id}', async () => {
+    it('clicking trace_id navigates to the Live Calls trace detail', async () => {
       mockApiSuccess();
       await renderLogExplorer();
 
@@ -152,7 +152,7 @@ describe('spec/CAB-2004: LogExplorer', () => {
       await waitFor(() => {
         const traceLink = screen.getByText('abc123');
         fireEvent.click(traceLink);
-        expect(mockNavigate).toHaveBeenCalledWith('/call-flow/trace/abc123');
+        expect(mockNavigate).toHaveBeenCalledWith('/observability/live-calls/trace/abc123');
       });
     });
   });
@@ -242,12 +242,16 @@ describe('spec/CAB-2004: LogExplorer', () => {
     });
   });
 
-  describe('AC14: Navigation tab renamed', () => {
-    it('navigation shows "Gateway Logs" instead of "Logs"', async () => {
+  describe('AC14: Observability product navigation', () => {
+    it('navigation groups logs under Live Calls instead of a primary tab', async () => {
       const { observabilityTabs } = await import('../../components/subNavGroups');
-      const logsTab = observabilityTabs.find((tab: { href: string }) => tab.href === '/logs');
-      expect(logsTab).toBeDefined();
-      expect(logsTab!.label).toBe('Gateway Logs');
+      expect(observabilityTabs.map((tab: { label: string }) => tab.label)).toEqual([
+        'Gateway Health',
+        'Live Calls',
+        'Security & Guardrails',
+        'Expert Mode',
+      ]);
+      expect(observabilityTabs.some((tab: { href: string }) => tab.href === '/logs')).toBe(false);
     });
   });
 

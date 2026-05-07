@@ -6,6 +6,8 @@ import { StatCard } from '@stoa/shared/components/StatCard';
 import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
 import { TrendIndicator } from '@stoa/shared/components/TrendIndicator';
 import { ChartCard } from '@stoa/shared/components/ChartCard';
+import { SubNav } from '../../components/SubNav';
+import { observabilityTabs } from '../../components/subNavGroups';
 import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
 import {
   usePrometheusQuery,
@@ -437,9 +439,9 @@ export function CallFlowDashboard() {
       {/* ─── Header ─── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Call Flow</h1>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Live Calls</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Real-time request flow across deployment modes — Gateway, Link, Connect
+            Recent calls, trace IDs, latency, and request flow across Gateway, Link, and Connect
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -468,6 +470,8 @@ export function CallFlowDashboard() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* ─── Prometheus status banners ─── */}
       {!prometheusAvailable && (
@@ -680,7 +684,7 @@ export function CallFlowDashboard() {
           >
             <LiveTraces
               traces={filteredTraces}
-              onSelectTrace={(id) => navigate(`/call-flow/trace/${id}`)}
+              onSelectTrace={(id) => navigate(`/observability/live-calls/trace/${id}`)}
               emptyMessage={
                 activeFilterCount > 0
                   ? 'No trace spans found for this filter — metrics (Prometheus) and traces (OpenSearch) may not cover the same time window'

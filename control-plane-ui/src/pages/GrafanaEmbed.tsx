@@ -12,7 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
  * Part of CAB-1108 Phase 2: Console Integration
  *
  * Supports deep-linking via ?url= query parameter.
- * Example: /observability?url=https://grafana.gostoa.dev/d/stoa-gateway-overview
+ * Example: /observability/grafana?url=https://grafana.gostoa.dev/d/stoa-gateway-overview
  */
 export function GrafanaEmbed() {
   const [searchParams] = useSearchParams();

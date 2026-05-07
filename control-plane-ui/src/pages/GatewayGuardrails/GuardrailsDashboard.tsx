@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { SubNav } from '../../components/SubNav';
-import { gatewayTabs } from '../../components/subNavGroups';
+import { observabilityTabs } from '../../components/subNavGroups';
 import {
   RefreshCw,
   ShieldAlert,
@@ -195,15 +195,15 @@ export function GuardrailsDashboard() {
 
   return (
     <div className="space-y-6">
-      <SubNav tabs={gatewayTabs} />
+      <SubNav tabs={observabilityTabs} />
 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-            Gateway Guardrails
+            Security & Guardrails
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Request/response protection — PII, injection, prompt guard, rate limiting
+            Audit, policy decisions, PII protection, prompt guard, and rate limiting events
           </p>
         </div>
         <button
@@ -285,7 +285,7 @@ export function GuardrailsDashboard() {
               return (
                 <button
                   key={event.span_id}
-                  onClick={() => navigate(`/call-flow/trace/${event.trace_id}`)}
+                  onClick={() => navigate(`/observability/live-calls/trace/${event.trace_id}`)}
                   className="flex items-center gap-4 w-full px-4 py-3 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
                 >
                   <span className="text-neutral-400 font-mono text-xs w-20 shrink-0">

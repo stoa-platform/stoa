@@ -376,7 +376,9 @@ export function LogExplorer() {
                 <div className="flex items-center justify-between py-1">
                   <span className="text-neutral-500 dark:text-neutral-400">Trace ID</span>
                   <button
-                    onClick={() => navigate(`/call-flow/trace/${selectedLog.trace_id}`)}
+                    onClick={() =>
+                      navigate(`/observability/live-calls/trace/${selectedLog.trace_id}`)
+                    }
                     className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-xs font-mono"
                   >
                     {selectedLog.trace_id}

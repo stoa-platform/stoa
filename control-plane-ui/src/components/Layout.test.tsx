@@ -151,14 +151,16 @@ describe('Layout', () => {
     expect(screen.getByText('Parzival')).toBeInTheDocument();
   });
 
-  it('renders Logs navigation item (CAB-1114)', () => {
+  it('does not expose logs as a primary observability navigation item', () => {
     renderLayout();
-    expect(screen.getByText('Logs')).toBeInTheDocument();
+    expect(screen.queryByText('Logs')).not.toBeInTheDocument();
   });
 
-  it('renders Observability navigation item (CAB-1108)', () => {
+  it('renders product observability navigation items', () => {
     renderLayout();
-    expect(screen.getByText('Observability')).toBeInTheDocument();
+    expect(screen.getByText('Gateway Health')).toBeInTheDocument();
+    expect(screen.getByText('Live Calls')).toBeInTheDocument();
+    expect(screen.getByText('Security & Guardrails')).toBeInTheDocument();
   });
 
   it('renders gateway section with items (CAB-1764)', () => {

@@ -13,10 +13,11 @@ vi.mock('../../services/api', () => ({
 
 function renderWithRoute(traceId: string) {
   return render(
-    <MemoryRouter initialEntries={[`/call-flow/trace/${traceId}`]}>
+    <MemoryRouter initialEntries={[`/observability/live-calls/trace/${traceId}`]}>
       <Routes>
+        <Route path="/observability/live-calls/trace/:traceId" element={<TraceDetail />} />
+        <Route path="/observability/live-calls" element={<div>Live Calls</div>} />
         <Route path="/call-flow/trace/:traceId" element={<TraceDetail />} />
-        <Route path="/call-flow" element={<div>Dashboard</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -89,7 +90,7 @@ describe('TraceDetail', () => {
       renderWithRoute('test-trace-001');
       await waitFor(
         () => {
-          expect(screen.getByText('Back to Call Flow')).toBeInTheDocument();
+          expect(screen.getByText('Back to Live Calls')).toBeInTheDocument();
         },
         { timeout: 3000 }
       );
@@ -144,7 +145,7 @@ describe('TraceDetail', () => {
       await waitFor(() => {
         expect(screen.getByText(/trace not found/i)).toBeInTheDocument();
       });
-      expect(screen.getByRole('button', { name: /back to call flow/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to live calls/i })).toBeInTheDocument();
     });
   });
 });

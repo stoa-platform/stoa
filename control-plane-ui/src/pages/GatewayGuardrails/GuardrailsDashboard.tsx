@@ -149,7 +149,7 @@ export function GuardrailsDashboard() {
     value: number;
     description: string;
     color: string;
-    filter: FilterType;
+    filter?: FilterType;
   }[] = [
     {
       icon: Fingerprint,
@@ -189,7 +189,6 @@ export function GuardrailsDashboard() {
       value: stats?.rate_limit_enforcements ?? 0,
       description: 'Requests throttled by token bucket',
       color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20',
-      filter: 'all',
     },
   ];
 
@@ -225,28 +224,53 @@ export function GuardrailsDashboard() {
 
       {/* Guardrail Cards — click filters the events table below */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {guardrailCards.map((card) => (
-          <button
-            key={card.title}
-            onClick={() => setActiveFilter((prev) => (prev === card.filter ? 'all' : card.filter))}
-            className={`rounded-lg border p-5 text-left transition-all ${card.color} ${
-              activeFilter === card.filter
-                ? 'ring-2 ring-current border-current'
-                : 'border-neutral-200 dark:border-neutral-700'
-            } ${card.value > 0 ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-current' : 'opacity-60'}`}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <card.icon className="h-5 w-5" />
-              <span className="text-sm font-semibold">{card.title}</span>
-            </div>
-            {loading ? (
-              <div className="h-8 w-16 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
-            ) : (
-              <p className="text-3xl font-bold">{card.value}</p>
-            )}
-            <p className="text-xs mt-2 opacity-75">{card.description}</p>
-          </button>
-        ))}
+        {guardrailCards.map((card) => {
+          const isFilterable = Boolean(card.filter);
+          const isActive = isFilterable && activeFilter === card.filter;
+          const className = `rounded-lg border p-5 text-left transition-all ${card.color} ${
+            isActive
+              ? 'ring-2 ring-current border-current'
+              : 'border-neutral-200 dark:border-neutral-700'
+          } ${
+            isFilterable && card.value > 0
+              ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-current'
+              : 'cursor-default'
+          } ${card.value === 0 ? 'opacity-60' : ''}`;
+          const content = (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <card.icon className="h-5 w-5" />
+                <span className="text-sm font-semibold">{card.title}</span>
+              </div>
+              {loading ? (
+                <div className="h-8 w-16 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+              ) : (
+                <p className="text-3xl font-bold">{card.value}</p>
+              )}
+              <p className="text-xs mt-2 opacity-75">{card.description}</p>
+            </>
+          );
+
+          if (!card.filter) {
+            return (
+              <div key={card.title} className={className}>
+                {content}
+              </div>
+            );
+          }
+
+          const filter = card.filter;
+
+          return (
+            <button
+              key={card.title}
+              onClick={() => setActiveFilter((prev) => (prev === filter ? 'all' : filter))}
+              className={className}
+            >
+              {content}
+            </button>
+          );
+        })}
       </div>
 
       {/* Recent Events — each row links to trace detail */}

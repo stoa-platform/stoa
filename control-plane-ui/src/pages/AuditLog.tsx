@@ -124,8 +124,8 @@ export function AuditLog() {
       };
       if (filters.action) params.action = filters.action;
       if (filters.status) params.status = filters.status;
-      if (filters.start_date) params.date_from = filters.start_date;
-      if (filters.end_date) params.date_to = filters.end_date;
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
       if (filters.search) params.search = filters.search;
 
       const { data } = await apiService.get<{
@@ -172,8 +172,8 @@ export function AuditLog() {
         params: {
           ...(filters.action && { action: filters.action }),
           ...(filters.status && { status: filters.status }),
-          ...(filters.start_date && { date_from: filters.start_date }),
-          ...(filters.end_date && { date_to: filters.end_date }),
+          ...(filters.start_date && { start_date: filters.start_date }),
+          ...(filters.end_date && { end_date: filters.end_date }),
         },
       });
       const blob = new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], {
@@ -358,7 +358,7 @@ export function AuditLog() {
                   type="date"
                   value={filters.start_date || ''}
                   onChange={(e) => {
-                    setFilters((f) => ({ ...f, date_from: e.target.value || undefined }));
+                    setFilters((f) => ({ ...f, start_date: e.target.value || undefined }));
                     setPage(1);
                   }}
                   className="text-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg px-3 py-2"
@@ -368,7 +368,7 @@ export function AuditLog() {
                   type="date"
                   value={filters.end_date || ''}
                   onChange={(e) => {
-                    setFilters((f) => ({ ...f, date_to: e.target.value || undefined }));
+                    setFilters((f) => ({ ...f, end_date: e.target.value || undefined }));
                     setPage(1);
                   }}
                   className="text-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg px-3 py-2"

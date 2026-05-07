@@ -59,10 +59,40 @@ Ces décisions doivent être tranchées par le product owner **avant que codex d
 | **AR-2** | "Rate Limit" appartient à `/observability/security` ou `/observability/live-calls` ? | PR-3 | **Garder dans Security** (protection, pas signal de trafic). Corriger filter (S6) au lieu de retirer la carte. | **STATUS: validated 2026-05-07** — Garder Rate Limit dans Security & Guardrails. S6 filter no-op corrigé en PR-0 (#2717 merged). PR-3 rendra la carte cliquable avec un vrai filtre `rate-limit` ou la gardera non-cliquable selon données disponibles. |
 | **AR-3** | Demo data fallback côté audit API (`routers/audit.py:259 _init_demo_data()`): garder ou supprimer en prod ? | PR-1B | **Supprimer en prod**, garder en dev/test via env var `STOA_AUDIT_DEMO_FALLBACK=false` par défaut. | **STATUS: validated 2026-05-07** — Demo fallback OFF en prod. Env var `STOA_AUDIT_DEMO_FALLBACK=false` par défaut, `true` en dev/test. Quand le fallback déclenche (env=true ET PG+OS indisponibles), réponse contient `{"source": "demo", "warning": "Audit backend unavailable"}` — jamais silencieux. |
 | **AR-4** | Auto-refresh policy audit log: garder 30s polling fixe ou exponential backoff sur erreur ? | PR-1B | **Backoff exponentiel sur erreur** (30s → 60s → 120s → 300s plafonné), reset au prochain succès. Pas de refactor SWR (over-engineering). | **STATUS: validated 2026-05-07** — Backoff exponentiel: 30s → 60s → 120s → 240s → 300s plafonné sur erreurs consécutives. Reset à 30s au prochain succès. Pas de SWR/TanStack refactor. |
-| **AR-5** | Fallback `'unknown'` dans `usePrometheus.ts:161 groupByLabel`: que faire quand un label est absent ? | PR-2 | **Renommer en `'(unlabelled)'`** + filtrer en aval, OU dropper la série. Le mot "unknown" est trompeur. | **STATUS: validated 2026-05-07** — Renommer fallback en `'(unlabelled)'`. Côté CallFlowDashboard: filtrer `(unlabelled)` de Top Routes / Heatmap si ≥1 vrai path présent ; afficher EmptyState explicite "Route labels unavailable" si 100% des routes sont unlabelled. |
-| **AR-6** | Heatmap synthétique `CallFlowDashboard.tsx:336-361`: supprimer ou réécrire en vraie query ? | PR-2 | **Supprimer** (cacher derrière `<EmptyState>` "Heatmap unavailable"). Réécriture vraie = ticket séparé non-bloquant. | **STATUS: validated 2026-05-07** — Supprimer la heatmap synthétique (hash + flatMap distribution). EmptyState "Heatmap unavailable until range-query data is wired" en attendant. Réécriture vraie tracée en ticket follow-up séparé non-bloquant (à créer après merge PR-2). |
+| **AR-5** | Route label semantics for Live Calls: how to group route-level metrics ? | PR-2 | Initial recommendation was `'(unlabelled)'` fallback. **PR-2 step 0 evidence (#2720) refines**: `http_route` is present on 306/306 current series, `path` on 0/306. Use `http_route` as canonical route label. Keep `'(unlabelled)'` only as fallback when the expected label is missing or empty. | **STATUS: validated 2026-05-08** — Use `http_route` as canonical route label for Live Calls. Replace `path` groupings everywhere in `CallFlowDashboard.tsx`. `usePrometheus.ts:161` fallback renamed `'unknown'` → `'(unlabelled)'` (also covers empty string). Filter `(unlabelled)` from Top Routes/Heatmap when ≥1 valid `http_route` exists ; render explicit EmptyState "Route labels unavailable" when 100% are unlabelled. |
+| **AR-6** | Heatmap synthétique `CallFlowDashboard.tsx:336-361`: supprimer ou réécrire en vraie query ? | PR-2 | **Supprimer** (cacher derrière `<EmptyState>` "Heatmap unavailable"). Réécriture vraie = ticket séparé non-bloquant. | **STATUS: validated 2026-05-08** — Remove synthetic heatmap (hash + flatMap business-hours distribution). EmptyState "Traffic heatmap unavailable. A real range-query heatmap is not wired yet for the selected time range." Real `query_range` heatmap grouped by `http_route` deferred to a separate non-blocking follow-up ticket created after PR-2 merge. |
 
 **Note**: l'arbitrage est inline dans ce plan (pas un fichier séparé). Un nouveau commit met à jour `STATUS: <decision>` + flip `validation_status: validated` quand les 6 sont remplis. Codex lit ce frontmatter au début de chaque PR.
+
+---
+
+## Investigation results — 2026-05-08
+
+### PR-1A — Audit ingestion (#2721 merged)
+
+Evidence: `docs/audits/2026-05-08-audit-ingestion/findings.md`
+
+**Verdict: BLOCKED_FOR_PR-1B_SCOPING.**
+
+OVH prod has Kafka topics `stoa.audit.trail` and `audit-log`, but **no consumer group is subscribed** to either. PostgreSQL `audit_events` exists with 113 562 rows, but newest event is `2026-05-03 20:04:46+00` and `0` rows in the last 24h. Source scan reveals two parallel sinks: direct `AuditService.record_event(...)` writes (chat paths, confirmed historical) and Kafka-only `kafka_service.emit_audit_event(...)` (deployment, promotion, apis, tenants, users — all CONFIRMED_UNCONSUMED).
+
+**Impact**: PR-1B is **blocked**. Do not implement Audit Log `/stats`, `/actions`, actor resolution, demo fallback toggle, or refresh backoff until audit ingestion is restored and at least one non-chat event is visible through `/v1/audit/{tenant_id}`.
+
+**Next**: insert **PR-1A2 — Audit consumer restore/scope** between PR-1A and PR-1B (see "Linear ticket structure" below). PR-1A2 must first determine whether the consumer implementation already exists (deployment/config gap) or must be scoped from scratch (mini-spec only, separate backend PR).
+
+This was the explicit **No-Go condition** in the plan's Go/No-Go criteria. The plan is not abandoned — only PR-1B is gated; everything else proceeds.
+
+### PR-2 step 0 — Live Calls PromQL evidence (#2720 merged)
+
+Evidence: `docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md`
+
+**Verdict: READY_FOR_PR-2_CODE_SCOPING.**
+
+Current `stoa_http_requests_total` exposes `http_route` on **306/306** series, `path` on **0/306**. Histogram series `stoa_http_request_duration_seconds_bucket` follow the same pattern (`http_route` 3627/3627, `path` 0/3627). The 24h `path` evidence shown earlier (88 entries) is **historical/legacy** stale series, not current data.
+
+**Impact**: the audit finding L2 ("path=unknown") was misdiagnosed. The cause is **the dashboard groups by the wrong label** (`path`), not a gateway emission bug. The `'unknown'` displayed comes from `usePrometheus.ts:161` fabricating a fallback when the queried label is absent.
+
+**Next**: PR-2 codex prompt updated below to use `http_route` as the canonical label everywhere. No gateway-side investigation required; `path` is simply not a current label on these metrics. Note for Top Routes histogram: confirm via the same evidence pack that `http_route` is exposed on the histogram metric (it is — 3627/3627).
 
 ---
 
@@ -355,10 +385,12 @@ Deliverable: a single markdown file. No code changes. PR description: "Investiga
 
 # PR-1B — Audit Log API + UI
 
+> ⛔ **BLOCKED — 2026-05-08**. PR-1A (#2721) revealed no production audit consumer is subscribed to `stoa.audit.trail` or `audit-log`. PR-1B is gated on **PR-1A2 — Audit consumer restore/scope** (see Linear ticket structure). Do not start PR-1B until PR-1A2 produces either a deployment fix landing audit events into PG, or a confirmed mini-spec for a new consumer. Acceptance signal: at least one non-chat audit row appears in `/v1/audit/{tenant_id}` after a manual API mutation.
+
 **Branch**: `feat/audit-log-coverage-and-ui`
-**MEGA**: A — Phase 2
+**MEGA**: A — Phase 3 (was Phase 2; PR-1A2 takes Phase 2)
 **Estimated**: 13 pts, ~400 LOC (backend + frontend + tests)
-**Risk**: depends on PR-1A scope
+**Risk**: depends on PR-1A2 outcome
 
 ## Goal
 
@@ -545,208 +577,238 @@ Commit message format: feat(api,ui): audit log compliance coverage + stats + act
 
 ---
 
-# PR-2 — Live Calls Metric Integrity
+# PR-2 — Live Calls Metric Integrity (using `http_route`)
 
-**Branch**: `fix/live-calls-metric-scope`
+> ✅ **Updated 2026-05-08 with PR-2 step 0 evidence (#2720 merged).** Investigation done. Cause is dashboard-side label mismatch (`path` vs `http_route`), not a gateway emission bug. Use `http_route` as canonical route label. No Rust gateway change required. Heatmap synthetic block removed (AR-6).
+
+**Branch**: `fix/live-calls-http-route-metric-integrity`
 **MEGA**: B — Phase 1
-**Estimated**: 8 pts, ~250 LOC (frontend + ~50 LOC potential gateway)
-**Risk**: medium (cross-stack: UI + Prometheus + possibly Rust)
+**Estimated**: 8 pts, ~250 LOC (frontend only)
+**Risk**: medium (cross-cutting on CallFlowDashboard but no backend touch)
 
 ## Goal
 
-Aligner les scopes des queries Prometheus de Live Calls pour qu'aucune contradiction "KPI 39.3K vs No traffic" ne soit possible. Traiter `'unknown'` (fallback UI) explicitement. Supprimer la heatmap synthétique. Investiguer pourquoi certaines séries n'ont pas le label `path`.
+Make `/observability/live-calls` internally consistent:
+- all request KPI and breakdown queries use the same metric scope (`MODE_FILTER`);
+- route-level panels group by `http_route`, not `path`;
+- synthetic heatmap removed;
+- missing route labels rendered as explicit data-state, not as fake routes;
+- request metrics and trace availability presented as different pipelines.
 
 ## Findings addressed
 
-L1, L2 (corrigé: cause = fallback UI + scrape), L3, L4, L5, L6, L8, L9, L10.
-
-## In scope
-
-### Investigation (étape 0, avant code)
-
-1. **Identifier quelles séries `stoa_http_requests_total` existent en prod** et leur label set:
-   ```bash
-   curl -s 'https://api.gostoa.dev/v1/metrics/query?query={__name__="stoa_http_requests_total"}' \
-     -H "Authorization: Bearer ${TOKEN}" | jq '.data.result[].metric'
-   ```
-   Output attendu: liste des séries (job=, path=, method=, status=).
-2. **Identifier pourquoi certaines séries n'ont pas `path`**:
-   - Hypothèse A: scrape config Prometheus drop le label.
-   - Hypothèse B: une métrique tierce (NGINX, federation) exporte aussi `stoa_http_requests_total` sans `path`.
-   - Hypothèse C: cp-api emet `stoa_control_plane_http_requests_total{endpoint=}` qui matche le pattern `stoa_http_requests_total` quand on requête sans préfixe (peu probable mais à vérifier).
-3. **Vérifier**: si gateway emet bien le label `path` à 100% (test unitaire `metrics::record_http_request` est OK ; vérifier aussi en prod live).
-
-Si l'investigation conclut que **toutes les séries ont `path`** mais que certaines valeurs sont vides (`""`), le fix est UI uniquement.
-Si certaines séries n'ont **pas du tout** le label `path`, le fix est mixte: UI (filter pertinent) + Rust gateway (forcer label sur tous les paths) OU scrape config (ne pas drop).
-
-### Frontend (`control-plane-ui/`)
-
-1. Aligner le scope de **toutes** les queries de la page sur le même filtre `job`:
-   ```promql
-   stoa_http_requests_total{job=~"stoa-gateway|stoa-link|stoa-connect"}
-   ```
-   Ou décider explicitement qu'on inclut cp-api avec un label distinct.
-   Cette décision conditionne les 7 queries du fichier (`CallFlowDashboard.tsx:142-227`).
-
-2. **`'unknown'` handling** (`usePrometheus.ts:161` + UI):
-   - Renommer le fallback `'unknown'` → `'(unlabelled)'` dans `groupByLabel` (cf. AR-5).
-   - Dans `CallFlowDashboard.tsx`:
-     - `topRoutes`: filtrer `(unlabelled)` si ≥1 vrai path présent. Sinon afficher `<EmptyState>` "Route labels are unavailable. Metrics report `path=\"\"` (empty). Check Prometheus scrape config or instrumentation."
-     - `heatmap`: idem.
-
-3. **Supprimer la heatmap synthétique** (`CallFlowDashboard.tsx:336-361`):
-   - Supprimer le code `hash(s, n)` + `flatMap(...).Array.from({length:24}...)`.
-   - Remplacer par un `<EmptyState>` "Heatmap unavailable until range-query data is wired." ou hide complete (cf. AR-6).
-   - Ouvrir un ticket séparé "CAB-XXXX: implement real Live Calls traffic heatmap" non bloquant.
-
-4. **KPI "Active Modes"** (l. 157-160, 584-590):
-   - Soit corriger la query: `count(count by (job) (stoa_http_requests_total{job=~"stoa-gateway|stoa-link|stoa-connect"}))`.
-   - Soit renommer le label en "Tracked Routes" et garder `count by (path)`.
-   - Recommandation: corriger la query (Active Modes est l'intention produit).
-
-5. **Bannière "scope mismatch"**:
-   - Ajouter un calcul: `if totalRequestsVal > 0 && (edgeMcpTrend + sidecarTrend + connectTrend) === 0`, afficher une bannière jaune "Total requests counted, but no per-mode traffic. Possible scope mismatch — gateway scrape may not match expected job names."
-   - Test régressif obligatoire (cf. point 8 user message).
-
-6. **Trace contradiction** (L4):
-   - Quand `/v1/monitoring/transactions` retourne empty mais Prometheus retourne >0, afficher "Request metrics are available, but no traces were found for this time range. Metrics source: Prometheus. Trace source: Tempo/OpenSearch pipeline."
-   - Code site: l. 681-689 (LiveTraces empty message).
-
-7. **Header duplication** (L8): vérifier au dev server qu'aucun layout parent injecte un second h1/subtitle. Si oui, retirer celui qui est en double dans le composant.
-
-8. **Refresh button vs auto-refresh toggle** (L9): retirer le bouton Refresh, garder le toggle. Ou inverser. Décision esthétique secondaire — au choix de codex.
-
-### Gateway (Rust, conditionnel sur investigation)
-
-Si l'investigation montre que le gateway lui-même produit des séries sans label `path`:
-- Vérifier `stoa-gateway/src/lib.rs:705-709` et `metrics.rs:1230-1238`.
-- Le test `test_record_http_request` (`metrics.rs:1454`) prouve que `record_http_request` met bien les 3 labels — donc le bug serait ailleurs (scrape config?).
-- Si trivial: fix dans la même PR.
-- Sinon: ouvrir CAB séparé "Gateway Prometheus path label missing on production scrape" et le PR-2 se contente du UI.
+L1, L2 (root cause: dashboard groups by wrong label), L3, L4, L5, L6, L8, L9, L10.
 
 ## Out of scope
 
-- Pas de réécriture vraie de la heatmap (ticket séparé).
-- Pas de Tempo wiring (déjà en non-goal de PR #2713).
-- Pas de modification du sélecteur de service (Gateway/Link/Connect) ni du filter logique.
+- Real heatmap implementation (separate non-blocking ticket post-merge).
+- Tempo / Loki / OpenSearch pipeline rewiring.
+- AuditLog or Guardrails changes.
+- Sidebar / nav cleanup (PR-4).
+- Gateway Rust changes (evidence #2720 confirms gateway emits `http_route` correctly).
 
 ## Codex prompt
 
 ```
-You are working on STOA control-plane-ui (React 18, TS, Vite) with optional surface in stoa-gateway (Rust).
+You are working on the STOA repository.
 
-Context: PR #2713 consolidated /observability routes but the Live Calls page (/observability/live-calls) presents inconsistent data. KPI "Total Requests (1h)" shows 39.3K but per-mode breakdowns show "No traffic". "Top Routes" and "Traffic Heatmap" only show "unknown" (a UI fallback fabricated by groupByLabel in src/hooks/usePrometheus.ts:161). The heatmap is synthetic, generated from a deterministic hash on top routes (CallFlowDashboard.tsx:336-361).
+Branch: `fix/live-calls-http-route-metric-integrity`
 
-Step 0 — Investigation (REQUIRED before code changes):
+Context:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- Original audit: docs/audits/2026-05-07-observability/AUDIT.md
+- PR-2 step 0 PromQL evidence: docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md
 
-Run these PromQL queries against api.gostoa.dev (use a real Bearer token from a logged-in CPI Admin session — see docs/audits/2026-05-07-observability/AUDIT.md for context):
+Important evidence (#2720 merged):
+- Current production `stoa_http_requests_total` exposes `http_route` on 306/306 series, `path` on 0/306.
+- `stoa_http_request_duration_seconds_bucket` exposes `http_route` on 3627/3627, `path` on 0/3627.
+- The audit finding L2 ("path=unknown") is a misdiagnosis: cause is the dashboard groups by the wrong label. Gateway is fine.
 
-1. Inventory series:
-   query={__name__="stoa_http_requests_total"}
+Therefore the Live Calls dashboard must use `http_route`, not `path`. Do not investigate Rust gateway path emission in this PR.
 
-2. Inventory histogram series:
-   query={__name__="stoa_http_request_duration_seconds_bucket"}
+Goal: make /observability/live-calls internally consistent.
+- all KPI and breakdown queries use the same metric scope (MODE_FILTER);
+- route-level panels group by `http_route`;
+- synthetic heatmap removed;
+- missing route labels rendered as explicit data-state, not fake routes;
+- request metrics and trace availability presented as different pipelines.
 
-3. Distinct job labels:
-   query=count by (job) (stoa_http_requests_total)
+Files likely involved:
+- control-plane-ui/src/pages/CallFlow/CallFlowDashboard.tsx
+- control-plane-ui/src/hooks/usePrometheus.ts
+- control-plane-ui/src/pages/CallFlow/components/TopRoutes.tsx
+- control-plane-ui/src/pages/CallFlow/components/TrafficHeatmap.tsx
+- relevant tests under control-plane-ui/src/**/__tests__ or page test locations
 
-4. Distinct path values:
-   query=count by (path) (stoa_http_requests_total)
+Do NOT touch AuditLog or Guardrails in this PR.
 
-5. Series with empty/missing path:
-   query=count(stoa_http_requests_total{path=""}) or count(stoa_http_requests_total) - count(stoa_http_requests_total{path!=""})
+---
 
-Document findings in docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md before writing code.
+1. Define metric scope and route label constants
 
-Decision tree based on evidence:
-- If all series have job ∈ {stoa-gateway, stoa-link, stoa-connect}: filter is correct, fix the missing-path issue only.
-- If some series have other job values (e.g. stoa-control-plane-api): scope ambiguity — either filter them out or handle them as a separate stack.
-- If some series have NO path label at all: that's the root cause of "unknown". Fix either Rust gateway emission or Prometheus scrape config.
+Near the top of CallFlowDashboard.tsx:
+  const MODE_FILTER = 'job=~"stoa-gateway|stoa-link|stoa-connect"';
+  const ROUTE_LABEL = 'http_route';
+  const UNLABELLED_ROUTE = '(unlabelled)';
 
-Step 1 — Frontend changes (control-plane-ui/src/):
+Use MODE_FILTER consistently. Use ROUTE_LABEL for grouping. Do not use `path` for current route-level panels.
 
-1. src/hooks/usePrometheus.ts:161
-   Change `const key = r.metric[label] || 'unknown';` to `const key = r.metric[label] ?? '(unlabelled)';`
-   Ensure consumers of groupByLabel handle the '(unlabelled)' key explicitly.
+2. Align all Live Calls Prometheus query scopes
 
-2. src/pages/CallFlow/CallFlowDashboard.tsx
-   Define MODE_FILTER constant at top of file:
-     const MODE_FILTER = 'job=~"stoa-gateway|stoa-link|stoa-connect"';
-   Apply this filter to ALL stoa_http_requests_total and stoa_http_request_duration_seconds_bucket queries (lines 142-206).
-   Verify totalRequests, totalErrors, p50/p99, activeModes, latencyBuckets, errorsByStatus, topRoutesP95, topRoutesCalls all use the same scope.
+All queries on `stoa_http_requests_total` and `stoa_http_request_duration_seconds_bucket` must use:
+  {job=~"stoa-gateway|stoa-link|stoa-connect"}
 
-3. CallFlowDashboard.tsx:157-160 (activeModes query)
-   Change to: count(count by (job) (stoa_http_requests_total{job=~"stoa-gateway|stoa-link|stoa-connect"}))
-   Update subtitle from "Deployment modes" to whatever now matches reality.
+Examples:
+  sum(increase(stoa_http_requests_total{job=~"stoa-gateway|stoa-link|stoa-connect"}[$range]))
+  sum by (job) (increase(stoa_http_requests_total{job=~"stoa-gateway|stoa-link|stoa-connect"}[$range]))
 
-4. CallFlowDashboard.tsx:321-333 (topRoutes parsing)
-   Filter out '(unlabelled)' key from p95Map before sorting.
-   If after filtering the resulting array is empty AND p95Map originally had only '(unlabelled)' key, render the EmptyState described below in the TopRoutes component.
+For histogram route-level latency (evidence confirms `http_route` is on 3627/3627 series):
+  topk(8, histogram_quantile(0.95, sum by (le, http_route) (rate(stoa_http_request_duration_seconds_bucket{job=~"stoa-gateway|stoa-link|stoa-connect", http_route!="", http_route!="unknown"}[5m]))))
 
-5. control-plane-ui/src/pages/CallFlow/components/TopRoutes.tsx
-   Add an empty state for the case "all routes are unlabelled":
-   "Route labels unavailable. Metrics currently report missing or empty 'path' label. Check Prometheus scrape config and gateway instrumentation."
-   Use the existing EmptyState component from @stoa/shared/components/EmptyState.
+3. Replace route grouping from `path` to `http_route`
 
-6. CallFlowDashboard.tsx:336-361 (heatmap synthesis)
-   Delete this entire block (the hash() function and the flatMap distribution).
-   Replace heatmapCells with empty state cards.tsx:644-655 — wrap TrafficHeatmap in a conditional that renders EmptyState "Heatmap unavailable. Real range-query implementation tracked in CAB-XXXX." when no real data is wired.
-   Open a ticket placeholder comment: // TODO(CAB-XXXX): implement real heatmap via query_range over selected window
+Anywhere code currently does `metric.path`, `groupByLabel(..., 'path')`, or `sum by (path)`, switch to `metric.http_route`, `groupByLabel(..., 'http_route')`, or `sum by (http_route)`.
 
-7. CallFlowDashboard.tsx — add scope-mismatch banner.
-   After loading totalRequestsVal, edgeMcpTrend, sidecarTrend, connectTrend:
-     const sumPerMode = (edgeMcpTrend.data?.[edgeMcpTrend.data.length-1]?.value ?? 0)
-                      + (sidecarTrend.data?.[sidecarTrend.data.length-1]?.value ?? 0)
-                      + (connectTrend.data?.[connectTrend.data.length-1]?.value ?? 0);
-     const scopeMismatch = totalRequestsVal !== null && totalRequestsVal > 0 && sumPerMode === 0;
-   If scopeMismatch, render an amber banner above the KPIs:
-     "Total requests counted, but no per-mode traffic for the selected window. Some scraped series may not match expected job names. See <link to runbook>."
+Do not keep a `path` fallback unless a test proves older environments need it. If a fallback is required, it must be explicit:
+  const route = metric.http_route ?? metric.path ?? UNLABELLED_ROUTE;
 
-8. CallFlowDashboard.tsx:681-689 (LiveTraces empty message)
-   When traces.length === 0 AND totalRequestsVal > 0, change emptyMessage to:
-     "Request metrics are available, but no traces were found for this time range. Metrics source: Prometheus. Trace source: Tempo/OpenSearch pipeline."
+But current production should prefer `http_route`.
 
-9. CallFlowDashboard.tsx:440 verify <h1>Live Calls</h1> (already changed in PR-0).
-   Investigate any duplicate header injected by parent layout — if found, remove the duplicate (one canonical title per page).
+4. Replace `'unknown'` fallback with explicit unlabelled semantics
 
-Step 2 — Gateway changes (CONDITIONAL on Step 0 evidence):
+In src/hooks/usePrometheus.ts, change:
+  const key = r.metric[label] || 'unknown';
+to:
+  const raw = r.metric[label];
+  const key = raw && raw.trim() ? raw : '(unlabelled)';
 
-If evidence shows the Rust gateway emits series WITHOUT a path label (e.g. only on certain code paths), AND the fix is trivial (≤30 LOC):
-  - Update stoa-gateway/src/lib.rs to ensure record_http_request is called on every response path.
-  - Add a regression cargo test asserting the label is always set.
+Empty strings and missing labels both treated as unlabelled.
 
-Otherwise:
-  - Open a separate ticket "Gateway Prometheus path label missing — scrape or emission fix" and reference it in PR-2 description.
-  - PR-2 is UI-only.
+5. Top Routes behavior
 
-Tests required:
+Top Routes must NEVER render a normal route called `unknown` or `(unlabelled)`.
 
-Frontend:
-- src/__tests__/regression/live-calls-scope-mismatch.test.tsx — given total > 0 and per-mode = 0, assert banner is rendered.
-- src/__tests__/regression/live-calls-unlabelled-routes.test.tsx — given groupByLabel returns {'(unlabelled)': 5000}, assert the EmptyState is rendered, NOT a Top Routes table with one row.
-- src/pages/CallFlow/components/TopRoutes.test.tsx — empty state when all routes unlabelled.
-- src/__tests__/regression/live-calls-no-synthetic-heatmap.test.tsx — assert heatmapCells is empty (no fake distribution).
-- src/hooks/usePrometheus.test.ts — groupByLabel returns '(unlabelled)' not 'unknown' for missing label.
+- If at least one valid http_route exists: filter out unknown/empty/(unlabelled) and render valid routes.
+- If all route data is missing/unlabelled: render an EmptyState:
+  "Route labels unavailable. Metrics currently do not expose a usable `http_route` label for route-level panels. Check Prometheus scrape config and gateway instrumentation."
+- If no route data at all: render the existing no-data state with clear wording.
 
-Backend (if gateway fix included):
-- cargo test --package stoa-gateway --lib record_http_request_always_has_path_label
+Do not show a fake single-row Top Routes table.
+
+6. Remove synthetic heatmap
+
+Delete the deterministic hash + business-hours block in CallFlowDashboard.tsx (the heatmap synthesis around the `hash()` and `flatMap` over 24 hours).
+
+Replace with an EmptyState:
+  "Traffic heatmap unavailable. A real range-query heatmap is not wired yet for the selected time range."
+
+Add a TODO consistent with repo style:
+  // TODO: implement real heatmap with Prometheus query_range grouped by http_route (separate ticket).
+
+Do NOT implement the real heatmap in this PR.
+
+7. Fix Active Modes query
+
+Active Modes must count deployment modes/jobs, not route labels:
+  count(count by (job) (stoa_http_requests_total{job=~"stoa-gateway|stoa-link|stoa-connect"}))
+
+If product label stays "Active Modes", subtitle should say "Gateway / Link / Connect jobs reporting traffic". Do NOT count `path` or `http_route` for this KPI.
+
+8. Add scope-mismatch banner
+
+When totalRequests > 0 AND all Gateway/Link/Connect breakdowns are 0/missing, show an amber banner:
+  "Total requests are available, but no Gateway/Link/Connect breakdown traffic was found for the selected window. Some scraped series may not match the expected job scope."
+
+Regression guard for the original bug. May not appear in normal production after MODE_FILTER alignment, but keep the logic and test it with mocked data.
+
+9. Clarify traces empty state
+
+When request metrics are non-zero but `/v1/monitoring/transactions` returns empty:
+  "Request metrics are available, but no traces were found for this time range. Metrics source: Prometheus. Trace source: Tempo/OpenSearch pipeline."
+
+Do not imply the entire observability pipeline is healthy.
+
+10. Header sanity check
+
+PR-0 already changed the h1 to "Live Calls". Verify this remains true. Do not touch route/nav/sidebar in this PR.
+
+---
+
+Tests required (use existing test setup):
+
+a. Query label test: route-level queries use `http_route`, not `sum by (path)` or `metric.path`.
+b. groupByLabel fallback test: missing/empty label → `(unlabelled)`, never `unknown`.
+c. Top Routes unlabelled test: 100% unlabelled → EmptyState, not a normal row.
+d. Top Routes valid test: mix of valid and unlabelled → unlabelled filtered out.
+e. Synthetic heatmap removal test: heatmap no longer generates cells from deterministic hash; with no real heatmap data, renders EmptyState.
+f. Scope mismatch banner test: total > 0 + breakdowns = 0 → banner appears.
+g. Traces split-brain test: total > 0 + transactions = [] → "metrics available, traces not found".
+
+Commands (from control-plane-ui):
+  npm run lint
+  npm run test -- --run
+  npm run test -- --run src/pages/CallFlow
+  npm run test -- --run src/hooks/usePrometheus.test.ts
+
+---
 
 Acceptance criteria:
-- [ ] All Prometheus queries on Live Calls use the same MODE_FILTER scope.
-- [ ] No '(unlabelled)' route appears as a normal entry in Top Routes when other routes exist.
-- [ ] When 100% of routes are unlabelled, an EmptyState is rendered, not a fake top route.
-- [ ] Heatmap is empty/hidden until real data is wired.
-- [ ] Scope-mismatch banner appears when KPI total > 0 but breakdowns are 0.
-- [ ] Active Modes label matches what is actually counted.
-- [ ] Tests added for all 5 regression scenarios.
+- All Live Calls request queries use a consistent MODE_FILTER.
+- Route-level panels use `http_route`, not `path`.
+- No normal UI row called `unknown` or `(unlabelled)` is shown as a route.
+- When route labels unavailable, explicit EmptyState rendered.
+- Synthetic heatmap removed.
+- Active Modes counts `job`, not routes.
+- Scope mismatch banner exists and is tested.
+- Live Traces distinguishes Prometheus metrics from Tempo/OpenSearch traces.
+- No AuditLog changes.
+- No Guardrails changes.
+- No backend endpoint changes.
+- Lint and tests pass.
 
-Out of scope:
-- Real heatmap implementation (separate ticket).
-- Tempo / Loki / OpenSearch pipeline rewiring.
-- Sidebar nav cleanup (PR-4).
-- Demo data fallback (no demo data in this page; ensure code review confirms).
+Out of scope (do NOT do):
+- Real heatmap implementation.
+- Tempo/OpenSearch ingestion changes.
+- AuditLog or Guardrails modifications.
+- Sidebar/nav legacy cleanup.
+- Audit stats/actions endpoints.
+- Audit Kafka consumer restore (PR-1A2 handles that).
 
-Commit message: fix(ui,gateway?): live calls metric scope alignment + unlabelled route handling (CAB-XXXX)
+Commit message: fix(ui): align live calls metrics on http_route
+
+PR title: fix(ui): align live calls metrics on http_route
+
+PR body must include:
+## Summary
+Fixes Live Calls metric integrity based on the PR-2 step 0 PromQL evidence.
+
+Evidence:
+- current `stoa_http_requests_total` series expose `http_route` on 306/306 series
+- `path` is absent on 0/306 series
+
+Changes:
+- align Live Calls metric scope across KPI and breakdowns
+- use `http_route` for route-level panels
+- remove synthetic heatmap
+- add explicit route-label unavailable state
+- add scope-mismatch banner
+- clarify Prometheus metrics vs traces empty state
+
+## Non-goals
+- no real heatmap implementation
+- no Tempo/OpenSearch rewiring
+- no AuditLog changes
+- no Guardrails changes
+- no sidebar cleanup
+
+## Tests
+- [ ] npm run lint
+- [ ] npm run test -- --run
+- [ ] route-level queries use `http_route`
+- [ ] unlabelled routes do not render as normal rows
+- [ ] synthetic heatmap removed
+- [ ] scope mismatch banner
+- [ ] traces split-brain empty state
 ```
 
 ## Acceptance criteria (binary)
@@ -1014,20 +1076,131 @@ Commit message: chore(ui): observability sidebar cleanup — remove legacy redir
 
 # Linear ticket structure (proposed)
 
-```
-[Standalone chore]
-└── PR-0 — Observability quick wins (1pt) — CAB-XXXX
+Updated 2026-05-08 to reflect PR-1A2 insertion (audit consumer restore/scope) after PR-1A's BLOCKED verdict.
 
-[MEGA-A: Audit Log Data Integrity] (21pt, 3 phases)
-├── Phase 1 — PR-1A Investigation (3pt) — CAB-XXXX
-├── Phase 2 — PR-1B API + UI (13pt) — CAB-XXXX
-└── Phase 3 — PR-1C Tests + evidence (5pt) — CAB-XXXX [optional, can fold into 1B]
+```
+[Standalone chore — DONE]
+└── PR-0 — Observability quick wins (1pt) — #2717 merged 2026-05-07
+
+[MEGA-A: Audit Log Data Integrity] (24pt, 4 phases)
+├── Phase 1 — PR-1A Investigation (3pt) — #2721 merged 2026-05-08, BLOCKED verdict
+├── Phase 2 — PR-1A2 Audit consumer restore/scope (NEW, 3pt) — see prompt below
+├── Phase 3 — PR-1B API + UI (13pt, BLOCKED on PR-1A2 outcome)
+└── Phase 4 — PR-1C Tests + evidence (5pt, optional, can fold into 1B)
 
 [MEGA-B: Runtime Observability Data Integrity] (21pt, 3 phases)
-├── Phase 1 — PR-2 Live Calls metric integrity (8pt) — CAB-XXXX
-├── Phase 2 — PR-3 Security & Guardrails runtime truth (8pt, BLOCKED on AR-1) — CAB-XXXX
-└── Phase 3 — PR-4 Sidebar IA cleanup (5pt, BLOCKED on AR-1+PR-3) — CAB-XXXX
+├── Phase 1 — PR-2 Live Calls metric integrity (8pt) — codex prompt updated for `http_route` after #2720
+├── Phase 2 — PR-3 Security & Guardrails runtime truth (8pt, BLOCKED on Annex B)
+└── Phase 3 — PR-4 Sidebar IA cleanup (5pt, BLOCKED on AR-1+PR-3)
 ```
+
+## PR-1A2 — Audit consumer restore/scope (NEW phase)
+
+**Branch**: `fix/audit-consumer-restore`
+**MEGA**: A — Phase 2 (inserted between PR-1A and PR-1B)
+**Estimated**: 3 pts (case A scope) to 1 pt (case C docs-only scope)
+**Risk**: low (read-only discovery → minimal config fix or scoping doc)
+
+### Goal
+
+Determine whether the repository already contains an audit consumer implementation or deployment manifest. Based on findings, either restore the missing deployment/config (Case A or B), or produce a minimal scoping document for a future backend PR (Case C).
+
+### Codex prompt
+
+```
+You are working on the STOA repository.
+Branch: `fix/audit-consumer-restore`
+
+Context:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- Evidence: docs/audits/2026-05-08-audit-ingestion/findings.md (PR-1A merged in #2721)
+
+Key finding from PR-1A:
+OVH prod has Kafka topics `stoa.audit.trail` and `audit-log`, but no consumer
+group is subscribed. PostgreSQL `audit_events` is stale (newest row
+2026-05-03, 0 rows last 24h). This blocks PR-1B.
+
+Goal: determine if a consumer implementation already exists, then either
+(1) restore the deployment/config; or (2) produce a scoping doc.
+
+Step 1 — Repository discovery (read-only)
+
+Search for:
+  audit_events, stoa.audit.trail, audit-log, AuditConsumer, consumer group,
+  kafka_service.emit_audit_event, emit_audit_event
+
+Areas: control-plane-api/, services/, deploy/, helm/, charts/, k8s/, infra/
+
+Document findings in:
+  docs/audits/2026-05-08-audit-ingestion/consumer-restore-scope.md
+
+Required sections (template in PR-1A2 section of plan):
+- Producer topic + source file/env var
+- Existing consumer implementation (yes/no, files, group, sink)
+- Existing deployment manifest (yes/no, files, namespace, env)
+- Gap classification: implementation-exists-deployment-missing /
+  deployment-exists-disabled-or-misconfigured / implementation-missing /
+  topic-mismatch / unknown
+- Recommended next PR
+
+Step 2 — Conditional action based on classification
+
+Case A (implementation exists, deployment missing or disabled):
+  Add Helm/Kubernetes deployment manifest, env wiring, consumer group name,
+  topic env. Do NOT rewrite the consumer.
+
+Case B (deployment exists but topic mismatch):
+  Fix the topic config so producer and consumer agree. Do NOT subscribe to
+  both `stoa.audit.trail` and `audit-log` without dedupe semantics. Identify
+  the canonical producer topic first.
+
+Case C (no consumer implementation):
+  Keep this PR docs-only. Produce consumer-restore-scope.md with mini-spec:
+  canonical topic, payload schema, consumer group, idempotency/dedup key,
+  retry/DLQ behavior, PG insert/upsert behavior, observability hooks.
+  Do NOT invent a consumer implementation in this PR.
+
+Out of scope (DO NOT do):
+- /v1/audit/{tenant_id}/stats or /actions endpoints
+- AuditLog UI changes
+- Actor resolution
+- audit_events schema migration
+- silent dual-topic consumption without dedupe
+- production data mutation
+
+Acceptance:
+- Canonical producer topic identified.
+- Implementation existence assessed (yes/no, files).
+- Deployment existence assessed (yes/no, files).
+- Either a deployment/config fix is implemented, OR a clear mini-spec
+  blocks PR-1B explicitly.
+- No AuditLog UI/API feature work included.
+
+Commit message:
+  fix(infra): restore audit consumer deployment   (Case A/B)
+  docs(observability): scope audit consumer restore   (Case C)
+
+PR title: same as commit message.
+
+PR body must reference:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- Evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
+- Classification chosen (A/B/C) with one-line justification.
+```
+
+### Acceptance criteria (binary)
+
+- [ ] Canonical producer topic identified in `consumer-restore-scope.md`.
+- [ ] Implementation existence: yes/no with file paths.
+- [ ] Deployment existence: yes/no with file paths.
+- [ ] Either Case A/B fix applied, or Case C mini-spec produced.
+- [ ] No AuditLog UI/API work included.
+- [ ] PR-1B unblock signal documented (what test must pass before PR-1B starts).
+
+### Tests required from Codex
+
+- For Case A/B (config fix): manifest lint passes, smoke test that consumer group registers on the topic in dev/staging if available.
+- For Case C (docs-only): `git diff --check` clean.
 
 # Sequencing (real timeline)
 

@@ -2,6 +2,12 @@
 
 Chronological log of notable technical decisions. For major architectural decisions, see [ADRs in stoa-docs](https://docs.gostoa.dev/architecture/adr/).
 
+## 2026-05
+
+| Date | Decision | Context |
+|------|----------|---------|
+| 2026-05-07 | Reframe AI Factory governance canonization to minimal separation of powers | Decision Gate #11 found governance canon drift and blocked premature canonization of the 5-category taxonomy |
+
 ## 2026-02
 
 | Date | Decision | Context |

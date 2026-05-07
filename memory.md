@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-04-15. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-05-07. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-05-07
+
+- Decision Gate #11 (`AI Factory Governance Alignment`) produced a **REFRAME**, not GO: the challenger found the existing governance canon is already drifting (4-persona/9+ public review-loop vs 8-persona/8.0 ADR-061/local rules). Plan `docs/plans/2026-05-07-ai-factory-governance.md` is now `validation_status: challenged`, with decision record `docs/decisions/2026-05-07-ai-factory-governance.md`. Retained doctrine: canonize only critical separation of powers (author ≠ reviewer ≠ human risk/merge decision owner), non-persona-fed external challenger, human risk acceptance for irreversible/public decisions, and PR reviewability. Do **not** canonize the 5-category taxonomy, Advisory Agents, governance levels, or expanded triggers from this draft.
 
 ## ✅ FREEZE LEVÉ (2026-04-19)
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.1...control-plane-ui-v1.7.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* **ui:** consolidate observability product navigation ([#2713](https://github.com/stoa-platform/stoa/issues/2713)) ([b653970](https://github.com/stoa-platform/stoa/commit/b65397083b3e0a60e6100e7c20a1b3d073ad195c))
+
 ## [1.7.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.0...control-plane-ui-v1.7.1) (2026-05-06)
 
 

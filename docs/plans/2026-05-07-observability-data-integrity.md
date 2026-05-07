@@ -1,7 +1,7 @@
 ---
 id: plan-2026-05-07-observability-data-integrity
 triggers: []                           # tactical remediation, no Decision Gate trigger
-validation_status: draft               # upgrade to validated once arbitrages AR-1..AR-6 below are filled
+validation_status: validated           # AR-1..AR-6 filled 2026-05-07 — Claude recommendations accepted by product owner
 challenge_ref: ""                      # not required (no triggers); add only if upgraded to challenged
 ---
 
@@ -55,12 +55,12 @@ Ces décisions doivent être tranchées par le product owner **avant que codex d
 
 | # | Décision à prendre | Bloque | Recommandation Claude | Décision |
 |---|---|---|---|---|
-| **AR-1** | Security Posture (Governance) ↔ Security & Guardrails (Observability): fusion ou clarification IA stricte ? | PR-3, PR-4 | **Clarifier** — Posture = état/findings/score statique ; Guardrails = events runtime. Documenter sous-titres. Pas de fusion (personas distincts: compliance officer vs SRE). | STATUS: pending |
-| **AR-2** | "Rate Limit" appartient à `/observability/security` ou `/observability/live-calls` ? | PR-3 | **Garder dans Security** (protection, pas signal de trafic). Corriger filter (S6) au lieu de retirer la carte. | STATUS: pending |
-| **AR-3** | Demo data fallback côté audit API (`routers/audit.py:259 _init_demo_data()`): garder ou supprimer en prod ? | PR-1B | **Supprimer en prod**, garder en dev/test via env var `STOA_AUDIT_DEMO_FALLBACK=false` par défaut. | STATUS: pending |
-| **AR-4** | Auto-refresh policy audit log: garder 30s polling fixe ou exponential backoff sur erreur ? | PR-1B | **Backoff exponentiel sur erreur** (30s → 60s → 120s → 300s plafonné), reset au prochain succès. Pas de refactor SWR (over-engineering). | STATUS: pending |
-| **AR-5** | Fallback `'unknown'` dans `usePrometheus.ts:161 groupByLabel`: que faire quand un label est absent ? | PR-2 | **Renommer en `'(unlabelled)'`** + filtrer en aval, OU dropper la série. Le mot "unknown" est trompeur. | STATUS: pending |
-| **AR-6** | Heatmap synthétique `CallFlowDashboard.tsx:336-361`: supprimer ou réécrire en vraie query ? | PR-2 | **Supprimer** (cacher derrière `<EmptyState>` "Heatmap unavailable"). Réécriture vraie = ticket séparé non-bloquant. | STATUS: pending |
+| **AR-1** | Security Posture (Governance) ↔ Security & Guardrails (Observability): fusion ou clarification IA stricte ? | PR-3, PR-4 | **Clarifier** — Posture = état/findings/score statique ; Guardrails = events runtime. Documenter sous-titres. Pas de fusion (personas distincts: compliance officer vs SRE). | **STATUS: validated 2026-05-07** — Clarifier (no fusion). Sous-titres distincts: Security Posture = "Compliance findings, security score, configuration assessment" ; Security & Guardrails = "Runtime events — guardrail decisions, PII/prompt/content/rate-limit monitoring". |
+| **AR-2** | "Rate Limit" appartient à `/observability/security` ou `/observability/live-calls` ? | PR-3 | **Garder dans Security** (protection, pas signal de trafic). Corriger filter (S6) au lieu de retirer la carte. | **STATUS: validated 2026-05-07** — Garder Rate Limit dans Security & Guardrails. S6 filter no-op corrigé en PR-0 (#2717 merged). PR-3 rendra la carte cliquable avec un vrai filtre `rate-limit` ou la gardera non-cliquable selon données disponibles. |
+| **AR-3** | Demo data fallback côté audit API (`routers/audit.py:259 _init_demo_data()`): garder ou supprimer en prod ? | PR-1B | **Supprimer en prod**, garder en dev/test via env var `STOA_AUDIT_DEMO_FALLBACK=false` par défaut. | **STATUS: validated 2026-05-07** — Demo fallback OFF en prod. Env var `STOA_AUDIT_DEMO_FALLBACK=false` par défaut, `true` en dev/test. Quand le fallback déclenche (env=true ET PG+OS indisponibles), réponse contient `{"source": "demo", "warning": "Audit backend unavailable"}` — jamais silencieux. |
+| **AR-4** | Auto-refresh policy audit log: garder 30s polling fixe ou exponential backoff sur erreur ? | PR-1B | **Backoff exponentiel sur erreur** (30s → 60s → 120s → 300s plafonné), reset au prochain succès. Pas de refactor SWR (over-engineering). | **STATUS: validated 2026-05-07** — Backoff exponentiel: 30s → 60s → 120s → 240s → 300s plafonné sur erreurs consécutives. Reset à 30s au prochain succès. Pas de SWR/TanStack refactor. |
+| **AR-5** | Fallback `'unknown'` dans `usePrometheus.ts:161 groupByLabel`: que faire quand un label est absent ? | PR-2 | **Renommer en `'(unlabelled)'`** + filtrer en aval, OU dropper la série. Le mot "unknown" est trompeur. | **STATUS: validated 2026-05-07** — Renommer fallback en `'(unlabelled)'`. Côté CallFlowDashboard: filtrer `(unlabelled)` de Top Routes / Heatmap si ≥1 vrai path présent ; afficher EmptyState explicite "Route labels unavailable" si 100% des routes sont unlabelled. |
+| **AR-6** | Heatmap synthétique `CallFlowDashboard.tsx:336-361`: supprimer ou réécrire en vraie query ? | PR-2 | **Supprimer** (cacher derrière `<EmptyState>` "Heatmap unavailable"). Réécriture vraie = ticket séparé non-bloquant. | **STATUS: validated 2026-05-07** — Supprimer la heatmap synthétique (hash + flatMap distribution). EmptyState "Heatmap unavailable until range-query data is wired" en attendant. Réécriture vraie tracée en ticket follow-up séparé non-bloquant (à créer après merge PR-2). |
 
 **Note**: l'arbitrage est inline dans ce plan (pas un fichier séparé). Un nouveau commit met à jour `STATUS: <decision>` + flip `validation_status: validated` quand les 6 sont remplis. Codex lit ce frontmatter au début de chaque PR.
 

@@ -14,8 +14,9 @@ import {
   CHART_GRID_STYLE,
   ChartEmptyState,
 } from '@stoa/shared/components/ChartCard';
+import { filterRenderableRoutes, ROUTE_LABELS_UNAVAILABLE_MESSAGE } from '../metrics';
 
-interface RouteLatency {
+export interface RouteLatency {
   route: string;
   p95Ms: number;
   calls: number;
@@ -35,10 +36,14 @@ function latencyColor(ms: number): string {
 }
 
 export function TopRoutes({ routes, activeRoute, onRouteClick }: TopRoutesProps) {
-  const data = routes.slice(0, 8);
+  const data = filterRenderableRoutes(routes).slice(0, 8);
 
   if (data.length === 0) {
-    return <ChartEmptyState message="No route data available" />;
+    return (
+      <ChartEmptyState
+        message={routes.length > 0 ? ROUTE_LABELS_UNAVAILABLE_MESSAGE : 'No route data available'}
+      />
+    );
   }
 
   return (

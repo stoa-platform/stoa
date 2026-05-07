@@ -1631,3 +1631,37 @@ Si AR-1 retient fusion: les deux pages deviennent une seule sous Observability, 
 5. **Confirm PR-0 scope is acceptable** (5 cosmetic fixes + 1 functional bug A4 in one chore PR).
 6. **Confirm PR-1A access** (someone with prod OVH kubeconfig runs the investigation, or grant codex temporary access).
 7. **Flip `validation_status: draft → validated`** in frontmatter once 1+2+3 done. PR-0 can start before 2/3 are locked (PR-0 doesn't touch contracts).
+
+---
+
+## Update — 2026-05-08 Live Calls deployed
+
+PR-2 `fix(ui): align live calls metrics on http_route` (stoa #2727, squash `87b1a4f9`) is deployed in OVH `stoa-system`.
+
+Deployment status:
+- control-plane-ui image: `dev-87b1a4f93c00cd852e6bedee16ef11c9ba8cc20b`
+- ArgoCD: `Synced` + `Healthy` (stoa-infra rev `4bb75075`)
+- API / Gateway / Console / Portal health: `200`
+- new UI pods running with 0 restarts; old ReplicaSet terminated cleanly
+
+Next:
+Create `docs/audits/2026-05-08-live-calls-runtime-verification/findings.md`. (Done — stoa PR #2731.)
+
+Gate:
+PR-2 is considered runtime-closed only if the evidence pack ends with:
+`VERDICT: PR-2_RUNTIME_PASS`. (Met in stoa #2731.)
+
+## Update — Audit consumer rollout
+
+PR-1A4 (stoa #2726) implementation, corrected by stoa PR #2730, is safe-by-default:
+- code default `ENABLE_AUDIT_TRAIL_CONSUMER=false` (`control-plane-api/src/main.py`)
+- base manifest value `"false"` (`control-plane-api/k8s/deployment.yaml`)
+- regression test locks safe-by-default behaviour (`tests/test_regression_kafka_boot.py::test_audit_trail_consumer_safe_by_default`)
+
+No dedicated staging ArgoCD target exists for this chart today. Rollout sequence:
+
+1. **stoa-infra A1a** — set prod-effective Helm values explicitly to `ENABLE_AUDIT_TRAIL_CONSUMER=false`. (Open: stoa-infra PR #74, branch `chore/cp-api-audit-consumer-explicit-off`.)
+2. Deploy cp-api image with consumer disabled; verify normal boot and that no audit consumer group starts consuming `stoa.audit.trail`.
+3. **stoa-infra A1b** — activate `ENABLE_AUDIT_TRAIL_CONSUMER=true` in a separate, isolated PR (single-line change, simple rollback).
+4. **PR-1A5** — produce a non-chat audit event; verify Kafka group, PG row in `audit_events`, and `/v1/audit/{tenant_id}`.
+5. **PR-1B** unblocks only after `VERDICT: PR-1B_UNBLOCKED`.

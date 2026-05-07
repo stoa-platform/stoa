@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-05-04. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-05-07. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-05-07
+
+- PR-2 Live Calls http_route migration implemented on branch `fix/live-calls-http-route-metric-integrity` in worktree `/Users/torpedo/hlfh-repos/stoa-live-calls-pr2`. Scope stayed frontend-only: Live Calls PromQL request queries now share `MODE_FILTER`, route-level panels group by `http_route`, `groupByLabel` uses explicit `(unlabelled)` fallback, Top Routes filters unusable route labels and renders a route-label unavailable state, synthetic heatmap generation was removed in favor of an explicit not-wired state, Active Modes counts jobs, scope-mismatch banner added, and traces empty-state now distinguishes Prometheus metrics from Tempo/OpenSearch traces. No AuditLog, Guardrails, backend, gateway Rust, Tempo/Loki/OpenSearch, sidebar/nav, or real heatmap implementation changes. Validation passed: `npm run test -- --run` (2302 passed, 11 skipped), targeted CallFlow/usePrometheus regressions (54 passed), `npm run lint` (50 pre-existing warnings, 0 errors), `npm run format:check`, `npm run build` after `shared/npm ci`, `git diff --check`, and static scan confirmed no Live Calls `sum by (path)`, `count by (path)`, `metric.path`, old `unknown` fallback, or synthetic heatmap hash block remains.
 
 ## Session Notes — 2026-05-04
 

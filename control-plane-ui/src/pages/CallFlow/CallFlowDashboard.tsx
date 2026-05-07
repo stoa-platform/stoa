@@ -24,6 +24,7 @@ import { TrafficHeatmap } from './components/TrafficHeatmap';
 import { LiveTraces } from './components/LiveTraces';
 import type { TraceEntry } from './components/LiveTraces';
 import { AutoRefreshToggle } from './components/AutoRefreshToggle';
+import { buildLiveCallsQueries, METRICS_TRACES_SPLIT_MESSAGE, ROUTE_LABEL } from './metrics';
 
 const DEFAULT_REFRESH = 15;
 
@@ -51,6 +52,10 @@ function latencyColorClass(ms: number | null): string | undefined {
   if (ms < 300) return 'text-green-600';
   if (ms < 500) return 'text-yellow-600';
   return 'text-red-600';
+}
+
+function seriesHasTraffic(data: { value: number }[] | null | undefined): boolean {
+  return data?.some((point) => point.value > 0) ?? false;
 }
 
 // ─── Live Traces: fetch from monitoring API (authenticated) ───
@@ -137,46 +142,32 @@ export function CallFlowDashboard() {
 
   const refreshMs = autoRefresh > 0 ? autoRefresh * 1000 : 0;
   const rangeCfg = RANGE_CONFIG[timeRange];
+  const queries = useMemo(() => buildLiveCallsQueries(timeRange), [timeRange]);
 
   // ─── KPI Queries ───
 
-  const totalRequests = usePrometheusQuery(
-    `sum(increase(stoa_http_requests_total[${timeRange}]))`,
-    refreshMs || 15_000
-  );
-  const totalErrors = usePrometheusQuery(
-    `sum(increase(stoa_http_requests_total{status=~"5.."}[${timeRange}]))`,
-    refreshMs || 15_000
-  );
-  const p50Latency = usePrometheusQuery(
-    `histogram_quantile(0.50, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le))`,
-    refreshMs || 15_000
-  );
-  const p99Latency = usePrometheusQuery(
-    `histogram_quantile(0.99, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le))`,
-    refreshMs || 15_000
-  );
-  const activeModes = usePrometheusQuery(
-    `count(count by (path) (stoa_http_requests_total))`,
-    refreshMs || 15_000
-  );
+  const totalRequests = usePrometheusQuery(queries.totalRequests, refreshMs || 15_000);
+  const totalErrors = usePrometheusQuery(queries.totalErrors, refreshMs || 15_000);
+  const p50Latency = usePrometheusQuery(queries.p50Latency, refreshMs || 15_000);
+  const p99Latency = usePrometheusQuery(queries.p99Latency, refreshMs || 15_000);
+  const activeModes = usePrometheusQuery(queries.activeModes, refreshMs || 15_000);
 
   // ─── Throughput (per-mode range queries for stacked area) ───
 
   const edgeMcpTrend = usePrometheusRange(
-    `sum(rate(stoa_http_requests_total{job="stoa-gateway"}[5m]))`,
+    queries.edgeMcpTrend,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
   );
   const sidecarTrend = usePrometheusRange(
-    `sum(rate(stoa_http_requests_total{job="stoa-link"}[5m]))`,
+    queries.sidecarTrend,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
   );
   const connectTrend = usePrometheusRange(
-    `sum(rate(stoa_http_requests_total{job="stoa-connect"}[5m]))`,
+    queries.connectTrend,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
@@ -184,28 +175,16 @@ export function CallFlowDashboard() {
 
   // ─── Latency histogram buckets ───
 
-  const latencyBuckets = usePrometheusQuery(
-    `sum(increase(stoa_http_request_duration_seconds_bucket[${timeRange}])) by (le)`,
-    refreshMs || 15_000
-  );
+  const latencyBuckets = usePrometheusQuery(queries.latencyBuckets, refreshMs || 15_000);
 
   // ─── Error breakdown by status code ───
 
-  const errorsByStatus = usePrometheusQuery(
-    `sum by (status) (increase(stoa_http_requests_total{status=~"4..|5.."}[${timeRange}]))`,
-    refreshMs || 15_000
-  );
+  const errorsByStatus = usePrometheusQuery(queries.errorsByStatus, refreshMs || 15_000);
 
   // ─── Top routes by P95 latency ───
 
-  const topRoutesP95 = usePrometheusQuery(
-    `topk(8, histogram_quantile(0.95, sum by (le, path) (rate(stoa_http_request_duration_seconds_bucket[5m]))))`,
-    refreshMs || 15_000
-  );
-  const topRoutesCalls = usePrometheusQuery(
-    `sum by (path) (increase(stoa_http_requests_total[${timeRange}]))`,
-    refreshMs || 15_000
-  );
+  const topRoutesP95 = usePrometheusQuery(queries.topRoutesP95, refreshMs || 15_000);
+  const topRoutesCalls = usePrometheusQuery(queries.topRoutesCalls, refreshMs || 15_000);
 
   // ─── Fallback queries (when service graph is not available) ───
 
@@ -271,6 +250,16 @@ export function CallFlowDashboard() {
 
   const prometheusAvailable = !totalRequests.error && !fallbackRequests.error;
   const loading = totalRequests.loading && fallbackRequests.loading;
+  const modeBreakdownLoading = edgeMcpTrend.loading || sidecarTrend.loading || connectTrend.loading;
+  const modeBreakdownHasTraffic =
+    seriesHasTraffic(edgeMcpTrend.data) ||
+    seriesHasTraffic(sidecarTrend.data) ||
+    seriesHasTraffic(connectTrend.data);
+  const showScopeMismatch =
+    useServiceGraph &&
+    !modeBreakdownLoading &&
+    (totalRequestsVal ?? 0) > 0 &&
+    !modeBreakdownHasTraffic;
 
   // ─── Client-side trace filters (from chart clicks) ───
 
@@ -321,8 +310,8 @@ export function CallFlowDashboard() {
   // ─── Parse top routes ───
 
   const topRoutes = useMemo(() => {
-    const p95Map = groupByLabel(topRoutesP95.data, 'path');
-    const callsMap = groupByLabel(topRoutesCalls.data, 'path');
+    const p95Map = groupByLabel(topRoutesP95.data, ROUTE_LABEL);
+    const callsMap = groupByLabel(topRoutesCalls.data, ROUTE_LABEL);
     return Object.entries(p95Map)
       .map(([route, p95Secs]) => ({
         route,
@@ -335,32 +324,10 @@ export function CallFlowDashboard() {
   }, [topRoutesP95.data, topRoutesCalls.data]);
 
   // ─── Parse traffic heatmap ───
-  // heatmapData is a range query with `sum by (client)` — we get one series per client
-  // For now, we use demo data since the range query returns aggregated series
+  // TODO: implement real heatmap with Prometheus query_range grouped by http_route (separate ticket).
   const heatmapCells = useMemo(() => {
-    // Derive heatmap from topRoutes calls — distribute proportionally across hours
-    // Business hours (8-20) get ~80% of traffic, off-hours get ~20%
-    const routes = topRoutes.slice(0, 6).map((r) => r.route);
-    if (routes.length === 0) return { cells: [], routes: [] };
-
-    // Simple hash for deterministic distribution per route+hour
-    const hash = (s: string, n: number) => {
-      let h = 0;
-      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-      return Math.abs((h * (n + 1) * 2654435761) % 100) / 100;
-    };
-
-    const cells = topRoutes.slice(0, 6).flatMap((r) =>
-      Array.from({ length: 24 }, (_, h) => {
-        const businessHour = h >= 8 && h <= 20;
-        const baseFraction = businessHour ? 0.06 : 0.015; // ~78% in business hours
-        const jitter = hash(r.route, h) * 0.04; // ±4% variation
-        const value = Math.round(r.calls * (baseFraction + jitter));
-        return { hour: h, route: r.route, value };
-      })
-    );
-    return { cells, routes };
-  }, [topRoutes]);
+    return { cells: [], routes: [] };
+  }, []);
 
   // ─── Throughput series for stacked area ───
 
@@ -382,9 +349,7 @@ export function CallFlowDashboard() {
   // ─── Sparkline data for KPI cards ───
 
   const requestsTrend = usePrometheusRange(
-    useServiceGraph
-      ? `sum(rate(traces_service_graph_request_total{server="stoa-gateway"}[5m]))`
-      : `sum(rate(stoa_mcp_tools_calls_total[5m]))`,
+    useServiceGraph ? queries.requestsTrend : `sum(rate(stoa_mcp_tools_calls_total[5m]))`,
     rangeCfg.seconds,
     rangeCfg.step,
     refreshMs || 15_000
@@ -410,7 +375,7 @@ export function CallFlowDashboard() {
     fallbackErrors.refetch();
     fallbackTrend.refetch();
     requestsTrend.refetch();
-    fetchTransactions(50, serviceType, timeRange, statusFilter).then(setTraces);
+    fetchTransactions(50, serviceType, timeRange, statusFilter, routeFilter).then(setTraces);
   }, [
     totalRequests,
     totalErrors,
@@ -431,8 +396,16 @@ export function CallFlowDashboard() {
     requestsTrend,
     serviceType,
     statusFilter,
+    routeFilter,
     timeRange,
   ]);
+
+  const liveTracesEmptyMessage =
+    activeFilterCount > 0
+      ? 'No trace spans found for this filter — metrics (Prometheus) and traces (OpenSearch) may not cover the same time window'
+      : (totalRequestsVal ?? 0) > 0
+        ? METRICS_TRACES_SPLIT_MESSAGE
+        : 'No traces yet — ensure gateway routes are configured and the observability pipeline (Alloy, Tempo, OpenSearch) is active';
 
   return (
     <div className="space-y-6">
@@ -478,7 +451,7 @@ export function CallFlowDashboard() {
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <span className="text-sm text-yellow-700 dark:text-yellow-400">
-            Prometheus is not reachable. Call flow data requires Tempo service graph metrics.
+            Prometheus is not reachable. Live Calls request metrics require Prometheus.
           </span>
         </div>
       )}
@@ -487,8 +460,18 @@ export function CallFlowDashboard() {
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3 rounded-lg flex items-center gap-2">
           <Network className="h-4 w-4 text-blue-600" />
           <span className="text-sm text-blue-700 dark:text-blue-400">
-            Tempo service graph metrics not yet available — showing gateway tool call metrics as
-            fallback. Service graph populates automatically when traces flow through Tempo.
+            Gateway HTTP request metrics are not available — showing gateway tool call metrics as
+            fallback. Request metrics populate when gateway Prometheus scraping is active.
+          </span>
+        </div>
+      )}
+
+      {showScopeMismatch && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <span className="text-sm text-yellow-700 dark:text-yellow-400">
+            Total requests are available, but no Gateway/Link/Connect breakdown traffic was found
+            for the selected window. Some scraped series may not match the expected job scope.
           </span>
         </div>
       )}
@@ -590,7 +573,7 @@ export function CallFlowDashboard() {
               value={activeModesVal !== null ? Math.round(activeModesVal).toString() : '--'}
               icon={Network}
               colorClass="text-blue-600"
-              subtitle="Deployment modes"
+              subtitle="Gateway / Link / Connect jobs reporting traffic"
             />
           </div>
 
@@ -685,11 +668,7 @@ export function CallFlowDashboard() {
             <LiveTraces
               traces={filteredTraces}
               onSelectTrace={(id) => navigate(`/observability/live-calls/trace/${id}`)}
-              emptyMessage={
-                activeFilterCount > 0
-                  ? 'No trace spans found for this filter — metrics (Prometheus) and traces (OpenSearch) may not cover the same time window'
-                  : 'No traces yet — ensure gateway routes are configured and the observability pipeline (Alloy, Tempo, OpenSearch) is active'
-              }
+              emptyMessage={liveTracesEmptyMessage}
             />
           </ChartCard>
 

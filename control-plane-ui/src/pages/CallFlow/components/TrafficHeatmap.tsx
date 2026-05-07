@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChartEmptyState } from '@stoa/shared/components/ChartCard';
+import { HEATMAP_UNAVAILABLE_MESSAGE } from '../metrics';
 
 interface HeatmapCell {
   hour: number;
@@ -37,7 +38,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   if (cells.length === 0 || routes.length === 0) {
-    return <ChartEmptyState message="No traffic heatmap data" height={200} />;
+    return <ChartEmptyState message={HEATMAP_UNAVAILABLE_MESSAGE} height={200} />;
   }
 
   const max = Math.max(...cells.map((c) => c.value), 1);

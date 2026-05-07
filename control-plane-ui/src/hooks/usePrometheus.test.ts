@@ -221,13 +221,13 @@ describe('groupByLabel', () => {
     });
   });
 
-  it('uses "unknown" for missing label', () => {
+  it('uses "(unlabelled)" for missing label', () => {
     const results = [
       { metric: {}, value: [123, '7'] as [number, string] },
       { metric: { status: '500' }, value: [123, '3'] as [number, string] },
     ];
     expect(groupByLabel(results, 'status')).toEqual({
-      unknown: 7,
+      '(unlabelled)': 7,
       '500': 3,
     });
   });
@@ -281,9 +281,9 @@ describe('groupByLabel', () => {
       { metric: { tag: '' }, value: [123, '10'] as [number, string] },
       { metric: { tag: 'prod' }, value: [123, '20'] as [number, string] },
     ];
-    // Empty string is treated as "unknown" by the groupByLabel function
+    // Empty string is treated as an explicit unlabelled data state.
     expect(groupByLabel(results, 'tag')).toEqual({
-      unknown: 10,
+      '(unlabelled)': 10,
       prod: 20,
     });
   });

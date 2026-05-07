@@ -90,14 +90,19 @@ describe('SubNav', () => {
       expect(gatewayTabs.map((t) => t.href)).toEqual(['/gateway', '/gateways', '/drift']);
     });
 
-    it('observabilityTabs has 5 tabs', () => {
-      expect(observabilityTabs).toHaveLength(5);
+    it('observabilityTabs exposes the product observability model', () => {
+      expect(observabilityTabs).toHaveLength(4);
+      expect(observabilityTabs.map((t) => t.label)).toEqual([
+        'Gateway Health',
+        'Live Calls',
+        'Security & Guardrails',
+        'Expert Mode',
+      ]);
       expect(observabilityTabs.map((t) => t.href)).toEqual([
         '/observability',
-        '/monitoring',
-        '/call-flow',
-        '/api-traffic',
-        '/logs',
+        '/observability/live-calls',
+        '/observability/security',
+        '/observability/grafana',
       ]);
     });
   });

@@ -45,7 +45,9 @@ describe('GuardrailsDashboard', () => {
 
   it('renders the heading', async () => {
     renderWithProviders(<GuardrailsDashboard />);
-    expect(await screen.findByRole('heading', { name: /Gateway Guardrails/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /Security & Guardrails/i })
+    ).toBeInTheDocument();
   });
 
   it('renders guardrail cards', async () => {
@@ -69,7 +71,9 @@ describe('GuardrailsDashboard', () => {
     // preserves metrics + error is not set for a partial failure.
     mockGetGuardrailsEvents.mockRejectedValue(new Error('Events endpoint 500'));
     renderWithProviders(<GuardrailsDashboard />);
-    expect(await screen.findByRole('heading', { name: /Gateway Guardrails/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /Security & Guardrails/i })
+    ).toBeInTheDocument();
     // Metric cards still render with non-zero PII detection value from the
     // fulfilled metrics slice.
     const pii = await screen.findAllByText('PII Detection');
@@ -83,7 +87,7 @@ describe('GuardrailsDashboard', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderWithProviders(<GuardrailsDashboard />);
         expect(
-          await screen.findByRole('heading', { name: /Gateway Guardrails/i })
+          await screen.findByRole('heading', { name: /Security & Guardrails/i })
         ).toBeInTheDocument();
       });
     }

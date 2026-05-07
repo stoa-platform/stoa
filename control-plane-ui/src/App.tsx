@@ -38,9 +38,6 @@ const Subscriptions = lazy(() =>
 const Deployments = lazy(() =>
   import('./pages/Deployments').then((m) => ({ default: m.Deployments }))
 );
-const APIMonitoring = lazy(() =>
-  import('./pages/APIMonitoring').then((m) => ({ default: m.APIMonitoring }))
-);
 const ErrorSnapshots = lazy(() =>
   import('./pages/ErrorSnapshots').then((m) => ({ default: m.ErrorSnapshots }))
 );
@@ -88,9 +85,6 @@ const DriftDetection = lazy(() =>
 );
 const GatewayObservability = lazy(() =>
   import('./pages/GatewayObservability').then((m) => ({ default: m.GatewayObservabilityDashboard }))
-);
-const GatewaySecurity = lazy(() =>
-  import('./pages/GatewaySecurity').then((m) => ({ default: m.GatewaySecurityDashboard }))
 );
 const GatewayGuardrails = lazy(() =>
   import('./pages/GatewayGuardrails').then((m) => ({ default: m.GuardrailsDashboard }))
@@ -189,11 +183,6 @@ const AnalyticsDashboard = lazy(() =>
 // CAB-1545: Proxy Owner Dashboard
 const ProxyOwnerDashboard = lazy(() =>
   import('./pages/ProxyOwner').then((m) => ({ default: m.ProxyOwnerDashboard }))
-);
-
-// CAB-1730: API Traffic Dashboard (proxy backend observability)
-const ApiTrafficDashboard = lazy(() =>
-  import('./pages/ApiTraffic').then((m) => ({ default: m.ApiTrafficDashboard }))
 );
 
 // CAB-1842: Call Flow Dashboard (service graph visualization)
@@ -314,7 +303,10 @@ function ProtectedRoutes() {
                 <Route path="/certificates" element={<CertificatesPage />} />
                 <Route path="/subscriptions" element={<Subscriptions />} />
                 <Route path="/deployments" element={<Deployments />} />
-                <Route path="/monitoring" element={<APIMonitoring />} />
+                <Route
+                  path="/monitoring"
+                  element={<Navigate to="/observability/live-calls" replace />}
+                />
                 <Route path="/errors" element={<ErrorSnapshots />} />
                 <Route path="/mcp-servers" element={<MCPServersUnified />} />
                 <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
@@ -336,9 +328,18 @@ function ProtectedRoutes() {
                 <Route path="/gateways/:id" element={<GatewayDetailPage />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
                 <Route path="/drift" element={<DriftDetection />} />
-                <Route path="/gateway-observability" element={<GatewayObservability />} />
-                <Route path="/gateway-security" element={<GatewaySecurity />} />
-                <Route path="/gateway-guardrails" element={<GatewayGuardrails />} />
+                <Route
+                  path="/gateway-observability"
+                  element={<Navigate to="/observability" replace />}
+                />
+                <Route
+                  path="/gateway-security"
+                  element={<Navigate to="/observability/security" replace />}
+                />
+                <Route
+                  path="/gateway-guardrails"
+                  element={<Navigate to="/observability/security" replace />}
+                />
                 <Route path="/operations" element={<OperationsDashboard />} />
                 <Route path="/my-usage" element={<TenantDashboard />} />
                 <Route path="/chat-settings" element={<TenantChatSettings />} />
@@ -351,7 +352,11 @@ function ProtectedRoutes() {
                 <Route path="/admin/settings" element={<AdminSettings />} />
                 <Route path="/admin/roles" element={<AdminRoles />} />
                 {/* Native observability dashboards (replace iframe embeds) */}
-                <Route path="/observability" element={<PlatformMetrics />} />
+                <Route path="/observability" element={<GatewayObservability />} />
+                <Route path="/observability/live-calls" element={<CallFlowDashboard />} />
+                <Route path="/observability/live-calls/trace/:traceId" element={<TraceDetail />} />
+                <Route path="/observability/security" element={<GatewayGuardrails />} />
+                <Route path="/observability/platform" element={<PlatformMetrics />} />
                 <Route path="/observability/grafana" element={<GrafanaEmbed />} />
                 <Route path="/observability/benchmarks" element={<GrafanaEmbed />} />
                 <Route path="/identity" element={<IdentityEmbed />} />
@@ -382,8 +387,14 @@ function ProtectedRoutes() {
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/hegemon" element={<HegemonDashboard />} />
                 <Route path="/proxy-owner" element={<ProxyOwnerDashboard />} />
-                <Route path="/api-traffic" element={<ApiTrafficDashboard />} />
-                <Route path="/call-flow" element={<CallFlowDashboard />} />
+                <Route
+                  path="/api-traffic"
+                  element={<Navigate to="/observability/live-calls" replace />}
+                />
+                <Route
+                  path="/call-flow"
+                  element={<Navigate to="/observability/live-calls" replace />}
+                />
                 <Route path="/call-flow/trace/:traceId" element={<TraceDetail />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />

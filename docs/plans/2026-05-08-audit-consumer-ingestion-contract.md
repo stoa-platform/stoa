@@ -1,6 +1,6 @@
 ---
 id: plan-2026-05-08-audit-consumer-ingestion-contract
-validation_status: draft
+validation_status: validated           # 2026-05-08 — accepted by product owner; PR-1A4 unblocked
 source_evidence:
   - docs/audits/2026-05-08-audit-ingestion/findings.md
   - docs/audits/2026-05-08-audit-consumer-restore/scoping.md

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.2...control-plane-ui-v1.7.3) (2026-05-07)
+
+
+### Bug Fixes
+
+* **ui:** consolidate Live Calls trace details ([#2715](https://github.com/stoa-platform/stoa/issues/2715)) ([c4c6a55](https://github.com/stoa-platform/stoa/commit/c4c6a55c8c9bd64a2d7ba059c4996304713efb49))
+
 ## [1.7.2](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.1...control-plane-ui-v1.7.2) (2026-05-07)
 
 

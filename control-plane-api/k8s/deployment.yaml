@@ -37,8 +37,11 @@ spec:
           env:
             - name: LOG_TRACE_EXPORT_ENDPOINT
               value: "http://stoa-alloy-otlp.stoa-monitoring:4317"
+            # Safe-by-default: audit trail consumer is OFF in the base manifest.
+            # Per-environment activation goes through stoa-infra Helm chart values
+            # (staging=true after smoke test; prod=true only after PR-1A5 PASS verdict).
             - name: ENABLE_AUDIT_TRAIL_CONSUMER
-              value: "true"
+              value: "false"
             - name: AUDIT_TRAIL_DLQ_TOPIC
               value: "stoa.audit.trail.dlq"
             # Shared internal keys (CAB-1863)

@@ -56,6 +56,38 @@ def test_per_consumer_flags_respect_master_gate() -> None:
         ), f"{flag} must AND with KAFKA_CONSUMERS_ENABLED so the master gate turns it off."
 
 
+def test_audit_trail_consumer_safe_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: ENABLE_AUDIT_TRAIL_CONSUMER must default to False even when
+    the master gate is on. The consumer is opt-in per environment to give
+    rollouts an explicit gate after PR-1A4 lands the Kafka -> PG sink.
+    """
+    monkeypatch.setenv("STOA_ENABLE_KAFKA_CONSUMERS", "true")
+    monkeypatch.delenv("ENABLE_AUDIT_TRAIL_CONSUMER", raising=False)
+
+    import importlib
+
+    from src import main
+
+    importlib.reload(main)
+    try:
+        assert main.KAFKA_CONSUMERS_ENABLED is True
+        assert main.ENABLE_AUDIT_TRAIL_CONSUMER is False, (
+            "ENABLE_AUDIT_TRAIL_CONSUMER must default to False — environments must opt in explicitly. "
+            "See docs/plans/2026-05-08-audit-consumer-ingestion-contract.md."
+        )
+
+        monkeypatch.setenv("ENABLE_AUDIT_TRAIL_CONSUMER", "true")
+        importlib.reload(main)
+        assert main.ENABLE_AUDIT_TRAIL_CONSUMER is True, (
+            "ENABLE_AUDIT_TRAIL_CONSUMER=true with master gate on must enable the consumer."
+        )
+    finally:
+        # Restore module state so subsequent tests see the conftest.py defaults.
+        monkeypatch.delenv("ENABLE_AUDIT_TRAIL_CONSUMER", raising=False)
+        monkeypatch.setenv("STOA_ENABLE_KAFKA_CONSUMERS", "false")
+        importlib.reload(main)
+
+
 def test_app_lifespan_emits_no_kafka_errors(caplog: pytest.LogCaptureFixture) -> None:
     """Running the full lifespan must not surface any Kafka broker lookup."""
     from src.main import app

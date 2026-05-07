@@ -137,6 +137,7 @@ from .services import (
 )
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
+from .workers.audit_trail_consumer import audit_trail_consumer
 from .workers.billing_metering_consumer import billing_metering_consumer
 from .workers.chat_metering_consumer import chat_metering_consumer
 from .workers.error_snapshot_consumer import error_snapshot_consumer
@@ -179,6 +180,9 @@ ENABLE_CHAT_METERING_CONSUMER = (
 )
 ENABLE_BILLING_METERING_CONSUMER = (
     KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
+)
+ENABLE_AUDIT_TRAIL_CONSUMER = (
+    KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_AUDIT_TRAIL_CONSUMER", "true").lower() == "true"
 )
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"
@@ -318,6 +322,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start billing metering consumer", error=str(e))
 
+    # Start audit trail PostgreSQL sink consumer (PR-1A4)
+    audit_trail_consumer_task = None
+    if ENABLE_AUDIT_TRAIL_CONSUMER:
+        try:
+            audit_trail_consumer_task = asyncio.create_task(audit_trail_consumer.start())
+            logger.info("Audit trail consumer started")
+        except Exception as e:
+            logger.warning("Failed to start audit trail consumer", error=str(e))
+
     # Start Git sync worker (CAB-2012 — async Git commits on API CRUD)
     git_sync_task = None
     if ENABLE_GIT_SYNC_WORKER and settings.GIT_SYNC_ON_WRITE:
@@ -426,6 +439,13 @@ async def lifespan(app: FastAPI):
         billing_metering_task.cancel()
         with suppress(asyncio.CancelledError):
             await billing_metering_task
+
+    # Stop audit trail PostgreSQL sink consumer (PR-1A4)
+    if ENABLE_AUDIT_TRAIL_CONSUMER and audit_trail_consumer_task:
+        await audit_trail_consumer.stop()
+        audit_trail_consumer_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await audit_trail_consumer_task
 
     # Stop git sync worker (CAB-2012)
     if ENABLE_GIT_SYNC_WORKER and git_sync_task:

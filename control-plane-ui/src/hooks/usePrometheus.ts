@@ -6,6 +6,7 @@ import { httpClient } from '../services/http';
 // httpClient baseURL is https://api.gostoa.dev, so the path is /v1/... — no /api prefix.
 const PROMETHEUS_BASE = '/v1/metrics';
 const PROMETHEUS_TIMEOUT_MS = 10_000;
+const UNLABELLED_LABEL = '(unlabelled)';
 
 interface PrometheusResult {
   metric: Record<string, string>;
@@ -155,7 +156,8 @@ export function groupByLabel(
   if (!results) return {};
   const groups: Record<string, number> = {};
   for (const r of results) {
-    const key = r.metric[label] || 'unknown';
+    const raw = r.metric[label];
+    const key = raw && raw.trim() ? raw : UNLABELLED_LABEL;
     groups[key] = (groups[key] || 0) + parseFloat(r.value?.[1] || '0');
   }
   return groups;

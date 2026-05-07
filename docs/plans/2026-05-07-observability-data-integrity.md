@@ -34,8 +34,8 @@ Restaurer la cohérence et la véracité des trois pages observability (`/observ
 | 1 | PR-0 | Chore (cosmetic + 1 functional) | None | P0 | — | ✅ #2717 |
 | 2 | PR-1A | Investigation (no code) | MEGA-A | P0 | PR-0 merged | ✅ #2721 |
 | 3 | PR-1A2 | Consumer restore scope | MEGA-A | P0 | PR-1A complete | ✅ #2723 (Case C) |
-| 4 | PR-1A3 | Audit ingestion contract mini-spec (docs) | MEGA-A | P0 | PR-1A2 complete | ⏳ NEXT |
-| 5 | PR-1A4 | Audit consumer implementation | MEGA-A | P0 | PR-1A3 merged | blocked |
+| 4 | PR-1A3 | Audit ingestion contract mini-spec (docs) | MEGA-A | P0 | PR-1A2 complete | ⏳ #2724 draft, awaiting validation |
+| 5 | PR-1A4 | Audit consumer implementation | MEGA-A | P0 | PR-1A3 merged | ⏳ NEXT after #2724 merged |
 | 6 | PR-1A5 | Verification evidence | MEGA-A | P0 | PR-1A4 deployed | blocked |
 | 7 | PR-1B | Audit Log API + UI | MEGA-A | P0 | PR-1A5 PASS verdict | blocked |
 | 8 | PR-2 | Live Calls metric integrity | MEGA-B | P0 | PR-0 merged | ⏳ ready |
@@ -109,8 +109,8 @@ This is a **contract ambiguity** that PR-1A3 must trancher avant que PR-1A4 impl
 ```
 Phase 1 — PR-1A   Investigation (#2721 ✅)
 Phase 2 — PR-1A2  Consumer restore scope (#2723 ✅, Case C)
-Phase 3 — PR-1A3  Audit ingestion contract mini-spec (docs-only)        ← NEXT
-Phase 4 — PR-1A4  Audit consumer implementation (backend + manifest)
+Phase 3 — PR-1A3  Audit ingestion contract mini-spec (docs-only) — #2724 draft, awaiting validation
+Phase 4 — PR-1A4  Audit consumer implementation (backend + manifest) ← NEXT after #2724 merged
 Phase 5 — PR-1A5  Verification evidence (post-deploy proof)
 Phase 6 — PR-1B   Audit Log API + UI (gated on PR-1A5 signal)
 ```
@@ -1120,8 +1120,8 @@ Updated 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATIO
 [MEGA-A: Audit Log Data Integrity] (~30pt, 6 phases)
 ├── Phase 1 — PR-1A   Investigation (3pt) — #2721 merged 2026-05-08, BLOCKED verdict
 ├── Phase 2 — PR-1A2  Consumer restore scope (1pt) — #2723 merged 2026-05-08, Case C
-├── Phase 3 — PR-1A3  Audit ingestion contract mini-spec (3pt, docs-only)        ← NEXT
-├── Phase 4 — PR-1A4  Audit consumer implementation (8pt, backend + manifest)
+├── Phase 3 — PR-1A3  Audit ingestion contract mini-spec (3pt, docs-only) — #2724 draft, awaiting validation
+├── Phase 4 — PR-1A4  Audit consumer implementation (8pt, backend + manifest) ← NEXT after #2724 merged
 ├── Phase 5 — PR-1A5  Verification evidence (2pt, post-deploy proof)
 └── Phase 6 — PR-1B   Audit Log API + UI (13pt, gated on PR-1A5 signal)
 
@@ -1139,147 +1139,37 @@ The repository contains Kafka audit producers and 5 generic consumer patterns, b
 
 The codex prompt that produced this PR is preserved in git history (commit on `fix/audit-consumer-restore` branch, merged squash). It is no longer reproduced in this plan to avoid redundancy.
 
-## PR-1A3 — Audit ingestion contract mini-spec (NEW phase, docs-only)
+## PR-1A3 — Audit ingestion contract mini-spec (DONE, draft)
 
-**Branch**: `docs/audit-ingestion-contract`
-**MEGA**: A — Phase 3
-**Estimated**: 3 pts, docs-only (~250 lines markdown)
-**Risk**: low (docs-only, no runtime impact)
+**Status**: ⏳ Draft #2724 produced by codex on 2026-05-08, awaiting validation. Output:
+`docs/plans/2026-05-08-audit-consumer-ingestion-contract.md`
+(frontmatter `validation_status: draft`).
 
-### Goal
+**Scope shipped** (covers and extends the 8 sections originally planned):
 
-Produce a **mini-spec contract** that PR-1A4 will implement. The spec must answer the 8 questions left open by PR-1A2 (cited in `scoping.md` section "Minimal Follow-Up Scope") and resolve the **Topic Contract Drift** (3 audit topic names in circulation: `stoa.audit.trail`, `audit-log`, `stoa.audit.events`).
+| Section | Decision in #2724 |
+|---|---|
+| Canonical topic | `stoa.audit.trail` (active producer); `audit-log` and `stoa.audit.events` left as legacy/unmanaged for now (deferred to open question 1). |
+| Source-of-truth | Implicitly (b) Kafka → PostgreSQL via the new consumer. Direct `AuditService.record_event(...)` paths preserved (chat, governance) — not replaced. |
+| Consumer group | `audit-trail-pg-consumer`, `auto_offset_reset=earliest`, **manual commits only**. |
+| Payload schema | Maps current `KafkaService._create_event(...)` envelope; required vs optional fields enumerated; missing required → DLQ. |
+| Idempotency | `event.id` → `audit_events.id`; duplicate = no-op (commit offset). |
+| Failure / DLQ | DLQ topic `stoa.audit.trail.dlq`, retry capped 60s, no auto-commit, schema/programming errors do not DLQ. |
+| Observability | 6 named Prometheus metrics, structured log fields specified, 3 alert intents. |
+| Deployment model | (a) In-process worker in cp-api, gated by `STOA_ENABLE_KAFKA_CONSUMERS` master + `ENABLE_AUDIT_TRAIL_CONSUMER` per-consumer (default true). |
+| Backfill | `earliest` on first deploy; no PG/OpenSearch/log-based backfill; no replay older than Kafka retention. |
 
-This is a **docs-only PR**. No code, no manifest, no runtime change.
+**Bonus content not in original prompt** (worth keeping):
+- Ordering guarantees (partition-only, `created_at` from envelope timestamp).
+- Tenant isolation rules (reject empty/`unknown`, no inference).
+- Producer-side PII masking preserved + tested.
+- Rollout 10 steps with explicit dev → prod gating.
+- Verification SQL + `rpk` commands ready to copy.
+- 5 open questions deferred (audit-log deletion, AUDIT_EVENTS deprecation, separate Deployment, future producer fields, DLQ retention).
 
-### Codex prompt
+**Validation gate**: review #2724, optionally request adjustments, flip frontmatter `validation_status: draft → validated`, mark PR ready for review, merge. Only then PR-1A4 can start.
 
-```
-You are working on the STOA repository.
-Branch: `docs/audit-ingestion-contract`
-
-Context:
-- Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
-- PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
-
-Verdict from PR-1A2 (#2723):
-- CONSUMER_IMPLEMENTATION_NOT_FOUND
-- Building a consumer = new ingestion architecture, not a restore
-- 3 topic names in circulation (Topic Contract Drift): stoa.audit.trail (active producer), audit-log (prod runtime topic), stoa.audit.events (legacy constant)
-
-Goal: produce a mini-spec contract at
-  docs/specs/2026-05-08-audit-ingestion-contract.md
-that PR-1A4 will implement.
-
-This is a docs-only PR. No code, no manifest, no schema migration, no runtime change.
-
-Required sections in the mini-spec:
-
-## 1. Authoritative topic decision
-Pick ONE canonical topic for production:
-- stoa.audit.trail   (active producer today, recommended)
-- stoa.audit.events  (legacy constant, no producer)
-- audit-log          (prod runtime topic, no repo producer)
-Document migration plan for the two non-canonical names (rename, alias, deprecation).
-Producers in the repo (already using Topics.AUDIT_LOG = "stoa.audit.trail") are the de-facto contract; default recommendation is to canonize stoa.audit.trail unless a strong infra reason argues otherwise.
-
-## 2. Source-of-truth contract
-Decide which of these is THE compliance audit sink (DORA/NIS2):
-(a) Direct PostgreSQL writes via AuditService.record_event(...) only
-(b) Kafka stoa.audit.trail consumer that persists to audit_events
-(c) Hybrid: direct PG writes for high-criticality paths + Kafka for fire-and-forget
-Compare reliability, latency, and operability. Recommend one.
-The current state (chat paths use direct PG, deployment/promotion/api/tenant/user paths use Kafka-only) is INCONSISTENT and is the root cause of the visible gap.
-
-## 3. Consumer group + offset policy
-- Consumer group name (proposal: audit-events-consumer)
-- Initial offset on first deploy (earliest for backfill vs latest for forward-only)
-- Re-balance protocol (cooperative-sticky vs eager)
-- Document why.
-
-## 4. Payload schema
-Map Kafka envelope produced by emit_audit_event(...) to audit_events table columns:
-- envelope.action  → audit_events.action
-- envelope.tenant_id → audit_events.tenant_id
-- envelope.actor → audit_events.actor_id, actor_email, actor_type
-- envelope.resource → resource_type, resource_id, resource_name
-- envelope.outcome → outcome
-- envelope.method, path → method, path
-- envelope.timestamp → created_at
-- envelope.details → details (JSONB)
-- envelope.correlation_id → correlation_id
-List required vs optional. List defaults. List validation errors → DLQ behavior.
-
-## 5. Idempotency / deduplication
-- Idempotency key: e.g. envelope.id (UUID) maps to audit_events.id (PK)
-- ON CONFLICT (id) DO NOTHING vs UPDATE
-- How replays are detected and short-circuited
-- Order: at-least-once delivery; document that PG PK guarantees dedup
-
-## 6. Failure mode
-- Audit sink failures must NOT block user-facing API operations
-- Producer side: log WARN with action+resource_type, never raise to caller
-- Consumer side: failed insert → DLQ topic (proposal: stoa.audit.trail.dlq) + WARN log + alert metric
-- Retry budget: e.g. 3 retries with exponential backoff (1s, 5s, 30s) before DLQ
-- Observability: Prometheus counter `stoa_audit_consumer_lag`, `stoa_audit_consumer_errors_total`
-
-## 7. Deployment model
-Choose ONE:
-(a) Consumer runs inside stoa-control-plane-api lifespan (gated by ENABLE_AUDIT_CONSUMER env var, like ENABLE_DEPLOYMENT_CONSUMER pattern)
-(b) Separate Kubernetes Deployment (e.g. stoa-audit-consumer with its own scaling/SLO)
-Compare blast radius (cp-api restart blast vs separate workload), resource footprint, operability.
-
-## 8. Backfill strategy for `audit_events` historic gap
-PR-1A evidence: 113 562 rows total, but stale since 2026-05-03. Decide:
-(a) Accept the gap, start fresh from PR-1A4 deploy time
-(b) Backfill from a known good source (Kafka retention is 604800000ms = 7 days, so all events from 2026-05-01 onward should be replay-able if consumer starts at earliest)
-Document operational risk of dual-write during backfill.
-
-Acceptance criteria for the mini-spec:
-- [ ] All 8 sections answered with explicit recommendations.
-- [ ] Topic Contract Drift resolved (1 canonical topic chosen, migration plan for the others).
-- [ ] Source-of-truth contract picked (a/b/c with rationale).
-- [ ] Consumer group, payload mapping, idempotency, failure mode, deployment model defined.
-- [ ] Backfill strategy chosen.
-- [ ] Document references PR-1A and PR-1A2 evidence packs.
-
-Out of scope (DO NOT do):
-- Implementing the consumer (PR-1A4).
-- Deploying anything (PR-1A4 + manifest).
-- Modifying `audit_events` schema.
-- Modifying producer code.
-- Changing the AuditLog UI/API (PR-1B).
-
-Commit message: docs(specs): audit ingestion contract mini-spec (PR-1A3)
-
-PR title: docs(specs): audit ingestion contract mini-spec
-
-PR body must reference:
-- Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
-- PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
-- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md
-```
-
-### Acceptance criteria (binary)
-
-- [ ] `docs/specs/2026-05-08-audit-ingestion-contract.md` exists with 8 mandatory sections.
-- [ ] Canonical topic chosen explicitly.
-- [ ] Source-of-truth (a/b/c) picked with rationale.
-- [ ] Consumer group, offset, payload mapping, idempotency, failure mode, deployment model documented.
-- [ ] Backfill strategy decided.
-- [ ] No code, no manifest, no schema migration in this PR.
-
-### Files probably touched
-
-- `docs/specs/2026-05-08-audit-ingestion-contract.md` (new, ~250 lines)
-- (no source change)
-
-### Risk + dependencies
-
-- Lock decisions made in this mini-spec **before** PR-1A4 starts.
-- Decisions are **reversible**: if PR-1A4 reveals a blocker (e.g. Kafka offset reset can't be safely cooperative), update the mini-spec in a follow-up commit before re-running PR-1A4.
+**No new codex prompt is needed for PR-1A3** — codex has already produced the deliverable. The original prompt that drove it is preserved in git history on the `docs/audit-consumer-ingestion-contract` branch.
 
 ## PR-1A4 — Audit consumer implementation (NEW phase, backend + manifest)
 
@@ -1522,8 +1412,8 @@ Day 0 — 2026-05-07 (DONE):
   - PR-1A2 audit consumer restore scope (#2723 merged 17:23 UTC, Case C).
 
 Day 1 — 2026-05-08 (NOW):
-  - This PR: plan update for PR-1A3/PR-1A4/PR-1A5 chain.
-  - PR-1A3 mini-spec docs-only (~half day, codex docs PR).
+  - This plan-update PR (#2725) acknowledges PR-1A3 already shipped as draft #2724.
+  - Validate #2724 mini-spec, flip frontmatter validated, mark ready, merge.
   - PR-2 Live Calls http_route migration can run in parallel (no MEGA-A dependency).
 
 Day 2-4:

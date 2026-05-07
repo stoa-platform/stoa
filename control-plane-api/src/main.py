@@ -182,7 +182,7 @@ ENABLE_BILLING_METERING_CONSUMER = (
     KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_BILLING_METERING_CONSUMER", "true").lower() == "true"
 )
 ENABLE_AUDIT_TRAIL_CONSUMER = (
-    KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_AUDIT_TRAIL_CONSUMER", "true").lower() == "true"
+    KAFKA_CONSUMERS_ENABLED and os.getenv("ENABLE_AUDIT_TRAIL_CONSUMER", "false").lower() == "true"
 )
 ENABLE_TELEMETRY_WORKER = os.getenv("ENABLE_TELEMETRY_WORKER", "true").lower() == "true"
 ENABLE_GATEWAY_RECONCILER = os.getenv("ENABLE_GATEWAY_RECONCILER", "true").lower() == "true"

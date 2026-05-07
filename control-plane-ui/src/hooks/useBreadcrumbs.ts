@@ -73,6 +73,14 @@ const routeLabels: Record<string, string> = {
 /**
  * Hook to generate breadcrumbs from the current route
  */
+function safeDecodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
 export function useBreadcrumbs(): BreadcrumbItem[] {
   const location = useLocation();
   const params = useParams();
@@ -86,6 +94,20 @@ export function useBreadcrumbs(): BreadcrumbItem[] {
     // If we're on the dashboard, don't add more
     if (pathSegments.length === 0) {
       return [{ label: 'Dashboard' }]; // No href = current page
+    }
+
+    if (
+      pathSegments[0] === 'observability' &&
+      pathSegments[1] === 'live-calls' &&
+      pathSegments[2] === 'trace'
+    ) {
+      const traceId = safeDecodeSegment(pathSegments[3] || '');
+      return [
+        { label: 'Dashboard', href: '/' },
+        { label: 'Observability', href: '/observability' },
+        { label: 'Live Calls', href: '/observability/live-calls' },
+        { label: traceId ? `Trace ${traceId}` : 'Trace' },
+      ];
     }
 
     // Build breadcrumbs from path segments

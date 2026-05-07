@@ -12,9 +12,12 @@ import {
   Cpu,
   Network,
   Lock,
+  ScrollText,
 } from 'lucide-react';
 import { StatCard } from '@stoa/shared/components/StatCard';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { SubNav } from '../../components/SubNav';
+import { observabilityTabs } from '../../components/subNavGroups';
 
 // ─── Types ───
 // Canonical: `Schemas['TransactionDetailWithDemoResponse']` from the backend
@@ -100,6 +103,31 @@ function statusConfig(code: number): {
     text: 'text-green-700 dark:text-green-400',
     icon: CheckCircle,
   };
+}
+
+function statusClass(code: number): string {
+  if (code >= 100 && code < 600) {
+    return `${Math.floor(code / 100)}xx`;
+  }
+  return 'unknown';
+}
+
+function headerValue(headers: Record<string, string>, name: string): string | undefined {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase());
+  return entry?.[1];
+}
+
+function firstMetadataValue(spans: TransactionSpan[], keys: string[]): string | undefined {
+  for (const span of spans) {
+    if (!span.metadata) continue;
+    for (const key of keys) {
+      const value = span.metadata[key];
+      if (value !== undefined && value !== null && value !== '') {
+        return String(value);
+      }
+    }
+  }
+  return undefined;
 }
 
 // ─── Fetch (authenticated via apiService) ───
@@ -395,6 +423,58 @@ function KernelMetricsGrid({ spans }: { spans: TransactionSpan[] }) {
   );
 }
 
+function TraceContextGrid({
+  detail,
+  responseHeaders,
+}: {
+  detail: TransactionDetail;
+  responseHeaders: Record<string, string>;
+}) {
+  const serviceName = detail.spans.find((span) => span.service)?.service;
+  const serviceVersion =
+    headerValue(responseHeaders, 'x-stoa-version') ||
+    firstMetadataValue(detail.spans, [
+      'service.version',
+      'service_version',
+      'resource.service.version',
+      'resource.attributes.service.version',
+    ]);
+  const spanId = firstMetadataValue(detail.spans, ['span_id', 'span.id', 'spanId']);
+  const httpRoute = firstMetadataValue(detail.spans, ['http.route', 'http_route', 'route']);
+
+  const fields = [
+    { label: 'trace_id', value: detail.trace_id },
+    { label: 'span_id', value: spanId },
+    { label: 'tenant_id', value: detail.tenant_id ?? undefined },
+    { label: 'service.name', value: serviceName },
+    { label: 'service.version', value: serviceVersion },
+    { label: httpRoute ? 'http_route' : 'http.path', value: httpRoute || detail.path },
+    { label: 'status_code', value: String(detail.status_code) },
+    { label: 'status_class', value: statusClass(detail.status_code) },
+    { label: 'latency', value: fmtDuration(detail.total_duration_ms) },
+  ].filter((field) => field.value && field.value !== '-');
+
+  return (
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
+      <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase mb-4">
+        Trace Context
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+        {fields.map((field) => (
+          <div key={field.label} className="min-w-0">
+            <div className="text-[10px] uppercase text-neutral-400 dark:text-neutral-500 mb-1">
+              {field.label}
+            </div>
+            <div className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate">
+              {field.value}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───
 
 export function TraceDetail() {
@@ -462,9 +542,12 @@ export function TraceDetail() {
 
   const sc = statusConfig(detail.status_code);
   const StatusIcon = sc.icon;
+  const logsPath = `/logs?service=gateway&trace_id=${encodeURIComponent(detail.trace_id)}`;
 
   return (
     <div className="space-y-6">
+      <SubNav tabs={observabilityTabs} />
+
       {/* ─── Breadcrumb + Banner ─── */}
       <div>
         <button
@@ -501,6 +584,18 @@ export function TraceDetail() {
           </span>
         </div>
       </div>
+
+      <div className="flex items-center justify-end">
+        <button
+          onClick={() => navigate(logsPath)}
+          className="inline-flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
+        >
+          <ScrollText className="h-4 w-4" />
+          View logs for trace
+        </button>
+      </div>
+
+      <TraceContextGrid detail={detail} responseHeaders={responseHeaders} />
 
       {/* ─── 6 Summary Cards ─── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

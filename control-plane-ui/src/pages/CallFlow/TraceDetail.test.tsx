@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { TraceDetail } from './TraceDetail';
 
 const mockGetTransactionDetail = vi.fn();
@@ -11,12 +11,18 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
+function LogsProbe() {
+  const location = useLocation();
+  return <div data-testid="logs-search">{location.search}</div>;
+}
+
 function renderWithRoute(traceId: string) {
   return render(
     <MemoryRouter initialEntries={[`/observability/live-calls/trace/${traceId}`]}>
       <Routes>
         <Route path="/observability/live-calls/trace/:traceId" element={<TraceDetail />} />
         <Route path="/observability/live-calls" element={<div>Live Calls</div>} />
+        <Route path="/logs" element={<LogsProbe />} />
         <Route path="/call-flow/trace/:traceId" element={<TraceDetail />} />
       </Routes>
     </MemoryRouter>
@@ -45,7 +51,7 @@ const MOCK_DETAIL = {
       start_offset_ms: 0,
       duration_ms: 5,
       status: 'success',
-      metadata: {},
+      metadata: { span_id: 'span-test0001', route: '/v4/latest/{base}' },
     },
     {
       name: 'auth_validation',
@@ -72,6 +78,7 @@ const MOCK_DETAIL = {
   response_headers: {
     'Content-Type': 'application/json',
     'X-STOA-Duration-Ms': '45',
+    'X-STOA-Version': '0.9.23',
   },
   error_message: null,
 };
@@ -132,6 +139,41 @@ describe('TraceDetail', () => {
       expect(screen.getByText('Auth')).toBeInTheDocument();
       expect(screen.getByText('Upstream')).toBeInTheDocument();
       expect(screen.getByText('Retries')).toBeInTheDocument();
+    });
+
+    it('surfaces canonical trace context fields', async () => {
+      renderWithRoute('test-trace-001');
+      await waitFor(() => {
+        expect(screen.getByText('Trace Context')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('trace_id')).toBeInTheDocument();
+      expect(screen.getAllByText('trace-test0001').length).toBeGreaterThan(0);
+      expect(screen.getByText('span_id')).toBeInTheDocument();
+      expect(screen.getByText('span-test0001')).toBeInTheDocument();
+      expect(screen.getByText('tenant_id')).toBeInTheDocument();
+      expect(screen.getByText('service.name')).toBeInTheDocument();
+      expect(screen.getByText('service.version')).toBeInTheDocument();
+      expect(screen.getByText('0.9.23')).toBeInTheDocument();
+      expect(screen.getByText('http_route')).toBeInTheDocument();
+      expect(screen.getByText('/v4/latest/{base}')).toBeInTheDocument();
+      expect(screen.getByText('status_class')).toBeInTheDocument();
+      expect(screen.getByText('2xx')).toBeInTheDocument();
+    });
+
+    it('links to the existing logs route with trace search parameters', async () => {
+      renderWithRoute('test-trace-001');
+      await waitFor(() => {
+        expect(screen.getByText('Trace Context')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /view logs for trace/i }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('logs-search')).toHaveTextContent(
+          '?service=gateway&trace_id=trace-test0001'
+        );
+      });
     });
   });
 

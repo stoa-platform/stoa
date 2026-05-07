@@ -72,6 +72,25 @@ describe('useBreadcrumbs', () => {
     ]);
   });
 
+  it('uses the Live Calls product breadcrumb for trace details', () => {
+    mockUseLocation.mockReturnValue({
+      pathname: '/observability/live-calls/trace/trace-test0001',
+      search: '',
+      hash: '',
+      state: null,
+      key: '',
+    });
+    mockUseParams.mockReturnValue({ traceId: 'trace-test0001' });
+
+    const { result } = renderHook(() => useBreadcrumbs());
+    expect(result.current).toEqual([
+      { label: 'Dashboard', href: '/' },
+      { label: 'Observability', href: '/observability' },
+      { label: 'Live Calls', href: '/observability/live-calls' },
+      { label: 'Trace trace-test0001' },
+    ]);
+  });
+
   it('formats unknown segments as title case', () => {
     mockUseLocation.mockReturnValue({
       pathname: '/some-unknown-page',

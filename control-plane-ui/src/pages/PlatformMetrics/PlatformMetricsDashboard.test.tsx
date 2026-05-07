@@ -189,10 +189,10 @@ describe('PlatformMetricsDashboard', () => {
     expect(viewAllLink.closest('a')).toHaveAttribute('href', '/business');
   });
 
-  it('renders cross-links to Transaction Tracing and Operations', () => {
+  it('renders cross-links to Live Calls and Operations', () => {
     renderWithProviders(<PlatformMetricsDashboard />);
-    expect(screen.getByText(/Transaction Tracing/i)).toBeInTheDocument();
-    expect(screen.getByText(/SLO & Deployments/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Live Calls/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SLO & Deployments/i })).toBeInTheDocument();
   });
 
   it('displays last refresh time', () => {

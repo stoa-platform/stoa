@@ -203,10 +203,10 @@ export function PlatformMetricsDashboard() {
       {/* Cross-links */}
       <div className="flex items-center gap-4 text-sm">
         <button
-          onClick={() => navigate('/monitoring')}
+          onClick={() => navigate('/observability/live-calls')}
           className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
         >
-          Transaction Tracing <ExternalLink className="h-3 w-3" />
+          Live Calls <ExternalLink className="h-3 w-3" />
         </button>
         <button
           onClick={() => navigate('/operations')}

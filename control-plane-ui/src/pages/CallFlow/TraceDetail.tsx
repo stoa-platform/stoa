@@ -450,11 +450,11 @@ export function TraceDetail() {
           Trace not found — it may have expired or the trace ID is invalid
         </p>
         <button
-          onClick={() => navigate('/call-flow')}
+          onClick={() => navigate('/observability/live-calls')}
           className="mt-4 inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Call Flow
+          Back to Live Calls
         </button>
       </div>
     );
@@ -468,11 +468,11 @@ export function TraceDetail() {
       {/* ─── Breadcrumb + Banner ─── */}
       <div>
         <button
-          onClick={() => navigate('/call-flow')}
+          onClick={() => navigate('/observability/live-calls')}
           className="flex items-center gap-1.5 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 mb-3"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Call Flow
+          Back to Live Calls
         </button>
 
         <div

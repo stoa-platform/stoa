@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { config } from '../../config';
 import { observabilityPath } from '../../utils/navigation';
 import type { AggregatedMetrics } from '../../types';
+import { SubNav } from '../../components/SubNav';
+import { observabilityTabs } from '../../components/subNavGroups';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
 
@@ -123,7 +125,7 @@ export function GatewayObservabilityDashboard() {
     }
 
     if (metricsResult.status === 'rejected') {
-      const reason: any = metricsResult.reason;
+      const reason = metricsResult.reason as { response?: { data?: { detail?: string } } };
       setError(reason?.response?.data?.detail || 'Failed to load metrics');
     } else {
       setError(null);
@@ -149,9 +151,7 @@ export function GatewayObservabilityDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-            Gateway Observability
-          </h1>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Gateway Health</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Health and sync metrics across all gateway instances
           </p>
@@ -164,7 +164,7 @@ export function GatewayObservabilityDashboard() {
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
-            Open in Grafana
+            Grafana Expert
           </button>
           <button
             onClick={loadData}
@@ -175,6 +175,8 @@ export function GatewayObservabilityDashboard() {
           </button>
         </div>
       </div>
+
+      <SubNav tabs={observabilityTabs} />
 
       {/* Error */}
       {error && (

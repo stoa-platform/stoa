@@ -101,6 +101,8 @@ describe('useBreadcrumbs', () => {
       { path: '/errors', label: 'Error Snapshots' },
       { path: '/mcp', label: 'MCP' },
       { path: '/observability', label: 'Observability' },
+      { path: '/observability/live-calls', label: 'Live Calls' },
+      { path: '/observability/security', label: 'Security & Guardrails' },
       { path: '/policies', label: 'Policies' },
       { path: '/monitoring', label: 'API Monitoring' },
       { path: '/analytics', label: 'Analytics' },

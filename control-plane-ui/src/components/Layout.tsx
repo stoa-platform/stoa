@@ -29,7 +29,6 @@ import {
   Server,
   ArrowUpDown,
   Rocket,
-  BarChart3,
   Menu,
   X,
   Search,
@@ -37,7 +36,6 @@ import {
   Sun,
   Moon,
   Gauge,
-  ScrollText,
   ClipboardList,
   Check,
   Users,
@@ -54,7 +52,6 @@ import {
   UserPlus,
   Lock,
   DollarSign,
-  History,
   Fingerprint,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -71,6 +68,7 @@ interface NavItem {
   permission?: string;
   shortcut?: string[];
   badge?: string;
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -241,29 +239,25 @@ const navigationSections: NavSection[] = [
     title: 'nav.monitoring',
     items: [
       {
-        name: 'nav.observability',
+        name: 'nav.gatewayHealth',
         href: '/observability',
         icon: Gauge,
         shortcut: ['g', 'g'],
+        exact: true,
       },
       {
-        name: 'nav.callFlow',
-        href: '/call-flow',
+        name: 'nav.liveCalls',
+        href: '/observability/live-calls',
         icon: Activity,
         shortcut: ['g', 'f'],
       },
-      { name: 'nav.logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
       {
-        name: 'nav.executions',
-        href: '/executions',
-        icon: History,
-        permission: 'apis:read',
-      },
-      {
-        name: 'nav.apiTraffic',
-        href: '/api-traffic',
-        icon: BarChart3,
+        name: 'nav.securityGuardrails',
+        href: '/observability/security',
+        icon: Shield,
         permission: 'tenants:read',
+        shortcut: ['g', 's'],
+        exact: true,
       },
     ],
   },
@@ -367,7 +361,9 @@ const routePrefetchMap: Record<string, () => Promise<unknown>> = {
   '/ai-tools': () => import('../pages/AITools'),
   '/applications': () => import('../pages/Applications'),
   '/deployments': () => import('../pages/Deployments'),
-  '/monitoring': () => import('../pages/APIMonitoring'),
+  '/observability': () => import('../pages/GatewayObservability'),
+  '/observability/live-calls': () => import('../pages/CallFlow'),
+  '/observability/security': () => import('../pages/GatewayGuardrails'),
 };
 
 export function Layout({ children }: LayoutProps) {
@@ -659,7 +655,9 @@ export function Layout({ children }: LayoutProps) {
                         {section.items.map((item) => {
                           const isActive =
                             location.pathname === item.href ||
-                            (item.href !== '/' && location.pathname.startsWith(item.href));
+                            (!item.exact &&
+                              item.href !== '/' &&
+                              location.pathname.startsWith(`${item.href}/`));
 
                           return (
                             <li key={item.href}>

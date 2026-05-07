@@ -21,8 +21,6 @@ import {
   Gauge,
   Activity,
   BarChart3,
-  Search,
-  Network,
 } from 'lucide-react';
 import type { SubNavTab } from './SubNav';
 
@@ -55,9 +53,8 @@ export const gatewayTabs: SubNavTab[] = [
 ];
 
 export const observabilityTabs: SubNavTab[] = [
-  { label: 'Observability', href: '/observability', icon: Gauge },
-  { label: 'Monitoring', href: '/monitoring', icon: Activity },
-  { label: 'Call Flow', href: '/call-flow', icon: Network },
-  { label: 'API Traffic', href: '/api-traffic', icon: BarChart3 },
-  { label: 'Gateway Logs', href: '/logs', icon: Search },
+  { label: 'Gateway Health', href: '/observability', icon: Gauge },
+  { label: 'Live Calls', href: '/observability/live-calls', icon: Activity },
+  { label: 'Security & Guardrails', href: '/observability/security', icon: ShieldCheck },
+  { label: 'Expert Mode', href: '/observability/grafana', icon: BarChart3 },
 ];

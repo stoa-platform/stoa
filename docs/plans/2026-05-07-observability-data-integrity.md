@@ -27,18 +27,22 @@ Restaurer la cohérence et la véracité des trois pages observability (`/observ
 
 ## TL;DR
 
-5 PRs, séquencés **données d'abord, polish ensuite**, regroupés en **2 MEGAs + 1 chore PR**:
+9 PRs, séquencés **données d'abord, polish ensuite**, regroupés en **2 MEGAs + 1 chore PR**. Updated 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATION_NOT_FOUND`.
 
-| Order | PR | Type | MEGA | Priority | Blocked by |
-|---|---|---|---|---|---|
-| 1 | PR-0 | Chore (cosmetic + 1 functional) | None (standalone) | P0 (quick win) | — |
-| 2 | PR-1A | Investigation (no code) | MEGA-A | P0 (compliance) | PR-0 merged |
-| 3 | PR-1B | Audit Log API + UI | MEGA-A | P0 | PR-1A complete |
-| 4 | PR-2 | Live Calls metric integrity | MEGA-B | P0 | PR-0 merged |
-| 5 | PR-3 | Security & Guardrails runtime truth | MEGA-B | P1 | **Arbitrage IA** + PR-2 merged |
-| 6 | PR-4 | Navigation IA cleanup | MEGA-B | P2 | **Arbitrage IA** + PR-3 merged |
+| Order | PR | Type | MEGA | Priority | Blocked by | Status |
+|---|---|---|---|---|---|---|
+| 1 | PR-0 | Chore (cosmetic + 1 functional) | None | P0 | — | ✅ #2717 |
+| 2 | PR-1A | Investigation (no code) | MEGA-A | P0 | PR-0 merged | ✅ #2721 |
+| 3 | PR-1A2 | Consumer restore scope | MEGA-A | P0 | PR-1A complete | ✅ #2723 (Case C) |
+| 4 | PR-1A3 | Audit ingestion contract mini-spec (docs) | MEGA-A | P0 | PR-1A2 complete | ⏳ NEXT |
+| 5 | PR-1A4 | Audit consumer implementation | MEGA-A | P0 | PR-1A3 merged | blocked |
+| 6 | PR-1A5 | Verification evidence | MEGA-A | P0 | PR-1A4 deployed | blocked |
+| 7 | PR-1B | Audit Log API + UI | MEGA-A | P0 | PR-1A5 PASS verdict | blocked |
+| 8 | PR-2 | Live Calls metric integrity | MEGA-B | P0 | PR-0 merged | ⏳ ready |
+| 9 | PR-3 | Security & Guardrails runtime truth | MEGA-B | P1 | Annex B locked | blocked |
+| 10 | PR-4 | Navigation IA cleanup | MEGA-B | P2 | PR-3 merged | blocked |
 
-**Total estimated**: ~50 pts across 2 MEGAs (sweet spot 21-34 each + 1 chore).
+**Total estimated**: ~60 pts (MEGA-A grew to ~30pt/6 phases, MEGA-B 21pt/3 phases, PR-0 1pt).
 
 ---
 
@@ -78,9 +82,40 @@ OVH prod has Kafka topics `stoa.audit.trail` and `audit-log`, but **no consumer 
 
 **Impact**: PR-1B is **blocked**. Do not implement Audit Log `/stats`, `/actions`, actor resolution, demo fallback toggle, or refresh backoff until audit ingestion is restored and at least one non-chat event is visible through `/v1/audit/{tenant_id}`.
 
-**Next**: insert **PR-1A2 — Audit consumer restore/scope** between PR-1A and PR-1B (see "Linear ticket structure" below). PR-1A2 must first determine whether the consumer implementation already exists (deployment/config gap) or must be scoped from scratch (mini-spec only, separate backend PR).
+**Next**: PR-1A2 inserted (consumer restore/scope) — see verdict below.
 
 This was the explicit **No-Go condition** in the plan's Go/No-Go criteria. The plan is not abandoned — only PR-1B is gated; everything else proceeds.
+
+### PR-1A2 — Audit consumer restore scope (#2723 merged)
+
+Evidence: `docs/audits/2026-05-08-audit-consumer-restore/scoping.md`
+
+**Verdict: CONSUMER_IMPLEMENTATION_NOT_FOUND** (Case C from the PR-1A2 codex prompt).
+
+The repository has Kafka audit **producers** (`emit_audit_event(...)` to `Topics.AUDIT_LOG = "stoa.audit.trail"`) and 5 generic Kafka consumer patterns (`deployment_consumer`, `promotion_deploy_consumer`, `chat_metering_consumer`, `billing_metering_consumer`, `error_snapshot_consumer`), but **no consumer that persists `stoa.audit.trail`, `audit-log`, or `stoa.audit.events` into PostgreSQL `audit_events`**. No `ENABLE_AUDIT_CONSUMER` flag, no audit consumer startup task, no audit consumer manifest.
+
+**Topic Contract Drift identified** (3 audit-topic names in circulation):
+
+| Name | Evidence | Status |
+|---|---|---|
+| `stoa.audit.trail` | `Topics.AUDIT_LOG`, active `emit_audit_event(...)` producer | **Active producer** |
+| `audit-log` | Prod Redpanda topic from PR-1A evidence | Runtime topic exists, no repo producer/consumer |
+| `stoa.audit.events` | `Topics.AUDIT_EVENTS` constant + runbooks | Documented/legacy, no repo consumer |
+
+This is a **contract ambiguity** that PR-1A3 must trancher avant que PR-1A4 implémente.
+
+**Impact**: building a consumer is **new ingestion architecture**, not a restore. PR-1A2 stays docs-only as designed (Case C). MEGA-A grows to **6 phases**:
+
+```
+Phase 1 — PR-1A   Investigation (#2721 ✅)
+Phase 2 — PR-1A2  Consumer restore scope (#2723 ✅, Case C)
+Phase 3 — PR-1A3  Audit ingestion contract mini-spec (docs-only)        ← NEXT
+Phase 4 — PR-1A4  Audit consumer implementation (backend + manifest)
+Phase 5 — PR-1A5  Verification evidence (post-deploy proof)
+Phase 6 — PR-1B   Audit Log API + UI (gated on PR-1A5 signal)
+```
+
+**PR-1B unblock signal** (canonical, ne pas dévier): at least one **non-chat** audit row appears in `/v1/audit/{tenant_id}` after a manual API mutation (e.g. tenant create or API create). PR-1A5 produces the evidence pack proving this.
 
 ### PR-2 step 0 — Live Calls PromQL evidence (#2720 merged)
 
@@ -385,12 +420,12 @@ Deliverable: a single markdown file. No code changes. PR description: "Investiga
 
 # PR-1B — Audit Log API + UI
 
-> ⛔ **BLOCKED — 2026-05-08**. PR-1A (#2721) revealed no production audit consumer is subscribed to `stoa.audit.trail` or `audit-log`. PR-1B is gated on **PR-1A2 — Audit consumer restore/scope** (see Linear ticket structure). Do not start PR-1B until PR-1A2 produces either a deployment fix landing audit events into PG, or a confirmed mini-spec for a new consumer. Acceptance signal: at least one non-chat audit row appears in `/v1/audit/{tenant_id}` after a manual API mutation.
+> ⛔ **BLOCKED — 2026-05-08, status reaffirmed 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATION_NOT_FOUND`.** Gating chain: PR-1A3 (mini-spec) → PR-1A4 (implementation) → PR-1A5 (verification evidence). **PR-1B starts only after PR-1A5 demonstrates that at least one non-chat audit row appears in `/v1/audit/{tenant_id}` post a manual API mutation in a real environment**. No exception, no early start "in parallel".
 
 **Branch**: `feat/audit-log-coverage-and-ui`
-**MEGA**: A — Phase 3 (was Phase 2; PR-1A2 takes Phase 2)
+**MEGA**: A — Phase 6 (was Phase 3; PR-1A3/PR-1A4/PR-1A5 inserted)
 **Estimated**: 13 pts, ~400 LOC (backend + frontend + tests)
-**Risk**: depends on PR-1A2 outcome
+**Risk**: depends on PR-1A5 evidence
 
 ## Goal
 
@@ -1076,17 +1111,19 @@ Commit message: chore(ui): observability sidebar cleanup — remove legacy redir
 
 # Linear ticket structure (proposed)
 
-Updated 2026-05-08 to reflect PR-1A2 insertion (audit consumer restore/scope) after PR-1A's BLOCKED verdict.
+Updated 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATION_NOT_FOUND`. MEGA-A grew to 6 phases.
 
 ```
 [Standalone chore — DONE]
 └── PR-0 — Observability quick wins (1pt) — #2717 merged 2026-05-07
 
-[MEGA-A: Audit Log Data Integrity] (24pt, 4 phases)
-├── Phase 1 — PR-1A Investigation (3pt) — #2721 merged 2026-05-08, BLOCKED verdict
-├── Phase 2 — PR-1A2 Audit consumer restore/scope (NEW, 3pt) — see prompt below
-├── Phase 3 — PR-1B API + UI (13pt, BLOCKED on PR-1A2 outcome)
-└── Phase 4 — PR-1C Tests + evidence (5pt, optional, can fold into 1B)
+[MEGA-A: Audit Log Data Integrity] (~30pt, 6 phases)
+├── Phase 1 — PR-1A   Investigation (3pt) — #2721 merged 2026-05-08, BLOCKED verdict
+├── Phase 2 — PR-1A2  Consumer restore scope (1pt) — #2723 merged 2026-05-08, Case C
+├── Phase 3 — PR-1A3  Audit ingestion contract mini-spec (3pt, docs-only)        ← NEXT
+├── Phase 4 — PR-1A4  Audit consumer implementation (8pt, backend + manifest)
+├── Phase 5 — PR-1A5  Verification evidence (2pt, post-deploy proof)
+└── Phase 6 — PR-1B   Audit Log API + UI (13pt, gated on PR-1A5 signal)
 
 [MEGA-B: Runtime Observability Data Integrity] (21pt, 3 phases)
 ├── Phase 1 — PR-2 Live Calls metric integrity (8pt) — codex prompt updated for `http_route` after #2720
@@ -1094,137 +1131,417 @@ Updated 2026-05-08 to reflect PR-1A2 insertion (audit consumer restore/scope) af
 └── Phase 3 — PR-4 Sidebar IA cleanup (5pt, BLOCKED on AR-1+PR-3)
 ```
 
-## PR-1A2 — Audit consumer restore/scope (NEW phase)
+## PR-1A2 — Audit consumer restore/scope (DONE)
 
-**Branch**: `fix/audit-consumer-restore`
-**MEGA**: A — Phase 2 (inserted between PR-1A and PR-1B)
-**Estimated**: 3 pts (case A scope) to 1 pt (case C docs-only scope)
-**Risk**: low (read-only discovery → minimal config fix or scoping doc)
+**Status**: ✅ Merged #2723 on 2026-05-08. Verdict `CONSUMER_IMPLEMENTATION_NOT_FOUND` (Case C). Evidence: `docs/audits/2026-05-08-audit-consumer-restore/scoping.md`.
+
+The repository contains Kafka audit producers and 5 generic consumer patterns, but no audit consumer implementation that persists `stoa.audit.trail`/`audit-log`/`stoa.audit.events` into PostgreSQL `audit_events`. Building a consumer is **new ingestion architecture, not a restore** — hence the explicit insertion of PR-1A3 (mini-spec) → PR-1A4 (implementation) → PR-1A5 (verification) before PR-1B can start.
+
+The codex prompt that produced this PR is preserved in git history (commit on `fix/audit-consumer-restore` branch, merged squash). It is no longer reproduced in this plan to avoid redundancy.
+
+## PR-1A3 — Audit ingestion contract mini-spec (NEW phase, docs-only)
+
+**Branch**: `docs/audit-ingestion-contract`
+**MEGA**: A — Phase 3
+**Estimated**: 3 pts, docs-only (~250 lines markdown)
+**Risk**: low (docs-only, no runtime impact)
 
 ### Goal
 
-Determine whether the repository already contains an audit consumer implementation or deployment manifest. Based on findings, either restore the missing deployment/config (Case A or B), or produce a minimal scoping document for a future backend PR (Case C).
+Produce a **mini-spec contract** that PR-1A4 will implement. The spec must answer the 8 questions left open by PR-1A2 (cited in `scoping.md` section "Minimal Follow-Up Scope") and resolve the **Topic Contract Drift** (3 audit topic names in circulation: `stoa.audit.trail`, `audit-log`, `stoa.audit.events`).
+
+This is a **docs-only PR**. No code, no manifest, no runtime change.
 
 ### Codex prompt
 
 ```
 You are working on the STOA repository.
-Branch: `fix/audit-consumer-restore`
+Branch: `docs/audit-ingestion-contract`
 
 Context:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Evidence: docs/audits/2026-05-08-audit-ingestion/findings.md (PR-1A merged in #2721)
+- PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
+- PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
 
-Key finding from PR-1A:
-OVH prod has Kafka topics `stoa.audit.trail` and `audit-log`, but no consumer
-group is subscribed. PostgreSQL `audit_events` is stale (newest row
-2026-05-03, 0 rows last 24h). This blocks PR-1B.
+Verdict from PR-1A2 (#2723):
+- CONSUMER_IMPLEMENTATION_NOT_FOUND
+- Building a consumer = new ingestion architecture, not a restore
+- 3 topic names in circulation (Topic Contract Drift): stoa.audit.trail (active producer), audit-log (prod runtime topic), stoa.audit.events (legacy constant)
 
-Goal: determine if a consumer implementation already exists, then either
-(1) restore the deployment/config; or (2) produce a scoping doc.
+Goal: produce a mini-spec contract at
+  docs/specs/2026-05-08-audit-ingestion-contract.md
+that PR-1A4 will implement.
 
-Step 1 — Repository discovery (read-only)
+This is a docs-only PR. No code, no manifest, no schema migration, no runtime change.
 
-Search for:
-  audit_events, stoa.audit.trail, audit-log, AuditConsumer, consumer group,
-  kafka_service.emit_audit_event, emit_audit_event
+Required sections in the mini-spec:
 
-Areas: control-plane-api/, services/, deploy/, helm/, charts/, k8s/, infra/
+## 1. Authoritative topic decision
+Pick ONE canonical topic for production:
+- stoa.audit.trail   (active producer today, recommended)
+- stoa.audit.events  (legacy constant, no producer)
+- audit-log          (prod runtime topic, no repo producer)
+Document migration plan for the two non-canonical names (rename, alias, deprecation).
+Producers in the repo (already using Topics.AUDIT_LOG = "stoa.audit.trail") are the de-facto contract; default recommendation is to canonize stoa.audit.trail unless a strong infra reason argues otherwise.
 
-Document findings in:
-  docs/audits/2026-05-08-audit-ingestion/consumer-restore-scope.md
+## 2. Source-of-truth contract
+Decide which of these is THE compliance audit sink (DORA/NIS2):
+(a) Direct PostgreSQL writes via AuditService.record_event(...) only
+(b) Kafka stoa.audit.trail consumer that persists to audit_events
+(c) Hybrid: direct PG writes for high-criticality paths + Kafka for fire-and-forget
+Compare reliability, latency, and operability. Recommend one.
+The current state (chat paths use direct PG, deployment/promotion/api/tenant/user paths use Kafka-only) is INCONSISTENT and is the root cause of the visible gap.
 
-Required sections (template in PR-1A2 section of plan):
-- Producer topic + source file/env var
-- Existing consumer implementation (yes/no, files, group, sink)
-- Existing deployment manifest (yes/no, files, namespace, env)
-- Gap classification: implementation-exists-deployment-missing /
-  deployment-exists-disabled-or-misconfigured / implementation-missing /
-  topic-mismatch / unknown
-- Recommended next PR
+## 3. Consumer group + offset policy
+- Consumer group name (proposal: audit-events-consumer)
+- Initial offset on first deploy (earliest for backfill vs latest for forward-only)
+- Re-balance protocol (cooperative-sticky vs eager)
+- Document why.
 
-Step 2 — Conditional action based on classification
+## 4. Payload schema
+Map Kafka envelope produced by emit_audit_event(...) to audit_events table columns:
+- envelope.action  → audit_events.action
+- envelope.tenant_id → audit_events.tenant_id
+- envelope.actor → audit_events.actor_id, actor_email, actor_type
+- envelope.resource → resource_type, resource_id, resource_name
+- envelope.outcome → outcome
+- envelope.method, path → method, path
+- envelope.timestamp → created_at
+- envelope.details → details (JSONB)
+- envelope.correlation_id → correlation_id
+List required vs optional. List defaults. List validation errors → DLQ behavior.
 
-Case A (implementation exists, deployment missing or disabled):
-  Add Helm/Kubernetes deployment manifest, env wiring, consumer group name,
-  topic env. Do NOT rewrite the consumer.
+## 5. Idempotency / deduplication
+- Idempotency key: e.g. envelope.id (UUID) maps to audit_events.id (PK)
+- ON CONFLICT (id) DO NOTHING vs UPDATE
+- How replays are detected and short-circuited
+- Order: at-least-once delivery; document that PG PK guarantees dedup
 
-Case B (deployment exists but topic mismatch):
-  Fix the topic config so producer and consumer agree. Do NOT subscribe to
-  both `stoa.audit.trail` and `audit-log` without dedupe semantics. Identify
-  the canonical producer topic first.
+## 6. Failure mode
+- Audit sink failures must NOT block user-facing API operations
+- Producer side: log WARN with action+resource_type, never raise to caller
+- Consumer side: failed insert → DLQ topic (proposal: stoa.audit.trail.dlq) + WARN log + alert metric
+- Retry budget: e.g. 3 retries with exponential backoff (1s, 5s, 30s) before DLQ
+- Observability: Prometheus counter `stoa_audit_consumer_lag`, `stoa_audit_consumer_errors_total`
 
-Case C (no consumer implementation):
-  Keep this PR docs-only. Produce consumer-restore-scope.md with mini-spec:
-  canonical topic, payload schema, consumer group, idempotency/dedup key,
-  retry/DLQ behavior, PG insert/upsert behavior, observability hooks.
-  Do NOT invent a consumer implementation in this PR.
+## 7. Deployment model
+Choose ONE:
+(a) Consumer runs inside stoa-control-plane-api lifespan (gated by ENABLE_AUDIT_CONSUMER env var, like ENABLE_DEPLOYMENT_CONSUMER pattern)
+(b) Separate Kubernetes Deployment (e.g. stoa-audit-consumer with its own scaling/SLO)
+Compare blast radius (cp-api restart blast vs separate workload), resource footprint, operability.
+
+## 8. Backfill strategy for `audit_events` historic gap
+PR-1A evidence: 113 562 rows total, but stale since 2026-05-03. Decide:
+(a) Accept the gap, start fresh from PR-1A4 deploy time
+(b) Backfill from a known good source (Kafka retention is 604800000ms = 7 days, so all events from 2026-05-01 onward should be replay-able if consumer starts at earliest)
+Document operational risk of dual-write during backfill.
+
+Acceptance criteria for the mini-spec:
+- [ ] All 8 sections answered with explicit recommendations.
+- [ ] Topic Contract Drift resolved (1 canonical topic chosen, migration plan for the others).
+- [ ] Source-of-truth contract picked (a/b/c with rationale).
+- [ ] Consumer group, payload mapping, idempotency, failure mode, deployment model defined.
+- [ ] Backfill strategy chosen.
+- [ ] Document references PR-1A and PR-1A2 evidence packs.
 
 Out of scope (DO NOT do):
-- /v1/audit/{tenant_id}/stats or /actions endpoints
-- AuditLog UI changes
-- Actor resolution
-- audit_events schema migration
-- silent dual-topic consumption without dedupe
-- production data mutation
+- Implementing the consumer (PR-1A4).
+- Deploying anything (PR-1A4 + manifest).
+- Modifying `audit_events` schema.
+- Modifying producer code.
+- Changing the AuditLog UI/API (PR-1B).
+
+Commit message: docs(specs): audit ingestion contract mini-spec (PR-1A3)
+
+PR title: docs(specs): audit ingestion contract mini-spec
+
+PR body must reference:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
+- PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
+- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md
+```
+
+### Acceptance criteria (binary)
+
+- [ ] `docs/specs/2026-05-08-audit-ingestion-contract.md` exists with 8 mandatory sections.
+- [ ] Canonical topic chosen explicitly.
+- [ ] Source-of-truth (a/b/c) picked with rationale.
+- [ ] Consumer group, offset, payload mapping, idempotency, failure mode, deployment model documented.
+- [ ] Backfill strategy decided.
+- [ ] No code, no manifest, no schema migration in this PR.
+
+### Files probably touched
+
+- `docs/specs/2026-05-08-audit-ingestion-contract.md` (new, ~250 lines)
+- (no source change)
+
+### Risk + dependencies
+
+- Lock decisions made in this mini-spec **before** PR-1A4 starts.
+- Decisions are **reversible**: if PR-1A4 reveals a blocker (e.g. Kafka offset reset can't be safely cooperative), update the mini-spec in a follow-up commit before re-running PR-1A4.
+
+## PR-1A4 — Audit consumer implementation (NEW phase, backend + manifest)
+
+**Branch**: `feat/audit-consumer-implementation`
+**MEGA**: A — Phase 4
+**Estimated**: 8 pts, ~400 LOC (Python consumer + Helm/k8s + tests)
+**Risk**: medium (new runtime workload + production data path)
+
+### Goal
+
+Implement the audit consumer per the mini-spec locked in PR-1A3. Land deployable code + manifest. Do NOT modify the AuditLog UI/API surface yet.
+
+### Codex prompt
+
+```
+You are working on the STOA repository.
+Branch: `feat/audit-consumer-implementation`
+
+Context:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md  (PR-1A3)
+- PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
+- PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
+
+PRECONDITION: read docs/specs/2026-05-08-audit-ingestion-contract.md first. If the mini-spec is not on main yet, STOP and request that PR-1A3 be merged before proceeding.
+
+Goal: implement the audit consumer per the mini-spec.
+
+Tasks:
+
+1. Implement the consumer
+   - Follow the existing Kafka consumer patterns:
+     control-plane-api/src/consumers/deployment_consumer.py
+     control-plane-api/src/consumers/promotion_deploy_consumer.py
+     control-plane-api/src/workers/chat_metering_consumer.py
+   - Place the new file at control-plane-api/src/consumers/audit_trail_consumer.py
+     (or similar, consistent with the mini-spec).
+   - Subscribe to the canonical topic chosen by the mini-spec.
+   - Use the consumer group name from the mini-spec.
+   - Use the offset policy from the mini-spec.
+   - Persist to PostgreSQL audit_events with ON CONFLICT (id) DO NOTHING semantics per the mini-spec.
+
+2. Wire startup gate
+   - Add `ENABLE_AUDIT_CONSUMER` env var (default false in code, true via deployment manifest).
+   - Update control-plane-api/src/main.py to start the audit consumer task when the gate is on.
+   - Update tests/test_regression_kafka_boot.py to include the new consumer flag.
+
+3. Failure mode + observability
+   - Producer-side audit failures must NOT raise to user-facing operation.
+   - Consumer-side: failed PG insert → log WARN, retry per mini-spec, then DLQ topic.
+   - Add Prometheus metrics: stoa_audit_consumer_lag, stoa_audit_consumer_errors_total, stoa_audit_consumer_processed_total.
+   - Structured log on every consume cycle (count, last offset).
+
+4. Helm/Kubernetes manifest
+   - Either (a) add ENABLE_AUDIT_CONSUMER=true to existing cp-api Deployment env, or
+     (b) add a separate Deployment for stoa-audit-consumer.
+   - Match the mini-spec deployment-model decision.
+   - Manifest path: charts/stoa-platform/templates/... or control-plane-api/k8s/...
+
+5. Backfill
+   - Implement the mini-spec backfill strategy (typically: first deploy, offset=earliest with a clear log "starting backfill from offset X").
+   - Document the dual-write window risk in the PR description.
+
+Tests required:
+
+- Unit test: consumer parses Kafka envelope and inserts correct audit_events row (use httpx.MockTransport-style boundary or asyncpg test fixture per repo standard).
+- Unit test: idempotency — same envelope.id processed twice does NOT insert twice.
+- Unit test: malformed envelope → DLQ + WARN log, no exception bubbles.
+- Integration test: consumer registers on topic, commits offset (skip if --integration not enabled).
+- Regression test: tests/test_regression_kafka_boot.py asserts ENABLE_AUDIT_CONSUMER is in the startup flag list.
+
+Acceptance criteria:
+- [ ] Consumer subscribes to canonical topic (mini-spec).
+- [ ] PostgreSQL audit_events inserts succeed with idempotency.
+- [ ] DLQ on failures, no user-facing impact.
+- [ ] Manifest deployable (helm template renders, kubectl --dry-run=client passes).
+- [ ] Tests pass.
+- [ ] PR body includes: link to mini-spec, deployment-model decision, backfill strategy.
+
+Out of scope (DO NOT do):
+- AuditLog UI/API changes (PR-1B).
+- /v1/audit/{tenant_id}/stats or /actions.
+- audit_events schema migration.
+- Topic rename/migration (the mini-spec decided one canonical topic; renames are separate).
+- Demo data fallback removal (already decided in AR-3, lands in PR-1B).
+
+Commit message: feat(api,infra): audit consumer implementation per mini-spec (PR-1A4)
+
+PR title: feat(api,infra): audit consumer implementation
+
+PR body must reference:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md
+- Deployment model chosen (a or b from mini-spec) with one-line justification.
+```
+
+### Acceptance criteria (binary)
+
+- [ ] Consumer code in `control-plane-api/src/consumers/...` per mini-spec.
+- [ ] `ENABLE_AUDIT_CONSUMER` env var wired (main.py + boot regression test).
+- [ ] Manifest deployable (helm template / kubectl --dry-run pass).
+- [ ] Idempotency proven by unit test.
+- [ ] DLQ on failure proven by unit test.
+- [ ] Prometheus metrics emitted.
+- [ ] No AuditLog UI/API surface changes.
+
+### Files probably touched
+
+- `control-plane-api/src/consumers/audit_trail_consumer.py` (new, ~150 LOC)
+- `control-plane-api/src/main.py` (~10 LOC for gate)
+- `control-plane-api/src/services/kafka_service.py` (potentially ~10 LOC if topic constant changes per mini-spec)
+- `control-plane-api/tests/test_audit_trail_consumer.py` (new, ~150 LOC)
+- `control-plane-api/tests/test_regression_kafka_boot.py` (~5 LOC)
+- `charts/stoa-platform/templates/...` or `control-plane-api/k8s/...` (~30 LOC)
+
+### Risk + dependencies
+
+- **Blocks on PR-1A3 merge** (mini-spec must be on main).
+- Production data write path — coordinate with infra for first deploy.
+- Backfill window: monitor consumer lag closely after deploy.
+
+## PR-1A5 — Verification evidence (NEW phase, post-deploy proof)
+
+**Branch**: `docs/audit-ingestion-verification-2026-05-XX`
+**MEGA**: A — Phase 5
+**Estimated**: 2 pts, docs-only (evidence pack)
+**Risk**: low (read-only, post-deploy verification)
+
+### Goal
+
+Prove that the PR-1A4 consumer is operational in production by demonstrating that **at least one non-chat audit event** appears in `/v1/audit/{tenant_id}` after a manual API mutation. This is the canonical **PR-1B unblock signal**.
+
+### Codex prompt
+
+```
+You are an SRE running a read-only verification in production.
+
+Branch: `docs/audit-ingestion-verification-2026-05-XX` (replace XX with actual date)
+
+Context:
+- Plan: docs/plans/2026-05-07-observability-data-integrity.md
+- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md (PR-1A3)
+- Implementation: PR-1A4 merged + deployed to OVH prod
+
+Goal: prove the consumer is operational and produce an evidence pack at
+  docs/audits/2026-05-XX-audit-ingestion-verification/proof.md
+
+Required sections in proof.md:
+
+## 1. Pre-state inventory
+- audit_events row count BEFORE the manual mutation.
+- audit_events newest row timestamp BEFORE.
+- Consumer group `audit-events-consumer` (or canonical name) lag BEFORE.
+Run from prod kubeconfig:
+  KUBECONFIG=$HOME/.kube/config-stoa-ovh kubectl exec ...
+
+## 2. Manual mutation
+Trigger ONE non-chat audit-emitting operation, e.g.:
+- POST /v1/tenants (create a test tenant)
+- PUT /v1/apis/{id} (update an API)
+- POST /v1/deployments (trigger a deployment)
+Document the command, the response body (sanitize tenant secrets), and the timestamp.
+
+## 3. Consumer activity
+Within 30 seconds, verify:
+- Kafka consumer group lag dropped to zero (or by N if N events emitted).
+- audit_events row count increased.
+- New row visible with action != chat_*.
+
+## 4. UI verification
+Hit /v1/audit/{tenant_id} via the cp-api directly:
+  curl -s -H "Authorization: Bearer ${TOKEN}" \
+    https://api.gostoa.dev/v1/audit/{tenant_id}?page=1&page_size=20 \
+    | jq '.entries[] | select(.action != "chat_conversation_create" and .action != "chat_tool_call")'
+Document the JSON output (sanitize tenant secrets).
+
+## 5. Verdict
+- PASS / FAIL with evidence.
+- If FAIL: describe what was missing (lag stuck, audit_events not incremented, action absent in /v1/audit).
+- If PASS: PR-1B is now unblocked. Update plan section "PR-1B BLOCKED notice" to reflect.
+
+DO NOT:
+- Mutate production data beyond the single test mutation.
+- Skip the cleanup of the test tenant/API/deployment.
+- Print raw secrets or tenant credentials in the evidence pack.
+- Use a non-prod environment unless the prod cp-api is unavailable (document if so).
 
 Acceptance:
-- Canonical producer topic identified.
-- Implementation existence assessed (yes/no, files).
-- Deployment existence assessed (yes/no, files).
-- Either a deployment/config fix is implemented, OR a clear mini-spec
-  blocks PR-1B explicitly.
-- No AuditLog UI/API feature work included.
+- [ ] Pre-state inventory captured.
+- [ ] Manual mutation triggered and timestamped.
+- [ ] Consumer activity proven (lag, audit_events delta).
+- [ ] /v1/audit/{tenant_id} returns ≥1 non-chat row from this mutation.
+- [ ] Verdict is PASS, OR FAIL with explicit gap analysis.
 
 Commit message:
-  fix(infra): restore audit consumer deployment   (Case A/B)
-  docs(observability): scope audit consumer restore   (Case C)
+  docs(observability): audit ingestion verification proof — PASS   (success)
+  docs(observability): audit ingestion verification proof — FAIL <gap>  (failure)
 
 PR title: same as commit message.
 
 PR body must reference:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
-- Classification chosen (A/B/C) with one-line justification.
+- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md
+- Implementation: PR-1A4 (link)
+- Verdict: PASS / FAIL.
 ```
 
 ### Acceptance criteria (binary)
 
-- [ ] Canonical producer topic identified in `consumer-restore-scope.md`.
-- [ ] Implementation existence: yes/no with file paths.
-- [ ] Deployment existence: yes/no with file paths.
-- [ ] Either Case A/B fix applied, or Case C mini-spec produced.
-- [ ] No AuditLog UI/API work included.
-- [ ] PR-1B unblock signal documented (what test must pass before PR-1B starts).
+- [ ] `docs/audits/2026-05-XX-audit-ingestion-verification/proof.md` with 5 sections.
+- [ ] Single manual mutation documented and cleaned up.
+- [ ] Consumer activity proven (lag dropped, audit_events incremented, /v1/audit returns the row).
+- [ ] Verdict PASS or FAIL.
+- [ ] **PASS** unblocks PR-1B; **FAIL** keeps PR-1B blocked and triggers a follow-up on PR-1A4.
 
-### Tests required from Codex
+### Files probably touched
 
-- For Case A/B (config fix): manifest lint passes, smoke test that consumer group registers on the topic in dev/staging if available.
-- For Case C (docs-only): `git diff --check` clean.
+- `docs/audits/2026-05-XX-audit-ingestion-verification/proof.md` (new)
+- `docs/audits/2026-05-XX-audit-ingestion-verification/raw/*.txt` (sanitized kubectl outputs)
+- (no source change)
+
+### Risk + dependencies
+
+- **Blocks on PR-1A4 merge + production deploy**.
+- Requires kubeconfig OVH prod read-only + a usable CPI Admin token for `/v1/audit/{tenant_id}` HTTP probe.
+- Test mutation must be cleaned up after evidence is captured (delete the test tenant/API/deployment).
 
 # Sequencing (real timeline)
 
+Updated 2026-05-08 after PR-1A2 #2723 confirmed Case C. MEGA-A audit chain became 6 phases instead of 2.
+
 ```
-Day 0 (today):
-  - Resolve AR-1 to AR-6 (1h max, fill `STATUS:` cells in section "Arbitrages requis" of this plan, then flip `validation_status: validated`).
+Day 0 — 2026-05-07 (DONE):
+  - PR-0 quick wins (#2717 merged 12:56 UTC).
+  - Plan + audit canon (#2718 merged 12:57 UTC).
+  - AR-1..AR-6 fill (#2719 merged 13:09 UTC).
+  - PR-2 step 0 PromQL evidence (#2720 merged 14:49 UTC).
+  - PR-1A audit ingestion findings (#2721 merged 14:54 UTC).
+  - Plan investigation results update (#2722 merged 16:55 UTC).
+  - PR-1A2 audit consumer restore scope (#2723 merged 17:23 UTC, Case C).
 
-Day 0-1:
-  - PR-0 quick wins: open, review, merge (~2h end-to-end).
-
-Day 1-2:
-  - PR-1A investigation: requires prod kubectl access (~half day).
+Day 1 — 2026-05-08 (NOW):
+  - This PR: plan update for PR-1A3/PR-1A4/PR-1A5 chain.
+  - PR-1A3 mini-spec docs-only (~half day, codex docs PR).
+  - PR-2 Live Calls http_route migration can run in parallel (no MEGA-A dependency).
 
 Day 2-4:
-  - PR-1B audit log + UI (in parallel with PR-2 if 2 dev capacity).
-  - PR-2 live calls metric integrity (parallel).
+  - PR-1A4 consumer implementation (~2 days, codex backend + manifest, then deploy + smoke).
+  - PR-2 lands.
 
-Day 5-6:
-  - PR-3 security guardrails runtime (after AR-1 resolved).
+Day 5:
+  - PR-1A5 verification evidence (post PR-1A4 deploy + 1 manual API mutation, ~1h).
+  - PR-1A5 PASS verdict unblocks PR-1B.
 
-Day 7:
-  - PR-4 nav cleanup.
+Day 6-8:
+  - PR-1B audit log API + UI (~2 days).
+  - PR-3 guardrails runtime truth (parallel after Annex B locked).
 
-Total: ~1 sprint week if focused, ~2 weeks if shared with other work.
+Day 9:
+  - PR-4 nav IA cleanup.
+
+Total: ~2 sprint weeks for the full chain. PR-2 is independent and can ship Day 1 if MEGA-B needs forward motion while MEGA-A iterates.
 ```
 
 # Annex A — Mini-spec: Audit Log API contract (PR-1B)

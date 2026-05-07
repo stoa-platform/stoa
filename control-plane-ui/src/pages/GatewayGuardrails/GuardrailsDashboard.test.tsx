@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { createAuthMock, renderWithProviders } from '../../test/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 import type { PersonaRole } from '../../test/helpers';
@@ -28,6 +29,11 @@ vi.mock('@stoa/shared/components/Toast', () => ({
 
 import { GuardrailsDashboard } from './GuardrailsDashboard';
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}</div>;
+}
+
 describe('GuardrailsDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,6 +46,7 @@ describe('GuardrailsDashboard', () => {
       },
       rate_limiting: { enforcements: 12 },
     });
+    mockGetGuardrailsEvents.mockResolvedValue({ events: [] });
     vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
@@ -58,6 +65,47 @@ describe('GuardrailsDashboard', () => {
     expect(screen.getAllByText(/Injection/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Prompt Guard/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Rate Limit')).toBeInTheDocument();
+  });
+
+  it('does not render Rate Limit as a misleading all-filter button', async () => {
+    renderWithProviders(<GuardrailsDashboard />);
+    const rateLimit = await screen.findByText('Rate Limit');
+    expect(rateLimit.closest('button')).toBeNull();
+  });
+
+  it('routes guardrail event traces through the canonical Live Calls detail path', async () => {
+    mockGetGuardrailsEvents.mockResolvedValue({
+      events: [
+        {
+          timestamp: '2026-05-07T10:00:00Z',
+          trace_id: 'trace-123',
+          span_id: 'span-123',
+          tool: 'payment-api',
+          action: 'pii-redacted',
+          reason: 'Sensitive payload redacted',
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/observability/security']}>
+        <Routes>
+          <Route path="/observability/security" element={<GuardrailsDashboard />} />
+          <Route path="/observability/live-calls/trace/:traceId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const toolCell = await screen.findByText('payment-api');
+    const eventRow = toolCell.closest('button');
+    expect(eventRow).not.toBeNull();
+    fireEvent.click(eventRow as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/observability/live-calls/trace/trace-123'
+      );
+    });
   });
 
   it('renders configuration section', async () => {

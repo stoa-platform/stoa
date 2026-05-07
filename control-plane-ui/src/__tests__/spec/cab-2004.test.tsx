@@ -80,10 +80,10 @@ function mockApiError(status: number) {
   mockGet.mockRejectedValue({ response: { status } });
 }
 
-async function renderLogExplorer() {
+async function renderLogExplorer(initialEntries: string[] = ['/logs']) {
   const { LogExplorer } = await import('../../pages/RequestExplorer/LogExplorer');
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <LogExplorer />
     </MemoryRouter>
   );
@@ -154,6 +154,24 @@ describe('spec/CAB-2004: LogExplorer', () => {
         fireEvent.click(traceLink);
         expect(mockNavigate).toHaveBeenCalledWith('/observability/live-calls/trace/abc123');
       });
+    });
+
+    it('initializes log search from Live Calls trace links', async () => {
+      mockApiSuccess();
+      await renderLogExplorer(['/logs?service=gateway&trace_id=abc123']);
+
+      await waitFor(() => {
+        expect(mockGet).toHaveBeenCalledWith(
+          '/v1/admin/logs',
+          expect.objectContaining({
+            params: expect.objectContaining({
+              service: 'gateway',
+              search: 'abc123',
+            }),
+          })
+        );
+      });
+      expect(screen.getByDisplayValue('abc123')).toBeInTheDocument();
     });
   });
 

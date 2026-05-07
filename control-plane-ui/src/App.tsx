@@ -194,6 +194,11 @@ const CallFlowDashboard = lazy(() =>
 const TraceDetail = lazy(() =>
   import('./pages/CallFlow').then((m) => ({ default: m.TraceDetail }))
 );
+const LegacyCallFlowTraceRedirect = lazy(() =>
+  import('./pages/CallFlow/LegacyCallFlowTraceRedirect').then((m) => ({
+    default: m.LegacyCallFlowTraceRedirect,
+  }))
+);
 
 // CAB-1487: LLM Cost Dashboard
 const LLMCostDashboard = lazy(() =>
@@ -395,7 +400,7 @@ function ProtectedRoutes() {
                   path="/call-flow"
                   element={<Navigate to="/observability/live-calls" replace />}
                 />
-                <Route path="/call-flow/trace/:traceId" element={<TraceDetail />} />
+                <Route path="/call-flow/trace/:traceId" element={<LegacyCallFlowTraceRedirect />} />
                 <Route path="/llm-cost" element={<LLMCostDashboard />} />
                 <Route path="/webhooks" element={<Webhooks />} />
                 <Route path="/credential-mappings" element={<CredentialMappings />} />

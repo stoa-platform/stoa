@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, RefreshCw, Search, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SubNav } from '../../components/SubNav';
@@ -57,6 +57,11 @@ const TIME_RANGE_OPTIONS = [
   { value: '24h', label: '24h', hours: 24 },
 ];
 
+function normalizeServiceFilter(value: string | null): string {
+  if (!value) return 'all';
+  return SERVICE_OPTIONS.some((option) => option.value === value) ? value : 'all';
+}
+
 const LEVEL_COLORS: Record<string, string> = {
   error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -72,7 +77,9 @@ const SERVICE_COLORS: Record<string, string> = {
 
 export function LogExplorer() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { hasRole } = useAuth();
+  const initialTraceSearch = searchParams.get('trace_id') || searchParams.get('search') || '';
 
   const [logs, setLogs] = useState<AdminLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,9 +87,9 @@ export function LogExplorer() {
   const [queryTimeMs, setQueryTimeMs] = useState<number>(0);
 
   // Filters
-  const [service, setService] = useState('all');
+  const [service, setService] = useState(normalizeServiceFilter(searchParams.get('service')));
   const [level, setLevel] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialTraceSearch);
   const [timeRange, setTimeRange] = useState('1h');
   const [refreshInterval, setRefreshInterval] = useState(0);
 
@@ -90,6 +97,17 @@ export function LogExplorer() {
   const [selectedLog, setSelectedLog] = useState<AdminLogEntry | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const nextSearch = searchParams.get('trace_id') || searchParams.get('search');
+    if (nextSearch != null) {
+      setSearch(nextSearch);
+    }
+    const nextService = searchParams.get('service');
+    if (nextService != null) {
+      setService(normalizeServiceFilter(nextService));
+    }
+  }, [searchParams]);
 
   const fetchLogs = useCallback(async () => {
     try {

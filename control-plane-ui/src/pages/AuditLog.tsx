@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
@@ -21,8 +22,10 @@ import { StatCard } from '@stoa/shared/components/StatCard';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
+const MAX_REFRESH_INTERVAL = 300_000;
 const ACTIVE_TENANT_KEY = 'stoa-active-tenant';
 const PAGE_SIZE = 20;
+const LEGACY_ACTION_OPTIONS = ['create', 'update', 'delete', 'deploy', 'login', 'access_denied'];
 
 type AuditAction =
   | 'create'
@@ -41,6 +44,8 @@ interface AuditEntry {
   timestamp: string;
   user_id: string | null;
   user_email: string | null;
+  user_display_name?: string | null;
+  user_resolved?: boolean;
   action: AuditAction;
   resource_type: string;
   resource_id: string | null;
@@ -59,6 +64,28 @@ interface AuditFilters {
   start_date?: string;
   end_date?: string;
   search?: string;
+}
+
+interface AuditStatsResponse {
+  total_events: number;
+  success_count: number;
+  failed_count: number;
+  unique_actors: number;
+  by_action: Record<string, number>;
+  by_status: Record<string, number>;
+  window_start: string;
+  window_end: string;
+}
+
+interface AuditActionCount {
+  action: string;
+  count: number;
+}
+
+interface AuditActionsResponse {
+  actions: AuditActionCount[];
+  window_start: string;
+  window_end: string;
 }
 
 const ACTION_ICONS: Record<string, typeof User> = {
@@ -87,9 +114,9 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   },
 };
 
-function formatTimestamp(ts: string): string {
+function formatTimestamp(ts: string, locale: string): string {
   const d = new Date(ts);
-  return d.toLocaleString('fr-FR', {
+  return d.toLocaleString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -99,10 +126,54 @@ function formatTimestamp(ts: string): string {
   });
 }
 
+function buildAuditParams(filters: AuditFilters, page?: number): Record<string, string | number> {
+  const params: Record<string, string | number> = {};
+  if (page !== undefined) {
+    params.page = page;
+    params.page_size = PAGE_SIZE;
+  }
+  if (filters.action) params.action = filters.action;
+  if (filters.status) params.status = filters.status;
+  if (filters.start_date) params.start_date = filters.start_date;
+  if (filters.end_date) params.end_date = filters.end_date;
+  if (filters.search) params.search = filters.search;
+  return params;
+}
+
+function formatActionLabel(action: string): string {
+  return action
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatWindowSubtitle(filters: AuditFilters, stats: AuditStatsResponse | null): string {
+  if (filters.start_date || filters.end_date) {
+    const start = filters.start_date || stats?.window_start?.slice(0, 10) || '...';
+    const end = filters.end_date || stats?.window_end?.slice(0, 10) || '...';
+    return `Window: ${start} → ${end}`;
+  }
+  return 'Last 30 days';
+}
+
+function formatRelativeTime(value: Date, now = new Date()): string {
+  const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - value.getTime()) / 1000));
+  if (elapsedSeconds < 60) return 'just now';
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes} min ago`;
+  }
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  return `${elapsedHours} hr ago`;
+}
+
 export function AuditLog() {
   const { user, isReady, hasRole } = useAuth();
+  const { i18n } = useTranslation();
+  const locale = i18n.language || i18n.resolvedLanguage || navigator.language || 'en';
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<AuditStatsResponse | null>(null);
+  const [actions, setActions] = useState<AuditActionCount[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +181,9 @@ export function AuditLog() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [lastSuccessAt, setLastSuccessAt] = useState<Date | null>(null);
+  const [currentInterval, setCurrentInterval] = useState(AUTO_REFRESH_INTERVAL);
 
   const canExport = hasRole('cpi-admin') || hasRole('tenant-admin');
   const tenantId = localStorage.getItem(ACTIVE_TENANT_KEY) || user?.tenant_id || 'default';
@@ -118,63 +192,75 @@ export function AuditLog() {
 
   const loadData = useCallback(async () => {
     try {
-      const params: Record<string, any> = {
-        page,
-        page_size: PAGE_SIZE,
-      };
-      if (filters.action) params.action = filters.action;
-      if (filters.status) params.status = filters.status;
-      if (filters.start_date) params.start_date = filters.start_date;
-      if (filters.end_date) params.end_date = filters.end_date;
-      if (filters.search) params.search = filters.search;
-
-      const { data } = await apiService.get<{
-        entries: AuditEntry[];
-        total: number;
-        page: number;
-        page_size: number;
-        has_more: boolean;
-      }>(`/v1/audit/${tenantId}`, { params });
+      const listParams = buildAuditParams(filters, page);
+      const statsParams = buildAuditParams(filters);
+      const [{ data }, statsResponse] = await Promise.all([
+        apiService.get<{
+          entries: AuditEntry[];
+          total: number;
+          page: number;
+          page_size: number;
+          has_more: boolean;
+        }>(`/v1/audit/${tenantId}`, { params: listParams }),
+        apiService.get<AuditStatsResponse>(`/v1/audit/${tenantId}/stats`, {
+          params: statsParams,
+        }),
+      ]);
 
       if (!mountedRef.current) return;
       setEntries(data.entries || []);
       setTotal(data.total || 0);
+      setStats(statsResponse.data || null);
       setError(null);
+      setLastSuccessAt(new Date());
+      setCurrentInterval(AUTO_REFRESH_INTERVAL);
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       setError(axiosErr.response?.data?.detail || 'Failed to load audit log');
       setEntries([]);
       setTotal(0);
+      setStats(null);
+      setCurrentInterval((interval) => Math.min(interval * 2, MAX_REFRESH_INTERVAL));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
   }, [tenantId, page, filters]);
 
+  const loadActions = useCallback(async () => {
+    try {
+      const { data } = await apiService.get<AuditActionsResponse>(`/v1/audit/${tenantId}/actions`);
+      if (!mountedRef.current) return;
+      const sortedActions = [...(data.actions || [])].sort((a, b) => b.count - a.count).slice(0, 100);
+      setActions(sortedActions);
+    } catch {
+      if (mountedRef.current) setActions([]);
+    }
+  }, [tenantId]);
+
   useEffect(() => {
     mountedRef.current = true;
-    if (isReady) loadData();
+    if (isReady) {
+      loadData();
+      loadActions();
+    }
     return () => {
       mountedRef.current = false;
     };
-  }, [isReady, loadData]);
+  }, [isReady, loadData, loadActions]);
 
   useEffect(() => {
     if (!isReady) return;
-    const interval = setInterval(loadData, AUTO_REFRESH_INTERVAL);
+    const interval = setInterval(loadData, currentInterval);
     return () => clearInterval(interval);
-  }, [isReady, loadData]);
+  }, [isReady, loadData, currentInterval]);
 
   const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true);
+    setShowExportMenu(false);
     try {
       const { data } = await apiService.get<string>(`/v1/audit/${tenantId}/export/${format}`, {
-        params: {
-          ...(filters.action && { action: filters.action }),
-          ...(filters.status && { status: filters.status }),
-          ...(filters.start_date && { start_date: filters.start_date }),
-          ...(filters.end_date && { end_date: filters.end_date }),
-        },
+        params: buildAuditParams(filters),
       });
       const blob = new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], {
         type: format === 'csv' ? 'text/csv' : 'application/json',
@@ -194,9 +280,15 @@ export function AuditLog() {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const successCount = entries.filter((e) => e.status === 'success').length;
-  const failureCount = entries.filter((e) => e.status === 'failure').length;
-  const uniqueActors = new Set(entries.map((e) => e.user_email || e.user_id)).size;
+  const successCount = stats?.success_count ?? entries.filter((e) => e.status === 'success').length;
+  const failureCount = stats?.failed_count ?? entries.filter((e) => e.status === 'failure').length;
+  const uniqueActors =
+    stats?.unique_actors ?? new Set(entries.map((e) => e.user_email || e.user_id).filter(Boolean)).size;
+  const totalEvents = stats?.total_events ?? total;
+  const statWindowSubtitle = formatWindowSubtitle(filters, stats);
+  const actionOptions =
+    actions.length > 0 ? actions : LEGACY_ACTION_OPTIONS.map((action) => ({ action, count: 0 }));
+  const retrySeconds = Math.ceil(currentInterval / 1000);
 
   return (
     <div className="space-y-6">
@@ -213,15 +305,46 @@ export function AuditLog() {
         </div>
         <div className="flex items-center gap-2">
           {canExport && (
-            <div className="relative">
+            <div className="relative flex" data-testid="audit-export-split">
               <button
                 onClick={() => handleExport('csv')}
                 disabled={exporting}
-                className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+                className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-l-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
               >
                 <Download className="h-4 w-4" />
-                Export
+                Export CSV
               </button>
+              <button
+                type="button"
+                aria-label="Export options"
+                aria-expanded={showExportMenu}
+                onClick={() => setShowExportMenu((open) => !open)}
+                disabled={exporting}
+                className="border-y border-r border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-2 py-2 rounded-r-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              {showExportMenu && (
+                <div
+                  data-testid="audit-export-menu"
+                  className="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExport('csv')}
+                    className="block w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                  >
+                    Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExport('json')}
+                    className="block w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                  >
+                    Export JSON
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <button
@@ -234,10 +357,17 @@ export function AuditLog() {
         </div>
       </div>
 
+      <div className="text-xs text-neutral-500 dark:text-neutral-400" data-testid="audit-refresh-status">
+        {lastSuccessAt ? `Last refreshed ${formatRelativeTime(lastSuccessAt)}` : 'Last refreshed pending'}
+      </div>
+
       {/* Error banner */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center justify-between">
-          <span className="text-sm">{error}</span>
+          <div className="text-sm">
+            <div className="font-medium">Refresh failed — retrying in {retrySeconds}s</div>
+            <div>{error}</div>
+          </div>
           <button
             onClick={() => setError(null)}
             className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
@@ -262,31 +392,31 @@ export function AuditLog() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
               label="Total Events"
-              value={total.toLocaleString()}
+              value={totalEvents.toLocaleString()}
               icon={ClipboardList}
               colorClass="text-blue-600"
-              subtitle="All audit entries"
+              subtitle={statWindowSubtitle}
             />
             <StatCard
               label="Successful"
               value={successCount}
               icon={Settings}
               colorClass="text-green-600"
-              subtitle="On this page"
+              subtitle={statWindowSubtitle}
             />
             <StatCard
               label="Failed"
               value={failureCount}
               icon={AlertTriangle}
               colorClass={failureCount > 0 ? 'text-red-600' : 'text-green-600'}
-              subtitle="On this page"
+              subtitle={statWindowSubtitle}
             />
             <StatCard
               label="Unique Actors"
               value={uniqueActors}
               icon={User}
               colorClass="text-blue-600"
-              subtitle="On this page"
+              subtitle={statWindowSubtitle}
             />
           </div>
 
@@ -333,13 +463,13 @@ export function AuditLog() {
                   }}
                   className="text-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg px-3 py-2"
                 >
-                  <option value="">All Actions</option>
-                  <option value="create">Create</option>
-                  <option value="update">Update</option>
-                  <option value="delete">Delete</option>
-                  <option value="deploy">Deploy</option>
-                  <option value="login">Login</option>
-                  <option value="access_denied">Access Denied</option>
+                  <option value="">All actions</option>
+                  {actionOptions.map(({ action, count }) => (
+                    <option key={action} value={action}>
+                      {formatActionLabel(action)}
+                      {count > 0 ? ` (${count})` : ''}
+                    </option>
+                  ))}
                 </select>
                 <select
                   value={filters.status || ''}
@@ -422,14 +552,34 @@ export function AuditLog() {
                                 )}
                               </td>
                               <td className="px-4 py-3 text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
-                                {formatTimestamp(entry.timestamp)}
+                                {formatTimestamp(entry.timestamp, locale)}
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                   <User className="h-3.5 w-3.5 text-neutral-400" />
-                                  <span className="text-neutral-900 dark:text-white">
-                                    {entry.user_email || entry.user_id || 'system'}
-                                  </span>
+                                  {entry.user_email ? (
+                                    <span className="text-neutral-900 dark:text-white">
+                                      {entry.user_email}
+                                    </span>
+                                  ) : entry.user_display_name ? (
+                                    <span className="text-neutral-900 dark:text-white">
+                                      {entry.user_display_name}
+                                    </span>
+                                  ) : entry.user_id ? (
+                                    <>
+                                      <span className="text-neutral-900 dark:text-white">
+                                        {entry.user_id}
+                                      </span>
+                                      <span
+                                        data-testid="actor-unresolved-badge"
+                                        className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300"
+                                      >
+                                        unresolved
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-neutral-900 dark:text-white">system</span>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-4 py-3">

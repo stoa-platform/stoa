@@ -141,9 +141,7 @@ function buildAuditParams(filters: AuditFilters, page?: number): Record<string, 
 }
 
 function formatActionLabel(action: string): string {
-  return action
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return action.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function formatWindowSubtitle(filters: AuditFilters, stats: AuditStatsResponse | null): string {
@@ -231,7 +229,9 @@ export function AuditLog() {
     try {
       const { data } = await apiService.get<AuditActionsResponse>(`/v1/audit/${tenantId}/actions`);
       if (!mountedRef.current) return;
-      const sortedActions = [...(data.actions || [])].sort((a, b) => b.count - a.count).slice(0, 100);
+      const sortedActions = [...(data.actions || [])]
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 100);
       setActions(sortedActions);
     } catch {
       if (mountedRef.current) setActions([]);
@@ -283,7 +283,8 @@ export function AuditLog() {
   const successCount = stats?.success_count ?? entries.filter((e) => e.status === 'success').length;
   const failureCount = stats?.failed_count ?? entries.filter((e) => e.status === 'failure').length;
   const uniqueActors =
-    stats?.unique_actors ?? new Set(entries.map((e) => e.user_email || e.user_id).filter(Boolean)).size;
+    stats?.unique_actors ??
+    new Set(entries.map((e) => e.user_email || e.user_id).filter(Boolean)).size;
   const totalEvents = stats?.total_events ?? total;
   const statWindowSubtitle = formatWindowSubtitle(filters, stats);
   const actionOptions =
@@ -357,8 +358,13 @@ export function AuditLog() {
         </div>
       </div>
 
-      <div className="text-xs text-neutral-500 dark:text-neutral-400" data-testid="audit-refresh-status">
-        {lastSuccessAt ? `Last refreshed ${formatRelativeTime(lastSuccessAt)}` : 'Last refreshed pending'}
+      <div
+        className="text-xs text-neutral-500 dark:text-neutral-400"
+        data-testid="audit-refresh-status"
+      >
+        {lastSuccessAt
+          ? `Last refreshed ${formatRelativeTime(lastSuccessAt)}`
+          : 'Last refreshed pending'}
       </div>
 
       {/* Error banner */}

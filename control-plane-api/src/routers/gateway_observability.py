@@ -8,9 +8,13 @@ Phase 2 (CAB-1635): per-tenant filtering, adapter operation metrics, health hist
 """
 
 import logging
+import os
+from datetime import UTC, datetime
+from typing import Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role
@@ -24,16 +28,85 @@ router = APIRouter(
     tags=["Gateway Observability"],
 )
 
+GuardrailsConfigSource = Literal["env", "runtime", "config-service"]
+TimeRange = Literal["1h", "6h", "24h", "7d"]
+
+
+class GuardrailsConfigResponse(BaseModel):
+    """Effective guardrails runtime/config state per PR-3A contract."""
+
+    pii_enabled: bool
+    injection_detection_enabled: bool
+    prompt_guard_enabled: bool
+    content_filter_enabled: bool
+    rate_limit_enabled: bool
+    opa_policy_enabled: bool
+    source: GuardrailsConfigSource
+    updated_at: datetime
+
 
 def _tenant_filter(user) -> str | None:
     """Return tenant_id for filtering: None for cpi-admin (sees all), user's tenant otherwise."""
     if "cpi-admin" in user.roles:
         return None
-    return user.tenant_id
+    return cast(str | None, user.tenant_id)
+
+
+def _read_bool_env(name: str) -> bool:
+    """Read a required boolean env value without guessing absent runtime state."""
+    raw = os.environ.get(name)
+    if raw is None:
+        raise HTTPException(status_code=503, detail=f"Guardrails config env missing: {name}")
+
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "disabled"}:
+        return False
+
+    raise HTTPException(status_code=503, detail=f"Guardrails config env invalid: {name}")
+
+
+def _read_rate_limit_enabled() -> bool:
+    """Read rate-limit enablement from explicit bool or numeric gateway default."""
+    if os.environ.get("STOA_RATE_LIMIT_ENABLED") is not None:
+        return _read_bool_env("STOA_RATE_LIMIT_ENABLED")
+
+    raw = os.environ.get("STOA_RATE_LIMIT_DEFAULT")
+    if raw is None:
+        raise HTTPException(status_code=503, detail="Guardrails config env missing: STOA_RATE_LIMIT_DEFAULT")
+
+    try:
+        return int(raw.strip()) > 0
+    except ValueError:
+        raise HTTPException(status_code=503, detail="Guardrails config env invalid: STOA_RATE_LIMIT_DEFAULT")
+
+
+def _guardrails_config_from_env() -> GuardrailsConfigResponse:
+    """Build the config response from gateway/control-plane visible env."""
+    return GuardrailsConfigResponse(
+        pii_enabled=_read_bool_env("STOA_GUARDRAILS_PII_ENABLED"),
+        injection_detection_enabled=_read_bool_env("STOA_GUARDRAILS_INJECTION_ENABLED"),
+        prompt_guard_enabled=_read_bool_env("STOA_PROMPT_GUARD_ENABLED"),
+        content_filter_enabled=_read_bool_env("STOA_GUARDRAILS_CONTENT_FILTER_ENABLED"),
+        rate_limit_enabled=_read_rate_limit_enabled(),
+        opa_policy_enabled=_read_bool_env("STOA_POLICY_ENABLED"),
+        source="env",
+        updated_at=datetime.now(UTC),
+    )
+
+
+@router.get("/guardrails/config", response_model=GuardrailsConfigResponse)
+async def get_guardrails_config(
+    user=Depends(require_role(["cpi-admin", "tenant-admin"])),
+) -> GuardrailsConfigResponse:
+    """Effective Guardrails config state for /observability/security."""
+    return _guardrails_config_from_env()
 
 
 @router.get("/metrics")
 async def get_aggregated_metrics(
+    time_range: TimeRange = Query("1h", alias="range"),
     db: AsyncSession = Depends(get_db),
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
@@ -42,13 +115,14 @@ async def get_aggregated_metrics(
     cpi-admin sees all gateways; tenant-admin sees only own tenant's gateways.
     """
     svc = GatewayMetricsService(db)
-    return await svc.get_aggregated_metrics(tenant_id=_tenant_filter(user))
+    return await svc.get_aggregated_metrics(tenant_id=_tenant_filter(user), time_range=time_range)
 
 
 @router.get("/metrics/guardrails/events")
 async def get_guardrails_events(
     limit: int = 50,
-    time_range_minutes: int = 60,
+    time_range: TimeRange = Query("1h", alias="range"),
+    time_range_minutes: int | None = None,
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Recent guardrails events (blocked, redacted, flagged) from OpenSearch spans.
@@ -62,10 +136,11 @@ async def get_guardrails_events(
         return {"events": [], "total": 0}
 
     tenant_id = _tenant_filter(user)
+    range_minutes = {"1h": 60, "6h": 360, "24h": 1440, "7d": 10080}[time_range]
 
     try:
         filters: list[dict] = [
-            {"range": {"startTime": {"gte": f"now-{time_range_minutes}m"}}},
+            {"range": {"startTime": {"gte": f"now-{time_range_minutes if time_range_minutes is not None else range_minutes}m"}}},
             {"term": {"name": "policy.guardrails"}},
             {"exists": {"field": "span.attributes.guardrails@action"}},
         ]
@@ -136,7 +211,7 @@ async def get_adapter_operation_metrics(
     Returns per-gateway-type: total_ops, success_rate, avg_latency_ms.
     cpi-admin only (process-wide metrics, not tenant-scoped).
     """
-    svc = GatewayMetricsService(db=None)  # type: ignore[arg-type]
+    svc = GatewayMetricsService(db=None)
     return svc.get_adapter_operation_metrics()
 
 

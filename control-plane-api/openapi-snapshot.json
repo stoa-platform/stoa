@@ -2370,6 +2370,17 @@
             ],
             "title": "User Email"
           },
+          "user_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Display Name"
+          },
           "user_id": {
             "anyOf": [
               {
@@ -2380,6 +2391,11 @@
               }
             ],
             "title": "User Id"
+          },
+          "user_resolved": {
+            "default": false,
+            "title": "User Resolved",
+            "type": "boolean"
           }
         },
         "required": [
@@ -29884,9 +29900,31 @@
             "title": "Page Size",
             "type": "integer"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
           }
         },
         "required": [

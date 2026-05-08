@@ -40,7 +40,7 @@ Restaurer la cohérence et la véracité des trois pages observability (`/observ
 | 7 | PR-1A6 | Activation A1b + post-activation evidence amend | MEGA-A | P0 | PR-1A5 reviewed + operator go | ⏳ stoa-infra #75 merged/activated; post-activation evidence amend pending |
 | 8 | PR-1B | Audit Log API + UI | MEGA-A | P0 | PR-1A6 PASS | blocked — post-activation evidence amend required |
 | 9 | PR-2 | Live Calls metric integrity | MEGA-B | P0 | PR-0 merged | ✅ #2727 merged |
-| 10 | PR-3 | Security & Guardrails runtime truth | MEGA-B | P1 | Annex B locked | blocked |
+| 10 | PR-3 | Security & Guardrails runtime truth | MEGA-B | P1 | PR-3A runtime-truth contract merged | blocked — contract drafted in `docs/plans/2026-05-10-guardrails-runtime-truth-contract.md` |
 | 11 | PR-4 | Navigation IA cleanup | MEGA-B | P2 | PR-3 merged | blocked |
 
 **Total estimated**: ~62 pts (MEGA-A grew to ~32pt/7 phases, MEGA-B 21pt/3 phases, PR-0 1pt).
@@ -178,7 +178,7 @@ Codex peut implémenter directement à partir de ce plan pour les PRs où la sur
 | PR-1A | No | Investigation-only, evidence pack format défini par checklist. |
 | PR-1B | **Yes** | New API endpoints + actor resolution + demo fallback semantics. Voir Annex A. |
 | PR-2 | Partial | PromQL evidence pack (PR-2 step 0) + data integrity rules dans le prompt. Pas de nouveau endpoint. |
-| PR-3 | **Yes** | New `/guardrails/config` endpoint + null/zero/stale/disabled/error semantics. Voir Annex B. |
+| PR-3 | **Yes** | New `/guardrails/config` endpoint + null/zero/stale/disabled/error semantics. Voir Annex B + `docs/plans/2026-05-10-guardrails-runtime-truth-contract.md`. |
 | PR-4 | Partial | Wording IA dépend de AR-1; pas de nouvelle surface API. |
 
 Une mini-spec doit fixer: shape request/response, sémantique d'état (null vs 0 vs disabled vs stale vs error), fallback behavior, acceptance criteria, tests obligatoires. Pas plus.
@@ -923,6 +923,7 @@ Changes:
 **MEGA**: B — Phase 2
 **Estimated**: 8 pts, ~250 LOC
 **Risk**: medium (depends on AR-1, AR-2)
+**Contract**: PR-3 implementation must follow `docs/plans/2026-05-10-guardrails-runtime-truth-contract.md`, which elaborates Annex B and preserves AR-1/AR-2.
 
 ## Goal
 
@@ -942,7 +943,7 @@ S2, S3, S4, S5 (couper le sous-titre), S8 (après AR-1), S9 (sidebar — délég
 ```
 You are working on STOA control-plane-api and control-plane-ui.
 
-PRECONDITION: read docs/plans/2026-05-07-observability-data-integrity.md (section 'Arbitrages requis'). If AR-1 (Security Posture vs Security & Guardrails) is not yet decided, STOP and request decision before proceeding.
+PRECONDITION: read docs/plans/2026-05-07-observability-data-integrity.md (section 'Arbitrages requis') and docs/plans/2026-05-10-guardrails-runtime-truth-contract.md. If AR-1 (Security Posture vs Security & Guardrails) is not yet decided, or if the PR-3A contract is missing/not validated, STOP and request decision before proceeding.
 
 Goal: make /observability/security display real runtime state.
 
@@ -1607,6 +1608,8 @@ Côté UI, exponential backoff sur erreur:
 # Annex B — Mini-spec: Guardrails runtime state contract (PR-3)
 
 **Lock this annex before PR-3 starts**. Bug racine actuel: `metrics?.guardrails?.pii_detections || 0` masque `null` en `0`. Cette annexe fixe les sémantiques pour empêcher la régression.
+
+**PR-3A implementation contract**: `docs/plans/2026-05-10-guardrails-runtime-truth-contract.md` elaborates this annex for implementation. It does not change the validated AR-1/AR-2 decisions above.
 
 ## Endpoints
 

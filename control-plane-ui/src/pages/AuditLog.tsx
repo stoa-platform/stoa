@@ -66,7 +66,20 @@ interface AuditFilters {
   search?: string;
 }
 
-interface AuditStatsResponse {
+interface AuditBackendMetadata {
+  source?: string | null;
+  warning?: string | null;
+}
+
+interface AuditListResponse extends AuditBackendMetadata {
+  entries: AuditEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+interface AuditStatsResponse extends AuditBackendMetadata {
   total_events: number;
   success_count: number;
   failed_count: number;
@@ -82,7 +95,7 @@ interface AuditActionCount {
   count: number;
 }
 
-interface AuditActionsResponse {
+interface AuditActionsResponse extends AuditBackendMetadata {
   actions: AuditActionCount[];
   window_start: string;
   window_end: string;
@@ -164,6 +177,10 @@ function formatRelativeTime(value: Date, now = new Date()): string {
   return `${elapsedHours} hr ago`;
 }
 
+function extractAuditNotice(...responses: AuditBackendMetadata[]): AuditBackendMetadata | null {
+  return responses.find((response) => response.source || response.warning) || null;
+}
+
 export function AuditLog() {
   const { user, isReady, hasRole } = useAuth();
   const { i18n } = useTranslation();
@@ -172,6 +189,10 @@ export function AuditLog() {
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<AuditStatsResponse | null>(null);
   const [actions, setActions] = useState<AuditActionCount[]>([]);
+  const [dataBackendNotice, setDataBackendNotice] = useState<AuditBackendMetadata | null>(null);
+  const [actionsBackendNotice, setActionsBackendNotice] = useState<AuditBackendMetadata | null>(
+    null
+  );
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,13 +214,7 @@ export function AuditLog() {
       const listParams = buildAuditParams(filters, page);
       const statsParams = buildAuditParams(filters);
       const [{ data }, statsResponse] = await Promise.all([
-        apiService.get<{
-          entries: AuditEntry[];
-          total: number;
-          page: number;
-          page_size: number;
-          has_more: boolean;
-        }>(`/v1/audit/${tenantId}`, { params: listParams }),
+        apiService.get<AuditListResponse>(`/v1/audit/${tenantId}`, { params: listParams }),
         apiService.get<AuditStatsResponse>(`/v1/audit/${tenantId}/stats`, {
           params: statsParams,
         }),
@@ -209,6 +224,7 @@ export function AuditLog() {
       setEntries(data.entries || []);
       setTotal(data.total || 0);
       setStats(statsResponse.data || null);
+      setDataBackendNotice(extractAuditNotice(data, statsResponse.data));
       setError(null);
       setLastSuccessAt(new Date());
       setCurrentInterval(AUTO_REFRESH_INTERVAL);
@@ -219,6 +235,7 @@ export function AuditLog() {
       setEntries([]);
       setTotal(0);
       setStats(null);
+      setDataBackendNotice(null);
       setCurrentInterval((interval) => Math.min(interval * 2, MAX_REFRESH_INTERVAL));
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -233,8 +250,12 @@ export function AuditLog() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 100);
       setActions(sortedActions);
+      setActionsBackendNotice(extractAuditNotice(data));
     } catch {
-      if (mountedRef.current) setActions([]);
+      if (mountedRef.current) {
+        setActions([]);
+        setActionsBackendNotice(null);
+      }
     }
   }, [tenantId]);
 
@@ -290,6 +311,8 @@ export function AuditLog() {
   const actionOptions =
     actions.length > 0 ? actions : LEGACY_ACTION_OPTIONS.map((action) => ({ action, count: 0 }));
   const retrySeconds = Math.ceil(currentInterval / 1000);
+  const backendNotice = dataBackendNotice || actionsBackendNotice;
+  const backendWarning = backendNotice?.warning || 'Audit backend unavailable';
 
   return (
     <div className="space-y-6">
@@ -380,6 +403,16 @@ export function AuditLog() {
           >
             &times;
           </button>
+        </div>
+      )}
+
+      {backendNotice && (
+        <div
+          data-testid="audit-backend-warning"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+        >
+          <div className="font-medium">{backendWarning}</div>
+          {backendNotice.source && <div className="mt-1">Source: {backendNotice.source}</div>}
         </div>
       )}
 

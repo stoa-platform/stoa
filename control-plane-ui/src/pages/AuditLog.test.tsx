@@ -222,6 +222,47 @@ describe('AuditLog', () => {
     expect(screen.getAllByText('Last 30 days')).toHaveLength(4);
   });
 
+  it('shows backend warning when audit responses come from demo fallback', async () => {
+    vi.useRealTimers();
+    mockGet.mockImplementation((url: unknown) => {
+      const path = String(url);
+      if (path.endsWith('/stats')) {
+        return Promise.resolve({
+          data: {
+            ...emptyStatsResponse,
+            source: 'demo',
+            warning: 'Audit backend unavailable',
+          },
+        });
+      }
+      if (path.endsWith('/actions')) {
+        return Promise.resolve({
+          data: {
+            ...emptyActionsResponse,
+            source: 'demo',
+            warning: 'Audit backend unavailable',
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          ...emptyListResponse,
+          source: 'demo',
+          warning: 'Audit backend unavailable',
+        },
+      });
+    });
+
+    render(<AuditLog />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('audit-backend-warning')).toHaveTextContent(
+        'Audit backend unavailable'
+      );
+      expect(screen.getByText('Source: demo')).toBeInTheDocument();
+    });
+  });
+
   it('actions endpoint populates filter dynamically by count', async () => {
     vi.useRealTimers();
     mockGet.mockImplementation((url: unknown) => {

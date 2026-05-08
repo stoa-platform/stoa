@@ -15,7 +15,7 @@ Restaurer la cohérence et la véracité des trois pages observability (`/observ
 
 ## Scope
 
-- **In**: 5 PRs séquencés données-d'abord (PR-0 quick wins, PR-1A/B audit log compliance, PR-2 live calls scope, PR-3 guardrails runtime, PR-4 nav IA).
+- **In**: PRs séquencés données-d'abord (PR-0 quick wins, PR-1A/A2/A3/A4/A5/A6/1B audit log compliance, PR-2 live calls scope, PR-3 guardrails runtime, PR-4 nav IA).
 - **Out**: pas de réécriture du pipeline OTel/Loki/Tempo/OpenSearch ; pas de migration schema `audit_events` ; pas de PII erasure UI ; pas de cross-tenant aggregation.
 
 ## Go / No-Go criteria
@@ -27,22 +27,23 @@ Restaurer la cohérence et la véracité des trois pages observability (`/observ
 
 ## TL;DR
 
-9 PRs, séquencés **données d'abord, polish ensuite**, regroupés en **2 MEGAs + 1 chore PR**. Updated 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATION_NOT_FOUND`.
+11 PR/work items, séquencés **données d'abord, polish ensuite**, regroupés en **2 MEGAs + 1 chore PR**. Updated 2026-05-08 after #2724/#2726/#2727/#2730/#2733/#2734 landed and the activation step moved to stoa-infra (#73/#75).
 
 | Order | PR | Type | MEGA | Priority | Blocked by | Status |
 |---|---|---|---|---|---|---|
 | 1 | PR-0 | Chore (cosmetic + 1 functional) | None | P0 | — | ✅ #2717 |
 | 2 | PR-1A | Investigation (no code) | MEGA-A | P0 | PR-0 merged | ✅ #2721 |
 | 3 | PR-1A2 | Consumer restore scope | MEGA-A | P0 | PR-1A complete | ✅ #2723 (Case C) |
-| 4 | PR-1A3 | Audit ingestion contract mini-spec (docs) | MEGA-A | P0 | PR-1A2 complete | ⏳ #2724 draft, awaiting validation |
-| 5 | PR-1A4 | Audit consumer implementation | MEGA-A | P0 | PR-1A3 merged | ⏳ NEXT after #2724 merged |
-| 6 | PR-1A5 | Verification evidence | MEGA-A | P0 | PR-1A4 deployed | blocked |
-| 7 | PR-1B | Audit Log API + UI | MEGA-A | P0 | PR-1A5 PASS verdict | blocked |
-| 8 | PR-2 | Live Calls metric integrity | MEGA-B | P0 | PR-0 merged | ⏳ ready |
-| 9 | PR-3 | Security & Guardrails runtime truth | MEGA-B | P1 | Annex B locked | blocked |
-| 10 | PR-4 | Navigation IA cleanup | MEGA-B | P2 | PR-3 merged | blocked |
+| 4 | PR-1A3 | Audit ingestion contract mini-spec (docs) | MEGA-A | P0 | PR-1A2 complete | ✅ #2724 (validated) |
+| 5 | PR-1A4 | Audit consumer implementation | MEGA-A | P0 | PR-1A3 merged | ✅ #2726 + corrective #2730 + test fix #2734; post-fix image deployed |
+| 6 | PR-1A5 | Verification evidence | MEGA-A | P0 | PR-1A4 deployed | ✅ #2733 (data-path PASS while enabled; disabled at end of test window) |
+| 7 | PR-1A6 | Activation A1b + post-activation evidence amend | MEGA-A | P0 | PR-1A5 reviewed + operator go | ⏳ stoa-infra #75 merged/activated; post-activation evidence amend pending |
+| 8 | PR-1B | Audit Log API + UI | MEGA-A | P0 | PR-1A6 PASS | blocked — post-activation evidence amend required |
+| 9 | PR-2 | Live Calls metric integrity | MEGA-B | P0 | PR-0 merged | ✅ #2727 merged |
+| 10 | PR-3 | Security & Guardrails runtime truth | MEGA-B | P1 | Annex B locked | blocked |
+| 11 | PR-4 | Navigation IA cleanup | MEGA-B | P2 | PR-3 merged | blocked |
 
-**Total estimated**: ~60 pts (MEGA-A grew to ~30pt/6 phases, MEGA-B 21pt/3 phases, PR-0 1pt).
+**Total estimated**: ~62 pts (MEGA-A grew to ~32pt/7 phases, MEGA-B 21pt/3 phases, PR-0 1pt).
 
 ---
 
@@ -104,18 +105,19 @@ The repository has Kafka audit **producers** (`emit_audit_event(...)` to `Topics
 
 This is a **contract ambiguity** that PR-1A3 must trancher avant que PR-1A4 implémente.
 
-**Impact**: building a consumer is **new ingestion architecture**, not a restore. PR-1A2 stays docs-only as designed (Case C). MEGA-A grows to **6 phases**:
+**Impact**: building a consumer is **new ingestion architecture**, not a restore. PR-1A2 stayed docs-only as designed (Case C). After the PR-1A4 activation incident, MEGA-A grew to **7 phases**:
 
 ```
 Phase 1 — PR-1A   Investigation (#2721 ✅)
 Phase 2 — PR-1A2  Consumer restore scope (#2723 ✅, Case C)
-Phase 3 — PR-1A3  Audit ingestion contract mini-spec (docs-only) — #2724 draft, awaiting validation
-Phase 4 — PR-1A4  Audit consumer implementation (backend + manifest) ← NEXT after #2724 merged
-Phase 5 — PR-1A5  Verification evidence (post-deploy proof)
-Phase 6 — PR-1B   Audit Log API + UI (gated on PR-1A5 signal)
+Phase 3 — PR-1A3  Audit ingestion contract mini-spec (docs-only) — #2724 ✅ validated
+Phase 4 — PR-1A4  Audit consumer implementation (backend + manifest) — #2726 ✅ + #2730/#2734 corrective
+Phase 5 — PR-1A5  Verification evidence — #2733 ✅ data-path PASS while enabled, caveat disabled after test
+Phase 6 — PR-1A6  Activation A1b + post-activation evidence amend — stoa-infra #75 merged, evidence amend pending
+Phase 7 — PR-1B   Audit Log API + UI (gated on PR-1A6 PASS)
 ```
 
-**PR-1B unblock signal** (canonical, ne pas dévier): at least one **non-chat** audit row appears in `/v1/audit/{tenant_id}` after a manual API mutation (e.g. tenant create or API create). PR-1A5 produces the evidence pack proving this.
+**PR-1B unblock signal** (canonical, ne pas dévier): at least one **non-chat** audit row appears in `/v1/audit/{tenant_id}` after a manual API mutation (e.g. tenant create or API create) **while the consumer is continuously enabled**. PR-1A5 proved the data path while enabled; PR-1A6 must amend the evidence after activation.
 
 ### PR-2 step 0 — Live Calls PromQL evidence (#2720 merged)
 
@@ -128,6 +130,39 @@ Current `stoa_http_requests_total` exposes `http_route` on **306/306** series, `
 **Impact**: the audit finding L2 ("path=unknown") was misdiagnosed. The cause is **the dashboard groups by the wrong label** (`path`), not a gateway emission bug. The `'unknown'` displayed comes from `usePrometheus.ts:161` fabricating a fallback when the queried label is absent.
 
 **Next**: PR-2 codex prompt updated below to use `http_route` as the canonical label everywhere. No gateway-side investigation required; `path` is simply not a current label on these metrics. Note for Top Routes histogram: confirm via the same evidence pack that `http_route` is exposed on the histogram metric (it is — 3627/3627).
+
+### PR-1A4 — Incident 2026-05-07: implementation merge with unsafe default
+
+Factual timeline:
+
+- 2026-05-07 18:39 UTC: #2726 merged with code default `ENABLE_AUDIT_TRAIL_CONSUMER` fallback `"true"` and `control-plane-api/k8s/deployment.yaml` env value `"true"`.
+- 18:49 UTC: stoa-infra image tag auto-bumped to the #2726 build by `github-actions[bot]` (~10 min after merge).
+- 18:50:36 UTC: ArgoCD sync rolled cp-api pods; consumer started in prod with no explicit chart-level gate.
+- 19:08 UTC: #2730 corrective merged (Python default `"true"` -> `"false"`, base manifest `"false"`, regression test added).
+- 19:23 UTC: stoa-infra #73 merged (chart values explicit `ENABLE_AUDIT_TRAIL_CONSUMER: "false"`).
+- 19:24:38 UTC: 1 audit event ingested (action=`export`, tenant=`demo`, id=`b9ca45fb-67b3-4823-98af-c198c3d68871`); schema valid, PII masking applied, `_kafka` metadata present. Volume = 1 row; no corruption.
+- 19:38 UTC: ArgoCD hard-refresh + auto-sync; pods rolling-restart with env override active; consumer effectively OFF.
+- 2026-05-08 06:18 UTC: #2730 main build hung 6h+ on `Run tests` (root cause: regression test used `importlib.reload(main)` which broke conftest patches; subsequent lifespan test attempted real Kafka connect, hung the runner). #2734 replaced the reload-based test with a static regex check; #2734 merged 06:30 UTC; main build succeeded; auto-bump fired ~07:00 UTC; ArgoCD synced; pods ran image post-fix `dev-1803ef125...` with double safety (code default `"false"` AND chart override `"false"`).
+
+Runbook violation: A1a was supposed to deploy disabled first, but auto-bump + auto-sync activated the consumer before the chart gate landed. Volume was contained (one verified row, no corruption), but this is process-correctable for future Kafka/PG-touching PRs.
+
+### Process notes — Kafka/PG PR safety gate
+
+Kafka/PG/data-path PRs require explicit operator go after reviewer flags risk, not just a review APPROVE.
+The #2726 -> #2730 -> #2734 sequence is the canonical case study.
+Safe rollout means code can merge with fail-closed defaults, but activation must be a separately controlled runtime step.
+If auto-bump + ArgoCD can activate the path, the chart gate must land before the code image can roll.
+
+## Activation A1b — staged rollout (stoa-infra #75 merged; post-activation evidence pending)
+
+Status note: the context that opened this plan-update still treated stoa-infra #75 as DRAFT/HOLD. GitHub verification on 2026-05-08 shows stoa-infra #75 was merged at 2026-05-08 07:40:34 UTC, and a read-only OVH prod check showed `ENABLE_AUDIT_TRAIL_CONSUMER="true"` on `stoa-control-plane-api` revision 517 with `audit-trail-pg-consumer` `STATE=Stable`, `MEMBERS=1`, `TOTAL-LAG=0`. This does **not** unblock PR-1B until the post-activation evidence amend is recorded.
+
+- Single change: `charts/control-plane-api/values.yaml` flips `ENABLE_AUDIT_TRAIL_CONSUMER` from `"false"` to `"true"`.
+- stoa-infra #75 was opened in **draft** explicitly; merge required explicit operator go.
+- Post-merge runbook is in the stoa-infra #75 PR body; do not duplicate it here.
+- Rollback path: open a follow-up PR flipping back to `"false"` and re-sync ArgoCD. Kafka retention 7 days mitigates short OFF windows.
+- Defense-in-depth: after activation, the consumer starts only if master gate `STOA_ENABLE_KAFKA_CONSUMERS` is effectively true in prod and chart override `=true`. The cp-api code default is `"false"` (#2730), which is a fail-closed last line of defense if the chart gate is removed.
+- After activation, evidence file `docs/audits/2026-05-09-audit-consumer-verification/findings.md` must be amended (or a follow-up file opened) with a verdict line like: `**VERDICT: PR-1B_UNBLOCKED — continuous ingestion verified <UTC timestamp>.**`
 
 ---
 
@@ -154,10 +189,10 @@ Une mini-spec doit fixer: shape request/response, sémantique d'état (null vs 0
 
 **Goal**: Garantir que `/audit-log` reflète la couverture DORA/NIS2 attendue (toutes les actions, pas seulement chat) et que l'UI ne ment pas sur l'état des données.
 
-**Estimated**: 21 pts (3 phases)
+**Estimated**: ~32 pts (7 phases)
 
 **Binary DoD**:
-- [ ] Production audit log retourne au moins une entrée non-`chat_*` après exercice manuel d'un emit path (ex: création API).
+- [ ] Production audit log retourne au moins une entrée non-`chat_*` après exercice manuel d'un emit path (ex: création API) **while the consumer is continuously enabled after A1b activation**.
 - [ ] Date filters fonctionnels (mapping UI→API correct).
 - [ ] KPIs (Total/Successful/Failed/Unique Actors) reflètent la fenêtre filtrée, pas la page courante.
 - [ ] Demo data désactivé en prod (sauf override env explicite).
@@ -420,10 +455,10 @@ Deliverable: a single markdown file. No code changes. PR description: "Investiga
 
 # PR-1B — Audit Log API + UI
 
-> ⛔ **BLOCKED — 2026-05-08, status reaffirmed 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATION_NOT_FOUND`.** Gating chain: PR-1A3 (mini-spec) → PR-1A4 (implementation) → PR-1A5 (verification evidence). **PR-1B starts only after PR-1A5 demonstrates that at least one non-chat audit row appears in `/v1/audit/{tenant_id}` post a manual API mutation in a real environment**. No exception, no early start "in parallel".
+> ⛔ **BLOCKED — 2026-05-08, status updated after PR-1A4 incident + A1b activation.** Gating chain: ✅ PR-1A3 (#2724 merged, validated) → ✅ PR-1A4 (#2726 merged + corrective #2730/#2734) → ✅ PR-1A5 (#2733 data-path PASS while enabled, caveat: disabled after test) → ✅ stoa-infra #75 activation merged 2026-05-08 07:40 UTC → ⏳ post-activation evidence amend showing continuous ingestion. **PR-1B starts only after the remaining ⏳ item demonstrates that at least one non-chat audit row is visible via `/v1/audit/{tenant_id}` after a manual API mutation in production while the consumer is continuously enabled**. No exception, no early start "in parallel".
 
 **Branch**: `feat/audit-log-coverage-and-ui`
-**MEGA**: A — Phase 6 (was Phase 3; PR-1A3/PR-1A4/PR-1A5 inserted)
+**MEGA**: A — Phase 7 (was Phase 3; PR-1A3/PR-1A4/PR-1A5/PR-1A6 inserted)
 **Estimated**: 13 pts, ~400 LOC (backend + frontend + tests)
 **Risk**: depends on PR-1A5 evidence
 
@@ -614,7 +649,7 @@ Commit message format: feat(api,ui): audit log compliance coverage + stats + act
 
 # PR-2 — Live Calls Metric Integrity (using `http_route`)
 
-> ✅ **Updated 2026-05-08 with PR-2 step 0 evidence (#2720 merged).** Investigation done. Cause is dashboard-side label mismatch (`path` vs `http_route`), not a gateway emission bug. Use `http_route` as canonical route label. No Rust gateway change required. Heatmap synthetic block removed (AR-6).
+> ✅ **Merged #2727 on 2026-05-07.** PR-2 step 0 evidence (#2720) showed the cause was dashboard-side label mismatch (`path` vs `http_route`), not a gateway emission bug. #2727 migrated Live Calls to `http_route`, aligned metric scope, removed the synthetic heatmap, and kept the real heatmap as a deferred non-blocking follow-up.
 
 **Branch**: `fix/live-calls-http-route-metric-integrity`
 **MEGA**: B — Phase 1
@@ -1111,22 +1146,23 @@ Commit message: chore(ui): observability sidebar cleanup — remove legacy redir
 
 # Linear ticket structure (proposed)
 
-Updated 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATION_NOT_FOUND`. MEGA-A grew to 6 phases.
+Updated 2026-05-08 after PR-1A4 incident, PR-1A5 evidence (#2733), and A1b activation state. MEGA-A grew to 7 phases.
 
 ```
 [Standalone chore — DONE]
 └── PR-0 — Observability quick wins (1pt) — #2717 merged 2026-05-07
 
-[MEGA-A: Audit Log Data Integrity] (~30pt, 6 phases)
+[MEGA-A: Audit Log Data Integrity] (~32pt, 7 phases)
 ├── Phase 1 — PR-1A   Investigation (3pt) — #2721 merged 2026-05-08, BLOCKED verdict
 ├── Phase 2 — PR-1A2  Consumer restore scope (1pt) — #2723 merged 2026-05-08, Case C
-├── Phase 3 — PR-1A3  Audit ingestion contract mini-spec (3pt, docs-only) — #2724 draft, awaiting validation
-├── Phase 4 — PR-1A4  Audit consumer implementation (8pt, backend + manifest) ← NEXT after #2724 merged
-├── Phase 5 — PR-1A5  Verification evidence (2pt, post-deploy proof)
-└── Phase 6 — PR-1B   Audit Log API + UI (13pt, gated on PR-1A5 signal)
+├── Phase 3 — PR-1A3  Audit ingestion contract mini-spec (3pt, docs-only) — #2724 merged, validated
+├── Phase 4 — PR-1A4  Audit consumer implementation (8pt, backend + manifest) — #2726 + #2730/#2734 corrective, image deployed
+├── Phase 5 — PR-1A5  Verification evidence (2pt, post-deploy proof) — #2733 data-path PASS, caveat continuous ingestion was off
+├── Phase 6 — PR-1A6  Activation A1b + post-activation evidence amend (2pt) — stoa-infra #75 chart flip merged; evidence amend pending
+└── Phase 7 — PR-1B   Audit Log API + UI (13pt, gated on PR-1A6 PASS)
 
 [MEGA-B: Runtime Observability Data Integrity] (21pt, 3 phases)
-├── Phase 1 — PR-2 Live Calls metric integrity (8pt) — codex prompt updated for `http_route` after #2720
+├── Phase 1 — PR-2 Live Calls metric integrity (8pt) — #2727 merged
 ├── Phase 2 — PR-3 Security & Guardrails runtime truth (8pt, BLOCKED on Annex B)
 └── Phase 3 — PR-4 Sidebar IA cleanup (5pt, BLOCKED on AR-1+PR-3)
 ```
@@ -1135,15 +1171,15 @@ Updated 2026-05-08 after PR-1A2 (#2723) confirmed Case C `CONSUMER_IMPLEMENTATIO
 
 **Status**: ✅ Merged #2723 on 2026-05-08. Verdict `CONSUMER_IMPLEMENTATION_NOT_FOUND` (Case C). Evidence: `docs/audits/2026-05-08-audit-consumer-restore/scoping.md`.
 
-The repository contains Kafka audit producers and 5 generic consumer patterns, but no audit consumer implementation that persists `stoa.audit.trail`/`audit-log`/`stoa.audit.events` into PostgreSQL `audit_events`. Building a consumer is **new ingestion architecture, not a restore** — hence the explicit insertion of PR-1A3 (mini-spec) → PR-1A4 (implementation) → PR-1A5 (verification) before PR-1B can start.
+At PR-1A2 time, the repository contained Kafka audit producers and 5 generic consumer patterns, but no audit consumer implementation that persisted `stoa.audit.trail`/`audit-log`/`stoa.audit.events` into PostgreSQL `audit_events`. Building a consumer was **new ingestion architecture, not a restore** — hence the explicit insertion of PR-1A3 (mini-spec) -> PR-1A4 (implementation) -> PR-1A5 (verification), later extended with PR-1A6 (activation + post-activation evidence amend) before PR-1B can start.
 
 The codex prompt that produced this PR is preserved in git history (commit on `fix/audit-consumer-restore` branch, merged squash). It is no longer reproduced in this plan to avoid redundancy.
 
-## PR-1A3 — Audit ingestion contract mini-spec (DONE, draft)
+## PR-1A3 — Audit ingestion contract mini-spec (DONE, validated)
 
-**Status**: ⏳ Draft #2724 produced by codex on 2026-05-08, awaiting validation. Output:
+**Status**: ✅ Merged #2724 on 2026-05-07, validated. Output:
 `docs/plans/2026-05-08-audit-consumer-ingestion-contract.md`
-(frontmatter `validation_status: draft`).
+(frontmatter `validation_status: validated`).
 
 **Scope shipped** (covers and extends the 8 sections originally planned):
 
@@ -1156,7 +1192,7 @@ The codex prompt that produced this PR is preserved in git history (commit on `f
 | Idempotency | `event.id` → `audit_events.id`; duplicate = no-op (commit offset). |
 | Failure / DLQ | DLQ topic `stoa.audit.trail.dlq`, retry capped 60s, no auto-commit, schema/programming errors do not DLQ. |
 | Observability | 6 named Prometheus metrics, structured log fields specified, 3 alert intents. |
-| Deployment model | (a) In-process worker in cp-api, gated by `STOA_ENABLE_KAFKA_CONSUMERS` master + `ENABLE_AUDIT_TRAIL_CONSUMER` per-consumer (default true). |
+| Deployment model | (a) In-process worker in cp-api, gated by `STOA_ENABLE_KAFKA_CONSUMERS` master + `ENABLE_AUDIT_TRAIL_CONSUMER` per-consumer. Mini-spec default was `true`; #2730 corrected implementation default to fail-closed `"false"` after the PR-1A4 incident. |
 | Backfill | `earliest` on first deploy; no PG/OpenSearch/log-based backfill; no replay older than Kafka retention. |
 
 **Bonus content not in original prompt** (worth keeping):
@@ -1167,16 +1203,18 @@ The codex prompt that produced this PR is preserved in git history (commit on `f
 - Verification SQL + `rpk` commands ready to copy.
 - 5 open questions deferred (audit-log deletion, AUDIT_EVENTS deprecation, separate Deployment, future producer fields, DLQ retention).
 
-**Validation gate**: review #2724, optionally request adjustments, flip frontmatter `validation_status: draft → validated`, mark PR ready for review, merge. Only then PR-1A4 can start.
+**Validation gate**: completed by #2724; PR-1A4 was unblocked after merge.
 
 **No new codex prompt is needed for PR-1A3** — codex has already produced the deliverable. The original prompt that drove it is preserved in git history on the `docs/audit-consumer-ingestion-contract` branch.
 
-## PR-1A4 — Audit consumer implementation (NEW phase, backend + manifest)
+## PR-1A4 — Audit consumer implementation (DONE, backend + manifest)
 
 **Branch**: `feat/audit-consumer-implementation`
 **MEGA**: A — Phase 4
 **Estimated**: 8 pts, ~400 LOC (Python consumer + Helm/k8s + tests)
 **Risk**: medium (new runtime workload + production data path)
+
+**Status**: ✅ #2726 merged 2026-05-07 18:39 UTC. Corrective #2730 merged 19:08 UTC to change code/base-manifest default from `"true"` to `"false"`. Test fix #2734 merged 2026-05-08 06:30 UTC to replace the `importlib.reload(main)` regression test that hung CI. Post-fix image `dev-1803ef125...` deployed to OVH prod.
 
 ### Goal
 
@@ -1190,11 +1228,11 @@ Branch: `feat/audit-consumer-implementation`
 
 Context:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md  (PR-1A3)
+- Mini-spec: docs/plans/2026-05-08-audit-consumer-ingestion-contract.md  (PR-1A3)
 - PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
 - PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
 
-PRECONDITION: read docs/specs/2026-05-08-audit-ingestion-contract.md first. If the mini-spec is not on main yet, STOP and request that PR-1A3 be merged before proceeding.
+PRECONDITION: read docs/plans/2026-05-08-audit-consumer-ingestion-contract.md first. If the mini-spec is not on main yet, STOP and request that PR-1A3 be merged before proceeding.
 
 Goal: implement the audit consumer per the mini-spec.
 
@@ -1213,7 +1251,7 @@ Tasks:
    - Persist to PostgreSQL audit_events with ON CONFLICT (id) DO NOTHING semantics per the mini-spec.
 
 2. Wire startup gate
-   - Add `ENABLE_AUDIT_CONSUMER` env var (default false in code, true via deployment manifest).
+   - Add `ENABLE_AUDIT_TRAIL_CONSUMER` env var (fail-closed default false after #2730; activation via chart values only).
    - Update control-plane-api/src/main.py to start the audit consumer task when the gate is on.
    - Update tests/test_regression_kafka_boot.py to include the new consumer flag.
 
@@ -1224,7 +1262,7 @@ Tasks:
    - Structured log on every consume cycle (count, last offset).
 
 4. Helm/Kubernetes manifest
-   - Either (a) add ENABLE_AUDIT_CONSUMER=true to existing cp-api Deployment env, or
+   - Either (a) add ENABLE_AUDIT_TRAIL_CONSUMER=true to existing cp-api Deployment env, or
      (b) add a separate Deployment for stoa-audit-consumer.
    - Match the mini-spec deployment-model decision.
    - Manifest path: charts/stoa-platform/templates/... or control-plane-api/k8s/...
@@ -1239,7 +1277,7 @@ Tests required:
 - Unit test: idempotency — same envelope.id processed twice does NOT insert twice.
 - Unit test: malformed envelope → DLQ + WARN log, no exception bubbles.
 - Integration test: consumer registers on topic, commits offset (skip if --integration not enabled).
-- Regression test: tests/test_regression_kafka_boot.py asserts ENABLE_AUDIT_CONSUMER is in the startup flag list.
+- Regression test: tests/test_regression_kafka_boot.py asserts ENABLE_AUDIT_TRAIL_CONSUMER is fail-closed by default and only enables with explicit env.
 
 Acceptance criteria:
 - [ ] Consumer subscribes to canonical topic (mini-spec).
@@ -1262,14 +1300,14 @@ PR title: feat(api,infra): audit consumer implementation
 
 PR body must reference:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md
+- Mini-spec: docs/plans/2026-05-08-audit-consumer-ingestion-contract.md
 - Deployment model chosen (a or b from mini-spec) with one-line justification.
 ```
 
 ### Acceptance criteria (binary)
 
 - [ ] Consumer code in `control-plane-api/src/consumers/...` per mini-spec.
-- [ ] `ENABLE_AUDIT_CONSUMER` env var wired (main.py + boot regression test).
+- [x] `ENABLE_AUDIT_TRAIL_CONSUMER` env var wired (main.py + boot regression test; default corrected to `"false"` by #2730).
 - [ ] Manifest deployable (helm template / kubectl --dry-run pass).
 - [ ] Idempotency proven by unit test.
 - [ ] DLQ on failure proven by unit test.
@@ -1291,12 +1329,14 @@ PR body must reference:
 - Production data write path — coordinate with infra for first deploy.
 - Backfill window: monitor consumer lag closely after deploy.
 
-## PR-1A5 — Verification evidence (NEW phase, post-deploy proof)
+## PR-1A5 — Verification evidence (DONE, post-deploy proof)
 
-**Branch**: `docs/audit-ingestion-verification-2026-05-XX`
+**Branch**: `docs/audit-consumer-runtime-verification`
 **MEGA**: A — Phase 5
 **Estimated**: 2 pts, docs-only (evidence pack)
 **Risk**: low (read-only, post-deploy verification)
+
+**Status**: ✅ #2733 merged 2026-05-08. Data-path PASS while the consumer was enabled: event `b9ca45fb-67b3-4823-98af-c198c3d68871` advanced Kafka offset `30018 -> 30019`, persisted into `audit_events`, and appeared in `/v1/audit/demo`. Caveat: consumer was disabled by config at the end of the evidence window; PR-1B remains blocked until PR-1A6 post-activation evidence confirms continuous ingestion while enabled.
 
 ### Goal
 
@@ -1311,7 +1351,7 @@ Branch: `docs/audit-ingestion-verification-2026-05-XX` (replace XX with actual d
 
 Context:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md (PR-1A3)
+- Mini-spec: docs/plans/2026-05-08-audit-consumer-ingestion-contract.md (PR-1A3)
 - Implementation: PR-1A4 merged + deployed to OVH prod
 
 Goal: prove the consumer is operational and produce an evidence pack at
@@ -1349,7 +1389,7 @@ Document the JSON output (sanitize tenant secrets).
 ## 5. Verdict
 - PASS / FAIL with evidence.
 - If FAIL: describe what was missing (lag stuck, audit_events not incremented, action absent in /v1/audit).
-- If PASS: PR-1B is now unblocked. Update plan section "PR-1B BLOCKED notice" to reflect.
+- If PASS while consumer is continuously enabled after A1b activation: PR-1B is now unblocked. Update plan section "PR-1B BLOCKED notice" to reflect.
 
 DO NOT:
 - Mutate production data beyond the single test mutation.
@@ -1372,7 +1412,7 @@ PR title: same as commit message.
 
 PR body must reference:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Mini-spec: docs/specs/2026-05-08-audit-ingestion-contract.md
+- Mini-spec: docs/plans/2026-05-08-audit-consumer-ingestion-contract.md
 - Implementation: PR-1A4 (link)
 - Verdict: PASS / FAIL.
 ```
@@ -1383,12 +1423,11 @@ PR body must reference:
 - [ ] Single manual mutation documented and cleaned up.
 - [ ] Consumer activity proven (lag dropped, audit_events incremented, /v1/audit returns the row).
 - [ ] Verdict PASS or FAIL.
-- [ ] **PASS** unblocks PR-1B; **FAIL** keeps PR-1B blocked and triggers a follow-up on PR-1A4.
+- [ ] **PASS after A1b continuous-ingestion check** unblocks PR-1B; **FAIL** keeps PR-1B blocked and triggers a follow-up on PR-1A4/PR-1A6.
 
 ### Files probably touched
 
-- `docs/audits/2026-05-XX-audit-ingestion-verification/proof.md` (new)
-- `docs/audits/2026-05-XX-audit-ingestion-verification/raw/*.txt` (sanitized kubectl outputs)
+- `docs/audits/2026-05-09-audit-consumer-verification/findings.md` (new evidence pack in #2733)
 - (no source change)
 
 ### Risk + dependencies
@@ -1397,9 +1436,40 @@ PR body must reference:
 - Requires kubeconfig OVH prod read-only + a usable CPI Admin token for `/v1/audit/{tenant_id}` HTTP probe.
 - Test mutation must be cleaned up after evidence is captured (delete the test tenant/API/deployment).
 
+## PR-1A6 — Activation A1b + post-activation evidence amend (NEW phase)
+
+**Branch**: stoa-infra #75 for chart flip; follow-up stoa docs branch for evidence amend
+**MEGA**: A — Phase 6
+**Estimated**: 2 pts (1pt chart flip + 1pt evidence amend)
+**Risk**: low/medium (runtime activation of already-implemented Kafka -> PostgreSQL consumer)
+
+### Goal
+
+Activate `ENABLE_AUDIT_TRAIL_CONSUMER` through the prod-effective stoa-infra chart values, then amend the STOA evidence pack to prove continuous ingestion while enabled. This phase is the new PR-1B gate after the PR-1A4 unsafe-default incident.
+
+### Scope
+
+- stoa-infra #75 chart flip: `charts/control-plane-api/values.yaml` changes `ENABLE_AUDIT_TRAIL_CONSUMER` from `"false"` to `"true"`.
+- stoa evidence amend: update `docs/audits/2026-05-09-audit-consumer-verification/findings.md` or add a follow-up evidence file.
+- Evidence must include the same signal as PR-1A5, but after activation: group `audit-trail-pg-consumer` `STATE=Stable`, `MEMBERS>=1`, acceptable lag, a controlled non-chat mutation, PostgreSQL row, and `/v1/audit/{tenant_id}` visibility.
+
+### Current status
+
+- stoa-infra #75 was originally DRAFT/HOLD with explicit operator-go requirement.
+- Verified 2026-05-08: #75 is merged and prod Deployment renders `ENABLE_AUDIT_TRAIL_CONSUMER="true"`.
+- Read-only prod check during this plan update: image `dev-1803ef125...`, group `audit-trail-pg-consumer` `STATE=Stable`, `MEMBERS=1`, `TOTAL-LAG=0`, offset `30054`.
+- The evidence amend is still pending; PR-1B remains blocked until the amend records `PR-1B_UNBLOCKED`.
+
+### Acceptance criteria
+
+- [x] stoa-infra #75 merged after explicit operator go.
+- [x] Prod Deployment renders `ENABLE_AUDIT_TRAIL_CONSUMER="true"`.
+- [ ] Evidence pack amended with `**VERDICT: PR-1B_UNBLOCKED — continuous ingestion verified <UTC timestamp>.**`
+- [ ] The amended evidence shows a non-`chat_*` row visible via `/v1/audit/{tenant_id}` after a manual API mutation while the consumer is continuously enabled.
+
 # Sequencing (real timeline)
 
-Updated 2026-05-08 after PR-1A2 #2723 confirmed Case C. MEGA-A audit chain became 6 phases instead of 2.
+Updated 2026-05-08 after PR-1A4 incident, #2733 evidence, and A1b activation state. MEGA-A audit chain is now 7 phases instead of 2.
 
 ```
 Day 0 — 2026-05-07 (DONE):
@@ -1410,28 +1480,31 @@ Day 0 — 2026-05-07 (DONE):
   - PR-1A audit ingestion findings (#2721 merged 14:54 UTC).
   - Plan investigation results update (#2722 merged 16:55 UTC).
   - PR-1A2 audit consumer restore scope (#2723 merged 17:23 UTC, Case C).
+  - PR-1A3 audit consumer ingestion contract (#2724 merged 17:49 UTC, validated).
+  - PR-2 Live Calls http_route migration (#2727 merged 18:27 UTC).
+  - PR-1A4 audit consumer implementation (#2726 merged 18:39 UTC).
+  - Incident: #2726 image auto-bumped and consumer started at 18:50:36 UTC before chart gate landed.
+  - Corrective #2730 default false merged 19:08 UTC.
+  - stoa-infra #73 explicit chart gate=false merged 19:23 UTC; ArgoCD disabled consumer by ~19:38 UTC.
 
-Day 1 — 2026-05-08 (NOW):
-  - This plan-update PR (#2725) acknowledges PR-1A3 already shipped as draft #2724.
-  - Validate #2724 mini-spec, flip frontmatter validated, mark ready, merge.
-  - PR-2 Live Calls http_route migration can run in parallel (no MEGA-A dependency).
+Day 1 — 2026-05-08 (DONE/PENDING):
+  - #2734 replaced the reload-based regression test; main build succeeded.
+  - #2733 PR-1A5 evidence pack merged 07:30 UTC: data-path PASS while enabled, caveat disabled at end of test window.
+  - stoa-infra #75 A1b activation merged 07:40 UTC; read-only check shows prod env `ENABLE_AUDIT_TRAIL_CONSUMER="true"` and group `audit-trail-pg-consumer` Stable/lag 0.
+  - PENDING: PR-1A6 evidence amend with `PR-1B_UNBLOCKED` verdict after manual non-chat mutation while consumer remains enabled.
 
-Day 2-4:
-  - PR-1A4 consumer implementation (~2 days, codex backend + manifest, then deploy + smoke).
-  - PR-2 lands.
+Day 2:
+  - If PR-1A6 evidence amend PASS: PR-1B can start.
+  - If PR-1A6 evidence amend FAIL: keep PR-1B blocked and open corrective follow-up.
 
-Day 5:
-  - PR-1A5 verification evidence (post PR-1A4 deploy + 1 manual API mutation, ~1h).
-  - PR-1A5 PASS verdict unblocks PR-1B.
-
-Day 6-8:
+Day 3-5:
   - PR-1B audit log API + UI (~2 days).
   - PR-3 guardrails runtime truth (parallel after Annex B locked).
 
-Day 9:
+Day 6:
   - PR-4 nav IA cleanup.
 
-Total: ~2 sprint weeks for the full chain. PR-2 is independent and can ship Day 1 if MEGA-B needs forward motion while MEGA-A iterates.
+Total: still roughly ~2 sprint weeks for the full chain. PR-2 already shipped; MEGA-A is now blocked only on PR-1A6 post-activation evidence before PR-1B.
 ```
 
 # Annex A — Mini-spec: Audit Log API contract (PR-1B)

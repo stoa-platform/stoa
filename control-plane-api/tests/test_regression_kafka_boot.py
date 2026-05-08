@@ -56,36 +56,36 @@ def test_per_consumer_flags_respect_master_gate() -> None:
         ), f"{flag} must AND with KAFKA_CONSUMERS_ENABLED so the master gate turns it off."
 
 
-def test_audit_trail_consumer_safe_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression: ENABLE_AUDIT_TRAIL_CONSUMER must default to False even when
-    the master gate is on. The consumer is opt-in per environment to give
-    rollouts an explicit gate after PR-1A4 lands the Kafka -> PG sink.
+def test_audit_trail_consumer_safe_by_default() -> None:
+    """Regression: src/main.py must default ENABLE_AUDIT_TRAIL_CONSUMER to "false"
+    so the audit Kafka -> PG consumer is opt-in per environment.
+
+    Static check on the source: importlib.reload(main) caused CI hangs because
+    conftest.py mocks several services in src.main via patch.object(...).start(),
+    and reloading drops those patches; subsequent lifespan tests then attempted
+    real Kafka connections. This static check covers the same intent without
+    touching module state.
     """
-    monkeypatch.setenv("STOA_ENABLE_KAFKA_CONSUMERS", "true")
-    monkeypatch.delenv("ENABLE_AUDIT_TRAIL_CONSUMER", raising=False)
+    import re
+    from pathlib import Path
 
-    import importlib
-
-    from src import main
-
-    importlib.reload(main)
-    try:
-        assert main.KAFKA_CONSUMERS_ENABLED is True
-        assert main.ENABLE_AUDIT_TRAIL_CONSUMER is False, (
-            "ENABLE_AUDIT_TRAIL_CONSUMER must default to False — environments must opt in explicitly. "
-            "See docs/plans/2026-05-08-audit-consumer-ingestion-contract.md."
-        )
-
-        monkeypatch.setenv("ENABLE_AUDIT_TRAIL_CONSUMER", "true")
-        importlib.reload(main)
-        assert main.ENABLE_AUDIT_TRAIL_CONSUMER is True, (
-            "ENABLE_AUDIT_TRAIL_CONSUMER=true with master gate on must enable the consumer."
-        )
-    finally:
-        # Restore module state so subsequent tests see the conftest.py defaults.
-        monkeypatch.delenv("ENABLE_AUDIT_TRAIL_CONSUMER", raising=False)
-        monkeypatch.setenv("STOA_ENABLE_KAFKA_CONSUMERS", "false")
-        importlib.reload(main)
+    main_py = (Path(__file__).resolve().parent.parent / "src" / "main.py").read_text()
+    pattern = re.compile(
+        r"ENABLE_AUDIT_TRAIL_CONSUMER\s*=\s*\(\s*"
+        r"KAFKA_CONSUMERS_ENABLED\s+and\s+"
+        r'os\.getenv\(\s*"ENABLE_AUDIT_TRAIL_CONSUMER"\s*,\s*"(?P<default>[^"]+)"\s*\)'
+        r"\s*\.\s*lower\(\)\s*==\s*\"true\"\s*\)",
+    )
+    match = pattern.search(main_py)
+    assert match is not None, (
+        "ENABLE_AUDIT_TRAIL_CONSUMER expression in src/main.py does not match the expected shape. "
+        "Update this regression if the formula changed, but keep the safe default invariant."
+    )
+    assert match.group("default") == "false", (
+        f'src/main.py defaults ENABLE_AUDIT_TRAIL_CONSUMER to "{match.group("default")}". '
+        'It must default to "false" — environments opt in explicitly via stoa-infra Helm values. '
+        "See docs/plans/2026-05-08-audit-consumer-ingestion-contract.md."
+    )
 
 
 def test_app_lifespan_emits_no_kafka_errors(caplog: pytest.LogCaptureFixture) -> None:

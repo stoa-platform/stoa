@@ -27,9 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user, require_tenant_access
 from ..auth.rbac import require_role
+from ..config import settings
 from ..database import get_db
 from ..opensearch.opensearch_integration import OpenSearchService
-from ..services.audit_service import AuditService
+from ..services.audit_service import AuditService, resolve_actor
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ class AuditEntry(BaseModel):
     tenant_id: str
     user_id: str | None
     user_email: str | None
+    user_display_name: str | None = None
+    user_resolved: bool = False
     action: str
     resource_type: str
     resource_id: str | None
@@ -67,6 +70,40 @@ class AuditListResponse(BaseModel):
     page: int
     page_size: int
     has_more: bool
+    source: str | None = None
+    warning: str | None = None
+
+
+class AuditStatsResponse(BaseModel):
+    """Response for audit statistics endpoint."""
+
+    total_events: int
+    success_count: int
+    failed_count: int
+    unique_actors: int
+    by_action: dict[str, int]
+    by_status: dict[str, int]
+    window_start: datetime
+    window_end: datetime
+    source: str | None = None
+    warning: str | None = None
+
+
+class AuditActionCount(BaseModel):
+    """Distinct audit action count."""
+
+    action: str
+    count: int
+
+
+class AuditActionsResponse(BaseModel):
+    """Response for audit action filter endpoint."""
+
+    actions: list[AuditActionCount]
+    window_start: datetime
+    window_end: datetime
+    source: str | None = None
+    warning: str | None = None
 
 
 class SecurityEvent(BaseModel):
@@ -187,6 +224,173 @@ def _init_demo_data():
         )
 
 
+DEMO_SOURCE = "demo"
+DEMO_WARNING = "Audit backend unavailable"
+
+
+def _audit_demo_fallback_enabled() -> bool:
+    return bool(settings.audit_demo_fallback_enabled)
+
+
+def _empty_audit_list_response(page: int, page_size: int) -> AuditListResponse:
+    return AuditListResponse(entries=[], total=0, page=page, page_size=page_size, has_more=False)
+
+
+def _stats_window(
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    window_end = end_date or datetime.now(UTC)
+    window_start = start_date or (window_end - timedelta(days=30))
+    return window_start, window_end
+
+
+def _filter_demo_audit_entries(
+    tenant_id: str,
+    *,
+    action: str | None = None,
+    status: str | None = None,
+    resource_type: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    search: str | None = None,
+) -> list[dict[str, Any]]:
+    entries = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
+
+    if action:
+        entries = [e for e in entries if e["action"] == action]
+    if status:
+        entries = [e for e in entries if e["status"] == status]
+    if resource_type:
+        entries = [e for e in entries if e["resource_type"] == resource_type]
+    if start_date:
+        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) >= start_date]
+    if end_date:
+        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) <= end_date]
+    if search:
+        needle = search.lower()
+        entries = [
+            e
+            for e in entries
+            if any(
+                needle in str(e.get(field) or "").lower()
+                for field in ("action", "resource_type", "resource_id", "user_id", "user_email", "request_id")
+            )
+        ]
+
+    return entries
+
+
+def _demo_audit_list_response(
+    tenant_id: str,
+    *,
+    page: int,
+    page_size: int,
+    action: str | None = None,
+    status: str | None = None,
+    resource_type: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    search: str | None = None,
+) -> AuditListResponse:
+    _init_demo_data()
+    entries = _filter_demo_audit_entries(
+        tenant_id,
+        action=action,
+        status=status,
+        resource_type=resource_type,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+    )
+
+    total = len(entries)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_entries = entries[start_idx:end_idx]
+
+    return AuditListResponse(
+        entries=[AuditEntry(**e) for e in page_entries],
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_more=end_idx < total,
+        source=DEMO_SOURCE,
+        warning=DEMO_WARNING,
+    )
+
+
+def _demo_audit_stats_response(
+    tenant_id: str,
+    *,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    action: str | None = None,
+    status: str | None = None,
+    resource_type: str | None = None,
+    search: str | None = None,
+) -> AuditStatsResponse:
+    window_start, window_end = _stats_window(start_date=start_date, end_date=end_date)
+    _init_demo_data()
+    entries = _filter_demo_audit_entries(
+        tenant_id,
+        action=action,
+        status=status,
+        resource_type=resource_type,
+        start_date=window_start,
+        end_date=window_end,
+        search=search,
+    )
+
+    by_action: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    actor_ids: set[str] = set()
+    for entry in entries:
+        by_action[entry["action"]] = by_action.get(entry["action"], 0) + 1
+        by_status[entry["status"]] = by_status.get(entry["status"], 0) + 1
+        if entry.get("user_id"):
+            actor_ids.add(entry["user_id"])
+
+    by_action = dict(sorted(by_action.items(), key=lambda item: (-item[1], item[0]))[:20])
+    by_status = dict(sorted(by_status.items(), key=lambda item: (-item[1], item[0])))
+    success_count = by_status.get("success", 0)
+
+    return AuditStatsResponse(
+        total_events=len(entries),
+        success_count=success_count,
+        failed_count=len(entries) - success_count,
+        unique_actors=len(actor_ids),
+        by_action=by_action,
+        by_status=by_status,
+        window_start=window_start,
+        window_end=window_end,
+        source=DEMO_SOURCE,
+        warning=DEMO_WARNING,
+    )
+
+
+def _demo_audit_actions_response(tenant_id: str) -> AuditActionsResponse:
+    window_start, window_end = _stats_window()
+    _init_demo_data()
+    entries = _filter_demo_audit_entries(tenant_id, start_date=window_start, end_date=window_end)
+
+    by_action: dict[str, int] = {}
+    for entry in entries:
+        by_action[entry["action"]] = by_action.get(entry["action"], 0) + 1
+
+    actions = [
+        AuditActionCount(action=action, count=count)
+        for action, count in sorted(by_action.items(), key=lambda item: (-item[1], item[0]))[:100]
+    ]
+    return AuditActionsResponse(
+        actions=actions,
+        window_start=window_start,
+        window_end=window_end,
+        source=DEMO_SOURCE,
+        warning=DEMO_WARNING,
+    )
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -200,6 +404,7 @@ async def list_audit_entries(
     page_size: int = Query(default=50, ge=1, le=500, description="Results per page"),
     action: str | None = Query(default=None, description="Filter by action"),
     status: str | None = Query(default=None, description="Filter by status"),
+    resource_type: str | None = Query(default=None, description="Filter by resource type"),
     start_date: datetime | None = Query(default=None, description="Start date (ISO 8601)"),
     end_date: datetime | None = Query(default=None, description="End date (ISO 8601)"),
     search: str | None = Query(default=None, description="Search in path/resource"),
@@ -221,18 +426,18 @@ async def list_audit_entries(
             page_size=page_size,
             action=action,
             outcome=status,
+            resource_type=resource_type,
             start_date=start_date,
             end_date=end_date,
             search=search,
         )
-        if total > 0 or page > 1:
-            return AuditListResponse(
-                entries=[_pg_event_to_entry(e) for e in events],
-                total=total,
-                page=page,
-                page_size=page_size,
-                has_more=(page * page_size) < total,
-            )
+        return AuditListResponse(
+            entries=[await _pg_event_to_entry(e) for e in events],
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=(page * page_size) < total,
+        )
     except Exception as e:
         logger.warning(f"PostgreSQL audit query failed: {e}")
 
@@ -247,40 +452,141 @@ async def list_audit_entries(
                 page_size,
                 action=action,
                 status=status,
+                resource_type=resource_type,
                 start_date=start_date,
                 end_date=end_date,
+                search=search,
             )
             if result is not None:
                 return result
         except Exception as e:
-            logger.warning(f"OpenSearch query failed, falling back to demo data: {e}")
+            logger.warning(f"OpenSearch query failed: {e}")
 
-    # 3. Fallback to demo data
-    _init_demo_data()
+    # 3. Fallback to demo data only when explicitly enabled.
+    if not _audit_demo_fallback_enabled():
+        return _empty_audit_list_response(page, page_size)
 
-    entries = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
-
-    if action:
-        entries = [e for e in entries if e["action"] == action]
-    if status:
-        entries = [e for e in entries if e["status"] == status]
-    if start_date:
-        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) >= start_date]
-    if end_date:
-        entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) <= end_date]
-
-    total = len(entries)
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    page_entries = entries[start_idx:end_idx]
-
-    return AuditListResponse(
-        entries=[AuditEntry(**e) for e in page_entries],
-        total=total,
+    return _demo_audit_list_response(
+        tenant_id,
         page=page,
         page_size=page_size,
-        has_more=end_idx < total,
+        action=action,
+        status=status,
+        resource_type=resource_type,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
     )
+
+
+@router.get("/{tenant_id}/stats", response_model=AuditStatsResponse)
+@require_tenant_access
+async def get_audit_stats(
+    tenant_id: str,
+    start_date: datetime | None = Query(default=None, description="Start date (ISO 8601)"),
+    end_date: datetime | None = Query(default=None, description="End date (ISO 8601)"),
+    action: str | None = Query(default=None, description="Filter by action"),
+    status: str | None = Query(default=None, description="Filter by status"),
+    resource_type: str | None = Query(default=None, description="Filter by resource type"),
+    search: str | None = Query(default=None, description="Search in path/resource"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AuditStatsResponse:
+    """
+    Return filtered audit aggregates for a tenant.
+
+    Data sources: PostgreSQL (primary) -> OpenSearch -> explicit demo fallback.
+    """
+    try:
+        audit_svc = AuditService(db)
+        stats = await audit_svc.get_stats(
+            tenant_id,
+            start_date=start_date,
+            end_date=end_date,
+            action=action,
+            outcome=status,
+            resource_type=resource_type,
+            search=search,
+        )
+        return AuditStatsResponse(**stats)
+    except Exception as e:
+        logger.warning(f"PostgreSQL audit stats query failed: {e}")
+
+    service = OpenSearchService.get_instance()
+    if service.client:
+        try:
+            result = await _query_opensearch_audit_stats(
+                service.client,
+                tenant_id,
+                start_date=start_date,
+                end_date=end_date,
+                action=action,
+                status=status,
+                resource_type=resource_type,
+                search=search,
+            )
+            if result is not None:
+                return result
+        except Exception as e:
+            logger.warning(f"OpenSearch audit stats query failed: {e}")
+
+    if not _audit_demo_fallback_enabled():
+        window_start, window_end = _stats_window(start_date=start_date, end_date=end_date)
+        return AuditStatsResponse(
+            total_events=0,
+            success_count=0,
+            failed_count=0,
+            unique_actors=0,
+            by_action={},
+            by_status={},
+            window_start=window_start,
+            window_end=window_end,
+        )
+
+    return _demo_audit_stats_response(
+        tenant_id,
+        start_date=start_date,
+        end_date=end_date,
+        action=action,
+        status=status,
+        resource_type=resource_type,
+        search=search,
+    )
+
+
+@router.get("/{tenant_id}/actions", response_model=AuditActionsResponse)
+@require_tenant_access
+async def get_audit_actions(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AuditActionsResponse:
+    """
+    Return the top 100 distinct actions for a tenant over the last 30 days.
+
+    Data sources: PostgreSQL (primary) -> OpenSearch -> explicit demo fallback.
+    """
+    try:
+        audit_svc = AuditService(db)
+        actions_result = await audit_svc.get_actions(tenant_id)
+        return AuditActionsResponse(**actions_result)
+    except Exception as e:
+        logger.warning(f"PostgreSQL audit actions query failed: {e}")
+
+    service = OpenSearchService.get_instance()
+    if service.client:
+        try:
+            os_result = await _query_opensearch_audit_actions(service.client, tenant_id)
+            if os_result is not None:
+                return os_result
+        except Exception as e:
+            logger.warning(f"OpenSearch audit actions query failed: {e}")
+
+    if not _audit_demo_fallback_enabled():
+        window_start, window_end = _stats_window()
+        return AuditActionsResponse(actions=[], window_start=window_start, window_end=window_end)
+
+    return _demo_audit_actions_response(tenant_id)
 
 
 @router.get("/{tenant_id}/export/csv")
@@ -313,8 +619,8 @@ async def export_audit_csv(
     except Exception as e:
         logger.warning(f"PostgreSQL export failed: {e}")
 
-    # Fallback to demo data
-    if not rows:
+    # Fallback to demo data only when explicitly enabled.
+    if not rows and _audit_demo_fallback_enabled():
         _init_demo_data()
         rows = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
         if start_date:
@@ -402,8 +708,8 @@ async def export_audit_json(
     except Exception as e:
         logger.warning(f"PostgreSQL export failed: {e}")
 
-    # Fallback to demo data
-    if not rows:
+    # Fallback to demo data only when explicitly enabled.
+    if not rows and _audit_demo_fallback_enabled():
         _init_demo_data()
         rows = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
         if start_date:
@@ -465,7 +771,10 @@ async def get_security_events(
         except Exception as e:
             logger.warning(f"OpenSearch security query failed, falling back to demo: {e}")
 
-    # Fallback to demo data
+    # Fallback to demo data only when explicitly enabled.
+    if not _audit_demo_fallback_enabled():
+        return SecurityEventsResponse(events=[], total=0, summary={})
+
     _init_demo_data()
 
     events = [e for e in _demo_security_events if e["tenant_id"] == tenant_id]
@@ -644,7 +953,18 @@ async def get_global_audit_summary(
     except Exception as e:
         logger.warning(f"PostgreSQL summary failed: {e}")
 
-    # Fallback to demo data
+    # Fallback to demo data only when explicitly enabled.
+    if not _audit_demo_fallback_enabled():
+        return {
+            "total_audit_entries": 0,
+            "total_security_events": 0,
+            "entries_by_tenant": {},
+            "entries_by_action": {},
+            "security_by_severity": {"info": 0, "warning": 0, "critical": 0},
+            "generated_at": datetime.now(UTC).isoformat(),
+            "source": "none",
+        }
+
     _init_demo_data()
 
     total_entries = len(_demo_audit_entries)
@@ -681,14 +1001,17 @@ async def get_global_audit_summary(
 # =============================================================================
 
 
-def _pg_event_to_entry(event: Any) -> AuditEntry:
+async def _pg_event_to_entry(event: Any) -> AuditEntry:
     """Convert a PostgreSQL AuditEvent model to the router AuditEntry schema."""
+    actor = await resolve_actor(event.actor_id, event.actor_email)
     return AuditEntry(
         id=event.id,
         timestamp=event.created_at,
         tenant_id=event.tenant_id,
         user_id=event.actor_id,
-        user_email=event.actor_email,
+        user_email=event.actor_email or actor.user_email,
+        user_display_name=actor.user_display_name,
+        user_resolved=actor.resolved,
         action=event.action,
         resource_type=event.resource_type,
         resource_id=event.resource_id,
@@ -726,6 +1049,49 @@ def _pg_event_to_dict(event: Any) -> dict[str, Any]:
 # =============================================================================
 
 
+def _opensearch_audit_must(
+    tenant_id: str,
+    *,
+    action: str | None = None,
+    status: str | None = None,
+    resource_type: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    search: str | None = None,
+) -> list[dict[str, Any]]:
+    must: list[dict[str, Any]] = [{"term": {"tenant_id.keyword": tenant_id}}]
+    if action:
+        must.append({"term": {"action.keyword": action}})
+    if status:
+        must.append({"term": {"outcome.keyword": status}})
+    if resource_type:
+        must.append({"term": {"resource.type.keyword": resource_type}})
+    if start_date or end_date:
+        ts_range: dict[str, str] = {}
+        if start_date:
+            ts_range["gte"] = start_date.isoformat()
+        if end_date:
+            ts_range["lte"] = end_date.isoformat()
+        must.append({"range": {"@timestamp": ts_range}})
+    if search:
+        must.append(
+            {
+                "multi_match": {
+                    "query": search,
+                    "fields": [
+                        "path",
+                        "action",
+                        "resource.type",
+                        "resource.id",
+                        "actor.email",
+                        "correlation_id",
+                    ],
+                }
+            }
+        )
+    return must
+
+
 async def _query_opensearch_audit(
     client: Any,
     tenant_id: str,
@@ -734,22 +1100,21 @@ async def _query_opensearch_audit(
     *,
     action: str | None = None,
     status: str | None = None,
+    resource_type: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
+    search: str | None = None,
 ) -> AuditListResponse | None:
-    """Query audit* index in OpenSearch. Returns None if no index exists."""
-    must = [{"term": {"tenant_id.keyword": tenant_id}}]
-    if action:
-        must.append({"match": {"action": action}})
-    if status:
-        must.append({"term": {"outcome.keyword": status}})
-    if start_date or end_date:
-        ts_range: dict[str, str] = {}
-        if start_date:
-            ts_range["gte"] = start_date.isoformat()
-        if end_date:
-            ts_range["lte"] = end_date.isoformat()
-        must.append({"range": {"@timestamp": ts_range}})
+    """Query audit* index in OpenSearch."""
+    must = _opensearch_audit_must(
+        tenant_id,
+        action=action,
+        status=status,
+        resource_type=resource_type,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+    )
 
     body = {
         "query": {"bool": {"must": must}},
@@ -761,25 +1126,27 @@ async def _query_opensearch_audit(
     resp = await client.search(index="audit*", body=body)
     hits = resp.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
-    if total == 0 and page == 1:
-        return None  # No data — fall back to demo
 
     entries = []
     for hit in hits.get("hits", []):
         src = hit["_source"]
+        actor_src = src.get("actor", {})
+        actor = await resolve_actor(actor_src.get("id"), actor_src.get("email"))
         entries.append(
             AuditEntry(
                 id=src.get("event_id", hit["_id"]),
                 timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
-                tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
-                user_id=src.get("actor", {}).get("id"),
-                user_email=src.get("actor", {}).get("email"),
+                tenant_id=src.get("tenant_id") or actor_src.get("tenant_id", tenant_id),
+                user_id=actor_src.get("id"),
+                user_email=actor_src.get("email") or actor.user_email,
+                user_display_name=actor.user_display_name,
+                user_resolved=actor.resolved,
                 action=src.get("action", "unknown"),
                 resource_type=src.get("resource", {}).get("type", "unknown"),
                 resource_id=src.get("resource", {}).get("id"),
                 status=src.get("outcome", "unknown"),
-                client_ip=src.get("actor", {}).get("ip_address"),
-                user_agent=src.get("actor", {}).get("user_agent"),
+                client_ip=actor_src.get("ip_address"),
+                user_agent=actor_src.get("user_agent"),
                 details=src.get("details"),
                 request_id=src.get("correlation_id"),
             )
@@ -791,6 +1158,85 @@ async def _query_opensearch_audit(
         page=page,
         page_size=page_size,
         has_more=(page * page_size) < total,
+    )
+
+
+async def _query_opensearch_audit_stats(
+    client: Any,
+    tenant_id: str,
+    *,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    action: str | None = None,
+    status: str | None = None,
+    resource_type: str | None = None,
+    search: str | None = None,
+) -> AuditStatsResponse | None:
+    """Query audit aggregates from OpenSearch."""
+    window_start, window_end = _stats_window(start_date=start_date, end_date=end_date)
+    must = _opensearch_audit_must(
+        tenant_id,
+        action=action,
+        status=status,
+        resource_type=resource_type,
+        start_date=window_start,
+        end_date=window_end,
+        search=search,
+    )
+
+    body = {
+        "query": {"bool": {"must": must}},
+        "size": 0,
+        "aggs": {
+            "by_action": {"terms": {"field": "action.keyword", "size": 20, "order": {"_count": "desc"}}},
+            "by_status": {"terms": {"field": "outcome.keyword", "size": 20, "order": {"_count": "desc"}}},
+            "unique_actors": {"cardinality": {"field": "actor.id.keyword"}},
+            "success_count": {"filter": {"term": {"outcome.keyword": "success"}}},
+        },
+    }
+    resp = await client.search(index="audit*", body=body)
+    hits = resp.get("hits", {})
+    total_events = int(hits.get("total", {}).get("value", 0) or 0)
+    aggs = resp.get("aggregations", {})
+    by_action = {
+        bucket["key"]: int(bucket["doc_count"])
+        for bucket in aggs.get("by_action", {}).get("buckets", [])
+    }
+    by_status = {
+        bucket["key"]: int(bucket["doc_count"])
+        for bucket in aggs.get("by_status", {}).get("buckets", [])
+    }
+    success_count = int(aggs.get("success_count", {}).get("doc_count", 0) or 0)
+
+    return AuditStatsResponse(
+        total_events=total_events,
+        success_count=success_count,
+        failed_count=total_events - success_count,
+        unique_actors=int(aggs.get("unique_actors", {}).get("value", 0) or 0),
+        by_action=by_action,
+        by_status=by_status,
+        window_start=window_start,
+        window_end=window_end,
+    )
+
+
+async def _query_opensearch_audit_actions(client: Any, tenant_id: str) -> AuditActionsResponse | None:
+    """Query top distinct audit actions from OpenSearch over the last 30 days."""
+    window_start, window_end = _stats_window()
+    must = _opensearch_audit_must(tenant_id, start_date=window_start, end_date=window_end)
+    body = {
+        "query": {"bool": {"must": must}},
+        "size": 0,
+        "aggs": {
+            "actions": {"terms": {"field": "action.keyword", "size": 100, "order": {"_count": "desc"}}},
+        },
+    }
+    resp = await client.search(index="audit*", body=body)
+    buckets = resp.get("aggregations", {}).get("actions", {}).get("buckets", [])
+    return AuditActionsResponse(
+        actions=[AuditActionCount(action=bucket["key"], count=int(bucket["doc_count"])) for bucket in buckets],
+        window_start=window_start,
+        window_end=window_end,
     )
 
 

@@ -8,15 +8,99 @@ Provides:
 """
 
 import logging
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from uuid import uuid4
 
-from sqlalchemy import func, select, update
+from cachetools import TTLCache  # type: ignore[import-untyped]
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.audit_event import AuditEvent
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ResolvedActor:
+    """Resolved actor identity returned to audit API callers."""
+
+    user_id: str | None
+    user_email: str | None
+    user_display_name: str | None
+    resolved: bool
+
+
+_ACTOR_CACHE: TTLCache[tuple[str | None, str | None], ResolvedActor] = TTLCache(maxsize=2000, ttl=300)
+
+
+def _keycloak_display_name(user: dict[str, Any]) -> str | None:
+    first_name = str(user.get("firstName") or "").strip()
+    last_name = str(user.get("lastName") or "").strip()
+    full_name = " ".join(part for part in (first_name, last_name) if part)
+    if full_name:
+        return full_name
+    username = str(user.get("username") or "").strip()
+    if username:
+        return username
+    email = user.get("email")
+    return str(email) if email else None
+
+
+async def resolve_actor(user_id: str | None, user_email: str | None) -> ResolvedActor:
+    """Resolve an audit actor via Keycloak without ever breaking audit reads."""
+    cache_key = (user_id, user_email)
+    cached = cast(ResolvedActor | None, _ACTOR_CACHE.get(cache_key))
+    if cached is not None:
+        return cached
+
+    if not user_id:
+        unresolved = ResolvedActor(
+            user_id=user_id,
+            user_email=user_email,
+            user_display_name=None,
+            resolved=False,
+        )
+        _ACTOR_CACHE[cache_key] = unresolved
+        return unresolved
+
+    try:
+        from src.services.keycloak_service import keycloak_service
+
+        if getattr(keycloak_service, "_admin", None) is None:
+            await keycloak_service.connect()
+
+        user = await keycloak_service.get_user(user_id)
+        if not user:
+            unresolved = ResolvedActor(
+                user_id=user_id,
+                user_email=None,
+                user_display_name=None,
+                resolved=False,
+            )
+            _ACTOR_CACHE[cache_key] = unresolved
+            return unresolved
+
+        email = user.get("email")
+        resolved = ResolvedActor(
+            user_id=user_id,
+            user_email=str(email) if email else user_email,
+            user_display_name=_keycloak_display_name(user),
+            resolved=True,
+        )
+        _ACTOR_CACHE[cache_key] = resolved
+        return resolved
+    except Exception as exc:
+        logger.debug("Failed to resolve audit actor %s: %s", user_id, exc)
+        unresolved = ResolvedActor(
+            user_id=user_id,
+            user_email=None,
+            user_display_name=None,
+            resolved=False,
+        )
+        _ACTOR_CACHE[cache_key] = unresolved
+        return unresolved
 
 
 class AuditService:
@@ -82,6 +166,46 @@ class AuditService:
 
     # ============ Read ============
 
+    def _filters(
+        self,
+        tenant_id: str,
+        *,
+        action: str | None = None,
+        outcome: str | None = None,
+        resource_type: str | None = None,
+        actor_id: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        search: str | None = None,
+    ) -> list[Any]:
+        conditions: list[Any] = [AuditEvent.tenant_id == tenant_id]
+
+        if action:
+            conditions.append(AuditEvent.action == action)
+        if outcome:
+            conditions.append(AuditEvent.outcome == outcome)
+        if resource_type:
+            conditions.append(AuditEvent.resource_type == resource_type)
+        if actor_id:
+            conditions.append(AuditEvent.actor_id == actor_id)
+        if start_date:
+            conditions.append(AuditEvent.created_at >= start_date)
+        if end_date:
+            conditions.append(AuditEvent.created_at <= end_date)
+        if search:
+            like_pattern = f"%{search}%"
+            conditions.append(
+                or_(
+                    AuditEvent.path.ilike(like_pattern),
+                    AuditEvent.resource_type.ilike(like_pattern),
+                    AuditEvent.resource_id.ilike(like_pattern),
+                    AuditEvent.resource_name.ilike(like_pattern),
+                    AuditEvent.action.ilike(like_pattern),
+                )
+            )
+
+        return conditions
+
     async def list_events(
         self,
         tenant_id: str,
@@ -97,32 +221,18 @@ class AuditService:
         search: str | None = None,
     ) -> tuple[list[AuditEvent], int]:
         """Query audit events with filters. Returns (events, total_count)."""
-        query = select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)
-        count_query = select(func.count(AuditEvent.id)).where(AuditEvent.tenant_id == tenant_id)
-
-        if action:
-            query = query.where(AuditEvent.action == action)
-            count_query = count_query.where(AuditEvent.action == action)
-        if outcome:
-            query = query.where(AuditEvent.outcome == outcome)
-            count_query = count_query.where(AuditEvent.outcome == outcome)
-        if resource_type:
-            query = query.where(AuditEvent.resource_type == resource_type)
-            count_query = count_query.where(AuditEvent.resource_type == resource_type)
-        if actor_id:
-            query = query.where(AuditEvent.actor_id == actor_id)
-            count_query = count_query.where(AuditEvent.actor_id == actor_id)
-        if start_date:
-            query = query.where(AuditEvent.created_at >= start_date)
-            count_query = count_query.where(AuditEvent.created_at >= start_date)
-        if end_date:
-            query = query.where(AuditEvent.created_at <= end_date)
-            count_query = count_query.where(AuditEvent.created_at <= end_date)
-        if search:
-            like_pattern = f"%{search}%"
-            search_filter = AuditEvent.path.ilike(like_pattern) | AuditEvent.resource_type.ilike(like_pattern)
-            query = query.where(search_filter)
-            count_query = count_query.where(search_filter)
+        filters = self._filters(
+            tenant_id,
+            action=action,
+            outcome=outcome,
+            resource_type=resource_type,
+            actor_id=actor_id,
+            start_date=start_date,
+            end_date=end_date,
+            search=search,
+        )
+        query = select(AuditEvent).where(*filters)
+        count_query = select(func.count(AuditEvent.id)).where(*filters)
 
         # Count
         total_result = await self.db.execute(count_query)
@@ -134,6 +244,91 @@ class AuditService:
         events = list(result.scalars().all())
 
         return events, total
+
+    async def get_stats(
+        self,
+        tenant_id: str,
+        *,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        action: str | None = None,
+        outcome: str | None = None,
+        resource_type: str | None = None,
+        search: str | None = None,
+    ) -> dict[str, Any]:
+        """Return filtered audit aggregates for one tenant."""
+        window_end = end_date or datetime.now(UTC)
+        window_start = start_date or (window_end - timedelta(days=30))
+        filters = self._filters(
+            tenant_id,
+            action=action,
+            outcome=outcome,
+            resource_type=resource_type,
+            start_date=window_start,
+            end_date=window_end,
+            search=search,
+        )
+
+        total_result = await self.db.execute(select(func.count(AuditEvent.id)).where(*filters))
+        total_events = int(total_result.scalar() or 0)
+
+        success_result = await self.db.execute(
+            select(func.count(AuditEvent.id)).where(*filters, AuditEvent.outcome == "success")
+        )
+        success_count = int(success_result.scalar() or 0)
+
+        unique_result = await self.db.execute(select(func.count(func.distinct(AuditEvent.actor_id))).where(*filters))
+        unique_actors = int(unique_result.scalar() or 0)
+
+        action_count = func.count(AuditEvent.id)
+        action_result = await self.db.execute(
+            select(AuditEvent.action, action_count.label("cnt"))
+            .where(*filters)
+            .group_by(AuditEvent.action)
+            .order_by(action_count.desc(), AuditEvent.action.asc())
+            .limit(20)
+        )
+        by_action = {row.action: int(row.cnt) for row in action_result}
+
+        status_count = func.count(AuditEvent.id)
+        status_result = await self.db.execute(
+            select(AuditEvent.outcome, status_count.label("cnt"))
+            .where(*filters)
+            .group_by(AuditEvent.outcome)
+            .order_by(status_count.desc(), AuditEvent.outcome.asc())
+        )
+        by_status = {row.outcome: int(row.cnt) for row in status_result}
+
+        return {
+            "total_events": total_events,
+            "success_count": success_count,
+            "failed_count": total_events - success_count,
+            "unique_actors": unique_actors,
+            "by_action": by_action,
+            "by_status": by_status,
+            "window_start": window_start,
+            "window_end": window_end,
+        }
+
+    async def get_actions(self, tenant_id: str) -> dict[str, Any]:
+        """Return top distinct audit actions for one tenant over the last 30 days."""
+        window_end = datetime.now(UTC)
+        window_start = window_end - timedelta(days=30)
+        filters = self._filters(tenant_id, start_date=window_start, end_date=window_end)
+        action_count = func.count(AuditEvent.id)
+        result = await self.db.execute(
+            select(AuditEvent.action, action_count.label("cnt"))
+            .where(*filters)
+            .group_by(AuditEvent.action)
+            .order_by(action_count.desc(), AuditEvent.action.asc())
+            .limit(100)
+        )
+
+        return {
+            "actions": [{"action": row.action, "count": int(row.cnt)} for row in result],
+            "window_start": window_start,
+            "window_end": window_end,
+        }
 
     async def get_event(self, event_id: str) -> AuditEvent | None:
         """Get a single audit event by ID."""
@@ -216,7 +411,7 @@ class AuditService:
 
         stmt = delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id).where(AuditEvent.created_at < before_date)
         result = await self.db.execute(stmt)
-        count = result.rowcount
+        count = int(getattr(result, "rowcount", 0) or 0)
         logger.info(f"Purged {count} audit events for tenant {tenant_id} before {before_date}")
         return count
 
@@ -257,7 +452,7 @@ class AuditService:
             stmt = stmt.where(AuditEvent.tenant_id == tenant_id)
 
         result = await self.db.execute(stmt)
-        count = result.rowcount
+        count = int(getattr(result, "rowcount", 0) or 0)
 
         logger.info(
             f"GDPR erasure: pseudonymized {count} audit records for user {user_id}"

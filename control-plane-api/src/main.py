@@ -201,6 +201,12 @@ async def lifespan(app: FastAPI):
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
     )
+    if not settings.audit_demo_fallback_enabled:
+        logger.info(
+            "Audit demo fallback disabled",
+            environment=settings.ENVIRONMENT,
+            configured_value=settings.STOA_AUDIT_DEMO_FALLBACK,
+        )
 
     # Initialize services
     try:

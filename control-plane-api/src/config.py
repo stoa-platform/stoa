@@ -203,6 +203,17 @@ class Settings(BaseSettings):
     # startup in production and still requires X-Demo-Mode: true per request.
     STOA_DISABLE_AUTH: bool = False
 
+    # Audit log demo fallback is dev/test-only by default. Production must fail
+    # closed unless operators explicitly opt in for a controlled diagnostic.
+    STOA_AUDIT_DEMO_FALLBACK: bool | None = None
+
+    @property
+    def audit_demo_fallback_enabled(self) -> bool:
+        """Whether audit API demo rows may be returned when real backends fail."""
+        if self.STOA_AUDIT_DEMO_FALLBACK is not None:
+            return self.STOA_AUDIT_DEMO_FALLBACK
+        return self.ENVIRONMENT in {"dev", "test"}
+
     @property
     def keycloak_internal_url(self) -> str:
         """Return internal URL for backend-to-KC calls, falling back to public URL."""

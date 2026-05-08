@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.audit_event import AuditEvent
-from src.services.audit_service import AuditService
+from src.services.audit_service import _ACTOR_CACHE, AuditService, resolve_actor
 
 
 @pytest.fixture
@@ -27,6 +27,13 @@ def mock_session():
 def audit_service(mock_session):
     """Create AuditService with mock session."""
     return AuditService(mock_session)
+
+
+@pytest.fixture(autouse=True)
+def clear_actor_cache():
+    _ACTOR_CACHE.clear()
+    yield
+    _ACTOR_CACHE.clear()
 
 
 class TestRecordEvent:
@@ -147,6 +154,62 @@ class TestListEvents:
 
         assert total == 100
         assert len(events) == 10
+
+
+class TestResolveActor:
+    """Tests for audit actor resolution."""
+
+    @pytest.mark.asyncio
+    async def test_resolve_actor_caches_keycloak_lookup(self):
+        keycloak = MagicMock()
+        keycloak._admin = object()
+        keycloak.get_user = AsyncMock(
+            return_value={
+                "id": "user-123",
+                "email": "alice@example.com",
+                "firstName": "Alice",
+                "lastName": "Nguyen",
+                "username": "alice",
+            }
+        )
+
+        with patch("src.services.keycloak_service.keycloak_service", keycloak):
+            first = await resolve_actor("user-123", None)
+            second = await resolve_actor("user-123", None)
+
+        assert first == second
+        assert first.resolved is True
+        assert first.user_email == "alice@example.com"
+        assert first.user_display_name == "Alice Nguyen"
+        keycloak.get_user.assert_awaited_once_with("user-123")
+
+    @pytest.mark.asyncio
+    async def test_resolve_actor_returns_unresolved_when_keycloak_down(self):
+        keycloak = MagicMock()
+        keycloak._admin = object()
+        keycloak.get_user = AsyncMock(side_effect=RuntimeError("keycloak down"))
+
+        with patch("src.services.keycloak_service.keycloak_service", keycloak):
+            actor = await resolve_actor("user-123", "alice@example.com")
+
+        assert actor.user_id == "user-123"
+        assert actor.user_email is None
+        assert actor.user_display_name is None
+        assert actor.resolved is False
+
+    @pytest.mark.asyncio
+    async def test_resolve_actor_does_not_raise_on_missing_user(self):
+        keycloak = MagicMock()
+        keycloak._admin = object()
+        keycloak.get_user = AsyncMock(return_value=None)
+
+        with patch("src.services.keycloak_service.keycloak_service", keycloak):
+            actor = await resolve_actor("missing-user", "missing@example.com")
+
+        assert actor.user_id == "missing-user"
+        assert actor.user_email is None
+        assert actor.user_display_name is None
+        assert actor.resolved is False
 
 
 class TestGetEvent:

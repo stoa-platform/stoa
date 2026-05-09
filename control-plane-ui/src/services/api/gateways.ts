@@ -2,6 +2,8 @@ import type { Schemas } from '@stoa/shared/api-types';
 import { httpClient, path } from '../http';
 import type {
   AggregatedMetrics,
+  GuardrailsConfigResponse,
+  GuardrailsTimeRange,
   GatewayGuardrailsResponse,
   GatewayHealthSummary,
   GatewayInstance,
@@ -80,15 +82,25 @@ export const gatewaysClient = {
   },
 
   // Observability
-  async getAggregatedMetrics(): Promise<AggregatedMetrics> {
-    const { data } = await httpClient.get('/v1/admin/gateways/metrics');
+  async getAggregatedMetrics(range?: GuardrailsTimeRange): Promise<AggregatedMetrics> {
+    const { data } = range
+      ? await httpClient.get('/v1/admin/gateways/metrics', { params: { range } })
+      : await httpClient.get('/v1/admin/gateways/metrics');
     return data;
   },
 
-  async getGuardrailsEvents(limit = 20): Promise<GatewayGuardrailsResponse> {
+  async getGuardrailsConfig(): Promise<GuardrailsConfigResponse> {
+    const { data } = await httpClient.get('/v1/admin/gateways/guardrails/config');
+    return data;
+  },
+
+  async getGuardrailsEvents(
+    limit = 20,
+    range?: GuardrailsTimeRange
+  ): Promise<GatewayGuardrailsResponse> {
     // P1-11 residu: use axios params option rather than inline template string.
     const { data } = await httpClient.get('/v1/admin/gateways/metrics/guardrails/events', {
-      params: { limit },
+      params: range ? { limit, range } : { limit },
     });
     return data;
   },

@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { SubNav } from '../../components/SubNav';
 import { observabilityTabs } from '../../components/subNavGroups';
+import { TimeRangeSelector } from '@stoa/shared/components/TimeRangeSelector';
+import type { TimeRange } from '@stoa/shared/components/TimeRangeSelector';
 import {
   RefreshCw,
   ShieldAlert,
@@ -13,35 +15,34 @@ import {
   Zap,
   AlertTriangle,
   ExternalLink,
+  Scale,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type {
+  AggregatedMetrics,
+  GatewayGuardrailsEvent,
+  GuardrailsConfigResponse,
+  GuardrailsMetricField,
+  GuardrailsTimeRange,
+} from '../../types';
+import { guardrailCardState, type GuardrailCardUIState } from './guardrailCardState';
 
-interface GuardrailStats {
-  pii_detections: number;
-  injection_blocks: number;
-  content_filters: number;
-  prompt_guard_flags: number;
-  rate_limit_enforcements: number;
-  by_tool: Record<string, number>;
-  by_category: Record<string, number>;
-}
+type FilterType = 'all' | 'pii' | 'injection' | 'content' | 'prompt' | 'rate-limit';
 
-interface GuardrailEvent {
-  timestamp: string;
-  trace_id: string;
-  span_id: string;
-  tool: string;
-  action: string;
-  reason: string;
-}
-
-type FilterType = 'all' | 'pii' | 'injection' | 'content' | 'prompt';
+const GUARDRAILS_TIME_RANGES: GuardrailsTimeRange[] = ['1h', '6h', '24h', '7d'];
 
 const ACTION_TO_FILTER: Record<string, FilterType> = {
   'pii-redacted': 'pii',
   'pii-blocked': 'pii',
   blocked: 'injection',
+  'injection-blocked': 'injection',
   'content-flagged': 'content',
+  'content-filter': 'content',
   'prompt-guard': 'prompt',
+  'prompt-guard-blocked': 'prompt',
+  'rate-limit': 'rate-limit',
+  'rate-limited': 'rate-limit',
+  rate_limit: 'rate-limit',
 };
 
 const FILTER_LABELS: Record<FilterType, string> = {
@@ -50,6 +51,7 @@ const FILTER_LABELS: Record<FilterType, string> = {
   injection: 'Injection',
   content: 'Content',
   prompt: 'Prompt',
+  'rate-limit': 'Rate Limit',
 };
 
 const ACTION_BADGE: Record<string, { label: string; className: string }> = {
@@ -69,7 +71,102 @@ const ACTION_BADGE: Record<string, { label: string; className: string }> = {
     label: 'Prompt guard',
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   },
+  'rate-limit': {
+    label: 'Rate limit',
+    className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  },
 };
+
+type ConfigField = keyof Pick<
+  GuardrailsConfigResponse,
+  | 'pii_enabled'
+  | 'injection_detection_enabled'
+  | 'prompt_guard_enabled'
+  | 'content_filter_enabled'
+  | 'rate_limit_enabled'
+  | 'opa_policy_enabled'
+>;
+
+interface MetricCardConfig {
+  kind: 'metric';
+  icon: LucideIcon;
+  title: string;
+  metricField: GuardrailsMetricField;
+  description: string;
+  color: string;
+  filter: Exclude<FilterType, 'all'>;
+}
+
+interface ConfigCardConfig {
+  kind: 'config';
+  icon: LucideIcon;
+  title: string;
+  configField: ConfigField;
+  description: string;
+  color: string;
+}
+
+type GuardrailCardConfig = MetricCardConfig | ConfigCardConfig;
+
+const GUARDRAIL_CARDS: GuardrailCardConfig[] = [
+  {
+    kind: 'metric',
+    icon: Fingerprint,
+    title: 'PII Detection',
+    metricField: 'pii_detections',
+    description: 'Sensitive data detection and redaction outcomes',
+    color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20',
+    filter: 'pii',
+  },
+  {
+    kind: 'metric',
+    icon: Bug,
+    title: 'Injection Blocks',
+    metricField: 'injection_blocks',
+    description: 'Prompt and request injection attempts blocked',
+    color: 'text-red-600 bg-red-50 dark:bg-red-900/20',
+    filter: 'injection',
+  },
+  {
+    kind: 'metric',
+    icon: MessageSquareWarning,
+    title: 'Prompt Guard',
+    metricField: 'prompt_guard_blocks',
+    description: 'LLM prompt guard enforcement outcomes',
+    color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20',
+    filter: 'prompt',
+  },
+  {
+    kind: 'metric',
+    icon: ShieldAlert,
+    title: 'Content Filter',
+    metricField: 'content_filter_blocks',
+    description: 'Content and payload policy filter blocks',
+    color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+    filter: 'content',
+  },
+  {
+    kind: 'metric',
+    icon: Zap,
+    title: 'Rate Limit',
+    metricField: 'rate_limit_blocks',
+    description: 'Requests throttled by rate-limit protection',
+    color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20',
+    filter: 'rate-limit',
+  },
+  {
+    kind: 'config',
+    icon: Scale,
+    title: 'OPA Policy',
+    configField: 'opa_policy_enabled',
+    description: 'Policy evaluation enablement from runtime config',
+    color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20',
+  },
+];
+
+function isGuardrailsTimeRange(range: TimeRange): range is GuardrailsTimeRange {
+  return GUARDRAILS_TIME_RANGES.includes(range as GuardrailsTimeRange);
+}
 
 function formatTimestamp(iso: string): string {
   try {
@@ -80,192 +177,251 @@ function formatTimestamp(iso: string): string {
   }
 }
 
+function formatRelativeSample(iso: string): string {
+  const timestampMs = new Date(iso).getTime();
+  if (Number.isNaN(timestampMs)) return iso;
+
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  if (ageSeconds < 60) return `${ageSeconds}s ago`;
+
+  const ageMinutes = Math.floor(ageSeconds / 60);
+  if (ageMinutes < 60) return `${ageMinutes} min ago`;
+
+  const ageHours = Math.floor(ageMinutes / 60);
+  if (ageHours < 24) return `${ageHours}h ago`;
+
+  const ageDays = Math.floor(ageHours / 24);
+  return `${ageDays}d ago`;
+}
+
+function isContractMetrics(metrics: AggregatedMetrics): boolean {
+  const guardrails = metrics.guardrails;
+  if (!guardrails) return false;
+
+  return (
+    typeof guardrails.source_healthy === 'boolean' &&
+    'last_sample_at' in guardrails &&
+    'metrics_age_seconds' in guardrails
+  );
+}
+
+function cardStateText(state: GuardrailCardUIState): string {
+  switch (state.kind) {
+    case 'metrics-unavailable':
+      return 'Metrics unavailable';
+    case 'disabled':
+      return 'Disabled';
+    case 'no-sample':
+      return 'No metrics sample';
+    case 'stale':
+      return 'Stale metrics';
+    case 'healthy':
+      return `${state.count} events · last sample ${formatRelativeSample(state.lastSampleAt ?? '')}`;
+  }
+}
+
+function configStatusText(
+  config: GuardrailsConfigResponse | null,
+  field: ConfigField,
+  loading: boolean,
+  unavailable: boolean
+): string {
+  if (loading) return 'Loading';
+  if (unavailable || !config) return 'Metrics unavailable';
+  return config[field] ? 'Enabled' : 'Disabled';
+}
+
+function cardTestId(title: string): string {
+  return `guardrail-card-${title.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
 export function GuardrailsDashboard() {
   const { isReady } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState<GuardrailStats | null>(null);
-  const [events, setEvents] = useState<GuardrailEvent[]>([]);
+  const [config, setConfig] = useState<GuardrailsConfigResponse | null>(null);
+  const [metrics, setMetrics] = useState<AggregatedMetrics | null>(null);
+  const [events, setEvents] = useState<GatewayGuardrailsEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configUnavailable, setConfigUnavailable] = useState(false);
+  const [metricsUnavailable, setMetricsUnavailable] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [timeRange, setTimeRange] = useState<GuardrailsTimeRange>('1h');
 
-  const loadData = useCallback(async () => {
+  const loadConfig = useCallback(async () => {
+    setConfigLoading(true);
+    try {
+      const nextConfig = await apiService.getGuardrailsConfig();
+      setConfig(nextConfig);
+      setConfigUnavailable(false);
+    } catch (reason) {
+      console.error('Failed to load guardrails config:', reason);
+      setConfig(null);
+      setConfigUnavailable(true);
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
+
+  const loadRuntimeData = useCallback(async () => {
     setLoading(true);
-    // P1-1: allSettled — each endpoint independent, partial failure leaves
-    // the other slice's prior state intact.
     const [metricsResult, eventsResult] = await Promise.allSettled([
-      apiService.getGatewayAggregatedMetrics(),
-      apiService.getGuardrailsEvents(50),
+      apiService.getGatewayAggregatedMetrics(timeRange),
+      apiService.getGuardrailsEvents(50, timeRange),
     ]);
 
-    if (metricsResult.status === 'fulfilled') {
-      const metrics = metricsResult.value;
-      setStats({
-        pii_detections: metrics?.guardrails?.pii_detections || 0,
-        injection_blocks: metrics?.guardrails?.injection_blocks || 0,
-        content_filters: metrics?.guardrails?.content_filters || 0,
-        prompt_guard_flags: metrics?.guardrails?.prompt_guard_flags || 0,
-        rate_limit_enforcements: metrics?.rate_limiting?.enforcements || 0,
-        by_tool: metrics?.guardrails?.by_tool || {},
-        by_category: metrics?.guardrails?.by_category || {},
-      });
+    if (metricsResult.status === 'fulfilled' && isContractMetrics(metricsResult.value)) {
+      setMetrics(metricsResult.value);
+      setMetricsUnavailable(false);
     } else {
-      console.error('Failed to load gateway aggregated metrics:', metricsResult.reason);
+      const reason =
+        metricsResult.status === 'rejected'
+          ? metricsResult.reason
+          : 'Guardrails metrics response missing freshness fields';
+      console.error('Failed to load gateway aggregated metrics:', reason);
+      setMetrics(null);
+      setMetricsUnavailable(true);
     }
+
     if (eventsResult.status === 'fulfilled') {
-      setEvents(eventsResult.value?.events || []);
+      setEvents(eventsResult.value?.events ?? []);
     } else {
       console.error('Failed to load guardrails events:', eventsResult.reason);
     }
 
-    if (metricsResult.status === 'rejected' && eventsResult.status === 'rejected') {
-      const reason = metricsResult.reason;
-      const message = reason instanceof Error ? reason.message : 'Failed to load guardrail metrics';
-      setError(message);
-    } else {
-      setError(null);
-    }
     setLoading(false);
-  }, []);
+  }, [timeRange]);
 
   useEffect(() => {
-    if (isReady) loadData();
-  }, [isReady, loadData]);
+    if (isReady) loadConfig();
+  }, [isReady, loadConfig]);
+
+  useEffect(() => {
+    if (isReady) loadRuntimeData();
+  }, [isReady, loadRuntimeData]);
 
   useEffect(() => {
     if (!isReady) return;
-    const interval = setInterval(loadData, 30_000);
+    const interval = setInterval(loadRuntimeData, 30_000);
     return () => clearInterval(interval);
-  }, [isReady, loadData]);
+  }, [isReady, loadRuntimeData]);
+
+  const handleRefresh = () => {
+    void Promise.all([loadConfig(), loadRuntimeData()]);
+  };
 
   const filteredEvents =
     activeFilter === 'all'
       ? events
-      : events.filter((e) => ACTION_TO_FILTER[e.action] === activeFilter);
+      : events.filter((event) => ACTION_TO_FILTER[event.action] === activeFilter);
 
-  const guardrailCards: {
-    icon: typeof Fingerprint;
-    title: string;
-    value: number;
-    description: string;
-    color: string;
-    filter?: FilterType;
-  }[] = [
-    {
-      icon: Fingerprint,
-      title: 'PII Detection',
-      value: stats?.pii_detections ?? 0,
-      description: 'SSN, credit card, phone, email patterns blocked',
-      color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20',
-      filter: 'pii',
-    },
-    {
-      icon: Bug,
-      title: 'Injection Blocks',
-      value: stats?.injection_blocks ?? 0,
-      description: 'SQL, XPath, command injection attempts blocked',
-      color: 'text-red-600 bg-red-50 dark:bg-red-900/20',
-      filter: 'injection',
-    },
-    {
-      icon: MessageSquareWarning,
-      title: 'Prompt Guard',
-      value: stats?.prompt_guard_flags ?? 0,
-      description: 'LLM prompt injection attempts flagged',
-      color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20',
-      filter: 'prompt',
-    },
-    {
-      icon: ShieldAlert,
-      title: 'Content Filters',
-      value: stats?.content_filters ?? 0,
-      description: 'MIME type and body size violations',
-      color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
-      filter: 'content',
-    },
-    {
-      icon: Zap,
-      title: 'Rate Limit',
-      value: stats?.rate_limit_enforcements ?? 0,
-      description: 'Requests throttled by token bucket',
-      color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20',
-    },
-  ];
+  const emptyEventsText =
+    activeFilter === 'rate-limit'
+      ? 'No rate-limit events'
+      : events.length === 0
+        ? `No guardrail events in the selected ${timeRange} window`
+        : `No ${FILTER_LABELS[activeFilter].toLowerCase()} events found`;
 
   return (
     <div className="space-y-6">
       <SubNav tabs={observabilityTabs} />
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
             Security & Guardrails
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Audit, policy decisions, PII protection, prompt guard, and rate limiting events
+            Runtime events — guardrail decisions, PII/prompt/content/rate-limit monitoring
           </p>
         </div>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <TimeRangeSelector
+            value={timeRange}
+            ranges={GUARDRAILS_TIME_RANGES}
+            onChange={(range) => {
+              if (isGuardrailsTimeRange(range)) setTimeRange(range);
+            }}
+          />
+          <button
+            onClick={handleRefresh}
+            disabled={loading || configLoading}
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading || configLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {error && (
+      {(configUnavailable || metricsUnavailable) && (
         <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-red-700 dark:text-red-400">
           <AlertTriangle className="inline h-4 w-4 mr-2" />
-          {error}
+          Metrics unavailable
         </div>
       )}
 
-      {/* Guardrail Cards — click filters the events table below */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {guardrailCards.map((card) => {
-          const isFilterable = Boolean(card.filter);
-          const isActive = isFilterable && activeFilter === card.filter;
+        {GUARDRAIL_CARDS.map((card) => {
+          const Icon = card.icon;
+          const state =
+            card.kind === 'metric'
+              ? guardrailCardState(config, metrics, card.metricField, { metricsUnavailable })
+              : null;
+          const statusText =
+            card.kind === 'metric'
+              ? cardStateText(state as GuardrailCardUIState)
+              : configStatusText(config, card.configField, configLoading, configUnavailable);
+          const isDisabled =
+            statusText === 'Disabled' ||
+            statusText === 'Metrics unavailable' ||
+            statusText === 'No metrics sample';
+          const isFilterable =
+            card.kind === 'metric' &&
+            !isDisabled &&
+            state?.kind !== 'stale' &&
+            Boolean(card.filter);
+          const isActive = card.kind === 'metric' && activeFilter === card.filter;
           const className = `rounded-lg border p-5 text-left transition-all ${card.color} ${
             isActive
               ? 'ring-2 ring-current border-current'
               : 'border-neutral-200 dark:border-neutral-700'
           } ${
-            isFilterable && card.value > 0
+            isFilterable
               ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-current'
               : 'cursor-default'
-          } ${card.value === 0 ? 'opacity-60' : ''}`;
+          } ${isDisabled ? 'opacity-75' : ''}`;
           const content = (
             <>
               <div className="flex items-center gap-2 mb-3">
-                <card.icon className="h-5 w-5" />
+                <Icon className="h-5 w-5" />
                 <span className="text-sm font-semibold">{card.title}</span>
               </div>
-              {loading ? (
-                <div className="h-8 w-16 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
+              {loading && card.kind === 'metric' && !metrics && !metricsUnavailable ? (
+                <div className="h-6 w-32 bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
               ) : (
-                <p className="text-3xl font-bold">{card.value}</p>
+                <p className="text-sm font-semibold">{statusText}</p>
               )}
               <p className="text-xs mt-2 opacity-75">{card.description}</p>
             </>
           );
 
-          if (!card.filter) {
+          if (!isFilterable || card.kind !== 'metric') {
             return (
-              <div key={card.title} className={className}>
+              <div key={card.title} className={className} data-testid={cardTestId(card.title)}>
                 {content}
               </div>
             );
           }
 
-          const filter = card.filter;
-
           return (
             <button
               key={card.title}
-              onClick={() => setActiveFilter((prev) => (prev === filter ? 'all' : filter))}
+              onClick={() =>
+                setActiveFilter((prev) => (prev === card.filter ? 'all' : card.filter))
+              }
               className={className}
+              data-testid={cardTestId(card.title)}
             >
               {content}
             </button>
@@ -273,7 +429,6 @@ export function GuardrailsDashboard() {
         })}
       </div>
 
-      {/* Recent Events — each row links to trace detail */}
       <div className="bg-white dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
         <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
@@ -293,15 +448,11 @@ export function GuardrailsDashboard() {
           <span className="text-xs text-neutral-400">{filteredEvents.length} events</span>
         </div>
         {filteredEvents.length === 0 ? (
-          <div className="p-8 text-center text-neutral-400 text-sm">
-            {events.length === 0
-              ? 'No guardrail events in the last hour'
-              : `No ${FILTER_LABELS[activeFilter].toLowerCase()} events found`}
-          </div>
+          <div className="p-8 text-center text-neutral-400 text-sm">{emptyEventsText}</div>
         ) : (
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {filteredEvents.map((event) => {
-              const badge = ACTION_BADGE[event.action] || {
+              const badge = ACTION_BADGE[event.action] ?? {
                 label: event.action,
                 className:
                   'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
@@ -336,32 +487,94 @@ export function GuardrailsDashboard() {
         )}
       </div>
 
-      {/* Feature Status */}
       <div className="bg-white dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
         <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
             Guardrail Configuration
           </h2>
+          {config && !configUnavailable && (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              Source: {config.source} · Updated {formatRelativeSample(config.updated_at)}
+            </p>
+          )}
         </div>
         <div className="p-4 space-y-3">
-          <ConfigRow label="PII Detection" envVar="GUARDRAILS_PII_ENABLED" />
-          <ConfigRow label="Injection Protection" envVar="GUARDRAILS_INJECTION_ENABLED" />
-          <ConfigRow label="Content Filter" envVar="GUARDRAILS_CONTENT_FILTER_ENABLED" />
-          <ConfigRow label="Prompt Guard" envVar="PROMPT_GUARD_ENABLED" />
-          <ConfigRow label="OPA Policy Engine" envVar="POLICY_ENABLED" />
+          <ConfigRow
+            label="PII Detection"
+            status={configStatusText(config, 'pii_enabled', configLoading, configUnavailable)}
+            testId="config-pii-detection"
+          />
+          <ConfigRow
+            label="Injection Detection"
+            status={configStatusText(
+              config,
+              'injection_detection_enabled',
+              configLoading,
+              configUnavailable
+            )}
+            testId="config-injection-detection"
+          />
+          <ConfigRow
+            label="Prompt Guard"
+            status={configStatusText(
+              config,
+              'prompt_guard_enabled',
+              configLoading,
+              configUnavailable
+            )}
+            testId="config-prompt-guard"
+          />
+          <ConfigRow
+            label="Content Filter"
+            status={configStatusText(
+              config,
+              'content_filter_enabled',
+              configLoading,
+              configUnavailable
+            )}
+            testId="config-content-filter"
+          />
+          <ConfigRow
+            label="Rate Limit"
+            status={configStatusText(
+              config,
+              'rate_limit_enabled',
+              configLoading,
+              configUnavailable
+            )}
+            testId="config-rate-limit"
+          />
+          <ConfigRow
+            label="OPA Policy"
+            status={configStatusText(
+              config,
+              'opa_policy_enabled',
+              configLoading,
+              configUnavailable
+            )}
+            testId="config-opa-policy"
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function ConfigRow({ label, envVar }: { label: string; envVar: string }) {
+function ConfigRow({ label, status, testId }: { label: string; status: string; testId: string }) {
+  const statusClass =
+    status === 'Enabled'
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+      : status === 'Disabled'
+        ? 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+
   return (
-    <div className="flex items-center justify-between py-2 border-b border-neutral-100 dark:border-neutral-800 last:border-0">
+    <div
+      className="flex items-center justify-between py-2 border-b border-neutral-100 dark:border-neutral-800 last:border-0"
+      data-testid={testId}
+    >
       <span className="text-sm text-neutral-700 dark:text-neutral-300">{label}</span>
-      <code className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded">
-        {envVar}
-      </code>
+      <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusClass}`}>{status}</span>
     </div>
   );
 }

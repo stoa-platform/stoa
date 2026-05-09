@@ -54,6 +54,8 @@ import type {
   TenantToolPermission,
   TenantToolPermissionListResponse,
   AggregatedMetrics,
+  GuardrailsConfigResponse,
+  GuardrailsTimeRange,
   DeploymentStatusSummary,
   GatewayDeployment,
   GatewayGuardrailsResponse,
@@ -875,12 +877,19 @@ class ApiService {
   // Gateway Observability
   // =========================================================================
 
-  async getGatewayAggregatedMetrics(): Promise<AggregatedMetrics> {
-    return gatewaysClient.getAggregatedMetrics();
+  async getGatewayAggregatedMetrics(range?: GuardrailsTimeRange): Promise<AggregatedMetrics> {
+    return gatewaysClient.getAggregatedMetrics(range);
   }
 
-  async getGuardrailsEvents(limit = 20): Promise<GatewayGuardrailsResponse> {
-    return gatewaysClient.getGuardrailsEvents(limit);
+  async getGuardrailsConfig(): Promise<GuardrailsConfigResponse> {
+    return gatewaysClient.getGuardrailsConfig();
+  }
+
+  async getGuardrailsEvents(
+    limit = 20,
+    range?: GuardrailsTimeRange
+  ): Promise<GatewayGuardrailsResponse> {
+    return gatewaysClient.getGuardrailsEvents(limit, range);
   }
 
   async getGatewayHealthSummary(): Promise<GatewayHealthSummary> {

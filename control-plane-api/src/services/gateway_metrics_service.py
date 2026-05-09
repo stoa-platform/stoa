@@ -4,6 +4,8 @@ Phase 2 (CAB-1635): per-tenant filtering, adapter operation metrics, health hist
 """
 
 import logging
+from datetime import UTC, datetime
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -18,6 +20,21 @@ from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus
 from src.services.prometheus_client import prometheus_client
 
 logger = logging.getLogger(__name__)
+
+TimeRange = Literal["1h", "6h", "24h", "7d"]
+
+_GUARDRAILS_TOTAL_QUERIES: dict[str, str] = {
+    "pii_detections": "sum(increase(stoa_guardrails_pii_detected_total[{range}]))",
+    "injection_blocks": "sum(increase(stoa_guardrails_injection_blocked_total[{range}]))",
+    "content_filter_blocks": "sum(increase(stoa_guardrails_content_filtered_total[{range}]))",
+    "prompt_guard_blocks": "sum(increase(stoa_prompt_guard_detected_total[{range}]))",
+}
+
+_RATE_LIMIT_BLOCK_QUERIES: tuple[str, ...] = (
+    "sum(increase(stoa_rate_limit_hits_total[{range}]))",
+    "sum(increase(stoa_api_proxy_rate_limited_total[{range}]))",
+    "sum(increase(stoa_ws_proxy_rate_limited_total[{range}]))",
+)
 
 
 class GatewayMetricsService:
@@ -138,38 +155,119 @@ class GatewayMetricsService:
             "recent_errors": recent_errors,
         }
 
-    async def _fetch_guardrails_metrics(self) -> dict:
-        """Fetch guardrails counters + per-tool breakdown from Prometheus."""
-        guardrails: dict = {
-            "pii_detections": 0,
-            "injection_blocks": 0,
-            "content_filters": 0,
-            "prompt_guard_flags": 0,
+    @staticmethod
+    def _empty_guardrails_metrics(source_healthy: bool) -> dict[str, Any]:
+        return {
+            "pii_detections": None,
+            "injection_blocks": None,
+            "prompt_guard_blocks": None,
+            "content_filter_blocks": None,
+            "rate_limit_blocks": None,
+            "last_sample_at": None,
+            "metrics_age_seconds": None,
+            "source_healthy": source_healthy,
+            # Compatibility fields for the current UI until PR-3B2 consumes the contract names.
+            "content_filters": None,
+            "prompt_guard_flags": None,
+            "rate_limit_enforcements": None,
             "by_tool": {},
             "by_category": {},
         }
+
+    @staticmethod
+    def _extract_prometheus_scalar(result: dict[str, Any] | None) -> tuple[int | None, datetime | None, bool]:
+        """Return scalar value, sample timestamp, and whether the result was interpretable."""
+        if result is None:
+            return None, None, False
+
+        values = result.get("result")
+        if not isinstance(values, list):
+            return None, None, False
+        if not values:
+            return None, None, True
+
+        raw_value = values[0].get("value")
+        if not isinstance(raw_value, list) or len(raw_value) < 2:
+            return None, None, False
+
+        try:
+            sample_at = datetime.fromtimestamp(float(raw_value[0]), UTC)
+            numeric = float(raw_value[1])
+        except (TypeError, ValueError, OSError):
+            return None, None, False
+
+        if numeric != numeric or numeric in {float("inf"), float("-inf")}:
+            return None, None, False
+
+        return int(numeric), sample_at, True
+
+    @staticmethod
+    def _metrics_age_seconds(last_sample_at: datetime | None) -> int | None:
+        if last_sample_at is None:
+            return None
+        return max(0, int(datetime.now(UTC).timestamp() - last_sample_at.timestamp()))
+
+    async def _fetch_guardrails_metrics(self, time_range: TimeRange = "1h") -> dict[str, Any]:
+        """Fetch guardrails counters + freshness from Prometheus."""
+        guardrails = self._empty_guardrails_metrics(source_healthy=False)
         if not prometheus_client.is_enabled:
             return guardrails
 
-        # Totals
-        totals = {
-            "pii_detections": "sum(stoa_guardrails_pii_detected_total) or vector(0)",
-            "injection_blocks": "sum(stoa_guardrails_injection_blocked_total) or vector(0)",
-            "content_filters": "sum(stoa_guardrails_content_filtered_total) or vector(0)",
-            "prompt_guard_flags": "sum(stoa_prompt_guard_detected_total) or vector(0)",
-        }
-        for key, promql in totals.items():
+        guardrails = self._empty_guardrails_metrics(source_healthy=True)
+        source_healthy = True
+        newest_sample_at: datetime | None = None
+
+        for key, promql_template in _GUARDRAILS_TOTAL_QUERIES.items():
             try:
-                result = await prometheus_client.query(promql)
-                if result and result.get("result"):
-                    val = result["result"][0].get("value", [None, "0"])
-                    guardrails[key] = int(float(val[1]))
+                result = await prometheus_client.query(promql_template.format(range=time_range))
             except Exception:
                 logger.debug("Failed to fetch guardrails metric %s", key)
+                source_healthy = False
+                continue
+
+            value, sample_at, interpretable = self._extract_prometheus_scalar(result)
+            if not interpretable:
+                source_healthy = False
+                continue
+            guardrails[key] = value
+            if sample_at and (newest_sample_at is None or sample_at > newest_sample_at):
+                newest_sample_at = sample_at
+
+        rate_limit_values: list[int] = []
+        for promql_template in _RATE_LIMIT_BLOCK_QUERIES:
+            try:
+                result = await prometheus_client.query(promql_template.format(range=time_range))
+            except Exception:
+                logger.debug("Failed to fetch rate-limit guardrails metric")
+                source_healthy = False
+                continue
+
+            value, sample_at, interpretable = self._extract_prometheus_scalar(result)
+            if not interpretable:
+                source_healthy = False
+                continue
+            if value is not None:
+                rate_limit_values.append(value)
+            if sample_at and (newest_sample_at is None or sample_at > newest_sample_at):
+                newest_sample_at = sample_at
+
+        if rate_limit_values:
+            guardrails["rate_limit_blocks"] = sum(rate_limit_values)
+
+        guardrails["last_sample_at"] = newest_sample_at.isoformat() if newest_sample_at else None
+        guardrails["metrics_age_seconds"] = self._metrics_age_seconds(newest_sample_at)
+        guardrails["source_healthy"] = source_healthy
+
+        # Compatibility aliases for the current UI. PR-3B2 consumes the canonical names.
+        guardrails["content_filters"] = guardrails["content_filter_blocks"]
+        guardrails["prompt_guard_flags"] = guardrails["prompt_guard_blocks"]
+        guardrails["rate_limit_enforcements"] = guardrails["rate_limit_blocks"]
 
         # Breakdown by tool (injection)
         try:
-            result = await prometheus_client.query("sum by (tool) (stoa_guardrails_injection_blocked_total)")
+            result = await prometheus_client.query(
+                f"sum by (tool) (increase(stoa_guardrails_injection_blocked_total[{time_range}]))"
+            )
             if result and result.get("result"):
                 for item in result["result"]:
                     tool = item.get("metric", {}).get("tool", "unknown")
@@ -180,7 +278,9 @@ class GatewayMetricsService:
 
         # Breakdown by category (content filter)
         try:
-            result = await prometheus_client.query("sum by (category) (stoa_guardrails_content_filtered_total)")
+            result = await prometheus_client.query(
+                f"sum by (category) (increase(stoa_guardrails_content_filtered_total[{time_range}]))"
+            )
             if result and result.get("result"):
                 for item in result["result"]:
                     cat = item.get("metric", {}).get("category", "unknown")
@@ -191,7 +291,9 @@ class GatewayMetricsService:
 
         # Breakdown by tool (PII — via recent rate to identify which tools leak PII)
         try:
-            result = await prometheus_client.query("sum by (tool) (stoa_guardrails_pii_detected_total)")
+            result = await prometheus_client.query(
+                f"sum by (tool) (increase(stoa_guardrails_pii_detected_total[{time_range}]))"
+            )
             if result and result.get("result"):
                 for item in result["result"]:
                     tool = item.get("metric", {}).get("tool", "unknown")
@@ -203,11 +305,11 @@ class GatewayMetricsService:
 
         return guardrails
 
-    async def get_aggregated_metrics(self, tenant_id: str | None = None) -> dict:
+    async def get_aggregated_metrics(self, tenant_id: str | None = None, time_range: TimeRange = "1h") -> dict:
         """Combined health + sync summaries + guardrails + overall_status."""
         health = await self.get_health_summary(tenant_id=tenant_id)
         sync = await self.get_sync_status_summary(tenant_id=tenant_id)
-        guardrails = await self._fetch_guardrails_metrics()
+        guardrails = await self._fetch_guardrails_metrics(time_range=time_range)
 
         # Determine overall status
         total_gateways = health.get("total_gateways", 0)

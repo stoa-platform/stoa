@@ -52,6 +52,7 @@ export const gatewayTabs: SubNavTab[] = [
   { label: 'Config Sync', href: '/drift', icon: GitCompareArrows },
 ];
 
+// AR-1: static security posture remains under Governance; runtime guardrail events stay here.
 export const observabilityTabs: SubNavTab[] = [
   { label: 'Gateway Health', href: '/observability', icon: Gauge },
   { label: 'Live Calls', href: '/observability/live-calls', icon: Activity },

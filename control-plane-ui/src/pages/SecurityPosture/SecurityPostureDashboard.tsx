@@ -345,7 +345,7 @@ export function SecurityPostureDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Security Posture</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Continuous security monitoring and compliance scoring
+            Compliance findings, security score, configuration assessment
           </p>
         </div>
         <div className="flex items-center gap-2">

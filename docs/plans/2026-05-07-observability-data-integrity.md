@@ -1707,3 +1707,16 @@ Si AR-1 retient fusion: les deux pages deviennent une seule sous Observability, 
 5. **Confirm PR-0 scope is acceptable** (5 cosmetic fixes + 1 functional bug A4 in one chore PR).
 6. **Confirm PR-1A access** (someone with prod OVH kubeconfig runs the investigation, or grant codex temporary access).
 7. **Flip `validation_status: draft → validated`** in frontmatter once 1+2+3 done. PR-0 can start before 2/3 are locked (PR-0 doesn't touch contracts).
+
+## Delivery closure — 2026-05-09
+
+Status: DELIVERED
+
+MEGA-A — Audit Log Data Integrity:
+Delivered and runtime-verified.
+
+MEGA-B — Runtime Observability Data Integrity:
+Delivered and runtime-verified.
+
+Final merged PR:
+PR-4 nav IA cleanup — #2745, merged 2026-05-09 08:18 UTC.

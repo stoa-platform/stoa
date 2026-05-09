@@ -1393,24 +1393,44 @@ export interface AggregatedMetrics {
     sync_percentage: number;
   };
   overall_status: string;
-  // Guardrails slice is emitted by the metrics endpoint when runtime security
-  // features are enabled. Backend does not expose a canonical schema — consumer
-  // (`GuardrailsDashboard`) expects this shape (CAB-2164).
-  guardrails?: {
-    pii_detections?: number;
-    injection_blocks?: number;
-    content_filters?: number;
-    prompt_guard_flags?: number;
-    by_tool?: Record<string, number>;
-    by_category?: Record<string, number>;
-  };
-  rate_limiting?: {
-    enforcements?: number;
-  };
-  // TODO(WAVE-2): promote guardrails/rate_limiting to Schemas when backend
-  // publishes their shape (see BACKEND-GAPS-CAB-2159.md §BUG-6/BUG-9).
+  // Guardrails slice follows the validated PR-3A runtime truth contract:
+  // docs/plans/2026-05-10-guardrails-runtime-truth-contract.md
+  guardrails?: GuardrailsMetricsBlock;
   [key: string]: unknown;
 }
+
+export type GuardrailsConfigSource = 'env' | 'runtime' | 'config-service';
+
+export type GuardrailsTimeRange = '1h' | '6h' | '24h' | '7d';
+
+export interface GuardrailsConfigResponse {
+  pii_enabled: boolean;
+  injection_detection_enabled: boolean;
+  prompt_guard_enabled: boolean;
+  content_filter_enabled: boolean;
+  rate_limit_enabled: boolean;
+  opa_policy_enabled: boolean;
+  source: GuardrailsConfigSource;
+  updated_at: string;
+}
+
+export interface GuardrailsMetricsBlock {
+  pii_detections: number | null;
+  injection_blocks: number | null;
+  prompt_guard_blocks: number | null;
+  content_filter_blocks: number | null;
+  rate_limit_blocks: number | null;
+  last_sample_at: string | null;
+  metrics_age_seconds: number | null;
+  source_healthy: boolean;
+}
+
+export type GuardrailsMetricField =
+  | 'pii_detections'
+  | 'injection_blocks'
+  | 'prompt_guard_blocks'
+  | 'content_filter_blocks'
+  | 'rate_limit_blocks';
 
 // CAB-2164 local wrapper: guardrails event stream consumed by
 // `GuardrailsDashboard.tsx`. Backend does not publish a canonical schema —

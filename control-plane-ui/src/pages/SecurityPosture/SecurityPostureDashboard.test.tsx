@@ -180,7 +180,7 @@ describe('SecurityPostureDashboard', () => {
   it('renders the subtitle', () => {
     render(<SecurityPostureDashboard />);
     expect(
-      screen.getByText('Continuous security monitoring and compliance scoring')
+      screen.getByText('Compliance findings, security score, configuration assessment')
     ).toBeInTheDocument();
   });
 

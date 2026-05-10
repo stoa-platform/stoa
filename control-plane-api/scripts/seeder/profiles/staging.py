@@ -10,4 +10,9 @@ STEPS: list[StepDefinition] = [
     StepDefinition(name="consumers", deps=["tenants", "plans"]),
     StepDefinition(name="mcp_servers", deps=["tenants"]),
     StepDefinition(name="security_posture", deps=["tenants"]),
+    StepDefinition(
+        name="observability_fixtures",
+        deps=["tenants"],
+        seed_fn="scripts.seeder.observability_fixtures.audit_events",
+    ),
 ]

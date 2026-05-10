@@ -112,9 +112,50 @@ Missing or misconfigured:
 
 The pipeline is not absent: gateway traces are generated and Tempo can store/retrieve them. It is not live end-to-end for the product surface: Data Prepper does not accept OTLP trace input on `21890`, OpenSearch does not receive the new probe span, and `/v1/monitoring/transactions` list returns no trace data for the UI.
 
+## Phase 0.5b Post-Merge Verification
+
+Date: 2026-05-10.
+
+The original Phase 0 verdict above is retained as the historical diagnostic
+state. After Phase 0.5a landed in stoa-infra, Phase 0.5b re-ran the gateway
+trace walk and confirmed the drift was cleared for new gateway spans:
+
+- ArgoCD reported `stoa-data-prepper`, `stoa-gateway`, and `control-plane-api`
+  as `Synced` / `Healthy` at infra commit
+  `44ef7ac3c141e0a9c6edd69b4aeb217e9af018f1`.
+- `opensearch/stoa-data-prepper` pod
+  `stoa-data-prepper-844f5f46c5-sn9gt` was `1/1 Running`.
+- Data Prepper bound OTLP `21890` and health `4900`; `/proc/net/tcp6` showed
+  listeners on `:5582` and `:1324`, with established Alloy connections on
+  `21890`.
+- `stoa-control-plane-api` had
+  `OPENSEARCH_HOST=https://opensearch-cluster-master.opensearch.svc.cluster.local:9200`.
+
+Probe:
+
+- Probe id: `probe-2026-05-10-bae194b8`
+- Route: `GET https://mcp.gostoa.dev/apis/echo-fallback/`
+- HTTP result: `404 No matching API route`
+- Injected W3C trace id: `b61e34fbb31ba2d1a18fe91f7399917f`
+- Gateway-generated trace id: `884404306fbdaeb833d32b6741b7a0ac`
+
+Post-fix hop matrix:
+
+| Hop | Result | Evidence |
+|---|---:|---|
+| Gateway -> Alloy | pass | Gateway access log for `stoa-phase5b-probe/2026-05-10` recorded trace id `884404306fbdaeb833d32b6741b7a0ac` on `/apis/echo-fallback/`. |
+| Alloy -> Data Prepper | pass | Data Prepper accepted new OTLP traffic on `21890`; Alloy logs after the probe no longer showed Data Prepper exporter `DeadlineExceeded`, `refused`, queue-full, or dropped-data errors. |
+| Data Prepper -> OpenSearch | pass | OpenSearch `_search?q=traceId:884404306fbdaeb833d32b6741b7a0ac` returned 5 hits in `otel-v1-apm-span-000017`. |
+| Control Plane transaction detail | pass | `/v1/monitoring/transactions/884404306fbdaeb833d32b6741b7a0ac` returned HTTP `200`, `source="opensearch"`, `span_count=5`. |
+| Control Plane transaction list | pass | `/v1/monitoring/transactions?time_range=15&limit=5&route=/apis/echo-fallback/` returned HTTP `200`, `source="opensearch"`, `total=5`. |
+| Tempo fallback | pass | `stoa-tempo.monitoring:3200/ready` returned `ready`, and `/api/traces/884404306fbdaeb833d32b6741b7a0ac` returned 5 spans. |
+
+Phase 5B uses this post-merge state for trace-hop applicability. The automated
+probe and operator runbook live in `docs/observability/gateway-telemetry-probe.md`.
+
 ## Recommended Next Work
 
-1. Phase 0.5a infra fix: make `opensearch/stoa-data-prepper` actually listen on OTLP `21890` by starting it only after OpenSearch is reachable and by failing readiness/liveness when `21890` is not bound.
-2. Phase 0.5a config fix: update Control Plane `OPENSEARCH_HOST` to the real service (`opensearch-cluster-master.opensearch.svc.cluster.local:9200`) rather than creating an alias for the stale `opensearch.opensearch` name.
-3. Product/API fix candidate: investigate why `/v1/monitoring/transactions/{trace_id}` can resolve Tempo traces but `/v1/monitoring/transactions` returns `source="none"` for the same window.
+1. Done in Phase 0.5a/0.5b: make `opensearch/stoa-data-prepper` actually listen on OTLP `21890` by starting it only after OpenSearch is reachable and by failing readiness/liveness when `21890` is not bound.
+2. Done in Phase 0.5a/0.5b: update Control Plane `OPENSEARCH_HOST` to the real service (`opensearch-cluster-master.opensearch.svc.cluster.local:9200`) rather than creating an alias for the stale `opensearch.opensearch` name.
+3. Done in Phase 0.5b: transaction list now returns `source="opensearch"` for fresh gateway spans once the trace index receives Data Prepper output.
 4. Gateway tracing fix candidate: decide whether inbound `traceparent` must be honored; if yes, add a follow-up outside Phase 0.

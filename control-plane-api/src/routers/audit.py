@@ -60,6 +60,7 @@ class AuditEntry(BaseModel):
     user_agent: str | None
     details: dict[str, Any] | None
     request_id: str | None
+    is_synthetic: bool = False
 
 
 class AuditListResponse(BaseModel):
@@ -135,6 +136,17 @@ class PiiErasureResponse(BaseModel):
     pg_records_affected: int
     os_records_deleted: int
     pseudo_id: str
+
+
+def _is_synthetic_details(details: dict[str, Any] | None) -> bool:
+    """Return true for audit fixture rows marked in details JSONB."""
+    if not isinstance(details, dict):
+        return False
+    return (
+        details.get("synthetic") is True
+        and details.get("source") == "seed"
+        and details.get("fixture_batch") == "observability-data-visibility-2026-05-09"
+    )
 
 
 # =============================================================================
@@ -645,6 +657,7 @@ async def export_audit_csv(
             "Status",
             "Client IP",
             "Request ID",
+            "Is Synthetic",
         ]
     )
 
@@ -662,6 +675,7 @@ async def export_audit_csv(
                 entry.get("status"),
                 entry.get("client_ip"),
                 entry.get("request_id"),
+                entry.get("is_synthetic", False),
             ]
         )
 
@@ -721,7 +735,7 @@ async def export_audit_json(
         "tenant_id": tenant_id,
         "exported_at": datetime.now(UTC).isoformat(),
         "total_entries": len(rows),
-        "entries": rows,
+        "entries": [{**row, "is_synthetic": row.get("is_synthetic", False)} for row in rows],
     }
 
     json_content = json.dumps(export_data, indent=2, default=str)
@@ -1020,6 +1034,7 @@ async def _pg_event_to_entry(event: Any) -> AuditEntry:
         user_agent=event.user_agent,
         details=event.details,
         request_id=event.correlation_id,
+        is_synthetic=_is_synthetic_details(event.details),
     )
 
 
@@ -1041,6 +1056,7 @@ def _pg_event_to_dict(event: Any) -> dict[str, Any]:
         "path": event.path,
         "status_code": event.status_code,
         "duration_ms": event.duration_ms,
+        "is_synthetic": _is_synthetic_details(event.details),
     }
 
 
@@ -1149,6 +1165,7 @@ async def _query_opensearch_audit(
                 user_agent=actor_src.get("user_agent"),
                 details=src.get("details"),
                 request_id=src.get("correlation_id"),
+                is_synthetic=_is_synthetic_details(src.get("details")),
             )
         )
 

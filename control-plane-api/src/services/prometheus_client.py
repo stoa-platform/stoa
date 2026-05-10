@@ -6,7 +6,7 @@ Uses httpx.AsyncClient with context managers following existing patterns.
 
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import httpx
@@ -21,6 +21,12 @@ LEGACY_MCP_REQUEST_DURATION_METRIC = "mcp_request_duration_seconds"
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _TIME_RANGE_RE = re.compile(r"^[1-9][0-9]*(s|m|h|d|w)$")
+
+
+def _prometheus_timestamp(value: datetime) -> str:
+    """Return an epoch timestamp accepted by Prometheus HTTP APIs."""
+    value = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    return str(value.timestamp())
 
 
 class PrometheusClient:
@@ -112,8 +118,8 @@ class PrometheusClient:
                     "/query_range",
                     params={
                         "query": promql,
-                        "start": start.isoformat() + "Z",
-                        "end": end.isoformat() + "Z",
+                        "start": _prometheus_timestamp(start),
+                        "end": _prometheus_timestamp(end),
                         "step": step,
                     },
                 )

@@ -172,7 +172,7 @@ describe('GuardrailsDashboard', () => {
 
     expect(
       await within(screen.getByTestId('guardrail-card-pii-detection')).findByText(
-        'No metrics sample'
+        'No guardrail trip samples in window'
       )
     ).toBeInTheDocument();
   });
@@ -196,7 +196,7 @@ describe('GuardrailsDashboard', () => {
     expect(await screen.findAllByText('Metrics unavailable')).not.toHaveLength(0);
     expect(
       await within(screen.getByTestId('guardrail-card-pii-detection')).findByText(
-        'No metrics sample'
+        'No guardrail trip samples in window'
       )
     ).toBeInTheDocument();
   });

@@ -390,6 +390,52 @@ describe('AuditLog', () => {
     });
   });
 
+  it('shows a visible badge for synthetic audit events', async () => {
+    vi.useRealTimers();
+    mockGet.mockImplementation((url: unknown) => {
+      if (String(url) === '/v1/audit/gregarious-games') {
+        return Promise.resolve({
+          data: {
+            entries: [
+              {
+                id: 'evt-synthetic',
+                timestamp: '2026-05-09T10:00:00Z',
+                user_id: 'system-seed',
+                user_email: null,
+                action: 'export',
+                resource_type: 'audit',
+                resource_id: 'audit-1',
+                resource_name: 'audit-one',
+                status: 'success',
+                details: {
+                  synthetic: true,
+                  source: 'seed',
+                  fixture_batch: 'observability-data-visibility-2026-05-09',
+                },
+                is_synthetic: true,
+                client_ip: null,
+                user_agent: null,
+                request_id: 'req-synthetic',
+                tenant_id: 'gregarious-games',
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+            has_more: false,
+          },
+        });
+      }
+      return defaultAuditMock(url);
+    });
+
+    render(<AuditLog />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('audit-synthetic-badge')).toHaveTextContent('synthetic');
+    });
+  });
+
   it('shows the last successful refresh timestamp', async () => {
     vi.useRealTimers();
     render(<AuditLog />);

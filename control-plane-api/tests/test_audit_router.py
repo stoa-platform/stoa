@@ -14,9 +14,8 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi.testclient import TestClient
-
 import pytest
+from fastapi.testclient import TestClient
 
 import src.routers.audit as audit_router
 from src.auth.dependencies import User, get_current_user
@@ -126,6 +125,42 @@ class TestListAuditEntries:
             resp = client.get(f"/v1/audit/{DEMO_TENANT}")
 
         assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_pg_audit_event_exposes_computed_is_synthetic() -> None:
+    event = SimpleNamespace(
+        id="evt-synthetic",
+        created_at=datetime(2026, 5, 9, tzinfo=UTC),
+        tenant_id=DEMO_TENANT,
+        actor_id="system-seed",
+        actor_email=None,
+        action="export",
+        resource_type="audit",
+        resource_id="audit-1",
+        outcome="success",
+        client_ip=None,
+        user_agent=None,
+        details={
+            "synthetic": True,
+            "source": "seed",
+            "fixture_batch": "observability-data-visibility-2026-05-09",
+        },
+        correlation_id="req-synthetic",
+        method="GET",
+        path="/v1/audits/audit-1",
+        status_code=200,
+        duration_ms=42,
+    )
+
+    with patch(
+        "src.routers.audit.resolve_actor",
+        AsyncMock(return_value=SimpleNamespace(user_email=None, user_display_name=None, resolved=False)),
+    ):
+        entry = await audit_router._pg_event_to_entry(event)
+
+    assert entry.is_synthetic is True
+    assert audit_router._pg_event_to_dict(event)["is_synthetic"] is True
 
 
 class TestAuditStatsEndpoint:

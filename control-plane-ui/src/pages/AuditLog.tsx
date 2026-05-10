@@ -52,6 +52,7 @@ interface AuditEntry {
   resource_name?: string;
   status: AuditStatus;
   details: Record<string, unknown> | null;
+  is_synthetic?: boolean;
   client_ip: string | null;
   user_agent: string | null;
   request_id: string | null;
@@ -627,6 +628,15 @@ export function AuditLog() {
                                   <span className="text-neutral-700 dark:text-neutral-300 capitalize">
                                     {entry.action.replace(/_/g, ' ')}
                                   </span>
+                                  {entry.is_synthetic && (
+                                    <span
+                                      data-testid="audit-synthetic-badge"
+                                      title="Synthetic seed event"
+                                      className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                                    >
+                                      synthetic
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-4 py-3">

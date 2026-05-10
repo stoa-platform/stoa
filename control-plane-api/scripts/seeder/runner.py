@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from scripts.seeder.models import SeederResult, StepDefinition, StepResult
@@ -24,6 +25,12 @@ VALID_STEPS = (
     "mcp_servers",
     "prospects",
     "security_posture",
+    "observability_fixtures",
+)
+
+_OBSERVABILITY_FIXTURE_ENVS = (
+    "STOA_OBSERVABILITY_AUDIT_FIXTURES",
+    "STOA_OBSERVABILITY_AUDIT_FIXTURE_PROFILE",
 )
 
 
@@ -33,8 +40,14 @@ def _load_profile(profile: str) -> list[StepDefinition]:
     return mod.STEPS
 
 
-def _load_step_module(step_name: str):
-    """Load the step module (scripts.seeder.steps.<name>)."""
+def _load_step_module(step_def: StepDefinition):
+    """Load the module that implements a seeder step."""
+    module_path = step_def.seed_fn or f"scripts.seeder.steps.{step_def.name}"
+    return importlib.import_module(module_path)
+
+
+def _load_dependency_module(step_name: str):
+    """Load a core dependency step module."""
     return importlib.import_module(f"scripts.seeder.steps.{step_name}")
 
 
@@ -71,6 +84,9 @@ class SeederRunner:
 
         if step is not None and step not in VALID_STEPS:
             raise ValueError(f"Unknown step: {step}. Valid: {', '.join(VALID_STEPS)}")
+
+        if profile == "prod" and (step == "observability_fixtures" or _observability_fixtures_requested()):
+            raise ValueError("Synthetic audit fixtures are forbidden in prod profile")
 
         self.session = session
         self.profile = profile
@@ -111,7 +127,7 @@ class SeederRunner:
                     result.error = dep_error
                     return result
 
-            step_mod = _load_step_module(step_def.name)
+            step_mod = _load_step_module(step_def)
             try:
                 step_result = await step_mod.seed(self.session, self.profile, dry_run=self.dry_run)
                 result.steps.append(step_result)
@@ -135,7 +151,7 @@ class SeederRunner:
     async def _run_check(self, result: SeederResult) -> SeederResult:
         """Run check mode — verify expected data exists."""
         for step_def in self._steps:
-            step_mod = _load_step_module(step_def.name)
+            step_mod = _load_step_module(step_def)
             missing = await step_mod.check(self.session, self.profile)
             result.missing.extend(missing)
 
@@ -153,7 +169,7 @@ class SeederRunner:
         for step_def in reversed(self._steps):
             if self.step_filter and step_def.name != self.step_filter:
                 continue
-            step_mod = _load_step_module(step_def.name)
+            step_mod = _load_step_module(step_def)
             deleted = await step_mod.reset(self.session, self.profile)
             if deleted > 0:
                 print(f"  [RESET] {step_def.name}: deleted {deleted} rows")
@@ -163,7 +179,7 @@ class SeederRunner:
     async def _check_deps(self, step_def: StepDefinition) -> str | None:
         """Check that dependencies exist when running a single step."""
         for dep_name in step_def.deps:
-            dep_mod = _load_step_module(dep_name)
+            dep_mod = _load_dependency_module(dep_name)
             missing = await dep_mod.check(self.session, self.profile)
             if missing:
                 return f"Missing dependency: {dep_name} ({', '.join(missing)})"
@@ -178,3 +194,10 @@ def _log_step(step_result: StepResult) -> None:
         f"skipped {step_result.skipped} / "
         f"failed {step_result.failed}"
     )
+
+
+def _observability_fixtures_requested() -> bool:
+    """Return true when an operator explicitly requested audit fixtures."""
+    opt_in = os.environ.get(_OBSERVABILITY_FIXTURE_ENVS[0], "").strip().lower()
+    fixture_profile = os.environ.get(_OBSERVABILITY_FIXTURE_ENVS[1], "").strip()
+    return opt_in in {"1", "true", "yes", "on", "enabled"} or bool(fixture_profile)

@@ -212,7 +212,7 @@ function cardStateText(state: GuardrailCardUIState): string {
     case 'disabled':
       return 'Disabled';
     case 'no-sample':
-      return 'No metrics sample';
+      return 'No guardrail trip samples in window';
     case 'stale':
       return 'Stale metrics';
     case 'healthy':
@@ -375,7 +375,7 @@ export function GuardrailsDashboard() {
           const isDisabled =
             statusText === 'Disabled' ||
             statusText === 'Metrics unavailable' ||
-            statusText === 'No metrics sample';
+            statusText === 'No guardrail trip samples in window';
           const isFilterable =
             card.kind === 'metric' &&
             !isDisabled &&

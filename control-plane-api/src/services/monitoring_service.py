@@ -274,6 +274,47 @@ def _time_diff_ms(parent_ts: str, child_ts: str) -> float:
     return (c - p) / 1_000_000
 
 
+def _transaction_span_candidates(hit: dict) -> list[dict]:
+    """Return request-level span candidates from a collapsed OpenSearch hit."""
+    inner_hits = hit.get("inner_hits", {}).get("transaction_spans", {}).get("hits", {}).get("hits", [])
+    return inner_hits or [hit]
+
+
+def _transaction_span_rank(hit: dict) -> tuple[int, int]:
+    """Rank request-level spans for list summaries.
+
+    A trace may contain both ``http.request`` and ``proxy.dynamic``.  The root
+    HTTP span carries method/route/duration, so prefer it when OpenSearch returns
+    multiple request-level spans for the collapsed trace.
+    """
+    src = hit.get("_source", {})
+    name = src.get("name", "")
+    has_method = src.get("span.attributes.http@method") is not None
+    has_route = src.get("span.attributes.http@route") is not None
+    has_status = src.get("span.attributes.http@status_code") is not None
+    completeness = 0 if has_method and has_route and has_status else 1
+    name_rank = {
+        "http.request": 0,
+        "mcp.tools.call": 1,
+        "mcp.tools.list": 2,
+        "HTTP GET": 3,
+        "HTTP POST": 4,
+        "proxy.dynamic": 5,
+        "stoa-connect.routes.fetch": 6,
+        "stoa-connect.routes.sync": 7,
+        "stoa-connect.heartbeat": 8,
+        "stoa-connect.discovery": 9,
+        "stoa-connect.sync": 10,
+        "stoa-connect.register": 11,
+    }.get(name, 99)
+    return (completeness, name_rank)
+
+
+def _select_transaction_span_hit(hit: dict) -> dict:
+    """Pick the best request-level span from a collapsed trace group."""
+    return min(_transaction_span_candidates(hit), key=_transaction_span_rank)
+
+
 class MonitoringService:
     """Queries OpenSearch audit-* index for transaction analytics."""
 
@@ -395,6 +436,14 @@ class MonitoringService:
             body = {
                 "query": {"bool": {"filter": filters}},
                 "sort": [{"startTime": {"order": "desc"}}],
+                "collapse": {
+                    "field": "traceId",
+                    "inner_hits": {
+                        "name": "transaction_spans",
+                        "size": len(request_span_names),
+                        "sort": [{"startTime": {"order": "asc"}}],
+                    },
+                },
                 "size": limit,
             }
 
@@ -406,6 +455,7 @@ class MonitoringService:
 
             transactions: list[APITransactionSummary] = []
             for hit in hits:
+                hit = _select_transaction_span_hit(hit)
                 src = hit["_source"]
                 tgf = src.get("traceGroupFields", {}) or {}
                 otel_status_code = int(tgf.get("statusCode", 0) or 0)

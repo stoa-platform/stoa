@@ -2,10 +2,11 @@
 id: decision-2026-05-11-guardrails-non-mcp-4b-full
 plan_ref: docs/plans/2026-05-11-guardrails-non-mcp-4b-full.md
 challenger: "ChatGPT (external, non-Claude — HLFH Decision Gate convention)"
-verdict: challenged
+verdict: validated
 verdict_history:
   - 2026-05-11 v1 challenged (12 amendments A1-A12 + 6 Q answers + severity matrix; challenger had F1-F5 summary + canonical sources only, not full plan content)
   - 2026-05-11 v2 challenged (8 amendments A13-A20; full plan visible, A1-A12 substantively integrated but residual semantic contradictions remain — challenger explicitly rejects rescope: "le plan est proche")
+  - 2026-05-11 v3 validated (5 micro-corrections E1-E5; rescope explicitly not triggered, codex_execution_allowed conditional on E1-E5 applied + Council gate)
 source_plan_ref: docs/plans/2026-05-09-observability-data-visibility.md
 source_decision_ref: docs/decisions/2026-05-09-observability-data-visibility.md
 decision_gate_log: "#13 (HLFH Decision Gate)"
@@ -510,7 +511,88 @@ reason: residual semantic contradictions in the metric/API contract would let
 
 **Pas de rescope complet recommandé**. Le plan est proche. Round 3 ciblé après application A13–A20, car ces points touchent le cœur du contrat runtime truth.
 
-## Operational gates post-validation (anticipated)
+## Re-challenge 2026-05-11 v3
+
+Verdict : **validated** (transition `validated` autorisée). Conditional clause : `codex_execution_allowed: conditional` sur E1-E5 applied + Council gate respected before implementation code. Pas de rescope HEG-PAT-022. Pas de Round 4 requis.
+
+### Validation A13–A20 (Round 3 confirmation)
+
+| Amendement | Statut Round 3 | Commentaire |
+|---|---|---|
+| A13 — Producer presence | validé | Zero-init bounded series par défaut + fallback gauge encadré. AC-10 ajouté. |
+| A14 — Skipped bodies | validé | Contradiction `not_applicable` / `allow` fermée. Skips n'incrémentent rien. |
+| A15 — State precedence | validé | Ordre backend explicite, testé Phase 6.4 / AC-12. |
+| A16 — `trips_count` / `error_count` | validé | `trips = redact + block`, `error` séparé. |
+| A17 — Per-guardrail health | validé | `scrape_sample_at`, `source_healthy`, `stale_reason` ajoutés par guardrail. |
+| A18 — No tenant-scoped no-evaluations smoke | validé | Remplacé par clean dev/k3d env ou gateway isolée. |
+| A19 — Prod smoke safe states only | validé | Plus de fault injection prod pour `metrics_unavailable`, `no_evaluations`, `stale_data`. |
+| A20 — Council gate | validé | `impact_score: HIGH`, `council_review_required: true`. |
+
+### Q1–Q6 verdict final verrouillé
+
+| # | Verdict | Lock |
+|---|---|---|
+| Q1 — Operator `go phase 6` suffit-il ? | YES | Audit MCP-only + blind spot sécurité + demande opérateur explicite + besoin distinguer no-evaluations/zero/stale/unavailable. |
+| Q2 — Non-MCP observe-only ? | YES | Aucun changement comportement, mutation, redaction effective ou blocage en Phase 6. Enforcement = plan séparé. |
+| Q3 — Narrowed label set acceptable ? | YES | `deployment_mode`, `surface`, `guardrail`, `decision` seulement. Tenant/route/policy/raw path restent interdits. |
+| Q4 — `flag` first-class decision ? | NO | `decision ∈ allow | redact | block | error` verrouillé. |
+| Q5 — `ws_proxy` in scope ? | Conditional, deferred par défaut | In-scope only if payload bounded + no streaming consumption + no per-frame eval + no behavior change. |
+| Q6 — OPA runtime counters ? | NO | OPA reste config-only ; runtime OPA = contrat séparé futur. |
+
+### Micro-corrections E1–E5 (à appliquer avant flip final)
+
+| # | Section | Correction |
+|---|---|---|
+| E1 | API Contract §A5 | `stale_data` triggers ONLY après A15 precedence : Prom query succeeded + producer presence + scrape_sample_at non-null + lag > freshness_threshold. Prometheus failure = `metrics_unavailable`, jamais `stale_data`. |
+| E2 | Phase 6.3 | `decisions_total{decision="redact"|"block"}` en observe-only = "verdict policy qui s'appliquerait sous enforcement", PAS "trafic réellement mutated/blocked". Phase 6.3 préserve request/response bit-pour-bit. |
+| E3 | API Contract §A15 | Top-level `guardrails.state` n'est PAS automatiquement flipped si UNE seule per-guardrail card est stale/unavailable. Per-guardrail states authoritatifs pour la card health. Top-level stale/unavailable seulement si aggregate health insuffisant. |
+| E4 | Scope | Retirer "flagged" du MCP coverage. Remplacé par `allow | redact | block | error` + note sur sensitive-but-allowed = `decision="allow"` + signal out-of-band. |
+| E5 | Decision Gate | Codex peut prep Phase 6.0 docs/cardinality/red tests SANS lander code d'implémentation. Council ≥ 8/10 obligatoire avant tout merge Phase 6.1+. |
+
+### Severity matrix finale (Round 3)
+
+| Phase | Severity finale | Verdict |
+|---|---|---|
+| 6.0 — Validation / red tests / cardinality | High | Validé. Council gate obligatoire. |
+| 6.1 — Gateway metric contract | High | Validé avec A13 producer presence. |
+| 6.2 — MCP coverage | High | Validé. A1/A2/A16 encadrent les décisions. |
+| 6.3 — Non-MCP observe-only | High | Validé avec E2 obligatoire pour éviter ambiguïté enforcement. |
+| 6.4 — cp-api reader | High | Validé avec A15/A16/A17 ; E1/E3 clarifient les priorités. |
+| 6.5 — UI five-state rendering | Medium-high | Validé. UI rend backend state, ne dérive pas. |
+| 6.6 — Runtime smoke / rollout | High | Validé. Prod smoke limité aux états sûrs. |
+
+### Décision opérationnelle
+
+Après application E1–E5 :
+
+```yaml
+validation_status: validated
+validated_at: 2026-05-11
+validation_rounds: 3
+```
+
+Exécution autorisée phase par phase avec gates :
+
+1. Council review ≥ 8/10 obligatoire avant tout merge implémentation.
+2. Codex implémente.
+3. Claude reviews against plan / DoD / anti-goals (HEG-PAT-022 Drafter ≠ code writer).
+4. ChatGPT / operator tranche les gates si dérive ou re-challenge.
+5. No Phase 6.1 before Phase 6.0 complete.
+6. No Phase 6.5 before both 6.3 and 6.4 complete (DAG F3 + A8).
+7. No prod smoke before dev/k3d evidence + operator opt-in (A12 + A19).
+
+### Final verdict v3
+
+```yaml
+verdict: validated
+rescope_required: false
+round_4_required: false
+micro_corrections_required_before_flip: [E1, E2, E3, E4, E5]
+codex_execution_allowed: conditional
+council_review_required: true
+```
+
+## Operational gates post-validation
 
 Quand `validation_status: validated` atteint, gates suivants verrouillés :
 

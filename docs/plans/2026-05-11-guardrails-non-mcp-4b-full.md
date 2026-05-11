@@ -1,14 +1,16 @@
 ---
 id: plan-2026-05-11-guardrails-non-mcp-4b-full
 triggers: [a, b]
-validation_status: challenged
+validation_status: validated
 challenge_ref: docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md
 source_plan_ref: docs/plans/2026-05-09-observability-data-visibility.md
 source_decision_ref: docs/decisions/2026-05-09-observability-data-visibility.md
 launch_signal: "Operator requested go phase 6 on 2026-05-11; maps to Q8.6 explicit signal to open the separate MEGA."
-amendments_applied: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20]
+amendments_applied: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, E1, E2, E3, E4, E5]
 impact_score: HIGH
 council_review_required: true
+validated_at: 2026-05-11
+validation_rounds: 3
 ---
 
 # Plan - Phase 6 Guardrails Non-MCP + 4B-Full
@@ -25,8 +27,17 @@ No implementation may start while `validation_status != validated`.
 Required before code:
 
 1. External non-Claude challenger verdict in `docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md`.
-2. Council review if impact score is HIGH or above.
+2. Council review (impact_score: HIGH locked in frontmatter; A20).
 3. Phase ownership claim per phase (see Phase Ownership matrix below).
+
+**E5 lock — Council gate scope**: after external challenger validation, Codex may only prepare Phase 6.0 deliverables that do NOT land implementation behavior:
+
+- Cardinality evidence documentation (`docs/observability/gateway-metrics-cardinality.md` updates).
+- Council materials (Council report scaffolding, persona inputs).
+- Red-test scaffolding (failing tests for AC-1 to AC-16 in gateway / cp-api / cp-ui slices).
+- A10 Surface Coverage Matrix verified with file:line anchors.
+
+**No implementation code may merge before Council review is archived and passes the ≥ 8/10 threshold** (HEG-PAT-003 Council canonical). Phase 6.1+ implementation PRs are blocked by the Council gate independently of plan `validation_status`.
 
 ## Phase Ownership (A9 lock — claim heartbeat protocol)
 
@@ -99,7 +110,7 @@ Phase 6 extends this without treating Phase 2 fixtures or UI wording as runtime 
 In:
 
 - New low-cardinality gateway counters for guardrail evaluations and decisions.
-- MCP producer coverage for pass, redacted, flagged, blocked, and rate-limited outcomes where applicable.
+- MCP producer coverage for `allow`, `redact`, `block`, and `error` outcomes (A2 enum). Rate-limit guardrail emits via `guardrail="rate_limit"` + `decision="block"`. Sensitive-but-allowed outcomes map to `decision="allow"` unless a future plan introduces a separate signal (E4 lock — no `flag` value in Phase 6).
 - Non-MCP producer coverage for guardrail-applicable proxy paths, initially in observe-only mode unless the challenger validates enforcement changes.
 - Control Plane API reader support for old and new metrics during a compatibility window.
 - `/observability/security` semantic split into five states:
@@ -312,6 +323,8 @@ When multiple state conditions could match, the backend MUST evaluate in this or
 
 State precedence applies independently to top-level `state` and each `by_guardrail` `state`. Per A17, each `by_guardrail` entry carries its own `scrape_sample_at` / `source_healthy` / `stale_reason` so the per-guardrail verdict cannot be falsified by an aggregate top-level value.
 
+**E3 lock — top-level aggregation rule**: top-level `guardrails.state` summarizes aggregate usable signals across in-scope guardrails. A single per-guardrail stale/unavailable verdict does **NOT** automatically flip the top-level state if other in-scope guardrails are healthy. Per-guardrail states remain authoritative for card-level health. Top-level `metrics_unavailable` or `stale_data` applies only when the aggregate producer/query health cannot support a truthful aggregate verdict (e.g., Prometheus itself unreachable, or all in-scope guardrails are stale/unavailable). Phase 6.4 tests must cover: "one guardrail stale, others healthy" → top-level NOT `stale_data`; "all guardrails stale" → top-level `stale_data`.
+
 ### A16 — `trips_count` Formula and `error_count` Handling
 
 **Formula lock**:
@@ -354,7 +367,7 @@ freshness_threshold(range):
   cap: never exceed 60 min regardless of range
 ```
 
-`state = "stale_data"` triggers when `source_healthy == false`, i.e., either (a) Prometheus query failed, or (b) `now - scrape_sample_at > freshness_threshold(range)`.
+`state = "stale_data"` triggers (E1 lock — subordinate to A15 precedence): after A15 precedence is applied, `stale_data` triggers **only** when Prometheus query succeeded, producer presence exists (A13), `scrape_sample_at` is non-null, AND `now - scrape_sample_at > freshness_threshold(range)`. **Prometheus query failure is `metrics_unavailable`, not `stale_data`** (A15 precedence #1 wins over #2).
 
 Default scrape interval = 30s. For ranges ≤ 1h → effective threshold = 5 min. For 7d range → effective threshold = 30 min (not 14h as in the uncapped F1 formula).
 
@@ -468,6 +481,8 @@ DoD (A2 lock — decision taxonomy `allow | redact | block | error`):
 ### Phase 6.3 - Non-MCP Observe-Only Coverage
 
 Goal: evaluate guardrails on non-MCP traffic without mutating or blocking traffic in the first implementation slice.
+
+**E2 lock — decision semantics in observe-only**: for non-MCP observe-only surfaces, `decisions_total{decision=...}` records the guardrail policy outcome that **would have applied under enforcement**. It does **NOT** imply traffic was mutated, redacted, or blocked. Phase 6.3 must preserve request/response behavior bit-for-bit. A `decision="block"` increment on `api_proxy` means "policy verdict was block" — the request still completed normally. Enforcement of non-MCP guardrails requires a separate follow-up plan.
 
 Candidate paths to confirm during implementation:
 

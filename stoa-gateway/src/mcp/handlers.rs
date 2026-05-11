@@ -22,6 +22,7 @@ use tracing::{debug, error, instrument, warn, Instrument};
 
 use crate::auth::jwt::JwtValidator;
 use crate::control_plane::ToolProxyClient;
+use crate::guardrails::{GuardrailMetricDecision, GuardrailMetricEvent};
 use crate::mcp::tools::{ToolContext, ToolDefinition, ToolRegistry};
 use crate::metering::{
     cost::compute_cost, ErrorSnapshot, EventStatus, GatewaySnapshot, MeteringProducerTrait,
@@ -31,6 +32,8 @@ use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
 use crate::resilience::CircuitBreaker;
 use crate::state::{AppState, PolicyCallerCtx};
+
+const MCP_GUARDRAIL_SURFACE: &str = "mcp";
 
 // === Request/Response Types ===
 
@@ -401,6 +404,7 @@ async fn mcp_tools_call_inner(
     // Phase 1: Extract JWT auth context
     let auth = extract_auth_context(&state, &headers).await;
     let t_auth = start.elapsed();
+    let deployment_mode = state.config.gateway_mode.to_string();
 
     // Enrich span with UAC attributes for OTel export (CAB-1374)
     let current_span = tracing::Span::current();
@@ -588,6 +592,13 @@ async fn mcp_tools_call_inner(
         state.rate_limiter.check(&auth.tenant_id)
     };
     if !rate_result.allowed {
+        record_mcp_guardrail_metric_event(
+            &deployment_mode,
+            GuardrailMetricEvent {
+                guardrail: "rate_limit",
+                decision: GuardrailMetricDecision::Block,
+            },
+        );
         warn!(tenant_id = %auth.tenant_id, "Rate limit exceeded");
         metrics::record_rate_limit_hit(&auth.tenant_id);
         if is_federation_request {
@@ -621,6 +632,13 @@ async fn mcp_tools_call_inner(
         )
             .into_response();
     }
+    record_mcp_guardrail_metric_event(
+        &deployment_mode,
+        GuardrailMetricEvent {
+            guardrail: "rate_limit",
+            decision: GuardrailMetricDecision::Allow,
+        },
+    );
 
     // CAB-1337 Phase 3: Tool allowlist check (per-tenant GuardrailPolicy)
     if !state
@@ -699,11 +717,14 @@ async fn mcp_tools_call_inner(
         .resolve(&auth.tenant_id, &global_guardrails_cfg);
     // Track guardrail action for X-Stoa-Guardrail response header
     let mut guardrail_action: Option<&str> = None;
-    let arguments = match crate::guardrails::check_request(
-        &guardrails_cfg,
-        &request.name,
-        &request.arguments,
-    ) {
+    let (guardrails_outcome, guardrail_metric_events) =
+        crate::guardrails::check_request_with_metric_events(
+            &guardrails_cfg,
+            &request.name,
+            &request.arguments,
+        );
+    record_mcp_guardrail_metric_events(&deployment_mode, &guardrail_metric_events);
+    let arguments = match guardrails_outcome {
         crate::guardrails::GuardrailsOutcome::Pass => {
             tracing::Span::current().record("guardrails.action", "pass");
             request.arguments.clone()
@@ -1361,6 +1382,22 @@ fn emit_error_snapshot(
 }
 
 // === Helpers ===
+
+fn record_mcp_guardrail_metric_event(deployment_mode: &str, event: GuardrailMetricEvent) {
+    metrics::record_guardrail_evaluation(deployment_mode, MCP_GUARDRAIL_SURFACE, event.guardrail);
+    metrics::record_guardrail_decision(
+        deployment_mode,
+        MCP_GUARDRAIL_SURFACE,
+        event.guardrail,
+        event.decision.as_str(),
+    );
+}
+
+fn record_mcp_guardrail_metric_events(deployment_mode: &str, events: &[GuardrailMetricEvent]) {
+    for event in events {
+        record_mcp_guardrail_metric_event(deployment_mode, *event);
+    }
+}
 
 fn extract_tenant(headers: &HeaderMap) -> Option<String> {
     headers

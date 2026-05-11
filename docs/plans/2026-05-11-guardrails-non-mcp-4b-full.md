@@ -1,11 +1,12 @@
 ---
 id: plan-2026-05-11-guardrails-non-mcp-4b-full
 triggers: [a, b]
-validation_status: draft
-challenge_ref: ""
+validation_status: challenged
+challenge_ref: docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md
 source_plan_ref: docs/plans/2026-05-09-observability-data-visibility.md
 source_decision_ref: docs/decisions/2026-05-09-observability-data-visibility.md
 launch_signal: "Operator requested go phase 6 on 2026-05-11; maps to Q8.6 explicit signal to open the separate MEGA."
+amendments_applied: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12]
 ---
 
 # Plan - Phase 6 Guardrails Non-MCP + 4B-Full
@@ -25,9 +26,9 @@ Required before code:
 2. Council review if impact score is HIGH or above.
 3. Phase ownership claim per phase (see Phase Ownership matrix below).
 
-## Phase Ownership
+## Phase Ownership (A9 lock — claim heartbeat protocol)
 
-Per CLAUDE.md multi-instance protocol (`.claude/claims/<ID>.json` + atomic `mkdir` lock). End-to-end ownership: whoever claims a phase finishes it. Stale claim auto-releases after 2h of inactivity.
+Per CLAUDE.md multi-instance protocol (`.claude/claims/<ID>.json` + atomic `mkdir` lock). End-to-end ownership: whoever claims a phase finishes it.
 
 | Phase | Component owner | Claim path |
 |---|---|---|
@@ -39,7 +40,14 @@ Per CLAUDE.md multi-instance protocol (`.claude/claims/<ID>.json` + atomic `mkdi
 | 6.5 | cp-ui | `.claude/claims/phase-6-5-ui-states.json` |
 | 6.6 | sre | `.claude/claims/phase-6-6-runtime-smoke.json` |
 
-A single actor may chain claims across phases owned by the same component (e.g., one gateway implementer covering 6.1 → 6.2 → 6.3) provided each claim file is created and released in order.
+### A9 — Claim heartbeat and chaining rules
+
+- **Stale definition**: a claim is stale after **2h without heartbeat update**, NOT after 2h of wall-clock task duration. A long-running test or build is not stale as long as the owner refreshes the heartbeat.
+- **Heartbeat schema**: each claim JSON file MUST include `last_heartbeat_at` (RFC3339 UTC), refreshed by the owner at minimum every 1h while work is in-flight. Suggested refresh hook: pre-commit + post-test.
+- **Stale auto-release**: any actor observing a claim with `now - last_heartbeat_at > 2h` may release it via atomic delete + new claim. The release event must be logged in `operations.log`.
+- **Same-component chaining**: allowed only if the **previous PR is merged** OR explicitly abandoned via operator notice. A single gateway implementer covering 6.1 → 6.2 → 6.3 must close each claim after each phase PR merges before opening the next.
+- **Cross-component chaining**: requires operator gate OR explicit approval from the next phase's component owner. No automatic handoff (e.g., gateway implementer cannot auto-claim 6.4 cp-api work).
+- **Heartbeat absence = no implicit completion**: a phase is not done because its claim heartbeat stopped. Completion requires DoD checklist binary-passed + PR merged + verdict archived.
 
 ## Objective
 
@@ -112,63 +120,121 @@ Out:
 
 ## Proposed Metric Contract
 
-New counters:
+### A1 — Formal Definition of "Guardrail Evaluation"
+
+A **guardrail evaluation** is one execution of one guardrail policy against one request context.
+
+Precisions:
+
+- A request with 3 policies evaluated increments `evaluations_total` by 3.
+- A `disabled` policy does **not** increment `evaluations_total`.
+- A `configured-but-not-applicable` policy does **not** increment `evaluations_total` (`not_applicable` is kept out of the counter — challenger A1 default lock).
+- An evaluation error increments `evaluations_total` AND `decisions_total{decision="error"}` if the evaluation effectively started. If the evaluation never started (e.g., policy load failure), neither counter increments.
+- `bypass` outcomes are **forbidden** as counter values. If a runtime bypass occurs (operator override, kill-switch), it must be logged separately, never as a `decisions_total` increment, because it would mask absence of evaluation.
+
+This definition is the single source of truth for what counts. Phase 6.1 / 6.2 / 6.3 implementations must conform.
+
+### Counters
 
 ```text
 stoa_guardrails_evaluations_total{deployment_mode, surface, guardrail}
 stoa_guardrails_decisions_total{deployment_mode, surface, guardrail, decision}
 ```
 
-Allowed label values:
+### A2 — Decision Taxonomy Lock
 
 | Label | Values | Notes |
 |---|---|---|
 | `deployment_mode` | `edge-mcp`, `sidecar`, `proxy`, `shadow`, `unknown` | Bounded ADR-024 mode projection. |
 | `surface` | `mcp`, `api_proxy`, `dynamic_proxy`, `ws_proxy` | Bounded producer call-site. |
 | `guardrail` | `pii`, `injection`, `prompt_guard`, `content_filter`, `rate_limit` | Bounded feature enum. |
-| `decision` | `allow`, `redact`, `flag`, `block`, `rate_limited` | Bounded outcome enum. |
+| `decision` | `allow`, `redact`, `block`, `error` | Bounded outcome enum (A2 challenger lock). |
 
-Cardinality budget:
+Forbidden / excluded decision values (must never appear as counter labels):
+
+- `not_applicable` — kept out of counter per A1 (policy didn't apply).
+- `bypass` — runtime overrides logged separately, never as decision (would mask missing evaluation).
+- `flag` — sensitive-but-allowed outcomes map to `decision=allow` with a guardrail-specific severity logged out-of-band (or open a separate plan if `flag` is product-required).
+- `rate_limited` — rate-limiting maps to `guardrail=rate_limit` + `decision=block` (no separate decision value).
+
+### A3 — Cardinality Lock (verified in Phase 6.0)
+
+Cardinality budget under bounded labels only:
 
 ```text
 evaluations_total <= 5 modes * 4 surfaces * 5 guardrails = 100 series
-decisions_total <= 5 modes * 4 surfaces * 5 guardrails * 5 decisions = 500 series
+decisions_total <= 5 modes * 4 surfaces * 5 guardrails * 4 decisions = 400 series
 ```
+
+Forbidden labels (no exceptions without challenger amendment + cardinality review):
+
+- `tenant_id`, `tenant` (high cardinality) — unless tenant-class or hashed-tenant with bounded enum is explicitly accepted.
+- `route` raw — only normalized route templates (e.g., `/v1/apis/:id`), never raw paths with IDs / query params / user input.
+- `policy_id`, `policy_name` raw — only bounded policy enum if exposed.
+- `tool`, `trace_id`, `span_id`, `request_id`, `user_id`, `consumer`, raw `path`, raw `url`, any payload-derived label.
+
+Route normalization rule (lock): produce templates from FastAPI / axum route patterns; never insert path segments captured at runtime.
 
 The prior sketch in `docs/plans/2026-05-09-observability-data-visibility.md` mentioned `{mode, tenant, route, policy}`. This plan intentionally starts narrower because `tenant_id`, route, and policy labels are limited or owner-approved under `docs/observability/telemetry-contract.md` and `docs/observability/gateway-metrics-cardinality.md`.
 
 If tenant-scoped drilldown is required, it should come from server-side filtered traces/logs or an explicitly challenged follow-up contract, not from this first Prometheus counter set.
 
+## A10 — Surface Coverage Matrix
+
+Explicit mode × surface × guardrail-applicability matrix. Vague language like "extend to non-MCP" is rejected: each surface must declare in/out status and rationale.
+
+| mode | surface | path | guardrail applicable? | `evaluations_total` emitted? | `decisions_total` emitted? | reason if excluded |
+|---|---|---|---|---|---|---|
+| `edge-mcp` | `mcp` | `stoa-gateway/src/mcp/handlers.rs` | yes | yes (Phase 6.2) | yes (Phase 6.2) | — |
+| `proxy` | `api_proxy` | `stoa-gateway/src/proxy/api_proxy_handler.rs` | yes (PII / injection / prompt_guard / content_filter / rate_limit applicable on buffered JSON request body) | yes — observe-only first (Phase 6.3) | yes — observe-only first (Phase 6.3) | — |
+| `proxy` | `dynamic_proxy` | `stoa-gateway/src/proxy/dynamic.rs` | yes (same as `api_proxy` for JSON paths) | yes — observe-only first (Phase 6.3) | yes — observe-only first (Phase 6.3) | — |
+| `proxy` | `ws_proxy` | `stoa-gateway/src/ws/proxy.rs` | **conditional** — only if payload semantics are safe and bounded (no streaming-body consumption, no per-frame eval) | conditional — Phase 6.3 deliverable lists explicit gating | conditional — Phase 6.3 deliverable lists explicit gating | streaming consumption + per-frame cost = open question, Q5 in plan |
+| `sidecar` | n/a | — | deferred | no (out of scope) | no (out of scope) | sidecar deployment mode (ADR-024 Q2 target) not yet shipped; no producer call-sites exist in current code |
+| `connect` | n/a | — | deferred | no | no | `stoa-connect` agent bridges third-party gateways (ADR-057); guardrails not yet defined for that surface |
+| `shadow` | n/a | — | deferred | no | no | shadow mode deferred per ADR-024 |
+| n/a | health/readiness | `/healthz`, `/readyz` | no | no | no | not user traffic; no policy applicable |
+| n/a | static admin routes | `/admin/*`, `/metrics`, `/openapi.json` | no | no | no | not subject to guardrails; auth handled at routing layer |
+| n/a | internal control-plane calls | gateway → cp-api callbacks | no | no | no | internal trust boundary; no end-user payload |
+
+Phase 6.3 implementation must reproduce this matrix in `docs/observability/gateway-metrics-cardinality.md` with verified file:line anchors before merge.
+
+Rationale for excluded modes: a Prometheus counter that never increments is preferable to a label series that pollutes cardinality budgets with always-zero values. Re-inclusion requires a separate plan amendment.
+
 ## API Contract
 
-Extend `GET /v1/admin/gateways/metrics?range=<range>` guardrails block with additive fields:
+Extend `GET /v1/admin/gateways/metrics?range=<range>` guardrails block with additive fields (A4 + A6 lock — distinct timestamp dimensions, state derived backend-side):
 
 ```ts
 {
   guardrails: {
-    evaluations_total: number | null,
-    decisions_total: number | null,
-    trips_total: number | null,
-    no_evaluations: boolean | null,
-    evaluation_sample_at: string | null,
-    decision_sample_at: string | null,
-    semantic_state:
+    state:
       | "metrics_unavailable"
       | "no_evaluations"
       | "evaluations_zero_trips"
       | "trips_observed"
       | "stale_data",
+    evaluations_count: number | null,
+    decisions_count: number | null,
+    trips_count: number | null,
+    last_evaluation_delta_at: string | null,   // RFC3339 UTC — most recent positive increase of evaluations_total
+    last_decision_delta_at: string | null,     // RFC3339 UTC — most recent positive increase of decisions_total
+    scrape_sample_at: string | null,           // RFC3339 UTC — latest successful Prometheus sample for the series
+    source_healthy: boolean,                   // Prom query succeeded AND scrape_sample_at within freshness threshold
+    stale_reason: string | null,               // populated when state="stale_data" — explains which timestamp triggered
     by_guardrail: Record<
       "pii" | "injection" | "prompt_guard" | "content_filter" | "rate_limit",
       {
-        evaluations: number | null,
-        trips: number | null,
         state:
           | "metrics_unavailable"
           | "no_evaluations"
           | "evaluations_zero_trips"
           | "trips_observed"
-          | "stale_data"
+          | "stale_data",
+        evaluations_count: number | null,
+        decisions_count: number | null,
+        trips_count: number | null,
+        last_evaluation_delta_at: string | null,
+        last_decision_delta_at: string | null
       }
     >
   }
@@ -181,23 +247,38 @@ Compatibility rules:
 - Existing legacy counters remain readable during the compatibility window.
 - `null` remains unknown/unavailable/no sample, never fake zero.
 - `0` means the backend can prove the count over the selected range.
-- `semantic_state` is derived server-side so tenant authorization and metric interpretation remain backend-owned.
+- `state` is derived server-side. **UI MUST NOT re-derive `state` from raw counts or timestamps** (A6 lock). UI renders backend `state` verbatim. The frontend cannot decide alone whether `null` means `no_evaluations`, `metrics_unavailable`, or `stale_data`.
 
-### Sample Timestamp and `stale_data` Semantics
+### A4 — Timestamp Field Semantics (A4 lock, supersedes F1)
 
-`evaluation_sample_at` and `decision_sample_at` are defined as:
+| Field | Definition |
+|---|---|
+| `last_evaluation_delta_at` | `max(timestamp WHERE increase(stoa_guardrails_evaluations_total[step]) > 0)` over the selected range, RFC3339 UTC. `null` if no positive delta observed. |
+| `last_decision_delta_at` | `max(timestamp WHERE increase(stoa_guardrails_decisions_total[step]) > 0)` over the selected range, RFC3339 UTC. `null` if no positive delta observed. |
+| `scrape_sample_at` | Timestamp of latest successful Prometheus sample for the series/query, regardless of delta value. RFC3339 UTC. `null` if Prometheus query failed or returned no series. |
+| `source_healthy` | `true` iff Prometheus query succeeded AND `scrape_sample_at` is within the freshness threshold (see A5). `false` otherwise. |
 
-- The RFC3339 UTC timestamp of the most recent Prometheus scrape for which the counter value strictly increased within the selected range. Operational definition: `max(timestamp WHERE delta(stoa_guardrails_evaluations_total[scrape_interval]) > 0)` over the range.
-- If no scrape recorded a positive delta in the range, the field is `null` and `no_evaluations` (or `metrics_unavailable` if the counter series is absent entirely) applies.
+Rationale: a counter with `delta=0` over a window can mean any of (a) no evaluations, (b) healthy scrape but no traffic, (c) scrape broken, (d) misfiltered query, (e) counter reset, (f) counter exists but not for this label set. The four-field split lets the backend express these distinctions without forcing UI inference.
 
-`stale_data` threshold (server-derived, **subject to challenger lock**):
+### A5 — `stale_data` Freshness Threshold (A5 lock, supersedes F1 formula)
 
-- For ranges ≤ 1h: `stale_data` triggers when `now - max(evaluation_sample_at, decision_sample_at) > max(2 × scrape_interval, 5 min)`. Default scrape interval = 30s → effective threshold = 5 min.
-- For ranges > 1h: `stale_data` triggers when `now - max(evaluation_sample_at, decision_sample_at) > range / 12`, with a floor of 5 min. Rationale: longer windows tolerate longer scrape gaps proportionally.
+Server-derived threshold with explicit cap (no formula yields > 60 min):
 
-UI must not re-derive `stale_data` from raw timestamps — the API ships the precomputed `semantic_state` and the UI renders it as-is. This preserves AR-1 boundary (backend owns runtime truth).
+```text
+freshness_threshold(range):
+  if range <= 1h:        max(2 * scrape_interval, 5 min)
+  elif range <= 24h:     max(2 * scrape_interval, 10 min)
+  else  (range > 24h):   max(2 * scrape_interval, 30 min)
+  cap: never exceed 60 min regardless of range
+```
 
-## Compatibility Window
+`state = "stale_data"` triggers when `source_healthy == false`, i.e., either (a) Prometheus query failed, or (b) `now - scrape_sample_at > freshness_threshold(range)`.
+
+Default scrape interval = 30s. For ranges ≤ 1h → effective threshold = 5 min. For 7d range → effective threshold = 30 min (not 14h as in the uncapped F1 formula).
+
+UI renders `state` as shipped. Backend owns the freshness verdict.
+
+## Compatibility Window (A7 lock, expands F2)
 
 Legacy guardrail counters remain readable during the compatibility window:
 
@@ -207,30 +288,35 @@ Legacy guardrail counters remain readable during the compatibility window:
 - `stoa_prompt_guard_detected_total`
 - rate-limit counters
 
-Window closes when **both** conditions hold:
+Window closes only when **all five** conditions hold (A7 expansion — `prometheus_engine_queries_total` alone is insufficient):
 
-1. Phase 6.6 smoke validates the 5 semantic states (`metrics_unavailable`, `no_evaluations`, `evaluations_zero_trips`, `trips_observed`, `stale_data`) in production, archived under `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`.
-2. At least 14 days of observation pass with no consumer (dashboard, alert rule, third-party export, internal script) querying the legacy counter names. Verification: Prometheus query-stats audit (`prometheus_engine_queries_total`) shows zero non-canary reads of legacy counter names over the 14-day window.
+1. **Phase 6.6 smoke prod archived** — 5 semantic states (`metrics_unavailable`, `no_evaluations`, `evaluations_zero_trips`, `trips_observed`, `stale_data`) validated in production, archived under `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`.
+2. **14 days without legacy cp-api field consumers** — verified by API access logs / dashboard queries / internal script audit (not just Prometheus engine stats). cp-api fields surfaced by PR-3A that map to legacy counters must show zero reads.
+3. **14 days without legacy PromQL consumers observed where observable** — Prometheus query-stats audit (`prometheus_engine_queries_total{query=~".*stoa_guardrails_(pii_detected|injection_blocked|content_filtered)_total.*"}`) shows zero non-canary reads. Explicit caveat: this metric **does not catch** Grafana dashboards via external Prometheus, ops scripts hitting Prometheus directly, bookmarks / exports outside the measured engine.
+4. **Release note / migration note published** — internal release notes + customer-facing changelog if any external consumer exists, naming the legacy counters being deprecated and the replacement counters.
+5. **Legacy removal plan exists separately** — new plan opened post-window, naming legacy counters to remove, removal rollback steps, and re-introduction criteria if a forgotten consumer surfaces.
 
-Legacy counter removal is scheduled by a **separate plan** opened after window closure. Phase 6 does not remove legacy counters under any condition (binding anti-goal). The 14-day floor is challenger-revisable upward if downstream dashboards or partner integrations are identified.
+Legacy counter removal is scheduled by that **separate plan**. Phase 6 does **not** remove legacy counters under any condition (binding anti-goal). The 14-day floor is challenger-revisable upward if downstream dashboards or partner integrations are identified during conditions 2–3.
 
 ## Phases
 
-### Phase Dependency Graph
+### Phase Dependency Graph (A8 lock — 6.4 is backend-only)
+
+**Phase 6.4 scope clarification (A8)**: Phase 6.4 = `Control Plane API Reader` covers ONLY the backend/API contract (cp-api reads new counters, derives the 5 states, exposes via `/v1/admin/gateways/metrics`). It does **NOT** include UI smoke, console-visible behavior, or end-to-end user experience validation. Those are Phase 6.5 (UI rendering) and Phase 6.6 (runtime smoke). Per A8 conditional: because 6.4 is strictly backend, 6.4 may start after 6.2 alone, not requiring 6.3.
 
 ```
-6.0 (validation) ─→ 6.1 (gateway metrics) ─┬─→ 6.2 (MCP coverage) ──┐
-                                            └─→ 6.3 (non-MCP obs)  ─┤
-                                                                    ├─→ 6.4 (API reader) ─→ 6.5 (UI states) ─→ 6.6 (smoke)
+6.0 (validation) ─→ 6.1 (gateway metrics) ─┬─→ 6.2 (MCP coverage)  ──→ 6.4 (cp-api backend reader) ─→ 6.5 (UI states) ─→ 6.6 (prod smoke)
+                                            └─→ 6.3 (non-MCP obs) ───────────┘
+                                              (parallel after 6.1, both feed 6.5 evidence)
 ```
 
 Rules:
 
-- **6.0 → 6.1**: validation must finish before producer code lands.
+- **6.0 → 6.1**: validation must finish before producer code lands. Phase 6.0 DoD locks contract + cardinality + semantics (A1 + A2 + A3 + A4 + A5).
 - **6.1 → {6.2, 6.3}**: 6.1 ships the counter contract on the producer side; 6.2 and 6.3 are independent call-site instrumentations and may run in parallel after 6.1.
-- **{6.2, 6.3} → 6.4**: 6.4 starts only when 6.2 has shipped (cp-api unit tests rely on MCP allow/redact/flag/block samples). 6.3 may still be in flight; the cp-api reader is agnostic to which call-sites produce.
-- **6.4 → 6.5**: strict — UI consumes new API fields; no UI work before backend ships and tests pass.
-- **6.5 → 6.6**: smoke validates the full stack, runs last.
+- **6.2 → 6.4**: 6.4 starts when 6.2 has shipped (cp-api unit tests rely on MCP `allow`/`redact`/`block`/`error` samples). 6.3 may still be in flight; the cp-api reader is agnostic to which call-sites produce, because 6.4 is backend-only.
+- **{6.4, 6.3} → 6.5**: UI strictly requires (a) 6.4 cp-api fields shipped and (b) 6.3 non-MCP producer shipped, because the UI surfaces non-MCP traffic distinctly. UI work cannot begin until both predecessors are complete.
+- **6.5 → 6.6**: prod smoke validates the full stack with UI present, runs last.
 
 A phase may not be marked complete until all its predecessors are complete and its DoD is binary-checked.
 
@@ -240,15 +326,20 @@ Goal: lock the contract before implementation.
 
 Deliverables:
 
-- This plan transitions from `draft` to `validated`.
+- This plan transitions from `draft` to `validated` via the multi-round external challenger flow (HEG-PAT-022).
 - A small SPEC addendum may be created if the branch root `SPEC.md` is replaced by a ticket-specific spec in the implementation branch; current root `SPEC.md` belongs to an older CAB and must not be reused silently.
 - Failing tests are added for the accepted acceptance criteria before production code changes.
 
-DoD:
+DoD (A3 — cardinality / contract / semantics locked here, before any gateway code):
 
-- [ ] External challenger validates or challenges the metric label set.
+- [ ] External challenger verdict = `validated` archived in `docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md`.
 - [ ] Council score meets the required threshold if impact score is HIGH or above.
 - [ ] Red tests exist in gateway, API, and UI slices before corresponding implementation.
+- [ ] **Cardinality budget documented** in `docs/observability/gateway-metrics-cardinality.md`: max series estimate from the A2 enum table (100 + 400 = 500 series ceiling), with the forbidden-labels list reproduced verbatim.
+- [ ] **Route normalization rule documented**: only FastAPI / axum-resolved route templates may serve as `route` label values (if `route` is ever added in a future plan amendment). Raw path / query / user-input forbidden.
+- [ ] **Label enums listed** with the A2 lock (`decision ∈ allow | redact | block | error`; `not_applicable` / `bypass` / `flag` / `rate_limited` excluded with rationale).
+- [ ] **Reviewer authority confirmed**: reviewer (Claude or Council) may reject any unbounded label introduction without operator escalation.
+- [ ] **A10 Surface Coverage Matrix reproduced** in cardinality doc with verified file:line anchors for in-scope surfaces (mcp / api_proxy / dynamic_proxy / conditional ws_proxy).
 
 ### Phase 6.1 - Gateway Metric Contract
 
@@ -278,13 +369,16 @@ Owned paths:
 - `stoa-gateway/src/guardrails/`
 - targeted gateway tests
 
-DoD:
+DoD (A2 lock — decision taxonomy `allow | redact | block | error`):
 
-- [ ] A clean MCP request increments evaluation and `allow` decision counters.
-- [ ] PII redact increments evaluation and `redact`.
-- [ ] Content sensitive/flag increments evaluation and `flag`.
-- [ ] Injection/content block increments evaluation and `block`.
-- [ ] Existing trip counters still increment as before.
+- [ ] A clean MCP request increments `evaluations_total` AND `decisions_total{decision="allow"}` for every applicable guardrail policy (A1 definition).
+- [ ] PII redact path increments `evaluations_total` AND `decisions_total{decision="redact", guardrail="pii"}`.
+- [ ] Injection block path increments `evaluations_total` AND `decisions_total{decision="block", guardrail="injection"}`.
+- [ ] Content filter block path increments `evaluations_total` AND `decisions_total{decision="block", guardrail="content_filter"}`.
+- [ ] Rate-limit block path increments `evaluations_total` AND `decisions_total{decision="block", guardrail="rate_limit"}` (no separate `decision="rate_limited"` — A2 lock).
+- [ ] Evaluation error path (policy started but failed) increments `evaluations_total` AND `decisions_total{decision="error"}` (A1 + A2).
+- [ ] `disabled` and `not_applicable` policies do **not** increment counters (A1 + A2 explicit exclusion).
+- [ ] Existing legacy trip counters still increment as before (compatibility window — A7).
 
 ### Phase 6.3 - Non-MCP Observe-Only Coverage
 
@@ -296,16 +390,18 @@ Candidate paths to confirm during implementation:
 - `stoa-gateway/src/proxy/dynamic.rs`
 - `stoa-gateway/src/ws/proxy.rs` only if payload semantics are safe and bounded
 
-DoD:
+DoD (A10 — surface coverage matrix conformance):
 
-- [ ] At least one HTTP non-MCP proxy path emits evaluations and decisions in observe-only mode.
-- [ ] Body handling does not consume streaming bodies unsafely.
-- [ ] No request/response behavior changes for non-MCP traffic unless a validated amendment allows it.
-- [ ] Tests prove non-JSON or oversized bodies are skipped or counted as `allow` without payload logging.
+- [ ] `api_proxy` (`stoa-gateway/src/proxy/api_proxy_handler.rs`) emits `evaluations_total` and `decisions_total` per A1 definition, in observe-only mode (no request/response mutation, no blocking).
+- [ ] `dynamic_proxy` (`stoa-gateway/src/proxy/dynamic.rs`) emits per the same observe-only contract.
+- [ ] `ws_proxy` (`stoa-gateway/src/ws/proxy.rs`) explicit gating decision archived: either (a) in-scope with payload bounding rules documented and tested, or (b) deferred with a follow-up plan reference. No half-measure.
+- [ ] Body handling never consumes streaming request bodies. Non-JSON or oversized bodies are skipped (and counted as `decisions_total{decision="allow"}` via "policy-not-applicable" path) without payload logging.
+- [ ] No request/response behavior changes for non-MCP traffic in this slice. Confirmed by integration tests that diff request/response headers + status before/after instrumentation.
+- [ ] `docs/observability/gateway-metrics-cardinality.md` updated with verified file:line anchors for each surface, matching the A10 matrix.
 
-### Phase 6.4 - Control Plane API Reader
+### Phase 6.4 - Control Plane API Reader (backend contract only — A8)
 
-Goal: expose the semantic split without breaking PR-3A fields.
+Goal: expose the semantic split without breaking PR-3A fields. **No UI work in this phase** (A8 — backend contract only; UI = Phase 6.5).
 
 Owned paths:
 
@@ -313,17 +409,21 @@ Owned paths:
 - `control-plane-api/tests/test_gateway_observability_router.py`
 - schemas only if the router already uses explicit response models
 
-DoD:
+DoD (A4 + A5 + A6 lock):
 
-- [ ] API reads new evaluation and decision counters.
-- [ ] API supports old trip counters during compatibility.
-- [ ] API returns `no_evaluations`, `evaluations_zero_trips`, and `trips_observed` distinctly.
-- [ ] Prometheus query failure returns unavailable/null semantics, not zero.
-- [ ] `pytest` targeted tests pass.
+- [ ] API reads new `evaluations_total` and `decisions_total` counters.
+- [ ] API continues reading legacy trip counters during compatibility window (A7).
+- [ ] API computes and ships `state ∈ {metrics_unavailable, no_evaluations, evaluations_zero_trips, trips_observed, stale_data}` **server-side** per A6. UI cannot derive `state`.
+- [ ] API ships all four A4 timestamp fields: `last_evaluation_delta_at`, `last_decision_delta_at`, `scrape_sample_at`, `source_healthy`.
+- [ ] `stale_data` triggers conform to A5 capped freshness threshold (`≤ 60 min` floor regardless of range).
+- [ ] Prometheus query failure returns `state="metrics_unavailable"` + `null` counts + `source_healthy=false`, never `0`.
+- [ ] `by_guardrail` map ships per-guardrail `state` independently (one guardrail may be `stale_data` while another is `evaluations_zero_trips`).
+- [ ] `stale_reason` is populated whenever `state="stale_data"` (e.g., "scrape gap 12min > 10min threshold for 6h range").
+- [ ] `pytest` targeted tests pass, including: state transitions, `null` vs `0` distinction, threshold cap (7d range → ≤ 60 min stale window), per-guardrail independence.
 
 ### Phase 6.5 - Console UI Five-State Rendering
 
-Goal: use the backend semantic state directly in `/observability/security`.
+Goal: use the backend semantic state directly in `/observability/security`. UI **renders** state, never derives it (A6 lock).
 
 Owned paths:
 
@@ -331,47 +431,74 @@ Owned paths:
 - `control-plane-ui/src/services/api/`
 - `control-plane-ui/src/__tests__/`
 
-DoD:
+DoD (A6 + A11 lock):
 
-- [ ] UI renders `No guardrail evaluations in window`.
-- [ ] UI renders `0 trips after N evaluations`.
-- [ ] UI renders `N trips observed`.
-- [ ] UI renders stale and unavailable states unchanged from PR-3A.
-- [ ] Existing AR-1 wording remains unchanged.
-- [ ] Targeted vitest regression tests pass.
+- [ ] UI renders the 5 server-shipped states directly from `state`:
+  - `metrics_unavailable` → "Metrics unavailable" wording (PR-3A baseline).
+  - `no_evaluations` → "No guardrail evaluations in window".
+  - `evaluations_zero_trips` → "0 trips after N evaluations" (substitute N from `evaluations_count`).
+  - `trips_observed` → "N trips observed" (substitute N from `trips_count`).
+  - `stale_data` → "Data stale (last observed: <timestamp>)" using `last_evaluation_delta_at` or `scrape_sample_at` for display only — **not for state recomputation** (A6).
+- [ ] UI must NOT collapse `null` count fields into `0`. `null` → render baseline wording for the corresponding state, never "0".
+- [ ] **A11 AR-1 anti-regression test** added to `control-plane-ui/src/__tests__/`:
+  - `/security-posture` page title + subtitle MUST match AR-1 canonical wording: "Compliance findings, security score, configuration assessment" (verified by snapshot or text match test).
+  - `/observability/security` page title + subtitle MUST match AR-1 canonical wording: "Runtime events — guardrail decisions, PII/prompt/content/rate-limit monitoring".
+  - Test fails if either page subtitle is changed, even by a single word, without an explicit AR-1 amendment plan.
+- [ ] Navigation / sidebar / IA NOT changed by Phase 6.5 (AR-1 lock — no fusion of Security Posture and Security & Guardrails).
+- [ ] Targeted vitest regression tests pass, including 5-state rendering matrix + AR-1 anti-regression test.
 
 ### Phase 6.6 - Runtime Smoke and Rollout
 
 Goal: prove metrics in a controlled environment before production opt-in.
 
-DoD:
+DoD (A12 lock — no real PII / no real customer prompt content):
 
-- [ ] Dev/k3d smoke emits MCP allow and trip samples.
-- [ ] Dev/k3d smoke emits at least one non-MCP observe-only sample.
-- [ ] Prometheus query shows bounded labels only.
-- [ ] `/v1/admin/gateways/metrics` returns the five semantic states in controlled scenarios.
-- [ ] Production smoke remains manual operator opt-in only.
+**Dev/k3d smoke**:
+
+- [ ] Dev/k3d smoke emits MCP `allow`, `redact`, `block`, `error` samples (A2 enum complete).
+- [ ] Dev/k3d smoke emits at least one non-MCP `api_proxy` or `dynamic_proxy` observe-only sample.
+- [ ] Prometheus query shows bounded labels only (A3 forbidden-labels list verified absent).
+- [ ] `/v1/admin/gateways/metrics` returns the five `state` values in controlled scenarios (`metrics_unavailable` via stopped Prometheus, `no_evaluations` via fresh tenant, `evaluations_zero_trips` via clean traffic, `trips_observed` via fixture trip, `stale_data` via scrape-pause injection).
+- [ ] AR-1 anti-regression test (A11) green in dev environment.
+
+**Prod smoke (A12 — operator-only)**:
+
+- [ ] `workflow_dispatch` only. No schedule trigger. No automatic firing.
+- [ ] Operator opt-in is explicit (PR comment lock OR `OPERATOR_OPT_IN` env var with operator initials; not a default value).
+- [ ] Synthetic tenant + synthetic route dedicated to the probe (tenant name e.g. `guardrails-probe`, never a real customer tenant).
+- [ ] **No real PII in payloads**. No emails, phone numbers, credit cards, SSNs, names of real persons, or any pattern that could match a known customer record.
+- [ ] **No real customer prompt content in payloads**. All test prompts are deterministic, pre-approved synthetic strings.
+- [ ] Synthetic payload fixtures committed in `docs/observability/phase-6-smoke-fixtures.md` with verbatim payload examples. Operator reviews fixtures before each prod run.
+- [ ] Cleanup / rollback steps documented: how to delete probe traces from OpenSearch, how to filter probe metrics from Prometheus dashboards, how to drop the synthetic tenant.
+- [ ] Smoke output archived with UTC timestamp under `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`, including verdict per-state and any failure mode observed.
+- [ ] Audit archive references this plan + decision-log for traceability.
 
 ## Acceptance Criteria
 
 | ID | Criterion | Proof |
 |---|---|---|
-| AC-1 | New evaluation and decision counters exist with only bounded labels. | Gateway unit tests + metrics output sample. |
-| AC-2 | MCP pass and trip paths increment evaluation counters. | Gateway tests for allow/redact/flag/block. |
-| AC-3 | Non-MCP proxy path emits observe-only evaluation metrics without behavior change. | Gateway tests + smoke evidence. |
-| AC-4 | Control Plane API distinguishes no evaluations from evaluations with zero trips. | API tests. |
-| AC-5 | UI renders five semantic states without collapsing `null` into `0`. | UI tests. |
-| AC-6 | Existing PR-3A fields and legacy metric readers remain compatible. | API regression tests. |
-| AC-7 | Cardinality contract remains within budget and forbidden labels are absent. | Static docs + metrics test. |
+| AC-1 | New `evaluations_total` + `decisions_total` counters exist with only A2 / A3 bounded labels (`decision ∈ allow|redact|block|error`). | Gateway unit tests + metrics output sample + cardinality doc. |
+| AC-2 | MCP path increments `evaluations_total` per A1 definition AND `decisions_total{decision}` for `allow`, `redact`, `block`, `error`. | Gateway tests covering 4 decision values. |
+| AC-3 | Non-MCP `api_proxy` + `dynamic_proxy` emit observe-only metrics matching A10 matrix; no request/response behavior change. | Gateway tests + smoke evidence + header/status diff before/after. |
+| AC-4 | cp-api ships server-derived `state` (A6) with 4 distinct timestamp fields (A4) and capped freshness threshold (A5). | API tests covering 5 state values + threshold cap. |
+| AC-5 | UI renders 5 states verbatim from server `state`; never collapses `null` into `0`; AR-1 anti-regression test green (A11). | UI vitest including subtitle snapshot tests. |
+| AC-6 | Existing PR-3A fields and legacy metric readers remain compatible during compatibility window (A7). | API regression tests + legacy counter read tests. |
+| AC-7 | Cardinality contract remains within A3 budget (≤ 500 series) and forbidden labels are absent. | Static docs + metrics linting test. |
+| AC-8 | Phase 6.6 prod smoke uses synthetic fixtures only — no real PII / no real customer prompt (A12). | Audit archive + fixture diff vs known-PII patterns. |
+| AC-9 | Compatibility window closes only on A7 5-condition lock; legacy removal scheduled by separate plan, never inside Phase 6. | Window-closure checklist + separate-plan reference. |
 
 ## Anti-Goals
 
-- Do not add `tenant_id`, route, policy, tool, or raw-path labels to the new counters in the first implementation.
+- Do not add `tenant_id`, route, policy, tool, or raw-path labels to the new counters in the first implementation (A3 forbidden-labels list).
 - Do not log or store raw payloads.
 - Do not alter non-MCP request/response behavior until explicitly validated.
-- Do not remove legacy metrics/readers in Phase 6 (see Compatibility Window for closure criteria).
-- Do not change Security Posture or merge it with Security & Guardrails (AR-1 lock — `docs/plans/2026-05-07-observability-data-integrity.md` line 63).
+- Do not remove legacy metrics/readers in Phase 6 (see Compatibility Window for closure criteria — A7).
+- Do not change Security Posture or merge it with Security & Guardrails (AR-1 lock — `docs/plans/2026-05-07-observability-data-integrity.md` line 63 + A11 test).
 - Do not create synthetic prod fallback data.
+- Do not add `flag`, `not_applicable`, `bypass`, or `rate_limited` as `decision` values (A2 taxonomy lock — only `allow | redact | block | error`).
+- Do not let the UI derive `state` from raw counts or timestamps (A6 — backend owns `state` verdict).
+- Do not include real PII or real customer prompt content in Phase 6.6 prod smoke payloads (A12 — synthetic fixtures only).
+- Do not let a stale claim auto-release while a long-running build/test is in flight; owners must refresh heartbeat (A9).
 
 ## Risks
 
@@ -415,12 +542,16 @@ Runtime:
 
 ## Open Questions For Challenger
 
-1. Is operator `go phase 6` sufficient Q8.6 signal, or must product explicitly state `/observability/security` covers non-MCP?
-2. Should non-MCP Phase 6 be observe-only first, or may it enforce redaction/blocking immediately?
-3. Is the narrowed label set acceptable, even though the earlier sketch mentioned tenant/route/policy?
-4. Should `flag` be a first-class decision distinct from `allow`, or should sensitive-but-allowed outcomes map to `allow` with a separate trip counter?
-5. Is `ws_proxy` in scope for first non-MCP coverage, or should Phase 6.3 start with HTTP proxy only?
-6. Should OPA remain config-only, or should OPA runtime counters be added in a separate later contract?
+Round 1 status: challenger gave 12 amendments (A1–A12) but did not verdict the plan's Q1–Q6 verbatim because the full plan was not visible. Round 2 must close these.
+
+| # | Question | Round 1 indicative answer (partial visibility) | Round 2 lock required |
+|---|---|---|---|
+| Q1 | Is operator `go phase 6` sufficient Q8.6 signal, or must product explicitly state `/observability/security` covers non-MCP? | **Not answered** | Required for `validated`. |
+| Q2 | Should non-MCP Phase 6 be observe-only first, or may it enforce redaction/blocking immediately? | Implicit YES observe-only (A10 matrix marks all non-MCP surfaces "observe-only first"). | Confirm + lock enforcement path for follow-up plan. |
+| Q3 | Is the narrowed label set acceptable, even though the earlier sketch mentioned tenant/route/policy? | YES (A3 locks narrow set; tenant/route/policy forbidden without amendment). | Confirm explicitly. |
+| Q4 | Should `flag` be a first-class decision distinct from `allow`, or should sensitive-but-allowed outcomes map to `allow` with a separate trip counter? | NO `flag` (A2 drops `flag`; sensitive-but-allowed = `decision="allow"` with severity logged out-of-band). | Confirm — operator may push back if product needs `flag`. |
+| Q5 | Is `ws_proxy` in scope for first non-MCP coverage, or should Phase 6.3 start with HTTP proxy only? | CONDITIONAL (A10 matrix: `ws_proxy` in-scope only if payload bounding rules documented + tested; otherwise deferred). | Confirm Phase 6.3 explicit gating decision. |
+| Q6 | Should OPA remain config-only, or should OPA runtime counters be added in a separate later contract? | **Not answered** | Required for `validated`. |
 
 ## Go / No-Go Criteria
 

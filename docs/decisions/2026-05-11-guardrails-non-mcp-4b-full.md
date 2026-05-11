@@ -5,6 +5,7 @@ challenger: "ChatGPT (external, non-Claude — HLFH Decision Gate convention)"
 verdict: challenged
 verdict_history:
   - 2026-05-11 v1 challenged (12 amendments A1-A12 + 6 Q answers + severity matrix; challenger had F1-F5 summary + canonical sources only, not full plan content)
+  - 2026-05-11 v2 challenged (8 amendments A13-A20; full plan visible, A1-A12 substantively integrated but residual semantic contradictions remain — challenger explicitly rejects rescope: "le plan est proche")
 source_plan_ref: docs/plans/2026-05-09-observability-data-visibility.md
 source_decision_ref: docs/decisions/2026-05-09-observability-data-visibility.md
 decision_gate_log: "#13 (HLFH Decision Gate)"
@@ -307,6 +308,207 @@ Note : la numérotation challenger diffère de celle du plan (challenger n'avait
 2. ⏳ Application des 12 amendements (A1–A12) dans le plan + transition `validation_status: draft → challenged`.
 3. ⏳ Re-soumission au challenger Round 2 avec **accès au fichier plan complet** (branche `codex/phase6-guardrails-full` sur GitHub, ou paste verbatim).
 4. ⏳ Round 2 verdict : `validated` (potentiellement avec E1, E2… micro-corrections) ou `challenged` v2 si défauts structurels persistent.
+
+## Re-challenge 2026-05-11 v2
+
+Verdict : **challenged** (transition `validated` refusée). Round 2 a confirmé que A1-A12 sont substantiellement intégrés, mais le plan complet a révélé des contradictions sémantiques résiduelles qui touchent le contrat de vérité runtime, pas seulement la forme éditoriale. 8 amendements ciblés requis avant Round 3.
+
+### Strengths confirmed (Round 2)
+
+1. Phase 6 reste une MEGA séparée justifiée (Q8.6 signal satisfait via audit guardrails MCP-only + opérateur explicit go + besoin de distinguer no_evaluations / zero trips / stale / unavailable).
+2. AR-1 protégé : Posture = compliance/findings/score/configuration ; Guardrails = runtime events. Pas de fusion.
+3. A1-A12 substantiellement présents : definition d'évaluation, taxonomie `allow|redact|block|error`, cardinality lock, timestamps séparés, freshness cap, state backend-only, compatibility window, DAG, ownership heartbeat, surface matrix, AR-1 tests, prod smoke synthetic-only.
+4. Label set resserré validé : retirer tenant, raw route et raw policy du premier contrat Prometheus = bonne décision.
+5. Split 6.4 backend-only / 6.5 UI / 6.6 smoke sain. A8 correctement intégré.
+
+### Amendments required before `validated` (A13–A20)
+
+#### A13 — Prouver `no_evaluations` : zéro-initialisation ou signal de présence obligatoire
+
+Avec de simples `CounterVec`, une série absente peut signifier : aucune évaluation, instrumentation non initialisée, mauvais label set, scrape cassé, ou service non scrappé. Phase 6 ne peut pas promettre `no_evaluations` sans mécanisme explicite.
+
+**Lock** :
+
+```text
+Phase 6.1 MUST either:
+(a) pre-initialize zero-valued series for every bounded
+    deployment_mode × surface × guardrail × decision combination,
+OR
+(b) expose a bounded producer-presence signal that proves the producer is live
+    even when no evaluations occurred.
+```
+
+Recommandation : option (a), budget est borné (500 series ceiling).
+
+**DoD Phase 6.1 ajout** :
+
+```text
+[ ] A fresh scrape with zero traffic exposes enough zero-valued/bounded series,
+    or an equivalent producer-presence metric, for cp-api to distinguish
+    no_evaluations from metrics_unavailable.
+```
+
+Sans ça, Phase 6 recrée le problème initial sous une forme plus sophistiquée.
+
+#### A14 — Corriger la contradiction `not_applicable` / skipped bodies
+
+A1 dit : "configured-but-not-applicable policy does not increment evaluations_total". Mais Phase 6.3 dit : "Non-JSON or oversized bodies are skipped (and counted as `decisions_total{decision='allow'}` via 'policy-not-applicable' path)". Contradictoire.
+
+**Correction verrouillée** :
+
+```text
+Non-JSON, oversized, streaming, or otherwise not-applicable bodies are skipped
+without incrementing evaluations_total or decisions_total.
+They may emit a bounded operational log or skip metric only if separately
+approved, but never as decision="allow".
+```
+
+Si le produit veut compter "skipped but allowed", il faut une nouvelle taxonomie explicite. Pas dans ce plan.
+
+#### A15 — Définir la priorité des états API
+
+A5 dit `state = "stale_data"` triggers when `source_healthy == false`. Phase 6.4 dit Prometheus query failure returns `state="metrics_unavailable"` + `source_healthy=false`. Les deux ne peuvent pas être vrais sans règle de priorité.
+
+**Lock** dans API Contract :
+
+```text
+State precedence:
+1. metrics_unavailable
+   - Prometheus query failed, Prometheus unavailable, or producer presence cannot be established.
+   - counts = null
+   - source_healthy = false
+2. stale_data
+   - Prometheus query succeeded AND producer presence exists
+   - scrape_sample_at exists
+   - now - scrape_sample_at > freshness_threshold(range)
+   - source_healthy = false
+3. no_evaluations
+   - source_healthy = true
+   - producer presence established
+   - evaluations_count = 0
+4. evaluations_zero_trips
+   - source_healthy = true
+   - evaluations_count > 0
+   - trips_count = 0
+5. trips_observed
+   - source_healthy = true
+   - trips_count > 0
+```
+
+Cette priorité doit être testée côté cp-api.
+
+#### A16 — Définir `trips_count`
+
+Le plan introduit `trips_count` mais ne définit pas sa formule.
+
+**Lock** :
+
+```text
+trips_count = sum decisions_total where decision in ("redact", "block")
+decision="error" is NOT a trip.
+```
+
+Le wording "trips observed" ne doit pas mélanger incident d'évaluation et décision de sécurité.
+
+**API contract ajout** :
+
+```ts
+error_count: number | null
+trips_count: number | null   // redact + block only, excludes error
+```
+
+#### A17 — Ajouter timestamps et health fields dans `by_guardrail`
+
+Le plan dit qu'un guardrail peut avoir un `state` indépendant ("one guardrail may be `stale_data` while another is `evaluations_zero_trips`"), mais `by_guardrail` ne porte ni `scrape_sample_at`, ni `source_healthy`, ni `stale_reason`. L'UI ne pourra pas expliquer pourquoi une carte est stale.
+
+**Lock** dans `by_guardrail` :
+
+```ts
+scrape_sample_at: string | null,
+source_healthy: boolean,
+stale_reason: string | null
+```
+
+Sinon le top-level `scrape_sample_at` risque de mentir pour une carte spécifique.
+
+#### A18 — Smoke `fresh tenant` : pas de tenant label dans les compteurs
+
+Phase 6.6 dit "no_evaluations via fresh tenant". Mais A3 interdit `tenant_id` / `tenant` dans le label set. Un "fresh tenant" ne peut pas isoler les métriques guardrails.
+
+**Correction verrouillée** :
+
+```text
+no_evaluations is validated in a clean dev/k3d environment or isolated synthetic
+gateway instance before emitting any guardrail-applicable traffic.
+It is not tenant-scoped unless a future challenged plan introduces bounded tenant
+segmentation.
+```
+
+Prod smoke ne doit pas prétendre prouver `no_evaluations` par tenant.
+
+#### A19 — Compatibility Window : ne pas exiger les 5 états en production
+
+A7 condition 1 ("5 semantic states validated in production") est trop forte. Valider `metrics_unavailable` ou `stale_data` en prod nécessiterait de casser ou simuler un scrape Prometheus prod — pas acceptable comme condition normale.
+
+**Correction verrouillée** :
+
+```text
+Compatibility window condition 1 becomes:
+Phase 6.6 smoke prod archived:
+- production validates the safe states reachable without degrading telemetry:
+  evaluations_zero_trips and/or trips_observed, plus bounded-label evidence.
+- metrics_unavailable, no_evaluations, and stale_data are validated in dev/k3d
+  or staging by controlled fault injection.
+- production fault injection is forbidden unless separately approved by SRE.
+```
+
+Legacy removal peut rester conditionné à 14j d'observation, release note et plan séparé.
+
+#### A20 — Clarifier Council gate
+
+Le plan dit "Council review if impact score is HIGH or above" mais aucun `impact_score` n'est fixé dans le frontmatter.
+
+**Lock recommandé** (vu risque sécurité observability + contrat Prometheus public) :
+
+```yaml
+impact_score: HIGH
+council_review_required: true
+```
+
+### Q1–Q6 verrouillés (Round 2)
+
+| # | Verdict |
+|---|---|
+| Q1 | **Oui**, opérateur `go phase 6` suffit comme Q8.6 signal — combine audit MCP-only + risque blind spot + demande opérateur explicite + besoin distinguer no_evaluations/zero/stale/unavailable. Signaux Q8.6 #2 et #3 satisfaits. Pas besoin de nouvelle confirmation produit, sauf si Council exige arbitrage formel. |
+| Q2 | **Oui**, observe-only verrouillé. Aucune enforcement non-MCP dans Phase 6 (no mutation/blocking/redaction). Enforcement = follow-up plan séparé. |
+| Q3 | **Oui**, narrowed label set validé. Interdictions initiales confirmées (tenant_id, tenant, raw route, raw policy, tool, trace_id, span_id, request_id, user_id, consumer, raw path/url, payload-derived). Drilldown futur = plan séparé. |
+| Q4 | **Non**, `flag` ne devient pas décision Phase 6. `decision ∈ allow | redact | block | error` verrouillé. Sensitive-but-allowed = `decision="allow"` + signal out-of-band non-cardinal. |
+| Q5 | **Conditional, deferred par défaut**. `ws_proxy` in-scope only if Phase 6.3 prouve bounded payload semantics + no streaming-body consumption + no per-frame eval + no behavior change. Sinon deferred avec follow-up plan reference. Aucune demi-mesure. |
+| Q6 | **OPA reste config-only**. Pas de nouveaux compteurs runtime OPA dans cette MEGA. Deferred à contrat séparé. |
+
+### Severity matrix Round 2
+
+| Phase | Severity | Verdict |
+|---|---|---|
+| 6.0 — Validation / red tests / cardinality | High | Doit intégrer A13–A20 avant code. |
+| 6.1 — Gateway metric contract | High | Risque principal : séries absentes impossibles à distinguer de no_evaluations. |
+| 6.2 — MCP coverage | High | Doit respecter A1/A2 strictement. |
+| 6.3 — Non-MCP observe-only coverage | High *(up from medium-high)* | Observe-only validé, mais skip/not_applicable doit être corrigé. |
+| 6.4 — cp-api reader | High | State precedence + timestamps per guardrail bloquants. |
+| 6.5 — UI five-state rendering | Medium-high | Bonne approche si backend owns state ; ne pas dériver côté UI. |
+| 6.6 — runtime smoke / rollout | High | Prod smoke doit rester safe ; ne pas exiger les 5 états en prod. |
+
+### Final verdict Round 2
+
+```yaml
+verdict: challenged
+transition_allowed: false
+codex_execution_allowed: false
+reason: residual semantic contradictions in the metric/API contract would let
+        Phase 6 claim no_evaluations or stale_data without sufficient proof.
+```
+
+**Pas de rescope complet recommandé**. Le plan est proche. Round 3 ciblé après application A13–A20, car ces points touchent le cœur du contrat runtime truth.
 
 ## Operational gates post-validation (anticipated)
 

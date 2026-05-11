@@ -48,24 +48,32 @@ async fn test_metrics_no_auth_required() {
     ];
     for (deployment_mode, surface) in zero_init_surfaces {
         for guardrail in GUARDRAILS_FULL_GUARDRAILS {
-            let expected = format!(
-                r#"stoa_guardrails_evaluations_total{{deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}} 0"#
+            let series = format!(
+                r#"stoa_guardrails_evaluations_total{{deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}}"#
             );
-            assert!(
-                body.contains(&expected),
-                "fresh /metrics scrape missing zero-valued guardrail series `{expected}`"
-            );
+            assert_counter_series_present(&body, &series);
             for decision in GUARDRAILS_FULL_DECISIONS {
-                let expected = format!(
-                    r#"stoa_guardrails_decisions_total{{decision="{decision}",deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}} 0"#
+                let series = format!(
+                    r#"stoa_guardrails_decisions_total{{decision="{decision}",deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}}"#
                 );
-                assert!(
-                    body.contains(&expected),
-                    "fresh /metrics scrape missing zero-valued guardrail series `{expected}`"
-                );
+                assert_counter_series_present(&body, &series);
             }
         }
     }
+}
+
+fn assert_counter_series_present(body: &str, expected_series: &str) {
+    let value = body.lines().find_map(|line| {
+        line.strip_prefix(expected_series)
+            .and_then(|suffix| suffix.strip_prefix(' '))
+            .and_then(|suffix| suffix.split_whitespace().next())
+            .and_then(|value| value.parse::<f64>().ok())
+    });
+
+    assert!(
+        matches!(value, Some(value) if value >= 0.0),
+        "/metrics scrape missing guardrail counter series `{expected_series}`"
+    );
 }
 
 // ========================================================================

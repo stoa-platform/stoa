@@ -1623,18 +1623,22 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TODO Phase 6.3 - non-MCP observe-only instrumentation"]
     fn spec_ac3_non_mcp_paths_record_observe_only_guardrails() {
         let api_proxy = include_str!("proxy/api_proxy_handler.rs");
         let dynamic_proxy = include_str!("proxy/dynamic.rs");
+        let observe_only = include_str!("proxy/observe_only_guardrails.rs");
 
         assert!(
-            api_proxy.contains("record_guardrail_evaluation"),
+            api_proxy.contains("record_observe_only_guardrails"),
             "AC3 red: api_proxy has no observe-only guardrail evaluation metric"
         );
         assert!(
-            dynamic_proxy.contains("record_guardrail_evaluation"),
+            dynamic_proxy.contains("record_observe_only_guardrails"),
             "AC3 red: dynamic_proxy has no observe-only guardrail evaluation metric"
+        );
+        assert!(
+            observe_only.contains("record_guardrail_evaluation"),
+            "AC3 red: observe-only helper must emit full guardrail evaluation metrics"
         );
         assert!(
             api_proxy.contains("observe_only") && dynamic_proxy.contains("observe_only"),
@@ -1747,19 +1751,19 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TODO Phase 6.3 - non-MCP skip-body semantics"]
     fn spec_ac11_skipped_body_paths_have_no_guardrail_counter_increment() {
         let api_proxy = include_str!("proxy/api_proxy_handler.rs");
         let dynamic_proxy = include_str!("proxy/dynamic.rs");
+        let observe_only = include_str!("proxy/observe_only_guardrails.rs");
 
         assert!(
-            api_proxy.contains("GuardrailBodyApplicability::Skipped")
-                || dynamic_proxy.contains("GuardrailBodyApplicability::Skipped"),
+            observe_only.contains("GuardrailBodyApplicability::Skipped"),
             "AC11 red: skipped-body guardrail applicability is not modeled yet"
         );
         assert!(
-            api_proxy.contains("without_guardrail_counter_increment")
-                || dynamic_proxy.contains("without_guardrail_counter_increment"),
+            api_proxy.contains("classify_buffered_json_body")
+                && dynamic_proxy.contains("buffer_json_request_for_observe_only")
+                && observe_only.contains("without_guardrail_counter_increment"),
             "AC11 red: skip branches must explicitly avoid evaluations/decisions increments"
         );
     }

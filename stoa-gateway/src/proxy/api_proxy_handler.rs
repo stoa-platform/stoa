@@ -23,6 +23,8 @@ use tracing::{debug, error, info, warn};
 use crate::metrics;
 use crate::state::AppState;
 
+use super::observe_only_guardrails;
+
 /// Shared reqwest client for API proxy (separate from dynamic proxy).
 static API_PROXY_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
 
@@ -323,6 +325,7 @@ pub async fn api_proxy_handler(
     }
 
     // Forward body
+    let request_headers = request.headers().clone();
     let body_bytes = match axum::body::to_bytes(request.into_body(), 10 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
@@ -336,6 +339,15 @@ pub async fn api_proxy_handler(
             return (StatusCode::BAD_REQUEST, "Failed to read request body").into_response();
         }
     };
+    let guardrail_body =
+        observe_only_guardrails::classify_buffered_json_body(&request_headers, &body_bytes);
+    let guardrails_config = observe_only_guardrails::resolve_guardrails_config(&state, None);
+    observe_only_guardrails::record_observe_only_guardrails(
+        "api_proxy",
+        &guardrails_config,
+        &guardrail_body,
+        backend.config.rate_limit_rpm > 0,
+    );
 
     if !body_bytes.is_empty() {
         upstream_req = upstream_req.body(body_bytes);

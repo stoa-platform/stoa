@@ -4,6 +4,8 @@
 
 ## Session Notes — 2026-05-11
 
+- Phase 6 Guardrails non-MCP + 4B-full opened on branch `codex/phase6-guardrails-full` in worktree `/Users/torpedo/hlfh-repos/stoa-phase6-guardrails-full`. Output plan: `docs/plans/2026-05-11-guardrails-non-mcp-4b-full.md` with `validation_status: draft`, `triggers: [a, b]`. No code implementation started: Phase 6 is a separate MEGA and must pass external non-Claude challenge plus Council if HIGH impact before any gateway/API/UI changes. The draft narrows the new counter labels to bounded dimensions (`deployment_mode`, `surface`, `guardrail`, `decision`) and explicitly rejects tenant/route/policy/tool/raw-path labels in the first implementation slice unless challenged and amended.
+
 - Observability Data Visibility Phase 0.5c Data Prepper load tuning executed as read-only prod diagnostic on branch `codex/phase05c-dp-load-tuning` in worktree `/Users/torpedo/hlfh-repos/stoa-phase05c-dp-load-tuning`. Output file: `docs/audits/2026-05-11-data-prepper-load-tuning/findings.md`. Verdict `monitor_only`: no infra tuning patch needed now. OVH prod Data Prepper showed 0 Data Prepper/Alloy dataprepper error lines across 12h/6h/2h/30m windows, buffer drained `206 -> 0` in 60s, OpenSearch successful docs increased `2081098 -> 2083155`, bulk retries/server errors stayed 0, and fresh probe trace `453484aa194a174879dff61c6f99f8a8` was visible in OpenSearch with 5 spans within a measured upper bound of 71s. Reopen only if trace indexing lag >30min, buffer remains non-zero across samples, or sink/error counters start increasing.
 
 ## Session Notes — 2026-05-07

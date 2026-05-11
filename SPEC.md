@@ -1,52 +1,118 @@
-# Spec: CAB-2012 — Console Commit-on-Write: Async Git Sync on API CRUD
+# Spec: CAB-2214 — CAB-2213 Phase 6.0 Guardrails Red Contract
 
-> Council: 8.25/10 Go (spec). Phase 1b of MEGA CAB-2010. Depends on CAB-2011.
+> Phase 6.0 branch: docs, cardinality evidence, and red-test scaffolding only.
+> Master ticket: CAB-2213.
+> Phase ticket: CAB-2214.
+> Validated plan: `docs/plans/2026-05-11-guardrails-non-mcp-4b-full.md`.
+> Decision log: `docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md`.
+> Council S2: 8.0/10 Go after E6 `stale_reason` bounded enum lock.
 
 ## Problem
 
-The Console writes API definitions to the database only. The Git catalog (`stoa-catalog`) diverges silently — there is no mechanism to propagate CRUD operations to Git after a DB write.
+The current Security & Guardrails observability surface can show runtime guardrail
+trips, but it cannot prove whether zero trips means "traffic was evaluated and
+allowed" or "no guardrail evaluation happened." Existing gateway counters are
+trip-oriented and legacy-shaped, and the Control Plane API/UI infer too much from
+missing samples.
 
 ## Goal
 
-Every API create/update/delete in the Console produces a corresponding Git commit in `stoa-catalog` within 30 seconds, without ever blocking the HTTP response.
+Introduce an additive, low-cardinality guardrails metrics contract that covers MCP
+and selected non-MCP gateway paths, then expose a server-derived five-state
+semantic contract to `/observability/security`.
 
-## Architecture
+Phase 6.0 prepares the contract and red tests. It must not implement gateway
+producers, API readers, UI rendering, rollout jobs, or production smoke.
 
+## API And Metrics Contract
+
+Gateway metrics:
+
+```text
+stoa_guardrails_evaluations_total{deployment_mode,surface,guardrail}
+stoa_guardrails_decisions_total{deployment_mode,surface,guardrail,decision}
 ```
-Console -> POST /apis -> DB write (sync) -> Kafka emit (fire-and-forget)
-                                                 |
-                                        Topic: stoa.api.lifecycle
-                                        Events: api-created, api-updated, api-deleted
-                                                 |
-                                        GitSyncWorker (consumer)
-                                                 |
-                                        GitHubService.create_api / update_api / delete_api
-                                                 |
-                                        stoa-catalog repo (Git commit)
+
+Locked enums:
+
+- `deployment_mode`: `edge-mcp | sidecar | proxy | shadow | unknown`
+- `surface`: `mcp | api_proxy | dynamic_proxy | ws_proxy`
+- `guardrail`: `pii | injection | prompt_guard | content_filter | rate_limit`
+- `decision`: `allow | redact | block | error`
+
+Forbidden decision values: `not_applicable`, `bypass`, `flag`, `rate_limited`.
+
+Control Plane API guardrails block:
+
+```ts
+{
+  state:
+    | 'metrics_unavailable'
+    | 'no_evaluations'
+    | 'evaluations_zero_trips'
+    | 'trips_observed'
+    | 'stale_data';
+  evaluations_count: number | null;
+  decisions_count: number | null;
+  trips_count: number | null;
+  error_count: number | null;
+  last_evaluation_delta_at: string | null;
+  last_decision_delta_at: string | null;
+  scrape_sample_at: string | null;
+  source_healthy: boolean;
+  stale_reason:
+    | 'prom_unreachable'
+    | 'scrape_gap'
+    | 'producer_absent'
+    | 'stale_unknown'
+    | null;
+  by_guardrail: Record<string, GuardrailSemanticState>;
+}
 ```
+
+The API owns `state`. The UI renders it and must not recompute it from counts or
+timestamps.
 
 ## Acceptance Criteria
 
-- [x] AC1: api-created -> Git commit in stoa-catalog
-- [x] AC2: api-updated -> Git commit updates api.yaml
-- [x] AC3: api-deleted -> API directory removed from stoa-catalog
-- [x] AC4: GIT_SYNC_ON_WRITE=false disables Git operations
-- [x] AC5: Retry 3x with exponential backoff (2s, 4s, 8s)
-- [x] AC6: Idempotent (no commit if content identical)
-- [x] AC7: Kafka failure doesn't block HTTP response
+| ID | Criterion | Red-test owner |
+| --- | --- | --- |
+| AC1 | New `evaluations_total` and `decisions_total` counters exist with only bounded labels and `decision in allow|redact|block|error`. | Gateway |
+| AC2 | MCP tool-call path increments one evaluation per executed guardrail policy and emits all four decision values. | Gateway |
+| AC3 | Non-MCP `api_proxy` and `dynamic_proxy` emit observe-only metrics without request/response behavior changes. | Gateway |
+| AC4 | cp-api ships server-derived `state`, four timestamp/health fields, and capped freshness semantics. | API |
+| AC5 | UI renders five backend states verbatim, preserves `null`, and keeps AR-1 wording. | UI |
+| AC6 | PR-3A fields and legacy metric readers remain compatible during the new-counter window. | API |
+| AC7 | Cardinality stays within the <=500 series budget and forbidden labels are absent. | Gateway |
+| AC8 | Phase 6.6 smoke fixtures are synthetic only: no real PII and no real customer prompt content. | Docs/API test harness |
+| AC9 | Legacy removal is impossible inside Phase 6 and requires a separate plan after the A7 closure checklist. | Docs/API test harness |
+| AC10 | Producer presence distinguishes `no_evaluations` from `metrics_unavailable` via zero-initialized bounded series or an approved gauge. | Gateway |
+| AC11 | Skipped bodies never increment evaluations or decisions. | Gateway |
+| AC12 | cp-api state precedence is locked, and UI never overrides backend `state`. | UI/API |
+| AC13 | `trips_count = redact + block`; `error_count = error`; error never contributes to trips. | API |
+| AC14 | Per-guardrail health is independent; one stale guardrail does not make healthy guardrails stale. | API |
+| AC15 | Production smoke validates only safe states; fault-injection states are dev/k3d or staging only. | Docs/API test harness |
+| AC16 | Council gate is archived before implementation code lands. | Docs/API test harness |
+| AC17 | `stale_reason` is a bounded enum and never leaks raw Prometheus internals. | API |
 
 ## Edge Cases
 
-| # | Case | Expected | Priority |
-|---|------|----------|----------|
-| E1 | GitHub rate limit (403) | Retry with backoff | Must |
-| E2 | Duplicate event | No-op (idempotent) | Must |
-| E3 | Tenant missing in Git | Auto-create via _ensure_tenant_exists() | Must |
-| E5 | Worker crash mid-retry | Kafka re-delivers (uncommitted offset) | Must |
-| E7 | GitHubService not initialized | Skip gracefully | Must |
+| ID | Case | Expected |
+| --- | --- | --- |
+| E1 | Prometheus query failure | `state="metrics_unavailable"`, null counts, `source_healthy=false`, bounded `stale_reason`. |
+| E2 | Fresh scrape, zero traffic | `state="no_evaluations"` when producer presence exists. |
+| E3 | Evaluations happened, no trips | `state="evaluations_zero_trips"` and `trips_count=0`. |
+| E4 | Redact + block + error in window | `trips_count=redact+block`, `error_count=error`. |
+| E5 | Non-JSON, oversized, streaming, or structurally not-applicable body | No evaluation and no decision increment. |
+| E6 | One guardrail stale, others healthy | Per-guardrail stale only; top-level stays healthy unless all guardrails are stale. |
+| E7 | Production smoke request would require fault injection | Forbidden unless a separate SRE-approved chaos plan exists. |
 
-## Out of Scope
+## Out Of Scope For Phase 6.0
 
-- Reverse sync (Git -> DB) — CAB-2016
-- UI feedback showing Git sync status
-- Tenant CRUD sync, Policy sync to Git
+- Gateway producer implementation.
+- cp-api Prometheus reader implementation.
+- UI rendering implementation.
+- Production, staging, or k3d smoke execution.
+- Legacy metric removal.
+- Security Posture / Security & Guardrails IA changes.
+- Synthetic production fallback data.

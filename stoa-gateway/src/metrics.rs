@@ -1466,6 +1466,145 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "TODO Phase 6.1+ - implementation lands counters"]
+    fn spec_ac1_guardrails_full_metrics_exist_with_locked_labels() {
+        init_all_metrics();
+        let body = encode_metrics();
+        let full_metric_lines = guardrails_full_metric_lines(&body);
+
+        assert!(
+            body.contains("stoa_guardrails_evaluations_total"),
+            "AC1 red: evaluations counter is not registered yet"
+        );
+        assert!(
+            body.contains("stoa_guardrails_decisions_total"),
+            "AC1 red: decisions counter is not registered yet"
+        );
+
+        for label in ["deployment_mode", "surface", "guardrail"] {
+            assert!(
+                full_metric_lines.iter().any(|line| line.contains(label)),
+                "AC1 red: guardrails full metrics must expose bounded label `{label}` only"
+            );
+        }
+        assert!(
+            full_metric_lines
+                .iter()
+                .any(|line| line.contains("decision=")),
+            "AC1 red: decisions counter must expose the locked decision label"
+        );
+    }
+
+    #[test]
+    #[ignore = "TODO Phase 6.1+ - implementation lands counters"]
+    fn spec_ac2_mcp_path_records_all_guardrail_decisions() {
+        let source = include_str!("mcp/handlers.rs");
+
+        assert!(
+            source.contains("record_guardrail_evaluation"),
+            "AC2 red: MCP tool-call path does not record full guardrail evaluations yet"
+        );
+        for decision in ["allow", "redact", "block", "error"] {
+            assert!(
+                source.contains(&format!("decision=\"{decision}\""))
+                    || source.contains(&format!("decision = \"{decision}\"")),
+                "AC2 red: MCP path must emit decision={decision}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "TODO Phase 6.1+ - implementation lands counters"]
+    fn spec_ac3_non_mcp_paths_record_observe_only_guardrails() {
+        let api_proxy = include_str!("proxy/api_proxy_handler.rs");
+        let dynamic_proxy = include_str!("proxy/dynamic.rs");
+
+        assert!(
+            api_proxy.contains("record_guardrail_evaluation"),
+            "AC3 red: api_proxy has no observe-only guardrail evaluation metric"
+        );
+        assert!(
+            dynamic_proxy.contains("record_guardrail_evaluation"),
+            "AC3 red: dynamic_proxy has no observe-only guardrail evaluation metric"
+        );
+        assert!(
+            api_proxy.contains("observe_only") && dynamic_proxy.contains("observe_only"),
+            "AC3 red: non-MCP guardrails must be explicitly observe-only before enforcement"
+        );
+    }
+
+    #[test]
+    #[ignore = "TODO Phase 6.1+ - implementation lands counters"]
+    fn spec_ac7_guardrails_full_metrics_exclude_forbidden_labels() {
+        init_all_metrics();
+        let body = encode_metrics();
+        let full_metric_lines = guardrails_full_metric_lines(&body);
+
+        assert!(
+            !full_metric_lines.is_empty(),
+            "AC7 red: cannot verify forbidden labels until full guardrails metrics exist"
+        );
+        for forbidden in [
+            "tenant_id=",
+            "tenant=",
+            "route=",
+            "policy=",
+            "tool=",
+            "trace_id=",
+            "span_id=",
+            "request_id=",
+            "user_id=",
+            "consumer=",
+            "path=",
+            "url=",
+        ] {
+            assert!(
+                full_metric_lines
+                    .iter()
+                    .all(|line| !line.contains(forbidden)),
+                "AC7 red: forbidden label `{forbidden}` leaked in full guardrails metrics:\n{}",
+                full_metric_lines.join("\n")
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "TODO Phase 6.1+ - implementation lands counters"]
+    fn spec_ac10_guardrails_full_metrics_zero_initialize_bounded_series() {
+        init_all_metrics();
+        let body = encode_metrics();
+
+        for expected in [
+            r#"deployment_mode="edge-mcp",guardrail="pii",surface="mcp""#,
+            r#"decision="allow",deployment_mode="edge-mcp",guardrail="pii",surface="mcp""#,
+            r#"decision="block",deployment_mode="proxy",guardrail="rate_limit",surface="api_proxy""#,
+        ] {
+            assert!(
+                body.contains(expected),
+                "AC10 red: producer-presence zero series missing `{expected}`"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "TODO Phase 6.1+ - implementation lands counters"]
+    fn spec_ac11_skipped_body_paths_have_no_guardrail_counter_increment() {
+        let api_proxy = include_str!("proxy/api_proxy_handler.rs");
+        let dynamic_proxy = include_str!("proxy/dynamic.rs");
+
+        assert!(
+            api_proxy.contains("GuardrailBodyApplicability::Skipped")
+                || dynamic_proxy.contains("GuardrailBodyApplicability::Skipped"),
+            "AC11 red: skipped-body guardrail applicability is not modeled yet"
+        );
+        assert!(
+            api_proxy.contains("without_guardrail_counter_increment")
+                || dynamic_proxy.contains("without_guardrail_counter_increment"),
+            "AC11 red: skip branches must explicitly avoid evaluations/decisions increments"
+        );
+    }
+
+    #[test]
     fn regression_http_metrics_use_normalized_route_label() {
         let route = normalize_path("/admin/apis/550e8400-e29b-41d4-a716-446655440000");
         record_http_request("GET", &route, 200, 0.001);
@@ -1622,5 +1761,14 @@ mod tests {
         prometheus::Encoder::encode(&encoder, &metric_families, &mut buffer)
             .expect("encode prometheus metrics");
         String::from_utf8(buffer).expect("prometheus metrics should be utf-8")
+    }
+
+    fn guardrails_full_metric_lines(body: &str) -> Vec<&str> {
+        body.lines()
+            .filter(|line| {
+                line.starts_with("stoa_guardrails_evaluations_total")
+                    || line.starts_with("stoa_guardrails_decisions_total")
+            })
+            .collect()
     }
 }

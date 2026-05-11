@@ -49,3 +49,183 @@ compatibility PR with reader and dashboard coverage.
 Console pages that still query direct PromQL by `path` are tracked as Console
 Observability productization work. Gateway HTTP producers now emit `http_route`
 for the canonical label projection.
+
+## Phase 6.0 Guardrails Full Metrics Contract
+
+References:
+
+- Master ticket: CAB-2213
+- Phase ticket: CAB-2214
+- Plan: `docs/plans/2026-05-11-guardrails-non-mcp-4b-full.md`
+- Decision log: `docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md`
+- Source plan: `docs/plans/2026-05-09-observability-data-visibility.md`
+- Source decision log: `docs/decisions/2026-05-09-observability-data-visibility.md`
+
+Phase 6.0 prepares the additive full guardrails metric contract. It does not
+implement producers, readers, dashboards, enforcement, or smoke jobs.
+
+### Proposed Metrics
+
+| Metric | Labels | Max series | Notes |
+| --- | --- | ---: | --- |
+| `stoa_guardrails_evaluations_total` | `deployment_mode`, `surface`, `guardrail` | 100 | One increment per execution of one guardrail policy against one request context. Disabled and skipped/not-applicable policies do not increment. |
+| `stoa_guardrails_decisions_total` | `deployment_mode`, `surface`, `guardrail`, `decision` | 400 | One decision increment for started evaluations only. |
+
+Maximum budget:
+
+```text
+deployment_mode: 5 values
+surface:         4 values
+guardrail:       5 values
+decision:        4 values
+
+evaluations_total = 5 * 4 * 5     = 100 series
+decisions_total   = 5 * 4 * 5 * 4 = 400 series
+combined ceiling  = 500 series
+```
+
+Reviewer authority: any reviewer may reject a Phase 6 implementation if a new
+guardrails metric exceeds the 500-series ceiling, uses a label outside this
+section, or introduces any forbidden label listed below.
+
+### Locked Label Enums
+
+`deployment_mode` values:
+
+- `edge-mcp`
+- `sidecar`
+- `proxy`
+- `shadow`
+- `unknown`
+
+`surface` values:
+
+- `mcp`
+- `api_proxy`
+- `dynamic_proxy`
+- `ws_proxy`
+
+`guardrail` values:
+
+- `pii`
+- `injection`
+- `prompt_guard`
+- `content_filter`
+- `rate_limit`
+
+`decision` values:
+
+- `allow`
+- `redact`
+- `block`
+- `error`
+
+Forbidden `decision` values:
+
+- `not_applicable`
+- `bypass`
+- `flag`
+- `rate_limited`
+
+`rate_limit` decisions must use `guardrail="rate_limit"` and
+`decision="block"` when enforcement blocks a request/message.
+
+### Forbidden Labels
+
+The new guardrails metrics must never expose:
+
+- `tenant_id`
+- `tenant`
+- raw route values
+- raw policy names or policy IDs
+- `tool`
+- `trace_id`
+- `span_id`
+- `request_id`
+- `user_id`
+- `consumer`
+- raw path values
+- raw URL values
+- payload-derived labels
+
+Route information is intentionally omitted from Phase 6 guardrails counters.
+If a future plan reintroduces route attribution, it must use normalized route
+templates only, never raw request paths, query strings, IDs, or user input.
+
+### Producer Presence
+
+Phase 6 uses zero-initialized bounded series as the default producer-presence
+mechanism. A freshly-started gateway with no guardrail-applicable traffic must
+still expose the bounded zero-valued series needed for the Control Plane API to
+distinguish `no_evaluations` from `metrics_unavailable`.
+
+A separate producer-present gauge is allowed only through a challenger-approved
+amendment.
+
+### Surface Coverage Matrix
+
+| Deployment mode | Surface | File anchor | Phase 6 scope |
+| --- | --- | --- | --- |
+| `edge-mcp` | `mcp` | `stoa-gateway/src/lib.rs:139`, `stoa-gateway/src/mcp/handlers.rs:680` | In scope. MCP tool calls are the primary producer path. |
+| `proxy` | `api_proxy` | `stoa-gateway/src/lib.rs:214`, `stoa-gateway/src/proxy/api_proxy_handler.rs:118`, `stoa-gateway/src/proxy/api_proxy_handler.rs:432` | In scope, observe-only first. No request/response mutation. |
+| `proxy` | `dynamic_proxy` | `stoa-gateway/src/proxy/dynamic.rs:331`, `stoa-gateway/src/proxy/dynamic.rs:525` | In scope, observe-only first. Body skip rules apply. |
+| `proxy` | `ws_proxy` | `stoa-gateway/src/ws/proxy.rs:121`, `stoa-gateway/src/ws/proxy.rs:172`, `stoa-gateway/src/ws/proxy.rs:207` | Conditional. Must be explicitly in-scope with payload bounding or explicitly deferred. |
+| `sidecar` | any | n/a | Deferred. Needs its own surface proof before producer work. |
+| `shadow` | any | `stoa-gateway/src/router/shadow.rs:21` | Deferred. Shadow parity/capture paths are not Phase 6 guardrail producers. |
+
+Excluded from guardrail producer coverage:
+
+- Kubernetes and process health/readiness/liveness routes:
+  `stoa-gateway/src/lib.rs:100`, `stoa-gateway/src/lib.rs:101`,
+  `stoa-gateway/src/lib.rs:102`, `stoa-gateway/src/lib.rs:103`.
+- Prometheus scrape route: `stoa-gateway/src/lib.rs:104`.
+- Admin health and admin/internal operator routes:
+  `stoa-gateway/src/handlers/admin/router.rs:54`,
+  `stoa-gateway/src/handlers/admin/router.rs:56`,
+  `stoa-gateway/src/handlers/admin/health.rs:31`.
+
+### API Semantic Fields
+
+The Control Plane API owns the semantic state. The UI must render this state and
+must not derive it from raw counts or timestamps.
+
+Required top-level and per-guardrail fields:
+
+- `state`
+- `evaluations_count`
+- `decisions_count`
+- `trips_count`
+- `error_count`
+- `last_evaluation_delta_at`
+- `last_decision_delta_at`
+- `scrape_sample_at`
+- `source_healthy`
+- `stale_reason`
+- `by_guardrail`
+
+Allowed `state` values:
+
+- `metrics_unavailable`
+- `no_evaluations`
+- `evaluations_zero_trips`
+- `trips_observed`
+- `stale_data`
+
+Allowed `stale_reason` values:
+
+- `prom_unreachable`
+- `scrape_gap`
+- `producer_absent`
+- `stale_unknown`
+
+`stale_reason` must never contain raw Prometheus errors, hostnames, internal
+URLs, raw query strings, request IDs, or trace IDs.
+
+Count formulas:
+
+- `trips_count = decisions_total{decision="redact"} + decisions_total{decision="block"}`
+- `error_count = decisions_total{decision="error"}`
+
+One stale guardrail does not make the top-level state stale while other
+guardrails are healthy. If all guardrails are stale, the top-level state may be
+`stale_data`.

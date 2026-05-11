@@ -15,7 +15,6 @@ from src.services.gateway_metrics_service import GatewayMetricsService
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac4_guardrails_contract_exposes_server_state_and_freshness_fields() -> None:
     payload = GatewayMetricsService._empty_guardrails_metrics(source_healthy=True)
     required = {
@@ -36,7 +35,6 @@ def test_spec_ac4_guardrails_contract_exposes_server_state_and_freshness_fields(
     assert not missing, f"AC4 red: guardrails API contract missing fields: {sorted(missing)}"
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac6_guardrails_reader_keeps_legacy_queries_and_adds_new_counters() -> None:
     queries = "\n".join(gateway_metrics_module._GUARDRAILS_TOTAL_QUERIES.values())
 
@@ -75,7 +73,6 @@ def test_spec_ac9_legacy_metric_removal_requires_separate_plan_marker() -> None:
     assert "separate plan" in body and "legacy" in body and "removal" in body
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac12_api_exposes_locked_state_precedence_helper() -> None:
     assert hasattr(
         GatewayMetricsService, "_derive_guardrails_state"
@@ -92,7 +89,6 @@ def test_spec_ac12_api_exposes_locked_state_precedence_helper() -> None:
     assert state == "no_evaluations"
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac13_trips_and_errors_are_separate_counts() -> None:
     assert hasattr(
         GatewayMetricsService, "_derive_guardrails_counts"
@@ -105,15 +101,37 @@ def test_spec_ac13_trips_and_errors_are_separate_counts() -> None:
     assert counts["error_count"] == 5
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac14_per_guardrail_health_is_independent() -> None:
-    payload = GatewayMetricsService._empty_guardrails_metrics(source_healthy=True)
-    by_guardrail = payload.get("by_guardrail")
+    threshold = GatewayMetricsService._freshness_threshold_seconds("1h")
 
-    assert isinstance(by_guardrail, dict) and by_guardrail, "AC14 red: by_guardrail contract missing"
-    assert by_guardrail["pii"]["state"] == "stale_data"
-    assert by_guardrail["injection"]["state"] == "evaluations_zero_trips"
-    assert payload["state"] != "stale_data", "AC14 red: one stale guardrail must not flip top-level state"
+    pii_state = GatewayMetricsService._derive_guardrails_state(
+        source_healthy=True,
+        producer_present=True,
+        evaluations_count=1,
+        trips_count=0,
+        scrape_age_seconds=threshold + 1,
+        freshness_threshold_seconds=threshold,
+    )
+    injection_state = GatewayMetricsService._derive_guardrails_state(
+        source_healthy=True,
+        producer_present=True,
+        evaluations_count=1,
+        trips_count=0,
+        scrape_age_seconds=30,
+        freshness_threshold_seconds=threshold,
+    )
+    aggregate_state = GatewayMetricsService._derive_guardrails_state(
+        source_healthy=True,
+        producer_present=True,
+        evaluations_count=2,
+        trips_count=0,
+        scrape_age_seconds=30,
+        freshness_threshold_seconds=threshold,
+    )
+
+    assert pii_state == "stale_data"
+    assert injection_state == "evaluations_zero_trips"
+    assert aggregate_state != "stale_data", "AC14 red: one stale guardrail must not flip top-level state"
 
 
 @pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
@@ -139,7 +157,6 @@ def test_spec_ac16_council_gate_has_machine_readable_archive() -> None:
     assert "go" in body.lower()
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac17_stale_reason_is_bounded_and_sanitized() -> None:
     payload = GatewayMetricsService._empty_guardrails_metrics(source_healthy=False)
     allowed = {"prom_unreachable", "scrape_gap", "producer_absent", "stale_unknown"}

@@ -6,7 +6,9 @@ challenge_ref: docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md
 source_plan_ref: docs/plans/2026-05-09-observability-data-visibility.md
 source_decision_ref: docs/decisions/2026-05-09-observability-data-visibility.md
 launch_signal: "Operator requested go phase 6 on 2026-05-11; maps to Q8.6 explicit signal to open the separate MEGA."
-amendments_applied: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, E1, E2, E3, E4, E5]
+amendments_applied: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, E1, E2, E3, E4, E5, E6]
+council_s2_score: 8.0
+council_s2_verdict: go
 impact_score: HIGH
 council_review_required: true
 validated_at: 2026-05-11
@@ -262,7 +264,7 @@ Extend `GET /v1/admin/gateways/metrics?range=<range>` guardrails block with addi
     last_decision_delta_at: string | null,     // RFC3339 UTC — most recent positive increase of decisions_total
     scrape_sample_at: string | null,           // RFC3339 UTC — latest successful Prometheus sample for the series
     source_healthy: boolean,                   // Prom query succeeded AND scrape_sample_at within freshness threshold
-    stale_reason: string | null,               // populated when state="stale_data" — explains which timestamp triggered
+    stale_reason: StaleReason | null,           // E6 lock — bounded enum, never raw Prometheus error
     by_guardrail: Record<
       "pii" | "injection" | "prompt_guard" | "content_filter" | "rate_limit",
       {
@@ -280,7 +282,7 @@ Extend `GET /v1/admin/gateways/metrics?range=<range>` guardrails block with addi
         last_decision_delta_at: string | null,
         scrape_sample_at: string | null,        // A17: per-guardrail scrape health
         source_healthy: boolean,                // A17: per-guardrail health verdict (one card may be stale while another is healthy)
-        stale_reason: string | null             // A17: per-guardrail stale explanation
+        stale_reason: StaleReason | null        // A17 + E6: per-guardrail bounded enum
       }
     >
   }
@@ -335,6 +337,27 @@ error_count = sum(decisions_total{decision="error"})
 ```
 
 `decision="error"` is **NOT** a trip. It surfaces via `error_count`. Mixing evaluation incidents with security decisions in `trips_count` would corrupt the UI wording "N trips observed". `error_count > 0` while `trips_count = 0` is a legitimate observable state (e.g., upstream policy service flaking) that the UI may render distinctly in a future enhancement; Phase 6 surfaces it but does not yet design a dedicated 6th state for it.
+
+### E6 — `stale_reason` Bounded Enum (Council S2 Pr1nc3ss lock)
+
+`stale_reason` is **NOT** a free-form string. It is a bounded enum to prevent leaking internal infrastructure details (Prometheus hostnames, internal URLs, raw error traces) to UI consumers and through them to attackers via DOM/network inspection.
+
+```ts
+type StaleReason =
+  | "prom_unreachable"      // Prometheus query failed (connection refused, timeout, 5xx)
+  | "scrape_gap"            // Prometheus query succeeded but scrape_sample_at older than freshness_threshold
+  | "producer_absent"       // No A13 series presence found AND no producer_present gauge
+  | "stale_unknown"         // Fallback when health verdict cannot be derived to a specific reason
+```
+
+Backend mapping rules (Phase 6.4 implementation):
+
+- Map specific Prometheus errors to `prom_unreachable` ; never pass through raw error message strings.
+- Map scrape lag detection to `scrape_gap`.
+- Map A13 presence-check failure to `producer_absent`.
+- Use `stale_unknown` only when the underlying signal does not match any of the three specific reasons (should be rare).
+
+UI may render the reason as a user-friendly label (e.g., "Source unreachable", "Stale scrape", "Producer offline") but **MUST NOT** display the raw enum value verbatim in messages exposed to non-privileged users.
 
 Compatibility rules:
 
@@ -522,8 +545,8 @@ DoD (A4 + A5 + A6 + A15 + A16 + A17 lock):
 - [ ] Prometheus query failure returns `state="metrics_unavailable"` + `null` counts + `source_healthy=false`, never `0`.
 - [ ] **A17 per-guardrail health fields**: each `by_guardrail` entry ships its own `scrape_sample_at`, `source_healthy`, `stale_reason`. Test scenario: one guardrail stale, others healthy — verify per-card verdicts independent of top-level aggregate.
 - [ ] `by_guardrail` map ships per-guardrail `state` independently (one guardrail may be `stale_data` while another is `evaluations_zero_trips`).
-- [ ] `stale_reason` is populated whenever `state="stale_data"` (e.g., "scrape gap 12min > 10min threshold for 6h range").
-- [ ] `pytest` targeted tests pass, including: state transitions, `null` vs `0` distinction, threshold cap (7d range → ≤ 60 min stale window), per-guardrail independence, trips_count/error_count separation.
+- [ ] `stale_reason` is populated whenever `state="stale_data"` and conforms to **E6 bounded enum** (`prom_unreachable` | `scrape_gap` | `producer_absent` | `stale_unknown`). Test: `stale_reason` never contains raw Prometheus error messages, hostnames, internal URLs, or query traces.
+- [ ] `pytest` targeted tests pass, including: state transitions, `null` vs `0` distinction, threshold cap (7d range → ≤ 60 min stale window), per-guardrail independence, trips_count/error_count separation, **E6 stale_reason enum validation** (forbidden raw error string regression test).
 
 ### Phase 6.5 - Console UI Five-State Rendering
 
@@ -604,6 +627,7 @@ DoD (A12 lock — no real PII / no real customer prompt content):
 | AC-14 | Per-guardrail health (A17): each `by_guardrail` entry ships its own `scrape_sample_at`, `source_healthy`, `stale_reason`; one guardrail stale does not flip aggregate top-level state. | cp-api unit test: mix one stale guardrail with healthy others, assert independent verdicts. |
 | AC-15 | Prod smoke safe-state restriction (A19): production validates only `evaluations_zero_trips` and `trips_observed`; `metrics_unavailable`, `no_evaluations`, `stale_data` validated in dev/k3d or staging only. | Audit archive of dev/k3d 5-state coverage + prod smoke archive with only safe states. |
 | AC-16 | Council gate (A20): plan frontmatter declares `impact_score: HIGH` and `council_review_required: true`; Council review completed before code lands. | Frontmatter check + Council report archived. |
+| AC-17 | `stale_reason` bounded enum (E6 Council S2 Pr1nc3ss lock): only `prom_unreachable` / `scrape_gap` / `producer_absent` / `stale_unknown`. Raw Prometheus error strings, hostnames, internal URLs never leak via this field. | cp-api unit test asserting enum membership + regression test for forbidden raw-error patterns. |
 
 ## Anti-Goals
 
@@ -622,6 +646,7 @@ DoD (A12 lock — no real PII / no real customer prompt content):
 - Do not validate `metrics_unavailable` / `no_evaluations` / `stale_data` in production smoke (A19 lock) — production fault injection forbidden unless SRE-approved chaos plan exists.
 - Do not promise `no_evaluations` without A13 producer-presence mechanism (zero-init series or producer_present gauge). An absent series is not proof of zero traffic.
 - Do not include `decision="error"` in `trips_count` (A16 lock). Errors surface via `error_count`, never via the trips wording.
+- Do not leak Prometheus error details, hostnames, internal URLs, query traces, or raw error messages via `stale_reason` (E6 lock). `stale_reason` is a bounded enum; raw Prom errors stay server-side in logs.
 
 ## Risks
 

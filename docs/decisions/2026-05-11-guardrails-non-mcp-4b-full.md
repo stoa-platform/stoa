@@ -7,6 +7,7 @@ verdict_history:
   - 2026-05-11 v1 challenged (12 amendments A1-A12 + 6 Q answers + severity matrix; challenger had F1-F5 summary + canonical sources only, not full plan content)
   - 2026-05-11 v2 challenged (8 amendments A13-A20; full plan visible, A1-A12 substantively integrated but residual semantic contradictions remain — challenger explicitly rejects rescope: "le plan est proche")
   - 2026-05-11 v3 validated (5 micro-corrections E1-E5; rescope explicitly not triggered, codex_execution_allowed conditional on E1-E5 applied + Council gate)
+  - 2026-05-11 Council S2 8.0/10 go (initial 7.875 Fix → E6 stale_reason bounded enum applied → re-score 8.0 Go; deferred N3m0 a11y + Archi unknown_mode + Gekk0 release-note)
 source_plan_ref: docs/plans/2026-05-09-observability-data-visibility.md
 source_decision_ref: docs/decisions/2026-05-09-observability-data-visibility.md
 decision_gate_log: "#13 (HLFH Decision Gate)"
@@ -590,6 +591,73 @@ round_4_required: false
 micro_corrections_required_before_flip: [E1, E2, E3, E4, E5]
 codex_execution_allowed: conditional
 council_review_required: true
+```
+
+## Council Stage 2 — 2026-05-11
+
+Internal 8-persona Team Coca jury (HEG-PAT-003) run on the externally-validated plan, per `impact_score: HIGH` + `council_review_required: true` gate. Council Stage 2 = plan validation rubric (post HEG-PAT-022 closure, pre implementation).
+
+### Scoring
+
+| Persona | Score | Verdict | Notes |
+|---|---|---|---|
+| Chucky (Devil's Advocate) | 9/10 | Go | 6 risks + 12 anti-goals + 17 ACs + DAG + per-component rollback + A13 producer presence ferme le piège "absent series = no_evaluations". |
+| N3m0 (Webapp Security) | 8/10 | Go | A11 anti-regression test préserve AR-1, A6 backend authoritative state, pas de nouvelle UI surface. A11y posture héritée PR-3A, non régressée. |
+| Gh0st (Supply Chain) | 9/10 | Go | Aucune nouvelle dep, lockfile inchangé, SBOM CI standard. |
+| Pr1nc3ss (Social Engineering) | 7/10 → **8/10 post-E6** | Fix → Go | `stale_reason` était `string`, risque de fuite topologie Prom interne. E6 applique enum borné. |
+| OSS Killer (VC Skeptique) | 8/10 | Go | Crédibilité-booster enterprise réel ; pas de me-too ; ws_proxy conditional-deferral évite over-engineering. |
+| Archi 50x50 (Architecte Veteran) | 9/10 | Go | Abstractions au bon niveau, breaking changes documentées (A7), 17 ACs binaires, A13 statefulness explicite. |
+| Better Call Saul (Legal/IP) | 9/10 | Go | A12 + A18 no real PII ; no tenant label ; aggregated counters GDPR-safe ; AR-1 content safety préservé. |
+| Gekk0 (Monétisation / GTM) | 8/10 | Go | Différenciateur enterprise ; OSS garde honest empty states ; pricing tier intact ; pitch sales 30s clair. |
+
+### Computation
+
+Initial scoring (avant E6) :
+
+- Persona Average : (9+8+9+7+8+9+9+8)/8 = 67/8 = **8.375/10**
+- Impact Score : HIGH (locked via A20 challenger amendment, frontmatter) | Modifier : **-0.5**
+- Final Score : 8.375 - 0.5 = **7.875/10** → **Fix verdict**
+
+E6 micro-correction applied inline (option A — Drafter-side correction analogous to HEG-PAT-022 E*-style, no external re-challenge required because change is narrative-only, no new structural contradiction) :
+
+- Pr1nc3ss re-score : 7/10 → **8/10**
+- Persona Average : (9+8+9+8+8+9+9+8)/8 = 68/8 = **8.5/10**
+- Final Score : 8.5 - 0.5 = **8.0/10** → **Go verdict** (threshold ≥ 8.0)
+
+### E6 — `stale_reason` Bounded Enum (Pr1nc3ss adjustment, applied)
+
+Risk identified : `stale_reason` was typed `string | null` in API contract without value bounding. Implementation could leak Prometheus error details ("context deadline exceeded querying http://prometheus-server.monitoring..."), exposing internal hostnames, endpoints, and stack to UI consumers and through them to attackers via DOM/network inspection.
+
+Lock applied (verbatim in plan §E6) :
+
+```ts
+type StaleReason =
+  | "prom_unreachable"
+  | "scrape_gap"
+  | "producer_absent"
+  | "stale_unknown"
+```
+
+Backend mapping rules + UI rendering rules added to plan §E6. Anti-Goal added : "Do not leak Prometheus error details, hostnames, internal URLs, query traces, or raw error messages via `stale_reason`." Phase 6.4 DoD test added : "stale_reason never contains raw Prometheus error messages, hostnames, internal URLs". AC-17 added to acceptance criteria matrix.
+
+### Deferred adjustments (non-blocking)
+
+- **N3m0 (Recommended)** : Phase 6.5 a11y checklist (keyboard nav state transitions, ARIA live region, screen reader announcement). Not blocking — a11y posture preserved from PR-3A; explicit a11y improvement = follow-up enhancement.
+- **Archi 50x50 (Deferred)** : track `deployment_mode="unknown"` retirement in follow-up plan when mode detection is reliable.
+- **Gekk0 (Deferred)** : Phase 6.6 DoD release-note checklist for sales/marketing comms.
+
+### Final Council verdict
+
+```yaml
+council_s2_score: 8.0/10
+council_s2_verdict: go
+council_s2_threshold: ">= 8.0"
+council_s2_passed: true
+labels_to_apply:
+  - council:ticket-go
+  - council:plan-go
+deferred_adjustments: [N3m0_a11y, Archi_unknown_mode, Gekk0_release_note]
+e6_applied: true
 ```
 
 ## Operational gates post-validation

@@ -162,6 +162,14 @@ distinguish `no_evaluations` from `metrics_unavailable`.
 A separate producer-present gauge is allowed only through a challenger-approved
 amendment.
 
+Phase 6.1 implements option (a) in `stoa-gateway/src/metrics.rs`: the gateway
+registers both full guardrails counters at metrics initialization and
+pre-creates zero-valued series for the A10 in-scope producer matrix
+(`edge-mcp/mcp`, `proxy/api_proxy`, `proxy/dynamic_proxy`, `proxy/ws_proxy`)
+across all five guardrail values and the four locked decision values. The
+startup presence set is 20 evaluation series plus 80 decision series, inside
+the documented 500-series ceiling.
+
 ### Surface Coverage Matrix
 
 | Deployment mode | Surface | File anchor | Phase 6 scope |

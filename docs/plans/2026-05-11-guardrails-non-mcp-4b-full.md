@@ -23,7 +23,23 @@ Required before code:
 
 1. External non-Claude challenger verdict in `docs/decisions/2026-05-11-guardrails-non-mcp-4b-full.md`.
 2. Council review if impact score is HIGH or above.
-3. Phase ownership claim for the first implementation PR.
+3. Phase ownership claim per phase (see Phase Ownership matrix below).
+
+## Phase Ownership
+
+Per CLAUDE.md multi-instance protocol (`.claude/claims/<ID>.json` + atomic `mkdir` lock). End-to-end ownership: whoever claims a phase finishes it. Stale claim auto-releases after 2h of inactivity.
+
+| Phase | Component owner | Claim path |
+|---|---|---|
+| 6.0 | platform | `.claude/claims/phase-6-0-validation.json` |
+| 6.1 | gateway | `.claude/claims/phase-6-1-gateway-metrics.json` |
+| 6.2 | gateway | `.claude/claims/phase-6-2-mcp-coverage.json` |
+| 6.3 | gateway | `.claude/claims/phase-6-3-nonmcp-observe.json` |
+| 6.4 | cp-api | `.claude/claims/phase-6-4-api-reader.json` |
+| 6.5 | cp-ui | `.claude/claims/phase-6-5-ui-states.json` |
+| 6.6 | sre | `.claude/claims/phase-6-6-runtime-smoke.json` |
+
+A single actor may chain claims across phases owned by the same component (e.g., one gateway implementer covering 6.1 → 6.2 → 6.3) provided each claim file is created and released in order.
 
 ## Objective
 
@@ -47,6 +63,11 @@ Already delivered:
 - PR-3A guardrails runtime truth contract is validated in `docs/plans/2026-05-10-guardrails-runtime-truth-contract.md`.
 - `/observability/security` already preserves `null` vs `0`, stale vs unavailable, and disabled vs enabled states.
 - Existing gateway guardrail counters only count selected trip outcomes. They do not count total evaluations, so the product cannot prove "evaluated and allowed".
+
+Canonical cross-references (challenger must treat as binding context):
+
+- **AR-1 canonical** — `docs/plans/2026-05-07-observability-data-integrity.md` line 63: "Clarifier — Posture = état/findings/score statique ; Guardrails = events runtime. Pas de fusion (personas distincts: compliance officer vs SRE)." Status: `validated 2026-05-07`. Phase 6 preserves AR-1 — no merge of Security Posture with Security & Guardrails; distinct subtitles remain.
+- **PR-3A wording elaboration** — `docs/plans/2026-05-10-guardrails-runtime-truth-contract.md`. Phase 6 must not change AR-1 wording (see Anti-Goals).
 
 Current relevant metric readers:
 
@@ -162,7 +183,56 @@ Compatibility rules:
 - `0` means the backend can prove the count over the selected range.
 - `semantic_state` is derived server-side so tenant authorization and metric interpretation remain backend-owned.
 
+### Sample Timestamp and `stale_data` Semantics
+
+`evaluation_sample_at` and `decision_sample_at` are defined as:
+
+- The RFC3339 UTC timestamp of the most recent Prometheus scrape for which the counter value strictly increased within the selected range. Operational definition: `max(timestamp WHERE delta(stoa_guardrails_evaluations_total[scrape_interval]) > 0)` over the range.
+- If no scrape recorded a positive delta in the range, the field is `null` and `no_evaluations` (or `metrics_unavailable` if the counter series is absent entirely) applies.
+
+`stale_data` threshold (server-derived, **subject to challenger lock**):
+
+- For ranges ≤ 1h: `stale_data` triggers when `now - max(evaluation_sample_at, decision_sample_at) > max(2 × scrape_interval, 5 min)`. Default scrape interval = 30s → effective threshold = 5 min.
+- For ranges > 1h: `stale_data` triggers when `now - max(evaluation_sample_at, decision_sample_at) > range / 12`, with a floor of 5 min. Rationale: longer windows tolerate longer scrape gaps proportionally.
+
+UI must not re-derive `stale_data` from raw timestamps — the API ships the precomputed `semantic_state` and the UI renders it as-is. This preserves AR-1 boundary (backend owns runtime truth).
+
+## Compatibility Window
+
+Legacy guardrail counters remain readable during the compatibility window:
+
+- `stoa_guardrails_pii_detected_total`
+- `stoa_guardrails_injection_blocked_total`
+- `stoa_guardrails_content_filtered_total`
+- `stoa_prompt_guard_detected_total`
+- rate-limit counters
+
+Window closes when **both** conditions hold:
+
+1. Phase 6.6 smoke validates the 5 semantic states (`metrics_unavailable`, `no_evaluations`, `evaluations_zero_trips`, `trips_observed`, `stale_data`) in production, archived under `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`.
+2. At least 14 days of observation pass with no consumer (dashboard, alert rule, third-party export, internal script) querying the legacy counter names. Verification: Prometheus query-stats audit (`prometheus_engine_queries_total`) shows zero non-canary reads of legacy counter names over the 14-day window.
+
+Legacy counter removal is scheduled by a **separate plan** opened after window closure. Phase 6 does not remove legacy counters under any condition (binding anti-goal). The 14-day floor is challenger-revisable upward if downstream dashboards or partner integrations are identified.
+
 ## Phases
+
+### Phase Dependency Graph
+
+```
+6.0 (validation) ─→ 6.1 (gateway metrics) ─┬─→ 6.2 (MCP coverage) ──┐
+                                            └─→ 6.3 (non-MCP obs)  ─┤
+                                                                    ├─→ 6.4 (API reader) ─→ 6.5 (UI states) ─→ 6.6 (smoke)
+```
+
+Rules:
+
+- **6.0 → 6.1**: validation must finish before producer code lands.
+- **6.1 → {6.2, 6.3}**: 6.1 ships the counter contract on the producer side; 6.2 and 6.3 are independent call-site instrumentations and may run in parallel after 6.1.
+- **{6.2, 6.3} → 6.4**: 6.4 starts only when 6.2 has shipped (cp-api unit tests rely on MCP allow/redact/flag/block samples). 6.3 may still be in flight; the cp-api reader is agnostic to which call-sites produce.
+- **6.4 → 6.5**: strict — UI consumes new API fields; no UI work before backend ships and tests pass.
+- **6.5 → 6.6**: smoke validates the full stack, runs last.
+
+A phase may not be marked complete until all its predecessors are complete and its DoD is binary-checked.
 
 ### Phase 6.0 - Validation and Red Tests
 
@@ -299,8 +369,8 @@ DoD:
 - Do not add `tenant_id`, route, policy, tool, or raw-path labels to the new counters in the first implementation.
 - Do not log or store raw payloads.
 - Do not alter non-MCP request/response behavior until explicitly validated.
-- Do not remove legacy metrics/readers in Phase 6.
-- Do not change Security Posture.
+- Do not remove legacy metrics/readers in Phase 6 (see Compatibility Window for closure criteria).
+- Do not change Security Posture or merge it with Security & Guardrails (AR-1 lock — `docs/plans/2026-05-07-observability-data-integrity.md` line 63).
 - Do not create synthetic prod fallback data.
 
 ## Risks

@@ -22,6 +22,8 @@ use crate::proxy::hop_detection;
 use crate::resilience::RetryConfig;
 use crate::state::AppState;
 
+use super::observe_only_guardrails;
+
 /// Resolve a BackendCredential into a (header_name, header_value) tuple.
 /// For OAuth2ClientCredentials, fetches/caches a token via the credential store.
 async fn resolve_credential_header(
@@ -350,6 +352,23 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         .extensions()
         .get::<crate::trace_context::RequestTraceContext>()
         .cloned();
+
+    let guardrails_cfg =
+        observe_only_guardrails::resolve_guardrails_config(&state, Some(&route.tenant_id));
+    let (request, guardrail_body) =
+        match observe_only_guardrails::buffer_json_request_for_observe_only(request).await {
+            Ok(result) => result,
+            Err(response) => {
+                record_proxy_status(response.status().as_u16());
+                return response;
+            }
+        };
+    observe_only_guardrails::record_observe_only_guardrails(
+        "dynamic_proxy",
+        &guardrails_cfg,
+        &guardrail_body,
+        false,
+    );
 
     // Save headers only if retry might be needed (idempotent methods with
     // retryable responses). Deferred clone avoids HeaderMap copy on every

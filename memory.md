@@ -4,6 +4,7 @@
 
 ## Session Notes — 2026-05-11
 
+- CAB-2217 Phase 6.3 implemented on `feat/cab-2213-phase63-nonmcp-observe`: gateway non-MCP observe-only guardrail counters for bounded JSON `api_proxy`/`dynamic_proxy`, skipped-body no-counter semantics, explicit `ws_proxy` defer decision, and A10 anchors updated.
 - CAB-2214 Phase 6.0 prep started under master ticket CAB-2213 on branch `feat/cab-2213-phase60-docs-redtests` in worktree `/Users/torpedo/hlfh-repos/stoa-cab2213-phase60`, based on validated `origin/codex/phase6-guardrails-full` (`1d0284dbc`). Scope is docs/cardinality + SPEC + red-test scaffolding only; no gateway producer, cp-api reader, UI behavior, rollout, or smoke implementation. Claim file: `.claude/claims/phase-6-0-validation.json` with heartbeat protocol.
 
 - CAB-2214 Phase 6.0 red-test proof captured locally: gateway `cargo test spec_ac -- --nocapture` failed 6/6 on missing full guardrails producers/zero-init/skip modeling; cp-api `python3 -m pytest tests/test_spec_cab_2214_phase60.py -q` failed 10/10 on missing semantic API fields/readers/docs artifacts; cp-ui `npm run test -- --run src/__tests__/spec/cab-2214-phase60.test.ts` failed 2/2 because current `guardrailCardState` derives `no-sample` instead of rendering backend `evaluations_zero_trips` / `trips_observed`. This is expected for Phase 6.0 red scaffolding.

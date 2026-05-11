@@ -175,9 +175,9 @@ the documented 500-series ceiling.
 | Deployment mode | Surface | File anchor | Phase 6 scope |
 | --- | --- | --- | --- |
 | `edge-mcp` | `mcp` | `stoa-gateway/src/lib.rs:139`, `stoa-gateway/src/mcp/handlers.rs:680` | In scope. MCP tool calls are the primary producer path. |
-| `proxy` | `api_proxy` | `stoa-gateway/src/lib.rs:214`, `stoa-gateway/src/proxy/api_proxy_handler.rs:118`, `stoa-gateway/src/proxy/api_proxy_handler.rs:432` | In scope, observe-only first. No request/response mutation. |
-| `proxy` | `dynamic_proxy` | `stoa-gateway/src/proxy/dynamic.rs:331`, `stoa-gateway/src/proxy/dynamic.rs:525` | In scope, observe-only first. Body skip rules apply. |
-| `proxy` | `ws_proxy` | `stoa-gateway/src/ws/proxy.rs:121`, `stoa-gateway/src/ws/proxy.rs:172`, `stoa-gateway/src/ws/proxy.rs:207` | Conditional. Must be explicitly in-scope with payload bounding or explicitly deferred. |
+| `proxy` | `api_proxy` | `stoa-gateway/src/lib.rs:214`, `stoa-gateway/src/proxy/api_proxy_handler.rs:120`, `stoa-gateway/src/proxy/api_proxy_handler.rs:327`, `stoa-gateway/src/proxy/api_proxy_handler.rs:342`, `stoa-gateway/src/proxy/observe_only_guardrails.rs:111` | In scope, observe-only first. JSON body evaluation emits bounded full guardrail counters without request/response mutation. |
+| `proxy` | `dynamic_proxy` | `stoa-gateway/src/proxy/dynamic.rs:148`, `stoa-gateway/src/proxy/dynamic.rs:356`, `stoa-gateway/src/proxy/dynamic.rs:358`, `stoa-gateway/src/proxy/dynamic.rs:366`, `stoa-gateway/src/proxy/observe_only_guardrails.rs:55` | In scope, observe-only first. Bounded JSON bodies are restored before forwarding; non-JSON, oversized, streaming, and invalid JSON bodies are skipped without counter increments. |
+| `proxy` | `ws_proxy` | `stoa-gateway/src/ws/proxy.rs:12`, `stoa-gateway/src/ws/proxy.rs:41`, `stoa-gateway/src/ws/proxy.rs:165`, `stoa-gateway/src/ws/proxy.rs:201` | Deferred. Follow-up required before `ws_proxy` emits full guardrail counters because payload bounding, no per-frame evaluation, and no behavior-change proof are not locked for long-lived streams. |
 | `sidecar` | any | n/a | Deferred. Needs its own surface proof before producer work. |
 | `shadow` | any | `stoa-gateway/src/router/shadow.rs:21` | Deferred. Shadow parity/capture paths are not Phase 6 guardrail producers. |
 

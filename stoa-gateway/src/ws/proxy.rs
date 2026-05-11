@@ -8,6 +8,10 @@
 //!
 //! Route: `GET /ws/:route_id` — looks up backend URL from RouteRegistry,
 //! upgrades to WebSocket, and relays frames bidirectionally.
+//!
+//! Phase 6.3 guardrails decision: `ws_proxy` guardrail counters are deferred
+//! until a follow-up proves bounded payloads, no per-frame evaluation, and no
+//! behavior changes for long-lived streams.
 
 use axum::{
     extract::{

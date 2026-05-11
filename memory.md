@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-05-09. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-05-11. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-05-11
+
+- Observability Data Visibility Phase 0.5c Data Prepper load tuning executed as read-only prod diagnostic on branch `codex/phase05c-dp-load-tuning` in worktree `/Users/torpedo/hlfh-repos/stoa-phase05c-dp-load-tuning`. Output file: `docs/audits/2026-05-11-data-prepper-load-tuning/findings.md`. Verdict `monitor_only`: no infra tuning patch needed now. OVH prod Data Prepper showed 0 Data Prepper/Alloy dataprepper error lines across 12h/6h/2h/30m windows, buffer drained `206 -> 0` in 60s, OpenSearch successful docs increased `2081098 -> 2083155`, bulk retries/server errors stayed 0, and fresh probe trace `453484aa194a174879dff61c6f99f8a8` was visible in OpenSearch with 5 spans within a measured upper bound of 71s. Reopen only if trace indexing lag >30min, buffer remains non-zero across samples, or sink/error counters start increasing.
 
 ## Session Notes — 2026-05-07
 

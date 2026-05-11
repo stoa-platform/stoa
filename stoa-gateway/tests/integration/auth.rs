@@ -8,6 +8,9 @@
 use axum::http::StatusCode;
 
 use crate::common::{config_with_admin_token, TestApp};
+use stoa_gateway::metrics::{
+    init_all_metrics, GUARDRAILS_FULL_DECISIONS, GUARDRAILS_FULL_GUARDRAILS,
+};
 
 // ========================================================================
 // Health / Ready — no auth required
@@ -32,10 +35,37 @@ async fn test_ready_no_cp_configured() {
 
 #[tokio::test]
 async fn test_metrics_no_auth_required() {
+    init_all_metrics();
     let app = TestApp::new();
-    let (status, _body) = app.get("/metrics").await;
+    let (status, body) = app.get("/metrics").await;
     assert_eq!(status, StatusCode::OK);
-    // Metrics endpoint accessible without auth (body may be empty if no metrics recorded)
+
+    let zero_init_surfaces = [
+        ("edge-mcp", "mcp"),
+        ("proxy", "api_proxy"),
+        ("proxy", "dynamic_proxy"),
+        ("proxy", "ws_proxy"),
+    ];
+    for (deployment_mode, surface) in zero_init_surfaces {
+        for guardrail in GUARDRAILS_FULL_GUARDRAILS {
+            let expected = format!(
+                r#"stoa_guardrails_evaluations_total{{deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}} 0"#
+            );
+            assert!(
+                body.contains(&expected),
+                "fresh /metrics scrape missing zero-valued guardrail series `{expected}`"
+            );
+            for decision in GUARDRAILS_FULL_DECISIONS {
+                let expected = format!(
+                    r#"stoa_guardrails_decisions_total{{decision="{decision}",deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}} 0"#
+                );
+                assert!(
+                    body.contains(&expected),
+                    "fresh /metrics scrape missing zero-valued guardrail series `{expected}`"
+                );
+            }
+        }
+    }
 }
 
 // ========================================================================

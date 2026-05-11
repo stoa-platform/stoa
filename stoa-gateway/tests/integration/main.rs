@@ -6,6 +6,7 @@
 mod api_bridge;
 mod auth;
 mod common;
+mod guardrails_metrics;
 mod llm_proxy;
 mod mcp;
 mod quota;

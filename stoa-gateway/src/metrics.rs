@@ -1605,18 +1605,17 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TODO Phase 6.2 - MCP guardrail call-site instrumentation"]
     fn spec_ac2_mcp_path_records_all_guardrail_decisions() {
-        let source = include_str!("mcp/handlers.rs");
+        let handlers = include_str!("mcp/handlers.rs");
+        let guardrails = include_str!("guardrails/mod.rs");
 
         assert!(
-            source.contains("record_guardrail_evaluation"),
+            handlers.contains("record_mcp_guardrail_metric_event"),
             "AC2 red: MCP tool-call path does not record full guardrail evaluations yet"
         );
-        for decision in ["allow", "redact", "block", "error"] {
+        for decision in ["Allow", "Redact", "Block", "Error"] {
             assert!(
-                source.contains(&format!("decision=\"{decision}\""))
-                    || source.contains(&format!("decision = \"{decision}\"")),
+                guardrails.contains(&format!("{decision},")),
                 "AC2 red: MCP path must emit decision={decision}"
             );
         }

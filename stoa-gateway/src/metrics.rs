@@ -232,6 +232,45 @@ pub static GUARDRAILS_CONTENT_FILTERED: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_guardrails_content_filtered_total metric")
 });
 
+pub const GUARDRAILS_FULL_DEPLOYMENT_MODES: [&str; 5] =
+    ["edge-mcp", "sidecar", "proxy", "shadow", "unknown"];
+pub const GUARDRAILS_FULL_SURFACES: [&str; 4] = ["mcp", "api_proxy", "dynamic_proxy", "ws_proxy"];
+pub const GUARDRAILS_FULL_GUARDRAILS: [&str; 5] = [
+    "pii",
+    "injection",
+    "prompt_guard",
+    "content_filter",
+    "rate_limit",
+];
+pub const GUARDRAILS_FULL_DECISIONS: [&str; 4] = ["allow", "redact", "block", "error"];
+
+const GUARDRAILS_FULL_ZERO_INIT_SURFACES: [(&str, &str); 4] = [
+    ("edge-mcp", "mcp"),
+    ("proxy", "api_proxy"),
+    ("proxy", "dynamic_proxy"),
+    ("proxy", "ws_proxy"),
+];
+
+/// Counter of guardrail evaluations by bounded deployment mode, surface, and guardrail.
+pub static GUARDRAILS_EVALUATIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_guardrails_evaluations_total",
+        "Total guardrail policy evaluations",
+        &["deployment_mode", "surface", "guardrail"]
+    )
+    .expect("Failed to create stoa_guardrails_evaluations_total metric")
+});
+
+/// Counter of guardrail decisions by bounded deployment mode, surface, guardrail, and decision.
+pub static GUARDRAILS_DECISIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_guardrails_decisions_total",
+        "Total guardrail policy decisions",
+        &["deployment_mode", "surface", "guardrail", "decision"]
+    )
+    .expect("Failed to create stoa_guardrails_decisions_total metric")
+});
+
 // === Prompt Guard Metrics (CAB-1761) ===
 
 /// Counter of prompt guard detections by category and action.
@@ -1072,6 +1111,57 @@ pub fn record_guardrails_content_filter(action: &str, category: &str) {
         .inc();
 }
 
+pub fn record_guardrail_evaluation(deployment_mode: &str, surface: &str, guardrail: &str) {
+    let Some((deployment_mode, surface, guardrail)) =
+        bounded_guardrail_labels(deployment_mode, surface, guardrail)
+    else {
+        return;
+    };
+
+    GUARDRAILS_EVALUATIONS_TOTAL
+        .with_label_values(&[deployment_mode, surface, guardrail])
+        .inc();
+}
+
+pub fn record_guardrail_decision(
+    deployment_mode: &str,
+    surface: &str,
+    guardrail: &str,
+    decision: &str,
+) {
+    let Some((deployment_mode, surface, guardrail)) =
+        bounded_guardrail_labels(deployment_mode, surface, guardrail)
+    else {
+        return;
+    };
+    let Some(decision) = bounded_label(decision, &GUARDRAILS_FULL_DECISIONS) else {
+        return;
+    };
+
+    GUARDRAILS_DECISIONS_TOTAL
+        .with_label_values(&[deployment_mode, surface, guardrail, decision])
+        .inc();
+}
+
+fn bounded_guardrail_labels<'a>(
+    deployment_mode: &'a str,
+    surface: &'a str,
+    guardrail: &'a str,
+) -> Option<(&'a str, &'a str, &'a str)> {
+    let deployment_mode = if GUARDRAILS_FULL_DEPLOYMENT_MODES.contains(&deployment_mode) {
+        deployment_mode
+    } else {
+        "unknown"
+    };
+    let surface = bounded_label(surface, &GUARDRAILS_FULL_SURFACES)?;
+    let guardrail = bounded_label(guardrail, &GUARDRAILS_FULL_GUARDRAILS)?;
+    Some((deployment_mode, surface, guardrail))
+}
+
+fn bounded_label<'a>(value: &'a str, allowed: &[&str]) -> Option<&'a str> {
+    allowed.contains(&value).then_some(value)
+}
+
 // === Prompt Guard metrics helpers (CAB-1761) ===
 
 /// Record a prompt guard detection event.
@@ -1322,6 +1412,8 @@ pub fn init_all_metrics() {
     Lazy::force(&GUARDRAILS_PII_DETECTED);
     Lazy::force(&GUARDRAILS_INJECTION_BLOCKED);
     Lazy::force(&GUARDRAILS_CONTENT_FILTERED);
+    Lazy::force(&GUARDRAILS_EVALUATIONS_TOTAL);
+    Lazy::force(&GUARDRAILS_DECISIONS_TOTAL);
     Lazy::force(&TOKEN_BUDGET_TOKENS_TOTAL);
     Lazy::force(&TOKEN_BUDGET_EXCEEDED_TOTAL);
     Lazy::force(&TOOL_DISCOVERY_DURATION);
@@ -1357,6 +1449,24 @@ pub fn init_all_metrics() {
     Lazy::force(&ROUTE_RELOAD_ROUTES_LOADED);
     Lazy::force(&LB_SELECTIONS_TOTAL);
     Lazy::force(&LB_UPSTREAM_ACTIVE);
+
+    init_guardrails_full_metric_series();
+}
+
+fn init_guardrails_full_metric_series() {
+    for (deployment_mode, surface) in GUARDRAILS_FULL_ZERO_INIT_SURFACES {
+        for guardrail in GUARDRAILS_FULL_GUARDRAILS {
+            GUARDRAILS_EVALUATIONS_TOTAL.with_label_values(&[deployment_mode, surface, guardrail]);
+            for decision in GUARDRAILS_FULL_DECISIONS {
+                GUARDRAILS_DECISIONS_TOTAL.with_label_values(&[
+                    deployment_mode,
+                    surface,
+                    guardrail,
+                    decision,
+                ]);
+            }
+        }
+    }
 }
 
 /// Get the total number of MCP tool calls across all labels.
@@ -1463,6 +1573,198 @@ mod tests {
         record_http_request("GET", "/health", 200, 0.001);
         record_http_request("POST", "/mcp/tools/call", 200, 0.05);
         record_http_request("GET", "/mcp/tools/list", 401, 0.002);
+    }
+
+    #[test]
+    fn spec_ac1_guardrails_full_metrics_exist_with_locked_labels() {
+        init_all_metrics();
+        let body = encode_metrics();
+        let full_metric_lines = guardrails_full_metric_lines(&body);
+
+        assert!(
+            body.contains("stoa_guardrails_evaluations_total"),
+            "AC1 red: evaluations counter is not registered yet"
+        );
+        assert!(
+            body.contains("stoa_guardrails_decisions_total"),
+            "AC1 red: decisions counter is not registered yet"
+        );
+
+        for label in ["deployment_mode", "surface", "guardrail"] {
+            assert!(
+                full_metric_lines.iter().any(|line| line.contains(label)),
+                "AC1 red: guardrails full metrics must expose bounded label `{label}` only"
+            );
+        }
+        assert!(
+            full_metric_lines
+                .iter()
+                .any(|line| line.contains("decision=")),
+            "AC1 red: decisions counter must expose the locked decision label"
+        );
+    }
+
+    #[test]
+    fn spec_ac2_mcp_path_records_all_guardrail_decisions() {
+        let handlers = include_str!("mcp/handlers.rs");
+        let guardrails = include_str!("guardrails/mod.rs");
+
+        assert!(
+            handlers.contains("record_mcp_guardrail_metric_event"),
+            "AC2 red: MCP tool-call path does not record full guardrail evaluations yet"
+        );
+        for decision in ["Allow", "Redact", "Block", "Error"] {
+            assert!(
+                guardrails.contains(&format!("{decision},")),
+                "AC2 red: MCP path must emit decision={decision}"
+            );
+        }
+    }
+
+    #[test]
+    fn spec_ac3_non_mcp_paths_record_observe_only_guardrails() {
+        let api_proxy = include_str!("proxy/api_proxy_handler.rs");
+        let dynamic_proxy = include_str!("proxy/dynamic.rs");
+        let observe_only = include_str!("proxy/observe_only_guardrails.rs");
+
+        assert!(
+            api_proxy.contains("record_observe_only_guardrails"),
+            "AC3 red: api_proxy has no observe-only guardrail evaluation metric"
+        );
+        assert!(
+            dynamic_proxy.contains("record_observe_only_guardrails"),
+            "AC3 red: dynamic_proxy has no observe-only guardrail evaluation metric"
+        );
+        assert!(
+            observe_only.contains("record_guardrail_evaluation"),
+            "AC3 red: observe-only helper must emit full guardrail evaluation metrics"
+        );
+        assert!(
+            api_proxy.contains("observe_only") && dynamic_proxy.contains("observe_only"),
+            "AC3 red: non-MCP guardrails must be explicitly observe-only before enforcement"
+        );
+    }
+
+    #[test]
+    fn spec_ac7_guardrails_full_metrics_exclude_forbidden_labels() {
+        init_all_metrics();
+        let body = encode_metrics();
+        let full_metric_lines = guardrails_full_metric_lines(&body);
+
+        assert!(
+            !full_metric_lines.is_empty(),
+            "AC7 red: cannot verify forbidden labels until full guardrails metrics exist"
+        );
+        for forbidden in [
+            "tenant_id=",
+            "tenant=",
+            "route=",
+            "policy=",
+            "tool=",
+            "trace_id=",
+            "span_id=",
+            "request_id=",
+            "user_id=",
+            "consumer=",
+            "path=",
+            "url=",
+        ] {
+            assert!(
+                full_metric_lines
+                    .iter()
+                    .all(|line| !line.contains(forbidden)),
+                "AC7 red: forbidden label `{forbidden}` leaked in full guardrails metrics:\n{}",
+                full_metric_lines.join("\n")
+            );
+        }
+    }
+
+    #[test]
+    fn spec_ac10_guardrails_full_metrics_zero_initialize_bounded_series() {
+        init_all_metrics();
+        let body = encode_metrics();
+
+        for (deployment_mode, surface) in GUARDRAILS_FULL_ZERO_INIT_SURFACES {
+            for guardrail in GUARDRAILS_FULL_GUARDRAILS {
+                let expected = format!(
+                    r#"stoa_guardrails_evaluations_total{{deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}} 0"#
+                );
+                assert!(
+                    body.contains(&expected),
+                    "AC10 red: producer-presence zero series missing `{expected}`"
+                );
+                for decision in GUARDRAILS_FULL_DECISIONS {
+                    let expected = format!(
+                        r#"stoa_guardrails_decisions_total{{decision="{decision}",deployment_mode="{deployment_mode}",guardrail="{guardrail}",surface="{surface}"}} 0"#
+                    );
+                    assert!(
+                        body.contains(&expected),
+                        "AC10 red: producer-presence zero series missing `{expected}`"
+                    );
+                }
+            }
+        }
+
+        let expected_evaluations =
+            GUARDRAILS_FULL_ZERO_INIT_SURFACES.len() * GUARDRAILS_FULL_GUARDRAILS.len();
+        let expected_decisions = expected_evaluations * GUARDRAILS_FULL_DECISIONS.len();
+        assert_eq!(expected_evaluations, 20);
+        assert_eq!(expected_decisions, 80);
+        assert!(
+            expected_evaluations + expected_decisions <= 500,
+            "guardrails full zero-init contract exceeds A3 ceiling"
+        );
+
+        let evaluations_series = guardrails_evaluation_metric_lines(&body);
+        let decisions_series = guardrails_decision_metric_lines(&body);
+        let total_series = evaluations_series.len() + decisions_series.len();
+        assert!(evaluations_series.len() >= expected_evaluations);
+        assert!(decisions_series.len() >= expected_decisions);
+        assert!(
+            total_series <= 500,
+            "guardrails full metrics exceed A3 ceiling: {total_series}"
+        );
+    }
+
+    #[test]
+    fn spec_ac10_record_helpers_increment_only_bounded_labels() {
+        init_all_metrics();
+        record_guardrail_evaluation("raw-mode", "mcp", "pii");
+        record_guardrail_decision("raw-mode", "mcp", "pii", "allow");
+        record_guardrail_decision("proxy", "api_proxy", "rate_limit", "rate_limited");
+
+        let body = encode_metrics();
+        for expected in [
+            r#"stoa_guardrails_evaluations_total{deployment_mode="unknown",guardrail="pii",surface="mcp"} 1"#,
+            r#"stoa_guardrails_decisions_total{decision="allow",deployment_mode="unknown",guardrail="pii",surface="mcp"} 1"#,
+        ] {
+            assert!(
+                body.contains(expected),
+                "guardrails full metric helper output missing `{expected}`"
+            );
+        }
+        assert!(
+            !body.contains(r#"decision="rate_limited""#),
+            "rate_limited is forbidden as a guardrails decision label"
+        );
+    }
+
+    #[test]
+    fn spec_ac11_skipped_body_paths_have_no_guardrail_counter_increment() {
+        let api_proxy = include_str!("proxy/api_proxy_handler.rs");
+        let dynamic_proxy = include_str!("proxy/dynamic.rs");
+        let observe_only = include_str!("proxy/observe_only_guardrails.rs");
+
+        assert!(
+            observe_only.contains("GuardrailBodyApplicability::Skipped"),
+            "AC11 red: skipped-body guardrail applicability is not modeled yet"
+        );
+        assert!(
+            api_proxy.contains("classify_buffered_json_body")
+                && dynamic_proxy.contains("buffer_json_request_for_observe_only")
+                && observe_only.contains("without_guardrail_counter_increment"),
+            "AC11 red: skip branches must explicitly avoid evaluations/decisions increments"
+        );
     }
 
     #[test]
@@ -1622,5 +1924,26 @@ mod tests {
         prometheus::Encoder::encode(&encoder, &metric_families, &mut buffer)
             .expect("encode prometheus metrics");
         String::from_utf8(buffer).expect("prometheus metrics should be utf-8")
+    }
+
+    fn guardrails_full_metric_lines(body: &str) -> Vec<&str> {
+        body.lines()
+            .filter(|line| {
+                line.starts_with("stoa_guardrails_evaluations_total")
+                    || line.starts_with("stoa_guardrails_decisions_total")
+            })
+            .collect()
+    }
+
+    fn guardrails_evaluation_metric_lines(body: &str) -> Vec<&str> {
+        body.lines()
+            .filter(|line| line.starts_with("stoa_guardrails_evaluations_total{"))
+            .collect()
+    }
+
+    fn guardrails_decision_metric_lines(body: &str) -> Vec<&str> {
+        body.lines()
+            .filter(|line| line.starts_with("stoa_guardrails_decisions_total{"))
+            .collect()
     }
 }

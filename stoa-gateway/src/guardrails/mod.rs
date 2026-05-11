@@ -38,6 +38,43 @@ pub use token_budget::{estimate_json, estimate_tokens, BudgetStatus, TokenBudget
 
 use serde_json::Value;
 
+/// Locked Phase 6.2 decision taxonomy for guardrail counter emission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuardrailMetricDecision {
+    Allow,
+    Redact,
+    Block,
+    Error,
+}
+
+impl GuardrailMetricDecision {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Allow => "allow",
+            Self::Redact => "redact",
+            Self::Block => "block",
+            Self::Error => "error",
+        }
+    }
+}
+
+/// Bounded guardrail metric event emitted only for policies that were evaluated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuardrailMetricEvent {
+    pub guardrail: &'static str,
+    pub decision: GuardrailMetricDecision,
+}
+
+fn metric_event(
+    guardrail: &'static str,
+    decision: GuardrailMetricDecision,
+) -> GuardrailMetricEvent {
+    GuardrailMetricEvent {
+        guardrail,
+        decision,
+    }
+}
+
 /// Configuration for guardrails checks (from env vars)
 pub struct GuardrailsConfig {
     pub pii_enabled: bool,
@@ -78,6 +115,18 @@ pub fn check_request(
     _tool_name: &str,
     arguments: &Value,
 ) -> GuardrailsOutcome {
+    check_request_with_metric_events(config, _tool_name, arguments).0
+}
+
+/// Evaluate request guardrails and return the bounded metric decisions for
+/// policies that actually ran. Disabled policies produce no events.
+pub fn check_request_with_metric_events(
+    config: &GuardrailsConfig,
+    _tool_name: &str,
+    arguments: &Value,
+) -> (GuardrailsOutcome, Vec<GuardrailMetricEvent>) {
+    let mut metric_events = Vec::new();
+
     // 0. Prompt guard (if enabled) — LLM-specific jailbreak detection (CAB-1761)
     if config.prompt_guard_enabled {
         if let PromptGuardOutcome::Detected {
@@ -89,22 +138,33 @@ pub fn check_request(
         {
             match action {
                 PromptGuardAction::Block => {
-                    return GuardrailsOutcome::Blocked(format!(
-                        "Prompt guard: {category} detected [rule: {rule}]"
-                    ));
+                    metric_events
+                        .push(metric_event("prompt_guard", GuardrailMetricDecision::Block));
+                    return (
+                        GuardrailsOutcome::Blocked(format!(
+                            "Prompt guard: {category} detected [rule: {rule}]"
+                        )),
+                        metric_events,
+                    );
                 }
                 PromptGuardAction::Warn | PromptGuardAction::LogOnly => {
                     // Log but continue — metrics tracked by caller
+                    metric_events
+                        .push(metric_event("prompt_guard", GuardrailMetricDecision::Allow));
                 }
             }
+        } else {
+            metric_events.push(metric_event("prompt_guard", GuardrailMetricDecision::Allow));
         }
     }
 
     // 1. Injection check (if enabled) — reject before PII redaction
     if config.injection_enabled {
         if let Some(reason) = InjectionScanner::scan(arguments) {
-            return GuardrailsOutcome::Blocked(reason);
+            metric_events.push(metric_event("injection", GuardrailMetricDecision::Block));
+            return (GuardrailsOutcome::Blocked(reason), metric_events);
         }
+        metric_events.push(metric_event("injection", GuardrailMetricDecision::Allow));
     }
 
     // 2. PII check (if enabled)
@@ -112,13 +172,19 @@ pub fn check_request(
         let (has_pii, redacted) = PiiScanner::scan(arguments);
         if has_pii {
             if config.pii_redact {
-                return GuardrailsOutcome::Redacted(redacted);
+                metric_events.push(metric_event("pii", GuardrailMetricDecision::Redact));
+                return (GuardrailsOutcome::Redacted(redacted), metric_events);
             } else {
-                return GuardrailsOutcome::Blocked(
-                    "Request contains PII (personally identifiable information)".to_string(),
+                metric_events.push(metric_event("pii", GuardrailMetricDecision::Block));
+                return (
+                    GuardrailsOutcome::Blocked(
+                        "Request contains PII (personally identifiable information)".to_string(),
+                    ),
+                    metric_events,
                 );
             }
         }
+        metric_events.push(metric_event("pii", GuardrailMetricDecision::Allow));
     }
 
     // 3. Content filter check (if enabled)
@@ -128,24 +194,43 @@ pub fn check_request(
                 rule_name,
                 category,
             } => {
-                return GuardrailsOutcome::Blocked(format!(
-                    "Content blocked by content filter [rule: {rule_name}, category: {category}]"
+                metric_events.push(metric_event(
+                    "content_filter",
+                    GuardrailMetricDecision::Block,
                 ));
+                return (
+                    GuardrailsOutcome::Blocked(format!(
+                        "Content blocked by content filter [rule: {rule_name}, category: {category}]"
+                    )),
+                    metric_events,
+                );
             }
             ContentFilterOutcome::Sensitive {
                 rule_name,
                 category,
             } => {
-                return GuardrailsOutcome::Sensitive {
-                    rule: rule_name,
-                    category,
-                };
+                metric_events.push(metric_event(
+                    "content_filter",
+                    GuardrailMetricDecision::Allow,
+                ));
+                return (
+                    GuardrailsOutcome::Sensitive {
+                        rule: rule_name,
+                        category,
+                    },
+                    metric_events,
+                );
             }
-            ContentFilterOutcome::Pass => {}
+            ContentFilterOutcome::Pass => {
+                metric_events.push(metric_event(
+                    "content_filter",
+                    GuardrailMetricDecision::Allow,
+                ));
+            }
         }
     }
 
-    GuardrailsOutcome::Pass
+    (GuardrailsOutcome::Pass, metric_events)
 }
 
 /// Scan response content through the content filter.

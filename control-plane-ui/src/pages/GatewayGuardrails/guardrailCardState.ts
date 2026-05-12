@@ -1,20 +1,20 @@
 import type {
   AggregatedMetrics,
+  GuardrailKey,
+  GuardrailRuntimeMetrics,
   GuardrailsConfigResponse,
   GuardrailsMetricField,
+  GuardrailsState,
 } from '../../types';
 
-export type GuardrailCardStateKind =
-  | 'metrics-unavailable'
-  | 'disabled'
-  | 'no-sample'
-  | 'stale'
-  | 'healthy';
+export type GuardrailCardStateKind = GuardrailsState | 'disabled';
 
 export interface GuardrailCardUIState {
   kind: GuardrailCardStateKind;
   count: number | null;
-  lastSampleAt: string | null;
+  evaluationsCount: number | null;
+  tripsCount: number | null;
+  lastObservedAt: string | null;
 }
 
 export interface GuardrailCardStateOptions {
@@ -29,6 +29,14 @@ const METRIC_TO_CONFIG_FIELD: Record<GuardrailsMetricField, keyof GuardrailsConf
   rate_limit_blocks: 'rate_limit_enabled',
 };
 
+const METRIC_TO_GUARDRAIL: Record<GuardrailsMetricField, GuardrailKey> = {
+  pii_detections: 'pii',
+  injection_blocks: 'injection',
+  prompt_guard_blocks: 'prompt_guard',
+  content_filter_blocks: 'content_filter',
+  rate_limit_blocks: 'rate_limit',
+};
+
 export function guardrailCardState(
   config: GuardrailsConfigResponse | null,
   metrics: AggregatedMetrics | null,
@@ -41,30 +49,40 @@ export function guardrailCardState(
 
   const configField = METRIC_TO_CONFIG_FIELD[fieldName];
   if (config && config[configField] === false) {
-    return { kind: 'disabled', count: null, lastSampleAt: null };
+    return {
+      kind: 'disabled',
+      count: null,
+      evaluationsCount: null,
+      tripsCount: null,
+      lastObservedAt: null,
+    };
   }
 
-  const guardrails = metrics.guardrails;
-  if (guardrails.source_healthy !== true) {
+  const guardrailKey = METRIC_TO_GUARDRAIL[fieldName];
+  const guardrail = metrics.guardrails.by_guardrail?.[guardrailKey];
+  if (!guardrail) {
     return unavailableState();
   }
 
-  const count = guardrails[fieldName];
-  if (guardrails.last_sample_at === null || count === null || count === undefined) {
-    return { kind: 'no-sample', count: null, lastSampleAt: null };
-  }
-
-  if (guardrails.metrics_age_seconds === null || guardrails.metrics_age_seconds === undefined) {
-    return unavailableState();
-  }
-
-  if (guardrails.metrics_age_seconds > 60) {
-    return { kind: 'stale', count, lastSampleAt: guardrails.last_sample_at };
-  }
-
-  return { kind: 'healthy', count, lastSampleAt: guardrails.last_sample_at };
+  return stateFromBackend(guardrail);
 }
 
 function unavailableState(): GuardrailCardUIState {
-  return { kind: 'metrics-unavailable', count: null, lastSampleAt: null };
+  return {
+    kind: 'metrics_unavailable',
+    count: null,
+    evaluationsCount: null,
+    tripsCount: null,
+    lastObservedAt: null,
+  };
+}
+
+function stateFromBackend(guardrail: GuardrailRuntimeMetrics): GuardrailCardUIState {
+  return {
+    kind: guardrail.state,
+    count: guardrail.trips_count,
+    evaluationsCount: guardrail.evaluations_count,
+    tripsCount: guardrail.trips_count,
+    lastObservedAt: guardrail.last_evaluation_delta_at ?? guardrail.scrape_sample_at,
+  };
 }

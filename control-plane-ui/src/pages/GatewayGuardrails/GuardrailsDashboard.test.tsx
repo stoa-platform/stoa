@@ -4,7 +4,13 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { createAuthMock, renderWithProviders } from '../../test/helpers';
 import { useAuth } from '../../contexts/AuthContext';
 import type { PersonaRole } from '../../test/helpers';
-import type { AggregatedMetrics, GuardrailsConfigResponse } from '../../types';
+import type {
+  AggregatedMetrics,
+  GuardrailKey,
+  GuardrailRuntimeMetrics,
+  GuardrailsConfigResponse,
+  GuardrailsMetricsBlock,
+} from '../../types';
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
@@ -39,8 +45,45 @@ const enabledConfig: GuardrailsConfigResponse = {
   updated_at: new Date(Date.now() - 30_000).toISOString(),
 };
 
+const GUARDRAILS: GuardrailKey[] = [
+  'pii',
+  'injection',
+  'prompt_guard',
+  'content_filter',
+  'rate_limit',
+];
+
+function guardrailEntry(overrides: Partial<GuardrailRuntimeMetrics> = {}): GuardrailRuntimeMetrics {
+  return {
+    state: 'trips_observed',
+    evaluations_count: 10,
+    decisions_count: 10,
+    trips_count: 5,
+    error_count: 0,
+    last_evaluation_delta_at: '2026-05-09T06:00:00Z',
+    last_decision_delta_at: '2026-05-09T06:00:00Z',
+    scrape_sample_at: '2026-05-09T06:00:15Z',
+    source_healthy: true,
+    stale_reason: null,
+    ...overrides,
+  };
+}
+
+function byGuardrail(
+  overrides: Partial<Record<GuardrailKey, Partial<GuardrailRuntimeMetrics>>> = {}
+): Record<GuardrailKey, GuardrailRuntimeMetrics> {
+  return GUARDRAILS.reduce(
+    (acc, guardrail) => {
+      acc[guardrail] = guardrailEntry(overrides[guardrail]);
+      return acc;
+    },
+    {} as Record<GuardrailKey, GuardrailRuntimeMetrics>
+  );
+}
+
 function metrics(
-  guardrails: Partial<NonNullable<AggregatedMetrics['guardrails']>> = {}
+  guardrails: Partial<GuardrailsMetricsBlock> = {},
+  perGuardrail: Partial<Record<GuardrailKey, Partial<GuardrailRuntimeMetrics>>> = {}
 ): AggregatedMetrics {
   return {
     health: {
@@ -63,11 +106,21 @@ function metrics(
     },
     overall_status: 'healthy',
     guardrails: {
+      state: 'trips_observed',
+      evaluations_count: 10,
+      decisions_count: 10,
+      trips_count: 5,
+      error_count: 0,
       pii_detections: 5,
       injection_blocks: 2,
       prompt_guard_blocks: 1,
       content_filter_blocks: 0,
       rate_limit_blocks: 0,
+      last_evaluation_delta_at: '2026-05-09T06:00:00Z',
+      last_decision_delta_at: '2026-05-09T06:00:00Z',
+      scrape_sample_at: '2026-05-09T06:00:15Z',
+      stale_reason: null,
+      by_guardrail: byGuardrail(perGuardrail),
       last_sample_at: new Date(Date.now() - 15_000).toISOString(),
       metrics_age_seconds: 15,
       source_healthy: true,
@@ -133,62 +186,76 @@ describe('GuardrailsDashboard', () => {
     ).toBeInTheDocument();
   });
 
-  it('card state renders enabled zero with a healthy source', async () => {
-    mockGetGatewayAggregatedMetrics.mockResolvedValue(metrics({ pii_detections: 0 }));
+  it('card state renders evaluations with zero trips from backend state', async () => {
+    mockGetGatewayAggregatedMetrics.mockResolvedValue(
+      metrics(
+        {},
+        { pii: { state: 'evaluations_zero_trips', evaluations_count: 12, trips_count: 0 } }
+      )
+    );
 
     renderWithProviders(<GuardrailsDashboard />);
 
     await waitFor(() => {
       expect(
         within(screen.getByTestId('guardrail-card-pii-detection')).getByText(
-          /0 events · last sample/
+          '0 trips after 12 evaluations'
         )
       ).toBeInTheDocument();
     });
   });
 
-  it('card state renders enabled N with a healthy source', async () => {
-    mockGetGatewayAggregatedMetrics.mockResolvedValue(metrics({ injection_blocks: 7 }));
+  it('card state renders observed trips from backend state', async () => {
+    mockGetGatewayAggregatedMetrics.mockResolvedValue(
+      metrics({}, { injection: { state: 'trips_observed', trips_count: 7 } })
+    );
 
     renderWithProviders(<GuardrailsDashboard />);
 
-    expect(await screen.findByText(/7 events · last sample/)).toBeInTheDocument();
+    expect(await screen.findByText('7 trips observed')).toBeInTheDocument();
   });
 
-  it('card state renders no sample when last_sample_at is null', async () => {
+  it('card state renders no evaluations from backend state', async () => {
     mockGetGatewayAggregatedMetrics.mockResolvedValue(
-      metrics({
-        pii_detections: null,
-        injection_blocks: null,
-        prompt_guard_blocks: null,
-        content_filter_blocks: null,
-        rate_limit_blocks: null,
-        last_sample_at: null,
-        metrics_age_seconds: null,
-      })
+      metrics({}, { pii: { state: 'no_evaluations', evaluations_count: 0, trips_count: 0 } })
     );
 
     renderWithProviders(<GuardrailsDashboard />);
 
     expect(
       await within(screen.getByTestId('guardrail-card-pii-detection')).findByText(
-        'No guardrail trip samples in window'
+        'No guardrail evaluations in window'
       )
     ).toBeInTheDocument();
   });
 
-  it('current prod fail-closed config can show config unavailable while metrics show no sample', async () => {
+  it('null counts do not collapse into zero text', async () => {
+    mockGetGatewayAggregatedMetrics.mockResolvedValue(
+      metrics(
+        {},
+        {
+          pii: {
+            state: 'evaluations_zero_trips',
+            evaluations_count: null,
+            trips_count: null,
+          },
+        }
+      )
+    );
+
+    renderWithProviders(<GuardrailsDashboard />);
+
+    expect(
+      await screen.findByText('Guardrail evaluations observed; trip count unavailable')
+    ).toBeInTheDocument();
+    const card = screen.getByTestId('guardrail-card-pii-detection');
+    expect(within(card).queryByText(/0 trips/)).not.toBeInTheDocument();
+  });
+
+  it('current prod fail-closed config can show config unavailable while metrics show no evaluations', async () => {
     mockGetGuardrailsConfig.mockRejectedValue(new Error('guardrails env missing'));
     mockGetGatewayAggregatedMetrics.mockResolvedValue(
-      metrics({
-        pii_detections: null,
-        injection_blocks: null,
-        prompt_guard_blocks: null,
-        content_filter_blocks: null,
-        rate_limit_blocks: null,
-        last_sample_at: null,
-        metrics_age_seconds: null,
-      })
+      metrics({}, { pii: { state: 'no_evaluations', evaluations_count: 0, trips_count: 0 } })
     );
 
     renderWithProviders(<GuardrailsDashboard />);
@@ -196,28 +263,38 @@ describe('GuardrailsDashboard', () => {
     expect(await screen.findAllByText('Metrics unavailable')).not.toHaveLength(0);
     expect(
       await within(screen.getByTestId('guardrail-card-pii-detection')).findByText(
-        'No guardrail trip samples in window'
+        'No guardrail evaluations in window'
       )
     ).toBeInTheDocument();
   });
 
-  it('card state renders stale when metrics age is above 60 seconds', async () => {
+  it('card state renders stale data from backend state', async () => {
     mockGetGatewayAggregatedMetrics.mockResolvedValue(
-      metrics({
-        metrics_age_seconds: 61,
-        last_sample_at: new Date(Date.now() - 61_000).toISOString(),
-      })
+      metrics(
+        { state: 'trips_observed', metrics_age_seconds: 15 },
+        {
+          pii: {
+            state: 'stale_data',
+            last_evaluation_delta_at: null,
+            scrape_sample_at: '2026-05-09T06:00:15Z',
+          },
+        }
+      )
     );
 
     renderWithProviders(<GuardrailsDashboard />);
 
     expect(
-      await within(screen.getByTestId('guardrail-card-pii-detection')).findByText('Stale metrics')
+      await within(screen.getByTestId('guardrail-card-pii-detection')).findByText(
+        'Data stale (last observed: 2026-05-09T06:00:15Z)'
+      )
     ).toBeInTheDocument();
   });
 
-  it('card state renders metrics unavailable when source is unhealthy', async () => {
-    mockGetGatewayAggregatedMetrics.mockResolvedValue(metrics({ source_healthy: false }));
+  it('card state renders metrics unavailable from backend state', async () => {
+    mockGetGatewayAggregatedMetrics.mockResolvedValue(
+      metrics({}, { pii: { state: 'metrics_unavailable', trips_count: null } })
+    );
 
     renderWithProviders(<GuardrailsDashboard />);
 
@@ -267,11 +344,20 @@ describe('GuardrailsDashboard', () => {
   });
 
   it('rate limit card does not use a synthetic all filter', async () => {
+    mockGetGatewayAggregatedMetrics.mockResolvedValue(
+      metrics(
+        {},
+        { rate_limit: { state: 'evaluations_zero_trips', evaluations_count: 10, trips_count: 0 } }
+      )
+    );
+
     renderWithProviders(<GuardrailsDashboard />);
 
     await waitFor(() => {
       expect(
-        within(screen.getByTestId('guardrail-card-rate-limit')).getByText(/0 events · last sample/)
+        within(screen.getByTestId('guardrail-card-rate-limit')).getByText(
+          '0 trips after 10 evaluations'
+        )
       ).toBeInTheDocument();
     });
     fireEvent.click(await screen.findByTestId('guardrail-card-rate-limit'));
@@ -281,6 +367,12 @@ describe('GuardrailsDashboard', () => {
   });
 
   it('rate limit card filters to rate-limit or shows explicit empty state', async () => {
+    mockGetGatewayAggregatedMetrics.mockResolvedValue(
+      metrics(
+        {},
+        { rate_limit: { state: 'evaluations_zero_trips', evaluations_count: 10, trips_count: 0 } }
+      )
+    );
     mockGetGuardrailsEvents.mockResolvedValue({
       events: [
         {
@@ -299,7 +391,9 @@ describe('GuardrailsDashboard', () => {
 
     await waitFor(() => {
       expect(
-        within(screen.getByTestId('guardrail-card-rate-limit')).getByText(/0 events · last sample/)
+        within(screen.getByTestId('guardrail-card-rate-limit')).getByText(
+          '0 trips after 10 evaluations'
+        )
       ).toBeInTheDocument();
     });
     fireEvent.click(await screen.findByTestId('guardrail-card-rate-limit'));
@@ -348,7 +442,7 @@ describe('GuardrailsDashboard', () => {
 
     renderWithProviders(<GuardrailsDashboard />);
 
-    expect(await screen.findByText(/5 events · last sample/)).toBeInTheDocument();
+    expect(await screen.findAllByText('5 trips observed')).not.toHaveLength(0);
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(

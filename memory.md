@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-05-11. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-05-12. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-05-12
+
+- CAB-2219 Phase 6.5 cp-ui five-state rendering implemented on branch `codex/cab-2219-phase65-cpui-states` in worktree `/Users/torpedo/hlfh-repos/stoa-cab2219-phase65`. Scope stayed cp-ui-only: Guardrails cards now render backend-shipped `by_guardrail[*].state` directly, preserve `null` counts, display `metrics_unavailable` / `no_evaluations` / `evaluations_zero_trips` / `trips_observed` / `stale_data` wording, add Phase 6.4 response types, unskip CAB-2214 cp-ui red tests, and add AR-1 anti-regression coverage for Security Posture vs Security & Guardrails subtitles. Validation passed: targeted vitest (33 passed), full `npm run test` (2338 passed, 11 skipped), `npm run lint` (0 errors, 49 pre-existing warnings), `npm run format:check`, `npm run build`, `git diff --check`. Browser observation on local Vite route redirected to `/login` as expected without auth, so visual page inspection was auth-gated.
 
 ## Session Notes — 2026-05-11
 

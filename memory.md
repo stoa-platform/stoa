@@ -4,6 +4,7 @@
 
 ## Session Notes — 2026-05-11
 
+- CAB-2218 Phase 6.4 cp-api reader implemented on branch `codex/cab-2218-phase64-cpapi-reader`. Scope cp-api-only: `/v1/admin/gateways/metrics` reads new guardrails counters + keeps legacy, derives A15 5-state precedence server-side, emits A4 4-field timestamps, applies A5 capped freshness (60min ceiling), separates A16 trips/error counts, ships A17 per-guardrail health, and bounds E6 `stale_reason` enum. Validation: targeted pytest (37 passed, 4 later-phase skips), ruff/black/mypy clean, coverage 77.25%. Pre-existing OpenAPI snapshot debt on `AuditEntry.is_synthetic` from Phase 2 obs data visibility batch addressed in companion commit.
 - CAB-2217 Phase 6.3 implemented on `feat/cab-2213-phase63-nonmcp-observe`: gateway non-MCP observe-only guardrail counters for bounded JSON `api_proxy`/`dynamic_proxy`, skipped-body no-counter semantics, explicit `ws_proxy` defer decision, and A10 anchors updated.
 - CAB-2214 Phase 6.0 prep started under master ticket CAB-2213 on branch `feat/cab-2213-phase60-docs-redtests` in worktree `/Users/torpedo/hlfh-repos/stoa-cab2213-phase60`, based on validated `origin/codex/phase6-guardrails-full` (`1d0284dbc`). Scope is docs/cardinality + SPEC + red-test scaffolding only; no gateway producer, cp-api reader, UI behavior, rollout, or smoke implementation. Claim file: `.claude/claims/phase-6-0-validation.json` with heartbeat protocol.
 

@@ -49,7 +49,7 @@ function metrics(guardrails: Record<string, unknown>): AggregatedMetrics {
 }
 
 describe('spec/CAB-2214 / CAB-2213 Phase 6.0 red tests', () => {
-  it.skip('TODO Phase 6.5 - cp-ui state rendering: AC5 renders server evaluations_zero_trips state', () => {
+  it('Phase 6.5 - cp-ui state rendering: AC5 renders server evaluations_zero_trips state', () => {
     const state = guardrailCardState(
       config,
       metrics({
@@ -79,7 +79,7 @@ describe('spec/CAB-2214 / CAB-2213 Phase 6.0 red tests', () => {
     expect(state.count).toBe(0);
   });
 
-  it.skip('TODO Phase 6.5 - cp-ui state rendering: AC12 trusts backend trips_observed state', () => {
+  it('Phase 6.5 - cp-ui state rendering: AC12 trusts backend trips_observed state', () => {
     const state = guardrailCardState(
       config,
       metrics({

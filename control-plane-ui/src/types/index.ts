@@ -1415,14 +1415,52 @@ export interface GuardrailsConfigResponse {
 }
 
 export interface GuardrailsMetricsBlock {
+  state: GuardrailsState;
+  evaluations_count: number | null;
+  decisions_count: number | null;
+  trips_count: number | null;
+  error_count: number | null;
   pii_detections: number | null;
   injection_blocks: number | null;
   prompt_guard_blocks: number | null;
   content_filter_blocks: number | null;
   rate_limit_blocks: number | null;
+  last_evaluation_delta_at: string | null;
+  last_decision_delta_at: string | null;
+  scrape_sample_at: string | null;
+  stale_reason: GuardrailsStaleReason | null;
+  by_guardrail: Record<GuardrailKey, GuardrailRuntimeMetrics>;
   last_sample_at: string | null;
   metrics_age_seconds: number | null;
   source_healthy: boolean;
+}
+
+export type GuardrailsState =
+  | 'metrics_unavailable'
+  | 'no_evaluations'
+  | 'evaluations_zero_trips'
+  | 'trips_observed'
+  | 'stale_data';
+
+export type GuardrailsStaleReason =
+  | 'prom_unreachable'
+  | 'scrape_gap'
+  | 'producer_absent'
+  | 'stale_unknown';
+
+export type GuardrailKey = 'pii' | 'injection' | 'prompt_guard' | 'content_filter' | 'rate_limit';
+
+export interface GuardrailRuntimeMetrics {
+  state: GuardrailsState;
+  evaluations_count: number | null;
+  decisions_count: number | null;
+  trips_count: number | null;
+  error_count: number | null;
+  last_evaluation_delta_at: string | null;
+  last_decision_delta_at: string | null;
+  scrape_sample_at: string | null;
+  source_healthy: boolean;
+  stale_reason: GuardrailsStaleReason | null;
 }
 
 export type GuardrailsMetricField =

@@ -1,0 +1,78 @@
+name: Guardrails Phase 6 Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_environment:
+        description: dev-k3d validates all states over controlled runs; prod is safe states only.
+        required: true
+        default: dev-k3d
+        type: choice
+        options:
+          - dev-k3d
+          - prod
+      expected_state:
+        description: Current CP API guardrails state expected for this smoke run.
+        required: true
+        default: no_evaluations
+        type: choice
+        options:
+          - metrics_unavailable
+          - no_evaluations
+          - evaluations_zero_trips
+          - trips_observed
+          - stale_data
+      operator_opt_in:
+        description: Required initials/token for prod runs; ignored in dev-k3d.
+        required: false
+        default: ""
+        type: string
+      ar1_status:
+        description: Dev/k3d AR-1 anti-regression result.
+        required: true
+        default: not-run
+        type: choice
+        options:
+          - green
+          - not-run
+          - red
+
+permissions:
+  contents: read
+
+jobs:
+  guardrails-smoke:
+    name: Guardrails smoke (${{ inputs.smoke_environment }} / ${{ inputs.expected_state }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Validate smoke harness syntax
+        shell: bash
+        run: bash -n stoa-gateway/scripts/smoke/guardrails-phase6-smoke.sh
+
+      - name: Run guardrails smoke
+        shell: bash
+        env:
+          SMOKE_ENV: ${{ inputs.smoke_environment }}
+          EXPECTED_STATE: ${{ inputs.expected_state }}
+          OPERATOR_OPT_IN: ${{ inputs.operator_opt_in }}
+          AR1_STATUS: ${{ inputs.ar1_status }}
+          GATEWAY_URL: ${{ vars.GUARDRAILS_SMOKE_GATEWAY_URL }}
+          PROMETHEUS_URL: ${{ vars.GUARDRAILS_SMOKE_PROMETHEUS_URL }}
+          CONTROL_PLANE_API_URL: ${{ vars.GUARDRAILS_SMOKE_CP_API_URL }}
+          CP_API_BEARER_TOKEN: ${{ secrets.GUARDRAILS_SMOKE_CP_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          stoa-gateway/scripts/smoke/guardrails-phase6-smoke.sh
+          cat artifacts/guardrails-smoke/findings.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: guardrails-smoke-${{ inputs.smoke_environment }}-${{ inputs.expected_state }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/guardrails-smoke/
+          retention-days: 14

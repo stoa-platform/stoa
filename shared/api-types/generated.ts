@@ -10243,6 +10243,11 @@ export interface components {
             } | null;
             /** Id */
             id: string;
+            /**
+             * Is Synthetic
+             * @default false
+             */
+            is_synthetic: boolean;
             /** Request Id */
             request_id: string | null;
             /** Resource Id */
@@ -10260,10 +10265,17 @@ export interface components {
             timestamp: string;
             /** User Agent */
             user_agent: string | null;
+            /** User Display Name */
+            user_display_name?: string | null;
             /** User Email */
             user_email: string | null;
             /** User Id */
             user_id: string | null;
+            /**
+             * User Resolved
+             * @default false
+             */
+            user_resolved: boolean;
         };
         /**
          * AuditResponse
@@ -22627,8 +22639,12 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+            /** Source */
+            source?: string | null;
             /** Total */
             total: number;
+            /** Warning */
+            warning?: string | null;
         };
         /**
          * CatalogEntry

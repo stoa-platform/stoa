@@ -2309,6 +2309,11 @@
             "title": "Id",
             "type": "string"
           },
+          "is_synthetic": {
+            "default": false,
+            "title": "Is Synthetic",
+            "type": "boolean"
+          },
           "request_id": {
             "anyOf": [
               {
@@ -2359,17 +2364,6 @@
             ],
             "title": "User Agent"
           },
-          "user_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Email"
-          },
           "user_display_name": {
             "anyOf": [
               {
@@ -2380,6 +2374,17 @@
               }
             ],
             "title": "User Display Name"
+          },
+          "user_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Email"
           },
           "user_id": {
             "anyOf": [

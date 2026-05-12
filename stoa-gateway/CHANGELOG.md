@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.24](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.23...stoa-gateway-v0.9.24) (2026-05-11)
+
+
+### Features
+
+* **gateway:** CAB-2215 phase 6.1 guardrails metric contract + A13 producer presence ([#2762](https://github.com/stoa-platform/stoa/issues/2762)) ([d8d4cda](https://github.com/stoa-platform/stoa/commit/d8d4cda072bbe80cdf2e47f178021c0b9fe5291c))
+* **gateway:** CAB-2216 phase 6.2 MCP guardrail metrics ([#2764](https://github.com/stoa-platform/stoa/issues/2764)) ([570a692](https://github.com/stoa-platform/stoa/commit/570a692a4e9413ca7c06ccca142bcdbe81ef6659))
+* **observability:** add gateway runtime telemetry probe (phase 5B) ([#2753](https://github.com/stoa-platform/stoa/issues/2753)) ([4e9dba2](https://github.com/stoa-platform/stoa/commit/4e9dba28e01d9246af553927452c7164112f0713))
+
 ## [0.9.23](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.22...stoa-gateway-v0.9.23) (2026-05-06)
 
 

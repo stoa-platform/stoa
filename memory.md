@@ -4,6 +4,8 @@
 
 ## Session Notes — 2026-05-12
 
+- CAB-2220 Phase 6.6 runtime smoke started on branch `codex/cab-2220-phase66-smoke-rollout` in worktree `/Users/torpedo/hlfh-repos/stoa-cab2220-phase66`, based on merged CAB-2219. Scope stayed workflow/docs/smoke-harness only: added manual `guardrails-smoke.yml`, executable `stoa-gateway/scripts/smoke/guardrails-phase6-smoke.sh`, synthetic fixtures, and rollout findings template. Validation passed: `bash -n`, Ruby YAML parse, `shellcheck`, `mpalmer/action-validator 0.9.0`, prod unsafe-state rejection, dev AR-1 rejection, no auto triggers, fixture PII-pattern scan, and an end-to-end mocked smoke for `no_evaluations`. Context compiler attempted but failed with `file is not a database (26)`.
+
 - CAB-2219 Phase 6.5 cp-ui five-state rendering implemented on branch `codex/cab-2219-phase65-cpui-states` in worktree `/Users/torpedo/hlfh-repos/stoa-cab2219-phase65`. Scope stayed cp-ui-only: Guardrails cards now render backend-shipped `by_guardrail[*].state` directly, preserve `null` counts, display `metrics_unavailable` / `no_evaluations` / `evaluations_zero_trips` / `trips_observed` / `stale_data` wording, add Phase 6.4 response types, unskip CAB-2214 cp-ui red tests, and add AR-1 anti-regression coverage for Security Posture vs Security & Guardrails subtitles. Validation passed: targeted vitest (33 passed), full `npm run test` (2338 passed, 11 skipped), `npm run lint` (0 errors, 49 pre-existing warnings), `npm run format:check`, `npm run build`, `git diff --check`. Browser observation on local Vite route redirected to `/login` as expected without auth, so visual page inspection was auth-gated.
 
 ## Session Notes — 2026-05-11

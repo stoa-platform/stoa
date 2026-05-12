@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.8.0...control-plane-ui-v1.9.0) (2026-05-12)
+
+
+### Features
+
+* **ui:** CAB-2219 phase 6.5 cp-ui 5-state rendering + AR-1 anti-regression ([#2766](https://github.com/stoa-platform/stoa/issues/2766)) ([b41bf49](https://github.com/stoa-platform/stoa/commit/b41bf49dc646f18dcaf00867a957705e92444e44))
+
 ## [1.8.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.3...control-plane-ui-v1.8.0) (2026-05-11)
 
 

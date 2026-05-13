@@ -34,9 +34,18 @@ import { TrafficHeatmap } from './components/TrafficHeatmap';
 import { LiveTraces } from './components/LiveTraces';
 import type { TraceEntry } from './components/LiveTraces';
 import { AutoRefreshToggle } from './components/AutoRefreshToggle';
-import { buildLiveCallsQueries, METRICS_TRACES_SPLIT_MESSAGE, ROUTE_LABEL } from './metrics';
+import {
+  buildLiveCallsQueries,
+  isRenderableRouteLabel,
+  METRICS_TRACES_SPLIT_MESSAGE,
+  ROUTE_LABEL,
+} from './metrics';
 
 const DEFAULT_REFRESH = 15;
+const HEATMAP_DURATION_SECONDS = 86_400;
+const HEATMAP_STEP = '3600';
+const HEATMAP_ROUTE_LIMIT = 6;
+const HEATMAP_BUCKET_LIMIT = 24;
 
 const MODE_CONFIG: Record<string, { label: string; color: string; colorClass: string }> = {
   'edge-mcp': { label: 'Gateway', color: '#3274D9', colorClass: 'text-blue-600' },
@@ -212,6 +221,12 @@ export function CallFlowDashboard() {
 
   const topRoutesP95 = usePrometheusQuery(queries.topRoutesP95, refreshMs || 15_000);
   const topRoutesCalls = usePrometheusQuery(queries.topRoutesCalls, refreshMs || 15_000);
+  const trafficHeatmap = usePrometheusRange(
+    queries.trafficHeatmap,
+    HEATMAP_DURATION_SECONDS,
+    HEATMAP_STEP,
+    refreshMs || 15_000
+  );
 
   // ─── Fallback queries (when service graph is not available) ───
 
@@ -381,11 +396,39 @@ export function CallFlowDashboard() {
       .slice(0, 8);
   }, [topRoutesP95.data, topRoutesCalls.data]);
 
-  // ─── Parse traffic heatmap ───
-  // TODO: implement real heatmap with Prometheus query_range grouped by http_route (separate ticket).
   const heatmapCells = useMemo(() => {
-    return { cells: [], routes: [] };
-  }, []);
+    const series = trafficHeatmap.series ?? [];
+    const seriesByRoute = new Map<string, { timestamp: number; value: number }[]>();
+    const routeTotals: Array<{ route: string; total: number }> = [];
+
+    for (const entry of series) {
+      const route = entry.metric[ROUTE_LABEL] ?? '';
+      if (!isRenderableRouteLabel(route)) continue;
+
+      const values = entry.values.slice(-HEATMAP_BUCKET_LIMIT);
+      const total = values.reduce((sum, point) => sum + Math.max(0, point.value), 0);
+      if (total <= 0) continue;
+
+      seriesByRoute.set(route, values);
+      routeTotals.push({ route, total });
+    }
+
+    const routes = routeTotals
+      .sort((a, b) => b.total - a.total || a.route.localeCompare(b.route))
+      .slice(0, HEATMAP_ROUTE_LIMIT)
+      .map(({ route }) => route);
+
+    const cells = routes.flatMap((route) => {
+      const hourlyBuckets = new Map<number, number>();
+      for (const point of seriesByRoute.get(route) ?? []) {
+        const hour = new Date(point.timestamp * 1000).getHours();
+        hourlyBuckets.set(hour, (hourlyBuckets.get(hour) ?? 0) + Math.max(0, point.value));
+      }
+      return Array.from(hourlyBuckets, ([hour, value]) => ({ route, hour, value }));
+    });
+
+    return { cells, routes };
+  }, [trafficHeatmap.series]);
 
   // ─── Throughput series for stacked area ───
 
@@ -430,6 +473,7 @@ export function CallFlowDashboard() {
     clientErrorsByStatus.refetch();
     topRoutesP95.refetch();
     topRoutesCalls.refetch();
+    trafficHeatmap.refetch();
     fallbackRequests.refetch();
     fallbackLatency.refetch();
     fallbackErrors.refetch();
@@ -451,6 +495,7 @@ export function CallFlowDashboard() {
     clientErrorsByStatus,
     topRoutesP95,
     topRoutesCalls,
+    trafficHeatmap,
     fallbackRequests,
     fallbackLatency,
     fallbackErrors,

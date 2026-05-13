@@ -102,6 +102,53 @@ describe('usePrometheus hooks — P0-7 regression lock', () => {
     expect(opts.timeout).toBe(10_000);
   });
 
+  it('usePrometheusRange preserves grouped matrix series for label-aware panels', async () => {
+    const { httpClient } = await import('../services/http');
+    (httpClient.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        status: 'success',
+        data: {
+          resultType: 'matrix',
+          result: [
+            {
+              metric: { http_route: '/customers' },
+              values: [[1000, '3'] as [number, string], [4600, '5'] as [number, string]],
+            },
+            {
+              metric: { http_route: '/orders' },
+              values: [[1000, '1'] as [number, string], [4600, '2'] as [number, string]],
+            },
+          ],
+        },
+      },
+    });
+
+    const { result } = renderHook(() => usePrometheusRange('up', 86_400, '3600', 0));
+
+    await waitFor(() => {
+      expect(result.current.series).toEqual([
+        {
+          metric: { http_route: '/customers' },
+          values: [
+            { timestamp: 1000, value: 3 },
+            { timestamp: 4600, value: 5 },
+          ],
+        },
+        {
+          metric: { http_route: '/orders' },
+          values: [
+            { timestamp: 1000, value: 1 },
+            { timestamp: 4600, value: 2 },
+          ],
+        },
+      ]);
+    });
+    expect(result.current.data).toEqual([
+      { timestamp: 1000, value: 3 },
+      { timestamp: 4600, value: 5 },
+    ]);
+  });
+
   it('usePrometheusQuery surfaces axios error (refresh path is exercised by the shared interceptor)', async () => {
     const { httpClient } = await import('../services/http');
     (httpClient.get as ReturnType<typeof vi.fn>).mockRejectedValue(

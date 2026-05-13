@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChartEmptyState } from '@stoa/shared/components/ChartCard';
-import { HEATMAP_UNAVAILABLE_MESSAGE } from '../metrics';
+import { HEATMAP_EMPTY_MESSAGE } from '../metrics';
 
 interface HeatmapCell {
   hour: number;
@@ -38,7 +38,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   if (cells.length === 0 || routes.length === 0) {
-    return <ChartEmptyState message={HEATMAP_UNAVAILABLE_MESSAGE} height={200} />;
+    return <ChartEmptyState message={HEATMAP_EMPTY_MESSAGE} height={200} />;
   }
 
   const max = Math.max(...cells.map((c) => c.value), 1);
@@ -50,7 +50,12 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
   }
 
   return (
-    <div className="overflow-x-auto relative">
+    <div
+      className="overflow-x-auto relative"
+      data-testid="traffic-heatmap"
+      role="region"
+      aria-label="Traffic heatmap by route and hour"
+    >
       <div className="min-w-[600px]">
         {/* Hour labels */}
         <div className="flex ml-28 mb-1">
@@ -65,9 +70,10 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
         </div>
 
         {/* Rows */}
-        {routes.slice(0, 6).map((route) => (
+        {routes.map((route) => (
           <div
             key={route}
+            data-testid="traffic-heatmap-route"
             className={`flex items-center mb-0.5 transition-opacity ${onCellClick ? 'cursor-pointer' : ''} ${activeRoute && activeRoute !== route ? 'opacity-30' : ''}`}
             onClick={() => {
               if (!onCellClick) return;
@@ -83,6 +89,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
                 return (
                   <div
                     key={h}
+                    data-testid="traffic-heatmap-cell"
                     className={`flex-1 h-5 rounded-sm ${intensityClass(val, max)} transition-colors cursor-crosshair`}
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();

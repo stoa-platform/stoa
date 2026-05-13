@@ -12,7 +12,7 @@ import { apiService } from '../../services/api';
 import { CallFlowDashboard } from '../../pages/CallFlow/CallFlowDashboard';
 import {
   buildLiveCallsQueries,
-  HEATMAP_UNAVAILABLE_MESSAGE,
+  HEATMAP_EMPTY_MESSAGE,
   METRICS_TRACES_SPLIT_MESSAGE,
   MODE_FILTER,
   ROUTE_LABEL,
@@ -128,6 +128,8 @@ describe('regression/live-calls-metric-integrity', () => {
 
     expect(queries.topRoutesP95).toContain(`sum by (le, ${ROUTE_LABEL})`);
     expect(queries.topRoutesCalls).toContain(`sum by (${ROUTE_LABEL})`);
+    expect(queries.trafficHeatmap).toContain(`sum by (${ROUTE_LABEL})`);
+    expect(queries.trafficHeatmap).toContain('[1h]');
     expect(queries.activeModes).toContain('count by (job)');
     expect(queries.activeModes).not.toContain('path');
     expect(queries.errorsByStatus).toContain('status=~"5.."');
@@ -166,9 +168,10 @@ describe('regression/live-calls-metric-integrity', () => {
     expect(await screen.findByText(METRICS_TRACES_SPLIT_MESSAGE)).toBeInTheDocument();
   });
 
-  it('renders the heatmap unavailable state instead of synthetic cells', async () => {
+  it('renders a neutral heatmap empty state when route traffic is absent', async () => {
     renderWithProviders(<CallFlowDashboard />, { route: '/observability/live-calls' });
 
-    expect(await screen.findByText(HEATMAP_UNAVAILABLE_MESSAGE)).toBeInTheDocument();
+    expect(await screen.findByText(HEATMAP_EMPTY_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(/traffic heatmap unavailable/i)).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.25](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.24...stoa-gateway-v0.9.25) (2026-05-12)
+
+
+### Features
+
+* **infra:** CAB-2220 phase 6.6 guardrails runtime smoke harness ([#2768](https://github.com/stoa-platform/stoa/issues/2768)) ([801be09](https://github.com/stoa-platform/stoa/commit/801be09401df3baecc1e21a74f02056aa5bd5398))
+
 ## [0.9.24](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.23...stoa-gateway-v0.9.24) (2026-05-11)
 
 

@@ -26,6 +26,7 @@ from src.models.webhook import (
     WebhookDeliveryStatus,
     WebhookEventType,
 )
+from src.services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
 
@@ -479,6 +480,54 @@ async def emit_subscription_revoked(db: AsyncSession, subscription: Subscription
         WebhookEventType.SUBSCRIPTION_REVOKED.value,
         subscription,
     )
+
+
+def _subscription_resource_payload(subscription: Subscription) -> dict:
+    """Build the resource-lifecycle Kafka payload for subscription transitions."""
+    return {
+        "subscription_id": str(subscription.id),
+        "application_id": subscription.application_id,
+        "application_name": subscription.application_name,
+        "api_id": subscription.api_id,
+        "api_name": subscription.api_name,
+        "api_version": subscription.api_version,
+        "tenant_id": subscription.tenant_id,
+        "subscriber_id": subscription.subscriber_id,
+        "subscriber_email": subscription.subscriber_email,
+        "status": subscription.status.value if hasattr(subscription.status, "value") else str(subscription.status),
+    }
+
+
+async def emit_subscription_suspended(db: AsyncSession, subscription: Subscription) -> None:
+    """Emit subscription suspended Kafka event."""
+    try:
+        payload = _subscription_resource_payload(subscription)
+        payload["status_reason"] = subscription.status_reason
+        await kafka_service.publish(
+            topic=Topics.RESOURCE_LIFECYCLE,
+            event_type="resource-suspended",
+            tenant_id=str(subscription.tenant_id),
+            payload=payload,
+        )
+        logger.info(f"Emitted resource-suspended Kafka event for subscription {subscription.id}")
+    except Exception as e:
+        logger.warning(f"Failed to emit resource-suspended Kafka event: {e}")
+
+
+async def emit_subscription_reactivated(db: AsyncSession, subscription: Subscription) -> None:
+    """Emit subscription reactivated Kafka event."""
+    try:
+        payload = _subscription_resource_payload(subscription)
+        payload["reactivation_reason"] = subscription.status_reason
+        await kafka_service.publish(
+            topic=Topics.RESOURCE_LIFECYCLE,
+            event_type="resource-reactivated",
+            tenant_id=str(subscription.tenant_id),
+            payload=payload,
+        )
+        logger.info(f"Emitted resource-reactivated Kafka event for subscription {subscription.id}")
+    except Exception as e:
+        logger.warning(f"Failed to emit resource-reactivated Kafka event: {e}")
 
 
 async def emit_subscription_rejected(db: AsyncSession, subscription: Subscription) -> None:

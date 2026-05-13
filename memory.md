@@ -1,6 +1,10 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-05-12. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-05-13. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-05-13
+
+- CAB-2223 Live Calls HTTP status semantics implemented on branch `codex/cab-2223-live-calls-status-mix` in worktree `/Users/torpedo/hlfh-repos/.worktrees/stoa-cab-2223`. Scope stayed `control-plane-ui`: `errorsByStatus` is now 5xx-only, a new `statusMix` query renders 2xx/3xx/4xx/5xx distribution, 4xx are split into a separate Client errors panel, and regression coverage asserts the public PromQL/query labels plus green-dominant Status Mix. Council S2 recorded on Linear with 8.25/10 Go; context compiler attempted but failed with `file is not a database (26)`. Validation passed: targeted Live Calls regression, focused CallFlow tests, full `npm run test -- --run` (2340 passed, 11 skipped), `npm run lint` (49 pre-existing warnings, 0 errors), `npm run format:check`, `npm run build` after `control-plane-ui/npm ci` + `shared/npm ci`, and `git diff --check`. Browser smoke reached the local app but `/observability/live-calls` redirected to `/login` because the in-app browser had no Keycloak session, so visual inspection of the protected page was auth-gated.
 
 ## Session Notes — 2026-05-12
 

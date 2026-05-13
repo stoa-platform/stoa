@@ -23,7 +23,9 @@ interface LiveCallsQueries {
   sidecarTrend: string;
   connectTrend: string;
   latencyBuckets: string;
+  statusMix: string;
   errorsByStatus: string;
+  clientErrorsByStatus: string;
   topRoutesP95: string;
   topRoutesCalls: string;
   requestsTrend: string;
@@ -42,7 +44,9 @@ export function buildLiveCallsQueries(timeRange: TimeRange): LiveCallsQueries {
     sidecarTrend: `sum(rate(stoa_http_requests_total{${MODE_FILTER}, job="stoa-link"}[5m]))`,
     connectTrend: `sum(rate(stoa_http_requests_total{${MODE_FILTER}, job="stoa-connect"}[5m]))`,
     latencyBuckets: `sum(increase(stoa_http_request_duration_seconds_bucket{${MODE_FILTER}}[${timeRange}])) by (le)`,
-    errorsByStatus: `sum by (status) (increase(stoa_http_requests_total{${MODE_FILTER}, status=~"4..|5.."}[${timeRange}]))`,
+    statusMix: `sum by (status) (increase(stoa_http_requests_total{${MODE_FILTER}, status=~"2..|3..|4..|5.."}[${timeRange}]))`,
+    errorsByStatus: `sum by (status) (increase(stoa_http_requests_total{${MODE_FILTER}, status=~"5.."}[${timeRange}]))`,
+    clientErrorsByStatus: `sum by (status) (increase(stoa_http_requests_total{${MODE_FILTER}, status=~"4.."}[${timeRange}]))`,
     topRoutesP95: `topk(8, histogram_quantile(0.95, sum by (le, ${ROUTE_LABEL}) (rate(stoa_http_request_duration_seconds_bucket{${MODE_FILTER}, ${ROUTE_LABEL_FILTER}}[5m]))))`,
     topRoutesCalls: `sum by (${ROUTE_LABEL}) (increase(stoa_http_requests_total{${MODE_FILTER}, ${ROUTE_LABEL_FILTER}}[${timeRange}]))`,
     requestsTrend: `sum(rate(stoa_http_requests_total{${MODE_FILTER}}[5m]))`,

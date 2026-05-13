@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.14.0...control-plane-api-v1.14.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* **api:** ttl extension uses commit not flush ([#2778](https://github.com/stoa-platform/stoa/issues/2778)) ([4fd4bb8](https://github.com/stoa-platform/stoa/commit/4fd4bb8500a37b4593d5870f57037a68bf11de82))
+
 ## [1.14.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.13.1...control-plane-api-v1.14.0) (2026-05-13)
 
 

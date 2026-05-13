@@ -34,9 +34,7 @@ _default_adapter = AdapterRegistry.create("webmethods")
 gateway_service = _default_adapter._svc
 
 
-async def _resolve_adapter(
-    db: AsyncSession, api_id: str, tenant_id: str
-) -> GatewayAdapterInterface | None:
+async def _resolve_adapter(db: AsyncSession, api_id: str, tenant_id: str) -> GatewayAdapterInterface | None:
     """Resolve the gateway adapter for an API.
 
     Looks up gateway_deployments to find which gateway the API is deployed to.
@@ -71,8 +69,11 @@ async def _resolve_adapter(
         from ..services.credential_resolver import create_adapter_with_credentials
 
         return await create_adapter_with_credentials(
-            gateway.gateway_type.value, gateway.base_url, gateway.auth_config,
-            source=gateway.source, gateway_name=gateway.name,
+            gateway.gateway_type.value,
+            gateway.base_url,
+            gateway.auth_config,
+            source=gateway.source,
+            gateway_name=gateway.name,
         )
     except Exception as e:
         logger.error("Failed to resolve gateway adapter for API %s: %s", api_id, e)
@@ -385,42 +386,66 @@ async def _deprovision_with_session(
 
     adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
     if adapter is None:
-        subscription.provisioning_status = ProvisioningStatus.FAILED
-        subscription.provisioning_error = (
-            "Deprovision failed: no gateway adapter resolved for existing gateway_app_id"
-        )
+        subscription.provisioning_status = ProvisioningStatus.DEPROVISIONING_FAILED
+        subscription.provisioning_error = "Deprovision failed: no gateway adapter resolved for existing gateway_app_id"
         await db.commit()
         logger.error(
             "Deprovision failed for subscription %s: no gateway adapter resolved",
             subscription.id,
-            extra={"correlation_id": correlation_id, "tenant_id": subscription.tenant_id},
+            extra={
+                "correlation_id": correlation_id,
+                "tenant_id": subscription.tenant_id,
+                "subscription_id": str(subscription.id),
+                "ops_alert": "deprovision_failed",
+            },
         )
         return
 
-    try:
-        # Clean up rate-limit policy first (CAB-1121 Phase 3)
-        await _cleanup_rate_limit_policy(adapter, subscription, auth_token, correlation_id)
+    last_error = None
 
-        result = await adapter.deprovision_application(subscription.gateway_app_id, auth_token=auth_token)
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            # Clean up rate-limit policy first (CAB-1121 Phase 3)
+            await _cleanup_rate_limit_policy(adapter, subscription, auth_token, correlation_id)
 
-        if not result.success:
-            raise RuntimeError(result.error or "Adapter returned failure")
+            result = await adapter.deprovision_application(subscription.gateway_app_id, auth_token=auth_token)
 
-        subscription.provisioning_status = ProvisioningStatus.DEPROVISIONED
-        subscription.gateway_app_id = None
-        await db.commit()
+            if not result.success:
+                raise RuntimeError(result.error or "Adapter returned failure")
 
-        logger.info(
-            f"Deprovisioned gateway app for subscription {subscription.id}",
-            extra={"correlation_id": correlation_id},
-        )
+            subscription.provisioning_status = ProvisioningStatus.DEPROVISIONED
+            subscription.gateway_app_id = None
+            await db.commit()
 
-    except Exception as e:
-        subscription.provisioning_status = ProvisioningStatus.FAILED
-        subscription.provisioning_error = f"Deprovision failed: {e}"
-        await db.commit()
+            logger.info(
+                f"Deprovisioned gateway app for subscription {subscription.id} (attempt {attempt})",
+                extra={"correlation_id": correlation_id, "tenant_id": subscription.tenant_id},
+            )
+            return
 
-        logger.error(
-            f"Deprovision failed for subscription {subscription.id}: {e}",
-            extra={"correlation_id": correlation_id},
-        )
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(
+                f"Deprovision attempt {attempt}/{MAX_RETRIES} failed for " f"subscription {subscription.id}: {e}",
+                extra={"correlation_id": correlation_id},
+            )
+
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                await asyncio.sleep(delay)
+
+    # All retries exhausted.
+    subscription.provisioning_status = ProvisioningStatus.DEPROVISIONING_FAILED
+    subscription.provisioning_error = f"Deprovision failed after {MAX_RETRIES} attempts: {last_error}"
+    await db.commit()
+    # TODO(CAB-2225 SUB-1): add Prometheus counter once metrics module is finalized.
+
+    logger.error(
+        f"Deprovision failed after {MAX_RETRIES} attempts for subscription {subscription.id}: {last_error}",
+        extra={
+            "correlation_id": correlation_id,
+            "tenant_id": subscription.tenant_id,
+            "subscription_id": str(subscription.id),
+            "ops_alert": "deprovision_failed",
+        },
+    )

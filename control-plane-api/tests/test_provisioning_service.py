@@ -5,9 +5,7 @@ deprovision_on_revocation, _push_rate_limit_policy, _cleanup_rate_limit_policy.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
-
-import pytest
+from uuid import uuid4
 
 from src.services.provisioning_service import (
     _cleanup_rate_limit_policy,
@@ -16,7 +14,6 @@ from src.services.provisioning_service import (
     deprovision_on_revocation,
     provision_on_approval,
 )
-
 
 # ─────────────────────────────────────────────
 # Helpers
@@ -131,14 +128,21 @@ class TestResolveAdapter:
         with (
             patch("src.repositories.gateway_deployment.GatewayDeploymentRepository", return_value=mock_deploy_repo),
             patch("src.repositories.gateway_instance.GatewayInstanceRepository", return_value=mock_gw_repo),
-            patch("src.services.credential_resolver.create_adapter_with_credentials", new_callable=AsyncMock, return_value=mock_adapter) as mock_create,
+            patch(
+                "src.services.credential_resolver.create_adapter_with_credentials",
+                new_callable=AsyncMock,
+                return_value=mock_adapter,
+            ) as mock_create,
         ):
             result = await _resolve_adapter(db, "api-1", "tenant-1")
 
         assert result is mock_adapter
         mock_create.assert_awaited_once_with(
-            "kong", "https://kong.example.com", {"token": "secret"},
-            source=gateway.source, gateway_name=gateway.name,
+            "kong",
+            "https://kong.example.com",
+            {"token": "secret"},
+            source=gateway.source,
+            gateway_name=gateway.name,
         )
 
     async def test_no_deployment_returns_none(self):
@@ -239,9 +243,7 @@ class TestProvisionOnApproval:
         db = _make_db()
         sub = _make_subscription()
         adapter = _make_adapter()
-        adapter.provision_application = AsyncMock(
-            side_effect=RuntimeError("Gateway unreachable")
-        )
+        adapter.provision_application = AsyncMock(side_effect=RuntimeError("Gateway unreachable"))
 
         with (
             patch("src.services.provisioning_service._resolve_adapter", new_callable=AsyncMock, return_value=adapter),
@@ -402,7 +404,7 @@ class TestDeprovisionOnRevocation:
         # No adapter calls, no status change
         db.commit.assert_not_called()
 
-    async def test_existing_gateway_app_without_adapter_sets_failed(self):
+    async def test_existing_gateway_app_without_adapter_sets_deprovisioning_failed(self):
         db = _make_db()
         sub = _make_subscription(gateway_app_id="app-123")
 
@@ -414,47 +416,45 @@ class TestDeprovisionOnRevocation:
 
         from src.models.subscription import ProvisioningStatus
 
-        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert sub.provisioning_status == ProvisioningStatus.DEPROVISIONING_FAILED
         assert "no gateway adapter resolved" in sub.provisioning_error
         assert sub.gateway_app_id == "app-123"
         cleanup.assert_not_called()
 
-    async def test_adapter_failure_sets_failed(self):
+    async def test_adapter_failure_sets_deprovisioning_failed(self):
         db = _make_db()
         sub = _make_subscription(gateway_app_id="app-123")
         adapter = _make_adapter()
-        adapter.deprovision_application = AsyncMock(
-            side_effect=RuntimeError("Gateway down")
-        )
+        adapter.deprovision_application = AsyncMock(side_effect=RuntimeError("Gateway down"))
 
         with (
             patch("src.services.provisioning_service._resolve_adapter", new_callable=AsyncMock, return_value=adapter),
             patch("src.services.provisioning_service._cleanup_rate_limit_policy", new_callable=AsyncMock),
+            patch("src.services.provisioning_service.asyncio.sleep", new_callable=AsyncMock),
         ):
             await deprovision_on_revocation(db, sub, "token", "corr-1")
 
         from src.models.subscription import ProvisioningStatus
 
-        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert sub.provisioning_status == ProvisioningStatus.DEPROVISIONING_FAILED
         assert "Deprovision failed" in sub.provisioning_error
 
-    async def test_adapter_returns_failure_sets_failed(self):
+    async def test_adapter_returns_failure_sets_deprovisioning_failed(self):
         db = _make_db()
         sub = _make_subscription(gateway_app_id="app-123")
         adapter = _make_adapter()
-        adapter.deprovision_application = AsyncMock(
-            return_value=_make_adapter_result(success=False, error="Not found")
-        )
+        adapter.deprovision_application = AsyncMock(return_value=_make_adapter_result(success=False, error="Not found"))
 
         with (
             patch("src.services.provisioning_service._resolve_adapter", new_callable=AsyncMock, return_value=adapter),
             patch("src.services.provisioning_service._cleanup_rate_limit_policy", new_callable=AsyncMock),
+            patch("src.services.provisioning_service.asyncio.sleep", new_callable=AsyncMock),
         ):
             await deprovision_on_revocation(db, sub, "token", "corr-1")
 
         from src.models.subscription import ProvisioningStatus
 
-        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert sub.provisioning_status == ProvisioningStatus.DEPROVISIONING_FAILED
 
     async def test_cleanup_rate_limit_called_before_deprovision(self):
         db = _make_db()
@@ -531,9 +531,7 @@ class TestPushRateLimitPolicy:
 
     async def test_adapter_returns_failure_does_not_raise(self):
         adapter = _make_adapter()
-        adapter.upsert_policy = AsyncMock(
-            return_value=_make_adapter_result(success=False, error="Policy rejected")
-        )
+        adapter.upsert_policy = AsyncMock(return_value=_make_adapter_result(success=False, error="Policy rejected"))
         sub = _make_subscription()
         plan = _make_plan()
 
@@ -569,9 +567,7 @@ class TestCleanupRateLimitPolicy:
 
     async def test_adapter_returns_failure_does_not_raise(self):
         adapter = _make_adapter()
-        adapter.delete_policy = AsyncMock(
-            return_value=_make_adapter_result(success=False, error="Not found")
-        )
+        adapter.delete_policy = AsyncMock(return_value=_make_adapter_result(success=False, error="Not found"))
         sub = _make_subscription()
 
         # Should not raise

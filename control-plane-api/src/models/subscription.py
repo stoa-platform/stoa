@@ -30,6 +30,7 @@ class ProvisioningStatus(enum.StrEnum):
     READY = "ready"  # Route active in gateway
     FAILED = "failed"  # Provisioning failed
     DEPROVISIONING = "deprovisioning"  # Removal in progress
+    DEPROVISIONING_FAILED = "deprovisioning_failed"  # Removal failed after retries
     DEPROVISIONED = "deprovisioned"  # Removed from gateway
 
 
@@ -102,7 +103,9 @@ class Subscription(Base):
     environment = Column(String(50), nullable=True)
 
     # Gateway provisioning (CAB-800)
-    provisioning_status = Column(String(32), nullable=False, default=ProvisioningStatus.NONE.value, server_default="none")
+    provisioning_status = Column(
+        String(32), nullable=False, default=ProvisioningStatus.NONE.value, server_default="none"
+    )
     gateway_app_id = Column(String(255), nullable=True)  # webMethods application ID
     provisioning_error = Column(Text, nullable=True)  # Last error message
     provisioned_at = Column(DateTime, nullable=True)  # When route was created

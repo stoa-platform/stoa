@@ -14,28 +14,30 @@ Tests cover:
 - Mappers: map_app_spec_to_route, map_quota_to_policy
 """
 
-import pytest
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from src.adapters.gateway_adapter_interface import AdapterResult
 
 
-class SubscriptionStatus(str, Enum):
+class SubscriptionStatus(StrEnum):
     PENDING = "pending"
     ACTIVE = "active"
     REVOKED = "revoked"
 
 
-class ProvisioningStatus(str, Enum):
+class ProvisioningStatus(StrEnum):
     NONE = "none"
     PENDING = "pending"
     PROVISIONING = "provisioning"
     READY = "ready"
     FAILED = "failed"
     DEPROVISIONING = "deprovisioning"
+    DEPROVISIONING_FAILED = "deprovisioning_failed"
     DEPROVISIONED = "deprovisioned"
 
 
@@ -302,7 +304,7 @@ class TestDeprovisionOnRevocation:
 
     @pytest.mark.asyncio
     async def test_deprovision_failure(self):
-        """Failed deprovision sets status FAILED."""
+        """Failed deprovision sets status DEPROVISIONING_FAILED."""
         sub = _make_subscription(
             gateway_app_id="wm-app-999",
             provisioning_status=ProvisioningStatus.READY,
@@ -312,21 +314,24 @@ class TestDeprovisionOnRevocation:
         adapter = AsyncMock()
         adapter.deprovision_application = AsyncMock(side_effect=RuntimeError("not found"))
 
-        with patch(
-            "src.services.provisioning_service._resolve_adapter",
-            new_callable=AsyncMock,
-            return_value=adapter,
+        with (
+            patch(
+                "src.services.provisioning_service._resolve_adapter",
+                new_callable=AsyncMock,
+                return_value=adapter,
+            ),
+            patch("src.services.provisioning_service.asyncio.sleep", new_callable=AsyncMock),
         ):
             from src.services.provisioning_service import deprovision_on_revocation
 
             await deprovision_on_revocation(db, sub, "jwt-token", "corr-300")
 
-        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert sub.provisioning_status == ProvisioningStatus.DEPROVISIONING_FAILED
         assert "not found" in sub.provisioning_error
 
     @pytest.mark.asyncio
     async def test_deprovision_adapter_failure_result(self):
-        """AdapterResult with success=False sets status FAILED."""
+        """AdapterResult with success=False sets status DEPROVISIONING_FAILED."""
         sub = _make_subscription(
             gateway_app_id="wm-app-500",
             provisioning_status=ProvisioningStatus.READY,
@@ -336,16 +341,19 @@ class TestDeprovisionOnRevocation:
         fail_result = AdapterResult(success=False, error="gateway rejected")
         adapter = _mock_adapter(deprovision_result=fail_result)
 
-        with patch(
-            "src.services.provisioning_service._resolve_adapter",
-            new_callable=AsyncMock,
-            return_value=adapter,
+        with (
+            patch(
+                "src.services.provisioning_service._resolve_adapter",
+                new_callable=AsyncMock,
+                return_value=adapter,
+            ),
+            patch("src.services.provisioning_service.asyncio.sleep", new_callable=AsyncMock),
         ):
             from src.services.provisioning_service import deprovision_on_revocation
 
             await deprovision_on_revocation(db, sub, "jwt-token", "corr-400")
 
-        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert sub.provisioning_status == ProvisioningStatus.DEPROVISIONING_FAILED
         assert "gateway rejected" in sub.provisioning_error
 
 
@@ -656,9 +664,10 @@ class TestCleanupRateLimitPolicy:
 
         from src.services.provisioning_service import _cleanup_rate_limit_policy
 
-        await _cleanup_rate_limit_policy(adapter, sub, "jwt", "corr-cleanup")
+        token = "jwt"
+        await _cleanup_rate_limit_policy(adapter, sub, token, "corr-cleanup")
 
-        adapter.delete_policy.assert_awaited_once_with(f"quota-{sub.id}", auth_token="jwt")
+        adapter.delete_policy.assert_awaited_once_with(f"quota-{sub.id}", auth_token=token)
 
     @pytest.mark.asyncio
     async def test_cleanup_policy_non_blocking_on_failure(self):

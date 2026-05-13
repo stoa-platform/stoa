@@ -10,23 +10,24 @@ They are **not yet in `stoa-docs/docs/architecture/adr/`** because:
 
 ## Inventory
 
-| ADR | Title | Depends on (other drafts) | Sign-off owners required |
-|-----|-------|---------------------------|--------------------------|
-| ADR-067 | UAC Describes / MCP Projects / Smoke Proves | — | Core Team, Security, Gateway WG, CP-API WG |
-| ADR-068 | Audit Log Actor/Resource/Action Doctrine | ADR-069 (coupled) | Core Team, Security, **DPO**, CP-API WG |
-| ADR-069 | GDPR ↔ DORA Audit Reconciliation | ADR-068 (coupled) | Core Team, Security, **DPO (non-delegable)**, Legal |
-| ADR-070 | Gateway Fail-Closed Posture | ADR-067, ADR-068 | Core Team, Security, **Business**, Gateway WG, Ops |
-| ADR-071 | API Subscription Lifecycle | ADR-067, ADR-068, ADR-070 | Core Team, Security, Product, CP-API WG, Gateway WG |
+> **Solo project mode** — the "Sign-off owner" column below was originally written with separate DPO / Legal / Security / Business / Product / Gateway / CP-API roles. Those roles **do not have separate humans** on this project. All decisions are made by the operator (founder) acting in those roles for this project stage. See memory `feedback_solo_project_mode_signoffs.md`.
+
+| ADR | Title | Depends on (other drafts) | Sign-off owner |
+|-----|-------|---------------------------|----------------|
+| ADR-067 | UAC Describes / MCP Projects / Smoke Proves | — | Operator |
+| ADR-068 | Audit Log Actor/Resource/Action Doctrine | ADR-069 (coupled) | Operator |
+| ADR-069 | GDPR ↔ DORA Audit Reconciliation | ADR-068 (coupled) | Operator (non-delegable to AI — the operator personally decides) |
+| ADR-070 | Gateway Fail-Closed Posture | ADR-067, ADR-068 | Operator (accepting product SLA impact) |
+| ADR-071 | API Subscription Lifecycle | ADR-067, ADR-068, ADR-070 | Operator |
 
 ## Promotion checklist (per ADR)
 
 Before moving a file into `stoa-docs/docs/architecture/adr/`:
 
-- [ ] All listed sign-off owners filled in §1 (no `(pending)`)
+- [ ] Operator approval recorded on the Linear ticket (single APPROVED / BLOCKED / DEFER verdict, one-line rationale)
 - [ ] Companion ADRs at least at Proposed status (or co-promoted)
 - [ ] Section "Open questions" answered or recorded as accepted-with-defaults
 - [ ] Cross-references to corrective plan and decision record updated to point at canonical paths
-- [ ] Linear ticket created and linked
 - [ ] Promotion PR opens on a dedicated branch in `stoa-docs`
 
 ## Doctrinal notes

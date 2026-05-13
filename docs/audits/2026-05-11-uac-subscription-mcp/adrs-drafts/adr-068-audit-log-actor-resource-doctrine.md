@@ -10,11 +10,11 @@ keywords: [ADR, audit log, DORA, NIS2, immutability, actor, resource, taxonomy, 
 
 ## 1. Status
 
-**Status:** Draft
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2226 for conditions; jointly with ADR-069). Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
-**Deciders:** STOA Core Team (pending), Security/Compliance (pending), DPO (pending), CP-API WG (pending), Gateway WG (pending)
+**Deciders:** Operator (founder, acting as product / security / privacy / business decision owner — solo project mode; no separate DPO / Legal / Security / Business / Product role exists at this stage).
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` Axe C (12 binary controls) + challenger decision record §C5.
 

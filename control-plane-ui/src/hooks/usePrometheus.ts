@@ -27,6 +27,11 @@ export interface TimeSeriesPoint {
   value: number;
 }
 
+export interface PrometheusRangeSeries {
+  metric: Record<string, string>;
+  values: TimeSeriesPoint[];
+}
+
 /**
  * Execute a Prometheus instant query.
  * Returns the first scalar value or null if unavailable.
@@ -86,6 +91,7 @@ export function usePrometheusRange(
   refreshInterval = 15_000
 ) {
   const [data, setData] = useState<TimeSeriesPoint[] | null>(null);
+  const [series, setSeries] = useState<PrometheusRangeSeries[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -103,17 +109,27 @@ export function usePrometheusRange(
         }
       );
       if (mountedRef.current) {
+        const matrix: PrometheusRangeSeries[] = json.data.result.map((result) => ({
+          metric: result.metric,
+          values:
+            result.values?.map(([ts, val]) => ({
+              timestamp: ts,
+              value: parseFloat(val) || 0,
+            })) ?? [],
+        }));
         const points: TimeSeriesPoint[] =
-          json.data.result[0]?.values?.map(([ts, val]) => ({
-            timestamp: ts,
-            value: parseFloat(val) || 0,
+          matrix[0]?.values?.map(({ timestamp, value }) => ({
+            timestamp,
+            value,
           })) ?? [];
+        setSeries(matrix);
         setData(points);
         setError(null);
       }
     } catch (err: unknown) {
       if (mountedRef.current) {
         setError(err instanceof Error ? err.message : 'Prometheus unavailable');
+        setSeries(null);
         setData(null);
       }
     } finally {
@@ -136,7 +152,7 @@ export function usePrometheusRange(
     };
   }, [fetchRange, refreshInterval, query]);
 
-  return { data, loading, error, refetch: fetchRange };
+  return { data, series, loading, error, refetch: fetchRange };
 }
 
 /** Extract scalar value from instant query result */

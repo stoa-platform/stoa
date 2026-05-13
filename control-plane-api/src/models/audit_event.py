@@ -9,7 +9,7 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Index, Integer, String
+from sqlalchemy import DateTime, Index, Integer, LargeBinary, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -88,6 +88,7 @@ class AuditEvent(Base):
 
     # Duration
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    row_hash: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
     # Timestamps — created_at only, no updated_at (immutable)
     created_at: Mapped[datetime] = mapped_column(

@@ -29,6 +29,12 @@ def audit_service(mock_session):
     return AuditService(mock_session)
 
 
+def _mock_empty_chain(session):
+    head_result = MagicMock()
+    head_result.one_or_none.return_value = None
+    session.execute = AsyncMock(side_effect=[MagicMock(), head_result, MagicMock()])
+
+
 @pytest.fixture(autouse=True)
 def clear_actor_cache():
     _ACTOR_CACHE.clear()
@@ -41,6 +47,8 @@ class TestRecordEvent:
 
     @pytest.mark.asyncio
     async def test_record_event_success(self, audit_service, mock_session):
+        _mock_empty_chain(mock_session)
+
         result = await audit_service.record_event(
             tenant_id="acme",
             action="subscription.created",
@@ -66,11 +74,15 @@ class TestRecordEvent:
         assert result.actor_id == "user-001"
         assert result.outcome == "success"
         assert result.duration_ms == 42
+        assert result.row_hash is not None
         mock_session.add.assert_called_once()
         mock_session.flush.assert_awaited_once()
+        assert mock_session.execute.await_count == 3
 
     @pytest.mark.asyncio
     async def test_record_event_minimal_fields(self, audit_service, mock_session):
+        _mock_empty_chain(mock_session)
+
         result = await audit_service.record_event(
             tenant_id="acme",
             action="data.accessed",
@@ -83,9 +95,11 @@ class TestRecordEvent:
         assert result.actor_id is None
         assert result.resource_id is None
         assert result.outcome == "success"
+        assert result.row_hash is not None
 
     @pytest.mark.asyncio
     async def test_record_event_db_error_raises(self, audit_service, mock_session):
+        _mock_empty_chain(mock_session)
         mock_session.flush.side_effect = Exception("DB connection lost")
 
         with pytest.raises(Exception, match="DB connection lost"):
@@ -284,11 +298,9 @@ class TestGetSummary:
         # Top actions
         action_rows = [MagicMock(action="create", cnt=20), MagicMock(action="update", cnt=15)]
         action_result = MagicMock()
-        action_result.__iter__ = lambda self: iter(action_rows)
+        action_result.__iter__ = lambda _self: iter(action_rows)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[total_result, *outcome_results, action_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[total_result, *outcome_results, action_result])
 
         summary = await audit_service.get_summary()
 
@@ -303,15 +315,13 @@ class TestGetSummary:
         total_result.scalar.return_value = 10
 
         outcome_results = [MagicMock(scalar=MagicMock(return_value=v)) for v in [8, 1, 0, 1]]
-        for r, v in zip(outcome_results, [8, 1, 0, 1]):
+        for r, v in zip(outcome_results, [8, 1, 0, 1], strict=True):
             r.scalar.return_value = v
 
         action_result = MagicMock()
-        action_result.__iter__ = lambda self: iter([])
+        action_result.__iter__ = lambda _self: iter([])
 
-        mock_session.execute = AsyncMock(
-            side_effect=[total_result, *outcome_results, action_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[total_result, *outcome_results, action_result])
 
         summary = await audit_service.get_summary(tenant_id="acme")
         assert summary["total"] == 10
@@ -321,56 +331,35 @@ class TestPurgeBefore:
     """Tests for AuditService.purge_before()."""
 
     @pytest.mark.asyncio
-    async def test_purge_deletes_old_events(self, audit_service, mock_session):
-        result = MagicMock()
-        result.rowcount = 42
-        mock_session.execute = AsyncMock(return_value=result)
+    async def test_purge_raises_after_audit_immutability(self, audit_service, mock_session):
+        with pytest.raises(NotImplementedError, match="CAB-2226 makes audit_events append-only"):
+            await audit_service.purge_before(
+                "acme",
+                datetime.now(UTC) - timedelta(days=365),
+            )
 
-        count = await audit_service.purge_before(
-            "acme",
-            datetime.now(UTC) - timedelta(days=365),
-        )
-
-        assert count == 42
-        mock_session.execute.assert_awaited_once()
+        mock_session.execute.assert_not_awaited()
 
 
 class TestEraseUserPii:
     """Tests for AuditService.erase_user_pii() — GDPR Art. 17 (CAB-1794)."""
 
     @pytest.mark.asyncio
-    async def test_erase_user_pii_pseudonymizes_records(self, audit_service, mock_session):
-        """Erasure returns affected count and pseudo ID."""
-        result = MagicMock()
-        result.rowcount = 15
-        mock_session.execute = AsyncMock(return_value=result)
+    async def test_erase_user_pii_records_auxiliary_erasure(self, audit_service, mock_session):
+        """Erasure records metadata in the auxiliary table."""
 
-        response = await audit_service.erase_user_pii("user-123")
-
-        assert response["records_affected"] == 15
-        assert response["pseudo_id"].startswith("erased-")
-        mock_session.execute.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_erase_user_pii_scoped_to_tenant(self, audit_service, mock_session):
-        """Erasure can be scoped to a specific tenant."""
-        result = MagicMock()
-        result.rowcount = 5
-        mock_session.execute = AsyncMock(return_value=result)
-
-        response = await audit_service.erase_user_pii("user-123", tenant_id="acme")
-
-        assert response["records_affected"] == 5
-        mock_session.execute.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_erase_user_pii_no_matching_records(self, audit_service, mock_session):
-        """Erasure for unknown user returns zero affected."""
-        result = MagicMock()
-        result.rowcount = 0
-        mock_session.execute = AsyncMock(return_value=result)
-
-        response = await audit_service.erase_user_pii("nonexistent-user")
+        response = await audit_service.erase_user_pii(
+            "user-123",
+            dpo_approver_id="dpo-1",
+            legal_basis="GDPR Art.17",
+            redaction_map={"actor_email": None},
+            scope_event_ids=["evt-1"],
+        )
 
         assert response["records_affected"] == 0
-        assert response["pseudo_id"].startswith("erased-")
+        assert response["erasure_id"]
+        assert response["scope_actor_ids"] == ["user-123"]
+        assert response["scope_event_ids"] == ["evt-1"]
+        statement = mock_session.execute.await_args.args[0]
+        assert statement.table.name == "pseudonymized_audit_erasures"
+        mock_session.execute.assert_awaited_once()

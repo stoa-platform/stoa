@@ -18109,13 +18109,23 @@
             "title": "Os Records Deleted",
             "type": "integer"
           },
-          "pg_records_affected": {
-            "title": "Pg Records Affected",
-            "type": "integer"
-          },
-          "pseudo_id": {
-            "title": "Pseudo Id",
+          "erasure_id": {
+            "title": "Erasure Id",
             "type": "string"
+          },
+          "scope_actor_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scope Actor Ids",
+            "type": "array"
+          },
+          "scope_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scope Event Ids",
+            "type": "array"
           },
           "user_id": {
             "title": "User Id",
@@ -18124,9 +18134,10 @@
         },
         "required": [
           "user_id",
-          "pg_records_affected",
+          "erasure_id",
           "os_records_deleted",
-          "pseudo_id"
+          "scope_actor_ids",
+          "scope_event_ids"
         ],
         "title": "PiiErasureResponse",
         "type": "object"

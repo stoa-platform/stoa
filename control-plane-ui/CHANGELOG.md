@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.9.0...control-plane-ui-v1.10.0) (2026-05-13)
+
+
+### Features
+
+* **ui:** live-calls success-first UX ([#2770](https://github.com/stoa-platform/stoa/issues/2770)) ([dab7f14](https://github.com/stoa-platform/stoa/commit/dab7f14816abb1decd1c93f56d099bcb002246c0))
+
 ## [1.9.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.8.0...control-plane-ui-v1.9.0) (2026-05-12)
 
 

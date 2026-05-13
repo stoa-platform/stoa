@@ -45,8 +45,10 @@ from ..services.webhook_service import (
     emit_subscription_approved,
     emit_subscription_created,
     emit_subscription_key_rotated,
+    emit_subscription_reactivated,
     emit_subscription_rejected,
     emit_subscription_revoked,
+    emit_subscription_suspended,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,21 @@ def _has_tenant_admin_access(user: User, tenant_id: str) -> bool:
     if "cpi-admin" in user.roles:
         return True
     return "tenant-admin" in user.roles and user.tenant_id == tenant_id
+
+
+async def _status_reason_from_request(request: Request, default: str) -> str:
+    """Read optional status_reason from JSON without changing the public schema."""
+    try:
+        payload = await request.json()
+    except Exception:
+        return default
+
+    if isinstance(payload, dict):
+        status_reason = payload.get("status_reason")
+        if isinstance(status_reason, str) and status_reason.strip():
+            return status_reason
+
+    return default
 
 
 # ============== Subscriber Endpoints (Developer Portal) ==============
@@ -779,9 +796,11 @@ async def revoke_subscription(
     return SubscriptionResponse.model_validate(subscription)
 
 
+@router.patch("/{subscription_id}/suspend", response_model=SubscriptionResponse, include_in_schema=False)
 @router.post("/{subscription_id}/suspend", response_model=SubscriptionResponse)
 async def suspend_subscription(
     subscription_id: UUID,
+    raw_request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -804,21 +823,26 @@ async def suspend_subscription(
             status_code=400, detail=f"Cannot suspend subscription in {subscription.status.value} status"
         )
 
+    status_reason = await _status_reason_from_request(raw_request, "Suspended by admin")
     subscription = await repo.update_status(
         subscription,
         SubscriptionStatus.SUSPENDED,
-        reason="Suspended by admin",
+        reason=status_reason,
         actor_id=user.id,
     )
 
     logger.info(f"Subscription {subscription_id} suspended by {user.email}")
 
+    await emit_subscription_suspended(db, subscription)
+
     return SubscriptionResponse.model_validate(subscription)
 
 
+@router.patch("/{subscription_id}/reactivate", response_model=SubscriptionResponse, include_in_schema=False)
 @router.post("/{subscription_id}/reactivate", response_model=SubscriptionResponse)
 async def reactivate_subscription(
     subscription_id: UUID,
+    raw_request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -839,14 +863,17 @@ async def reactivate_subscription(
             status_code=400, detail=f"Cannot reactivate subscription in {subscription.status.value} status"
         )
 
+    status_reason = await _status_reason_from_request(raw_request, "Reactivated by admin")
     subscription = await repo.update_status(
         subscription,
         SubscriptionStatus.ACTIVE,
-        reason="Reactivated by admin",
+        reason=status_reason,
         actor_id=user.id,
     )
 
     logger.info(f"Subscription {subscription_id} reactivated by {user.email}")
+
+    await emit_subscription_reactivated(db, subscription)
 
     return SubscriptionResponse.model_validate(subscription)
 

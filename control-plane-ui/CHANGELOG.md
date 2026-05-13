@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.9.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.8.0...control-plane-ui-v1.9.0) (2026-05-12)
+
+
+### Features
+
+* **ui:** CAB-2219 phase 6.5 cp-ui 5-state rendering + AR-1 anti-regression ([#2766](https://github.com/stoa-platform/stoa/issues/2766)) ([b41bf49](https://github.com/stoa-platform/stoa/commit/b41bf49dc646f18dcaf00867a957705e92444e44))
+
+## [1.8.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.3...control-plane-ui-v1.8.0) (2026-05-11)
+
+
+### Features
+
+* **api:** observability audit fixtures gated by profile (phase 2) ([#2748](https://github.com/stoa-platform/stoa/issues/2748)) ([286fc84](https://github.com/stoa-platform/stoa/commit/286fc84ec96f261edb169627da6b65692570ad00))
+* **ui:** audit log stats + actions + actor + backoff + export + i18n ([#2738](https://github.com/stoa-platform/stoa/issues/2738)) ([15b8b91](https://github.com/stoa-platform/stoa/commit/15b8b91e1dc13c741c7ecc50e9b10aff35fe4ec9))
+* **ui:** guardrails runtime truth UI per PR-3A contract ([#2743](https://github.com/stoa-platform/stoa/issues/2743)) ([97a5ee7](https://github.com/stoa-platform/stoa/commit/97a5ee70e48fe32df0bd60e3e8cf4471fc402e91))
+
+
+### Bug Fixes
+
+* **ui:** align live calls metrics on http_route ([#2727](https://github.com/stoa-platform/stoa/issues/2727)) ([87b1a4f](https://github.com/stoa-platform/stoa/commit/87b1a4f93c00cd852e6bedee16ef11c9ba8cc20b))
+* **ui:** honest wording for guardrails empty state (phase 3) ([#2749](https://github.com/stoa-platform/stoa/issues/2749)) ([a054b09](https://github.com/stoa-platform/stoa/commit/a054b09e6cec902f41d486a27ddfac8c308592bd))
+
 ## [1.7.3](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.7.2...control-plane-ui-v1.7.3) (2026-05-07)
 
 

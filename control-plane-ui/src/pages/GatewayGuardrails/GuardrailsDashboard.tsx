@@ -23,6 +23,7 @@ import type {
   GatewayGuardrailsEvent,
   GuardrailsConfigResponse,
   GuardrailsMetricField,
+  GuardrailsState,
   GuardrailsTimeRange,
 } from '../../types';
 import { guardrailCardState, type GuardrailCardUIState } from './guardrailCardState';
@@ -30,6 +31,19 @@ import { guardrailCardState, type GuardrailCardUIState } from './guardrailCardSt
 type FilterType = 'all' | 'pii' | 'injection' | 'content' | 'prompt' | 'rate-limit';
 
 const GUARDRAILS_TIME_RANGES: GuardrailsTimeRange[] = ['1h', '6h', '24h', '7d'];
+const GUARDRAILS_STATES: ReadonlySet<string> = new Set<GuardrailsState>([
+  'metrics_unavailable',
+  'no_evaluations',
+  'evaluations_zero_trips',
+  'trips_observed',
+  'stale_data',
+]);
+const NON_FILTERABLE_METRIC_STATES: ReadonlySet<GuardrailCardUIState['kind']> = new Set([
+  'disabled',
+  'metrics_unavailable',
+  'no_evaluations',
+  'stale_data',
+]);
 
 const ACTION_TO_FILTER: Record<string, FilterType> = {
   'pii-redacted': 'pii',
@@ -199,7 +213,10 @@ function isContractMetrics(metrics: AggregatedMetrics): boolean {
   if (!guardrails) return false;
 
   return (
+    GUARDRAILS_STATES.has(guardrails.state) &&
     typeof guardrails.source_healthy === 'boolean' &&
+    guardrails.by_guardrail !== null &&
+    typeof guardrails.by_guardrail === 'object' &&
     'last_sample_at' in guardrails &&
     'metrics_age_seconds' in guardrails
   );
@@ -207,17 +224,31 @@ function isContractMetrics(metrics: AggregatedMetrics): boolean {
 
 function cardStateText(state: GuardrailCardUIState): string {
   switch (state.kind) {
-    case 'metrics-unavailable':
+    case 'metrics_unavailable':
       return 'Metrics unavailable';
     case 'disabled':
       return 'Disabled';
-    case 'no-sample':
-      return 'No metrics sample';
-    case 'stale':
-      return 'Stale metrics';
-    case 'healthy':
-      return `${state.count} events · last sample ${formatRelativeSample(state.lastSampleAt ?? '')}`;
+    case 'no_evaluations':
+      return 'No guardrail evaluations in window';
+    case 'evaluations_zero_trips':
+      if (state.tripsCount === 0 && state.evaluationsCount !== null) {
+        return `0 trips after ${formatCount(state.evaluationsCount, 'evaluation')}`;
+      }
+      return 'Guardrail evaluations observed; trip count unavailable';
+    case 'trips_observed':
+      if (state.tripsCount !== null) {
+        return `${formatCount(state.tripsCount, 'trip')} observed`;
+      }
+      return 'Trips observed';
+    case 'stale_data':
+      return state.lastObservedAt
+        ? `Data stale (last observed: ${state.lastObservedAt})`
+        : 'Data stale';
   }
+}
+
+function formatCount(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
 }
 
 function configStatusText(
@@ -373,14 +404,10 @@ export function GuardrailsDashboard() {
               ? cardStateText(state as GuardrailCardUIState)
               : configStatusText(config, card.configField, configLoading, configUnavailable);
           const isDisabled =
-            statusText === 'Disabled' ||
-            statusText === 'Metrics unavailable' ||
-            statusText === 'No metrics sample';
-          const isFilterable =
-            card.kind === 'metric' &&
-            !isDisabled &&
-            state?.kind !== 'stale' &&
-            Boolean(card.filter);
+            card.kind === 'metric'
+              ? NON_FILTERABLE_METRIC_STATES.has((state as GuardrailCardUIState).kind)
+              : statusText === 'Disabled' || statusText === 'Metrics unavailable';
+          const isFilterable = card.kind === 'metric' && !isDisabled && Boolean(card.filter);
           const isActive = card.kind === 'metric' && activeFilter === card.filter;
           const className = `rounded-lg border p-5 text-left transition-all ${card.color} ${
             isActive

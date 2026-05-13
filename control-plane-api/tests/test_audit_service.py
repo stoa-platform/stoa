@@ -30,9 +30,8 @@ def audit_service(mock_session):
 
 
 def _mock_empty_chain(session):
-    head_result = MagicMock()
-    head_result.one_or_none.return_value = None
-    session.execute = AsyncMock(side_effect=[MagicMock(), head_result, MagicMock()])
+    session.execute = AsyncMock(side_effect=[MagicMock(), MagicMock()])
+    session.scalar = AsyncMock(return_value=None)
 
 
 @pytest.fixture(autouse=True)
@@ -77,7 +76,8 @@ class TestRecordEvent:
         assert result.row_hash is not None
         mock_session.add.assert_called_once()
         mock_session.flush.assert_awaited_once()
-        assert mock_session.execute.await_count == 3
+        mock_session.scalar.assert_awaited_once()
+        assert mock_session.execute.await_count == 2
 
     @pytest.mark.asyncio
     async def test_record_event_minimal_fields(self, audit_service, mock_session):
@@ -91,6 +91,7 @@ class TestRecordEvent:
             resource_type="api",
         )
 
+        assert result is not None
         assert result.tenant_id == "acme"
         assert result.actor_id is None
         assert result.resource_id is None
@@ -98,18 +99,19 @@ class TestRecordEvent:
         assert result.row_hash is not None
 
     @pytest.mark.asyncio
-    async def test_record_event_db_error_raises(self, audit_service, mock_session):
+    async def test_record_event_db_error_returns_none(self, audit_service, mock_session):
         _mock_empty_chain(mock_session)
         mock_session.flush.side_effect = Exception("DB connection lost")
 
-        with pytest.raises(Exception, match="DB connection lost"):
-            await audit_service.record_event(
-                tenant_id="acme",
-                action="test",
-                method="POST",
-                path="/test",
-                resource_type="test",
-            )
+        result = await audit_service.record_event(
+            tenant_id="acme",
+            action="test",
+            method="POST",
+            path="/test",
+            resource_type="test",
+        )
+
+        assert result is None
 
 
 class TestListEvents:

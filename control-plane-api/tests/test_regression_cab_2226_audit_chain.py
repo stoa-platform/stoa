@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 from datetime import UTC, datetime, timedelta
@@ -43,15 +44,21 @@ class _ChainSession:
         sql = str(statement)
         if "pg_advisory_xact_lock" in sql:
             return _empty_result()
-        if "SELECT" in sql and "audit_chain_heads" in sql:
-            prev_hash = b"" if self.head is None else self.head[0]
-            self.prev_hashes.append(prev_hash)
-            return MagicMock(one_or_none=MagicMock(return_value=self.head))
         if "INSERT INTO audit_chain_heads" in sql:
             event = self.added[-1]
             self.head = (event.row_hash, event.id)
             return _empty_result()
         raise AssertionError(f"unexpected SQL: {sql}")
+
+    async def scalar(self, statement: Any) -> Any:
+        sql = str(statement)
+        if "SELECT" in sql and "audit_chain_heads" in sql:
+            prev_hash = b"" if self.head is None else self.head[0]
+            self.prev_hashes.append(prev_hash)
+            if self.head is None:
+                return None
+            return MagicMock(last_row_hash=self.head[0], last_event_id=self.head[1])
+        raise AssertionError(f"unexpected scalar SQL: {sql}")
 
 
 class _SpySession:
@@ -91,14 +98,43 @@ def test_hash_determinism_same_inputs_same_row_hash() -> None:
     assert len(first) == 32
 
 
+def test_hash_canonical_field_order() -> None:
+    previous = b"previous"
+    kwargs = {
+        "event_id": "evt-1",
+        "created_at": datetime(2026, 5, 13, 12, 0, tzinfo=UTC),
+        "tenant_id": "tenant-1",
+        "actor_id": "actor-1",
+        "action": "create",
+        "resource_type": "subscription",
+        "resource_id": "sub-1",
+        "outcome": "success",
+    }
+    expected = hashlib.sha256()
+    expected.update(previous)
+    for component in (
+        "evt-1",
+        "2026-05-13T12:00:00+00:00",
+        "tenant-1",
+        "actor-1",
+        "create",
+        "subscription:sub-1",
+        "success",
+    ):
+        expected.update(component.encode("utf-8"))
+
+    assert _compute_audit_row_hash(previous, **kwargs) == expected.digest()
+
+
 @pytest.mark.asyncio
 async def test_hash_chain_progression_advances_chain_head_three_times() -> None:
     session = _ChainSession()
     service = AuditService(session)  # type: ignore[arg-type]
     created_at = datetime(2026, 5, 13, 12, 0, tzinfo=UTC)
 
-    events = [
-        await service.record_event(
+    events = []
+    for idx in range(3):
+        event = await service.record_event(
             tenant_id="tenant-1",
             action="create",
             method="POST",
@@ -109,8 +145,8 @@ async def test_hash_chain_progression_advances_chain_head_three_times() -> None:
             event_id=f"evt-{idx}",
             created_at=created_at + timedelta(seconds=idx),
         )
-        for idx in range(3)
-    ]
+        assert event is not None
+        events.append(event)
 
     hashes = [event.row_hash for event in events]
     assert session.prev_hashes == [b"", hashes[0], hashes[1]]
@@ -187,6 +223,7 @@ async def test_concurrent_same_tenant_inserts_do_not_reuse_previous_hash() -> No
                     outcome="success",
                 )
                 await session.commit()
+                assert event is not None
                 return event.id
 
         await asyncio.gather(emit(1), emit(2))

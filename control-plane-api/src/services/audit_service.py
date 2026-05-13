@@ -136,13 +136,19 @@ def _compute_audit_row_hash(
     return hasher.digest()
 
 
-def _previous_row_hash(head_row: Any) -> bytes:
-    if head_row is None:
-        return b""
-    candidate = getattr(head_row, "last_row_hash", None)
-    if candidate is None:
-        candidate = head_row[0]
-    return bytes(candidate)
+def _wrap_pseudonymization_key(raw_key: bytes) -> bytes:
+    """Application-layer wrap for the pseudonymization key (ADR-069 §4.2).
+
+    DRAFT seam. Today it returns the raw key unchanged. Sign-off on
+    CAB-2226 (DPO + Security) MUST decide before merge whether to:
+      (a) wrap with a Vault-derived master key (KMS-style envelope), or
+      (b) amend ADR-069 to accept raw storage because the DB itself is
+          the trust boundary.
+
+    DO NOT MERGE this PR until that decision is recorded on CAB-2226.
+    """
+    # TODO(CAB-2226 DPO sign-off): replace with Vault wrap; see ADR-069 §4.2.
+    return raw_key
 
 
 class AuditService:
@@ -180,16 +186,18 @@ class AuditService:
         duration_ms: int | None = None,
         event_id: str | None = None,
         created_at: datetime | None = None,
-    ) -> AuditEvent:
-        """Record an immutable audit event. Never raises — logs errors instead."""
+    ) -> AuditEvent | None:
+        """Record an immutable audit event.
+
+        Returns the AuditEvent on success; returns None and logs ERROR on any
+        persistence failure (CAB-1475 contract, preserved by CAB-2226). A
+        future PR will replace this best-effort path with a durable outbox so
+        that the function can flip to fail-loud per DORA Art.5.
+        """
         try:
             await self.db.execute(_AUDIT_CHAIN_LOCK_SQL, {"tenant_id": tenant_id})
-            head_result = await self.db.execute(
-                select(AuditChainHead.last_row_hash, AuditChainHead.last_event_id).where(
-                    AuditChainHead.tenant_id == tenant_id
-                )
-            )
-            prev_hash = _previous_row_hash(head_result.one_or_none())
+            head = await self.db.scalar(select(AuditChainHead).where(AuditChainHead.tenant_id == tenant_id))
+            prev_hash = bytes(head.last_row_hash) if head is not None else b""
             event_created_at = created_at or datetime.now(UTC)
             event = AuditEvent(
                 id=event_id or str(uuid4()),
@@ -246,8 +254,11 @@ class AuditService:
             # CAB-2226: lock, audit row, and chain head share the caller-owned transaction and commit together.
             return event
         except Exception as e:
+            # TODO(CAB-2226 follow-up): wire a durable outbox + replay so we can
+            # flip this to fail-loud per DORA Art.5. Until then we honour the
+            # original CAB-1475 contract: never raise; log + return None.
             logger.error(f"Failed to record audit event: {e}")
-            raise
+            return None
 
     # ============ Read ============
 
@@ -518,7 +529,7 @@ class AuditService:
                 dpo_approver_id=dpo_approver_id,
                 dpo_approved_at=now,
                 subject_external_ref=None,
-                pseudonymization_key=secrets.token_bytes(32),
+                pseudonymization_key=_wrap_pseudonymization_key(secrets.token_bytes(32)),
                 scope_actor_ids=[user_id],
                 scope_event_ids=event_scope,
                 redaction_map=redaction_map,

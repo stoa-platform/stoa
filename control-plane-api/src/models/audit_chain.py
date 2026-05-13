@@ -40,6 +40,7 @@ class PseudonymizedAuditErasure(Base):
 
 class AuditEventRedactedView(Base):
     __tablename__ = "audit_events_redacted"
+    __table_args__ = {"info": {"is_view": True}}
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)

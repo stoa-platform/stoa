@@ -2,7 +2,7 @@
 
 Comprehensive verification of the subscription lifecycle covering:
 - Phase 1: State machine transitions (valid + invalid)
-- Phase 2: RBAC multi-tenant isolation (4 roles × 17 endpoints)
+- Phase 2: RBAC multi-tenant isolation (4 roles x 17 endpoints)
 - Phase 3: Audit trail (Kafka events + webhook emissions)
 - Phase 4: Gateway provisioning (approve→READY, revoke→DEPROVISIONED)
 
@@ -287,9 +287,7 @@ class TestPhase1StateMachine:
         ],
         ids=lambda x: str(x) if not isinstance(x, dict) else "payload",
     )
-    def test_invalid_transitions_return_400(
-        self, app_with_tenant_admin, initial_status, endpoint, method, payload
-    ):
+    def test_invalid_transitions_return_400(self, app_with_tenant_admin, initial_status, endpoint, method, payload):
         """Invalid state transitions must be blocked with HTTP 400."""
         sub = _make_sub(status=initial_status)
         patches = _patch_all()
@@ -299,19 +297,11 @@ class TestPhase1StateMachine:
 
             client = TestClient(app_with_tenant_admin)
 
-            if endpoint == "cancel":
-                url = f"/v1/subscriptions/{sub.id}"
-            else:
-                url = f"/v1/subscriptions/{sub.id}/{endpoint}"
-
-            if method == "post":
-                resp = client.post(url, json=payload or {})
-            else:
-                resp = client.delete(url)
+            url = f"/v1/subscriptions/{sub.id}" if endpoint == "cancel" else f"/v1/subscriptions/{sub.id}/{endpoint}"
+            resp = client.post(url, json=payload or {}) if method == "post" else client.delete(url)
 
             assert resp.status_code == 400, (
-                f"Expected 400 for {initial_status.value}→{endpoint}, "
-                f"got {resp.status_code}: {resp.json()}"
+                f"Expected 400 for {initial_status.value}→{endpoint}, " f"got {resp.status_code}: {resp.json()}"
             )
 
     # --- Audit fields verification ---
@@ -766,9 +756,7 @@ class TestPhase3AuditTrail:
 
             repo_inst.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
             repo_inst.update_status = AsyncMock(
-                side_effect=[
-                    _make_sub(id=s.id, status=SubscriptionStatus.ACTIVE) for s in subs
-                ]
+                side_effect=[_make_sub(id=s.id, status=SubscriptionStatus.ACTIVE) for s in subs]
             )
 
             client = TestClient(app_with_tenant_admin)
@@ -783,54 +771,6 @@ class TestPhase3AuditTrail:
             assert resp.status_code == 200
             assert resp.json()["succeeded"] == 3
             assert mock_emit.call_count == 3
-
-    def test_suspend_does_not_emit_webhook_L8(self, app_with_tenant_admin):
-        """Suspend currently does NOT emit a webhook — documenting gap L8."""
-        sub = _make_sub(status=SubscriptionStatus.ACTIVE)
-        patches = _patch_all()
-        with (
-            patches["sub_repo"] as mock_repo_cls,
-            patches["emit_approved"] as mock_approved,
-            patches["emit_revoked"] as mock_revoked,
-            patches["emit_rejected"] as mock_rejected,
-            patches["emit_created"] as mock_created,
-        ):
-            repo_inst = mock_repo_cls.return_value
-            repo_inst.get_by_id = AsyncMock(return_value=sub)
-            suspended = _make_sub(id=sub.id, status=SubscriptionStatus.SUSPENDED)
-            repo_inst.update_status = AsyncMock(return_value=suspended)
-
-            client = TestClient(app_with_tenant_admin)
-            resp = client.post(f"/v1/subscriptions/{sub.id}/suspend")
-
-            assert resp.status_code == 200
-            # Document L8: no webhook emitted for suspend
-            mock_approved.assert_not_called()
-            mock_revoked.assert_not_called()
-            mock_rejected.assert_not_called()
-            mock_created.assert_not_called()
-
-    def test_reactivate_does_not_emit_webhook_L8(self, app_with_tenant_admin):
-        """Reactivate currently does NOT emit a webhook — documenting gap L8."""
-        sub = _make_sub(status=SubscriptionStatus.SUSPENDED)
-        patches = _patch_all()
-        with (
-            patches["sub_repo"] as mock_repo_cls,
-            patches["emit_approved"] as mock_approved,
-            patches["emit_revoked"] as mock_revoked,
-        ):
-            repo_inst = mock_repo_cls.return_value
-            repo_inst.get_by_id = AsyncMock(return_value=sub)
-            reactivated = _make_sub(id=sub.id, status=SubscriptionStatus.ACTIVE)
-            repo_inst.update_status = AsyncMock(return_value=reactivated)
-
-            client = TestClient(app_with_tenant_admin)
-            resp = client.post(f"/v1/subscriptions/{sub.id}/reactivate")
-
-            assert resp.status_code == 200
-            # Document L8: no webhook for reactivation
-            mock_approved.assert_not_called()
-            mock_revoked.assert_not_called()
 
     def test_ttl_extend_emits_kafka_event(self, app_with_tenant_admin):
         """TTL extension must publish to RESOURCE_LIFECYCLE topic."""
@@ -937,9 +877,7 @@ class TestPhase4GatewayProvisioning:
 
             repo_inst.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
             repo_inst.update_status = AsyncMock(
-                side_effect=[
-                    _make_sub(id=s.id, status=SubscriptionStatus.ACTIVE) for s in subs
-                ]
+                side_effect=[_make_sub(id=s.id, status=SubscriptionStatus.ACTIVE) for s in subs]
             )
 
             client = TestClient(app_with_tenant_admin)

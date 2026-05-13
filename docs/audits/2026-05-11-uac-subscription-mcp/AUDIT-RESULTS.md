@@ -59,7 +59,7 @@ Architecture observée : `SubscriptionCreate → PENDING → (auto/manual approv
 |----|-----|---------|--------|
 | SUB-1 | P0 | **Deprovision one-shot, pas de retry** : revocation côté CP mais gateway route reste active si gateway down au moment du revoke | `services/provisioning_service.py:341-380` (pas de retry loop comme `_provision_with_session`) |
 | SUB-2 | P0 | **TTL extension: flush sans commit** : `await db.flush()` au lieu de `commit()`, transaction réversible si étape suivante échoue | `routers/subscriptions.py:562` |
-| SUB-3 | P1 | **Suspend/Reactivate sans webhook** : aucun audit trail externe pour ces transitions ; documenté comme gap intentionnel dans le test `test_suspend_does_not_emit_webhook_L8` | `routers/subscriptions.py:777-846` |
+| SUB-3 | P1 | **Suspend/Reactivate sans webhook** : aucun audit trail externe pour ces transitions ; documenté comme gap intentionnel dans le test `test_suspend_does_not_emit_webhook_L8` → **CLOSED** PR #2784, regression test `tests/test_regression_cab_2225_sub_3_suspend_reactivate_webhook.py`. | `routers/subscriptions.py:777-846` |
 | SUB-4 | P1 | **Provision timeout 10s hardcodé, sans correlation_id dans log warning** : timeouts en prod intraçables | `routers/subscriptions.py:209-216` |
 | SUB-5 | P1 | **`auto_approve_roles` jamais testé end-to-end** : feature documentée sur Plan, aucun test e2e ne prouve qu'un viewer auto-approuve sans manual gate | `routers/subscriptions.py:182` |
 | SUB-6 | P2 | **Cross-tenant subscription non rejetée à la création** : pas de check `api.owner.tenant_id == request.tenant_id` | `routers/subscriptions.py:147` |

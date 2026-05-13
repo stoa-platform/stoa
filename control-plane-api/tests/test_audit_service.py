@@ -350,13 +350,17 @@ class TestEraseUserPii:
     async def test_erase_user_pii_records_auxiliary_erasure(self, audit_service, mock_session):
         """Erasure records metadata in the auxiliary table."""
 
-        response = await audit_service.erase_user_pii(
-            "user-123",
-            dpo_approver_id="dpo-1",
-            legal_basis="GDPR Art.17",
-            redaction_map={"actor_email": None},
-            scope_event_ids=["evt-1"],
-        )
+        with patch(
+            "src.services.audit_service._wrap_pseudonymization_key",
+            new=AsyncMock(return_value=b"vault:v1:test-ciphertext"),
+        ):
+            response = await audit_service.erase_user_pii(
+                "user-123",
+                dpo_approver_id="dpo-1",
+                legal_basis="GDPR Art.17",
+                redaction_map={"actor_email": None},
+                scope_event_ids=["evt-1"],
+            )
 
         assert response["records_affected"] == 0
         assert response["erasure_id"]
@@ -364,4 +368,6 @@ class TestEraseUserPii:
         assert response["scope_event_ids"] == ["evt-1"]
         statement = mock_session.execute.await_args.args[0]
         assert statement.table.name == "pseudonymized_audit_erasures"
+        params = statement.compile().params
+        assert params["pseudonymization_key"].startswith(b"vault:v1:")
         mock_session.execute.assert_awaited_once()

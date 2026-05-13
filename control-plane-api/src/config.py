@@ -348,18 +348,14 @@ class Settings(BaseSettings):
             canonical = _ENVIRONMENT_ALIASES[key]
             if stripped != canonical:
                 _logger.info(
-                    "ENVIRONMENT normalized: %r → %r "
-                    "(CAB-2199 Phase 3-A — case-insensitive accept).",
+                    "ENVIRONMENT normalized: %r → %r " "(CAB-2199 Phase 3-A — case-insensitive accept).",
                     v,
                     canonical,
                 )
             return canonical
 
         accepted = sorted(set(_ENVIRONMENT_ALIASES))
-        raise ValueError(
-            f"ENVIRONMENT={v!r} is not recognized. "
-            f"Accepted values (case-insensitive): {accepted}."
-        )
+        raise ValueError(f"ENVIRONMENT={v!r} is not recognized. " f"Accepted values (case-insensitive): {accepted}.")
 
     # Kafka/Redpanda Event Streaming
     KAFKA_ENABLED: bool = True  # Set to False to skip Kafka health checks
@@ -621,6 +617,12 @@ class Settings(BaseSettings):
     VAULT_KUBERNETES_ROLE: str = "control-plane-api"
     VAULT_MOUNT_POINT: str = "secret"
     VAULT_ENABLED: bool = True  # Set to False to skip Vault operations (credentials not stored)
+    AUDIT_PSEUDO_VAULT_KEY_NAME: str = Field(
+        default="audit-pseudo",
+        description=(
+            "Vault transit-engine key name for envelope-encrypting audit pseudonymization keys (ADR-069 §4.2)."
+        ),
+    )
 
     # Backend API encryption (Fernet key for BYOK credential storage — CAB-1188)
     BACKEND_ENCRYPTION_KEY: str = ""
@@ -722,9 +724,7 @@ class Settings(BaseSettings):
         derived: dict[str, str] = {
             "KEYCLOAK_URL": f"https://auth.{base_domain}",
             "GATEWAY_URL": f"https://vps-wm.{base_domain}",
-            "GATEWAY_ADMIN_PROXY_URL": (
-                f"https://apis.{base_domain}/gateway/Gateway-Admin-API/1.0"
-            ),
+            "GATEWAY_ADMIN_PROXY_URL": (f"https://apis.{base_domain}/gateway/Gateway-Admin-API/1.0"),
             "ARGOCD_URL": f"https://argocd.{base_domain}",
             "ARGOCD_EXTERNAL_URL": f"https://argocd.{base_domain}",
             "GRAFANA_URL": f"https://grafana.{base_domain}",
@@ -773,9 +773,7 @@ class Settings(BaseSettings):
             )
             return self
 
-        _logger.debug(
-            "opensearch_audit: hydrating from flat OPENSEARCH_*/AUDIT_* env vars."
-        )
+        _logger.debug("opensearch_audit: hydrating from flat OPENSEARCH_*/AUDIT_* env vars.")
         self.opensearch_audit = OpenSearchAuditConfig(
             host=self.OPENSEARCH_HOST,
             user=self.OPENSEARCH_USER,

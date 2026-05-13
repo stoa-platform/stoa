@@ -10,7 +10,7 @@ import os
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -159,17 +159,23 @@ async def test_erase_user_pii_inserts_auxiliary_record_without_audit_update() ->
     session = _SpySession()
     service = AuditService(session)  # type: ignore[arg-type]
 
-    await service.erase_user_pii(
-        "user-1",
-        dpo_approver_id="dpo-1",
-        legal_basis="GDPR Art.17",
-        redaction_map={"actor_email": None, "client_ip": None},
-        scope_event_ids=["evt-1"],
-    )
+    with patch(
+        "src.services.audit_service._wrap_pseudonymization_key",
+        new=AsyncMock(return_value=b"vault:v1:test-ciphertext"),
+    ):
+        await service.erase_user_pii(
+            "user-1",
+            dpo_approver_id="dpo-1",
+            legal_basis="GDPR Art.17",
+            redaction_map={"actor_email": None, "client_ip": None},
+            scope_event_ids=["evt-1"],
+        )
 
     sql = "\n".join(_compiled_sql(statement) for statement in session.statements)
     assert "insert into pseudonymized_audit_erasures" in sql
     assert "update audit_events" not in sql
+    params = session.statements[0].compile(dialect=postgresql.dialect()).params
+    assert params["pseudonymization_key"].startswith(b"vault:v1:")
 
 
 @pytest.mark.asyncio

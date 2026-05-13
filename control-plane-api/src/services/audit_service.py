@@ -136,19 +136,17 @@ def _compute_audit_row_hash(
     return hasher.digest()
 
 
-def _wrap_pseudonymization_key(raw_key: bytes) -> bytes:
+async def _wrap_pseudonymization_key(raw_key: bytes) -> bytes:
     """Application-layer wrap for the pseudonymization key (ADR-069 §4.2).
 
-    DRAFT seam. Today it returns the raw key unchanged. Sign-off on
-    CAB-2226 (DPO + Security) MUST decide before merge whether to:
-      (a) wrap with a Vault-derived master key (KMS-style envelope), or
-      (b) amend ADR-069 to accept raw storage because the DB itself is
-          the trust boundary.
-
-    DO NOT MERGE this PR until that decision is recorded on CAB-2226.
+    Operator decision 2026-05-13
+    (docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md
+    §CAB-2226): Vault wrap is mandatory; raw storage is NOT accepted as
+    final state.
     """
-    # TODO(CAB-2226 DPO sign-off): replace with Vault wrap; see ADR-069 §4.2.
-    return raw_key
+    from .audit_pseudo_vault import wrap_pseudonymization_key
+
+    return await wrap_pseudonymization_key(raw_key)
 
 
 class AuditService:
@@ -529,7 +527,7 @@ class AuditService:
                 dpo_approver_id=dpo_approver_id,
                 dpo_approved_at=now,
                 subject_external_ref=None,
-                pseudonymization_key=_wrap_pseudonymization_key(secrets.token_bytes(32)),
+                pseudonymization_key=await _wrap_pseudonymization_key(secrets.token_bytes(32)),
                 scope_actor_ids=[user_id],
                 scope_event_ids=event_scope,
                 redaction_map=redaction_map,

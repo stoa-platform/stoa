@@ -73,10 +73,17 @@ describe('LiveTraces', () => {
     expect(screen.getByText('Gateway')).toBeInTheDocument();
   });
 
-  it('highlights error traces', () => {
+  it('highlights 5xx server errors with red background', () => {
     const { container } = render(<LiveTraces traces={[errorTrace]} />);
     const row = container.querySelector('tr.bg-red-50\\/50');
     expect(row).toBeInTheDocument();
+  });
+
+  it('highlights 4xx client errors with yellow (not red)', () => {
+    const clientErrorTrace: TraceEntry = { ...mockTrace, id: 'trace-003', statusCode: 404 };
+    const { container } = render(<LiveTraces traces={[clientErrorTrace]} />);
+    expect(container.querySelector('tr.bg-yellow-50\\/40')).toBeInTheDocument();
+    expect(container.querySelector('tr.bg-red-50\\/50')).not.toBeInTheDocument();
   });
 
   it('calls onSelectTrace on row click', () => {

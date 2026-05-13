@@ -1,6 +1,15 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, RefreshCw, Zap, AlertTriangle, Network, Gauge, Timer } from 'lucide-react';
+import {
+  Activity,
+  RefreshCw,
+  Zap,
+  AlertTriangle,
+  CheckCircle,
+  Network,
+  Gauge,
+  Timer,
+} from 'lucide-react';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { StatCard } from '@stoa/shared/components/StatCard';
 import { TimeRangeSelector, RANGE_CONFIG } from '@stoa/shared/components/TimeRangeSelector';
@@ -247,6 +256,7 @@ export function CallFlowDashboard() {
     totalRequestsVal && totalErrorsVal && totalRequestsVal > 0
       ? (totalErrorsVal / totalRequestsVal) * 100
       : 0;
+  const successRateVal = totalRequestsVal && totalRequestsVal > 0 ? 100 - errorRateVal : null;
 
   const prometheusAvailable = !totalRequests.error && !fallbackRequests.error;
   const loading = totalRequests.loading && fallbackRequests.loading;
@@ -556,17 +566,23 @@ export function CallFlowDashboard() {
               subtitle="Tail latency"
             />
             <StatCard
-              label="Error Rate"
-              value={errorRateVal > 0 ? `${errorRateVal.toFixed(2)}%` : '0%'}
-              icon={AlertTriangle}
+              label="Success Rate"
+              value={successRateVal !== null ? `${successRateVal.toFixed(2)}%` : '--'}
+              icon={CheckCircle}
               colorClass={
-                errorRateVal < 1
-                  ? 'text-green-600'
-                  : errorRateVal < 5
-                    ? 'text-yellow-600'
-                    : 'text-red-600'
+                successRateVal === null
+                  ? 'text-neutral-400'
+                  : successRateVal >= 99
+                    ? 'text-green-600'
+                    : successRateVal >= 95
+                      ? 'text-yellow-600'
+                      : 'text-red-600'
               }
-              subtitle={`${Math.round(totalErrorsVal || 0)} errors`}
+              subtitle={
+                totalRequestsVal && totalRequestsVal > 0
+                  ? `${Math.round(totalErrorsVal || 0)} server errors (5xx)`
+                  : 'No requests in this period'
+              }
             />
             <StatCard
               label="Active Modes"
@@ -710,7 +726,11 @@ export function CallFlowDashboard() {
                     />
                   ) : (
                     <div className="h-[100px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
-                      {trend.error ? 'Unavailable' : 'No traffic'}
+                      {trend.error
+                        ? 'Unavailable'
+                        : key === 'edge-mcp'
+                          ? 'No traffic'
+                          : 'Awaiting traffic'}
                     </div>
                   )}
                 </div>

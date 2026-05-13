@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.11.0...control-plane-ui-v1.12.0) (2026-05-13)
+
+
+### Features
+
+* **ui:** CAB-2224 wire Live Calls traffic heatmap ([#2775](https://github.com/stoa-platform/stoa/issues/2775)) ([3420236](https://github.com/stoa-platform/stoa/commit/3420236258727efd8c057c897fb97d40298b5395))
+
 ## [1.11.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.10.0...control-plane-ui-v1.11.0) (2026-05-13)
 
 

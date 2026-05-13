@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.10.0...control-plane-ui-v1.11.0) (2026-05-13)
+
+
+### Features
+
+* **ui:** CAB-2223 split Live Calls status semantics ([#2772](https://github.com/stoa-platform/stoa/issues/2772)) ([5264cf9](https://github.com/stoa-platform/stoa/commit/5264cf9c8748f71d4f3b1459defc937988a1887b))
+
 ## [1.10.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.9.0...control-plane-ui-v1.10.0) (2026-05-13)
 
 

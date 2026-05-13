@@ -559,7 +559,12 @@ async def extend_subscription_ttl(
     subscription.ttl_extension_count += 1
     subscription.ttl_total_extended_days += request.extend_days
 
-    await db.flush()
+    # SUB-2 (audit 2026-05-11): commit before emitting the side-effect, not flush.
+    # flush() only sends the UPDATE; the dependency-level commit can still be
+    # rolled back if anything between handler-return and dep-commit raises
+    # (middleware, response serialization, audit emit). commit() locks durability
+    # in-handler so the API response truly matches persisted state.
+    await db.commit()
 
     logger.info(
         f"TTL extended for subscription {subscription_id} by {request.extend_days}d "

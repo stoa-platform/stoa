@@ -42,6 +42,14 @@ Voir Linear (queue typiquement ~40 tickets mais drainée à 0 en Phase 1 CAB-205
 - [ ] CAB-2069 Fix TCO fabriqué build-vs-buy article + extend audit script (5 pts, P1) — Council 7.88/10 Fix
 - [ ] CAB-2070 Audit SaaS Playbook + migration guides TCO fabrication (13 pts, P2) — Council 7.88/10 Fix, blocked by CAB-2069
 
+## Cycle 19+ (May 11+) — ACTIVE (post-batch observability)
+
+**Theme**: Phase 6 guardrails non-MCP coverage + 4B-full counter contract
+
+- [ ] **CAB-2213** Phase 6 — guardrails non-MCP + 4B-full (21 pts, P1) — **Council 8.0/10 Go** | HEG-PAT-022 3 rounds validated + E1-E6. Branch `codex/phase6-guardrails-full`. Council gate satisfied; Phase 6.0 (docs/cardinality/red tests) only before any implementation merges. Decompose via `/decompose` post-claim.
+
+> plan.md is stale (last sync Apr 15) — current cycle per memory.md is C19 (May 3-10). Run `/sync-plan` to refresh.
+
 ## Milestones
 
 | Date | Event |

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.14.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.13.1...control-plane-api-v1.14.0) (2026-05-13)
+
+
+### Features
+
+* **api,infra:** audit consumer implementation ([#2726](https://github.com/stoa-platform/stoa/issues/2726)) ([6400f51](https://github.com/stoa-platform/stoa/commit/6400f51a51b32e4f3fb9d2b8010a90dc9d2ae8cc))
+* **api:** audit log /stats /actions + actor resolution + demo fallback gate ([#2737](https://github.com/stoa-platform/stoa/issues/2737)) ([bd408bb](https://github.com/stoa-platform/stoa/commit/bd408bbb49e07545d3158ab2aa86b96400564d40))
+* **api:** CAB-2218 phase 6.4 cp-api reader + 5-state precedence + E6 stale_reason enum ([#2765](https://github.com/stoa-platform/stoa/issues/2765)) ([77a8a5d](https://github.com/stoa-platform/stoa/commit/77a8a5d3185681fb977ee1b7cbeb0275251e4585))
+* **api:** control-plane audit pipeline probe (phase 5A) ([#2750](https://github.com/stoa-platform/stoa/issues/2750)) ([bfb1c84](https://github.com/stoa-platform/stoa/commit/bfb1c84cb0e7a95ec70ea604a172ca73d6d61309))
+* **api:** guardrails /config endpoint + metrics freshness ([#2742](https://github.com/stoa-platform/stoa/issues/2742)) ([ae52ff9](https://github.com/stoa-platform/stoa/commit/ae52ff9cbcd142eb9965fb22d7a53599398c5f6e))
+* **api:** observability audit fixtures gated by profile (phase 2) ([#2748](https://github.com/stoa-platform/stoa/issues/2748)) ([286fc84](https://github.com/stoa-platform/stoa/commit/286fc84ec96f261edb169627da6b65692570ad00))
+* **observability:** add gateway runtime telemetry probe (phase 5B) ([#2753](https://github.com/stoa-platform/stoa/issues/2753)) ([4e9dba2](https://github.com/stoa-platform/stoa/commit/4e9dba28e01d9246af553927452c7164112f0713))
+
+
+### Bug Fixes
+
+* **api:** cp-api transactions list under-counts spans (phase 0.5b) ([#2755](https://github.com/stoa-platform/stoa/issues/2755)) ([08e93e4](https://github.com/stoa-platform/stoa/commit/08e93e4abfcb5ff34374d1c15337b6997962e727))
+* **audit:** default audit trail consumer off ([#2730](https://github.com/stoa-platform/stoa/issues/2730)) ([cd889da](https://github.com/stoa-platform/stoa/commit/cd889da00ecfb4a652def7baddc9a6ce7e8f0f4b))
+
 ## [1.13.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.13.0...control-plane-api-v1.13.1) (2026-05-06)
 
 

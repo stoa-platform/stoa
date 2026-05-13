@@ -28,6 +28,7 @@ import { SparklineChart } from '../../components/charts/SparklineChart';
 import { ThroughputChart } from './components/ThroughputChart';
 import { LatencyHistogram } from './components/LatencyHistogram';
 import { ErrorBreakdown } from './components/ErrorBreakdown';
+import { StatusMix, type StatusClass, type StatusMixEntry } from './components/StatusMix';
 import { TopRoutes } from './components/TopRoutes';
 import { TrafficHeatmap } from './components/TrafficHeatmap';
 import { LiveTraces } from './components/LiveTraces';
@@ -55,6 +56,18 @@ const LATENCY_BUCKETS = [
   { label: '50-100ms', le: 0.1 },
   { label: '100ms+', le: Infinity },
 ];
+
+const STATUS_MIX_CLASSES: Array<Omit<StatusMixEntry, 'count'>> = [
+  { statusClass: '2xx', label: '2xx Success' },
+  { statusClass: '3xx', label: '3xx Redirects' },
+  { statusClass: '4xx', label: '4xx Client' },
+  { statusClass: '5xx', label: '5xx Failures' },
+];
+
+function statusClassForCode(status: string): StatusClass | null {
+  if (!/^[2-5]\d\d$/.test(status)) return null;
+  return `${status[0]}xx` as StatusClass;
+}
 
 function latencyColorClass(ms: number | null): string | undefined {
   if (ms === null) return undefined;
@@ -188,7 +201,12 @@ export function CallFlowDashboard() {
 
   // ─── Error breakdown by status code ───
 
+  const statusMix = usePrometheusQuery(queries.statusMix, refreshMs || 15_000);
   const errorsByStatus = usePrometheusQuery(queries.errorsByStatus, refreshMs || 15_000);
+  const clientErrorsByStatus = usePrometheusQuery(
+    queries.clientErrorsByStatus,
+    refreshMs || 15_000
+  );
 
   // ─── Top routes by P95 latency ───
 
@@ -317,6 +335,36 @@ export function CallFlowDashboard() {
       .sort((a, b) => b.count - a.count);
   }, [errorsByStatus.data]);
 
+  const clientErrorEntries = useMemo(() => {
+    const map = groupByLabel(clientErrorsByStatus.data, 'status');
+    return Object.entries(map)
+      .map(([code, count]) => ({ code, count: Math.round(count) }))
+      .filter((e) => e.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [clientErrorsByStatus.data]);
+
+  const statusMixEntries = useMemo<StatusMixEntry[]>(() => {
+    const counts: Record<StatusClass, number> = {
+      '2xx': 0,
+      '3xx': 0,
+      '4xx': 0,
+      '5xx': 0,
+    };
+    const map = groupByLabel(statusMix.data, 'status');
+
+    for (const [status, count] of Object.entries(map)) {
+      const statusClass = statusClassForCode(status);
+      if (statusClass) {
+        counts[statusClass] += count;
+      }
+    }
+
+    return STATUS_MIX_CLASSES.map((entry) => ({
+      ...entry,
+      count: Math.round(counts[entry.statusClass]),
+    }));
+  }, [statusMix.data]);
+
   // ─── Parse top routes ───
 
   const topRoutes = useMemo(() => {
@@ -377,7 +425,9 @@ export function CallFlowDashboard() {
     sidecarTrend.refetch();
     connectTrend.refetch();
     latencyBuckets.refetch();
+    statusMix.refetch();
     errorsByStatus.refetch();
+    clientErrorsByStatus.refetch();
     topRoutesP95.refetch();
     topRoutesCalls.refetch();
     fallbackRequests.refetch();
@@ -396,7 +446,9 @@ export function CallFlowDashboard() {
     sidecarTrend,
     connectTrend,
     latencyBuckets,
+    statusMix,
     errorsByStatus,
+    clientErrorsByStatus,
     topRoutesP95,
     topRoutesCalls,
     fallbackRequests,
@@ -626,13 +678,33 @@ export function CallFlowDashboard() {
             </ChartCard>
           </div>
 
-          {/* ─── Charts Row 2: Error Breakdown + Top Routes ─── */}
+          {/* ─── Charts Row 2: Status Mix + Failures ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ChartCard title="Error Breakdown">
+            <ChartCard title="Status Mix">
+              <StatusMix entries={statusMixEntries} />
+            </ChartCard>
+            <ChartCard title="Failures (5xx only)">
               <ErrorBreakdown
                 errors={errorEntries}
-                activeCode={statusFilter}
+                activeCode={statusFilter.startsWith('5') ? statusFilter : ''}
                 onSliceClick={setStatusFilter}
+                emptyMessage="No 5xx failures in this period"
+                tooltipLabel="Failures"
+                testId="failures-breakdown"
+              />
+            </ChartCard>
+          </div>
+
+          {/* ─── Charts Row 3: Client Errors + Top Routes ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ChartCard title="Client errors (4xx)">
+              <ErrorBreakdown
+                errors={clientErrorEntries}
+                activeCode={statusFilter.startsWith('4') ? statusFilter : ''}
+                onSliceClick={setStatusFilter}
+                emptyMessage="No 4xx client errors in this period"
+                tooltipLabel="Client errors"
+                testId="client-errors-breakdown"
               />
             </ChartCard>
             <ChartCard title="Top Routes by Latency (P95)">

@@ -44,10 +44,56 @@ function vector(value: number, metric: Record<string, string> = {}) {
   return [{ metric, value: [123, String(value)] as [number, string] }];
 }
 
-function mockLiveCallsMetrics(totalRequests = 42) {
+function statusVectors(values: Record<string, number>) {
+  return Object.entries(values).map(([status, value]) => ({
+    metric: { status },
+    value: [123, String(value)] as [number, string],
+  }));
+}
+
+function mockLiveCallsMetrics(totalRequests = 42, statusMix: Record<string, number> = {}) {
   vi.mocked(usePrometheusQuery).mockImplementation((query: string) => {
     if (query.startsWith('sum(increase(stoa_http_requests_total') && !query.includes('status=')) {
       return { data: vector(totalRequests), loading: false, error: null, refetch: mocks.refetch };
+    }
+    if (query.includes('status=~"2..|3..|4..|5.."')) {
+      return {
+        data: statusVectors(statusMix),
+        loading: false,
+        error: null,
+        refetch: mocks.refetch,
+      };
+    }
+    if (query.includes('sum by (status)') && query.includes('status=~"4.."')) {
+      return {
+        data: statusVectors(
+          Object.fromEntries(Object.entries(statusMix).filter(([s]) => s[0] === '4'))
+        ),
+        loading: false,
+        error: null,
+        refetch: mocks.refetch,
+      };
+    }
+    if (query.includes('sum by (status)') && query.includes('status=~"5.."')) {
+      return {
+        data: statusVectors(
+          Object.fromEntries(Object.entries(statusMix).filter(([s]) => s[0] === '5'))
+        ),
+        loading: false,
+        error: null,
+        refetch: mocks.refetch,
+      };
+    }
+    if (query.includes('status=~"5.."')) {
+      const serverFailures = Object.entries(statusMix)
+        .filter(([status]) => status[0] === '5')
+        .reduce((sum, [, value]) => sum + value, 0);
+      return {
+        data: vector(serverFailures),
+        loading: false,
+        error: null,
+        refetch: mocks.refetch,
+      };
     }
     if (query.includes('status=~')) {
       return { data: vector(0), loading: false, error: null, refetch: mocks.refetch };
@@ -84,8 +130,24 @@ describe('regression/live-calls-metric-integrity', () => {
     expect(queries.topRoutesCalls).toContain(`sum by (${ROUTE_LABEL})`);
     expect(queries.activeModes).toContain('count by (job)');
     expect(queries.activeModes).not.toContain('path');
+    expect(queries.errorsByStatus).toContain('status=~"5.."');
+    expect(queries.errorsByStatus).not.toContain('4..');
+    expect(queries.clientErrorsByStatus).toContain('status=~"4.."');
+    expect(queries.statusMix).toContain('status=~"2..|3..|4..|5.."');
     expect(queryText).toContain(MODE_FILTER);
     expect(queryText).not.toMatch(/sum by \(path\)|count by \(path\)|metric\.path/);
+  });
+
+  it('separates status semantics into success mix, client errors, and 5xx failures', async () => {
+    mockLiveCallsMetrics(100, { '200': 95, '302': 2, '404': 2, '500': 1 });
+
+    renderWithProviders(<CallFlowDashboard />, { route: '/observability/live-calls' });
+
+    expect(await screen.findByRole('heading', { name: 'Status Mix' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Failures (5xx only)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Client errors (4xx)' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Error Breakdown' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('status-mix-share-2xx')).toHaveTextContent('95.0%');
   });
 
   it('shows a scope mismatch banner when total requests exist but mode breakdowns are empty', async () => {

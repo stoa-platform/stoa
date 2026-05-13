@@ -161,7 +161,8 @@ export function LiveTraces({
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {pagedTraces.map((t) => {
-              const isError = t.statusCode >= 400;
+              const isServerError = t.statusCode >= 500;
+              const isClientError = t.statusCode >= 400 && t.statusCode < 500;
               const sb = statusBadge(t.statusCode);
               const mb = modeBadge(t.mode);
 
@@ -169,9 +170,11 @@ export function LiveTraces({
                 <tr
                   key={t.id}
                   className={`${
-                    isError
+                    isServerError
                       ? 'bg-red-50/50 dark:bg-red-900/10'
-                      : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                      : isClientError
+                        ? 'bg-yellow-50/40 dark:bg-yellow-900/10'
+                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
                   } cursor-pointer transition-colors`}
                   onClick={() => onSelectTrace?.(t.id)}
                 >
@@ -180,7 +183,9 @@ export function LiveTraces({
                   </td>
                   <td className="py-2 pr-2">
                     <div className="flex items-center gap-1.5">
-                      {isError && <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />}
+                      {isServerError && (
+                        <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                      )}
                       <span className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate max-w-[180px]">
                         {t.method} {t.route}
                       </span>

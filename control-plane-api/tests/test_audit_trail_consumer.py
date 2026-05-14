@@ -94,10 +94,15 @@ async def test_persist_event_inserts_once_and_commits():
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
 
-    with patch("src.workers.audit_trail_consumer._get_session_factory", return_value=_session_factory(session)):
+    with (
+        patch("src.workers.audit_trail_consumer._get_session_factory", return_value=_session_factory(session)),
+        patch(
+            "src.services.audit_service.AuditService.record_event", new=AsyncMock(return_value=event)
+        ) as record_event,
+    ):
         assert await consumer._persist_event(event) == "inserted"
 
-    session.add.assert_called_once_with(event)
+    record_event.assert_awaited_once()
     session.commit.assert_awaited_once()
     session.rollback.assert_not_awaited()
 

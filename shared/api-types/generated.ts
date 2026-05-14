@@ -17317,10 +17317,12 @@ export interface components {
         PiiErasureResponse: {
             /** Os Records Deleted */
             os_records_deleted: number;
-            /** Pg Records Affected */
-            pg_records_affected: number;
-            /** Pseudo Id */
-            pseudo_id: string;
+            /** Erasure Id */
+            erasure_id: string;
+            /** Scope Actor Ids */
+            scope_actor_ids: string[];
+            /** Scope Event Ids */
+            scope_event_ids: string[];
             /** User Id */
             user_id: string;
         };

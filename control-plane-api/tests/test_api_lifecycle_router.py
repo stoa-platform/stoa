@@ -28,10 +28,17 @@ def _scalars_result(rows):
     return result
 
 
+def _audit_chain_results():
+    head = MagicMock()
+    head.one_or_none.return_value = None
+    return [MagicMock(), head, MagicMock()]
+
+
 def test_create_draft_endpoint_returns_lifecycle_state(client_as_tenant_admin, mock_db_session) -> None:
     mock_db_session.execute.side_effect = [
         _scalar_result(None),
         _scalar_result(None),
+        *_audit_chain_results(),
         _rows_result([]),
         _scalars_result([]),
     ]
@@ -128,6 +135,7 @@ def test_validate_draft_endpoint_returns_ready_state(client_as_tenant_admin, moc
     )
     mock_db_session.execute.side_effect = [
         _scalar_result(catalog),
+        *_audit_chain_results(),
         _rows_result([]),
         _scalars_result([]),
     ]
@@ -167,7 +175,7 @@ def test_validate_draft_endpoint_returns_422_for_invalid_spec(client_as_tenant_a
             "paths": {"/payments": {"get": {"operationId": "listPayments"}}},
         },
     )
-    mock_db_session.execute.side_effect = [_scalar_result(catalog)]
+    mock_db_session.execute.side_effect = [_scalar_result(catalog), *_audit_chain_results()]
 
     response = client_as_tenant_admin.post("/v1/tenants/acme/apis/payments-api/lifecycle/validate")
 

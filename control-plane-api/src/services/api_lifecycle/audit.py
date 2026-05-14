@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.audit_event import AuditEvent
+from src.services.audit_service import AuditService
 
 from .ports import LifecycleActor
 
@@ -31,21 +31,18 @@ class SqlAlchemyLifecycleAuditSink:
         method: str = "POST",
         path: str | None = None,
     ) -> None:
-        self.session.add(
-            AuditEvent(
-                tenant_id=tenant_id,
-                actor_id=actor.actor_id,
-                actor_email=actor.email,
-                actor_type=actor.actor_type,
-                action=action,
-                method=method,
-                path=path or f"/v1/tenants/{tenant_id}/apis/lifecycle/drafts",
-                resource_type="api",
-                resource_id=resource_id,
-                resource_name=resource_name,
-                outcome=outcome,
-                status_code=status_code,
-                details=details,
-            )
+        await AuditService(self.session).record_event(
+            tenant_id=tenant_id,
+            actor_id=actor.actor_id,
+            actor_email=actor.email,
+            actor_type=actor.actor_type,
+            action=action,
+            method=method,
+            path=path or f"/v1/tenants/{tenant_id}/apis/lifecycle/drafts",
+            resource_type="api",
+            resource_id=resource_id,
+            resource_name=resource_name,
+            outcome=outcome,
+            status_code=status_code,
+            details=details,
         )
-        await self.session.flush()

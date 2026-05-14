@@ -340,7 +340,30 @@ class AuditTrailConsumer:
                 await session.rollback()
                 return "duplicate"
             try:
-                session.add(event)
+                from ..services.audit_service import AuditService
+
+                await AuditService(session).record_event(
+                    tenant_id=event.tenant_id,
+                    actor_id=event.actor_id,
+                    actor_email=event.actor_email,
+                    actor_type=event.actor_type,
+                    action=event.action,
+                    method=event.method,
+                    path=event.path,
+                    resource_type=event.resource_type,
+                    resource_id=event.resource_id,
+                    resource_name=event.resource_name,
+                    outcome=event.outcome,
+                    status_code=event.status_code,
+                    client_ip=event.client_ip,
+                    user_agent=event.user_agent,
+                    correlation_id=event.correlation_id,
+                    details=event.details,
+                    diff=event.diff,
+                    duration_ms=event.duration_ms,
+                    event_id=event.id,
+                    created_at=event.created_at,
+                )
                 await session.commit()
                 return "inserted"
             except IntegrityError:

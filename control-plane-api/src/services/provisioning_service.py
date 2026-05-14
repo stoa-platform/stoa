@@ -106,7 +106,8 @@ async def provision_on_approval(
     """
     from ..database import get_async_session_factory
 
-    factory = get_async_session_factory()
+    # Unit tests pass plain AsyncMock sessions; do not let a developer .env create a real DB session there.
+    factory = get_async_session_factory() if isinstance(db, AsyncSession) else None
     if factory is not None:
         try:
             async with factory() as own_db:
@@ -355,7 +356,8 @@ async def deprovision_on_revocation(
 
     from ..database import get_async_session_factory
 
-    factory = get_async_session_factory()
+    # Unit tests pass plain AsyncMock sessions; do not let a developer .env create a real DB session there.
+    factory = get_async_session_factory() if isinstance(db, AsyncSession) else None
     if factory is not None:
         try:
             async with factory() as own_db:

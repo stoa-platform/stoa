@@ -133,9 +133,10 @@ class PiiErasureResponse(BaseModel):
     """Response for GDPR Article 17 PII erasure (CAB-1794)."""
 
     user_id: str
-    pg_records_affected: int
+    erasure_id: str
     os_records_deleted: int
-    pseudo_id: str
+    scope_actor_ids: list[str]
+    scope_event_ids: list[str]
 
 
 def _is_synthetic_details(details: dict[str, Any] | None) -> bool:
@@ -877,15 +878,25 @@ async def erase_user_pii(
     """
     GDPR Article 17 — Right to Erasure (CAB-1794).
 
-    Pseudonymizes PII in PostgreSQL audit records and deletes matching
-    documents from OpenSearch for the specified user.
+    Records DPO-approved audit pseudonymization metadata without mutating
+    PostgreSQL audit rows, and deletes matching documents from OpenSearch.
 
     Requires cpi-admin role. Creates a meta-audit record of the erasure.
     """
     audit_svc = AuditService(db)
 
-    # 1. Pseudonymize in PostgreSQL
-    pg_result = await audit_svc.erase_user_pii(user_id, tenant_id=tenant_id)
+    # 1. Record PostgreSQL pseudonymization metadata. The audit_events source table is never updated.
+    pg_result = await audit_svc.erase_user_pii(
+        user_id,
+        dpo_approver_id=user.id,
+        legal_basis="GDPR Art.17 with DORA Art.11 audit retention reconciliation (CAB-2226)",
+        redaction_map={
+            "actor_id": "pseudo:<sha256>",
+            "actor_email": None,
+            "client_ip": None,
+            "user_agent": None,
+        },
+    )
 
     # 2. Delete from OpenSearch
     os_deleted = 0
@@ -922,9 +933,10 @@ async def erase_user_pii(
             actor_email=getattr(user, "email", None),
             outcome="success",
             details={
-                "pg_records_affected": pg_result["records_affected"],
+                "erasure_id": pg_result["erasure_id"],
                 "os_records_deleted": os_deleted,
-                "pseudo_id": pg_result["pseudo_id"],
+                "scope_actor_ids": pg_result["scope_actor_ids"],
+                "scope_event_ids": pg_result["scope_event_ids"],
             },
         )
         await db.commit()
@@ -934,9 +946,10 @@ async def erase_user_pii(
 
     return PiiErasureResponse(
         user_id=user_id,
-        pg_records_affected=pg_result["records_affected"],
+        erasure_id=pg_result["erasure_id"],
         os_records_deleted=os_deleted,
-        pseudo_id=pg_result["pseudo_id"],
+        scope_actor_ids=pg_result["scope_actor_ids"],
+        scope_event_ids=pg_result["scope_event_ids"],
     )
 
 
@@ -1215,14 +1228,8 @@ async def _query_opensearch_audit_stats(
     hits = resp.get("hits", {})
     total_events = int(hits.get("total", {}).get("value", 0) or 0)
     aggs = resp.get("aggregations", {})
-    by_action = {
-        bucket["key"]: int(bucket["doc_count"])
-        for bucket in aggs.get("by_action", {}).get("buckets", [])
-    }
-    by_status = {
-        bucket["key"]: int(bucket["doc_count"])
-        for bucket in aggs.get("by_status", {}).get("buckets", [])
-    }
+    by_action = {bucket["key"]: int(bucket["doc_count"]) for bucket in aggs.get("by_action", {}).get("buckets", [])}
+    by_status = {bucket["key"]: int(bucket["doc_count"]) for bucket in aggs.get("by_status", {}).get("buckets", [])}
     success_count = int(aggs.get("success_count", {}).get("doc_count", 0) or 0)
 
     return AuditStatsResponse(

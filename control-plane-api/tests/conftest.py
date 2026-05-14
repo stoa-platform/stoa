@@ -4,6 +4,8 @@ Pytest configuration and fixtures for Control Plane API tests.
 CAB-839: Enhanced fixtures for router testing with 80% coverage target.
 """
 
+# ruff: noqa: E402,I001,UP006,UP035,UP042,UP045,DTZ011
+
 # Register integration test fixtures (conftest_integration.py)
 pytest_plugins = ["tests.conftest_integration"]
 
@@ -20,7 +22,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Remove any cached 'src' modules to force reload from the correct path
-_modules_to_remove = [key for key in sys.modules if key == 'src' or key.startswith('src.')]
+_modules_to_remove = [key for key in sys.modules if key == "src" or key.startswith("src.")]
 for mod in _modules_to_remove:
     del sys.modules[mod]
 
@@ -84,18 +86,18 @@ import src.main as _main_module
 
 # Patch services in the main module where they're imported and used
 # Using patch.object() instead of string-based patching for reliability
-patch.object(_main_module, 'kafka_service', _mock_kafka_service).start()
-patch.object(_main_module, 'git_service', _mock_git_service).start()
-patch.object(_main_module, 'keycloak_service', _mock_keycloak_service).start()
-patch.object(_main_module, 'gateway_service', _mock_gateway_service).start()
-patch.object(_main_module, 'argocd_service', _mock_argocd_service).start()
-patch.object(_main_module, 'metrics_service', _mock_metrics_service).start()
+patch.object(_main_module, "kafka_service", _mock_kafka_service).start()
+patch.object(_main_module, "git_service", _mock_git_service).start()
+patch.object(_main_module, "keycloak_service", _mock_keycloak_service).start()
+patch.object(_main_module, "gateway_service", _mock_gateway_service).start()
+patch.object(_main_module, "argocd_service", _mock_argocd_service).start()
+patch.object(_main_module, "metrics_service", _mock_metrics_service).start()
 
 # Also patch at service module level for routers that import directly
-patch('src.services.kafka_service.kafka_service', _mock_kafka_service).start()
-patch('src.services.git_service.git_service', _mock_git_service).start()
-patch('src.services.keycloak_service.keycloak_service', _mock_keycloak_service).start()
-patch('src.services.metrics_service.metrics_service', _mock_metrics_service).start()
+patch("src.services.kafka_service.kafka_service", _mock_kafka_service).start()
+patch("src.services.git_service.git_service", _mock_git_service).start()
+patch("src.services.keycloak_service.keycloak_service", _mock_keycloak_service).start()
+patch("src.services.metrics_service.metrics_service", _mock_metrics_service).start()
 
 # Bridge DI with module-level patches (CAB-1889 git_provider migration).
 # Routers use Depends(get_git_provider), tests patch module-level git_service.
@@ -127,17 +129,18 @@ def _git_di_bridge() -> object:
 _app.dependency_overrides[get_git_provider] = _git_di_bridge
 
 # Patch OpenSearch setup
-patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
+patch.object(_main_module, "setup_opensearch", AsyncMock()).start()
 
 # Patch error snapshots
-patch.object(_main_module, 'connect_error_snapshots', AsyncMock(return_value=None)).start()
-patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
+patch.object(_main_module, "connect_error_snapshots", AsyncMock(return_value=None)).start()
+patch.object(_main_module, "add_error_snapshot_middleware", MagicMock()).start()
 
 # ============== Auto-Skip Integration Tests Without Infra (CAB-1939) ==============
 # Tests marked @pytest.mark.integration require a PostgreSQL database.
 # Skip them automatically when DATABASE_URL is not set (local dev without DB).
 # This complements conftest_integration.py's integration_db fixture (which only
 # skips tests that explicitly use the fixture, not all @integration-marked tests).
+
 
 def pytest_collection_modifyitems(config, items):  # noqa: ARG001, RUF100
     """Skip @pytest.mark.integration tests when DATABASE_URL is absent."""
@@ -176,6 +179,7 @@ from pydantic import BaseModel
 # Define User locally to avoid import conflicts with mcp-gateway
 class User(BaseModel):
     """Mock User model matching src.auth.dependencies.User"""
+
     id: str
     email: str
     username: str
@@ -186,6 +190,7 @@ class User(BaseModel):
 # ============== Mock SubscriptionStatus Enum ==============
 class SubscriptionStatus(str, Enum):
     """Mock SubscriptionStatus for fixtures - mirrors src.models.subscription.SubscriptionStatus"""
+
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
@@ -194,6 +199,7 @@ class SubscriptionStatus(str, Enum):
 
 
 # ============== Session & Backend Fixtures ==============
+
 
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
@@ -210,6 +216,7 @@ def anyio_backend() -> str:
 
 
 # ============== User Fixtures (RBAC Testing) ==============
+
 
 @pytest.fixture
 def mock_user_cpi_admin():
@@ -273,6 +280,7 @@ def mock_user_no_tenant():
 
 # ============== Legacy Token Fixtures ==============
 
+
 @pytest.fixture
 def mock_keycloak_token() -> dict[str, Any]:
     """Mock Keycloak token payload."""
@@ -295,10 +303,12 @@ def auth_headers(mock_keycloak_token: dict[str, Any]) -> dict[str, str]:
 
 # ============== Database Mock Fixtures ==============
 
+
 @pytest.fixture
 def mock_db_session():
     """Create a mock AsyncSession for database operations."""
     from sqlalchemy.ext.asyncio import AsyncSession
+
     session = AsyncMock(spec=AsyncSession)
     # return_value must be MagicMock (not AsyncMock) so that chained
     # attribute access like result.scalar_one_or_none() returns a MagicMock
@@ -308,18 +318,20 @@ def mock_db_session():
     _exec_result = MagicMock()
     _exec_result.scalar_one_or_none.return_value = None
     _exec_result.scalars.return_value.first.return_value = None
+    session.add = MagicMock()
+    session.close = AsyncMock()
+    session.commit = AsyncMock()
+    session.delete = AsyncMock()
     session.execute = AsyncMock(return_value=_exec_result)
     session.flush = AsyncMock()
-    session.commit = AsyncMock()
-    session.rollback = AsyncMock()
     session.refresh = AsyncMock()
-    session.close = AsyncMock()
-    session.delete = AsyncMock()
-    session.add = MagicMock()
+    session.rollback = AsyncMock()
+    session.scalar = AsyncMock(return_value=None)
     return session
 
 
 # ============== Sample Data Fixtures ==============
+
 
 @pytest.fixture
 def sample_subscription_id():
@@ -500,6 +512,7 @@ def sample_quota_usage_id():
 def sample_quota_usage_data(sample_quota_usage_id, sample_consumer_id):
     """Sample quota usage data for testing."""
     from datetime import date
+
     today = date.today()
     return {
         "id": sample_quota_usage_id,
@@ -560,10 +573,12 @@ def _add_http_bearer_overrides(app):
 
 # ============== App & Client Fixtures ==============
 
+
 @pytest.fixture
 def app():
     """Get the FastAPI application instance."""
     from src.main import app
+
     return app
 
 
@@ -582,6 +597,7 @@ async def async_client(app) -> AsyncGenerator[AsyncClient, None]:
 
 
 # ============== App with Dependency Overrides ==============
+
 
 @pytest.fixture
 def app_with_tenant_admin(app, mock_user_tenant_admin, mock_db_session):
@@ -724,6 +740,7 @@ def client_as_no_tenant_user(app_with_no_tenant_user) -> Generator[TestClient, N
 
 
 # ============== Autouse Reset Fixture ==============
+
 
 @pytest.fixture(autouse=True)
 def reset_app_overrides(app):

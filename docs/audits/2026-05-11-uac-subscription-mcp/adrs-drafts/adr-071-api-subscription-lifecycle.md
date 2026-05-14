@@ -10,11 +10,11 @@ keywords: [ADR, subscription, lifecycle, state machine, RBAC, propagation, DORA,
 
 ## 1. Status
 
-**Status:** Draft
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2228 for conditions). Parameters fixed: `PARTIALLY_PROVISIONED` = **consumer-visible with target-level breakdown**, 4-eyes for destructive endpoints = **strict 2 distinct tenant-admins** (devops pairing NOT accepted), provisioning time budget = **15 min**. Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
-**Deciders:** STOA Core Team (pending), Security/Compliance (pending), Product (pending — UX impact), CP-API WG (pending), Gateway WG (pending).
+**Deciders:** Operator (founder, acting as product / security / privacy / business decision owner — solo project mode; no separate Product / Security / Gateway role exists at this stage).
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` Axe A (findings SUB-1 through SUB-7) + challenger decision record §C6.
 

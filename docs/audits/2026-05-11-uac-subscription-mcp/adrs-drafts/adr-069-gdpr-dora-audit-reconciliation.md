@@ -10,11 +10,11 @@ keywords: [ADR, GDPR, DORA, NIS2, audit log, pseudonymization, erasure, retentio
 
 ## 1. Status
 
-**Status:** Draft
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2226 for conditions; jointly with ADR-068). Key disposition: **retrievable-with-dual-control**. Vault wrap of `pseudonymization_key`: **mandatory before PR #2781 may exit DRAFT** — raw storage without Vault wrap is NOT the accepted final state. Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
-**Deciders:** STOA Core Team (pending), Security/Compliance (pending), **DPO (pending — sign-off required, not delegable)**, Legal (pending).
+**Deciders:** Operator (founder, acting as product / security / privacy / business decision owner — solo project mode; no separate DPO / Legal / Security / Business / Product role exists at this stage). The "non-delegable to AI" rule still applies — Claude and Codex must not decide GDPR/DORA reconciliation policy; only the operator can.
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` §C + cross-cutting pattern "Conflit GDPR vs DORA non résolu" + challenger decision record §C5 + §3.3 Q4.
 

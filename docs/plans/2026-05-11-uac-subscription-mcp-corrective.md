@@ -22,12 +22,13 @@ regulatory_context:
   - NIS2
 verdict_from_audit: "NOGO"
 target_outcome: "Regulatory-ready execution path for subscription, MCP tool invocation, gateway enforcement, and audit trail"
+project_mode: solo
 owners:
-  accountable: "TBD — platform/compliance owner"
-  cp_api: "TBD"
-  gateway: "TBD"
-  docs_adr: "TBD"
-  security: "TBD"
+  accountable: "operator (founder, acting as product/security/privacy/business owner)"
+  cp_api: "operator"
+  gateway: "operator"
+  docs_adr: "operator"
+  security: "operator (no separate Security/DPO/Legal/Business role exists at this stage)"
   external_challenger: "GPT-5.5 Pro (external non-Claude challenger, 2026-05-13)"
 ---
 

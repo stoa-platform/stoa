@@ -10,11 +10,11 @@ keywords: [ADR, gateway, fail-closed, DORA, NIS2, resilience, policy, RBAC, cach
 
 ## 1. Status
 
-**Status:** Draft
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2227 for conditions). Parameters fixed: cache TTL = **60 min**, Phase 0 audit emit scope = **denies + approval-gated only (C1 Option A)**, tenant-visible `/status` endpoint = **yes**. Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
-**Deciders:** STOA Core Team (pending), Security/Compliance (pending), **Business owner (pending — fail-closed has product impact)**, Gateway WG (pending), Platform Ops (pending).
+**Deciders:** Operator (founder, acting as product / security / privacy / business decision owner — solo project mode; no separate Business / Ops / Gateway role exists at this stage). The fail-closed posture has product SLA impact; the operator explicitly accepts that impact as the single decision-maker.
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` Axe D (findings GW-1 through GW-9) + challenger decision record §C2 + §C3 + §3.3 Q1 + Q2.
 

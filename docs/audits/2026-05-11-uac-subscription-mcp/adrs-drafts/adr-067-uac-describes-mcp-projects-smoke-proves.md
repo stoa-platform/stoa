@@ -10,11 +10,11 @@ keywords: [ADR, UAC, MCP, doctrine, projection, smoke tests, runtime enforcement
 
 ## 1. Status
 
-**Status:** Draft
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2225 for conditions). Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
-**Deciders:** STOA Core Team (pending), Security/Compliance (pending), Gateway WG (pending), CP-API WG (pending)
+**Deciders:** Operator (founder, acting as product / security / privacy / business decision owner — solo project mode; no separate DPO / Legal / Security / Business / Product role exists at this stage).
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` (MCP-1, MCP-2, MCP-3) + `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` §4.2 + challenger decision record §3.3 (C4).
 

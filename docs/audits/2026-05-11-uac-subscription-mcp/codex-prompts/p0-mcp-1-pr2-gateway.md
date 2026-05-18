@@ -6,9 +6,32 @@ You are implementing **PR 2 of P0-MCP-1** in the STOA monorepo
 
 Read first: `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` §5.3,
 `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-067-...md` §4.4,
-the sibling README `p0-mcp-1-README.md`, and **PR 1's frozen contract** (the
-consume + JWKS endpoint shapes and the pinned `arguments_hash` test vector —
-get these from the PR 1 report; do not re-derive them).
+the sibling README `p0-mcp-1-README.md`.
+
+## Frozen upstream contract — P0-MCP-1 PR 1 (merged/landed as PR #2794)
+
+PR 1 is landed and reviewed GO. Implement against these frozen values exactly;
+do not re-derive. This PR has **no code dependency** on #2794 (cross-language:
+#2794 is Python CP-API, this PR is Rust gateway) — only the HTTP contract
+below. Branch off fresh `origin/main`.
+
+- **Consume** — `POST {cp_url}/v1/internal/approval-tokens/consume`
+  - Auth header: `X-Gateway-Key: <gateway key>`
+  - Request JSON: `{"jti","tenant_id","tool_name","arguments_hash"}`
+    (`tool_name` = `tenant:contract:operation`; `arguments_hash` = 64-char
+    lowercase hex sha256)
+  - Success: `200 {"consumed": true}`
+  - Reject: `409 {"consumed": false, "reason": "<r>"}` where
+    `r ∈ {replay, scope_mismatch, arguments_mismatch, expired}`
+- **JWKS** — `GET {cp_url}/v1/internal/approval-tokens/jwks`
+  - Auth header: `X-Gateway-Key`
+  - Response: `{"keys":[{"kty":"RSA","use":"sig","kid":"…","alg":"RS256","n":"…","e":"…"}]}`
+- **Canonical `arguments_hash`** — JSON with object keys sorted lexicographically
+  at every nesting level, no insignificant whitespace, UTF-8; lowercase hex
+  SHA-256; absent/`null` arguments hash the 2-byte string `{}`.
+  **Pinned vector** (your `canonical_arguments_hash` unit test MUST reproduce
+  it byte-for-byte): canonical `{"id":"A","nested":{"a":1,"b":2}}` →
+  `d19f077a1f0fd7c47cc9563295b1afd5eb3655e6dada92dd9ae9cbaace5c01b7`.
 
 ## Defect
 

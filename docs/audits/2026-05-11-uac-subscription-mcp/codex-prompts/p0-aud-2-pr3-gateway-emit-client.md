@@ -3,12 +3,50 @@
 You are implementing **PR 3 of P0-AUD-2** in the STOA monorepo
 (`/Users/torpedo/hlfh-repos/stoa`), component `stoa-gateway/` (Rust, Tokio).
 
-**Depends on PR 1** (`p0-aud-2-pr1-cp-api-emit-endpoint.md` — the
-`/v1/internal/audit/emit` contract + HMAC signing string) **and PR 2**
-(`p0-aud-2-pr2-gateway-spool.md` — `audit::spool`). Get PR 1's frozen request
-schema + HMAC signing-string and PR 2's `audit::spool` API from their reports;
-do not re-derive. Read `p0-aud-2-README.md` and ADR-070 §4.6. Follow the
-conventions from `p0-mcp-1-pr2-gateway.md`.
+Read `p0-aud-2-README.md` and ADR-070 §4.6. Follow the conventions from
+`p0-mcp-1-pr2-gateway.md`.
+
+## Branch base — IMPORTANT
+
+This PR has a **hard code dependency on PR 2** (`stoa-gateway/src/audit/spool.rs`
+— it *uses* the spool, cannot mock it). PR 2 landed as **PR #2792**. Do **not**
+branch off plain `origin/main` until #2792 is merged — the `audit::spool`
+module would be absent and the crate would not compile. Branch base:
+- **Preferred:** dispatch this PR only *after* #2792 merges to `main`; then
+  branch off fresh `origin/main`.
+- If dispatched earlier: branch off #2792's branch
+  `feat/cab-2227-aud-2-gateway-audit-spool` (stacked PR — flag it as stacked in
+  the PR description; rebase onto `main` once #2792 merges).
+
+PR 1 (CP-API audit emit) landed as **PR #2793**; this PR depends only on its
+HTTP contract below, no code dependency (cross-language).
+
+## Frozen upstream contract
+
+**From PR #2793 — `/v1/internal/audit/emit`:**
+- `POST {cp_url}/v1/internal/audit/emit`
+- Headers: `Authorization: HMAC-SHA256 <hex>`, `X-Timestamp: <unix>`,
+  `Idempotency-Key: <uuid>` (all required).
+- **HMAC signing string** (reproduce byte-for-byte):
+  `f"{timestamp}\n{method}\n{path}\n{sha256_hex(body)}"`, HMAC-SHA256 keyed by
+  the shared secret (`INTERNAL_AUDIT_HMAC_SECRET` on the CP side; Vault-sourced
+  on the gateway side). Replay window 300 s.
+- Request body: the 15-field schema — `source` ("stoa-gateway"), `event_type`,
+  `decision` ("allow"|"deny"), `reason`, `tenant_id`, `actor_id`|null,
+  `session_id`|null, `resource_type`, `resource_id`, `tool_call_id`,
+  `approval_id`|null, `policy_version`|null, `correlation_id`, `occurred_at`
+  (ISO-8601 UTC), `details` (object). Extra fields are rejected — send exactly
+  these. Success = `202`; duplicate `Idempotency-Key` also `202`.
+
+**From PR #2792 — `audit::spool` (confirm exact signatures in
+`stoa-gateway/src/audit/`):** `AuditSpool::open(dir, config)`,
+`append(&self, AuditEvent) -> Result<(), SpoolError>`,
+`drain_oldest(&self, max) -> Vec<(cursor, AuditEvent)>`, `ack(&self, cursor)`,
+`depth()`, `oldest_age()`, `is_over_high_water() -> bool`; the sole error
+variant `SpoolError::GapDeclared(String)`; `AuditEvent` in `audit/event.rs`
+(carries an `idempotency_key`). The wire shape of `AuditEvent` already matches
+PR #2793's request schema (PR 2's `regression_audit_event_wire_shape_matches_cp_schema`
+asserts it).
 
 ## Goal
 

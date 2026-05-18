@@ -41,6 +41,7 @@ from .routers import (
     api_gateway_assignments,
     api_lifecycle,
     apis,
+    approval_tokens,
     applications,
     argocd_admin,
     audit,
@@ -793,6 +794,7 @@ app.include_router(api_lifecycle.router)
 # /deployable-environments are swallowed by the apis router's /{api_id} catch-all.
 app.include_router(api_gateway_assignments.router)
 app.include_router(apis.router)
+app.include_router(approval_tokens.router)
 app.include_router(applications.router)
 app.include_router(deployments.router)
 app.include_router(promotions.router)

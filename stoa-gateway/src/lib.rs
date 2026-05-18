@@ -920,7 +920,7 @@ mod tests {
 
     // regression for CAB-2227
     #[tokio::test]
-    async fn test_gateway_readiness_fails_when_policy_not_loaded_in_regulated_profile() {
+    async fn regression_gateway_readiness_fails_when_policy_not_loaded_in_regulated_profile() {
         let mut state = AppState::new(config::Config {
             policy_enabled: false,
             quota_enforcement_enabled: false,

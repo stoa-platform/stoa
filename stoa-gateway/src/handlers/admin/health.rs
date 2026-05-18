@@ -148,7 +148,7 @@ mod tests {
 
     // regression for CAB-2227
     #[tokio::test]
-    async fn test_admin_health_degraded_when_policy_not_loaded_in_regulated_profile() {
+    async fn regression_admin_health_degraded_when_policy_not_loaded_in_regulated_profile() {
         let config = Config {
             admin_api_token: Some("secret".into()),
             policy_enabled: false,

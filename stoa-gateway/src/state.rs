@@ -925,14 +925,14 @@ mod tests {
     // regression for CAB-2227
     #[test]
     #[should_panic(expected = "policy engine unavailable in regulated profile")]
-    fn test_gateway_boot_fails_when_policy_file_missing_in_prod() {
+    fn regression_gateway_boot_fails_when_policy_file_missing_in_prod() {
         AppState::new(config_with_policy(Environment::Prod, true));
     }
 
     // regression for CAB-2227
     #[test]
     #[should_panic(expected = "policy engine unavailable in regulated profile")]
-    fn test_gateway_boot_fails_when_policy_file_corrupt_in_prod() {
+    fn regression_gateway_boot_fails_when_policy_file_corrupt_in_prod() {
         let mut file = tempfile::NamedTempFile::new().expect("temp policy file");
         writeln!(file, "package stoa.authz\nallow if {{").expect("write corrupt policy");
         let mut config = config_with_policy(Environment::Prod, true);
@@ -943,7 +943,7 @@ mod tests {
 
     // regression for CAB-2227
     #[test]
-    fn test_gateway_allows_policy_disabled_only_in_dev_profile() {
+    fn regression_gateway_allows_policy_disabled_only_in_dev_profile() {
         let dev_engine = AppState::new(config_with_policy(Environment::Dev, false));
         assert!(!dev_engine.uac_enforcer.policy_engine().is_enabled());
 
@@ -956,7 +956,7 @@ mod tests {
     // regression for CAB-2227
     #[test]
     #[should_panic(expected = "policy engine unavailable in regulated profile")]
-    fn test_gateway_boot_fails_when_policy_file_missing_in_staging() {
+    fn regression_gateway_boot_fails_when_policy_file_missing_in_staging() {
         AppState::new(config_with_policy(Environment::Staging, true));
     }
 

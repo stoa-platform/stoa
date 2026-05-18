@@ -1,7 +1,7 @@
 """approval tokens for destructive MCP calls
 
-Revision ID: 108_approval_tokens
-Revises: 107_audit_immutability_pseudonymization
+Revision ID: 109_approval_tokens
+Revises: 108_audit_emit_idempotency
 Create Date: 2026-05-18
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "108_approval_tokens"
-down_revision: str | tuple[str, ...] | None = "107_audit_immutability_pseudonymization"
+revision: str = "109_approval_tokens"
+down_revision: str | tuple[str, ...] | None = "108_audit_emit_idempotency"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

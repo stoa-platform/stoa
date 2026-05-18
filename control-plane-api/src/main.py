@@ -44,6 +44,7 @@ from .routers import (
     applications,
     argocd_admin,
     audit,
+    audit_internal,
     backend_apis,
     billing,
     billing_internal,
@@ -909,6 +910,8 @@ app.include_router(gateway_internal.router)
 app.include_router(telemetry_router)
 # Internal billing API for gateway budget enforcement (CAB-1457)
 app.include_router(billing_internal.router)
+# Internal gateway audit emit API (CAB-2227)
+app.include_router(audit_internal.router)
 # Billing CRUD API for tenant admins (CAB-1458)
 app.include_router(billing.router)
 

@@ -477,6 +477,11 @@ class Settings(BaseSettings):
     # Gateway Auto-Registration (ADR-028)
     # Comma-separated list of valid API keys for gateway self-registration
     GATEWAY_API_KEYS: str = ""
+    INTERNAL_AUDIT_HMAC_SECRET: SecretStr = Field(
+        default=SecretStr("REPLACE_FROM_VAULT"),
+        exclude=True,
+        description="Shared HMAC secret for /v1/internal/audit/emit; sourced from Vault in deployed envs.",
+    )
     # Heartbeat timeout in seconds (gateway marked OFFLINE after this)
     GATEWAY_HEARTBEAT_TIMEOUT_SECONDS: int = 90
     # Health check interval in seconds (how often to check for stale gateways)

@@ -30,7 +30,6 @@ struct PermissionListResponse {
     total: usize,
 }
 
-/// Stable fail-closed deny reasons for audit/log correlation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionDenyReason {
     PermissionAbsent,
@@ -48,8 +47,6 @@ impl PermissionDenyReason {
     }
 }
 
-/// Explicit permission state for a tenant.
-#[derive(Debug)]
 pub enum PermissionState {
     Fresh {
         allow_set: HashSet<String>,
@@ -132,9 +129,6 @@ impl ToolPermissionService {
         }
     }
 
-    /// Returns a readiness failure reason when the last observed permission
-    /// state is stale or unavailable. `None` means no degraded permission state
-    /// has been observed, or the last observed state was fresh.
     pub fn readiness_failure_reason(&self) -> Option<&'static str> {
         self.last_failure
             .read()

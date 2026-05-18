@@ -2,6 +2,7 @@
 //!
 //! Shared state across all handlers.
 
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::Instrument;
@@ -12,7 +13,7 @@ use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::auth::subscription::SubscriptionValidator;
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
-use crate::config::Config;
+use crate::config::{Config, Environment};
 use crate::control_plane::{OidcConfig, ToolPermissionService, ToolProxyClient};
 use crate::diagnostics::DiagnosticEngine;
 use crate::events::polling::EventBuffer;
@@ -167,26 +168,7 @@ impl AppState {
         let rate_limiter = Arc::new(RateLimiter::new(&config));
         let api_key_validator = Arc::new(ApiKeyValidator::new(&config));
 
-        // Initialize Policy Engine (OPA)
-        let policy_config = PolicyEngineConfig {
-            policy_path: config.policy_path.clone(),
-            enabled: config.policy_enabled,
-            ..PolicyEngineConfig::default()
-        };
-        let policy_engine = match PolicyEngine::new(policy_config) {
-            Ok(engine) => Arc::new(engine),
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to initialize policy engine — using permissive fallback");
-                // Create disabled engine as fallback
-                Arc::new(
-                    PolicyEngine::new(PolicyEngineConfig {
-                        enabled: false,
-                        ..PolicyEngineConfig::default()
-                    })
-                    .expect("Fallback policy engine"),
-                )
-            }
-        };
+        let policy_engine = Arc::new(resolve_policy_engine(&config));
         let uac_enforcer = Arc::new(UacEnforcer::new(policy_engine));
 
         let cp_url = config
@@ -671,6 +653,11 @@ impl AppState {
         }
     }
 
+    pub fn policy_ready(&self) -> bool {
+        !is_regulated_profile(self.config.environment)
+            || self.uac_enforcer.policy_engine().is_enabled()
+    }
+
     /// Start background tasks
     pub fn start_background_tasks(&self) {
         // Start memory budget polling (CAB-1829)
@@ -780,6 +767,56 @@ impl AppState {
     }
 }
 
+pub fn resolve_policy_engine(config: &Config) -> PolicyEngine {
+    let regulated = is_regulated_profile(config.environment);
+
+    if regulated && !config.policy_enabled {
+        panic!("policy engine unavailable in regulated profile: policy_enabled=false");
+    }
+    if regulated && config.policy_path.is_none() {
+        panic!("policy engine unavailable in regulated profile: policy_path is required");
+    }
+    if regulated
+        && config
+            .policy_path
+            .as_ref()
+            .is_some_and(|path| !Path::new(path).exists())
+    {
+        panic!("policy engine unavailable in regulated profile: policy file missing");
+    }
+    if !regulated && !config.policy_enabled {
+        tracing::warn!(
+            reason = "policy_disabled_in_dev",
+            "Policy engine disabled in dev profile; using permissive mode"
+        );
+    }
+
+    let policy_config = PolicyEngineConfig {
+        policy_path: config.policy_path.clone(),
+        enabled: config.policy_enabled,
+        ..PolicyEngineConfig::default()
+    };
+
+    match PolicyEngine::new(policy_config) {
+        Ok(engine) => engine,
+        Err(error) if regulated => {
+            panic!("policy engine unavailable in regulated profile: {error}");
+        }
+        Err(error) => {
+            tracing::warn!(error = %error, "Policy engine init failed in dev; using disabled fallback");
+            PolicyEngine::new(PolicyEngineConfig {
+                enabled: false,
+                ..PolicyEngineConfig::default()
+            })
+            .expect("dev disabled policy engine")
+        }
+    }
+}
+
+fn is_regulated_profile(environment: Environment) -> bool {
+    matches!(environment, Environment::Prod | Environment::Staging)
+}
+
 /// UAC Enforcer using OPA Policy Engine
 ///
 /// Evaluates scope-based access control policies for tool invocations.
@@ -856,6 +893,8 @@ impl UacEnforcer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Environment;
+    use std::io::Write;
 
     fn make_disabled_enforcer() -> UacEnforcer {
         let engine = PolicyEngine::new(PolicyEngineConfig {
@@ -873,6 +912,52 @@ mod tests {
         })
         .expect("enabled engine");
         UacEnforcer::new(Arc::new(engine))
+    }
+
+    fn config_with_policy(environment: Environment, policy_enabled: bool) -> Config {
+        Config {
+            environment,
+            policy_enabled,
+            ..Config::default()
+        }
+    }
+
+    // regression for CAB-2227
+    #[test]
+    #[should_panic(expected = "policy engine unavailable in regulated profile")]
+    fn test_gateway_boot_fails_when_policy_file_missing_in_prod() {
+        AppState::new(config_with_policy(Environment::Prod, true));
+    }
+
+    // regression for CAB-2227
+    #[test]
+    #[should_panic(expected = "policy engine unavailable in regulated profile")]
+    fn test_gateway_boot_fails_when_policy_file_corrupt_in_prod() {
+        let mut file = tempfile::NamedTempFile::new().expect("temp policy file");
+        writeln!(file, "package stoa.authz\nallow if {{").expect("write corrupt policy");
+        let mut config = config_with_policy(Environment::Prod, true);
+        config.policy_path = Some(file.path().display().to_string());
+
+        AppState::new(config);
+    }
+
+    // regression for CAB-2227
+    #[test]
+    fn test_gateway_allows_policy_disabled_only_in_dev_profile() {
+        let dev_engine = AppState::new(config_with_policy(Environment::Dev, false));
+        assert!(!dev_engine.uac_enforcer.policy_engine().is_enabled());
+
+        let prod_result = std::panic::catch_unwind(|| {
+            AppState::new(config_with_policy(Environment::Prod, false));
+        });
+        assert!(prod_result.is_err());
+    }
+
+    // regression for CAB-2227
+    #[test]
+    #[should_panic(expected = "policy engine unavailable in regulated profile")]
+    fn test_gateway_boot_fails_when_policy_file_missing_in_staging() {
+        AppState::new(config_with_policy(Environment::Staging, true));
     }
 
     #[test]

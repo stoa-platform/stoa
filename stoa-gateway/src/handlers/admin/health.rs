@@ -30,7 +30,12 @@ pub struct AdminHealthResponse {
 
 pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResponse> {
     Json(AdminHealthResponse {
-        status: "ok".to_string(),
+        status: if state.policy_ready() {
+            "ok"
+        } else {
+            "degraded"
+        }
+        .to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         routes_count: state.route_registry.count(),
         policies_count: state.policy_registry.count(),
@@ -139,5 +144,36 @@ mod tests {
             .unwrap();
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(data["git_provider"], "github");
+    }
+
+    // regression for CAB-2227
+    #[tokio::test]
+    async fn test_admin_health_degraded_when_policy_not_loaded_in_regulated_profile() {
+        let config = Config {
+            admin_api_token: Some("secret".into()),
+            policy_enabled: false,
+            ..Config::default()
+        };
+        let mut state = AppState::new(config);
+        state.config.environment = crate::config::Environment::Prod;
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "degraded");
     }
 }

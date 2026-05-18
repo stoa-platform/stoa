@@ -29,8 +29,19 @@ pub struct AdminHealthResponse {
 }
 
 pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResponse> {
+    let status = if state
+        .tool_permissions
+        .as_ref()
+        .and_then(|svc| svc.readiness_failure_reason())
+        .is_some()
+    {
+        "degraded"
+    } else {
+        "ok"
+    };
+
     Json(AdminHealthResponse {
-        status: "ok".to_string(),
+        status: status.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         routes_count: state.route_registry.count(),
         policies_count: state.policy_registry.count(),

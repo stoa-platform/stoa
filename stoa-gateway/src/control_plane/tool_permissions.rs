@@ -137,8 +137,18 @@ impl ToolPermissionService {
     }
 
     /// Get (or fetch) the explicit permission state for a tenant.
+    ///
+    /// An expired cache entry does **not** deny on its own: while the
+    /// Control Plane is reachable the entry is refetched so legitimate
+    /// calls keep flowing across the TTL boundary. Only a *failed* refetch
+    /// over expired data yields `Stale` (deny); a failed refetch with no
+    /// prior data yields `Unavailable` (deny).
     async fn get_permission_state(&self, tenant_id: &str) -> PermissionState {
         let cache_key = tenant_id.to_string();
+
+        // Prior allow set carried from an expired entry, so a failed
+        // refetch can still surface `Stale` instead of losing the data.
+        let mut expired_entry: Option<(HashSet<String>, Instant)> = None;
 
         if let Some(cached) = self.cache.get(&cache_key) {
             if Instant::now() <= cached.expires_at {
@@ -147,11 +157,9 @@ impl ToolPermissionService {
                     fetched_at: cached.fetched_at,
                 };
             }
+            // Expired: drop the entry and attempt a refetch before deciding.
             self.cache.invalidate(&cache_key);
-            return PermissionState::Stale {
-                allow_set: cached.allow_set,
-                expired_at: cached.expires_at,
-            };
+            expired_entry = Some((cached.allow_set, cached.expires_at));
         }
 
         match self.fetch_permissions(tenant_id).await {
@@ -174,7 +182,16 @@ impl ToolPermissionService {
                     reason = %reason.as_str(),
                     "Failed to fetch tool permissions"
                 );
-                PermissionState::Unavailable { reason }
+                // A failed refetch over an expired entry still denies, but
+                // as `Stale` (prior data exists) — distinct from a cold
+                // `Unavailable`. Both deny and both surface in readiness.
+                match expired_entry {
+                    Some((allow_set, expired_at)) => PermissionState::Stale {
+                        allow_set,
+                        expired_at,
+                    },
+                    None => PermissionState::Unavailable { reason },
+                }
             }
         }
     }
@@ -314,11 +331,14 @@ mod tests {
     #[tokio::test]
     async fn test_tool_permissions_expired_cache_denies() {
         let server = MockServer::start().await;
+        // Serve the cold fetch once; the post-expiry refetch finds no
+        // matching mock (404) — i.e. CP no longer returns the permissions.
         Mock::given(method("GET"))
             .and(path_regex("/v1/tenants/.*/tool-permissions"))
             .respond_with(permissions_response(serde_json::json!([
                 {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
             ])))
+            .up_to_n_times(1)
             .expect(1)
             .mount(&server)
             .await;
@@ -326,9 +346,41 @@ mod tests {
         let svc =
             ToolPermissionService::new(Client::new(), &server.uri(), Duration::from_millis(1));
 
+        // Cold fetch from a healthy CP populates the cache.
         assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
         tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Cache expired AND the refetch fails: the gateway must stay
+        // fail-closed and deny (Stale).
         assert!(!svc.is_tool_allowed("tenant1", "ok_tool").await);
+    }
+
+    // regression for CAB-2227
+    #[tokio::test]
+    async fn regression_tool_permissions_expired_cache_refetches_when_cp_reachable() {
+        let server = MockServer::start().await;
+        // CP stays healthy and keeps serving the same allow set across the
+        // TTL boundary. Two fetches are expected: the cold one and the
+        // post-expiry refetch.
+        Mock::given(method("GET"))
+            .and(path_regex("/v1/tenants/.*/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .expect(2)
+            .mount(&server)
+            .await;
+
+        let svc =
+            ToolPermissionService::new(Client::new(), &server.uri(), Duration::from_millis(1));
+
+        // Cold fetch — allowed.
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Cache expired but CP is reachable: an expired entry must trigger a
+        // refetch, not a spurious deny. The legitimate call still succeeds.
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
     }
 
     #[tokio::test]

@@ -1,12 +1,12 @@
 ---
-title: "ADR-070: Gateway Fail-Closed Posture"
-sidebar_label: "ADR-070: Gateway Fail-Closed"
-sidebar_position: 70
+title: "ADR-072: Gateway Fail-Closed Posture"
+sidebar_label: "ADR-072: Gateway Fail-Closed"
+sidebar_position: 72
 description: "Codifies the fail-closed defaults for stoa-gateway: deny on Control Plane unreachable, deny on policy load failure, deny on expired cache, no implicit read-only fallback, readiness probe reflects true enforcement state."
 keywords: [ADR, gateway, fail-closed, DORA, NIS2, resilience, policy, RBAC, cache]
 ---
 
-# ADR-070 — Gateway Fail-Closed Posture
+# ADR-072 — Gateway Fail-Closed Posture
 
 ## 1. Status
 
@@ -18,7 +18,7 @@ keywords: [ADR, gateway, fail-closed, DORA, NIS2, resilience, policy, RBAC, cach
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` Axe D (findings GW-1 through GW-9) + challenger decision record §C2 + §C3 + §3.3 Q1 + Q2.
 
-**Related decisions:** ADR-035 Gateway Adapter Pattern, ADR-037 Deployment Modes (Sovereign First), ADR-044 MCP OAuth Gateway Proxy, ADR-066 UAC as LLM-Optimized Executable Contract, ADR-067 (draft, UAC Doctrine), ADR-068 (draft, Audit Log Doctrine).
+**Related decisions:** ADR-035 Gateway Adapter Pattern, ADR-037 Deployment Modes (Sovereign First), ADR-044 MCP OAuth Gateway Proxy, ADR-067 UAC as LLM-Optimized Executable Contract, ADR-069 (draft, UAC Doctrine), ADR-070 (draft, Audit Log Doctrine).
 
 ## 2. Context
 
@@ -27,7 +27,7 @@ The audit identifies **five permissive fallback paths** in `stoa-gateway`:
 1. **Control Plane unreachable** → `tool_permissions.rs:88-96` defaults all permissions to allow.
 2. **Policy engine load failure** → `state.rs:176-189` creates a disabled engine (`enabled=false`) that allows everything.
 3. **Classification VH soft-mode** → `proxy/dynamic.rs:410-422` logs decision but does not deny.
-4. **`requires_human_approval=true`** → never checked at runtime (cross-ref: ADR-067).
+4. **`requires_human_approval=true`** → never checked at runtime (cross-ref: ADR-069).
 5. **Deprovision one-shot** → revoked subscriptions can still be served if gateway was offline at revoke time.
 
 Combined, these turn the gateway into a **fail-open** component when its dependencies degrade. For a STOA tenant under DORA/NIS2, this is a regulatory NOGO.
@@ -58,7 +58,7 @@ The gateway adopts **deny-by-default** as its first-order posture. All exception
 | Policy bundle reload (SIGHUP) fails | **Keep previous bundle in force.** Emit alert. Subsequent SIGHUP retries. No silent transition to permissive. |
 | Permission for a (tenant, tool) absent from cache | **Deny.** Emit `tool_call_denied` with `reason="permission_absent_in_cache"`. |
 | Revocation event for (tenant, subscription) received | **Invalidate immediately**, even if cache has not expired. Revocation has priority over cache. |
-| `requires_human_approval=true` on tool with no valid approval token | **Deny.** Emit `approval_required`. (Cross-ref: ADR-067, plan §C4.) |
+| `requires_human_approval=true` on tool with no valid approval token | **Deny.** Emit `approval_required`. (Cross-ref: ADR-069, plan §C4.) |
 | `inputSchema` validation fails | **Deny.** No tool invocation. |
 | `outputSchema` validation fails | **Strip / replace response with error** (do not return malformed contract). |
 
@@ -90,9 +90,9 @@ The cache is verified on every consult. A stale or tampered cache is treated as 
 
 ### 4.3 No implicit read-only fallback
 
-The challenger (§3.3 Q1) explicitly forbids an implicit read-only degradation. STOA does not have, at this stage, a machine-readable proof per-operation that the operation is non-mutating (the UAC `side_effects` field is moving toward that state but is not universally typed yet — see ADR-067).
+The challenger (§3.3 Q1) explicitly forbids an implicit read-only degradation. STOA does not have, at this stage, a machine-readable proof per-operation that the operation is non-mutating (the UAC `side_effects` field is moving toward that state but is not universally typed yet — see ADR-069).
 
-Until ADR-067 (a) ships typed `side_effects` in `ToolDefinition` and (b) is itself signed off as the source of truth, a "read-only mode" does not exist. Any future read-only mode will require its own ADR amendment to this one.
+Until ADR-069 (a) ships typed `side_effects` in `ToolDefinition` and (b) is itself signed off as the source of truth, a "read-only mode" does not exist. Any future read-only mode will require its own ADR amendment to this one.
 
 ### 4.4 Readiness vs liveness
 
@@ -119,14 +119,14 @@ Per the challenger's §C1 Option A (recommended), a minimal version of the audit
 
 - Endpoint `/v1/internal/audit/emit` on CP-API (HMAC-signed inter-service auth).
 - Gateway audit client buffering only **denies** and **approval-gated** events at first (not every successful call — that's Phase 1).
-- Same schema as ADR-068.
+- Same schema as ADR-070.
 
 **Buffer durability and overflow semantics (challenger condition C1 reinforced).** A simple in-memory buffer with drop-on-overflow would re-introduce silent audit gaps and is **forbidden** for the critical events in scope (denies, approval-gated, health-degrade). The following semantics are mandatory:
 
 1. **Durable local spool.** The buffer is backed by an on-disk WAL (e.g., a bounded directory with rotated append-only segments). A process restart preserves unflushed events.
 2. **Bounded growth with readiness coupling.** A high-water mark is configurable (default: 80% of the spool capacity). Crossing it MUST flip the gateway's readiness probe to FAIL — orchestrator stops routing new traffic until the buffer drains. Liveness is not affected.
 3. **No silent drop.** If the spool genuinely cannot accept (disk full, corruption), the gateway emits a synchronous `audit_gap_declared` event locally (and to stderr / orchestrator alerts) **and** transitions to fail-closed for all in-scope decisions, deny-by-default. A declared gap is an incident, not a metric line.
-4. **Replay on recovery.** When CP-API becomes reachable again, the gateway drains the spool oldest-first, respecting the ADR-068 hash chain and `correlation_id` ordering. A successful drain emits `audit_chain_resumed` with the count and time window covered.
+4. **Replay on recovery.** When CP-API becomes reachable again, the gateway drains the spool oldest-first, respecting the ADR-070 hash chain and `correlation_id` ordering. A successful drain emits `audit_chain_resumed` with the count and time window covered.
 5. **Operator observability.** Spool depth, age of oldest entry, and the count of `audit_gap_declared` events are exposed as Prometheus metrics with alert thresholds.
 
 Phase 1 expands buffering to all events. Phase 0 only carries the critical subset, but with the full durable semantics above — that is the irreducible minimum for "audit chain operational" in the challenger sense.
@@ -153,7 +153,7 @@ Without this Phase 0 minimum, the global NOGO is not lifted at Phase 0 close (pe
 
 ## 6. Implementation
 
-This ADR is **non-executable until business sign-off** (the SLO change is not a purely technical decision) AND ADR-067/068/069 reach at least Proposed status (since fail-closed depends on typed metadata and audit chain).
+This ADR is **non-executable until business sign-off** (the SLO change is not a purely technical decision) AND ADR-069/ADR-070/ADR-071 reach at least Proposed status (since fail-closed depends on typed metadata and audit chain).
 
 | Deliverable | Owner | Surface |
 |-------------|-------|---------|
@@ -172,7 +172,7 @@ This ADR is **non-executable until business sign-off** (the SLO change is not a 
 |--------|---------|
 | Keep permissive fallbacks; document them | ❌ Manufactures paper compliance |
 | Allow stale cache indefinitely during outage | ❌ Drift in policy + invisibility of revocations |
-| Implement implicit read-only fallback today | ❌ No machine-readable proof of "read-only" yet (see ADR-067) |
+| Implement implicit read-only fallback today | ❌ No machine-readable proof of "read-only" yet (see ADR-069) |
 | Make CP-API a hard dependency at gateway startup | ❌ Boot couples too tightly; cache-on-boot mitigation is enough |
 | **Deny-by-default + signed cache + readiness gate + Phase 0 audit chain** | ✅ Selected |
 
@@ -180,9 +180,9 @@ This ADR is **non-executable until business sign-off** (the SLO change is not a 
 
 - Audit Axe D (GW-1 through GW-9)
 - Decision record §C2, §C3, §3.3 Q1, §3.3 Q2, §C1 (Option A recommendation)
-- ADR-067 (UAC doctrine — companion)
-- ADR-068 (audit log doctrine — companion)
-- ADR-069 (GDPR/DORA reconciliation — companion)
+- ADR-069 (UAC doctrine — companion)
+- ADR-070 (audit log doctrine — companion)
+- ADR-071 (GDPR/DORA reconciliation — companion)
 - DORA Regulation (EU) 2022/2554 Art. 5, 8, 9, 17
 - NIS2 Directive (EU) 2022/2555 Art. 21
 - NIST SP 800-160 (resilient systems)

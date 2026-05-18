@@ -1,16 +1,16 @@
 ---
-title: "ADR-068: Audit Log Actor/Resource/Action Doctrine"
-sidebar_label: "ADR-068: Audit Log Doctrine"
-sidebar_position: 68
+title: "ADR-070: Audit Log Actor/Resource/Action Doctrine"
+sidebar_label: "ADR-070: Audit Log Doctrine"
+sidebar_position: 70
 description: "Defines the taxonomy and invariants for STOA platform audit events: actor identification, resource taxonomy, action verbs, immutability, and integrity. Foundation for DORA Art.5/8 and NIS2 Art.21 compliance."
 keywords: [ADR, audit log, DORA, NIS2, immutability, actor, resource, taxonomy, compliance]
 ---
 
-# ADR-068 — Audit Log Actor/Resource/Action Doctrine
+# ADR-070 — Audit Log Actor/Resource/Action Doctrine
 
 ## 1. Status
 
-**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2226 for conditions; jointly with ADR-069). Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2226 for conditions; jointly with ADR-071). Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
@@ -18,7 +18,7 @@ keywords: [ADR, audit log, DORA, NIS2, immutability, actor, resource, taxonomy, 
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` Axe C (12 binary controls) + challenger decision record §C5.
 
-**Related decisions:** ADR-012 MCP RBAC, ADR-021 UAC-Driven Observability, ADR-054 RBAC Taxonomy v2, ADR-069 (draft, GDPR↔DORA audit reconciliation), ADR-070 (draft, Gateway Fail-Closed Posture).
+**Related decisions:** ADR-012 MCP RBAC, ADR-021 UAC-Driven Observability, ADR-054 RBAC Taxonomy v2, ADR-071 (draft, GDPR↔DORA audit reconciliation), ADR-072 (draft, Gateway Fail-Closed Posture).
 
 ## 2. Context
 
@@ -31,7 +31,7 @@ The 2026-05-11 audit scored audit log compliance at **3 PASS / 5 PARTIAL / 4 FAI
 - Approval workflow audit lacks `approval_justification` and a structured before/after diff.
 - The gateway emits to `tracing::info!` only; no inter-service chain reaches the CP audit table.
 
-ADR-068 fixes the **schema and identity invariants**. ADR-069 handles the GDPR/DORA tension. ADR-070 handles the gateway posture. The three ADRs are a triplet.
+ADR-070 fixes the **schema and identity invariants**. ADR-071 handles the GDPR/DORA tension. ADR-072 handles the gateway posture. The three ADRs are a triplet.
 
 ## 3. Problem
 
@@ -103,7 +103,7 @@ The `action` is an enum. Initial set, grouped:
 ```sql
 CREATE OR REPLACE FUNCTION audit_events_immutable() RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION 'audit_events is append-only (ADR-068)';
+  RAISE EXCEPTION 'audit_events is append-only (ADR-070)';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -114,7 +114,7 @@ CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON audit_events
   FOR EACH ROW EXECUTE FUNCTION audit_events_immutable();
 ```
 
-GDPR erasure does **not** mutate this table. See ADR-069 for the pseudonymization model (auxiliary table).
+GDPR erasure does **not** mutate this table. See ADR-071 for the pseudonymization model (auxiliary table).
 
 Bulk retention purges run via a break-glass procedure that temporarily drops the DELETE trigger inside a transaction with full audit of the operation itself. Procedure must be documented separately and require security sign-off per execution.
 
@@ -163,7 +163,7 @@ Out of scope: cross-tenant ordering. Tenants are independent chains by design.
 
 ### 4.6 Gateway → CP propagation
 
-Gateway-emitted events use the same schema and the same `correlation_id`. Transport is the inter-service endpoint defined in the corrective plan §6.1 and to be detailed in a follow-up ADR (or ADR-070 §gateway-emit). Buffered + signed + replayed if CP transiently unreachable. **Cache-and-deny if CP is durably unreachable** (per ADR-070).
+Gateway-emitted events use the same schema and the same `correlation_id`. Transport is the inter-service endpoint defined in the corrective plan §6.1 and to be detailed in a follow-up ADR (or ADR-072 §gateway-emit). Buffered + signed + replayed if CP transiently unreachable. **Cache-and-deny if CP is durably unreachable** (per ADR-072).
 
 ## 5. Consequences
 
@@ -178,7 +178,7 @@ Gateway-emitted events use the same schema and the same `correlation_id`. Transp
 
 - Migration cost: existing free-form `action`/`resource_type` strings must be normalized into enums. Backfill plan needed.
 - Insert latency increases by hash computation (~µs per row, negligible).
-- Inter-service emit requires gateway↔CP HMAC and replay buffer — engineering work shared with ADR-070.
+- Inter-service emit requires gateway↔CP HMAC and replay buffer — engineering work shared with ADR-072.
 
 ### Neutral
 
@@ -186,7 +186,7 @@ Gateway-emitted events use the same schema and the same `correlation_id`. Transp
 
 ## 6. Implementation
 
-This ADR is **non-executable until ADR-069 (GDPR↔DORA) is signed off, because the immutability invariant collides with the current `erase_user_pii()` behaviour**. The two ADRs are a coupled pair.
+This ADR is **non-executable until ADR-071 (GDPR↔DORA) is signed off, because the immutability invariant collides with the current `erase_user_pii()` behaviour**. The two ADRs are a coupled pair.
 
 | Deliverable | Owner | Surface |
 |-------------|-------|---------|
@@ -211,8 +211,8 @@ This ADR is **non-executable until ADR-069 (GDPR↔DORA) is signed off, because 
 
 - Audit §C "Audit log + traçabilité DORA/NIS2" (12-control matrix)
 - Decision record §C5 "Audit immutability: trigger strict, procédure migration séparée"
-- ADR-069 (companion, GDPR/DORA reconciliation)
-- ADR-070 (companion, gateway fail-closed + emit)
+- ADR-071 (companion, GDPR/DORA reconciliation)
+- ADR-072 (companion, gateway fail-closed + emit)
 - DORA Regulation (EU) 2022/2554 Art. 5, 8, 11, 17
 - NIS2 Directive (EU) 2022/2555 Art. 21
 - NIST SP 800-53 SC-7 (audit integrity)

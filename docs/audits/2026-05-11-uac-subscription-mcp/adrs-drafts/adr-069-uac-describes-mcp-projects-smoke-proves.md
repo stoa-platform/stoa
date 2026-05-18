@@ -1,12 +1,12 @@
 ---
-title: "ADR-067: UAC Describes / MCP Projects / Smoke Proves"
-sidebar_label: "ADR-067: UAC Doctrine"
-sidebar_position: 67
+title: "ADR-069: UAC Describes / MCP Projects / Smoke Proves"
+sidebar_label: "ADR-069: UAC Doctrine"
+sidebar_position: 69
 description: "Formalizes the canonical doctrine that UAC is the primary product contract, MCP tools are projections of UAC operations, and smoke tests are the runtime proof of projection."
 keywords: [ADR, UAC, MCP, doctrine, projection, smoke tests, runtime enforcement]
 ---
 
-# ADR-067 — UAC Describes / MCP Projects / Smoke Proves
+# ADR-069 — UAC Describes / MCP Projects / Smoke Proves
 
 ## 1. Status
 
@@ -18,7 +18,7 @@ keywords: [ADR, UAC, MCP, doctrine, projection, smoke tests, runtime enforcement
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` (MCP-1, MCP-2, MCP-3) + `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` §4.2 + challenger decision record §3.3 (C4).
 
-**Related decisions:** ADR-006 Tool Registry Architecture, ADR-012 MCP RBAC Architecture, ADR-021 UAC-Driven Observability, ADR-045 stoa.yaml Declarative Spec, ADR-051 Lazy MCP Discovery, ADR-066 UAC as LLM-Optimized Executable Contract.
+**Related decisions:** ADR-006 Tool Registry Architecture, ADR-012 MCP RBAC Architecture, ADR-021 UAC-Driven Observability, ADR-045 stoa.yaml Declarative Spec, ADR-051 Lazy MCP Discovery, ADR-067 UAC as LLM-Optimized Executable Contract.
 
 **Supersedes / amends:** none. Codifies a doctrine previously living only in `.claude/docs/uac-llm-ready.md`.
 
@@ -61,7 +61,7 @@ Concretely:
 ### 4.1 UAC describes
 
 - UAC is the **primary product contract**. Any operation exposed to a consumer (API, MCP tool, future protocols) must be attached to a UAC operation or flow contract.
-- Endpoint-level `llm` metadata (per ADR-066) is the **operational intent layer**.
+- Endpoint-level `llm` metadata (per ADR-067) is the **operational intent layer**.
 - The hard rule is binding at all layers: `side_effects=destructive ⇒ requires_human_approval=true`. Malformed metadata is an error.
 
 ### 4.2 MCP projects
@@ -73,7 +73,7 @@ Concretely:
   - `safe_for_agents: bool` typed
   - `tool_name` derived deterministically from `{tenant}:{contract}:{operation_id}`
 - The gateway runtime MUST read the typed fields and:
-  - refuse `tools/call` when `requires_human_approval=true` and no valid approval token is presented (cross-reference: ADR-070 fail-closed posture).
+  - refuse `tools/call` when `requires_human_approval=true` and no valid approval token is presented (cross-reference: ADR-072 fail-closed posture).
   - validate inputs against the UAC `inputSchema` before invocation; validate outputs before returning.
 
 ### 4.4 Approval token invariants (binding doctrine for §4.2)
@@ -111,7 +111,7 @@ Mandatory audit emissions:
 - `APPROVAL_TOKEN_USED` at successful consumption (gateway).
 - `APPROVAL_TOKEN_REJECTED` with `reason ∈ {signature, replay, scope_mismatch, arguments_mismatch, policy_version_mismatch, 4_eyes_violation, expired, ...}`.
 
-Without any of these invariants, the token does not prove what the doctrine requires. Implementations that omit `arguments_hash`, `jti` atomic single-use, or 4-eyes acteur separation are non-compliant with ADR-067 even if a JWT is technically present.
+Without any of these invariants, the token does not prove what the doctrine requires. Implementations that omit `arguments_hash`, `jti` atomic single-use, or 4-eyes acteur separation are non-compliant with ADR-069 even if a JWT is technically present.
 
 ### 4.3 Smoke proves
 
@@ -134,13 +134,13 @@ Without any of these invariants, the token does not prove what the doctrine requ
 
 ### Negative
 
-- Backward compatibility cost: existing tenants with UAC contracts missing `endpoint.llm` get warnings; new MCP-exposed endpoints will require completed metadata before merge (V2 target per ADR-066).
+- Backward compatibility cost: existing tenants with UAC contracts missing `endpoint.llm` get warnings; new MCP-exposed endpoints will require completed metadata before merge (V2 target per ADR-067).
 - Wire format change to MCP `ToolDefinition` requires gateway version bump and client SDK alignment.
 - Smoke gates add latency to publish pipelines (~minutes).
 
 ### Neutral
 
-- ADR-066 remains the authoritative spec for *which* fields exist. ADR-067 is the *enforcement* doctrine on top.
+- ADR-067 remains the authoritative spec for *which* fields exist. ADR-069 is the *enforcement* doctrine on top.
 
 ## 6. Implementation
 
@@ -161,9 +161,9 @@ Once signed:
 | Option | Verdict |
 |--------|---------|
 | Leave doctrine in `.claude/docs/` | ❌ Not citeable by regulators, drifts silently |
-| Embed doctrine in ADR-066 amendment | ❌ Conflates "what fields exist" with "how they are enforced" |
+| Embed doctrine in ADR-067 amendment | ❌ Conflates "what fields exist" with "how they are enforced" |
 | Codify only the typed wire format, skip the smoke gate | ❌ Drift invisible until prod incident |
-| **Standalone ADR-067 with three pillars** | ✅ Selected |
+| **Standalone ADR-069 with three pillars** | ✅ Selected |
 
 ## 8. References
 
@@ -171,9 +171,9 @@ Once signed:
 - Plan §4.2 "Doctrine exécutée au runtime"
 - Decision record §C4 (approval-token enrichment) and §3.3 (4-eyes proof)
 - `.claude/docs/uac-llm-ready.md` (canonical source of doctrine text, to be archived as historical)
-- ADR-066 (field definitions) — predecessor
+- ADR-067 (field definitions) — predecessor
 
 ## 9. Open questions for sign-off
 
-- Should `safe_for_agents=false` block all autonomous agents at the gateway, or only emit a warning that the client SDK can choose to honour? (Recommendation: **block** to align with fail-closed posture ADR-070.)
+- Should `safe_for_agents=false` block all autonomous agents at the gateway, or only emit a warning that the client SDK can choose to honour? (Recommendation: **block** to align with fail-closed posture ADR-072.)
 - Should the smoke gate run on every PR touching the tenant's UAC, or on every publish? (Recommendation: **every publish**, plus optional PR-level dry-run.)

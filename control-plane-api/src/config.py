@@ -486,6 +486,11 @@ class Settings(BaseSettings):
     # ArgoCD reconciler interval (how often to sync ArgoCD apps → gateway_instances)
     GATEWAY_RECONCILER_INTERVAL_SECONDS: int = 60
 
+    # MCP destructive-tool approval tokens (CAB-2227 / ADR-067).
+    # Secret is sourced from Vault/env in deployments; never commit a real PEM.
+    approval_token_signing_key: SecretStr = Field(default=SecretStr(""))
+    approval_token_ttl_seconds: int = 300
+
     # Docs Search — Algolia integration (CAB-1327)
     ALGOLIA_APP_ID: str = "GIWP67WK7V"
     ALGOLIA_SEARCH_API_KEY: str = "6f5bb332c047a35c99fd3a151c44cc7f"  # Public search-only key

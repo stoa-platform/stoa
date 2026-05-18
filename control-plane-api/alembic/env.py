@@ -1,4 +1,5 @@
 """Alembic environment configuration"""
+
 import os
 import sys
 from logging.config import fileConfig
@@ -14,6 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.database import Base
 
 # Import all models to register them with Base.metadata
+from src.models.approval_token import ApprovalToken
+from src.models.audit_chain import AuditChainHead, PseudonymizedAuditErasure
+from src.models.audit_event import AuditEvent
 from src.models.catalog import APICatalog, CatalogSyncStatus, MCPToolsCatalog
 from src.models.consumer import Consumer
 from src.models.mcp_subscription import MCPServer, MCPServerSubscription, MCPServerTool, MCPToolAccess
@@ -36,6 +40,7 @@ def get_database_url():
         return url
     # Fallback to config
     from src.config import settings
+
     return settings.database_url_sync
 
 

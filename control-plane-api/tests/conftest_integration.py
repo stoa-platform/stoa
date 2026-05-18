@@ -8,6 +8,7 @@ Usage:
     DATABASE_URL=postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_test \
       pytest -m integration -v
 """
+
 import os
 
 import pytest
@@ -17,6 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.database import Base
 
 # Import ALL models so Base.metadata knows about all tables
+from src.models.approval_token import ApprovalToken  # noqa: F401
+from src.models.audit_chain import AuditChainHead, PseudonymizedAuditErasure  # noqa: F401
+from src.models.audit_event import AuditEvent  # noqa: F401
 from src.models.catalog import APICatalog, CatalogSyncStatus, MCPToolsCatalog  # noqa: F401
 from src.models.contract import Contract, ProtocolBinding  # noqa: F401
 from src.models.external_mcp_server import ExternalMCPServer, ExternalMCPServerTool  # noqa: F401
@@ -53,10 +57,9 @@ async def integration_db():
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    async with session_factory() as session:
-        async with session.begin():
-            yield session
-            # Rollback ensures test isolation — no data leaks between tests
-            await session.rollback()
+    async with session_factory() as session, session.begin():
+        yield session
+        # Rollback ensures test isolation — no data leaks between tests
+        await session.rollback()
 
     await engine.dispose()

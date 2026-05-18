@@ -27,6 +27,13 @@ vi.mock('../../services/mcpServers', () => ({
   },
 }));
 
+const mockListMyApiSubscriptions = vi.fn();
+vi.mock('../../services/apiSubscriptions', () => ({
+  apiSubscriptionsService: {
+    listMySubscriptions: () => mockListMyApiSubscriptions(),
+  },
+}));
+
 // Mock hooks
 const mockSubscriptionsData = vi.fn();
 const mockRevokeMutation = vi.fn();
@@ -81,6 +88,7 @@ describe('MySubscriptions', () => {
     vi.clearAllMocks();
     mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
     mockGetMyServerSubscriptions.mockResolvedValue([]);
+    mockListMyApiSubscriptions.mockResolvedValue({ items: [] });
     mockSubscriptionsData.mockReturnValue({ subscriptions: [] });
   });
 
@@ -134,6 +142,7 @@ describe('MySubscriptions', () => {
         vi.clearAllMocks();
         mockAuth.mockReturnValue(createAuthMock(role));
         mockGetMyServerSubscriptions.mockResolvedValue([]);
+        mockListMyApiSubscriptions.mockResolvedValue({ items: [] });
         mockSubscriptionsData.mockReturnValue({ subscriptions: [] });
       });
 

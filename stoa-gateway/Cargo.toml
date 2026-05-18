@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
-jsonwebtoken = { version = "10", features = ["rust_crypto"] }  # RUSTSEC-2023-0071: rsa timing vuln — no upstream fix, low risk (JWT verify only, no RSA decrypt)
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }  # avoid RustCrypto rsa timing advisory
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2"] }
 async-trait = "0.1"
 
@@ -68,7 +68,7 @@ regex = "1"
 notify = "8"
 
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
-regorus = "0.9"                              # Pure Rust OPA evaluator (no sidecar) — RUSTSEC-2025-0141: bincode unmaintained (transitive, no API exposed)
+regorus = "0.10"                             # Pure Rust OPA evaluator (no sidecar)
 
 # === Phase 8: Shadow Mode UAC Generation ===
 serde_yaml = "0.9"                           # YAML serialization for UAC contracts

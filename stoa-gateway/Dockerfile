@@ -72,7 +72,7 @@ RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
 FROM debian:bookworm-slim AS runtime
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       ca-certificates \
       libssl3 \
       curl \

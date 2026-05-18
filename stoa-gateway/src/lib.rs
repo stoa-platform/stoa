@@ -775,6 +775,15 @@ async fn ready(
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    if !state.policy_ready() {
+        warn!("Policy engine is not ready");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT READY: Policy engine unavailable",
+        )
+            .into_response();
+    }
+
     // Check Control Plane connectivity (non-blocking, short timeout)
     if let Some(cp_url) = &state.config.control_plane_url {
         let health_url = format!("{}/health", cp_url);
@@ -924,6 +933,21 @@ mod tests {
             .unwrap();
 
         assert_eq!(mcp.status(), StatusCode::NOT_FOUND);
+    }
+
+    // regression for CAB-2227
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_when_policy_not_loaded_in_regulated_profile() {
+        let mut state = AppState::new(config::Config {
+            policy_enabled: false,
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        });
+        state.config.environment = config::Environment::Prod;
+
+        let response = ready(axum::extract::State(state)).await;
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     // regression for CAB-2227

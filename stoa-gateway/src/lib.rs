@@ -4,6 +4,7 @@
 
 pub mod a2a;
 pub mod access_log;
+pub mod audit;
 pub mod auth;
 pub mod cache;
 pub mod config;

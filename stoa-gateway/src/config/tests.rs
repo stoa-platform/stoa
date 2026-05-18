@@ -15,6 +15,7 @@ fn test_default_config() {
     assert_eq!(config.port, 8080);
     assert_eq!(config.host, "0.0.0.0");
     assert_eq!(config.mcp_session_ttl_minutes, 30);
+    assert_eq!(config.audit_spool_high_water_pct, 80);
 }
 
 #[test]

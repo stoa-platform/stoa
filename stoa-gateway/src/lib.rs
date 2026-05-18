@@ -4,6 +4,7 @@
 
 pub mod a2a;
 pub mod access_log;
+pub mod audit;
 pub mod auth;
 pub mod cache;
 pub mod config;
@@ -807,6 +808,20 @@ async fn ready(
         }
     }
 
+    if let Some(ref perm_svc) = state.tool_permissions {
+        if let Some(reason) = perm_svc.readiness_failure_reason() {
+            warn!(
+                reason = %reason,
+                "Tool permission state is not ready"
+            );
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("NOT READY: Tool permissions {reason}"),
+            )
+                .into_response();
+        }
+    }
+
     // Check JWKS is reachable (if auth is enabled)
     if let Some(ref jwt) = state.jwt_validator {
         match jwt.oidc_provider().get_config().await {
@@ -864,6 +879,8 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn sidecar_app() -> Router {
         let config = config::Config {
@@ -928,6 +945,34 @@ mod tests {
         });
         state.config.environment = config::Environment::Prod;
 
+        let response = ready(axum::extract::State(state)).await;
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // regression for CAB-2227
+    #[tokio::test]
+    async fn test_gateway_readiness_fails_when_cp_permission_state_unavailable() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant1/tool-permissions"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        let config = config::Config {
+            control_plane_url: Some(server.uri()),
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        };
+        let state = AppState::new(config);
+        let permissions = state.tool_permissions.as_ref().unwrap();
+        let _ = permissions.is_tool_allowed("tenant1", "any_tool").await;
         let response = ready(axum::extract::State(state)).await;
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);

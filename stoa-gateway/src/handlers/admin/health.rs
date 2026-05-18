@@ -29,13 +29,21 @@ pub struct AdminHealthResponse {
 }
 
 pub async fn admin_health(State(state): State<AppState>) -> Json<AdminHealthResponse> {
+    // Degraded if EITHER tool-permission readiness failed (GW-1, CAB-2227) OR
+    // the policy engine is not ready in a regulated profile (GW-2, CAB-2227).
+    let tool_permissions_degraded = state
+        .tool_permissions
+        .as_ref()
+        .and_then(|svc| svc.readiness_failure_reason())
+        .is_some();
+    let status = if tool_permissions_degraded || !state.policy_ready() {
+        "degraded"
+    } else {
+        "ok"
+    };
+
     Json(AdminHealthResponse {
-        status: if state.policy_ready() {
-            "ok"
-        } else {
-            "degraded"
-        }
-        .to_string(),
+        status: status.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         routes_count: state.route_registry.count(),
         policies_count: state.policy_registry.count(),

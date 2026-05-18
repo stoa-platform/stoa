@@ -16,11 +16,13 @@ related_audit: "docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
 > They are **not** to be represented as "DPO approved", "Legal approved", "Security approved", or any other multi-role fan-out.
 > See memory rule `feedback_solo_project_mode_signoffs`.
 
-This document is the canonical regulatory trace that the policies in ADR-067, ADR-068, ADR-069, ADR-070, ADR-071 came from the human operator — not from Claude or Codex. Agents may proceed within the accepted scope only; any deviation requires re-challenge.
+This document is the canonical regulatory trace that the policies in ADR-069, ADR-070, ADR-071, ADR-072, ADR-073 came from the human operator — not from Claude or Codex. Agents may proceed within the accepted scope only; any deviation requires re-challenge.
+
+> **2026-05-18 — ADR numbers renumbered +2.** This batch was approved on 2026-05-13 as ADR-067…071. A duplicate-`adr-060` dedup on `stoa-docs` `main` had already taken `adr-067`/`adr-068`, so the batch was renumbered into free slots **ADR-069…073** (UAC doctrine 069, audit doctrine 070, GDPR/DORA 071, gateway fail-closed 072, subscription lifecycle 073). The CAB ticket numbers (CAB-2225…2229) are unchanged, and the operator approvals themselves are unchanged — only the ADR identifiers were corrected. See `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` §8.
 
 ---
 
-## CAB-2225 — ADR-067 UAC describes / MCP projects / Smoke proves
+## CAB-2225 — ADR-069 UAC describes / MCP projects / Smoke proves
 
 **Verdict:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -38,11 +40,11 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2226 — ADR-068 (audit immutability) + ADR-069 (GDPR ↔ DORA reconciliation), joint
+## CAB-2226 — ADR-070 (audit immutability) + ADR-071 (GDPR ↔ DORA reconciliation), joint
 
-**Verdict ADR-068:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
+**Verdict ADR-070:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
-**Verdict ADR-069:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
+**Verdict ADR-071:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
 **Date:** 2026-05-13.
 
@@ -61,7 +63,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2227 — ADR-070 gateway fail-closed posture
+## CAB-2227 — ADR-072 gateway fail-closed posture
 
 **Verdict:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -90,7 +92,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2228 — ADR-071 API subscription lifecycle
+## CAB-2228 — ADR-073 API subscription lifecycle
 
 **Verdict:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -108,7 +110,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 1. `PARTIALLY_PROVISIONED` must surface target-by-target ack status to the consumer — not just a global degraded label.
 2. 4-eyes enforcement must verify **distinct human subjects** at the policy layer; technical equality of actor IDs is not sufficient evidence of separation. Audit events must record both actors.
-3. Every lifecycle transition emits one `audit_events` row per ADR-068 schema. Per-target updates emit `subscription_target` rows.
+3. Every lifecycle transition emits one `audit_events` row per ADR-070 schema. Per-target updates emit `subscription_target` rows.
 4. `DEPROVISIONING_FAILED` and `SUSPENDED` remain first-class degraded states (already partially delivered by PR #2782 and PR #2784).
 
 **Rationale:** Consumers need operational truth. Hiding partial provisioning behind a green light produces support escalations and erodes trust. Destructive operations (revoke, deprovision, suspend) affect access and potentially billing — strict 4-eyes is the correct posture for a regulated API gateway. 15 minutes is a generous but reasonable provisioning ceiling.

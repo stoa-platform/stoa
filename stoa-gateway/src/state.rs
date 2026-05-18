@@ -144,7 +144,7 @@ pub struct AppState {
     /// None when STOA_A2A_ENABLED=false (default).
     pub a2a_registry: Option<Arc<crate::a2a::registry::AgentRegistry>>,
     /// Tenant tool permission cache — checks if tools are allowed per tenant.
-    /// Fetches from CP-API and caches with 60s TTL. Default-allow on miss/error.
+    /// Fetches from CP-API and denies unless a fresh explicit allow exists.
     pub tool_permissions: Option<Arc<ToolPermissionService>>,
     /// Error snapshot store for 5xx response capture (CAB-1645).
     pub snapshot_store: Arc<SnapshotStore>,

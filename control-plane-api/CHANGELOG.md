@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.15.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.14.1...control-plane-api-v1.15.0) (2026-05-19)
+
+
+### Features
+
+* **api:** add CAB-2227 audit emit endpoint ([#2793](https://github.com/stoa-platform/stoa/issues/2793)) ([c812861](https://github.com/stoa-platform/stoa/commit/c812861957c26e9a7eac6515e6011b5f47d5bda4))
+* **api:** audit immutability + pseudonymization migration DRAFT (CAB-2226) ([#2780](https://github.com/stoa-platform/stoa/issues/2780)) ([03631c1](https://github.com/stoa-platform/stoa/commit/03631c1067b4a93a49c537b9527919ec6805ab35))
+
+
+### Bug Fixes
+
+* **api:** deprovision retry loop with DEPROVISIONING_FAILED state ([#2782](https://github.com/stoa-platform/stoa/issues/2782)) ([c70800a](https://github.com/stoa-platform/stoa/commit/c70800a74f68077d166717530a84bf79a7e77722))
+* **api:** emit webhooks on subscription suspend and reactivate ([#2784](https://github.com/stoa-platform/stoa/issues/2784)) ([2c8721b](https://github.com/stoa-platform/stoa/commit/2c8721b9f69154994a91e8f84e7de7f9b67eb02b))
+
 ## [1.14.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.14.0...control-plane-api-v1.14.1) (2026-05-13)
 
 

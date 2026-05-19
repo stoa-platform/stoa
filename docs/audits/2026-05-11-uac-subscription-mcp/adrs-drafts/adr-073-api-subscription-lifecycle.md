@@ -1,12 +1,12 @@
 ---
-title: "ADR-071: API Subscription Lifecycle"
-sidebar_label: "ADR-071: Subscription Lifecycle"
-sidebar_position: 71
+title: "ADR-073: API Subscription Lifecycle"
+sidebar_label: "ADR-073: Subscription Lifecycle"
+sidebar_position: 73
 description: "Formalizes the state machine, RBAC boundaries, and propagation contract of API subscriptions on STOA, extending ADR-001 for the consumer-producer relationship and providing the auditable workflow required by DORA/NIS2."
 keywords: [ADR, subscription, lifecycle, state machine, RBAC, propagation, DORA, NIS2]
 ---
 
-# ADR-071 — API Subscription Lifecycle
+# ADR-073 — API Subscription Lifecycle
 
 ## 1. Status
 
@@ -18,9 +18,9 @@ keywords: [ADR, subscription, lifecycle, state machine, RBAC, propagation, DORA,
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` Axe A (findings SUB-1 through SUB-7) + challenger decision record §C6.
 
-**Extends:** ADR-001 Third-Party API Exposure Strategy (Control Plane / Data Plane separation). ADR-001 defines the architecture; ADR-071 defines the lifecycle inside it.
+**Extends:** ADR-001 Third-Party API Exposure Strategy (Control Plane / Data Plane separation). ADR-001 defines the architecture; ADR-073 defines the lifecycle inside it.
 
-**Related decisions:** ADR-022 UAC Tenant Architecture, ADR-054 RBAC Taxonomy v2, ADR-055 Portal/Console Governance, ADR-066 UAC as Executable Contract, ADR-067 UAC Doctrine, ADR-068 Audit Log Doctrine, ADR-070 Gateway Fail-Closed Posture.
+**Related decisions:** ADR-022 UAC Tenant Architecture, ADR-054 RBAC Taxonomy v2, ADR-055 Portal/Console Governance, ADR-067 UAC as Executable Contract, ADR-069 UAC Doctrine, ADR-070 Audit Log Doctrine, ADR-072 Gateway Fail-Closed Posture.
 
 ## 2. Context
 
@@ -33,7 +33,7 @@ A consumer tenant subscribes to a producer tenant's API on STOA. The current imp
 - **Cross-tenant subscription not validated** at create time (SUB-6).
 - **Approval not formally a state**: PENDING jumps to ACTIVE directly on auto-approve or manual approve, with no observable APPROVED-but-not-PROVISIONED moment.
 
-ADR-001 told us **how** STOA is architected. ADR-071 tells us **how a subscription lives, ages, and dies** inside that architecture.
+ADR-001 told us **how** STOA is architected. ADR-073 tells us **how a subscription lives, ages, and dies** inside that architecture.
 
 ## 3. Problem
 
@@ -99,19 +99,19 @@ We adopt a **single unified state machine** for subscription lifecycle, with **p
 | `PARTIALLY_PROVISIONED` | Some targets ack, others not | Allowed only on ack'd targets |
 | `PROVISIONING_FAILED` | Retries exhausted | No allow anywhere |
 | `ACTIVE` | Fully usable | All targets allow |
-| `SUSPENDED` | Temporary hold by producer or system | Deny everywhere (gateway invalidates immediately, per ADR-070) |
+| `SUSPENDED` | Temporary hold by producer or system | Deny everywhere (gateway invalidates immediately, per ADR-072) |
 | `REVOKING` | Revoke initiated, deprovision in flight | Deny new calls, drain in-flight |
 | `DEPROVISIONING` | Targets being notified to remove | Same as REVOKING |
-| `DEPROVISIONING_FAILED` | Retries exhausted; **alertable** | Deny enforced at gateway via ADR-070 cache invalidation; ops manual intervention |
+| `DEPROVISIONING_FAILED` | Retries exhausted; **alertable** | Deny enforced at gateway via ADR-072 cache invalidation; ops manual intervention |
 | `REVOKED` | Final; immutable | No allow anywhere |
 
-`ACTIVE` is reached **only if all required targets ack the provisioning**. `REVOKED` is reached **only if all required targets ack the revocation OR a higher-level deny mechanism guarantees no service** (e.g., the ADR-070 cache invalidation already prevents allow regardless of target ack).
+`ACTIVE` is reached **only if all required targets ack the provisioning**. `REVOKED` is reached **only if all required targets ack the revocation OR a higher-level deny mechanism guarantees no service** (e.g., the ADR-072 cache invalidation already prevents allow regardless of target ack).
 
 **Default doctrine on `required` flag.** In standard STOA deployments — a tenant served by one or more gateways behind a single Control Plane — every gateway reachable for that tenant is `required=true`. `PARTIALLY_PROVISIONED` is therefore an **operator-visible degradation state**, not a normal usage state: it means some gateways are out of sync with the policy intent and the situation must be reconciled. Consumer surface MAY display it (recommendation §9) but consumers should treat it as "temporary degraded availability", not as "feature partially enabled".
 
 The `required=false` value is reserved for explicit, advanced topologies: shadow/canary gateway, observability-only data plane, soft-launch region. Setting `required=false` requires an out-of-band justification recorded on the `subscription_target` row (`details.justification`) and is itself an audited event. The default for any new target is `required=true`.
 
-A subscription is "usable" iff `status=ACTIVE` AND every `required=true` target has `provisioned_at IS NOT NULL` AND no `required=true` target is in revocation/deprovisioning. No other combination is considered usable; the gateway-side cache invalidation (ADR-070) is the final fail-safe regardless of the field.
+A subscription is "usable" iff `status=ACTIVE` AND every `required=true` target has `provisioned_at IS NOT NULL` AND no `required=true` target is in revocation/deprovisioning. No other combination is considered usable; the gateway-side cache invalidation (ADR-072) is the final fail-safe regardless of the field.
 
 ### 4.3 Per-target ack model
 
@@ -131,14 +131,14 @@ CREATE TABLE subscription_targets (
 );
 ```
 
-Per-target ack is computed asynchronously via the gateway → CP audit emit chain (ADR-070 §4.6, promoted to Phase 0).
+Per-target ack is computed asynchronously via the gateway → CP audit emit chain (ADR-072 §4.6, promoted to Phase 0).
 
 ### 4.4 RBAC matrix
 
 | Action | Who | Notes |
 |--------|-----|-------|
 | `subscription:request` | `tenant-admin`, `devops` of the **consumer** tenant | |
-| `subscription:approve` | `tenant-admin` of the **producer** tenant (or `cpi-admin`) | If the api has any `destructive` endpoint per ADR-067, requires **4-eyes**: two distinct producer-tenant approvers |
+| `subscription:approve` | `tenant-admin` of the **producer** tenant (or `cpi-admin`) | If the api has any `destructive` endpoint per ADR-069, requires **4-eyes**: two distinct producer-tenant approvers |
 | `subscription:reject` | `tenant-admin` of producer | |
 | `subscription:suspend` | `tenant-admin` of producer; `cpi-admin` | |
 | `subscription:reactivate` | `tenant-admin` of producer; `cpi-admin` | Emits webhook (closes the audit gap SUB-3) |
@@ -149,11 +149,11 @@ At creation time, the CP-API **must validate** `request.tenant_id` matches the c
 
 ### 4.5 Audit emission
 
-Every state transition emits one `audit_events` row using the ADR-068 schema:
+Every state transition emits one `audit_events` row using the ADR-070 schema:
 
 - `resource_type=subscription`, `resource_id=<sub-id>`
 - `action ∈ {request, approve, reject, suspend, reactivate, revoke, expire, escalate, ...}`
-- `actor_id`, `actor_tenant_id`, `session_id` (per ADR-068)
+- `actor_id`, `actor_tenant_id`, `session_id` (per ADR-070)
 - `before`/`after` carrying the state field diff
 - `approval_justification` mandatory on `approve`, `reject`, `revoke`, `suspend`
 
@@ -168,7 +168,7 @@ Per-target ack updates emit `audit_events` of `resource_type=subscription_target
 ### 4.7 TTL extension
 
 - Extension writes go through an explicit `commit()`, not `flush()` (closes SUB-2, P0).
-- TTL extensions during a CP-API outage are **refused** by ADR-070's fail-closed posture (no local extension of cache).
+- TTL extensions during a CP-API outage are **refused** by ADR-072's fail-closed posture (no local extension of cache).
 - Each extension emits one audit event with the diff (`before.expires_at`, `after.expires_at`, `extend_days`).
 
 ## 5. Consequences
@@ -192,7 +192,7 @@ Per-target ack updates emit `audit_events` of `resource_type=subscription_target
 
 ## 6. Implementation
 
-This ADR is **non-executable until ADR-067 (typed metadata) and ADR-070 (cache + audit chain) reach Proposed**, because 4-eyes/destructive routing and target ack rely on them.
+This ADR is **non-executable until ADR-069 (typed metadata) and ADR-072 (cache + audit chain) reach Proposed**, because 4-eyes/destructive routing and target ack rely on them.
 
 | Deliverable | Owner | Surface |
 |-------------|-------|---------|
@@ -212,7 +212,7 @@ This ADR is **non-executable until ADR-067 (typed metadata) and ADR-070 (cache +
 | Keep dual `status`/`provisioning_status` fields; document mapping | ❌ UI lies; regulators see ambiguity |
 | Add states only to `provisioning_status`; leave `status` simple | ❌ Confuses what is "live" |
 | Per-target tracking but no `PARTIALLY_PROVISIONED` state | ❌ Half-states invisible to ops and consumers |
-| Drop 4-eyes; rely on ADR-067 approval token only | ❌ Approval token proves intent binding, 4-eyes proves separation of duties — both needed for destructive endpoints |
+| Drop 4-eyes; rely on ADR-069 approval token only | ❌ Approval token proves intent binding, 4-eyes proves separation of duties — both needed for destructive endpoints |
 | **Unified state machine + per-target ack + 4-eyes for destructive** | ✅ Selected |
 
 ## 8. References
@@ -220,9 +220,9 @@ This ADR is **non-executable until ADR-067 (typed metadata) and ADR-070 (cache +
 - Audit Axe A (SUB-1 through SUB-7) + state-machine current vs ideal diagram
 - Decision record §C6 (partial provisioning + failure states)
 - ADR-001 (architecture predecessor)
-- ADR-067 (destructive routing — companion)
-- ADR-068 (audit emission schema — companion)
-- ADR-070 (cache invalidation + audit chain — companion)
+- ADR-069 (destructive routing — companion)
+- ADR-070 (audit emission schema — companion)
+- ADR-072 (cache invalidation + audit chain — companion)
 - DORA Regulation (EU) 2022/2554 Art. 5, 17
 - NIS2 Directive (EU) 2022/2555 Art. 21
 

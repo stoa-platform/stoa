@@ -29,11 +29,41 @@ jobs:
   health-check:
     name: Health Smoke (${{ inputs.component }})
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
 
     steps:
-      - name: Wait for rollout (30s)
-        run: sleep 30
+      - name: Wait for rollout to converge
+        run: |
+          set -uo pipefail
+          # Poll the just-deployed component's own endpoint until it serves,
+          # instead of a fixed sleep — a 2-pod ArgoCD rollout routinely takes
+          # longer than 30s and the smoke raced it red on every gateway
+          # deploy (CAB-2227).
+          case "${{ inputs.component }}" in
+            stoa-gateway)      url="https://mcp.gostoa.dev/health/ready" ;;
+            control-plane-api) url="https://api.gostoa.dev/health" ;;
+            portal)            url="https://portal.gostoa.dev" ;;
+            control-plane-ui)  url="https://console.gostoa.dev" ;;
+            *)                 url="" ;;
+          esac
+          if [ -z "$url" ]; then
+            echo "No rollout-wait URL for ${{ inputs.component }}; sleeping 30s"
+            sleep 30
+            exit 0
+          fi
+          echo "Waiting for $url to converge (up to 5 min)..."
+          for i in $(seq 1 60); do
+            s=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo 000)
+            if [ "$s" = "200" ]; then
+              echo "Ready after ~$((i * 5))s (HTTP $s)"
+              exit 0
+            fi
+            echo "  attempt $i: HTTP $s"
+            sleep 5
+          done
+          # Timed out — let the checks below run and fail with real detail
+          # (a component unready after 5 min IS a genuine smoke failure).
+          echo "::warning::$url not ready after 5 min — running checks anyway"
 
       - name: Health checks
         run: |

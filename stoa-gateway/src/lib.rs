@@ -4,6 +4,7 @@
 
 pub mod a2a;
 pub mod access_log;
+pub mod audit;
 pub mod auth;
 pub mod cache;
 pub mod config;
@@ -774,6 +775,15 @@ async fn ready(
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    if !state.policy_ready() {
+        warn!("Policy engine is not ready");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT READY: Policy engine unavailable",
+        )
+            .into_response();
+    }
+
     // Check Control Plane connectivity (non-blocking, short timeout)
     if let Some(cp_url) = &state.config.control_plane_url {
         let health_url = format!("{}/health", cp_url);
@@ -795,6 +805,22 @@ async fn ready(
                 )
                     .into_response();
             }
+        }
+    }
+
+    // Tool-permission unavailability is fail-closed on the DATA PLANE
+    // (`is_tool_allowed` denies); it does NOT gate pod readiness. Coupling it
+    // to `/ready` took the whole gateway out of rotation when the gateway
+    // could not authenticate to CP's tenant tool-permissions endpoint
+    // (CAB-2227 incident 2026-05-19 — endpoint requires a user JWT the
+    // gateway does not hold). Re-couple once the gateway authenticates
+    // properly (Option 1 follow-up). Still surfaced via admin `/health`.
+    if let Some(ref perm_svc) = state.tool_permissions {
+        if let Some(reason) = perm_svc.readiness_failure_reason() {
+            warn!(
+                reason = %reason,
+                "Tool permission state degraded — data-plane fail-closed; not gating readiness"
+            );
         }
     }
 
@@ -855,6 +881,8 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn sidecar_app() -> Router {
         let config = config::Config {
@@ -907,5 +935,55 @@ mod tests {
             .unwrap();
 
         assert_eq!(mcp.status(), StatusCode::NOT_FOUND);
+    }
+
+    // regression for CAB-2227
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_when_policy_not_loaded_in_regulated_profile() {
+        let mut state = AppState::new(config::Config {
+            policy_enabled: false,
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        });
+        state.config.environment = config::Environment::Prod;
+
+        let response = ready(axum::extract::State(state)).await;
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // regression for CAB-2227
+    // Incident 2026-05-19: tool-permission unavailability must NOT 503 the
+    // `/ready` probe — coupling it took the whole gateway out of rotation
+    // when the gateway could not authenticate to CP's tenant
+    // tool-permissions endpoint. The data plane still fail-closed-denies;
+    // pod readiness stays OK. (Supersedes the prior test that asserted 503.)
+    #[tokio::test]
+    async fn regression_gateway_readiness_not_gated_by_tool_permission_state() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant1/tool-permissions"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        let config = config::Config {
+            control_plane_url: Some(server.uri()),
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        };
+        let state = AppState::new(config);
+        let permissions = state.tool_permissions.as_ref().unwrap();
+        // Data-plane fail-closed still holds: unavailable permission state denies.
+        assert!(!permissions.is_tool_allowed("tenant1", "any_tool").await);
+        // ...but the pod stays ready — readiness is not gated on it.
+        let response = ready(axum::extract::State(state)).await;
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

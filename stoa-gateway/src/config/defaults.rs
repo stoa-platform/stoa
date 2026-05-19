@@ -10,6 +10,7 @@ use super::{
     LogLevel, MtlsConfig, SenderConstraintConfig, SupervisionDefaultTier,
 };
 use crate::mode::GatewayMode;
+use std::path::PathBuf;
 
 pub(super) fn default_true() -> bool {
     true
@@ -37,6 +38,22 @@ pub(super) fn default_ws_proxy_burst() -> usize {
 
 pub(super) fn default_gateway_external_url() -> Option<String> {
     Some("http://localhost:8080".to_string())
+}
+
+pub(super) fn default_audit_spool_dir() -> PathBuf {
+    PathBuf::from("/var/lib/stoa-gateway/audit-spool")
+}
+
+pub(super) fn default_audit_spool_capacity_bytes() -> u64 {
+    64 * 1024 * 1024
+}
+
+pub(super) fn default_audit_spool_segment_bytes() -> u64 {
+    1024 * 1024
+}
+
+pub(super) fn default_audit_spool_high_water_pct() -> u8 {
+    80
 }
 
 pub(super) fn default_policy_enabled() -> bool {
@@ -303,6 +320,10 @@ impl Default for Config {
             gateway_external_url: default_gateway_external_url(),
             control_plane_url: None,
             control_plane_api_key: None,
+            audit_spool_dir: default_audit_spool_dir(),
+            audit_spool_capacity_bytes: default_audit_spool_capacity_bytes(),
+            audit_spool_segment_bytes: default_audit_spool_segment_bytes(),
+            audit_spool_high_water_pct: default_audit_spool_high_water_pct(),
             admin_api_token: None,
             gitlab_url: None,
             gitlab_api_url: None,

@@ -664,7 +664,7 @@ async fn mcp_tools_call_inner(
 
     // Tenant tool permission check (replaces circular CP-API proxy)
     // Fetches permissions from CP-API and caches locally (60s TTL).
-    // Default-allow: if no permission row exists, the tool is allowed.
+    // Fail-closed: only fresh explicit allow entries can execute.
     if let Some(ref perm_svc) = state.tool_permissions {
         if !perm_svc
             .is_tool_allowed(&auth.tenant_id, &request.name)

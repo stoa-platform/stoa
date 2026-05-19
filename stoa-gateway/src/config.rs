@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::path::PathBuf;
 
 use crate::mode::GatewayMode;
 
@@ -96,6 +97,27 @@ pub struct Config {
 
     #[serde(default)]
     pub control_plane_api_key: Option<String>,
+
+    // === Audit spool ===
+    /// Directory for durable gateway audit WAL segments.
+    /// Env: STOA_AUDIT_SPOOL_DIR
+    #[serde(default = "default_audit_spool_dir")]
+    pub audit_spool_dir: PathBuf,
+
+    /// Maximum audit spool bytes before append declares a gap.
+    /// Env: STOA_AUDIT_SPOOL_CAPACITY_BYTES
+    #[serde(default = "default_audit_spool_capacity_bytes")]
+    pub audit_spool_capacity_bytes: u64,
+
+    /// Maximum bytes per audit spool segment before rotation.
+    /// Env: STOA_AUDIT_SPOOL_SEGMENT_BYTES
+    #[serde(default = "default_audit_spool_segment_bytes")]
+    pub audit_spool_segment_bytes: u64,
+
+    /// Readiness high-water percentage of audit spool capacity.
+    /// Env: STOA_AUDIT_SPOOL_HIGH_WATER_PCT
+    #[serde(default = "default_audit_spool_high_water_pct")]
+    pub audit_spool_high_water_pct: u8,
 
     // === Admin API ===
     /// Bearer token for the admin API (Control Plane → gateway calls).
@@ -907,6 +929,16 @@ impl fmt::Debug for Config {
             .field("gateway_external_url", &self.gateway_external_url)
             .field("control_plane_url", &self.control_plane_url)
             .field("control_plane_api_key", &r(&self.control_plane_api_key))
+            .field("audit_spool_dir", &self.audit_spool_dir)
+            .field(
+                "audit_spool_capacity_bytes",
+                &self.audit_spool_capacity_bytes,
+            )
+            .field("audit_spool_segment_bytes", &self.audit_spool_segment_bytes)
+            .field(
+                "audit_spool_high_water_pct",
+                &self.audit_spool_high_water_pct,
+            )
             .field("admin_api_token", &r(&self.admin_api_token))
             .field("gitlab_url", &self.gitlab_url)
             .field("gitlab_api_url", &self.gitlab_api_url)

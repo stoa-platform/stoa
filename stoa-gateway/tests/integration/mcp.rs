@@ -4,6 +4,10 @@
 //! In EdgeMcp mode (default), these endpoints are available.
 
 use axum::http::StatusCode;
+use std::{collections::HashMap, sync::Arc};
+use stoa_gateway::config::Config;
+use stoa_gateway::mcp::tools::dynamic_tool::DynamicTool;
+use stoa_gateway::mcp::tools::ToolSchema;
 
 use crate::common::TestApp;
 
@@ -99,6 +103,37 @@ async fn test_mcp_tools_call_no_validator_unknown_tool() {
         // Non-200 status is also acceptable for unknown tool
         assert!(status.is_client_error() || status.is_server_error());
     }
+}
+
+// regression for CAB-2227
+#[tokio::test]
+async fn test_tool_permissions_cp_unreachable_denies_tools_call() {
+    let app = TestApp::with_config(Config {
+        control_plane_url: Some("http://127.0.0.1:1".to_string()),
+        quota_enforcement_enabled: false,
+        ..Config::default()
+    });
+    let schema = ToolSchema {
+        schema_type: "object".to_string(),
+        properties: HashMap::new(),
+        required: Vec::new(),
+    };
+    let tool = DynamicTool::new(
+        "any_tool",
+        "permission regression tool",
+        "http://localhost:9/noop",
+        "POST",
+        schema,
+        "default",
+    )
+    .into_public();
+    app.state.tool_registry.register(Arc::new(tool));
+
+    let (status, _) = app
+        .post_json("/mcp/tools/call", r#"{"name":"any_tool","arguments":{}}"#)
+        .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]

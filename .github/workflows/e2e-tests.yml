@@ -85,7 +85,7 @@ jobs:
       - name: Fetch E2E secrets from Vault
         id: vault-secrets
         continue-on-error: true  # Gracefully fall back to GitHub secrets if Vault fails
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@v4
         with:
           # vault.gostoa.dev = Infisical (different product) — E2E secrets live on
           # the HashiCorp Vault instance at hcvault.gostoa.dev. Changing this URL

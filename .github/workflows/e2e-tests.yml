@@ -80,12 +80,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Fetch E2E secrets from Vault
         id: vault-secrets
         continue-on-error: true  # Gracefully fall back to GitHub secrets if Vault fails
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@v4
         with:
           # vault.gostoa.dev = Infisical (different product) — E2E secrets live on
           # the HashiCorp Vault instance at hcvault.gostoa.dev. Changing this URL

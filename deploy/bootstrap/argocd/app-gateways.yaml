@@ -1,0 +1,87 @@
+---
+# Applications Argo CD pour les deux namespaces QUE GIT DÉCRIT DÉJÀ.
+#
+# Remplace deploy/k3s-gateways/argocd.yaml, qui ne doit pas être appliqué :
+#   - il porte `destination.server: https://<K3S_CP_IP>:6443` — placeholder non
+#     substitué, donc inapplicable en l'état ;
+#   - il vise « le cluster OVH prod où tourne ArgoCD », architecture hub qui
+#     n'existe plus (les hôtes OVH sont hors gestion depuis le 2026-07-27) ;
+#   - il utilise `project: default`, sans aucune restriction de destination.
+#
+# Sur la POSTURE DE SYNCHRONISATION — écart assumé vis-à-vis du rapport :
+# le rapport recommande `Prune=false` en phase 1. Cette recommandation est
+# conditionnée à l'ADOPTION d'un cluster existant, où le pruning risquerait de
+# supprimer des ressources créées à la main et absentes de Git. Ici le cluster
+# est NEUF et VIDE : il n'y a rien à adopter, donc rien à élaguer par erreur.
+# `prune: true` est le comportement correct sur une table rase.
+#
+# En revanche `allowEmpty: false` est posé EXPLICITEMENT et non hérité : la
+# vérification adverse n'a pas confirmé qu'il s'agissait du défaut. Sans lui, un
+# overlay qui rendrait un manifeste vide (erreur Kustomize, mauvaise branche)
+# viderait le namespace entier.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateways-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa
+  source:
+    repoURL: https://github.com/stoa-platform/stoa.git
+    targetRevision: main
+    path: k8s/gateways/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gateway-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false      # explicite : un rendu vide ne doit JAMAIS vider le ns
+    syncOptions:
+      - CreateNamespace=true
+      # SSA sans Force : sur conflit de champ, le sync ÉCHOUE au lieu d'écraser.
+      # C'est le comportement fail-closed. N'ajoutez JAMAIS Force pour faire
+      # taire un conflit — cela retire le champ des managedFields de tous les
+      # autres gestionnaires et détruit exactement la garantie recherchée.
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateways-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa
+  source:
+    repoURL: https://github.com/stoa-platform/stoa.git
+    targetRevision: main
+    path: k8s/gateways/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gateway-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

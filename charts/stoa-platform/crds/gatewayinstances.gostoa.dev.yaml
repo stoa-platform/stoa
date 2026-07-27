@@ -96,8 +96,20 @@ spec:
                     healthUrl:
                       type: string
                       description: Health/readiness endpoint
-                  additionalProperties:
-                    type: string
+                  # Clés d'endpoint supplémentaires autorisées, en plus des six
+                  # nommées ci-dessus.
+                  #
+                  # NE PAS revenir à `additionalProperties: {type: string}` :
+                  # l'API Kubernetes REFUSE un schéma structurel qui porte à la
+                  # fois `properties` et `additionalProperties` —
+                  #   « additionalProperties and properties are mutual exclusive ».
+                  # La CRD était donc INAPPLICABLE en l'état : `kubectl apply`
+                  # échouait, et le cluster en service tourne en réalité avec un
+                  # schéma permissif sans validation, posé à la main. Personne ne
+                  # l'avait vu parce que rien n'avait jamais tenté d'appliquer ce
+                  # fichier — il a fallu reconstruire un cluster depuis Git pour
+                  # que l'écart apparaisse.
+                  x-kubernetes-preserve-unknown-fields: true
                 deploymentMode:
                   type: string
                   description: 'Canonical topology: edge, connect, or sidecar'

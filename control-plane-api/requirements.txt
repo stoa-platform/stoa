@@ -5,7 +5,9 @@ pydantic[email]==2.13.3
 pydantic-settings==2.14.0
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.27
+# CVE-2026-53539 (HIGH) — DoS via crafted form-urlencoded bodies. Corrigé en
+# 0.0.30 ; on prend le dernier correctif de la série 0.0.x.
+python-multipart==0.0.32
 httpx==0.28.1
 kafka-python==2.3.1
 python-snappy==0.7.3

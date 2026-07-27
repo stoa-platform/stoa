@@ -1,0 +1,58 @@
+---
+# CRD du domaine gostoa.dev.
+#
+# POURQUOI CETTE APPLICATION EXISTE : sur l'ancien cluster, ces 5 CRD ont été
+# posées IMPÉRATIVEMENT le 2026-05-02 (soit ~42 jours après la création du
+# cluster) et n'appartiennent à aucun overlay. Les overlays dev/staging/production
+# créent pourtant des ressources `GatewayInstance` : sans les CRD, la
+# synchronisation échoue avec
+#   « The Kubernetes API could not find gostoa.dev/GatewayInstance ».
+# C'est le piège des « CRD orphelines » — une dépendance réelle du déploiement
+# qui ne figure dans aucun manifeste déployé, et qu'on ne découvre qu'en
+# reconstruisant. La reconstruction depuis Git l'a rendue visible ; l'adoption
+# in-place ne l'aurait jamais montrée.
+#
+# CONSTAT À TRANCHER (hors périmètre de ce commit) : aucun contrôleur ne
+# surveille ces CRD sur l'ancien cluster — `kubectl get deploy -A` n'y montre
+# aucun opérateur. Les objets `GatewayInstance` y sont donc INERTES : ils sont
+# stockés dans l'API, et rien ne les réconcilie. Soit un opérateur est prévu et
+# manque, soit ces objets sont du décor et doivent disparaître. On les reproduit
+# ici pour atteindre la PARITÉ avec l'existant avant bascule, pas parce qu'ils
+# sont justifiés.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-crds
+  namespace: argocd
+  annotations:
+    # Vague négative : ces CRD doivent exister avant les Applications qui en
+    # créent des instances. Argo CD n'ordonne pas les Applications entre elles ;
+    # la reprise sur erreur des Applications gateways assure la convergence.
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa
+  source:
+    repoURL: https://github.com/stoa-platform/stoa.git
+    targetRevision: main
+    path: charts/stoa-platform/crds
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stoa-system
+  syncPolicy:
+    automated:
+      prune: false        # une CRD élaguée détruirait TOUTES ses instances
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

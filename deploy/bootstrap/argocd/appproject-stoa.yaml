@@ -1,0 +1,69 @@
+---
+# AppProject `stoa` — périmètre de mutation d'Argo CD, fail-closed.
+#
+# Le projet `default` livré avec Argo CD n'impose AUCUNE restriction : toute
+# Application peut viser n'importe quel cluster, n'importe quel namespace,
+# n'importe quel type de ressource. Le manifeste précédent
+# (deploy/k3s-gateways/argocd.yaml) utilisait `project: default` — on le
+# remplace par un projet qui énumère explicitement ce qui est permis.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stoa
+  namespace: argocd
+spec:
+  description: >-
+    Périmètre unique de mutation du cluster k3s labs. Toute ressource du cluster
+    doit provenir d'une Application de ce projet — c'est ce qui rend vraie la
+    phrase « Git est la source de vérité ».
+
+  # Dépôts autorisés — énumérés, jamais `*`. Le dépôt Git est PUBLIC : Argo CD le
+  # lit sans credential, donc aucun « secret zero » n'est nécessaire pour amorcer
+  # le GitOps.
+  #
+  # Les dépôts de charts Helm doivent figurer ICI AUSSI : `sourceRepos` filtre
+  # toute source, pas seulement les dépôts Git. Une Application dont le chart
+  # vient d'un dépôt absent de cette liste reste bloquée en `Unknown` avec
+  # « repo ... is not permitted in project 'stoa' ». C'est le comportement
+  # fail-closed voulu — il faut donc déclarer chaque source, explicitement.
+  sourceRepos:
+    - https://github.com/stoa-platform/stoa.git
+    - https://kubernetes.github.io/ingress-nginx
+    - https://prometheus-community.github.io/helm-charts
+
+  # Destinations autorisées — énumérées, jamais `*`.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: gateway-dev
+    - server: https://kubernetes.default.svc
+      namespace: gateway-staging
+    - server: https://kubernetes.default.svc
+      namespace: ingress-nginx
+    - server: https://kubernetes.default.svc
+      namespace: observability
+    - server: https://kubernetes.default.svc
+      namespace: stoa-system
+
+  # Ressources cluster-scoped autorisées. ingress-nginx et kube-prometheus-stack
+  # en posent (CRD, ClusterRole, IngressClass) : on les nomme au lieu d'ouvrir.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+    - group: networking.k8s.io
+      kind: IngressClass
+    - group: scheduling.k8s.io
+      kind: PriorityClass
+
+  # `gateway-rec` est volontairement ABSENT de ce projet. Le namespace n'a jamais
+  # eu d'overlay en Git ; ses 3 déploiements ne sont définis nulle part. Il part
+  # au rebut plutôt que d'être décrit après coup (cf. RAPPORT, jalon G2).

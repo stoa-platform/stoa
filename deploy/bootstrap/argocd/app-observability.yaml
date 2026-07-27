@@ -1,0 +1,183 @@
+---
+# kube-prometheus-stack — la surveillance qui aurait vu les 19 447 redémarrages.
+#
+# POURQUOI CETTE BRIQUE ET PAS LES RÈGLES MAISON DE deploy/prometheus/ :
+# les règles déjà commitées dans ce dépôt auraient raté la panne DEUX FOIS.
+#   1. Périmètre. Tous les sélecteurs de deploy/prometheus/ sont
+#      `namespace="stoa-system"` (8×), `namespace=~"stoa-system|team-alpha|team-beta"`
+#      (7×), `namespace=~"stoa-system|stoa-monitoring"` (2×). Les namespaces qui
+#      existent réellement — gateway-dev, gateway-staging, gateway-rec —
+#      n'apparaissent dans AUCUNE règle.
+#   2. Seuil. `PodCrashLooping` (alerting-rules.yaml:222) exige
+#      > 3 redémarrages / 15 min. La panne réelle produisait 19 447 redémarrages
+#      en 119 jours, soit 1,7 / 15 min. Même avec le bon namespace, la règle
+#      n'aurait jamais déclenché : CrashLoopBackOff plafonne l'intervalle à
+#      5 min, donc une alerte de DÉBIT rate structurellement un crash-loop
+#      plafonné par le backoff.
+#
+# La règle amont `KubePodCrashLooping` de kube-prometheus-stack est fondée sur
+# l'ÉTAT (`kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}`)
+# et ne filtre aucun namespace — elle voit la panne quel que soit son rythme.
+# Reuse-first : on prend des règles maintenues en amont plutôt que d'en écrire.
+# NB : l'expression exacte doit être relue APRÈS déploiement (read-back-assert),
+# pas supposée depuis ce commentaire.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 87.19.2          # épinglé
+    helm:
+      values: |
+        # Grafana désactivé dans cette passe : l'objectif est l'ALERTING, pas les
+        # tableaux de bord. Un flag à rebasculer quand le besoin arrive.
+        grafana:
+          enabled: false
+
+        # Exportateurs du plan de contrôle DÉSACTIVÉS. Deux raisons, dans cet ordre :
+        #  1. Ils ne fonctionnent pas sur k3s : scheduler, controller-manager,
+        #     proxy et etcd ne sont pas des processus distincts exposant chacun
+        #     leur port — k3s les exécute dans un binaire unique. Les cibles de
+        #     scrape resteraient rouges en permanence, et une alerte qui est
+        #     rouge en permanence est une alerte qu'on apprend à ignorer.
+        #  2. Chacun crée un Service dans `kube-system`. Les activer obligerait à
+        #     ajouter kube-system aux destinations de l'AppProject, c'est-à-dire
+        #     à donner à Argo CD un droit d'écriture sur le namespace système
+        #     pour de la métrique décorative. Moindre privilège : on refuse.
+        # Coût assumé : pas de métriques CoreDNS. Sans effet sur l'objectif —
+        # CrashLoopBackOff et ImagePullBackOff viennent de kube-state-metrics.
+        kubeScheduler:
+          enabled: false
+        kubeControllerManager:
+          enabled: false
+        kubeEtcd:
+          enabled: false
+        kubeProxy:
+          enabled: false
+        coreDns:
+          enabled: false
+
+        # kube-state-metrics est la brique qui manquait : node_exporter tournait
+        # sur les 5 machines, mais node_exporter n'expose AUCUNE métrique d'objet
+        # Kubernetes. Sans kube-state-metrics, un CrashLoopBackOff est invisible
+        # — c'est la raison technique des 4 mois sans détection.
+        kube-state-metrics:
+          enabled: true
+
+        nodeExporter:
+          enabled: true
+
+        # Port déplacé de 9100 à 9101 — COLLISION RÉELLE, constatée au déploiement.
+        # Un `node_exporter` système tourne déjà sur les 5 machines et détient le
+        # port 9100 ; le DaemonSet du chart (hostNetwork) partait en
+        # CrashLoopBackOff sur « address already in use ».
+        #
+        # Pourquoi garder celui du chart plutôt que l'exporteur système :
+        # l'exporteur système n'est déclaré nulle part en Git, n'est scrapé par
+        # RIEN (c'est précisément la panne des 4 mois : des métriques produites
+        # que personne ne lit), et n'a ni ServiceMonitor ni règles associées.
+        # Celui du chart est réconcilié par Argo CD et découvert automatiquement.
+        # DETTE À SOLDER : les node_exporter système des 5 hôtes sont désormais
+        # redondants et doivent être retirés — sinon on maintient deux
+        # exporteurs dont un seul est observé.
+        prometheus-node-exporter:
+          service:
+            port: 9101
+            targetPort: 9101
+
+        prometheus:
+          prometheusSpec:
+            # Rétention courte et volume modeste : le disque de la flotte est la
+            # contrainte dure (p99 fsync ~10 ms), et le TSDB de Prometheus écrit
+            # un WAL. On ne transforme pas la surveillance en source de charge.
+            retention: 7d
+            retentionSize: 15GB
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                memory: 2Gi
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: local-path
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 20Gi
+            # Découvrir les ServiceMonitor de TOUS les namespaces, sans filtre.
+            # C'est la correction directe de la panne de périmètre décrite plus haut.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 256Mi
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: local-path
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 2Gi
+          config:
+            route:
+              group_by: ['namespace', 'alertname']
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 12h
+              receiver: 'default'
+              routes:
+                # Watchdog = alerte qui déclenche EN PERMANENCE, par conception.
+                # C'est le dead-man switch : câblée sur Healthchecks.io, son
+                # SILENCE devient l'alerte. C'est précisément ce qui manquait —
+                # une surveillance morte était indiscernable d'une flotte saine.
+                - matchers: ['alertname = "Watchdog"']
+                  receiver: 'deadman'
+                  group_wait: 0s
+                  group_interval: 5m
+                  repeat_interval: 5m
+            receivers:
+              - name: 'default'
+              - name: 'deadman'
+                # L'URL Healthchecks est un secret : elle N'EST PAS committée.
+                # Elle sera injectée depuis Vault via ESO à l'étape de câblage.
+                # Tant que ce bloc est vide, la DÉTECTION fonctionne (l'alerte
+                # part et est visible dans Alertmanager) mais la NOTIFICATION
+                # n'est pas livrée — limite à lever explicitement, pas à oublier.
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      # Les CRD de kube-prometheus-stack dépassent 256 Ko. Server-Side Apply
+      # évite l'annotation last-applied-configuration, qui buterait sur la
+      # limite de 262 144 octets (cf. argoproj/argo-cd#26279).
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 10m

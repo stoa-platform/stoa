@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vault-rules
+  namespace: ci
+spec:
+  groups:
+    - name: vault
+      rules:
+        # Vault scellé fait échouer les pipelines — comportement correct, mais
+        # qui doit être VISIBLE. Sans cette alerte, un Vault scellé après
+        # redémarrage se traduit par des builds rouges sans cause apparente.
+        - alert: VaultSealed
+          expr: |
+            max_over_time(kube_pod_container_status_ready{namespace="ci", pod=~"vault-.*"}[5m]) == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vault indisponible ou scellé"
+            description: "Les pipelines Jenkins ne peuvent plus obtenir d'identifiants."

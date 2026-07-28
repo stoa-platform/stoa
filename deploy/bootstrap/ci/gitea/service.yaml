@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: ci
+spec:
+  # NodePort, et non ClusterIP : le registre d'images doit être joignable au
+  # niveau HÔTE. containerd et `docker push` tournent hors du cluster et
+  # utilisent /etc/resolv.conf, pas CoreDNS — un nom en .svc.cluster.local y est
+  # irrésoluble. Chaque nœud tape son propre `localhost:30300`, kube-proxy route
+  # vers le pod Gitea où qu'il soit.
+  #
+  # Ce n'est PAS une exposition publique : ufw est en `-P INPUT DROP` et
+  # n'ouvre au monde que 22, 30080 et 30443 ; 30300 n'est joignable que par la
+  # boucle locale et les pairs du cluster. Vérifié le 2026-07-28.
+  #
+  # Pourquoi pas une entrée /etc/hosts pointant la ClusterIP : ce serait une
+  # liaison mutable posée hors de Git sur quatre nœuds. La ClusterIP change à
+  # toute recréation du Service, et les /etc/hosts deviendraient périmés EN
+  # SILENCE. `localhost` ne change jamais et le NodePort est versionné ici.
+  type: NodePort
+  selector:
+    app: gitea
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30300

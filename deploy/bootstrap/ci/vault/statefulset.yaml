@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: ci
+spec:
+  serviceName: vault
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.18
+          args: ["server"]
+          env:
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+            # Stockage FICHIER sur PVC — pas le mode dev du POC, dont tout
+            # disparaît au redémarrage.
+            - name: VAULT_LOCAL_CONFIG
+              value: |
+                storage "file" { path = "/vault/data" }
+                listener "tcp" {
+                  address     = "0.0.0.0:8200"
+                  tls_disable = 1
+                }
+                disable_mlock = true
+                ui = false
+          ports:
+            - containerPort: 8200
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          volumeMounts:
+            - name: vault-data
+              mountPath: /vault/data
+          # Amendement contrôleur validé : Vault scellé renvoie 503
+          # (non-initialisé 501) → pod NotReady → le Service ferme les flux
+          # (échec fermé) ET l'alerte VaultSealed (readiness) peut réellement
+          # rougir ; sans cette sonde, un Vault scellé mais démarré resterait
+          # « Ready » et l'alerte ne rougirait jamais.
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true
+              port: 8200
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: vault-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi

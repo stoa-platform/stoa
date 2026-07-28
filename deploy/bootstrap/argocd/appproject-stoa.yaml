@@ -43,6 +43,8 @@ spec:
       namespace: observability
     - server: https://kubernetes.default.svc
       namespace: stoa-system
+    - server: https://kubernetes.default.svc
+      namespace: ci
 
   # Ressources cluster-scoped autorisées. ingress-nginx et kube-prometheus-stack
   # en posent (CRD, ClusterRole, IngressClass) : on les nomme au lieu d'ouvrir.

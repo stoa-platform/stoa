@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gitea
+  namespace: ci
+spec:
+  serviceName: gitea
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22
+          env:
+            # ROOT_URL pointe sur le Service interne. La valeur du compose
+            # (localhost:13000) est spécifique à Docker et casserait les URL de clone.
+            - name: GITEA__server__ROOT_URL
+              value: "http://gitea.ci.svc.cluster.local:3000/"
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+            # Restreint au Service Jenkins. Le compose utilisait "*", acceptable
+            # sur un réseau Docker isolé, pas dans un cluster.
+            - name: GITEA__webhook__ALLOWED_HOST_LIST
+              value: "jenkins.ci.svc.cluster.local"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: gitea-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/version
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: gitea-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 20Gi

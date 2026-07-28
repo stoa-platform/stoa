@@ -15,6 +15,19 @@ spec:
         app: vault
     spec:
       serviceAccountName: vault
+      # Amendement contrôleur validé (constat en cours de déploiement) : le
+      # scheduler avait placé vault-0 sur worker-3, or les règles de sécurité
+      # de la tâche interdisent de toucher worker-3 (nœud hors périmètre,
+      # héberge des charges hors socle CI). Cette anti-affinité l'exclut.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - worker-3
       containers:
         - name: vault
           image: hashicorp/vault:1.18

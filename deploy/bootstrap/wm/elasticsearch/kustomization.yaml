@@ -4,3 +4,4 @@ namespace: wm
 resources:
   - service.yaml
   - statefulset.yaml
+  - networkpolicy.yaml

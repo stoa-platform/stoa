@@ -45,6 +45,10 @@ spec:
       namespace: stoa-system
     - server: https://kubernetes.default.svc
       namespace: ci
+    # F3 (lot 2) : webMethods 10.15 + son Elasticsearch, porté en cluster par
+    # la chaîne du lot 1 — spéc stoa-labs 2026-07-29-f3-webmethods-cluster.
+    - server: https://kubernetes.default.svc
+      namespace: wm
 
   # Ressources cluster-scoped autorisées. ingress-nginx et kube-prometheus-stack
   # en posent (CRD, ClusterRole, IngressClass) : on les nomme au lieu d'ouvrir.

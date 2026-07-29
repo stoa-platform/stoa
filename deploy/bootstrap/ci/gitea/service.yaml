@@ -19,6 +19,14 @@ spec:
   # toute recréation du Service, et les /etc/hosts deviendraient périmés EN
   # SILENCE. `localhost` ne change jamais et le NodePort est versionné ici.
   type: NodePort
+  # ClusterIP épinglée (F3, dette realm OCI du lot 1) : le realm du registre
+  # suit ROOT_URL (gitea.ci.svc.cluster.local:3000), que les HÔTES résolvent
+  # par une entrée /etc/hosts vers cette ClusterIP (rôle registry_config,
+  # stoa-labs). Tant que l'adresse n'était que runtime, une recréation du
+  # Service l'aurait périmée en silence — exactement l'objection du commentaire
+  # ci-dessus. La déclarer ici la rend stable et versionnée. Valeur = adresse
+  # actuelle du Service (immuable côté API ; apply server-side = no-op).
+  clusterIP: 10.43.60.211
   selector:
     app: gitea
   ports:

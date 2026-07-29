@@ -1,0 +1,19 @@
+# ClusterIP uniquement — doctrine no-Ingress du lot 1 : l'admin REST (5555) et
+# la console (9072) ne sont joignables que du cluster ; accès humain par
+# `kubectl port-forward`. L'exposition publique du data-plane viendra par la
+# bascule Caddy (F5), pas par un Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: wm-apigateway
+  namespace: wm
+spec:
+  selector:
+    app: wm-apigateway
+  ports:
+    - name: is-admin-data
+      port: 5555
+      targetPort: 5555
+    - name: console-ui
+      port: 9072
+      targetPort: 9072

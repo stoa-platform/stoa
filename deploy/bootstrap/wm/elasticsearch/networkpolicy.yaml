@@ -1,0 +1,22 @@
+# ES ne sert QUE la gateway (F4 : les clients réels sont connus — le CronJob
+# wm-restarter ne parle qu'à l'API k8s, les agents Jenkins qu'à la
+# gateway:5555). 9300 omis : ES mono-pod (à rouvrir intra-ES si le cluster ES
+# grandit). Spéc F4 § D8 (stoa-labs).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wm-elasticsearch-ingress
+  namespace: wm
+spec:
+  podSelector:
+    matchLabels:
+      app: wm-elasticsearch
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: wm-apigateway
+      ports:
+        - port: 9200
+          protocol: TCP

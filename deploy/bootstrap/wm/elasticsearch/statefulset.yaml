@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wm-elasticsearch
+  namespace: wm
+spec:
+  serviceName: elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wm-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: wm-elasticsearch
+    spec:
+      # Placement VOULU, pas subi : worker-4 est le seul nœud à la fois mesuré
+      # (fio p99 10,95 ms — ES est le composant sensible au fsync du lot 2) et
+      # vide ; worker-5 n'a jamais été mesuré et porte déjà les 3 PVC `ci`.
+      # local-path épinglerait de toute façon le pod à son premier nœud : on
+      # l'écrit. Exclut worker-3 par construction (motif PR #2819).
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - worker-4
+      containers:
+        - name: elasticsearch
+          image: localhost:30300/ci/elasticsearch:8.13.4@sha256:8efa98b161b85cd4ca692a7585efc03a72c71d650569dfe948ca8176ffa9a776
+          env:
+            # Copie conforme du Docker prouvé (worker-3, 2 mois de service —
+            # deploy/vps/webmethods/docker-compose.dev.yml). xpack off : le
+            # namespace n'est pas exposé (aucun Ingress/NodePort) ;
+            # NetworkPolicy = dette actée F4 (spéc F3, stoa-labs).
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          ports:
+            - containerPort: 9200
+          volumeMounts:
+            - name: es-data
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1536Mi
+            limits:
+              memory: 2560Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: es-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi

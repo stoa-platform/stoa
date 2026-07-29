@@ -16,7 +16,9 @@ spec:
     spec:
       containers:
         - name: gitea
-          image: gitea/gitea:1.22
+          # Épinglé par digest (dette lot 1, passe F3) : 1.22 est un tag
+          # flottant côté Docker Hub ; le digest fige ce qui tourne réellement.
+          image: gitea/gitea:1.22@sha256:538658de667c5d098a274f2f63aa6ec891d88f670cdd5282cf27221ba747dda4
           env:
             # ROOT_URL pointe sur le Service interne. La valeur du compose
             # (localhost:13000) est spécifique à Docker et casserait les URL de clone.

@@ -32,7 +32,9 @@ spec:
                       - worker-3
       containers:
         - name: jenkins
-          image: localhost:30300/ci/jenkins-go:v1
+          # Épinglé par digest (dette lot 1, passe F3) : le tag v1 est mutable
+          # dans le registre ; le digest fige ce qui tourne réellement.
+          image: localhost:30300/ci/jenkins-go:v1@sha256:00ad5591be6f1c7b4eccfd7e498abe5e947dc07f01e4d7a247005b65ef0c565b
           env:
             - name: JAVA_OPTS
               value: "-Djenkins.install.runSetupWizard=false"

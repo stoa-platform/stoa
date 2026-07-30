@@ -71,6 +71,14 @@ spec:
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: local-path
+        # `volumeMode` déclaré EXPLICITEMENT alors que Filesystem est le défaut :
+        # sans lui, l'API l'ajoute au StatefulSet vivant, or volumeClaimTemplates
+        # est IMMUABLE — Argo voyait donc un écart qu'il ne pouvait jamais
+        # réconcilier, et l'Application restait OutOfSync indéfiniment (constaté
+        # F5, 2026-07-30). Ce qui compte n'est pas la dérive mais sa conséquence :
+        # pour cette Application, « OutOfSync » ne signalait plus rien — une
+        # alerte allumée en permanence est une alerte qu'on apprend à ignorer.
+        volumeMode: Filesystem
         resources:
           requests:
             storage: 10Gi

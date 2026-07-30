@@ -55,7 +55,7 @@ impl AgentMessage {
             id: format!(
                 "msg-{}-{}",
                 chrono::Utc::now().timestamp_millis(),
-                &uuid_fragment()
+                uuid_fragment()
             ),
             from: from.to_string(),
             to: to.to_string(),

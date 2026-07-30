@@ -447,7 +447,7 @@ async fn patch_public_client(
 
     let clients_resp = client
         .get(&clients_url)
-        .header("Authorization", format!("Bearer {}", &admin_token))
+        .header("Authorization", format!("Bearer {}", admin_token))
         .send()
         .await
         .map_err(|e| format!("Client lookup failed: {}", e))?;
@@ -505,7 +505,7 @@ async fn patch_public_client(
 
     let patch_resp = client
         .put(&update_url)
-        .header("Authorization", format!("Bearer {}", &admin_token))
+        .header("Authorization", format!("Bearer {}", admin_token))
         .json(&patch_body)
         .send()
         .await

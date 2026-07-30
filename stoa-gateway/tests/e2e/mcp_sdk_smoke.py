@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 
 DEFAULT_URL = "http://127.0.0.1:8080/mcp/sse"
@@ -71,7 +71,7 @@ async def run_smoke(
     headers = {"Authorization": f"Bearer {bearer}"} if bearer else None
 
     try:
-        async with streamablehttp_client(url, headers=headers) as (
+        async with streamable_http_client(url, headers=headers) as (
             read_stream,
             write_stream,
             _get_session_id,

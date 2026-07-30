@@ -61,7 +61,16 @@ jobs:
       run-coverage: true
       run-build: true
       upload-artifact: true
-      runner: self-hosted
+      # `ubuntu-latest` et non `self-hosted` : le dépôt n'a AUCUN runner
+      # auto-hébergé enregistré (0 au 2026-07-30), donc ce job restait en file
+      # indéfiniment — mesuré 38 min sans démarrer, seul run en attente du
+      # dépôt. Conséquence : tout changement front atteignait `main` SANS
+      # aucune validation CI. Un contrôle qui ne peut pas s'exécuter n'est pas
+      # un garde-fou, c'est un voyant éteint qu'on croit allumé.
+      # reusable-node-ci ne fait que lint/format/i18n/test/build Node : il n'a
+      # besoin d'aucune ressource locale. Si des runners sont réenregistrés un
+      # jour, repasser ce paramètre suffit — l'entrée `runner` est prévue pour.
+      runner: ubuntu-latest
     permissions:
       contents: read
       checks: write

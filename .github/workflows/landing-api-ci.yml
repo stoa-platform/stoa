@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
@@ -86,7 +86,7 @@ jobs:
           retention-days: 30
 
       - name: Test Report
-        uses: dorny/test-reporter@29672c52a8220c09bd9f79b5b6cf6315f1763996 # v1
+        uses: dorny/test-reporter@a53e41438c2381e621dc719a47a57180e30c7075 # v1
         if: always()
         with:
           name: 'landing-api Tests'

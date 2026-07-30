@@ -1,0 +1,107 @@
+# Réplique A du SPIKE « répliques décalées » (stoa-labs
+# SPIKE-wm-repliques-decalees-ignite.md). DEUX Deployments d'une réplique
+# plutôt qu'un Deployment de deux : le CronJob de rotation doit pouvoir cibler
+# UNE réplique, or les noms de pods d'un Deployment sont aléatoires. Le label
+# `rotation` donne cette prise ; le Service, lui, sélectionne toujours
+# `app: wm-apigateway` et voit donc les deux.
+#
+# HYPOTHÈSE À RÉFUTER : deux nœuds Ignite en rotation permanente peuvent servir
+# MOINS BIEN qu'un nœud seul avec son trou de 120-235 s (mesuré en F5, ~85 %).
+# Chaque départ est détecté en ~30 s (igniteFailureDetectionTimeout) et entraîne
+# un rééquilibrage de cache. Le critère d'arrêt est la sonde publique de F5.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wm-apigateway-a
+  namespace: wm
+spec:
+  replicas: 1
+  # Recreate : miroir des sémantiques `docker restart` du poste worker-3 ;
+  # deux gateways trial simultanées sur le même ES n'ont aucun sens.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wm-apigateway
+      rotation: a
+  template:
+    metadata:
+      labels:
+        app: wm-apigateway
+        rotation: a
+    spec:
+      # Anti-affinité worker-3 (motif PR #2819) : la prod Docker wm-dev-* y
+      # tourne encore (double-run F3–F5) — GOAL socle→gateway, jalon F3.
+      affinity:
+        # Les deux répliques sur des nœuds DISTINCTS : sans cela, la perte d'un
+        # nœud emporterait les deux et la rotation ne protégerait de rien.
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: wm-apigateway
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - worker-3
+      containers:
+        - name: apigateway
+          image: localhost:30300/ci/apigateway-trial:10.15@sha256:b6aee2b436f6d1053e881844c1f4a6cd12b168a4e2784af97dc84419cef59c49
+          env:
+            # Copie conforme du compose dev worker-3
+            # (deploy/vps/webmethods/docker-compose.dev.yml) : l'état vit dans
+            # ES, la gateway n'a AUCUN volume (constaté sur le Docker de
+            # référence — 2 mois de service).
+            - name: apigw_elasticsearch_hosts
+              value: "elasticsearch:9200"
+            - name: apigw_elasticsearch_http_username
+              value: ""
+            - name: apigw_elasticsearch_http_password
+              value: ""
+          ports:
+            - containerPort: 5555
+            - containerPort: 9072
+          # Identifiants des sondes = Administrator:manage, les identifiants PAR
+          # DÉFAUT de l'image trial, déjà publics dans le healthcheck du compose
+          # de ce dépôt. Retour mesuré ~5 min après restart (handoff stoa-labs
+          # 2026-07-29) : la startupProbe laisse 10 min ; ensuite readiness 15 s
+          # (cadence du healthcheck compose) et liveness en filet du cas
+          # « bloqué sans exit » (l'expiration trial, elle, sort en ExitCode 0
+          # → restartPolicy Always la couvre).
+          startupProbe:
+            httpGet:
+              path: /rest/apigateway/health
+              port: 5555
+              httpHeaders:
+                - name: Authorization
+                  value: "Basic QWRtaW5pc3RyYXRvcjptYW5hZ2U="
+            periodSeconds: 15
+            failureThreshold: 40
+          readinessProbe:
+            httpGet:
+              path: /rest/apigateway/health
+              port: 5555
+              httpHeaders:
+                - name: Authorization
+                  value: "Basic QWRtaW5pc3RyYXRvcjptYW5hZ2U="
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /rest/apigateway/health
+              port: 5555
+              httpHeaders:
+                - name: Authorization
+                  value: "Basic QWRtaW5pc3RyYXRvcjptYW5hZ2U="
+            periodSeconds: 30
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 3Gi
+            limits:
+              memory: 4Gi

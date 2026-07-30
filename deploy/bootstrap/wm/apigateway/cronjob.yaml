@@ -3,12 +3,32 @@
 # contrôlé aux minutes 0/20/40 — le même motif que le cron root de worker-3,
 # porté avec le pod. Le ReplicaSet recrée le pod aussitôt.
 #
-# CHIFFRE MESURÉ (F5, 2026-07-30) : la coupure dure 150 s, pas « ~5 min ».
-# Sonde à 5 s depuis l'hôte worker-3 sur la ClusterIP : 07:20:23 → 07:22:54.
-# Soit 17 min 30 de service par cycle de 20 min = 87,5 % de disponibilité.
-# L'estimation précédente (« retour Ready ~5 min ; ~15 min de service par
-# cycle ») surestimait le trou d'un facteur 2. Les jobs wm-restarter eux-mêmes
-# durent 4-9 s : les 150 s sont le DÉMARRAGE de webMethods, pas la suppression.
+# COUPURE MESURÉE : 120 à 235 s par cycle, soit ~85 % de disponibilité.
+#
+# Sonde à 5 s sur l'INVOCATION DATA-PLANE publique
+# (https://dev-wm.gostoa.dev/gateway/…), 36 min, deux cycles complets
+# (F5, 2026-07-30) :
+#     10:40:09 → 10:44:04   235 s
+#     11:00:14 → 11:02:18   120 s
+# La dispersion atteint un FACTEUR 2 : le chiffre honnête est un intervalle,
+# pas un point. Ne pas le réduire à une moyenne rassurante.
+#
+# CORRECTION d'une valeur précédemment inscrite ici. Ce commentaire annonçait
+# « 150 s » et « 87,5 % ». C'était mesuré sur /rest/apigateway/health — or le
+# health remonte ~85 s AVANT que l'API soit chargée et invocable. Un client
+# voit donc plus long qu'une sonde de santé, et c'est le client qui compte.
+# Les jobs wm-restarter durent 4-9 s : la coupure est le DÉMARRAGE de
+# webMethods, pas la suppression du pod.
+#
+# Ce que voit un client pendant la fenêtre (355 s cumulées sur les 2 cycles) :
+#     503  340 s  le handle_errors du Caddyfile (worker-3) — intention tenue
+#     500   10 s  webMethods répond lui-même 500 pendant son arrêt, et Caddy
+#                 RELAIE ce 5xx amont : handle_errors ne capture que les
+#                 erreurs DE Caddy, pas une réponse d'erreur transmise
+#     000    5 s  aucune réponse sous 6 s (connexion vers un amont mort)
+# Le couvrir exigerait d'intercepter les 5xx amont (handle_response), ce qui
+# masquerait aussi de vraies erreurs applicatives de la gateway. À connaître,
+# pas à maquiller.
 #
 # Conséquence assumée. La haute disponibilité par répliques décalées (A à
 # :00/:20/:40, B à :10/:30/:50) est un SPIKE SÉPARÉ, pas à improviser ici :

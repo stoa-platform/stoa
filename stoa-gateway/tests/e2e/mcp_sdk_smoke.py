@@ -82,10 +82,11 @@ async def run_smoke(
         # D'où le `async with` ci-dessous ; l'omettre fuirait des connexions à
         # chaque exécution.
         async with httpx2.AsyncClient(headers=headers) as http_client:
+            # 2.x ne rend que DEUX flux : `get_session_id` a disparu du tuple
+            # (la 1.x en rendait trois). Il n'était lié nulle part ailleurs ici.
             async with streamable_http_client(url, http_client=http_client) as (
                 read_stream,
                 write_stream,
-                _get_session_id,
             ):
                 async with ClientSession(read_stream, write_stream) as session:
                     # 1. initialize — locks CAB-2112 (experimental shape) + CAB-2106 (Accept).

@@ -20,7 +20,7 @@ implementation_pending:
   - "PR #2781 Vault wrap on _wrap_pseudonymization_key (CAB-2226 condition)"
   - "P0-MCP-1 approval-token runtime (gated on PR #2781 + #2780 lock-step deploy)"
   - "P0-GW-1 / P0-GW-2 gateway fail-closed runtime (CAB-2227)"
-  - "P0-AUD-2 minimal Gateway↔CP audit emit (in ADR-070 §4.6)"
+  - "P0-AUD-2 minimal Gateway↔CP audit emit (in ADR-072 §4.6)"
 scope:
   - control-plane-api/
   - stoa-gateway/
@@ -49,7 +49,7 @@ owners:
 > - Any future move to raw storage for `pseudonymization_key` without a NEW ADR explicitly narrowing the trust boundary.
 > - Multi-role sign-off framing on new artefacts — solo project mode applies (per `feedback_solo_project_mode_signoffs`).
 >
-> **Phase 0 rule preserved (challenger §5)**: Phase 0 closes local P0 blockers only if P0-AUD-2 minimal Gateway↔CP audit chain is included. ADR-070 §4.6 codifies this; the chain itself is part of PR #2781 scope.
+> **Phase 0 rule preserved (challenger §5)**: Phase 0 closes local P0 blockers only if P0-AUD-2 minimal Gateway↔CP audit chain is included. ADR-072 §4.6 codifies this; the chain itself is part of PR #2781 scope.
 >
 > **Historical (pre-validation) note** — the doctrine `challenged` state above became `validated` via operator decision on 2026-05-13. The "Refused now" list from the prior challenged-state has been folded into the live conditions above; the original wording is preserved in git history via this section's pre-validation revision.
 
@@ -72,7 +72,7 @@ Le plan cible une correction en **9 semaines**, structurée ainsi :
 | Phase 0 | Semaines 1-2 | Fermer les blockers P0 | 4 FAIL → 0 FAIL sur gates bloquants |
 | Phase 1 | Semaines 3-5 | Restaurer chaîne audit + observabilité + runtime validation | Audit Gateway↔CP opérationnel, metadata MCP typées |
 | Phase 2 | Semaines 6-9 | Workflow approval auditable + state machine unifiée | Souscription et révocation prouvables bout-en-bout |
-| ADRs | En parallèle | Versionner la doctrine absente | ADR-067, 068, 069, 070, 071 publiées (ADR-001 reste predecessor accepté, non amendé) |
+| ADRs | En parallèle | Versionner la doctrine absente | ADR-069, ADR-070, ADR-071, ADR-072, ADR-073 publiées (ADR-001 reste predecessor accepté, non amendé) |
 
 ---
 
@@ -133,7 +133,7 @@ Le gate doit refuser le démarrage si au moins une condition est vraie :
 - L’équipe sécurité refuse le design de token d’approbation.
 - La migration audit log ne définit pas précisément ce que devient `erase_user_pii`.
 - Le plan de rollback des migrations DB est absent.
-- Les ADR-067 et ADR-068 restent non versionnées.
+- Les ADR-069 et ADR-070 restent non versionnées.
 - Les tests de preuve DORA/NIS2 ne sont pas identifiés avant implémentation.
 
 ### 1.6 Intégration des conditions C1-C7 (CAB-2229, opérateur 2026-05-13)
@@ -142,12 +142,12 @@ Le gate est fermé : opérateur GO_WITH_CONDITIONS, validation_status flippé à
 
 | # | Condition | Statut | Référence canonique |
 |---|-----------|--------|---------------------|
-| C1 | Split Phase 0 / NOGO régulateur — Option A (Phase 0 minimal audit chain) ou SPLIT_GATE explicite | **CLOSED — Option A** | ADR-070 §4.6 codifie la chain minimum Phase 0 (denies + approval-gated, durable spool). Operator approval CAB-2227 confirme C1 Option A. |
-| C2 | Sign-off business du fail-closed | **CLOSED — operator** | Operator approval CAB-2227 enregistré : `validated_for_code_execution: true` côté opérateur, SLA impact accepté. Frontmatter §C2 conditions intégrées dans ADR-070 §4.1. |
-| C3 | Cache permissions = artefact signé non extensible | **CLOSED** | ADR-070 §4.2 codifie le `policy_cache_artefact` (policy_version, issued_at, expires_at ≤ 60 min, signature, deny_default). Operator parameters : TTL = 60 min, jamais extensible localement. |
-| C4 | Approval token avec intent binding + preuve 4-eyes | **CLOSED** | ADR-067 §4.4 codifie les 6 invariants approval token (jti single-use atomic, arguments_hash, policy_version, contract_version, requester/approver séparés, audit issued/used/rejected). Operator approval CAB-2225 confirme conditions binding. |
-| C5 | Audit immutability : trigger strict + procédure migration séparée | **CLOSED** | ADR-068 §4.4 (trigger + 3 exceptions break-glass), ADR-069 §4.2 (pseudo aux table). Operator approval CAB-2226 : key disposition = retrievable-with-dual-control ; **Vault wrap mandatory** sur PR #2781 (`implementation_pending`). |
-| C6 | State machine partial provisioning + failure states | **CLOSED** | ADR-071 §4.1 codifie `PARTIALLY_PROVISIONED`, `PROVISIONING_FAILED`, `DEPROVISIONING_FAILED`. Operator approval CAB-2228 : visibility consumer-visible avec target breakdown, 4-eyes strict 2 tenant-admins, time budget 15 min. PR #2782 (DEPROVISIONING_FAILED) + PR #2784 (suspend/reactivate webhooks) déjà mergées. |
+| C1 | Split Phase 0 / NOGO régulateur — Option A (Phase 0 minimal audit chain) ou SPLIT_GATE explicite | **CLOSED — Option A** | ADR-072 §4.6 codifie la chain minimum Phase 0 (denies + approval-gated, durable spool). Operator approval CAB-2227 confirme C1 Option A. |
+| C2 | Sign-off business du fail-closed | **CLOSED — operator** | Operator approval CAB-2227 enregistré : `validated_for_code_execution: true` côté opérateur, SLA impact accepté. Frontmatter §C2 conditions intégrées dans ADR-072 §4.1. |
+| C3 | Cache permissions = artefact signé non extensible | **CLOSED** | ADR-072 §4.2 codifie le `policy_cache_artefact` (policy_version, issued_at, expires_at ≤ 60 min, signature, deny_default). Operator parameters : TTL = 60 min, jamais extensible localement. |
+| C4 | Approval token avec intent binding + preuve 4-eyes | **CLOSED** | ADR-069 §4.4 codifie les 6 invariants approval token (jti single-use atomic, arguments_hash, policy_version, contract_version, requester/approver séparés, audit issued/used/rejected). Operator approval CAB-2225 confirme conditions binding. |
+| C5 | Audit immutability : trigger strict + procédure migration séparée | **CLOSED** | ADR-070 §4.4 (trigger + 3 exceptions break-glass), ADR-071 §4.2 (pseudo aux table). Operator approval CAB-2226 : key disposition = retrievable-with-dual-control ; **Vault wrap mandatory** sur PR #2781 (`implementation_pending`). |
+| C6 | State machine partial provisioning + failure states | **CLOSED** | ADR-073 §4.1 codifie `PARTIALLY_PROVISIONED`, `PROVISIONING_FAILED`, `DEPROVISIONING_FAILED`. Operator approval CAB-2228 : visibility consumer-visible avec target breakdown, 4-eyes strict 2 tenant-admins, time budget 15 min. PR #2782 (DEPROVISIONING_FAILED) + PR #2784 (suspend/reactivate webhooks) déjà mergées. |
 | C7 | Planning 9 semaines conditionnel staffing parallèle | **CLOSED — solo mode** | Solo project mode (`feedback_solo_project_mode_signoffs`) : l'opérateur s'engage personnellement sur le timeline. Si la capacité solo s'avère insuffisante en cours d'exécution, le plan rebase à 12-14 semaines sans drame. Aucun staffing tiers requis. |
 
 **Implications sur les PRs en cours** (cf. `implementation_pending` du frontmatter) :
@@ -445,7 +445,7 @@ Si `tool.requires_human_approval == true` :
 - Tout destructive call sans token → 403.
 - 403 produit un audit event structuré.
 - Token valide single-use → allow une seule fois.
-- La doctrine ADR-067 est exécutée au runtime, pas seulement décrite.
+- La doctrine ADR-069 est exécutée au runtime, pas seulement décrite.
 
 ---
 
@@ -523,7 +523,7 @@ After:
 - `UPDATE audit_events` échoue au niveau PostgreSQL.
 - `DELETE audit_events` échoue au niveau PostgreSQL.
 - `erase_user_pii()` ne mute jamais `audit_events`.
-- Le conflit GDPR/DORA est documenté dans ADR-069 avant merge.
+- Le conflit GDPR/DORA est documenté dans ADR-071 avant merge.
 
 **Point à trancher au Gate**
 
@@ -741,7 +741,7 @@ Design :
 - `AUDIT_RETENTION_DAYS=1825` par défaut.
 - Helm CronJob quotidien.
 - `purge_before()` utilisé uniquement sur données purgeables, pas sur `audit_events` append-only si DORA impose conservation.
-- En cas de conflit, ADR-069 tranche.
+- En cas de conflit, ADR-071 tranche.
 
 Acceptance criteria :
 
@@ -860,7 +860,7 @@ Actions :
 - Ajouter `approval_diff` JSONB.
 - Stocker approver actor/session/IP.
 - Exiger justification non vide pour approvals manuels.
-- Pour destructive endpoints, exiger enhanced approval si ADR-067 le décide.
+- Pour destructive endpoints, exiger enhanced approval si ADR-069 le décide.
 
 Acceptance criteria :
 
@@ -947,9 +947,11 @@ Acceptance criteria :
 
 ## 8. ADRs à formaliser
 
-### 8.1 ADR-071 — API subscription lifecycle
+> **2026-05-18 — Renumérotation +1 (collision stoa-docs).** Ce batch était initialement numéroté ADR-067…071. Une déduplication d'un `adr-060` en double sur `stoa-docs` `main` a décalé tous les ADR ≥066 d'un cran : `stoa-docs` `main` publie désormais `adr-067` (UAC LLM-Optimized) et `adr-068` (Audit Log Actor/Resource Views), en collision avec ce batch. Le batch a été renuméroté **+2 vers les slots libres ADR-069…073** : ADR-069 UAC doctrine, ADR-070 audit doctrine, ADR-071 GDPR/DORA, **ADR-072 gateway fail-closed**, ADR-073 subscription lifecycle. Toutes les références ci-dessous, le frontmatter, le README des drafts et les deux decision records ont été mis à jour. Vérifier l'index ADR de `stoa-docs` avant toute promotion ultérieure.
 
-> **2026-05-13 reconciliation note.** L'ancienne entrée "ADR-001 — API exposure strategy" est obsolète : ADR-001 existe déjà (Accepted 2026-01-18) et reste **predecessor non amendé**. Le manque réel = lifecycle souscription, traité par un ADR neuf (ADR-071) qui étend ADR-001 sans le modifier.
+### 8.1 ADR-073 — API subscription lifecycle
+
+> **2026-05-13 reconciliation note.** L'ancienne entrée "ADR-001 — API exposure strategy" est obsolète : ADR-001 existe déjà (Accepted 2026-01-18) et reste **predecessor non amendé**. Le manque réel = lifecycle souscription, traité par un ADR neuf (ADR-073) qui étend ADR-001 sans le modifier.
 
 But :
 
@@ -961,11 +963,11 @@ But :
 
 Statut cible : `accepted` avant Phase 2.
 
-Draft : `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-071-api-subscription-lifecycle.md`.
+Draft : `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-073-api-subscription-lifecycle.md`.
 
 ---
 
-### 8.2 ADR-067 — UAC describes / MCP projects / Smoke proves
+### 8.2 ADR-069 — UAC describes / MCP projects / Smoke proves
 
 But :
 
@@ -981,7 +983,7 @@ Statut cible : `accepted` avant merge P0-3.
 
 ---
 
-### 8.3 ADR-068 — Audit log actor/resource doctrine
+### 8.3 ADR-070 — Audit log actor/resource doctrine
 
 But :
 
@@ -994,7 +996,7 @@ Statut cible : `accepted` avant merge P1-1.
 
 ---
 
-### 8.4 ADR-069 — GDPR ↔ DORA audit reconciliation
+### 8.4 ADR-071 — GDPR ↔ DORA audit reconciliation
 
 But :
 
@@ -1007,7 +1009,7 @@ Statut cible : `accepted` avant migration P0-4.
 
 ---
 
-### 8.5 ADR-070 — Gateway fail-closed posture
+### 8.5 ADR-072 — Gateway fail-closed posture
 
 But :
 
@@ -1078,7 +1080,7 @@ Le plan est terminé seulement si :
 
 - Les 12 gates DORA/NIS2 sont PASS ou explicitement acceptées avec justification externe.
 - Les 4 P0 FAIL sont fermés par tests.
-- Les ADR-067/068/069/070 sont versionnées.
+- Les ADR-069/ADR-070/ADR-071/ADR-072 sont versionnées.
 - Le smoke suite est automatisé en CI ou environnement pré-prod.
 - Le challenger externe signe un Decision Record final.
 - Le runbook ops décrit fail-closed, break-glass, audit replay, revocation failed.
@@ -1090,7 +1092,7 @@ Le plan est terminé seulement si :
 | Risque | Probabilité | Impact | Mitigation |
 |---|---:|---:|---|
 | Fail-closed provoque indisponibilité client lors d’un incident CP | Élevée | Élevé | Circuit breaker, status page, runbook, cache frais strict, communication business |
-| Trigger audit bloque migration légitime | Moyenne | Élevé | Procédure migration dédiée, tests staging, break-glass audité si accepté par ADR-069 |
+| Trigger audit bloque migration légitime | Moyenne | Élevé | Procédure migration dédiée, tests staging, break-glass audité si accepté par ADR-071 |
 | Approval token ralentit agents IA | Moyenne | Moyen | UX approval claire, TTL court mais réaliste, erreurs explicites |
 | Gateway audit buffer perd des events | Moyenne | Élevé | Buffer borné + métrique drop + alerte + option durable queue |
 | State machine migration casse UI/API | Moyenne | Élevé | Compatibility layer, migration progressive, tests contract |
@@ -1107,10 +1109,10 @@ Le plan est terminé seulement si :
 
 ```text
 PR-DOC-0: Plan correctif draft
-PR-DOC-1: ADR-067 draft
-PR-DOC-2: ADR-068 draft
-PR-DOC-3: ADR-069 draft
-PR-DOC-4: ADR-070 draft
+PR-DOC-1: ADR-069 draft
+PR-DOC-2: ADR-070 draft
+PR-DOC-3: ADR-071 draft
+PR-DOC-4: ADR-072 draft
 Decision record: GO / GO_WITH_CONDITIONS / NOGO
 ```
 
@@ -1179,7 +1181,7 @@ Rollback :
 
 - Ne pas supprimer le trigger sans Decision Record.
 - En cas de blocage, forward-fix recommandé.
-- Break-glass uniquement si ADR-069 le permet.
+- Break-glass uniquement si ADR-071 le permet.
 
 ### 12.3 Migration state machine
 
@@ -1283,10 +1285,10 @@ TBD.
 
 - [ ] Decision Record créé.
 - [ ] Challenger externe assigné.
-- [ ] ADR-067 draft disponible.
-- [ ] ADR-068 draft disponible.
 - [ ] ADR-069 draft disponible.
 - [ ] ADR-070 draft disponible.
+- [ ] ADR-071 draft disponible.
+- [ ] ADR-072 draft disponible.
 - [ ] Business owner informé de l’impact fail-closed.
 - [ ] Environnement staging prêt.
 - [ ] Snapshot DB anonymisé disponible.

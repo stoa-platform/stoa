@@ -13,6 +13,8 @@ phase0_authorization: "conditional_after_conditions_are_written_and_signed"
 
 # Decision — UAC Subscription MCP Corrective Plan
 
+> **2026-05-18 — ADR numbers renumbered +2.** The ADR references in this record were originally written as ADR-067…071. They were renumbered into free `stoa-docs` slots **ADR-069…073** (gateway fail-closed = ADR-072) after a duplicate-`adr-060` dedup on `stoa-docs` `main` took `adr-067`/`adr-068`. Verdict and conditions are unchanged. See `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` §8.
+
 ## 1. Verdict
 
 **Verdict challenger : `GO_WITH_CONDITIONS`.**
@@ -44,7 +46,7 @@ Mettre le plan à `validation_status: challenged`, pas `validated`.
 `validated` ne doit être utilisé qu’après :
 
 - acceptation écrite des conditions C1 à C7 ;
-- ADR-067, ADR-068, ADR-069 et ADR-070 au minimum en draft reviewable ;
+- ADR-069, ADR-070, ADR-071 et ADR-072 au minimum en draft reviewable ;
 - owners business, security, compliance, gateway et CP-API nommés.
 
 ### C1 — Clarifier le split Phase 0 / levée du NOGO régulateur
@@ -71,13 +73,13 @@ Condition : ajouter un sign-off business/security sur les règles suivantes :
 - aucun mode dégradé “read-only” implicite tant que le gateway ne peut pas prouver la séparation read-only / mutating par contrat UAC typé ;
 - readiness doit exposer l’état réel d’enforcement.
 
-Un mode “read-only” ne pourra être ajouté qu’ultérieurement, sous ADR-070, avec preuves typées et tests séparés.
+Un mode “read-only” ne pourra être ajouté qu’ultérieurement, sous ADR-072, avec preuves typées et tests séparés.
 
 ### C3 — Cache permissions gateway : artefact signé et non extensible
 
 Un cache frais peut être accepté pendant une indisponibilité CP, mais seulement comme artefact de politique explicite.
 
-Condition : formaliser dans ADR-070 :
+Condition : formaliser dans ADR-072 :
 
 - `policy_version` ;
 - `issued_at` ;
@@ -110,7 +112,7 @@ Sans `arguments_hash`, un token pourrait autoriser un appel différent de celui 
 
 Le trigger PostgreSQL doit bloquer `UPDATE` et `DELETE` sur `audit_events` en production.
 
-Condition : ADR-069 doit trancher avant migration :
+Condition : ADR-071 doit trancher avant migration :
 
 - aucune mutation applicative de `audit_events` ;
 - `erase_user_pii()` doit produire des événements append-only et/ou une table auxiliaire, sans altérer la ligne audit source ;
@@ -140,7 +142,7 @@ Condition : préciser les hypothèses de capacité :
 
 - au moins 1 owner gateway Rust ;
 - au moins 1 owner CP-API Python/DB ;
-- support security/compliance pour ADR-069/070 ;
+- support security/compliance pour ADR-071/ADR-072 ;
 - staging avec PostgreSQL, gateway, CP, Kafka/webhook ou équivalent ;
 - capacité QA/e2e dédiée pour smoke DORA/NIS2.
 
@@ -187,7 +189,7 @@ Avec `arguments_hash`, séparation des acteurs, store `jti` atomique, TTL court,
 
 ### 4. La pseudonymisation hors-table `audit_events` résout-elle correctement le conflit GDPR Art.17 vs DORA Art.11 ?
 
-**Réponse : direction correcte, mais résolution incomplète tant qu’ADR-069 n’est pas accepté.**
+**Réponse : direction correcte, mais résolution incomplète tant qu’ADR-071 n’est pas accepté.**
 
 La table auxiliaire est préférable à une mutation in-place, car elle préserve la ligne source et crée une preuve d’effacement/pseudonymisation. Mais il faut documenter :
 
@@ -220,7 +222,7 @@ Les volumes annoncés (~6800 LOC, ~67 tests) sont plausibles, mais le chemin cri
 - behavior change gateway fail-closed ;
 - endpoint audit inter-service ;
 - smoke e2e CP↔Gateway ;
-- ADR-069/070 avec sign-off sécurité/compliance ;
+- ADR-071/ADR-072 avec sign-off sécurité/compliance ;
 - state machine + compatibilité API/UI.
 
 Avec une seule équipe séquentielle, 9 semaines est optimiste. Avec deux workstreams techniques + support compliance/QA, 9 semaines est acceptable.
@@ -231,7 +233,7 @@ Avec une seule équipe séquentielle, 9 semaines est optimiste. Avec deux workst
 
 ### Autorisé immédiatement
 
-- Création des ADR drafts : ADR-067, ADR-068, ADR-069, ADR-070, puis ADR-001.
+- Création des ADR drafts : ADR-069, ADR-070, ADR-071, ADR-072, puis ADR-001.
 - Création des tickets Linear, sans assigner encore de date de merge P0.
 - Mise à jour du plan à `validation_status: challenged`.
 - Préparation des tests/smoke specs.
@@ -240,18 +242,18 @@ Avec une seule équipe séquentielle, 9 semaines est optimiste. Avec deux workst
 ### Autorisable après conditions écrites et signées
 
 - `P0-SUB-2` TTL commit, avec test transactionnel.
-- `P0-GW-1` et `P0-GW-2`, après ADR-070 draft et sign-off fail-closed.
+- `P0-GW-1` et `P0-GW-2`, après ADR-072 draft et sign-off fail-closed.
 - `P0-MCP-1`, après ajout des exigences `arguments_hash`, jti single-use atomique et preuve 4-eyes.
-- `P0-AUD-1`, après ADR-069 draft accepté par security/compliance.
+- `P0-AUD-1`, après ADR-071 draft accepté par security/compliance.
 - `P0-SUB-1`, après formalisation des états minimum `REVOKING/DEPROVISIONING/DEPROVISIONING_FAILED`.
 - `P0-AUD-2`, soit en Phase 0 minimal, soit explicitement reporté en Phase 1 avec mention que le NOGO régulateur n’est pas levé avant cette Phase.
 
 ### Refusé à ce stade
 
 - Marquer le plan `validated`.
-- Démarrer une migration `audit_events` sans ADR-069.
+- Démarrer une migration `audit_events` sans ADR-071.
 - Introduire un mode read-only ou cached-allow implicite pendant outage CP.
-- Déclarer la doctrine ADR-067 conforme sans enforcement runtime et smoke test.
+- Déclarer la doctrine ADR-069 conforme sans enforcement runtime et smoke test.
 - Déclarer la conformité DORA/NIS2 après Phase 0 si Gateway↔CP audit chain reste absente.
 
 ---

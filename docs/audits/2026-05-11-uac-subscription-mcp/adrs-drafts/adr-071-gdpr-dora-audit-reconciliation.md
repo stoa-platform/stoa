@@ -1,16 +1,16 @@
 ---
-title: "ADR-069: GDPR ↔ DORA Audit Reconciliation"
-sidebar_label: "ADR-069: GDPR/DORA Audit"
-sidebar_position: 69
+title: "ADR-071: GDPR ↔ DORA Audit Reconciliation"
+sidebar_label: "ADR-071: GDPR/DORA Audit"
+sidebar_position: 71
 description: "Resolves the tension between GDPR Art.17 (right to erasure) and DORA Art.11 (audit log integrity / 5-year retention) by codifying a pseudonymization model with an auxiliary table that preserves the source audit row."
 keywords: [ADR, GDPR, DORA, NIS2, audit log, pseudonymization, erasure, retention, compliance]
 ---
 
-# ADR-069 — GDPR ↔ DORA Audit Reconciliation
+# ADR-071 — GDPR ↔ DORA Audit Reconciliation
 
 ## 1. Status
 
-**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2226 for conditions; jointly with ADR-068). Key disposition: **retrievable-with-dual-control**. Vault wrap of `pseudonymization_key`: **mandatory before PR #2781 may exit DRAFT** — raw storage without Vault wrap is NOT the accepted final state. Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
+**Status:** Draft (operator-approved 2026-05-13 — see `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` §CAB-2226 for conditions; jointly with ADR-070). Key disposition: **retrievable-with-dual-control**. Vault wrap of `pseudonymization_key`: **mandatory before PR #2781 may exit DRAFT** — raw storage without Vault wrap is NOT the accepted final state. Will be promoted to `Proposed` then `Accepted` in `stoa-docs/` after CAB-2229 closes.
 
 **Date:** 2026-05-13
 
@@ -18,11 +18,11 @@ keywords: [ADR, GDPR, DORA, NIS2, audit log, pseudonymization, erasure, retentio
 
 **Source:** `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` §C + cross-cutting pattern "Conflit GDPR vs DORA non résolu" + challenger decision record §C5 + §3.3 Q4.
 
-**Related decisions:** ADR-068 Audit Log Actor/Resource/Action Doctrine (companion). ADR-070 Gateway Fail-Closed Posture (companion).
+**Related decisions:** ADR-070 Audit Log Actor/Resource/Action Doctrine (companion). ADR-072 Gateway Fail-Closed Posture (companion).
 
 ## 2. Context
 
-STOA's audit log is the spine of DORA Art.5/8/11/17 and NIS2 Art.21 compliance. ADR-068 declares it append-only with a PostgreSQL trigger refusing `UPDATE`/`DELETE`.
+STOA's audit log is the spine of DORA Art.5/8/11/17 and NIS2 Art.21 compliance. ADR-070 declares it append-only with a PostgreSQL trigger refusing `UPDATE`/`DELETE`.
 
 GDPR Art.17 ("right to erasure") may, on data-subject request and after legal review, oblige STOA to **erase or pseudonymize personal data** about a natural person — including data carried in audit events such as `actor_email` and free-text justifications.
 
@@ -112,7 +112,7 @@ Data subject request →
 
 ### 4.6 What the trigger lets through
 
-The PG trigger from ADR-068 raises on `UPDATE`/`DELETE`. Three exceptions only:
+The PG trigger from ADR-070 raises on `UPDATE`/`DELETE`. Three exceptions only:
 
 1. **Retention purge** — break-glass procedure as above. Logged.
 2. **Schema migration** — alembic-managed, no row mutation, only structure. Trigger drop is per-deployment break-glass with Security sign-off.
@@ -165,7 +165,7 @@ GDPR erasure is **not** an exception. It works through the view, not through mut
 
 - Audit cross-cutting "Conflit GDPR vs DORA non résolu"
 - Decision record §C5 and §3.3 Q4
-- ADR-068 (immutability invariant — companion)
+- ADR-070 (immutability invariant — companion)
 - GDPR Regulation (EU) 2016/679 Art.5, 17, 25
 - DORA Regulation (EU) 2022/2554 Art.11
 - EDPB Guidelines 01/2022 on data subject rights

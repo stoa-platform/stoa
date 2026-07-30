@@ -8,7 +8,7 @@
 
 ## UAC / Agent Contract Doctrine
 
-Canonical rule from ADR-067:
+Canonical rule from ADR-069 (draft — UAC enforcement doctrine; predecessor ADR-067 "UAC as LLM-Optimized Executable Contract" defines the metadata fields):
 
 ```text
 UAC describes.

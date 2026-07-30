@@ -1,3 +1,8 @@
+# Rotation A du spike « répliques décalées » — décalée d'une DEMI-période
+# (0,20,40) par rapport à l'autre, pour qu'une réplique serve pendant que
+# l'autre redémarre. Le labelSelector est SCOPÉ à `rotation=a` : sans cela
+# le CronJob tuerait les DEUX répliques ensemble et la rotation ne servirait
+# à rien — c'est le défaut que la version mono-réplique ne pouvait pas avoir.
 # Cycle trial PILOTÉ (spéc F3 § D5, stoa-labs) : l'exploitant a tranché « pas
 # de licence » (2026-07-29) ; l'expiration ~25-30 min devient un redémarrage
 # contrôlé aux minutes 0/20/40 — le même motif que le cron root de worker-3,
@@ -37,10 +42,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: wm-restarter
+  name: wm-restarter-a
   namespace: wm
 spec:
-  schedule: "*/20 * * * *"
+  schedule: "0,20,40 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -61,5 +66,5 @@ spec:
                   curl -sf --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
                   -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
                   -X DELETE
-                  "https://kubernetes.default.svc/api/v1/namespaces/wm/pods?labelSelector=app%3Dwm-apigateway"
-                  -o /dev/null -w "restart-pilote: %{http_code}\n"
+                  "https://kubernetes.default.svc/api/v1/namespaces/wm/pods?labelSelector=app%3Dwm-apigateway%2Crotation%3Da"
+                  -o /dev/null -w "restart-pilote-a: %{http_code}\n"

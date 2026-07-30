@@ -1,7 +1,18 @@
+# Réplique B du SPIKE « répliques décalées » (stoa-labs
+# SPIKE-wm-repliques-decalees-ignite.md). DEUX Deployments d'une réplique
+# plutôt qu'un Deployment de deux : le CronJob de rotation doit pouvoir cibler
+# UNE réplique, or les noms de pods d'un Deployment sont aléatoires. Le label
+# `rotation` donne cette prise ; le Service, lui, sélectionne toujours
+# `app: wm-apigateway` et voit donc les deux.
+#
+# HYPOTHÈSE À RÉFUTER : deux nœuds Ignite en rotation permanente peuvent servir
+# MOINS BIEN qu'un nœud seul avec son trou de 120-235 s (mesuré en F5, ~85 %).
+# Chaque départ est détecté en ~30 s (igniteFailureDetectionTimeout) et entraîne
+# un rééquilibrage de cache. Le critère d'arrêt est la sonde publique de F5.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wm-apigateway
+  name: wm-apigateway-b
   namespace: wm
 spec:
   replicas: 1
@@ -12,14 +23,24 @@ spec:
   selector:
     matchLabels:
       app: wm-apigateway
+      rotation: b
   template:
     metadata:
       labels:
         app: wm-apigateway
+        rotation: b
     spec:
       # Anti-affinité worker-3 (motif PR #2819) : la prod Docker wm-dev-* y
       # tourne encore (double-run F3–F5) — GOAL socle→gateway, jalon F3.
       affinity:
+        # Les deux répliques sur des nœuds DISTINCTS : sans cela, la perte d'un
+        # nœud emporterait les deux et la rotation ne protégerait de rien.
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: wm-apigateway
+              topologyKey: kubernetes.io/hostname
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:

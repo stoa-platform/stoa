@@ -31,5 +31,10 @@
     "dotenv": "^17.4.2",
     "playwright-bdd": "^8.5.0",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "@cucumber/messages@27.2.0": {
+      "uuid": "^11.1.1"
+    }
   }
 }

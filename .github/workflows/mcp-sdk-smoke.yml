@@ -39,10 +39,11 @@ env:
   # construit par l'appelant). Le smoke cassait donc sans qu'aucun commit ne
   # le provoque. Un plancher de version dans une suite de test n'est pas une
   # souplesse, c'est une dépendance non déterministe.
-  # 1.29.0 = dernière 1.x, et version de TRANSITION : elle porte les deux
-  # noms (vérifié en l'installant). Position d'attente assumée — le portage
-  # vers l'API 2.x est un travail à part, pas une correction mécanique.
-  PY_MCP_VERSION: '1.29.0'
+  # 2.0.0 = version courante, vers laquelle le script est désormais PORTÉ
+  # (plus de position d'attente sur une 1.x figée). L'épinglage reste : ce
+  # qui cassait n'était pas la version mais le PLANCHER, qui laissait entrer
+  # une majeure sans qu'aucun commit ne le décide.
+  PY_MCP_VERSION: '2.0.0'
 
 jobs:
   pre-merge:

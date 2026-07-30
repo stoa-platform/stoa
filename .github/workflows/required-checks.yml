@@ -1,7 +1,13 @@
 # =============================================================================
 # GitHub Actions: Required Checks — Branch Protection Gates
 # =============================================================================
-# Lightweight workflow containing the 3 branch-protection required checks.
+# Lightweight workflow containing 3 des 4 checks requis par la protection de
+# branche. Le QUATRIÈME — `Regression Test Guard` — vit dans un autre
+# workflow. La formulation précédente (« the 3 branch-protection required
+# checks ») laissait croire que ce fichier les portait TOUS : quiconque veut
+# l'inventaire des gardes doit interroger la protection de branche, pas ce
+# fichier. Vérifié le 2026-07-30 : License Compliance, SBOM Generation,
+# Verify Signed Commits (ici) + Regression Test Guard (ailleurs).
 # Extracted from security-scan.yml to avoid trigger delays caused by the
 # heavy 15-job security workflow (SAST, container scans, dependency audits).
 #

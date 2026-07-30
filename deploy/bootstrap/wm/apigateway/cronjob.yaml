@@ -1,8 +1,19 @@
 # Cycle trial PILOTÉ (spéc F3 § D5, stoa-labs) : l'exploitant a tranché « pas
 # de licence » (2026-07-29) ; l'expiration ~25-30 min devient un redémarrage
 # contrôlé aux minutes 0/20/40 — le même motif que le cron root de worker-3,
-# porté avec le pod. Le ReplicaSet recrée le pod aussitôt ; retour Ready
-# ~5 min ; ~15 min de service par cycle de 20 min, conséquence assumée.
+# porté avec le pod. Le ReplicaSet recrée le pod aussitôt.
+#
+# CHIFFRE MESURÉ (F5, 2026-07-30) : la coupure dure 150 s, pas « ~5 min ».
+# Sonde à 5 s depuis l'hôte worker-3 sur la ClusterIP : 07:20:23 → 07:22:54.
+# Soit 17 min 30 de service par cycle de 20 min = 87,5 % de disponibilité.
+# L'estimation précédente (« retour Ready ~5 min ; ~15 min de service par
+# cycle ») surestimait le trou d'un facteur 2. Les jobs wm-restarter eux-mêmes
+# durent 4-9 s : les 150 s sont le DÉMARRAGE de webMethods, pas la suppression.
+#
+# Conséquence assumée. La haute disponibilité par répliques décalées (A à
+# :00/:20/:40, B à :10/:30/:50) est un SPIKE SÉPARÉ, pas à improviser ici :
+# deux instances wM 10.15 sur un ES partagé exigent un vrai clustering
+# (Terracotta/Ignite) non instruit. Spéc stoa-labs F5 § D9.
 apiVersion: batch/v1
 kind: CronJob
 metadata:

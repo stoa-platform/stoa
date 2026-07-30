@@ -69,7 +69,14 @@ env:
 jobs:
   e2e-tests:
     name: E2E Tests (shard ${{ matrix.shard }}/3)
-    runs-on: self-hosted
+    # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré
+    # (0 au 2026-07-30), donc ces jobs restaient en file indéfiniment — la
+    # suite E2E ne s'exécutait tout simplement plus. Mesuré 38 min sans
+    # démarrer sur une PR, sans qu'aucun check ne rougisse : un contrôle qui
+    # ne peut pas s'exécuter n'alerte sur rien.
+    # Vérifié avant bascule : les cibles E2E sont publiques (portal 200,
+    # console 200, auth 302) et les 12 secrets de repli GitHub existent tous.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     # PR and scheduled runs are non-blocking — E2E requires live infra
     continue-on-error: ${{ github.event_name == 'pull_request' || github.event_name == 'schedule' }}
@@ -84,7 +91,17 @@ jobs:
 
       - name: Fetch E2E secrets from Vault
         id: vault-secrets
-        continue-on-error: true  # Gracefully fall back to GitHub secrets if Vault fails
+        # ÉCHEC ATTENDU sur un runner GitHub, et c'est assumé : hcvault.gostoa.dev
+        # résout publiquement mais son 443 est FERMÉ de l'extérieur — mesuré le
+        # 2026-07-30. Seul un runner du réseau autorisé
+        # l'atteint. Le repli sur les secrets GitHub cesse donc d'être un
+        # filet et devient le chemin NORMAL ; les 12 secrets nécessaires sont
+        # présents (4 personas × user/password + 4 URL).
+        # À savoir : ce `continue-on-error` a DÉJÀ masqué une panne
+        # silencieuse (404 sur une mauvaise URL, cf. commentaire ci-dessous).
+        # Si des runners auto-hébergés sont réenregistrés, repasser
+        # `runs-on` ci-dessus suffit à redonner Vault comme source primaire.
+        continue-on-error: true
         uses: hashicorp/vault-action@v3
         with:
           # vault.gostoa.dev = Infisical (different product) — E2E secrets live on

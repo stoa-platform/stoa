@@ -11,6 +11,27 @@ spec:
     repoURL: https://github.com/stoa-platform/stoa.git
     targetRevision: main
     path: deploy/bootstrap/wm/elasticsearch
+  # `volumeClaimTemplates` est IGNORÉ, et c'est le seul correctif possible.
+  # L'API ajoute au StatefulSet vivant trois champs absents de Git :
+  #   apiVersion: v1 · kind: PersistentVolumeClaim · status: {phase: Pending}
+  # `status` n'est déclarable dans AUCUN manifeste — l'écart est donc
+  # irréductible, et l'Application restait OutOfSync indéfiniment.
+  # Ignorer n'occulte rien d'actionnable : volumeClaimTemplates est un champ
+  # IMMUABLE sur un StatefulSet, donc Argo ne pourrait de toute façon jamais
+  # agir sur une différence à cet endroit.
+  # Ce qui était en jeu n'est pas la dérive mais sa conséquence : une alerte
+  # allumée en permanence est une alerte qu'on apprend à ignorer, et elle
+  # masque celle qui compterait.
+  # Une première tentative (#2834, déclarer volumeMode) n'a corrigé qu'un des
+  # champs : les blocs `spec` coïncident désormais, mais apiVersion/kind/status
+  # subsistaient. Écart re-mesuré avant d'écrire ceci, pas supposé.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: wm-elasticsearch
+      namespace: wm
+      jsonPointers:
+        - /spec/volumeClaimTemplates
   destination:
     server: https://kubernetes.default.svc
     namespace: wm

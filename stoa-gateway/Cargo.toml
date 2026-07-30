@@ -94,6 +94,29 @@ k8s-openapi = { version = "0.27", features = ["latest"], optional = true }
 schemars = { version = "1", optional = true }
 
 # === Phase 5: OpenTelemetry Distributed Tracing (CAB-1374 / CAB-1831: always-on) ===
+# ALERTE DEPENDABOT NON ATTEIGNABLE, et migration délibérément différée.
+# (analysé le 2026-07-30 — relire cette note avant de rouvrir le sujet)
+#
+# L'alerte vise `opentelemetry_sdk` <= 0.32.0 : « unbounded memory allocation
+# in W3C Baggage propagation », corrigée en 0.32.1 seulement.
+#
+# NON ATTEIGNABLE ICI : le mot `baggage` n'apparaît nulle part dans
+# stoa-gateway/src, et la feature n'est pas activée — on ne demande que
+# ["trace"]. La propagation utilisée est TraceContext, pas Baggage.
+#
+# POURQUOI CE N'EST PAS UN SIMPLE BUMP. Passer de 0.27 à 0.32 traverse cinq
+# mineures et casse deux points que ce code utilise, vérifiés sur docs.rs :
+#   - `opentelemetry::global::shutdown_tracer_provider` N'EXISTE PLUS en 0.32
+#     (il faut garder un handle sur le TracerProvider et appeler .shutdown()) ;
+#   - `opentelemetry_sdk::runtime::Tokio` est passé derrière le drapeau
+#     `experimental_async_runtime` ; la feature `rt-tokio` d'ici ne suffit plus.
+# S'y ajoutent les crates en verrou : opentelemetry, -otlp et
+# tracing-opentelemetry doivent monter ensemble.
+#
+# Cela touche l'initialisation ET l'arrêt du traçage — du code qu'on ne valide
+# pas sans exécuter le binaire. Le faire par tours de CI successifs
+# reviendrait à découvrir l'API par ses échecs ; à faire avec une chaîne Rust
+# locale, comme une passe dédiée.
 opentelemetry = { version = "0.27", features = ["trace"] }
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"] }

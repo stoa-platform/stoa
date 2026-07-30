@@ -1,0 +1,63 @@
+# Image RÉUTILISÉE depuis le registre Gitea PAR DIGEST (doctrine F3 : aucune
+# image depuis Docker Hub, aucun tag mutable). `jenkins-go:v1` embarque python3
+# (dépendance d'ansible-core) : inutile de construire et de pousser une image
+# pour 40 lignes de serveur HTTP. Le code vit dans un ConfigMap, donc l'état de
+# ce backend se dérive entièrement de Git (ADR-076).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-dev
+  namespace: wm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-dev
+  template:
+    metadata:
+      labels:
+        app: backend-dev
+    spec:
+      # Anti-affinité worker-3 (motif PR #2819) : la prod Docker wm-dev-* y
+      # tourne encore au moment où ce manifeste est posé (double-run F3–F5).
+      # À conserver après la décommission : worker-3 porte Caddy, le point
+      # d'entrée public de toute la flotte — on n'y empile pas de charge.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - worker-3
+      containers:
+        - name: backend
+          image: localhost:30300/ci/jenkins-go:v1@sha256:00ad5591be6f1c7b4eccfd7e498abe5e947dc07f01e4d7a247005b65ef0c565b
+          command: ["python3", "/opt/backend/server.py"]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: src
+              mountPath: /opt/backend
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /accounts
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /accounts
+              port: 8080
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: src
+          configMap:
+            name: backend-dev-src

@@ -48,8 +48,10 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx2
+
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 
 DEFAULT_URL = "http://127.0.0.1:8080/mcp/sse"
@@ -71,110 +73,119 @@ async def run_smoke(
     headers = {"Authorization": f"Bearer {bearer}"} if bearer else None
 
     try:
-        async with streamablehttp_client(url, headers=headers) as (
-            read_stream,
-            write_stream,
-            _get_session_id,
-        ):
-            async with ClientSession(read_stream, write_stream) as session:
-                # 1. initialize — locks CAB-2112 (experimental shape) + CAB-2106 (Accept).
-                init = await session.initialize()
-                results.append(
-                    StageResult(
-                        "initialize",
-                        True,
-                        f"protocol={init.protocolVersion} "
-                        f"server={init.serverInfo.name}/{init.serverInfo.version}",
-                        init,
-                    )
-                )
-
-                # `ping` stays anonymous — part of PUBLIC_METHODS per CAB-2109.
-                ping = await session.send_ping()
-                results.append(StageResult("ping", True, str(ping), ping))
-
-                # 2. Discovery surface — CAB-2121 gated these behind Bearer.
-                #    Without a bearer, record an AUTH_SKIP so post-deploy cron
-                #    without a CI secret doesn't flap; pre-merge injects a
-                #    dummy bearer so `jwt_validator=None` accepts it
-                #    (stoa-gateway/src/mcp/sse.rs:280) and we exercise the
-                #    real discovery surface.
-                if bearer is None:
+        # SDK MCP 2.x : `streamable_http_client` ne prend plus `headers`. On lui
+        # passe un client HTTP pré-configuré — et c'est `httpx2`, pas `httpx` :
+        # le SDK 2.0 dépend d'un paquet distinct (httpx n'est même pas installé).
+        # PROPRIÉTÉ DU CLIENT : la source du SDK est explicite —
+        #   « Only manage client lifecycle if we created it »
+        # donc un client fourni par l'appelant doit être fermé PAR l'appelant.
+        # D'où le `async with` ci-dessous ; l'omettre fuirait des connexions à
+        # chaque exécution.
+        async with httpx2.AsyncClient(headers=headers) as http_client:
+            async with streamable_http_client(url, http_client=http_client) as (
+                read_stream,
+                write_stream,
+                _get_session_id,
+            ):
+                async with ClientSession(read_stream, write_stream) as session:
+                    # 1. initialize — locks CAB-2112 (experimental shape) + CAB-2106 (Accept).
+                    init = await session.initialize()
                     results.append(
                         StageResult(
-                            "discovery",
+                            "initialize",
                             True,
-                            "AUTH_SKIP: set STOA_GATEWAY_BEARER to exercise "
-                            "tools/list, resources/list, prompts/list, logging/setLevel",
-                        )
-                    )
-                else:
-                    tools = await session.list_tools()
-                    results.append(
-                        StageResult(
-                            "tools/list",
-                            len(tools.tools) > 0,
-                            f"{len(tools.tools)} tools",
-                            tools,
+                            f"protocol={init.protocolVersion} "
+                            f"server={init.serverInfo.name}/{init.serverInfo.version}",
+                            init,
                         )
                     )
 
-                    resources = await session.list_resources()
-                    results.append(
-                        StageResult(
-                            "resources/list",
-                            True,
-                            f"{len(resources.resources)} resources",
-                            resources,
-                        )
-                    )
+                    # `ping` stays anonymous — part of PUBLIC_METHODS per CAB-2109.
+                    ping = await session.send_ping()
+                    results.append(StageResult("ping", True, str(ping), ping))
 
-                    templates = await session.list_resource_templates()
-                    results.append(
-                        StageResult(
-                            "resources/templates/list",
-                            True,
-                            f"{len(templates.resourceTemplates)} templates",
-                            templates,
+                    # 2. Discovery surface — CAB-2121 gated these behind Bearer.
+                    #    Without a bearer, record an AUTH_SKIP so post-deploy cron
+                    #    without a CI secret doesn't flap; pre-merge injects a
+                    #    dummy bearer so `jwt_validator=None` accepts it
+                    #    (stoa-gateway/src/mcp/sse.rs:280) and we exercise the
+                    #    real discovery surface.
+                    if bearer is None:
+                        results.append(
+                            StageResult(
+                                "discovery",
+                                True,
+                                "AUTH_SKIP: set STOA_GATEWAY_BEARER to exercise "
+                                "tools/list, resources/list, prompts/list, logging/setLevel",
+                            )
                         )
-                    )
+                    else:
+                        tools = await session.list_tools()
+                        results.append(
+                            StageResult(
+                                "tools/list",
+                                len(tools.tools) > 0,
+                                f"{len(tools.tools)} tools",
+                                tools,
+                            )
+                        )
 
-                    prompts = await session.list_prompts()
-                    results.append(
-                        StageResult(
-                            "prompts/list",
-                            True,
-                            f"{len(prompts.prompts)} prompts",
-                            prompts,
+                        resources = await session.list_resources()
+                        results.append(
+                            StageResult(
+                                "resources/list",
+                                True,
+                                f"{len(resources.resources)} resources",
+                                resources,
+                            )
                         )
-                    )
 
-                    logging_result = await session.set_logging_level("info")
-                    results.append(
-                        StageResult(
-                            "logging/setLevel",
-                            True,
-                            "level=info accepted",
-                            logging_result,
+                        templates = await session.list_resource_templates()
+                        results.append(
+                            StageResult(
+                                "resources/templates/list",
+                                True,
+                                f"{len(templates.resourceTemplates)} templates",
+                                templates,
+                            )
                         )
-                    )
 
-                # 3. One concrete tool invocation (no external deps).
-                #    `stoa_platform_info` is a self-describing health tool.
-                #    Requires a bearer for the same CAB-2121 reason as
-                #    discovery; pre-merge supplies a dummy bearer.
-                if call_tool and bearer is not None:
-                    info = await session.call_tool(
-                        "stoa_platform_info", arguments={}
-                    )
-                    results.append(
-                        StageResult(
-                            "tools/call:stoa_platform_info",
-                            not info.isError,
-                            "ok" if not info.isError else "tool returned isError",
-                            info,
+                        prompts = await session.list_prompts()
+                        results.append(
+                            StageResult(
+                                "prompts/list",
+                                True,
+                                f"{len(prompts.prompts)} prompts",
+                                prompts,
+                            )
                         )
-                    )
+
+                        logging_result = await session.set_logging_level("info")
+                        results.append(
+                            StageResult(
+                                "logging/setLevel",
+                                True,
+                                "level=info accepted",
+                                logging_result,
+                            )
+                        )
+
+                    # 3. One concrete tool invocation (no external deps).
+                    #    `stoa_platform_info` is a self-describing health tool.
+                    #    Requires a bearer for the same CAB-2121 reason as
+                    #    discovery; pre-merge supplies a dummy bearer.
+                    if call_tool and bearer is not None:
+                        info = await session.call_tool(
+                            "stoa_platform_info", arguments={}
+                        )
+                        results.append(
+                            StageResult(
+                                "tools/call:stoa_platform_info",
+                                not info.isError,
+                                "ok" if not info.isError else "tool returned isError",
+                                info,
+                            )
+                        )
 
     except Exception as exc:  # noqa: BLE001
         results.append(

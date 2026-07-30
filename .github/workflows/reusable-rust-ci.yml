@@ -47,7 +47,7 @@ jobs:
       run:
         working-directory: ${{ inputs.component }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install system dependencies for rdkafka
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake build-essential
@@ -90,7 +90,7 @@ jobs:
       # --- Step 4: Coverage (reuses test artifacts via llvm-cov) ---
       - name: Cache cargo-llvm-cov binary
         id: cache-llvm-cov
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-llvm-cov-${{ runner.os }}-v0.6

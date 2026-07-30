@@ -20,4 +20,13 @@ jobs:
       component: stoa-operator
       python-version: '3.11'
       coverage-threshold: 70
-      runner: self-hosted
+      # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré,
+      # donc ce job restait en file indéfiniment — la CI Python de l'opérateur
+      # ne s'exécutait plus. Sixième et dernière occurrence illégitime du motif
+      # (après control-plane-api/CAB-2114, portal, control-plane-ui, e2e-tests,
+      # stoa-gateway) ; seul e2e-cross-validation reste sur self-hosted, lui
+      # LÉGITIMEMENT — son en-tête le déclare hors PR gate et exigeant des
+      # services vivants.
+      # Vérifié : reusable-python-ci ne fait que checkout / setup-python /
+      # lint / test / upload — aucune ressource locale.
+      runner: ubuntu-latest

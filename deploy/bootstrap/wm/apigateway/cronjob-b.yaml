@@ -1,0 +1,70 @@
+# Rotation B du spike « répliques décalées » — décalée d'une DEMI-période
+# (10,30,50) par rapport à l'autre, pour qu'une réplique serve pendant que
+# l'autre redémarre. Le labelSelector est SCOPÉ à `rotation=b` : sans cela
+# le CronJob tuerait les DEUX répliques ensemble et la rotation ne servirait
+# à rien — c'est le défaut que la version mono-réplique ne pouvait pas avoir.
+# Cycle trial PILOTÉ (spéc F3 § D5, stoa-labs) : l'exploitant a tranché « pas
+# de licence » (2026-07-29) ; l'expiration ~25-30 min devient un redémarrage
+# contrôlé aux minutes 0/20/40 — le même motif que le cron root de worker-3,
+# porté avec le pod. Le ReplicaSet recrée le pod aussitôt.
+#
+# COUPURE MESURÉE : 120 à 235 s par cycle, soit ~85 % de disponibilité.
+#
+# Sonde à 5 s sur l'INVOCATION DATA-PLANE publique
+# (https://dev-wm.gostoa.dev/gateway/…), 36 min, deux cycles complets
+# (F5, 2026-07-30) :
+#     10:40:09 → 10:44:04   235 s
+#     11:00:14 → 11:02:18   120 s
+# La dispersion atteint un FACTEUR 2 : le chiffre honnête est un intervalle,
+# pas un point. Ne pas le réduire à une moyenne rassurante.
+#
+# CORRECTION d'une valeur précédemment inscrite ici. Ce commentaire annonçait
+# « 150 s » et « 87,5 % ». C'était mesuré sur /rest/apigateway/health — or le
+# health remonte ~85 s AVANT que l'API soit chargée et invocable. Un client
+# voit donc plus long qu'une sonde de santé, et c'est le client qui compte.
+# Les jobs wm-restarter durent 4-9 s : la coupure est le DÉMARRAGE de
+# webMethods, pas la suppression du pod.
+#
+# Ce que voit un client pendant la fenêtre (355 s cumulées sur les 2 cycles) :
+#     503  340 s  le handle_errors du Caddyfile (worker-3) — intention tenue
+#     500   10 s  webMethods répond lui-même 500 pendant son arrêt, et Caddy
+#                 RELAIE ce 5xx amont : handle_errors ne capture que les
+#                 erreurs DE Caddy, pas une réponse d'erreur transmise
+#     000    5 s  aucune réponse sous 6 s (connexion vers un amont mort)
+# Le couvrir exigerait d'intercepter les 5xx amont (handle_response), ce qui
+# masquerait aussi de vraies erreurs applicatives de la gateway. À connaître,
+# pas à maquiller.
+#
+# Conséquence assumée. La haute disponibilité par répliques décalées (A à
+# :00/:20/:40, B à :10/:30/:50) est un SPIKE SÉPARÉ, pas à improviser ici :
+# deux instances wM 10.15 sur un ES partagé exigent un vrai clustering
+# (Terracotta/Ignite) non instruit. Spéc stoa-labs F5 § D9.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: wm-restarter-b
+  namespace: wm
+spec:
+  schedule: "10,30,50 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 120
+      template:
+        spec:
+          serviceAccountName: wm-restarter
+          restartPolicy: Never
+          containers:
+            - name: restart
+              image: localhost:30300/ci/curl:8.10.1@sha256:3a57427a38852a03f246297e21aebaeaab5da747f5444b7b3383c1f4c49a4aa3
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  curl -sf --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                  -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+                  -X DELETE
+                  "https://kubernetes.default.svc/api/v1/namespaces/wm/pods?labelSelector=app%3Dwm-apigateway%2Crotation%3Db"
+                  -o /dev/null -w "restart-pilote-b: %{http_code}\n"

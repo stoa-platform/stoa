@@ -4,5 +4,10 @@ namespace: wm
 resources:
   - rbac.yaml
   - service.yaml
-  - deployment.yaml
-  - cronjob.yaml
+  # Deux Deployments d'une réplique, et non un Deployment de deux : le CronJob
+  # de rotation doit cibler UNE réplique, or les noms de pods d'un Deployment
+  # sont aléatoires. Le label `rotation` donne cette prise.
+  - deployment-a.yaml
+  - deployment-b.yaml
+  - cronjob-a.yaml
+  - cronjob-b.yaml

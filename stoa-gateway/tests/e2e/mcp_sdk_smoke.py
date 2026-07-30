@@ -95,8 +95,8 @@ async def run_smoke(
                         StageResult(
                             "initialize",
                             True,
-                            f"protocol={init.protocolVersion} "
-                            f"server={init.serverInfo.name}/{init.serverInfo.version}",
+                            f"protocol={init.protocol_version} "
+                            f"server={init.server_info.name}/{init.server_info.version}",
                             init,
                         )
                     )
@@ -146,7 +146,7 @@ async def run_smoke(
                             StageResult(
                                 "resources/templates/list",
                                 True,
-                                f"{len(templates.resourceTemplates)} templates",
+                                f"{len(templates.resource_templates)} templates",
                                 templates,
                             )
                         )
@@ -182,8 +182,8 @@ async def run_smoke(
                         results.append(
                             StageResult(
                                 "tools/call:stoa_platform_info",
-                                not info.isError,
-                                "ok" if not info.isError else "tool returned isError",
+                                not info.is_error,
+                                "ok" if not info.is_error else "tool returned isError",
                                 info,
                             )
                         )

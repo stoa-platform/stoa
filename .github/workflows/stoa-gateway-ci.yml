@@ -56,13 +56,32 @@ jobs:
     with:
       component: stoa-gateway
       cargo-features: '--features kafka,pingora'
-      runner: self-hosted
+      # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré
+      # (0 au 2026-07-30), donc ce job restait en file indéfiniment — le CI
+      # Rust de la gateway ne s'exécutait tout simplement plus.
+      # Vérifié avant bascule, car un build Rust peut légitimement dépendre
+      # de l'hôte : reusable-rust-ci installe LUI-MÊME ses dépendances
+      # système (libcurl, libsasl2, cmake, build-essential) et sccache y est
+      # configuré avec SCCACHE_GHA_ENABLED, c'est-à-dire le cache GitHub
+      # Actions — conçu pour les runners hébergés, pas un cache disque local.
+      # Le workflow a de plus un repli explicite si sccache est indisponible.
+      runner: ubuntu-latest
     permissions:
       contents: read
 
   # === Docker: build + push GHCR (AMD64 only) ===
   # Note: does NOT depend on ci — flaky integration tests must not block deploy.
-  # CI still runs in parallel for visibility. Clippy/fmt gate PR merges via required checks.
+  # CI still runs in parallel for visibility.
+  # ATTENTION — la phrase qui figurait ici (« Clippy/fmt gate PR merges via
+  # required checks ») était FAUSSE, vérifié le 2026-07-30. Les checks
+  # réellement requis sur `main` sont : License Compliance, SBOM Generation,
+  # Verify Signed Commits, Regression Test Guard. Ni clippy, ni fmt, ni aucun
+  # CI Rust n'y figure. Ce job ne gardait donc rien — et il ne s'exécutait
+  # même pas, faute de runner (corrigé ci-dessus).
+  # Une garantie écrite mais inexistante est pire qu'une absence de garantie :
+  # elle dispense de vérifier. Corriger la phrase AVANT de décider s'il faut
+  # ajouter ce check aux required — c'est une décision de politique de merge,
+  # qui appartient aux mainteneurs du dépôt.
   docker:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/reusable-docker-ghcr.yml

@@ -55,7 +55,18 @@ jobs:
           sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake build-essential \
             python3 python3-venv python3-pip
 
+      # `working-directory` est REQUIS par cette action (aucun défaut) et
+      # manquait ici : rust-cache lançait donc `cargo metadata` à la racine du
+      # dépôt, où il n'y a pas de Cargo.toml, et le job mourait au setup.
+      # Ce workflow n'avait donc JAMAIS pu s'exécuter — alors que son en-tête
+      # annonce qu'il attrape les régressions de schéma CAB-2106/2109/2112
+      # avant la prod. Un garde écrit EN RÉPONSE à des incidents, qui n'a jamais
+      # tourné. `defaults.run.working-directory` ne corrige pas le cas : il ne
+      # s'applique qu'aux étapes `run:`, jamais aux `uses:`.
+      # rust-scheduled-checks.yml, lui, passait bien l'entrée.
       - uses: ./.github/actions/setup-rust-env
+        with:
+          working-directory: stoa-gateway
 
       - name: Install MCP Python SDK
         working-directory: .

@@ -37,7 +37,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          # `go-version-file` et non une version en dur : le bump de
+          # golang.org/x/crypto en 0.52.0 (8 alertes CRITIQUES de contournement
+          # d'authentification SSH) a relevé la directive `go` du module de
+          # 1.24.0 à 1.25.0, ce qui faisait échouer ce workflow épinglé à 1.24.
+          # Deux endroits qui doivent s'accorder finissent par divorcer : on lit
+          # la source de vérité. Motif déjà en place dans les autres workflows Go
+          # du dépôt (stoa-go-ci.yml, stoa-go-release.yml).
+          go-version-file: hegemon/daemon/go.mod
           cache-dependency-path: hegemon/daemon/go.sum
 
       - name: Build binary

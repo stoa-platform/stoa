@@ -1,0 +1,62 @@
+# Backend RÉEL de l'API `accounts-read` publiée par F4.
+#
+# F4 avait posé l'URI `backend-dev.wm.svc.cluster.local:8080/accounts` en la
+# documentant honnêtement comme « nom honnête, aucun backend réel derrière » :
+# la route data-plane fonctionnait (500 mesuré = elle passe, le backend manque)
+# mais rien ne répondait. F5 fait EXISTER ce nom, ce qui rend l'API réellement
+# invocable SANS RIEN RENOMMER. Spéc stoa-labs F5 § D5.
+#
+# Le serveur répond 200 sur N'IMPORTE QUEL chemin, et JOURNALISE le chemin reçu.
+# Raison : webMethods concatène la ressource à l'URI de l'endpoint, et cet
+# endpoint se termine déjà par /accounts — le backend peut donc recevoir
+# /accounts/accounts. Plutôt que de deviner la règle de concaténation, on est
+# agnostique, et le chemin réellement reçu devient une PREUVE consignée.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-dev-src
+  namespace: wm
+data:
+  server.py: |
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    ACCOUNTS = [
+        {"id": "ACC-001", "holder": "Ada Lovelace", "balance": 1042.50, "currency": "EUR"},
+        {"id": "ACC-002", "holder": "Alan Turing",  "balance":  317.00, "currency": "EUR"},
+    ]
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def _respond(self, with_body):
+            payload = json.dumps({
+                "backend": "backend-dev.wm.svc.cluster.local",
+                "receivedPath": self.path,
+                "accounts": ACCOUNTS,
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            if with_body:
+                self.wfile.write(payload)
+
+        def do_GET(self):
+            self._respond(True)
+
+        def do_HEAD(self):
+            self._respond(False)
+
+        def log_message(self, fmt, *args):
+            print("backend-dev %s" % (fmt % args), flush=True)
+
+    # ThreadingHTTPServer, PAS HTTPServer : avec protocol_version HTTP/1.1 la
+    # connexion reste ouverte (keep-alive), et un HTTPServer mono-connexion
+    # resterait bloqué à servir le premier client — une gateway qui maintient
+    # un pool de connexions ferait alors expirer tous les autres appels.
+    # Constaté en exécutant le script avant de le déployer.
+    class Server(ThreadingHTTPServer):
+        daemon_threads = True
+
+    Server(("0.0.0.0", 8080), Handler).serve_forever()

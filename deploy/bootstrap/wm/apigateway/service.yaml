@@ -1,13 +1,24 @@
 # ClusterIP uniquement — doctrine no-Ingress du lot 1 : l'admin REST (5555) et
 # la console (9072) ne sont joignables que du cluster ; accès humain par
-# `kubectl port-forward`. L'exposition publique du data-plane viendra par la
-# bascule Caddy (F5), pas par un Ingress.
+# `kubectl port-forward`. L'exposition publique du data-plane est venue par la
+# bascule Caddy (F5), pas par un Ingress — et elle ne publie QUE /gateway/*.
 apiVersion: v1
 kind: Service
 metadata:
   name: wm-apigateway
   namespace: wm
 spec:
+  # ClusterIP ÉPINGLÉE — F5. Caddy tourne au niveau HÔTE sur worker-3 et ignore
+  # CoreDNS (comme containerd) : sa cible amont est donc une IP, pas un nom.
+  # Sans épinglage, toute recréation du Service réattribue l'adresse et le
+  # Caddyfile pointe dans le vide — des 502 publics SANS aucune alerte, car
+  # rien ne relie mécaniquement les deux artefacts.
+  # Motif identique à la ClusterIP gitea (10.43.60.211) épinglée au lot 1.
+  # Mesuré joignable depuis l'hôte worker-3 : 200 en 18,7 ms (2026-07-30).
+  #
+  # SI CETTE VALEUR CHANGE, changer AUSSI, dans le dépôt stoa-labs :
+  #   ansible/roles/caddy_wm_cutover/defaults/main.yml → wm_cutover_upstream
+  clusterIP: 10.43.227.71
   selector:
     app: wm-apigateway
   ports:

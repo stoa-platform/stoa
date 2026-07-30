@@ -1,0 +1,18 @@
+# ClusterIP, NON épinglée — et c'est délibéré. Ce Service n'est consommé que
+# par la gateway, DEPUIS UN POD, donc par son nom DNS résolu par CoreDNS.
+# Contrairement à wm-apigateway (dont Caddy est un consommateur au niveau HÔTE,
+# qui ignore CoreDNS), aucune raison d'épingler l'adresse ici : épingler ce
+# qu'on n'a pas besoin de figer ajoute une contrainte d'immutabilité sans
+# bénéfice.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-dev
+  namespace: wm
+spec:
+  selector:
+    app: backend-dev
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

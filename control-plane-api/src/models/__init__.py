@@ -1,4 +1,5 @@
 from .api_gateway_assignment import ApiGatewayAssignment
+from .approval_token import ApprovalToken, ApprovalTokenStatus
 from .backend_api import BackendApi, BackendApiAuthType, BackendApiStatus
 from .catalog import (
     APICatalog,

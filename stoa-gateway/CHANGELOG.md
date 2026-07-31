@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.26](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.25...stoa-gateway-v0.9.26) (2026-07-31)
+
+
+### Features
+
+* **gateway:** CAB-2227 durable audit spool ([#2792](https://github.com/stoa-platform/stoa/issues/2792)) ([28e5dd8](https://github.com/stoa-platform/stoa/commit/28e5dd81db9fbeb362a18dbadcbbee65a9a5de7a))
+* **gateway:** porter le smoke MCP vers l'API 2.x, et lever l'épinglage d'attente ([#2840](https://github.com/stoa-platform/stoa/issues/2840)) ([10ea9d4](https://github.com/stoa-platform/stoa/commit/10ea9d468dc1c653db807e93e00e3ca477cfe2fb))
+
+
+### Bug Fixes
+
+* **gateway:** decouple /ready from tool-permission fetch (CAB-2227) ([#2796](https://github.com/stoa-platform/stoa/issues/2796)) ([71704cf](https://github.com/stoa-platform/stoa/commit/71704cff2b298486c2dbe38deb0477b8bd5e2a14))
+* **gateway:** fail-closed policy boot in regulated profiles ([#2789](https://github.com/stoa-platform/stoa/issues/2789)) ([f84a469](https://github.com/stoa-platform/stoa/commit/f84a46962b365baf40003fa30c7b4d4fa07c27cf))
+* **gateway:** fail-closed tool permissions on cp outage ([#2787](https://github.com/stoa-platform/stoa/issues/2787)) ([18629b4](https://github.com/stoa-platform/stoa/commit/18629b46ed66a6ac7397f55ab940b6e00a100148))
+
 ## [0.9.25](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.24...stoa-gateway-v0.9.25) (2026-05-12)
 
 

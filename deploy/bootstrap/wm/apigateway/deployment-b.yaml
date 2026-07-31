@@ -5,10 +5,21 @@
 # `rotation` donne cette prise ; le Service, lui, sélectionne toujours
 # `app: wm-apigateway` et voit donc les deux.
 #
-# HYPOTHÈSE À RÉFUTER : deux nœuds Ignite en rotation permanente peuvent servir
-# MOINS BIEN qu'un nœud seul avec son trou de 120-235 s (mesuré en F5, ~85 %).
-# Chaque départ est détecté en ~30 s (igniteFailureDetectionTimeout) et entraîne
-# un rééquilibrage de cache. Le critère d'arrêt est la sonde publique de F5.
+# RÉSULTAT MESURÉ (2026-07-30, 63 min de sonde publique à 5 s sur l'invocation
+# data-plane) : 99,1 % de disponibilité, contre ~85 % en mono-réplique. La
+# coupure passe de 120-235 s par cycle de 20 min à MOINS DE 5 s par rotation de
+# 10 min — sept rotations observées, chacune coûtant un seul échantillon, donc
+# la coupure réelle est SOUS la résolution de la sonde.
+#
+# L'hypothèse posée en ouvrant ce spike — « deux nœuds Ignite en rotation
+# permanente peuvent servir MOINS BIEN qu'un nœud seul » — n'a PAS été réfutée
+# par les faits : le rééquilibrage redouté ne se manifeste pas à cette échelle.
+#
+# À SAVOIR, et ce n'est pas un détail : le code d'erreur passe de 503 à 500. En
+# mono-réplique, Caddy rendait son handle_errors pendant 2-4 min ; désormais un
+# client malchanceux reçoit un 500 de webMethods relayé par Caddy, pendant moins
+# de 5 s. Il voit donc une erreur APPLICATIVE brève là où il voyait une
+# indisponibilité franche et longue. Un client qui réessaie réussit.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

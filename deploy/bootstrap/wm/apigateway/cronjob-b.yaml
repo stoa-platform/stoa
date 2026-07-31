@@ -8,7 +8,13 @@
 # contrôlé aux minutes 0/20/40 — le même motif que le cron root de worker-3,
 # porté avec le pod. Le ReplicaSet recrée le pod aussitôt.
 #
-# COUPURE MESURÉE : 120 à 235 s par cycle, soit ~85 % de disponibilité.
+# COUPURE MESURÉE — DEUX RÉGIMES, à ne pas confondre.
+#   mono-réplique (avant le 2026-07-30) : 120 à 235 s par cycle de 20 min,
+#     soit ~85 % de disponibilité ;
+#   ROTATION DÉCALÉE (régime actuel)    : moins de 5 s par rotation de
+#     10 min, soit 99,1 % mesuré sur 63 min.
+# Les chiffres détaillés ci-dessous décrivent le PREMIER régime : ils
+# expliquent pourquoi la rotation existe, pas ce qu'elle produit.
 #
 # Sonde à 5 s sur l'INVOCATION DATA-PLANE publique
 # (https://dev-wm.gostoa.dev/gateway/…), 36 min, deux cycles complets

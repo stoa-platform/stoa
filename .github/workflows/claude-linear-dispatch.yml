@@ -34,7 +34,7 @@ jobs:
       context_pack_path: ${{ steps.build.outputs.pack_path }}
       should_block: ${{ steps.build.outputs.should_block }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Unlock git-crypt
         run: |
@@ -168,7 +168,7 @@ jobs:
     outputs:
       slack_thread_ts: ${{ steps.slack-council.outputs.thread_ts }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Dedup gate: skip if ticket already has a council:ticket-* label.
       # Prevents re-running council when multiple webhooks fire for the same ticket

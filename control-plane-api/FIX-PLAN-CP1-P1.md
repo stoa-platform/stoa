@@ -357,7 +357,7 @@
    - Pas de commit obs-only : c'est intégré dans chaque commit concerné.
 
 4. **H.10 fix maintenant ou backlog ?** **Fix maintenant**. Coût 5 LOC
-   + 4 tests. Défense en profondeur requise par attentes DORA BDF. Tout
+   + 4 tests. Défense en profondeur requise par attentes DORA client A. Tout
    refactor futur introduisant `os.path.normpath` ouvre la fenêtre — le
    garde-fou doit être côté router, pas côté provider.
 

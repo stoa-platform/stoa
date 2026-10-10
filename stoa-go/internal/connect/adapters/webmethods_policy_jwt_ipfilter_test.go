@@ -3,7 +3,7 @@
 // types fell through to the default passthrough, sending raw STOA config
 // to webMethods which rejected with 400. Field names below are committed
 // under WM-10.15-HYPOTHESIS and must be validated in staging before the
-// BDF demo — ticket CAB-2161.
+// client A demo — ticket CAB-2161.
 package adapters
 
 import (

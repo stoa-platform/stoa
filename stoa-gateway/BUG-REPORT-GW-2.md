@@ -241,7 +241,7 @@ fn snapshot_default_config() {
 1. `serde_yaml::from_str::<Config>("") == Config::default()` — **faux** pour les 4 fields de P1-4.
 2. `toml::from_str::<Config>("") == Config::default()` — même.
 3. `Config::default() → serialize → deserialize == Config::default()` — oui (les Some roundtrip OK), mais le snapshot ne le prouve pas explicitement.
-4. Compatibilité avec `gateway.toml` / `config.yaml` de prod réel. Pas de fixture YAML réaliste (BDF, Engie, Elis, dev local) versionnée → impossible de vérifier "un YAML qui marchait avant marche après".
+4. Compatibilité avec `gateway.toml` / `config.yaml` de prod réel. Pas de fixture YAML réaliste (client A, client B, client C, dev local) versionnée → impossible de vérifier "un YAML qui marchait avant marche après".
 
 **Fix direction** :
 - Ajouter test `roundtrip_default_config` : `serialize(Config::default()) → deserialize → assert_eq!`.
@@ -403,7 +403,7 @@ pub struct FederationUpstreamConfig {
 Les "defaults" documentés (transport="sse", timeout=30) sont appliqués **par le consumer** (`admin/federation.rs:91-93` via `unwrap_or_else`). Si un nouveau consumer oublie l'unwrap, il lira `None`. Documenter dans la struct ou fournir des helpers `upstream.transport_or_default() -> &str`.
 
 ### N-3 — Pas de test intégration bout-en-bout "gateway.toml de prod → Config chargé"
-Aucune fixture YAML prod (dev local, Engie, Elis, BDF, LV) versionnée. Tout changement futur de nom de champ peut casser silencieusement un deployment prod existant. Suggestion : ajouter `tests/fixtures/config_*.yaml` (sans secrets) + test `load_production_fixtures` qui fait `Config::load_from(path)` pour chaque fixture et asserts des invariants.
+Aucune fixture YAML prod (dev local, client B, client C, client A, client D) versionnée. Tout changement futur de nom de champ peut casser silencieusement un deployment prod existant. Suggestion : ajouter `tests/fixtures/config_*.yaml` (sans secrets) + test `load_production_fixtures` qui fait `Config::load_from(path)` pour chaque fixture et asserts des invariants.
 
 ---
 

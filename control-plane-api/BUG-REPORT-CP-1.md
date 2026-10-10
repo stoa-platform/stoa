@@ -236,7 +236,7 @@ Le wrapper est appelé à **seulement 2 sites** : `list_apis_parallel` (ligne 51
 
 **M.7 absorbé** : `create_api` GitHub (`github_service.py:672-673`) a la même structure `if _file_exists → raise; else → create`. Même TOCTOU.
 
-**Impact** : silent data loss dans le catalog GitOps sous concurrence. Pour BDF qui audite le catalog pour DORA, fenêtre de désync non-traçable.
+**Impact** : silent data loss dans le catalog GitOps sous concurrence. Pour client A qui audite le catalog pour DORA, fenêtre de désync non-traçable.
 
 **Fix direction** :
 - GitHub : rely sur 422 du `create_file` pour détection "already exists"; pour update, passer la `sha` en argument du router et vérifier matching.
@@ -379,7 +379,7 @@ def _tenant_path(tenant_id: str, path: str = "") -> str:
 
 **Pourquoi le garder en P1** :
 - Tout refactor introduisant `os.path.normpath()` ou `Path().resolve()` ouvre le trou.
-- Défense en profondeur (DORA expectations BDF).
+- Défense en profondeur (DORA expectations client A).
 - Coût du fix dérisoire (5 LOC + 3 tests).
 
 **Fix** : `if ".." in path.split("/") or "\x00" in path or path.startswith("/"): raise HTTPException(400)`.

@@ -148,7 +148,7 @@ Combine above fixtures in a single spec, assert every externalDocs is wrapped.
 ### Risques identifiés
 
 - **R-A** : Le walk récursif peut matcher un `externalDocs` dans un nom d'extension vendor (`x-some.externalDocs`). Sémantiquement bénin pour webMethods (qui n'interprète pas les `x-*`), mais rend la transformation un peu plus générale qu'OpenAPI standard. Mitigation : documenter dans la godoc.
-- **R-B** : Perf sur grandes specs (e.g. Swagger avec 500 endpoints × 20 responses chacune). Le walk est O(nodes). Un spec BDF réaliste ~2 MB est traité en < 10 ms. Non-problème sauf pour specs > 50 MB.
+- **R-B** : Perf sur grandes specs (e.g. Swagger avec 500 endpoints × 20 responses chacune). Le walk est O(nodes). Un spec client A réaliste ~2 MB est traité en < 10 ms. Non-problème sauf pour specs > 50 MB.
 - **R-C** : Le round-trip `Unmarshal → Marshal` perd l'ordre des clés. Identique au comportement actuel de `fixExternalDocs`, ne constitue pas une régression.
 - **R-D** : Le walk modifie la map en place (re-wrapping), puis Marshal. Si un autre code tient une référence à la map intermédiaire, il verrait la forme transformée — pas le cas ici (map créée et throwaway dans la fonction).
 
@@ -354,7 +354,7 @@ after:  parsed := map[string]interface{}{}
 
 **Risque** : round-trip round-trip loses key ordering. Déjà le cas avec les autres fonctions. Pas de régression sémantique.
 
-**Trade-off** : `regexp.Match` scanne le spec sans allocation lourde ; le JSON parse alloue la map complète. Sur grosses specs (~ MB), l'allocation JSON pèse ~10× plus. Accepté : le fix se produit sur un downgrade déjà rare (3.1 = peu adopté), et le coût est négligeable sur les tailles BDF.
+**Trade-off** : `regexp.Match` scanne le spec sans allocation lourde ; le JSON parse alloue la map complète. Sur grosses specs (~ MB), l'allocation JSON pèse ~10× plus. Accepté : le fix se produit sur un downgrade déjà rare (3.1 = peu adopté), et le coût est négligeable sur les tailles client A.
 
 ### Fonctions impactées (récap)
 

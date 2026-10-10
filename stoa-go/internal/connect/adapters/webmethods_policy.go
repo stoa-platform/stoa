@@ -25,13 +25,13 @@ var wmPolicyTypeMapping = map[string]string{
 // (BUG-REPORT-GO-1.md) — previously they fell through to the default
 // passthrough, sending STOA's raw config to webMethods which rejected with
 // 400 "invalid policy params" (direct impact on CAB-2079 Auth/RBAC for the
-// BDF demo).
+// client A demo).
 //
 // WM-10.15-HYPOTHESIS: the exact webMethods 10.15 parameter names below
 // (jwtIssuer / jwtAudience / jwksURL / requiredClaims for jwtPolicy;
 // ipFilterMode / ipList for ipFilterPolicy) are a best-effort mapping drawn
 // from webMethods doc patterns but not confirmed against a live 10.15
-// instance. MUST VALIDATE in staging before BDF demo — see ticket CAB-2161.
+// instance. MUST VALIDATE in staging before client A demo — see ticket CAB-2161.
 // If field names differ, update the cases below and remove this comment.
 func mapPolicyConfig(wmType string, config map[string]interface{}) map[string]interface{} {
 	switch wmType {

@@ -64,7 +64,7 @@ Slice header (ptr+len+cap) non-atomique. Lecture concurrente sans sync = data ra
 3. `scanner.Err()` ÉTAIT lu (ligne 172 pré-S5) mais l'erreur retournée était ensuite écrasée par le sentinel `fmt.Errorf("SSE stream ended")` — donc le reconnect loop ne voyait jamais la cause réelle dans ses logs.
 4. Worst case : reconnect infini avec même event qui retruncate silencieusement.
 
-**Impact en prod** : latent. Jamais observé (les OpenAPI specs actuels passent sous 64KB). Devient un bug visible si un client pousse un spec volumineux (démo BDF type : spec webMethods complet avec ~200 paths).
+**Impact en prod** : latent. Jamais observé (les OpenAPI specs actuels passent sous 64KB). Devient un bug visible si un client pousse un spec volumineux (démo client A type : spec webMethods complet avec ~200 paths).
 
 **Fix appliqué (S5)** :
 ```go

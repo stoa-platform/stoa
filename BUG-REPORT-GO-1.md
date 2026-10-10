@@ -61,7 +61,7 @@ for _, p := range policies.PolicyActions {
 }
 ```
 
-**Impact** : si webMethods a **plusieurs** policy actions du même template pour une API (doublon créé par un `ApplyPolicy` concurrent, crash mid-apply qui a laissé un orphelin, ou upgrade qui a changé le nom mais pas le template), `RemovePolicy` n'en supprime qu'une. Les autres restent **actives côté gateway** alors que STOA les croit désactivées. Côté BDF/Engie, ça signifie qu'une policy rate-limit "supprimée" peut continuer à s'appliquer silencieusement — **divergence sécurité fonctionnelle**.
+**Impact** : si webMethods a **plusieurs** policy actions du même template pour une API (doublon créé par un `ApplyPolicy` concurrent, crash mid-apply qui a laissé un orphelin, ou upgrade qui a changé le nom mais pas le template), `RemovePolicy` n'en supprime qu'une. Les autres restent **actives côté gateway** alors que STOA les croit désactivées. Côté client A/client B, ça signifie qu'une policy rate-limit "supprimée" peut continuer à s'appliquer silencieusement — **divergence sécurité fonctionnelle**.
 
 Corollaire : pas d'idempotence réelle. Premier `RemovePolicy` laisse N-1 policies, deuxième en laisse N-2, etc. Le test `webmethods_policy_test.go` ne couvre pas le cas multi-match.
 
@@ -233,7 +233,7 @@ Si un spec a `externalDocs` ailleurs qu'à la racine (très courant dans les spe
 
 Le comment ligne 113 dit "Swagger 2.0 RefProperty parser". Mais OpenAPI 3.x peut avoir le même pattern de crash avec `content.<mime>.schema.$ref`. Le code gate strictement sur `bytes.Contains(spec, []byte("swagger"))` (ligne 115) et ne strip que `r["schema"]` (ligne 153, format Swagger 2.0).
 
-**Impact** : un OpenAPI 3.x avec `$ref` dans response content schema passe tel quel → wM 10.15 peut crasher de la même façon. Pas observé en prod (BDF envoie du Swagger 2.0 via webMethods Designer), mais Engie/LV peuvent envoyer du 3.x. Risque latent démo juin.
+**Impact** : un OpenAPI 3.x avec `$ref` dans response content schema passe tel quel → wM 10.15 peut crasher de la même façon. Pas observé en prod (client A envoie du Swagger 2.0 via webMethods Designer), mais client B/client D peuvent envoyer du 3.x. Risque latent démo juin.
 
 **Fix suggéré** : détecter `openapi: 3.x` et strip aussi `content.<mime>.schema` récursivement (ou mieux : remplacer par `{type: object}`).
 
@@ -247,7 +247,7 @@ Le switch gère `corsPolicy`, `throttlingPolicy`, `logInvocationPolicy`. `jwtPol
 
 Si STOA attend `{"issuer": "...", "audience": "..."}` mais webMethods attend `{"jwtIssuer": "...", "audienceClaim": "..."}`, wM renvoie 400 "invalid policy params". L'erreur bubble up correctement via `ApplyPolicy` (bien, contrairement à SyncRoutes), mais la policy reste non appliquée.
 
-**Impact démo** : si la démo BDF exige JWT policy (vrai, vu CAB-2079 Auth/RBAC), le apply échoue silencieusement (log seulement).
+**Impact démo** : si la démo client A exige JWT policy (vrai, vu CAB-2079 Auth/RBAC), le apply échoue silencieusement (log seulement).
 
 **Fix** : ajouter les cases manquants, ou documenter explicitement que ces types doivent être envoyés déjà-mappés par CP.
 
@@ -293,7 +293,7 @@ Les fonctions `fixExternalDocs`, `fixSecuritySchemeTypes`, `stripSwagger2Respons
 for _, field := range []string{"type", "in"} {
 ```
 
-Manque le champ `scheme` (pour type `http`) qui vaut `basic`/`bearer` — docs webMethods pour wM 10.15 demandent `BASIC`/`BEARER` uppercase pour certaines versions. Si Engie pousse un spec avec `{"type": "http", "scheme": "bearer"}`, le `type` devient `HTTP` mais `scheme` reste `bearer` → wM peut rejeter.
+Manque le champ `scheme` (pour type `http`) qui vaut `basic`/`bearer` — docs webMethods pour wM 10.15 demandent `BASIC`/`BEARER` uppercase pour certaines versions. Si client B pousse un spec avec `{"type": "http", "scheme": "bearer"}`, le `type` devient `HTTP` mais `scheme` reste `bearer` → wM peut rejeter.
 
 **Fix trivial** : ajouter `"scheme"` à la liste.
 
@@ -310,7 +310,7 @@ if err != nil {
 }
 ```
 
-Si wM est unreachable (DNS fail, timeout), `Detect` retourne `(false, nil)` — indistinguable de "wM is up, but endpoint 404". Conséquence : le caller choisit un autre adapter (Kong?) ou skippe wM sans logguer la cause réelle. À BDF, on peut finir à debug pourquoi "wM n'est pas détecté" alors que c'est juste un firewall temporaire.
+Si wM est unreachable (DNS fail, timeout), `Detect` retourne `(false, nil)` — indistinguable de "wM is up, but endpoint 404". Conséquence : le caller choisit un autre adapter (Kong?) ou skippe wM sans logguer la cause réelle. À client A, on peut finir à debug pourquoi "wM n'est pas détecté" alors que c'est juste un firewall temporaire.
 
 **Fix** : retourner l'erreur, laisser le caller décider (avec éventuel wrapper qui log+swallow si besoin).
 
@@ -375,7 +375,7 @@ Si un spec a un example `"description": "This was openapi: '3.1.0' before"` cont
 **P0 — avant démo juin** :
 - C.2 (409 silent skip + no retry) — cause la plus probable de "route ne se sync pas" inexplicable
 - C.3 + C.6 (race conditions) — cause silencieuse d'acks mensongers vers CP
-- C.1 (RemovePolicy partial delete) — sécurité fonctionnelle BDF
+- C.1 (RemovePolicy partial delete) — sécurité fonctionnelle client A
 
 **P1 — pour stabilité** :
 - C.4, C.5 (hard returns qui kill le batch)

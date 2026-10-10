@@ -1,6 +1,15 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-05-13. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+> Dernière MAJ: 2026-10-11. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
+
+## Session Notes — 2026-10-10 / 2026-10-11
+
+- **Relance ciblée à l'étude, dans un dépôt privé local (`stoa-next`), hors de ce monorepo.** Objet validé : un **pilote de preuve** de migration d'un ESB propriétaire vers Apache Camel chez un client institutionnel régulé, porté par un intégrateur titulaire ; 5 à 10 flux en mode ombre, trois mesures (conversion, écart de rejeu, charge d'exploitation), aucune bascule en production dans le pilote. Decision Gate #13 : challenger Codex → REFRAME, accepté ; plan `validated` le 2026-10-11, portée limitée au dossier de cadrage ; démarrage conditionné aux réponses de l'intégrateur. Journal : `stoa-docs/HEGEMON/DECISION_GATE.md` (#180 mergée). **Aucun code dans `stoa` avant le Go de phase 1.** Détails client : jamais ici (dépôt public).
+- Mesures Docker locales (dans `stoa-next/research/`) : 6 briques OSS (Envoy, Camel Quarkus, Keycloak, OPA, PostgreSQL, OTel) = 0,78 Gio au repos, 1,25 Gio et 4,3 cœurs à 7 290 req/s ; Camel natif 13 Mio. L'hypothèse « 12-16 cœurs par cluster » est abandonnée. Keycloak sans plafond de heap monte à 10,7 Gio : livrer des défauts réglés.
+- **Hygiène confidentialité** : #2851 mergée (références clients anonymisées dans 6 rapports de bugs/plans + 2 commentaires Go) ; `stoa-labs` passé **privé** et historique réécrit (`git filter-repo`, local == GitHub vérifié) ; `stoa-docs` #179 mergée (blocklist suivie → gabarit, vraie liste via variable privée). Historique de `stoa` : 23 commits anciens portent encore des références, 2 forks → risque résiduel assumé.
+- Gotcha : `git filter-repo` réécrit les hash abrégés cités dans les messages de commit selon les objets du dépôt → deux passes sur deux clones divergent ; toujours une seule passe, un seul clone, toutes les refs.
+- Hook pré-push : `gateway:fmt` échoue sur `feat/gateway-maturity-parity` (code Rust non formaté) et bloque tout push lancé depuis ce checkout, y compris vers d'autres dépôts. Dette à traiter avant de reprendre cette branche.
+- Restes hors dossier : ticket support GitHub (purge des anciens objets de `stoa-labs`, 22 refs `refs/pull/*`) ; miroirs Gitea/GitLab de `stoa-labs` à re-pousser avant tout `fetch` ; 80 alertes Dependabot sur `stoa-docs` (2 critiques, 33 hautes) ; gates #8-#12 jamais consignés dans `DECISION_GATE.md`.
 
 ## Session Notes — 2026-05-13
 

@@ -32,10 +32,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           # `go-version-file` et non une version en dur : le bump de
           # golang.org/x/crypto en 0.52.0 (8 alertes CRITIQUES de contournement

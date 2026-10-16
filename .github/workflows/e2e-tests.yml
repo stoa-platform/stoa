@@ -87,7 +87,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Fetch E2E secrets from Vault
         id: vault-secrets
@@ -102,7 +102,7 @@ jobs:
         # Si des runners auto-hébergés sont réenregistrés, repasser
         # `runs-on` ci-dessus suffit à redonner Vault comme source primaire.
         continue-on-error: true
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@v4
         with:
           # vault.gostoa.dev = Infisical (different product) — E2E secrets live on
           # the HashiCorp Vault instance at hcvault.gostoa.dev. Changing this URL

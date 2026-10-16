@@ -59,7 +59,7 @@ jobs:
     name: Git provider config gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Check for legacy settings.GIT_* reads
         working-directory: control-plane-api
         run: |
@@ -103,7 +103,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-python-env
         with:
           python-version: '3.11'

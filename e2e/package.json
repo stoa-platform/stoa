@@ -25,11 +25,11 @@
     "test:smoke-mock": "playwright test --config=smoke-mock/playwright.config.ts"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.3",
-    "@playwright/test": "1.59.1",
-    "@types/node": "^25.6.0",
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "1.62.0",
+    "@types/node": "^26.1.2",
     "dotenv": "^17.4.2",
-    "playwright-bdd": "^8.5.0",
-    "typescript": "^6.0.3"
+    "playwright-bdd": "^9.2.0",
+    "typescript": "^7.0.2"
   }
 }

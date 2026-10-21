@@ -66,6 +66,10 @@ pub struct JwtValidatorConfig {
     /// Whether to validate the audience
     pub validate_audience: bool,
 
+    /// Audiences accepted when `validate_audience` is set.
+    /// Empty falls back to the OIDC provider audience.
+    pub audiences: Vec<String>,
+
     /// Whether to validate expiration
     pub validate_exp: bool,
 
@@ -81,6 +85,7 @@ impl Default for JwtValidatorConfig {
         Self {
             validate_issuer: true,
             validate_audience: true,
+            audiences: Vec::new(),
             validate_exp: true,
             leeway_seconds: 30,
             required_scopes: vec![],
@@ -108,6 +113,22 @@ impl JwtValidator {
         Self {
             oidc_provider,
             config,
+        }
+    }
+
+    /// Same keys and issuer, but `aud` must contain one of `audiences`.
+    ///
+    /// Used by the REST proxy when a published policy carries `config.audience`.
+    /// The process-wide validator can leave audience checks off; the policy
+    /// still fail-closes that route.
+    pub fn with_audience_override(&self, audiences: &[String]) -> Self {
+        Self {
+            oidc_provider: Arc::clone(&self.oidc_provider),
+            config: JwtValidatorConfig {
+                validate_audience: true,
+                audiences: audiences.to_vec(),
+                ..self.config.clone()
+            },
         }
     }
 
@@ -152,11 +173,23 @@ impl JwtValidator {
             validation.set_issuer(&[self.oidc_provider.issuer_url()]);
         }
 
-        // Set audience validation
-        if self.config.validate_audience {
-            validation.set_audience(&[self.oidc_provider.audience()]);
+        // Set audience validation. STOA_JWT_AUDIENCE overrides the OIDC client id.
+        // jsonwebtoken accepts a token that omits `aud` even after set_audience,
+        // so the claim is checked again on the decoded Claims.
+        let required_audiences: Vec<String> = if self.config.validate_audience {
+            if self.config.audiences.is_empty() {
+                vec![self.oidc_provider.audience().to_string()]
+            } else {
+                self.config.audiences.clone()
+            }
         } else {
+            Vec::new()
+        };
+        if required_audiences.is_empty() {
             validation.validate_aud = false;
+        } else {
+            let refs: Vec<&str> = required_audiences.iter().map(String::as_str).collect();
+            validation.set_audience(&refs);
         }
 
         // Decode and validate
@@ -167,13 +200,22 @@ impl JwtValidator {
                     expected: self.oidc_provider.issuer_url().to_string(),
                 },
                 jsonwebtoken::errors::ErrorKind::InvalidAudience => JwtError::InvalidAudience {
-                    expected: self.oidc_provider.audience().to_string(),
+                    expected: required_audiences.join(","),
                 },
                 jsonwebtoken::errors::ErrorKind::InvalidSignature => JwtError::InvalidSignature,
                 _ => JwtError::DecodeError(e.to_string()),
             })?;
 
         let claims = token_data.claims;
+        if !required_audiences.is_empty()
+            && !required_audiences
+                .iter()
+                .any(|aud| claims.aud.contains(aud))
+        {
+            return Err(JwtError::InvalidAudience {
+                expected: required_audiences.join(","),
+            });
+        }
 
         // Check required scopes
         if !self.config.required_scopes.is_empty() {
@@ -280,7 +322,7 @@ impl ValidatedToken {
 // =============================================================================
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -369,9 +411,13 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
         exp: i64,
         iat: i64,
         iss: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        aud: Option<String>,
     }
 
-    async fn validator_against_test_key() -> (JwtValidator, String) {
+    pub(crate) async fn validator_against_test_key(
+        config: JwtValidatorConfig,
+    ) -> (JwtValidator, String) {
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -410,17 +456,18 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
                 ..crate::auth::oidc::OidcProviderConfig::default()
             },
         ));
-        let validator = JwtValidator::with_config(
-            provider,
-            JwtValidatorConfig {
-                validate_audience: false,
-                ..JwtValidatorConfig::default()
-            },
-        );
+        let validator = JwtValidator::with_config(provider, config);
         (validator, issuer)
     }
 
-    fn mint(issuer: &str, exp: i64) -> String {
+    pub(crate) fn issuer_only() -> JwtValidatorConfig {
+        JwtValidatorConfig {
+            validate_audience: false,
+            ..JwtValidatorConfig::default()
+        }
+    }
+
+    pub(crate) fn mint(issuer: &str, exp: i64, aud: Option<&str>) -> String {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -434,6 +481,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
                 exp,
                 iat: now,
                 iss: issuer.to_string(),
+                aud: aud.map(str::to_string),
             },
             &jsonwebtoken::EncodingKey::from_rsa_pem(TEST_PEM.as_bytes()).unwrap(),
         )
@@ -442,12 +490,12 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_accepts_keycloak_shaped_token_without_audience() {
-        let (validator, issuer) = validator_against_test_key().await;
+        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-        let token = mint(&issuer, now + 300);
+        let token = mint(&issuer, now + 300, None);
         let claims = validator.validate(&token).await.expect("valid token");
         assert_eq!(claims.sub, "svc");
         assert_eq!(claims.iss, issuer);
@@ -455,25 +503,50 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_rejects_expired_token() {
-        let (validator, issuer) = validator_against_test_key().await;
+        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-        let token = mint(&issuer, now - 120);
+        let token = mint(&issuer, now - 120, None);
         let error = validator.validate(&token).await.expect_err("expired");
         assert!(matches!(error, JwtError::Expired));
     }
 
     #[tokio::test]
     async fn rs256_rejects_wrong_issuer() {
-        let (validator, _issuer) = validator_against_test_key().await;
+        let (validator, _issuer) = validator_against_test_key(issuer_only()).await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-        let token = mint("http://evil.example/realms/stoa", now + 300);
+        let token = mint("http://evil.example/realms/stoa", now + 300, None);
         let error = validator.validate(&token).await.expect_err("wrong iss");
         assert!(matches!(error, JwtError::InvalidIssuer { .. }));
+    }
+
+    #[tokio::test]
+    async fn rs256_checks_audience_only_when_configured() {
+        let (validator, issuer) = validator_against_test_key(JwtValidatorConfig {
+            validate_audience: true,
+            audiences: vec!["stoa-gateway".into()],
+            ..JwtValidatorConfig::default()
+        })
+        .await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let accepted = mint(&issuer, now + 300, Some("stoa-gateway"));
+        let claims = validator.validate(&accepted).await.expect("aud matches");
+        assert_eq!(claims.sub, "svc");
+
+        let wrong = mint(&issuer, now + 300, Some("account"));
+        let error = validator.validate(&wrong).await.expect_err("wrong aud");
+        assert!(matches!(error, JwtError::InvalidAudience { .. }));
+
+        let missing = mint(&issuer, now + 300, None);
+        let error = validator.validate(&missing).await.expect_err("missing aud");
+        assert!(matches!(error, JwtError::InvalidAudience { .. }));
     }
 }

@@ -1,0 +1,17 @@
+# Install the standalone gateway. This does not select Service/gateway
+# and does not edit the public Ingress, so a later `kubectl apply -k`
+# cannot undo a rollback or repeat a switch.
+#
+# Switch and rollback live in overlays/ and replace the live selector
+# and Ingress paths. `kubectl apply` strategic-merges Service selectors,
+# so those overlays are applied by their scripts, not by `kubectl apply -k`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stoa
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+  - networkpolicy.yaml

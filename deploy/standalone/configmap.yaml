@@ -8,18 +8,26 @@
 #   iss=http://keycloak.stoa.svc:8080/realms/stoa and reject those tokens.
 #   STOA_KEYCLOAK_INTERNAL_URL is only the fetch base. Discovery and JWKS
 #   are rewritten onto it (path preserved):
-#   http://keycloak.__NAMESPACE__.svc:8080/realms/stoa/.well-known/openid-configuration
+#   http://keycloak.stoa.svc:8080/realms/stoa/.well-known/openid-configuration
 #   STOA_JWT_ISSUER is not consulted by the validator.
 #
-# Trusted proxies (fetched 2026-10-21 from https://www.cloudflare.com/ips-v4
-# and https://www.cloudflare.com/ips-v6), plus the k3s pod CIDR. The TCP
-# peer is the ingress-nginx pod, so 10.42.0.0/16 is what makes the
-# Cloudflare hop in X-Forwarded-For trustworthy.
+# STOA_JWT_AUDIENCE turns audience checks on. Empty would leave them off.
+# There is no allowUnauthenticatedREST bypass. Callers need an audience
+# mapper that adds aud=stoa-gateway (see README).
+#
+# Trusted proxies are the ingress-nginx pod addresses only. The tunnel's
+# TCP peer is that pod, never a Cloudflare edge address, and the pod CIDR
+# 10.42.0.0/16 also contains untrusted workloads. Replace the sentinel
+# with the pod IPs (or their node /24) from
+# `kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx -o wide`
+# before the switch. Until then forwarded headers are ignored.
+#
+# The audit spool is not opened at startup. This ConfigMap does not set
+# STOA_AUDIT_SPOOL_DIR and the Deployment has no volume for it.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: stoa-gateway
-  namespace: __NAMESPACE__
 data:
   STOA_HOST: "0.0.0.0"
   STOA_PORT: "8080"
@@ -28,11 +36,12 @@ data:
   STOA_LOG_FORMAT: json
   RUST_LOG: "info,stoa_gateway=info"
   STOA_GATEWAY_MODE: edge-mcp
-  STOA_GATEWAY_EXTERNAL_URL: https://__PUBLIC_HOST__
-  STOA_GATEWAY_PUBLIC_URL: https://__PUBLIC_HOST__
+  STOA_GATEWAY_EXTERNAL_URL: https://api.gostoa.dev
+  STOA_GATEWAY_PUBLIC_URL: https://api.gostoa.dev
   STOA_KEYCLOAK_URL: https://auth.gostoa.dev
-  STOA_KEYCLOAK_INTERNAL_URL: http://keycloak.__NAMESPACE__.svc:8080
+  STOA_KEYCLOAK_INTERNAL_URL: http://keycloak.stoa.svc:8080
   STOA_KEYCLOAK_REALM: stoa
+  STOA_JWT_AUDIENCE: stoa-gateway
   STOA_AUTO_REGISTER: "false"
   STOA_NATIVE_TOOLS_ENABLED: "false"
   STOA_ROUTE_RELOAD_ENABLED: "false"
@@ -40,5 +49,7 @@ data:
   STOA_K8S_ENABLED: "false"
   STOA_BUDGET_ENFORCEMENT_ENABLED: "false"
   STOA_OTEL_ENABLED: "false"
-  STOA_AUDIT_SPOOL_DIR: /var/lib/stoa-gateway/audit-spool
-  STOA_TRUSTED_PROXIES: "10.42.0.0/16,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+  # 768 keeps the in-process backpressure line under the 1Gi cgroup limit.
+  # The compiled default is 512, which OOM-killed the v1 gateway.
+  STOA_MEMORY_LIMIT_MB: "768"
+  STOA_TRUSTED_PROXIES: "REPLACE_WITH_INGRESS_NGINX_POD_IPS"

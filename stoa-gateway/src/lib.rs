@@ -506,9 +506,9 @@ pub fn build_router(state: AppState) -> Router {
         security_headers::security_headers_middleware,
     ));
 
-    // TCP early filter (CAB-1830): outermost layer — rejects blocked/rate-limited IPs
-    // before any HTTP processing. Requires into_make_service_with_connect_info in main.
-    if tcp_filter.is_enabled() {
+    // TCP early filter (CAB-1830): rejects blocked/rate-limited IPs before any
+    // HTTP processing. Requires into_make_service_with_connect_info in main.
+    let routed = if tcp_filter.is_enabled() {
         let filter = tcp_filter.clone();
         with_security.layer(axum::middleware::from_fn(move |request, next| {
             let filter = filter.clone();
@@ -516,7 +516,13 @@ pub fn build_router(state: AppState) -> Router {
         }))
     } else {
         with_security
-    }
+    };
+
+    // Outermost: a public proxy may only deliver /apis. Ambiguous paths
+    // (traversal, encoded dots) are 400 and never reach /admin.
+    routed.layer(axum::middleware::from_fn(
+        proxy::path_guard::public_surface_middleware,
+    ))
 }
 
 // === HTTP Metrics Middleware ===

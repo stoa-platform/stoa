@@ -1,36 +1,44 @@
-# Parameterised node selector: __NODE_HOSTNAME__ (params.env, default
-# vmi3109795). The image reference is __IMAGE__ (params.env).
+# Standalone stoa-gateway. Traffic stays on APISIX until
+# overlays/use-stoa-gateway/switch.sh retargets Service/gateway.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: stoa-gateway
-  namespace: __NAMESPACE__
   labels:
     app: stoa-gateway
     app.kubernetes.io/name: stoa-gateway
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: stoa-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   template:
     metadata:
       labels:
         app: stoa-gateway
         app.kubernetes.io/name: stoa-gateway
     spec:
-      # Single-node k3s. Override STOA_NODE_HOSTNAME in params.env.
+      # k3s node name. Confirm with `kubectl get nodes` before Friday.
       nodeSelector:
-        kubernetes.io/hostname: __NODE_HOSTNAME__
+        kubernetes.io/hostname: worker-3
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: stoa-gateway
-          image: __IMAGE__
-          imagePullPolicy: IfNotPresent
+          # Local import only. Build steps are in the README. Not a registry image.
+          image: stoa-gateway:standalone
+          imagePullPolicy: Never
           ports:
             - name: http
               containerPort: 8080
@@ -39,9 +47,16 @@ spec:
                 name: stoa-gateway
             - secretRef:
                 name: stoa-gateway-admin
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
-            - name: audit-spool
-              mountPath: /var/lib/stoa-gateway/audit-spool
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /ready
@@ -60,9 +75,9 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
             limits:
-              memory: 512Mi
+              memory: 1Gi
       volumes:
-        - name: audit-spool
+        - name: tmp
           emptyDir: {}

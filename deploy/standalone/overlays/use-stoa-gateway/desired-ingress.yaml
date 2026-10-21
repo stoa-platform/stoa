@@ -1,0 +1,19 @@
+# Desired public rule after switch.sh. Other hosts on the same Ingress are
+# left alone. This file is not applied by kustomize.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoa-api
+  namespace: stoa
+spec:
+  rules:
+    - host: api.gostoa.dev
+      http:
+        paths:
+          - path: /apis
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 9080

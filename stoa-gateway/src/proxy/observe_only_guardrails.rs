@@ -50,6 +50,7 @@ pub(crate) fn resolve_guardrails_config(
         .unwrap_or(global)
 }
 
+#[allow(clippy::result_large_err)] // axum Response as Err; rustc 1.99 -D warnings
 pub(crate) async fn buffer_json_request_for_observe_only(
     request: Request<Body>,
 ) -> Result<(Request<Body>, GuardrailBodyApplicability), Response> {

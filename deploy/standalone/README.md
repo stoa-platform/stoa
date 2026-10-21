@@ -1,11 +1,13 @@
 # Standalone gateway
 
 Run `stoa-gateway` without control-plane-api. Contracts come from stoactl
-through `POST /admin/contracts`. This directory is the k3s example for that
-mode: namespace `stoa`, ingress-nginx class `nginx`, one node.
+through `POST /admin/contracts`. This directory is the k3s layout for that
+mode: namespace `stoa`, ingress-nginx, node `worker-3`.
 
-`jwt-proof.sh` is the published-route JWT check (Keycloak plus nginx). It is
-unchanged.
+Public calls move from APISIX to this process only when you run the switch
+script. Root apply does not touch Service `gateway` or the public Ingress.
+
+`jwt-proof.sh` is the published-route JWT check (Keycloak plus nginx).
 
 ## Keycloak issuer
 
@@ -41,85 +43,178 @@ Change the realm if `auth.gostoa.dev` uses a different one. Readiness
 (`/ready`) calls discovery on the internal URL and stays 503 until Keycloak
 answers. Liveness is `/health` and does not call Keycloak or the control plane.
 
-## Apply
+## Apply, switch, rollback
 
-Parameters live in `params.env` (node hostname, namespace, public host, image):
+The node selector is `kubernetes.io/hostname=worker-3` (the k3s node name).
+Confirm it with `kubectl get nodes` before Friday. Namespace is `stoa`.
 
 ```bash
-# defaults: hostname vmi3109795, namespace stoa, host gateway.gostoa.dev
-deploy/standalone/apply.sh --print
 kubectl -n stoa create secret generic stoa-gateway-admin \
   --from-literal=STOA_ADMIN_API_TOKEN="$(openssl rand -hex 32)"
-deploy/standalone/apply.sh
+kubectl apply -k deploy/standalone
 ```
 
-`secret.yaml` is a template (`REPLACE_FROM_VAULT`). `apply.sh` does not apply
-it. The Deployment reads `STOA_ADMIN_API_TOKEN` from Secret
+That installs the Deployment (2 replicas, PDB `minAvailable: 1`), ConfigMap,
+PodDisruptionBudget, and the in-cluster Services `stoa-gateway` and
+`stoa-gateway-admin`. It does not create or patch Service `gateway` and it
+does not create an Ingress. APISIX keeps `api.gostoa.dev`.
+
+`secret.yaml` is a template (`REPLACE_FROM_VAULT`). It is not in
+`kustomization.yaml`. The Deployment reads `STOA_ADMIN_API_TOKEN` from Secret
 `stoa-gateway-admin`, not from the ConfigMap.
 
 `STOA_ENVIRONMENT` is `dev`. `prod` and `staging` refuse to boot unless
 `STOA_POLICY_PATH` points at an existing Rego file (`stoa-gateway/policies/default.rego`
 is not in the image).
 
-## Admin API is not on the Ingress
+### Why the switch is not `kubectl apply -k`
 
-The process listens on 8080 only. There is no admin port. The Ingress publishes
-`/apis`, `/mcp`, `/.well-known`, `/oauth`, `/health`, and `/ready`. It has no
-`/` prefix and no `/admin` rule, so the public hostname does not route the
-admin API.
+Service `gateway` today fronts APISIX. Its port is 9080. This process listens
+on 8080. `kubectl apply` strategic-merges `spec.selector`, so a manifest whose
+selector is only `app: stoa-gateway` keeps whatever APISIX keys are already
+there. The Service then matches no pods and `api.gostoa.dev` returns 502.
+The same merge would not delete a Prefix `/` Ingress path, so `/admin/contracts`
+would stay public.
 
-Inside the cluster, stoactl uses the separate Service (also not an Ingress
-backend):
+`switch.py` reads the live objects and `kubectl replace`s them. The first
+switch saves the live selector, the port-9080 targetPort, and the
+`api.gostoa.dev` paths into ConfigMap `stoa/stoa-gateway-switch-backup`.
+
+Before Friday, read the live objects and stop if the host is not
+`api.gostoa.dev` or there is no port 9080:
+
+```bash
+kubectl -n stoa get svc gateway -o yaml
+kubectl -n stoa get ingress -o yaml
+```
+
+Switch (pods must already be Ready; `/ready` stays 503 until Keycloak answers):
+
+```bash
+deploy/standalone/overlays/use-stoa-gateway/switch.sh
+```
+
+That sets selector `app: stoa-gateway`, keeps Service port 9080, sets
+`targetPort` 8080, and replaces the `api.gostoa.dev` paths with Prefix `/apis`
+only. Other hosts on the same Ingress are left as they are.
+
+The public Ingress is `stoa-api`, not a new Ingress. Switch narrows its
+`api.gostoa.dev` rule to Prefix `/apis` only. `/admin`, `/metrics`, `/mcp`,
+`/oauth/register`, and `/v1/messages` are not on that rule.
+`deploy/standalone/ingress.yaml` is not in this tree. Do not apply one.
+
+Rollback is versioned:
+
+```bash
+deploy/standalone/overlays/use-apisix/rollback.sh
+```
+
+It puts Service `gateway` back to selector `app: apisix` and targetPort
+`9080`, and restores the `stoa-api` paths saved at switch time. With no
+backup it applies the baseline in `overlays/use-apisix/stoa-api.yaml`:
+Prefix `/` to `gateway:9080`, which is what serves
+`/demo-customer-referential/v1/...` on APISIX. A later
+`kubectl apply -k deploy/standalone` does not list Service `gateway`,
+Ingress `stoa-api`, or the backup ConfigMap, so it cannot undo the rollback
+or repeat the switch. `desired-service.yaml` and `desired-ingress.yaml` are
+not kustomize resources. `kubectl apply` is the wrong tool for the selector:
+it merges map keys and the Service then matches nothing.
+
+## Public URLs
+
+After the switch, published operations are:
+
+```text
+https://api.gostoa.dev/apis/<tenant>/<name>/<endpoint>
+https://api.gostoa.dev/apis/demo/live-api/ping
+```
+
+`/mcp`, `/.well-known`, `/oauth`, `/health`, and `/ready` are not on the
+public Ingress. Admin stays on the ClusterIP, which has no Ingress rule:
 
 ```text
 http://stoa-gateway-admin.stoa.svc:8080/admin/contracts
 ```
 
-Unset or empty `STOA_ADMIN_API_TOKEN` makes `/admin` return 503. A missing or
-wrong bearer returns 401. There is no default token.
+There is no `allowUnauthenticatedREST` flag in this repo. A published route
+whose contract sets `inboundAuth: jwt` (or a `jwt_validation` policy) always
+challenges. A route without that policy is unchanged.
 
-## Trusted proxies
+The process returns 400 for an ambiguous path (`..`, `%2e`, `%2f`, `//`) and
+404 for any other path when `X-Forwarded-For` or `X-Forwarded-Host` is set,
+unless the path is `/apis` or `/apis/...`. ingress-nginx sets both headers.
+A direct ClusterIP or `kubectl port-forward` call does not, so kubelet probes
+and in-cluster stoactl still reach `/health` and `/admin`. A proxied call to
+`/admin`, `/metrics`, `/mcp`, `/oauth/register`, or `/v1/messages` is 404,
+not 401.
+
+Unset or empty `STOA_ADMIN_API_TOKEN` makes a direct `/admin` call return 503.
+A missing or wrong bearer returns 401. There is no default token.
+
+## Resilience
+
+Two replicas, `PodDisruptionBudget` `minAvailable: 1`, rolling update
+`maxUnavailable: 1` / `maxSurge: 0` so the single node does not need a third
+pod. Both pods have `nodeSelector` `worker-3`. Memory request 256Mi, limit
+1Gi. The v1 gateway was OOM-killed at 512Mi. `STOA_MEMORY_LIMIT_MB=768` is
+the in-process backpressure line, under that cgroup limit.
+
+The audit spool is only opened from tests (`AuditSpool::open`). Startup does
+not create it. The only volume is an `emptyDir` at `/tmp` because the root
+filesystem is read-only. There is no PVC.
+
+## Trusted proxies and network policy
 
 `STOA_TRUSTED_PROXIES` (not `STOA_MTLS__TRUSTED_PROXIES`) is the allow list for
 `X-Forwarded-For` and `X-Forwarded-Proto`. The TCP peer must sit in the list.
-On this cluster that peer is the ingress-nginx pod, so the list includes pod
-CIDR `10.42.0.0/16` plus the Cloudflare ranges fetched on 2026-10-21 from
-`https://www.cloudflare.com/ips-v4` and `https://www.cloudflare.com/ips-v6`.
+On this cluster that peer is an ingress-nginx pod. Cloudflare ranges are not
+in the list: the tunnel never presents a Cloudflare address as the TCP peer.
+`10.42.0.0/16` is not in the list either: other namespaces share that CIDR.
 
-The client is the first address from the right that is not itself trusted, so
-a spoofed leftmost hop is ignored. Scheme comes from `X-Forwarded-Proto` only
-for a trusted peer. An empty list keeps the old leftmost-`X-Forwarded-For`
-behaviour and does not trust the proto header.
+The ConfigMap ships the sentinel `REPLACE_WITH_INGRESS_NGINX_POD_IPS`. That
+string is not a CIDR, so no peer is trusted and a spoofed
+`X-Forwarded-For` is ignored. Before the switch, replace it with the pod IPs
+(or that node's /24) from:
 
-Refresh the Cloudflare ranges before the next change; they are copied into
-`configmap.yaml`.
+```bash
+kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx -o wide
+```
+
+`networkpolicy.yaml` (`stoa-gateway-ingress`) allows TCP 8080 only from
+ingress-nginx pods and from a pod in `stoa` labelled
+`app.kubernetes.io/name=stoa-reconciler`. Confirm that label before Friday.
+A pod in `default` calling the Service should time out.
 
 ## Image
 
-No image of this branch is published. `ghcr.io/stoa-platform/stoa-gateway` is
-not updated from this PR. Build locally and import into k3s (containerd):
+No registry image exists for this build. `ghcr.io/stoa-platform/stoa-gateway`
+is not updated from this PR. The Deployment uses `stoa-gateway:standalone`
+with `imagePullPolicy: Never` (a reschedule without a local import fails
+closed instead of pulling `docker.io/library/stoa-gateway`). Build from the
+git SHA you are about to import. `FEATURES` is empty: no Pingora, Kafka, or
+Kubernetes watcher. `Cargo.lock` is copied into the build. The image label
+`org.opencontainers.image.revision` is that SHA.
 
 ```bash
-docker build -t stoa-gateway:0.9.25 stoa-gateway
-docker image inspect --format '{{.Id}}' stoa-gateway:0.9.25
-docker save stoa-gateway:0.9.25 | sudo k3s ctr images import -
+deploy/standalone/build-image.sh
 ```
 
-`params.env` pins the image built from this branch on 2026-10-21:
+The script writes `stoa-gateway-standalone.tar`, its sha256, a CycloneDX
+SBOM, and the Trivy HIGH table. It exits if any CRITICAL finding is reported.
+`deploy/standalone/IMAGE-TRIAGE.md` is where each HIGH is accepted or blocked
+in writing. Import is a separate step, on worker-3, and this script does not
+run it:
 
-```text
-stoa-gateway@sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb
+```bash
+docker save stoa-gateway:standalone | ssh worker-3 'sudo k3s ctr -n k8s.io images import -'
 ```
-
-That is the local image id (`docker image inspect --format '{{.Id}}'`). Nothing
-was pushed, so `ghcr.io` has no manifest for it. `imagePullPolicy` is
-`IfNotPresent`. After `k3s ctr images import`, check `sudo k3s ctr images ls`.
-If containerd reports a different digest, put that digest in `params.env`.
 
 The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
 (`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). Base image
 tags are not digest-pinned. `stoa-gateway/.dockerignore` excludes `target/`
-so the context is not the local debug build.
+so the context is not the local debug build. An earlier local image id
+`sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb` does
+not contain audience enforcement or the admin proxy deny. Do not import it.
 
 ## Startup without control-plane-api
 
@@ -156,7 +251,8 @@ end. Secrets are never given a default.
 | `STOA_JWT_ISSUER` | unset | Stored, not used for issuer checks. |
 | `STOA_KEYCLOAK_URL` | unset | Public issuer base. |
 | `STOA_KEYCLOAK_REALM` | `stoa` when URL set | Appended as `/realms/{realm}`. |
-| `STOA_KEYCLOAK_CLIENT_ID` | `stoa-mcp-gateway` when URL set | Audience label. Audience check is off. |
+| `STOA_KEYCLOAK_CLIENT_ID` | `stoa-mcp-gateway` when URL set | OIDC client id. Not the checked `aud` unless `STOA_JWT_AUDIENCE` is empty and audience checks are forced on in code. |
+| `STOA_JWT_AUDIENCE` | empty | CSV or JSON. Empty leaves audience checks off. Standalone sets `stoa-gateway`. |
 | `STOA_KEYCLOAK_CLIENT_SECRET` | unset | Gateway's own client, not the caller. |
 | `STOA_KEYCLOAK_ADMIN_PASSWORD` | unset | DCR public-client patch. |
 | `STOA_KEYCLOAK_INTERNAL_URL` | unset | Discovery and JWKS fetch base. |
@@ -170,7 +266,7 @@ end. Secrets are never given a default.
 | --- | --- | --- |
 | `STOA_CONTROL_PLANE_URL` | unset | Unset → standalone. No refresh loops. |
 | `STOA_CONTROL_PLANE_API_KEY` | unset | Required together with the URL to register. |
-| `STOA_AUDIT_SPOOL_DIR` | `/var/lib/stoa-gateway/audit-spool` | Example mounts an emptyDir. |
+| `STOA_AUDIT_SPOOL_DIR` | `/var/lib/stoa-gateway/audit-spool` | Spool is not opened at startup. Standalone mounts nothing here. |
 | `STOA_AUDIT_SPOOL_CAPACITY_BYTES` | `67108864` | |
 | `STOA_AUDIT_SPOOL_SEGMENT_BYTES` | `1048576` | |
 | `STOA_AUDIT_SPOOL_HIGH_WATER_PCT` | `80` | |
@@ -355,7 +451,7 @@ end. Secrets are never given a default.
 | `STOA_IP_BLOCKLIST` | empty | CSV of IPs/CIDRs dropped before HTTP. |
 | `STOA_IP_BLOCKLIST_FILE` | unset | One CIDR per line. |
 | `STOA_TCP_RATE_LIMIT_PER_IP` | unset | Positive finite rate, or unset to disable. |
-| `STOA_MEMORY_LIMIT_MB` | `512` | Backpressure at 80%. |
+| `STOA_MEMORY_LIMIT_MB` | `512` | Backpressure at 80%. Standalone ConfigMap sets `768` under the 1Gi limit. |
 | `STOA_SNAPSHOT_ENABLED` | `false` | |
 | `STOA_SNAPSHOT_MAX_COUNT` | `100` | |
 | `STOA_SNAPSHOT_MAX_AGE_SECS` | `3600` | |
@@ -418,12 +514,42 @@ Accepted by the loader for older manifests: `PORT`, `HOST`, `JWT_SECRET`,
 ## Published-route JWT proof
 
 A contract with `inboundAuth: jwt` (or a `jwt_validation` policy) requires a
-Keycloak RS256 bearer on the REST route. No header → 401 with
-`WWW-Authenticate`. Valid client-credentials token → proxied. Expired token →
-401. A contract without that policy is unchanged. Audience check stays off.
+Keycloak RS256 bearer on `GET /apis/<tenant>/<name>/...`. The gateway stores
+that policy in the same `POST /admin/contracts` as the routes, before the
+routes are inserted, so the route is not served anonymously between a
+contract call and a later policy call. `inboundAuthAudience` (or
+`policies[].config.audience`) is the audience checked for that route, even
+when the process-wide validator has audience checks off. Issuer is
+`{STOA_KEYCLOAK_URL}/realms/{realm}` (`https://auth.gostoa.dev/realms/stoa`
+in the ConfigMap). No header → 401 with `WWW-Authenticate`. Token whose `aud`
+contains the policy audience → proxied. Another client's token, `alg: none`,
+a broken signature, and an expired token → 401. A contract without that
+policy is unchanged.
+
+stoactl (stoa-v2 PR #8) is not in this repository. It must send
+`inboundAuth: jwt` and `inboundAuthAudience` on the contract. This gateway
+does not read `allowUnauthenticatedREST` or `allowWidenedPrefix`. After a
+restart the in-memory routes are gone (404) until that same call is published
+again. There is no disk replay.
+
+The proof sets `STOA_JWT_AUDIENCE=stoa-gateway` and adds a Keycloak
+`oidc-audience-mapper` with `included.custom.audience=stoa-gateway` on
+client `stoa-caller` only. Client `stoa-no-audience` has no mapper. It also
+checks that `POST /admin/contracts` with `X-Forwarded-For` is 404. Nothing
+in the script sets `allowUnauthenticatedREST`; that variable does not exist.
 
 ```bash
 STOA_PROOF_BIN=./stoa-gateway/target/debug/stoa-gateway deploy/standalone/jwt-proof.sh
 ```
 
-The script prints status codes only.
+The script prints status codes only. On the cluster, the same calls are:
+
+```text
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.gostoa.dev/apis/demo/live-api/ping
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.gostoa.dev/apis/demo/live-api/ping \
+  -H "authorization: Bearer $ACCESS_TOKEN"
+```
+
+The first is 401. The second is 200 when the token's `iss` is
+`https://auth.gostoa.dev/realms/stoa` and its `aud` contains `stoa-gateway`.
+Callers need the audience mapper on their Keycloak client before the switch.

@@ -193,6 +193,14 @@ pub struct UacContractSpec {
         skip_serializing_if = "Option::is_none"
     )]
     pub inbound_auth: Option<String>,
+    /// Resource-server audience required on published routes (`inboundAuthAudience`).
+    /// Stored on the `jwt_validation` policy in the same bind as the routes.
+    #[serde(
+        default,
+        alias = "inboundAuthAudience",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub inbound_auth_audience: Option<String>,
     /// Explicit policies. A `jwt_validation` entry is enforced on the REST proxy.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub policies: Vec<ContractPolicy>,
@@ -223,6 +231,7 @@ impl UacContractSpec {
             spec_hash: None,
             llm_config: None,
             inbound_auth: None,
+            inbound_auth_audience: None,
             policies: Vec::new(),
         }
     }
@@ -437,6 +446,18 @@ mod tests {
         .unwrap();
         assert!(from_policy.requires_jwt_validation());
         assert_eq!(from_policy.policies[0].policy_type, "jwt_validation");
+    }
+
+    #[test]
+    fn inbound_auth_audience_alias_round_trips() {
+        let parsed: UacContractSpec = serde_json::from_str(
+            r#"{"name":"live-api","version":"1.0.0","tenant_id":"demo","inboundAuth":"jwt","inboundAuthAudience":"demo-customer-referential","endpoints":[]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.inbound_auth_audience.as_deref(),
+            Some("demo-customer-referential")
+        );
     }
 
     #[test]

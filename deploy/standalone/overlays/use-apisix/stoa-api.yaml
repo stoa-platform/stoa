@@ -1,0 +1,22 @@
+# Versioned original of Ingress stoa-api for api.gostoa.dev.
+# rollback.sh restores this path (Prefix / to gateway:9080) together with
+# Service/gateway selector app=apisix and targetPort 9080.
+# Not a kustomize resource: root `kubectl apply -k deploy/standalone` does
+# not include it, so a later apply cannot undo a rollback or re-apply a switch.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoa-api
+  namespace: stoa
+spec:
+  rules:
+    - host: api.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 9080

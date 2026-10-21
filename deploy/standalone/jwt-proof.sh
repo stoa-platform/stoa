@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Live proof: a published contract with jwt_validation (inboundAuth=jwt)
-# is 401 without a token, 200 with a Keycloak client_credentials token,
-# and 401 again once that token is expired or the issuer does not match.
+# is 401 without a token, 200 with a Keycloak client_credentials token
+# whose aud contains stoa-gateway, and 401 again once that token is
+# expired, the issuer does not match, or the caller has no audience mapper.
 #
 # A second contract with no policy stays open (200 without a token).
+# There is no allowUnauthenticatedREST flag.
+# POST /admin/contracts with X-Forwarded-For is 404.
 #
 # Usage: deploy/standalone/jwt-proof.sh [image]
 # Does not print the admin token or the Keycloak client secret.
@@ -16,6 +19,7 @@ PROOF_BIN="${STOA_PROOF_BIN:-}"
 NET=stoa-jwt-proof
 ADMIN_TOKEN="$(openssl rand -hex 32)"
 CLIENT_SECRET="$(openssl rand -hex 24)"
+NOAUD_SECRET="$(openssl rand -hex 24)"
 KC_IMAGE=quay.io/keycloak/keycloak:26.4.2
 
 cleanup() {
@@ -82,6 +86,19 @@ sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create clients -r stoa \
   -s standardFlowEnabled=false \
   -s directAccessGrantsEnabled=false \
   -s protocol=openid-connect >/dev/null
+sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create clients -r stoa \
+  -s clientId=stoa-no-audience \
+  -s secret="$NOAUD_SECRET" \
+  -s serviceAccountsEnabled=true \
+  -s publicClient=false \
+  -s standardFlowEnabled=false \
+  -s directAccessGrantsEnabled=false \
+  -s protocol=openid-connect >/dev/null
+sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh get clients -r stoa -q clientId=stoa-caller >/tmp/stoa-jwt-caller.json
+CALLER_ID="$(python3 -c 'import json; print(json.load(open("/tmp/stoa-jwt-caller.json"))[0]["id"])')"
+python3 -c 'import json; json.dump({"name":"stoa-gateway-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":False,"config":{"included.custom.audience":"stoa-gateway","id.token.claim":"false","access.token.claim":"true"}}, open("/tmp/stoa-jwt-mapper.json","w"))'
+sudo docker cp /tmp/stoa-jwt-mapper.json stoa-jwt-kc:/tmp/stoa-jwt-mapper.json
+sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create "clients/${CALLER_ID}/protocol-mappers/models" -r stoa -f /tmp/stoa-jwt-mapper.json >/dev/null
 
 if [[ -n "$PROOF_BIN" ]]; then
   STOA_HOST=0.0.0.0 \
@@ -94,6 +111,7 @@ if [[ -n "$PROOF_BIN" ]]; then
   STOA_OTEL_ENABLED=false \
   STOA_KEYCLOAK_URL="$KC_URL" \
   STOA_KEYCLOAK_REALM=stoa \
+  STOA_JWT_AUDIENCE=stoa-gateway \
   RUST_LOG=info \
   "$PROOF_BIN" >/tmp/stoa-jwt-gw.log 2>&1 &
   GW_PID=$!
@@ -110,6 +128,7 @@ else
     -e STOA_OTEL_ENABLED=false \
     -e STOA_KEYCLOAK_URL="$KC_URL" \
     -e STOA_KEYCLOAK_REALM=stoa \
+    -e STOA_JWT_AUDIENCE=stoa-gateway \
     -e RUST_LOG=info \
     "$IMAGE" >/dev/null
 fi
@@ -134,6 +153,14 @@ echo "GET /health $health"
 
 admin_anon="$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/admin/contracts -H 'content-type: application/json' -d '{}')"
 echo "POST /admin/contracts without token $admin_anon"
+
+admin_fwd="$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/admin/contracts \
+  -H "authorization: Bearer $ADMIN_TOKEN" \
+  -H 'content-type: application/json' \
+  -H 'X-Forwarded-For: 203.0.113.10' \
+  -H 'X-Forwarded-Host: api.gostoa.dev' \
+  -d '{}')"
+echo "POST /admin/contracts via forwarded headers $admin_fwd"
 
 protected="$(python3 -c 'import json,os; print(json.dumps({"name":"live-api","version":"1.0.0","tenant_id":"demo","status":"published","classification":"H","inboundAuth":"jwt","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":os.environ["BACKEND_URL"]}]}))')"
 open="$(python3 -c 'import json,os; print(json.dumps({"name":"open-api","version":"1.0.0","tenant_id":"demo","status":"published","classification":"H","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":os.environ["BACKEND_URL"]}]}))')"
@@ -164,10 +191,27 @@ else
 fi
 ACCESS_TOKEN="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["access_token"])' "$token_json")"
 ISS="$(python3 -c 'import base64,json,sys; p=sys.argv[1].split(".")[1]; p+="="*((4-len(p)%4)%4); print(json.loads(base64.urlsafe_b64decode(p))["iss"])' "$ACCESS_TOKEN")"
+python3 -c 'import base64,json,sys; p=sys.argv[1].split(".")[1]; p+="="*((4-len(p)%4)%4); aud=json.loads(base64.urlsafe_b64decode(p)).get("aud"); aud=[aud] if isinstance(aud,str) else list(aud or []);
+assert "stoa-gateway" in aud, aud; print("token aud", ",".join(aud))' "$ACCESS_TOKEN"
 echo "token iss=$ISS"
 
 authed="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/apis/demo/live-api/ping -H "authorization: Bearer $ACCESS_TOKEN")"
 echo "GET protected with token $authed"
+
+if [[ -n "$PROOF_BIN" ]]; then
+  noaud_json="$(curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    -d "grant_type=client_credentials" -d "client_id=stoa-no-audience" -d "client_secret=$NOAUD_SECRET")"
+else
+  noaud_json="$(sudo docker exec stoa-jwt-gw curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    -d "grant_type=client_credentials" -d "client_id=stoa-no-audience" -d "client_secret=$NOAUD_SECRET")"
+fi
+NOAUD_TOKEN="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["access_token"])' "$noaud_json")"
+python3 -c 'import base64,json,sys; p=sys.argv[1].split(".")[1]; p+="="*((4-len(p)%4)%4); aud=json.loads(base64.urlsafe_b64decode(p)).get("aud"); aud=[aud] if isinstance(aud,str) else list(aud or []);
+assert "stoa-gateway" not in aud, aud' "$NOAUD_TOKEN"
+noaud="$(curl -sS -o /tmp/stoa-jwt-noaud -w '%{http_code}' http://127.0.0.1:18080/apis/demo/live-api/ping -H "authorization: Bearer $NOAUD_TOKEN")"
+echo "GET protected with token missing audience $noaud $(cat /tmp/stoa-jwt-noaud)"
 
 # Realm accessTokenLifespan is 1s. Validator leeway is 30s.
 echo "waiting for the access token to age past the 30s leeway"
@@ -182,11 +226,14 @@ echo "GET protected with wrong issuer $wrong $(cat /tmp/stoa-jwt-wrong)"
 
 test "$health" = 200
 test "$admin_anon" = 401
+test "$admin_fwd" = 404
 test "$protected_status" = 201
 test "$open_status" = 201
 test "$anon" = 401
 test "$open_anon" = 200
 test "$authed" = 200
+test "$noaud" = 401
+grep -q 'Invalid token audience' /tmp/stoa-jwt-noaud
 test "$expired" = 401
 test "$wrong" = 401
 test "$ISS" = "$KC_URL/realms/stoa"

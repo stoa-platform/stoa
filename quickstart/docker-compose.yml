@@ -1,0 +1,138 @@
+# Minimal STOA quickstart.
+#
+# Starts the control plane, PostgreSQL, Keycloak, STOA Gateway, and a fake
+# backend. No Redpanda (BSL) and no Redis: this path does not need them.
+#
+# R1 declares the API on the gateway with POST /admin/contracts and
+# inboundAuth. The control plane is running, and it does not protect the
+# route. See README.md.
+
+name: stoa-quickstart
+
+services:
+  postgres:
+    # postgres:16.10-alpine
+    image: postgres@sha256:029660641a0cfc575b14f336ba448fb8a75fd595d42e1fa316b9fb4378742297
+    environment:
+      POSTGRES_USER: quickstart
+      POSTGRES_PASSWORD: placeholder-only
+      POSTGRES_DB: quickstart
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quickstart -d quickstart"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 3s
+
+  keycloak:
+    # quay.io/keycloak/keycloak:26.5.3
+    image: quay.io/keycloak/keycloak@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a
+    command: ["start-dev"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: quickstart
+      KC_BOOTSTRAP_ADMIN_PASSWORD: placeholder-only
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /realms/master HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200' <&3",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+
+  control-plane:
+    # ghcr.io/stoa-platform/control-plane-api:1.14.1 (linux/amd64)
+    image: ghcr.io/stoa-platform/control-plane-api@sha256:a8c01bfac64865f543f7836d6b3f1e626896817913c47715b240760bd3f58c81
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ENVIRONMENT: dev
+      BASE_DOMAIN: example.test
+      DATABASE_URL: postgresql+asyncpg://quickstart:placeholder-only@postgres:5432/quickstart
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_REALM: quickstart
+      KEYCLOAK_CLIENT_ID: quickstart-control-plane
+      KEYCLOAK_CLIENT_SECRET: placeholder-only
+      KEYCLOAK_ADMIN_CLIENT_SECRET: placeholder-only
+      KEYCLOAK_VERIFY_SSL: "false"
+      GITLAB_URL: http://127.0.0.1:9
+      GITLAB_TOKEN: ""
+      GITLAB_PROJECT_ID: ""
+      KAFKA_ENABLED: "false"
+      KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9
+      STOA_ENABLE_KAFKA_CONSUMERS: "false"
+      ENABLE_GATEWAY_HEALTH_WORKER: "false"
+      ENABLE_TELEMETRY_WORKER: "false"
+      ENABLE_GATEWAY_RECONCILER: "false"
+      GATEWAY_URL: http://gateway:8080
+      GATEWAY_ADMIN_PASSWORD: ""
+      CORS_ORIGINS: http://127.0.0.1:8000
+      OPENSEARCH_HOST: http://127.0.0.1:9
+      OPENSEARCH_URL: http://127.0.0.1:9
+      OPENSEARCH_TIMEOUT: "1"
+      PROMETHEUS_ENABLED: "false"
+      LOKI_ENABLED: "false"
+      ARGOCD_URL: http://127.0.0.1:9
+      VAULT_ADDR: http://127.0.0.1:9
+      STOA_API_SNAPSHOT_ENABLED: "false"
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  gateway:
+    # Built from this checkout at the crate version in stoa-gateway/Cargo.toml.
+    # Default features only (no Kafka, no Pingora). The GHCR image is compiled
+    # with Pingora and drops the proxied call.
+    build:
+      context: ../stoa-gateway
+      dockerfile: ../quickstart/Dockerfile.gateway
+    image: stoa-quickstart-gateway:0.9.25
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      STOA_HOST: 0.0.0.0
+      STOA_PORT: "8080"
+      STOA_ADMIN_API_TOKEN: placeholder-only
+      STOA_AUTO_REGISTER: "false"
+      STOA_ROUTE_RELOAD_ENABLED: "false"
+      STOA_BUDGET_ENFORCEMENT_ENABLED: "false"
+      STOA_KAFKA_ENABLED: "false"
+      STOA_OTEL_ENABLED: "false"
+      STOA_KEYCLOAK_URL: http://keycloak:8080
+      STOA_KEYCLOAK_REALM: quickstart
+      STOA_CONTROL_PLANE_URL: http://control-plane:8000
+      STOA_AUDIT_SPOOL_DIR: /tmp/audit-spool
+      RUST_LOG: info
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+  backend:
+    # nginx:1.27.5-alpine — returns 200 for GET /
+    image: nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 2s

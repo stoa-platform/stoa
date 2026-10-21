@@ -1,0 +1,47 @@
+# Community STOA Gateway for the quickstart.
+#
+# The image published to GHCR is built with FEATURES=kafka,pingora.
+# That Pingora proxy closes the connection when it forwards the
+# quickstart request. This image leaves both features off and proxies
+# with the default HTTP client.
+#
+# Opt-level 1 keeps the first compile shorter than a full release build.
+# The binary is still stripped.
+
+FROM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+# Cargo.lock is gitignored in stoa-gateway. The wildcard matches when a lockfile is present.
+COPY Cargo.toml Cargo.lock* ./
+COPY src ./src
+COPY benches ./benches
+
+ENV CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
+    CARGO_PROFILE_RELEASE_LTO=off \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+    CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
+RUN cargo build --release \
+    && strip target/release/stoa-gateway
+
+FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3 curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r -g 1000 stoa \
+    && useradd -r -u 1000 -g stoa -d /app stoa
+
+WORKDIR /app
+COPY --from=builder /app/target/release/stoa-gateway /app/stoa-gateway
+RUN chown -R stoa:stoa /app
+
+USER 1000
+EXPOSE 8080
+ENV STOA_HOST=0.0.0.0 \
+    STOA_PORT=8080
+ENTRYPOINT ["/app/stoa-gateway"]

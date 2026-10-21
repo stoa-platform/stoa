@@ -89,6 +89,20 @@ password: readyplayerone
 
 For local component-by-component development, see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
+## Access-control quickstart
+
+[`quickstart/`](quickstart/README.md) starts the control plane, PostgreSQL, Keycloak, STOA Gateway, and a fake backend.
+
+The API is declared with `POST /admin/contracts` and `inboundAuth` on the gateway. `POST /v1/tenants/{id}/apis` on the control plane publishes the route without a valid JWT policy, so the control plane does not protect that route. A later version will declare the API through the control plane.
+
+```bash
+cd quickstart
+timeout 300 docker compose up --wait
+./verify.sh
+```
+
+`verify.sh` declares the API, expects 401 without a token, then 200 with a token.
+
 ---
 
 ## From API to agent tool in 3 steps

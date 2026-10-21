@@ -20,8 +20,12 @@ use crate::config::Config;
 use crate::state::AppState;
 
 pub(super) fn create_test_state(admin_token: Option<&str>) -> AppState {
+    // These tests publish contracts the way the control plane did, including
+    // contracts with no inboundAuth. Standalone refusal is covered by the
+    // binder tests and by the unknown-inboundAuth cases.
     let config = Config {
         admin_api_token: admin_token.map(|s| s.to_string()),
+        control_plane_url: Some("http://control-plane-api.test:8000".into()),
         ..Config::default()
     };
     AppState::new(config)

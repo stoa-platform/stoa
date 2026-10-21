@@ -265,6 +265,13 @@ impl UacContractSpec {
         if self.name.is_empty() {
             errors.push("name must not be empty".to_string());
         }
+        if let Some(auth) = self.inbound_auth.as_deref() {
+            if known_inbound_auth(auth).is_none() {
+                errors.push(format!(
+                    "unknown inboundAuth value {auth:?}; expected jwt, bearer, oauth2, oidc, or client_credentials"
+                ));
+            }
+        }
         if self.version.is_empty() {
             errors.push("version must not be empty".to_string());
         }
@@ -358,10 +365,95 @@ pub fn is_jwt_validation_policy(policy_type: &str) -> bool {
 }
 
 fn inbound_auth_requires_jwt(value: Option<&str>) -> bool {
-    matches!(
-        value.unwrap_or("").trim().to_ascii_lowercase().as_str(),
-        "jwt" | "bearer" | "oauth2" | "oidc" | "client_credentials" | "jwt_validation"
-    )
+    value.and_then(known_inbound_auth).is_some()
+}
+
+/// `jwt`, `bearer`, `oauth2`, `oidc`, `client_credentials`, `jwt_validation`.
+/// Empty and unknown values are not authentication.
+fn known_inbound_auth(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "jwt" => Some("jwt"),
+        "bearer" => Some("bearer"),
+        "oauth2" => Some("oauth2"),
+        "oidc" => Some("oidc"),
+        "client_credentials" => Some("client_credentials"),
+        "jwt_validation" => Some("jwt_validation"),
+        _ => None,
+    }
+}
+
+const INBOUND_AUTH_KEYS: &[&str] = &[
+    "inboundAuth",
+    "inbound_auth",
+    "inboundAuthAudience",
+    "inbound_auth_audience",
+];
+
+/// True when `key` is not a real inboundAuth field but would be ignored by
+/// serde and leave the route open (`InboundAuth`, `inboundAut`, …).
+fn resembles_inbound_auth_field(key: &str) -> bool {
+    if INBOUND_AUTH_KEYS.contains(&key) {
+        return false;
+    }
+    let folded: String = key
+        .chars()
+        .filter(|ch| *ch != '_' && *ch != '-')
+        .flat_map(|ch| ch.to_lowercase())
+        .collect();
+    const TARGETS: [&str; 2] = ["inboundauth", "inboundauthaudience"];
+    if TARGETS.contains(&folded.as_str()) {
+        return true;
+    }
+    let mentions_auth = folded.contains("inbound") || folded.contains("auth");
+    mentions_auth
+        && TARGETS
+            .iter()
+            .any(|target| edit_distance(&folded, target) <= 2)
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let a: Vec<char> = left.chars().collect();
+    let b: Vec<char> = right.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut curr = vec![0; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[b.len()]
+}
+
+/// Parse a `POST /admin/contracts` body.
+///
+/// Unknown `inboundAuth` values (`jtw`, `""`) and unknown fields that look
+/// like that name (`InboundAuth`) are rejected. Other unknown fields stay
+/// ignored: a full `deny_unknown_fields` would refuse documents stoactl
+/// already sends.
+pub fn parse_admin_contract(value: &serde_json::Value) -> Result<UacContractSpec, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "contract body must be a JSON object".to_string())?;
+    for key in object.keys() {
+        if resembles_inbound_auth_field(key) {
+            return Err(format!(
+                "unknown field {key:?} looks like inboundAuth; use inboundAuth"
+            ));
+        }
+    }
+    let contract: UacContractSpec =
+        serde_json::from_value(value.clone()).map_err(|err| format!("invalid contract: {err}"))?;
+    if let Some(auth) = contract.inbound_auth.as_deref() {
+        if known_inbound_auth(auth).is_none() {
+            return Err(format!(
+                "unknown inboundAuth value {auth:?}; expected jwt, bearer, oauth2, oidc, or client_credentials"
+            ));
+        }
+    }
+    Ok(contract)
 }
 
 // =============================================================================
@@ -458,6 +550,53 @@ mod tests {
             parsed.inbound_auth_audience.as_deref(),
             Some("demo-customer-referential")
         );
+    }
+
+    fn published_body(inbound_auth: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "name": "live-api",
+            "version": "1.0.0",
+            "tenant_id": "demo",
+            "status": "published",
+            "inboundAuth": inbound_auth,
+            "endpoints": [{
+                "path": "/ping",
+                "methods": ["GET"],
+                "backend_url": "http://127.0.0.1:9"
+            }]
+        })
+    }
+
+    #[test]
+    fn unknown_inbound_auth_value_is_rejected() {
+        for value in ["jtw", "", "   ", "none"] {
+            let err =
+                parse_admin_contract(&published_body(serde_json::json!(value))).expect_err(value);
+            assert!(err.contains("unknown inboundAuth"), "{value}: {err}");
+        }
+    }
+
+    #[test]
+    fn misspelled_inbound_auth_field_is_rejected() {
+        for key in ["InboundAuth", "INBOUNDAUTH", "inboundAut", "inboudAuth"] {
+            let mut body = published_body(serde_json::json!("jwt"));
+            let object = body.as_object_mut().unwrap();
+            object.remove("inboundAuth");
+            object.insert(key.to_string(), serde_json::json!("jwt"));
+            let err = parse_admin_contract(&body).expect_err(key);
+            assert!(err.contains("looks like inboundAuth"), "{key}: {err}");
+        }
+    }
+
+    #[test]
+    fn known_inbound_auth_and_unrelated_fields_still_parse() {
+        let mut body = published_body(serde_json::json!("jwt"));
+        body.as_object_mut()
+            .unwrap()
+            .insert("owner".into(), serde_json::json!("stoactl"));
+        let parsed = parse_admin_contract(&body).expect("jwt");
+        assert!(parsed.requires_jwt_validation());
+        assert_eq!(parsed.inbound_auth.as_deref(), Some("jwt"));
     }
 
     #[test]

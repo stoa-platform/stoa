@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* **quickstart:** add a Docker Compose stack that starts the control plane and STOA Gateway, declares an API through the gateway admin contract API, and checks access control (401 without a token, 401 with an invalid token, 200 with a token)
+
 ## [2.3.0](https://github.com/stoa-platform/stoa/compare/v2.2.0...v2.3.0) (2026-03-06)
 
 

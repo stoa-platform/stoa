@@ -1,0 +1,68 @@
+# Fresh runner: timeout 300 on docker compose up --wait, then verify.sh.
+# The control plane image is pulled anonymously. No registry login.
+
+name: Quickstart
+
+on:
+  pull_request:
+    paths:
+      - "quickstart/**"
+      - "stoa-gateway/Cargo.lock"
+      - ".github/workflows/quickstart.yml"
+  push:
+    branches: [main]
+    paths:
+      - "quickstart/**"
+      - "stoa-gateway/Cargo.lock"
+      - ".github/workflows/quickstart.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quickstart-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  access-control:
+    name: Compose access control
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Refuse a registry login
+        run: |
+          set -euo pipefail
+          if [[ -f "$HOME/.docker/config.json" ]] && grep -q 'ghcr.io' "$HOME/.docker/config.json"; then
+            echo "GHCR credentials are present; this job must pull anonymously"
+            exit 1
+          fi
+          echo "no GHCR credentials"
+
+      - name: Start the stack
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          timeout 300 docker compose up --wait
+          end=$(date +%s)
+          seconds=$((end - start))
+          echo "compose_up_seconds=$seconds"
+          echo "compose_up_seconds=$seconds" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify access control
+        working-directory: quickstart
+        run: ./verify.sh
+
+      - name: Image sizes
+        if: always()
+        run: |
+          docker image ls --digests --format 'table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.Size}}'
+
+      - name: Logs on failure
+        if: failure()
+        working-directory: quickstart
+        run: docker compose logs --tail=120

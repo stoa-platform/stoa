@@ -16,6 +16,18 @@ pub async fn upsert_policy(
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
 
+    // POST replaces jwt:<route> in place and can drop the audience check.
+    if !state.config.control_plane_configured() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "status": "rejected",
+                "message": "standalone mode refuses POST /admin/policies; republish the contract instead"
+            })),
+        )
+            .into_response();
+    }
+
     // GW-1 P1-6: require the identifying fields so we don't silently
     // store a policy with key "" (which would collide with every other
     // policy missing an id). `config` is `serde_json::Value` — empty
@@ -175,6 +187,52 @@ mod tests {
             .list()
             .iter()
             .any(|policy| policy.id == "jwt-1"));
+    }
+
+    #[tokio::test]
+    async fn standalone_refuses_post_policies_overwrite_of_jwt_route() {
+        let state = AppState::new(Config {
+            admin_api_token: Some("secret".into()),
+            jwt_audience: vec!["stoa-gateway".into()],
+            ..Config::default()
+        });
+        state.policy_registry.upsert(PolicyEntry {
+            id: "jwt:r1".into(),
+            name: "jwt_validation".into(),
+            policy_type: "jwt_validation".into(),
+            config: serde_json::json!({"audience": "stoa-gateway", "source": "contract"}),
+            priority: 0,
+            api_id: "r1".into(),
+        });
+        let app = build_full_admin_router(state.clone());
+        let overwrite = serde_json::json!({
+            "id": "jwt:r1",
+            "name": "jwt_validation",
+            "policy_type": "jwt_validation",
+            "config": {},
+            "priority": 0,
+            "api_id": "r1"
+        });
+
+        let response = app
+            .oneshot(auth_json_req("POST", "/policies", overwrite))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["message"]
+            .as_str()
+            .unwrap()
+            .contains("POST /admin/policies"));
+
+        let stored = state.policy_registry.list();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].id, "jwt:r1");
+        assert_eq!(stored[0].config["audience"], "stoa-gateway");
+        assert_eq!(stored[0].config["source"], "contract");
     }
 
     // ─── GW-1 P1-6 regression: required fields on upsert_policy ───────

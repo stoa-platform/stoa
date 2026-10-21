@@ -219,9 +219,10 @@ http://stoa-gateway-admin.stoa.svc:8080/admin/contracts
 contract JSON file. It does not run kubectl or ssh. `--post` sends the
 body only when `STOA_ADMIN_API_TOKEN` and `STOA_GATEWAY_ADMIN_URL` are
 set. A file without `inboundAuth` is refused before any request.
-`POST /admin/apis` and `DELETE /admin/policies` return 403 in standalone:
-the first stores a trusted route with no JWT policy, the second removes
-a policy and leaves the route open.
+`POST /admin/apis`, `POST /admin/policies`, and `DELETE /admin/policies` return 403 in standalone.
+`POST /admin/apis` stores a trusted route with no JWT policy.
+`POST /admin/policies` can replace `jwt:<route>` and drop its audience.
+`DELETE /admin/policies` removes a policy and leaves the route open.
 
 ```bash
 deploy/standalone/republish-contracts.sh contracts/*.json

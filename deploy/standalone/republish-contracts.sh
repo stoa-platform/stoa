@@ -50,7 +50,7 @@ print_plan() {
   echo "  -H \"authorization: Bearer \$STOA_ADMIN_API_TOKEN\" \\"
   echo "  -H 'content-type: application/json' \\"
   echo "  --data-binary @${file}"
-  echo "POST /admin/apis and DELETE /admin/policies stay 403 in standalone."
+  echo "POST /admin/apis, POST /admin/policies, and DELETE /admin/policies stay 403 in standalone."
 }
 
 post_one() {

@@ -66,6 +66,7 @@ impl RealBinders {
                     rest
                 } else {
                     rest.enforcing_inbound_auth()
+                        .with_global_audience(state.config.jwt_audience.iter().map(String::as_str))
                 }
             },
             mcp: McpBinder::new(state.tool_registry.clone()),
@@ -329,7 +330,7 @@ async fn restore_previous_bindings(
 fn binder_failure_response(key: &str, which: &str, err: &str) -> Response {
     // The standalone inbound-auth refusal is a caller error. Other binder
     // failures stay generic; the detail is already in `tracing::warn!`.
-    if err.contains("no inbound auth") {
+    if err.contains("no inbound auth") || err.contains("no audience") {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({

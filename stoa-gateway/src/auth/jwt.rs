@@ -116,6 +116,11 @@ impl JwtValidator {
         }
     }
 
+    /// True when this validator rejects a token whose `aud` is missing or wrong.
+    pub fn enforces_audience(&self) -> bool {
+        self.config.validate_audience
+    }
+
     /// Same keys and issuer, but `aud` must contain one of `audiences`.
     ///
     /// Used by the REST proxy when a published policy carries `config.audience`.

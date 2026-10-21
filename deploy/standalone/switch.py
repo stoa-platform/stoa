@@ -31,6 +31,7 @@ import ipaddress
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,48 @@ STOA_SELECTOR = {"app": "stoa-gateway"}
 APISIX_SELECTOR = {"app": "apisix"}
 STOA_TARGET_PORT = 8080
 APISIX_TARGET_PORT = 9080
+# Anonymous call measured on APISIX before the switch. Rollback puts this
+# path back on gateway:9080 (Prefix /). The gateway itself would 404 it.
+LEGACY_ANON_PATH = "/demo-customer-referential/v1/customers/C-1001"
+LEGACY_ANON_STATUS = 401
+
+
+def kubectl_bin() -> str:
+    """Operator binary. The review host sets K=~/stoa-deploy-bin/kubectl-stoa.
+
+    `KUBECTL` wins, then `K`, then `kubectl-stoa` on PATH, then `kubectl`.
+    """
+    for key in ("KUBECTL", "K"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            return os.path.expanduser(raw)
+    found = shutil.which("kubectl-stoa")
+    if found:
+        return found
+    return "kubectl"
+
+
+def ingress_matches(rule: dict, request_path: str) -> bool:
+    """Kubernetes Ingress Prefix match. Prefix `/` matches every path."""
+    path = rule["path"]
+    if rule.get("pathType") != "Prefix":
+        return request_path == path
+    if path == "/":
+        return request_path.startswith("/")
+    base = path.rstrip("/")
+    return request_path == base or request_path.startswith(base + "/")
+
+
+def legacy_anonymous_status(rule: dict, request_path: str) -> int:
+    """Status of an anonymous call after rollback, without contacting the cluster.
+
+    Prefix `/` to port 9080 is the APISIX route. That route answers 401.
+    Any other backend (the STOA targetPort 8080) does not serve this URL.
+    """
+    port = rule["backend"]["service"]["port"]["number"]
+    if port == APISIX_TARGET_PORT and ingress_matches(rule, request_path):
+        return LEGACY_ANON_STATUS
+    return 404
 
 
 def stoa_paths() -> list[dict]:
@@ -73,13 +116,13 @@ def apisix_catch_all_paths() -> list[dict]:
 
 
 def kubectl_json(*args: str) -> dict:
-    out = subprocess.check_output(["kubectl", *args, "-o", "json"], text=True)
+    out = subprocess.check_output([kubectl_bin(), *args, "-o", "json"], text=True)
     return json.loads(out)
 
 
 def kubectl_replace(obj: dict) -> None:
     subprocess.run(
-        ["kubectl", "replace", "-f", "-"],
+        [kubectl_bin(), "replace", "-f", "-"],
         input=json.dumps(obj),
         text=True,
         check=True,
@@ -88,7 +131,7 @@ def kubectl_replace(obj: dict) -> None:
 
 def backup_exists() -> bool:
     result = subprocess.run(
-        ["kubectl", "-n", NS, "get", "configmap", BACKUP],
+        [kubectl_bin(), "-n", NS, "get", "configmap", BACKUP],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -117,7 +160,7 @@ def save_backup(payload: dict) -> None:
         "data": {"backup": json.dumps(payload)},
     }
     subprocess.run(
-        ["kubectl", "create", "-f", "-"],
+        [kubectl_bin(), "create", "-f", "-"],
         input=json.dumps(cm),
         text=True,
         check=True,
@@ -499,7 +542,7 @@ def install_ingress_pod_ips() -> str:
     patch = json.dumps({"data": {"STOA_TRUSTED_PROXIES": value}})
     subprocess.run(
         [
-            "kubectl",
+            kubectl_bin(),
             "-n",
             NS,
             "patch",
@@ -521,12 +564,12 @@ def install_ingress_pod_ips() -> str:
 def restart_gateway() -> None:
     """Reload the ConfigMap. envFrom is read at process start."""
     subprocess.run(
-        ["kubectl", "-n", NS, "rollout", "restart", "deployment/stoa-gateway"],
+        [kubectl_bin(), "-n", NS, "rollout", "restart", "deployment/stoa-gateway"],
         check=True,
     )
     subprocess.run(
         [
-            "kubectl",
+            kubectl_bin(),
             "-n",
             NS,
             "rollout",
@@ -538,15 +581,27 @@ def restart_gateway() -> None:
     )
 
 
+def backup_volumes(host: str) -> None:
+    """Snapshot PVCs on the node before Service/gateway is retargeted.
+
+    `systemctl start` waits for the oneshot. A non-zero status refuses the
+    switch. This does not print the archive; the operator checks the journal.
+    """
+    _ssh(host, "sudo systemctl start stoa-pvc-backup.service")
+    print(f"volume backup finished on {host} (stoa-pvc-backup.service)")
+
+
 def preflight() -> None:
-    """Image revision on worker-3, then ingress-nginx pod IPs, then restart.
+    """Image revision on worker-3, volume backup, then ingress-nginx pod IPs.
 
     Does not retarget Service/gateway or Ingress stoa-api. switch.sh calls
-    this before `switch.py stoa`. A node /24 is never written.
+    this before `switch.py stoa`. A node /24 is never written. The backup
+    runs before the ConfigMap patch and the rollout restart.
     """
     host = os.environ.get("STOA_NODE_SSH", "worker-3").strip() or "worker-3"
     revision = expected_revision()
     confirm_image(host, revision)
+    backup_volumes(host)
     install_ingress_pod_ips()
     restart_gateway()
     print("preflight ok")
@@ -565,6 +620,12 @@ def self_test() -> None:
     catch_all = apisix_catch_all_paths()
     assert catch_all[0]["path"] == "/"
     assert catch_all[0]["backend"]["service"]["port"]["number"] == 9080
+    assert ingress_matches(catch_all[0], LEGACY_ANON_PATH)
+    assert not any(ingress_matches(rule, LEGACY_ANON_PATH) for rule in paths)
+    assert legacy_anonymous_status(catch_all[0], LEGACY_ANON_PATH) == 401
+    assert (
+        legacy_anonymous_status(paths[0], LEGACY_ANON_PATH) == 404
+    ), "the stoa /apis rule must not answer the old APISIX URL"
     assert INGRESS == "stoa-api"
     assert STOA_SELECTOR == {"app": "stoa-gateway"}
     assert STOA_TARGET_PORT == 8080
@@ -622,6 +683,20 @@ def self_test() -> None:
         == "sha256:" + "cd" * 32
     )
     print("switch.py self-test ok")
+    previous = {key: os.environ.get(key) for key in ("K", "KUBECTL")}
+    os.environ["K"] = "~/stoa-deploy-bin/kubectl-stoa"
+    os.environ.pop("KUBECTL", None)
+    try:
+        assert kubectl_bin() == os.path.expanduser("~/stoa-deploy-bin/kubectl-stoa")
+        os.environ["KUBECTL"] = "/usr/bin/kubectl"
+        assert kubectl_bin() == "/usr/bin/kubectl"
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    print("kubectl binary selection ok")
 
 
 def main(argv: list[str]) -> None:
@@ -629,8 +704,9 @@ def main(argv: list[str]) -> None:
         sys.exit(
             "usage: switch.py preflight | stoa | apisix | --self-test\n"
             "  preflight  require the imported image revision on worker-3,\n"
-            "             set STOA_TRUSTED_PROXIES to the ingress-nginx pod\n"
-            "             IPs (never a node /24), restart the deployment\n"
+            "             snapshot PVCs (stoa-pvc-backup.service) before any\n"
+            "             change, set STOA_TRUSTED_PROXIES to the ingress-nginx\n"
+            "             pod IPs (never a node /24), restart the deployment\n"
             "  stoa       Service/gateway -> app=stoa-gateway, targetPort 8080,\n"
             "             Ingress host api.gostoa.dev paths replaced with /apis\n"
             "  apisix     restore the selector, targetPort, and paths saved on\n"

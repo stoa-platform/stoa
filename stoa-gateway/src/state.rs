@@ -240,9 +240,10 @@ impl AppState {
             let oidc_provider = Arc::new(OidcProvider::new(oidc_config));
             // Audience is checked only when STOA_JWT_AUDIENCE is set. Unset keeps
             // the previous behaviour (issuer + RS256, no aud check) so existing
-            // MCP clients without an audience mapper keep working. The standalone
-            // manifest sets the audience to `stoa-gateway`.
-            let audiences = config.jwt_audiences.clone();
+            // MCP clients without an audience mapper keep working. Standalone
+            // refuses to boot with an empty list (`Config::validate`). The old
+            // env name STOA_JWT_AUDIENCES does not bind.
+            let audiences = config.jwt_audience.clone();
             let validate_audience = !audiences.is_empty();
             if validate_audience {
                 tracing::info!(audiences = ?audiences, "JWT audience validation enabled");

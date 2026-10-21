@@ -1083,6 +1083,20 @@ async fn require_published_route_jwt(
     };
 
     let audiences = policy_audiences(state, route);
+    // Standalone boot already refuses an empty STOA_JWT_AUDIENCE. This is the
+    // request-path half: a JWT route with no policy audience and no global
+    // audience check must not be proxied (aud=account and a missing aud were
+    // measured as 200 when the ConfigMap name did not bind).
+    if audiences.is_empty()
+        && !state.config.control_plane_configured()
+        && !validator.enforces_audience()
+    {
+        warn!("standalone JWT route has neither a policy audience nor STOA_JWT_AUDIENCE");
+        return Err(bearer_unauthorized(
+            "invalid_token",
+            "Invalid token audience",
+        ));
+    }
     let validator = if audiences.is_empty() {
         validator
     } else {
@@ -1317,6 +1331,94 @@ mod tests {
         let expired = call(state.clone(), Some(&expired_token)).await;
         assert_eq!(expired.status(), StatusCode::UNAUTHORIZED);
         assert!(body_string(expired).await.contains("Token expired"));
+    }
+
+    /// jwt-proof.sh publishes `inboundAuth: jwt` with no `inboundAuthAudience`
+    /// and sets `STOA_JWT_AUDIENCE=stoa-gateway`. A token with `aud=account`,
+    /// a token with no `aud`, `alg: none`, a broken signature, and an expired
+    /// token are 401. A token whose `aud` is `stoa-gateway` is not.
+    #[tokio::test]
+    async fn jwt_proof_global_audience_rejects_account_and_missing_aud() {
+        use crate::auth::jwt::tests::{mint, validator_against_test_key};
+        use crate::auth::jwt::JwtValidatorConfig;
+
+        let (validator, issuer) = validator_against_test_key(JwtValidatorConfig {
+            validate_audience: true,
+            audiences: vec!["stoa-gateway".into()],
+            ..JwtValidatorConfig::default()
+        })
+        .await;
+        let mut state = AppState::new(crate::config::Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            ..crate::config::Config::default()
+        });
+        state.jwt_validator = Some(std::sync::Arc::new(validator));
+        let route = ping_route();
+        state.policy_registry.upsert(jwt_policy(&route.id));
+        state.route_registry.upsert(route);
+
+        let missing = call(state.clone(), None).await;
+        assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let valid = mint(&issuer, now + 300, Some("stoa-gateway"));
+        let accepted = call(state.clone(), Some(&valid)).await;
+        assert_ne!(accepted.status(), StatusCode::UNAUTHORIZED);
+
+        let account = mint(&issuer, now + 300, Some("account"));
+        let wrong_aud = call(state.clone(), Some(&account)).await;
+        assert_eq!(wrong_aud.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(wrong_aud)
+            .await
+            .contains("Invalid token audience"));
+
+        let no_aud = mint(&issuer, now + 300, None);
+        let omitted = call(state.clone(), Some(&no_aud)).await;
+        assert_eq!(omitted.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(omitted)
+            .await
+            .contains("Invalid token audience"));
+
+        let broken = format!("{valid}x");
+        let invalid = call(state.clone(), Some(&broken)).await;
+        assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
+
+        let none = call(state.clone(), Some(&unsigned_none_token())).await;
+        assert_eq!(none.status(), StatusCode::UNAUTHORIZED);
+
+        let expired_token = mint(&issuer, now - 120, Some("stoa-gateway"));
+        let expired = call(state.clone(), Some(&expired_token)).await;
+        assert_eq!(expired.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(expired).await.contains("Token expired"));
+    }
+
+    /// Measured 200 when the plural env name left audience checks off.
+    /// Standalone must 401 that token even if boot validation was skipped.
+    #[tokio::test]
+    async fn standalone_without_global_or_route_audience_is_401() {
+        use crate::auth::jwt::tests::{issuer_only, mint, validator_against_test_key};
+
+        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
+        let mut state = AppState::new(crate::config::Config::default());
+        state.jwt_validator = Some(std::sync::Arc::new(validator));
+        let route = ping_route();
+        state.policy_registry.upsert(jwt_policy(&route.id));
+        state.route_registry.upsert(route);
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let account = mint(&issuer, now + 300, Some("account"));
+        let response = call(state, Some(&account)).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(response)
+            .await
+            .contains("Invalid token audience"));
     }
 
     #[test]

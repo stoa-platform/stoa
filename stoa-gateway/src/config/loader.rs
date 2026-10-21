@@ -64,6 +64,17 @@ pub enum ConfigError {
     /// NaN / -inf / +inf would silently disable or fully-open the limiter.
     #[error("tcp_rate_limit_per_ip must be a finite positive f64 when set (got {0})")]
     TcpRateLimitNotFinite(f64),
+
+    /// Standalone has no control plane to attach an audience later. An empty
+    /// `STOA_JWT_AUDIENCE` leaves `validate_audience` off, so a JWT route with
+    /// no `inboundAuthAudience` accepts `aud=account` and tokens that omit
+    /// `aud`. The plural env name `STOA_JWT_AUDIENCES` does not bind.
+    #[error(
+        "standalone mode requires STOA_JWT_AUDIENCE (or a route audience on \
+         every published contract). Empty audience checks accept aud=account \
+         and tokens with no aud. STOA_JWT_AUDIENCES is not read."
+    )]
+    StandaloneRequiresJwtAudience,
 }
 
 impl Config {
@@ -180,6 +191,20 @@ impl Config {
             }
         }
 
+        // Routes are published after boot. Without a global audience, a JWT
+        // route that does not carry its own audience is not checked. A route
+        // audience alone is not visible yet, so standalone refuses to start
+        // until STOA_JWT_AUDIENCE is set. Publishing still refuses the case
+        // where both the global list and the route audience are empty.
+        if !self.control_plane_configured()
+            && self
+                .jwt_audience
+                .iter()
+                .all(|audience| audience.trim().is_empty())
+        {
+            return Err(ConfigError::StandaloneRequiresJwtAudience);
+        }
+
         // --- Soft warnings (proceed) ---
 
         if self.control_plane_url.is_none() {
@@ -274,11 +299,47 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_accepts_default_config() {
+    fn test_validate_rejects_standalone_without_audience() {
         let config = Config::default();
-        // Default config has no CP URL and no JWT — validate logs warnings
-        // but does not fail.
-        config.validate().expect("default config must validate");
+        match config.validate() {
+            Err(ConfigError::StandaloneRequiresJwtAudience) => {}
+            other => panic!("expected StandaloneRequiresJwtAudience, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_validate_accepts_standalone_with_audience() {
+        let config = Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            ..Config::default()
+        };
+        config
+            .validate()
+            .expect("standalone with STOA_JWT_AUDIENCE must validate");
+    }
+
+    #[test]
+    fn test_validate_accepts_control_plane_without_audience() {
+        let config = Config {
+            control_plane_url: Some("http://control-plane-api:8000".into()),
+            ..Config::default()
+        };
+        config
+            .validate()
+            .expect("control plane keeps audience checks optional");
+    }
+
+    #[test]
+    fn test_validate_accepts_default_config() {
+        // Historical name: the default config is standalone and now refuses
+        // to boot without an audience. Control-plane mode still validates.
+        let config = Config {
+            control_plane_url: Some("http://control-plane-api:8000".into()),
+            ..Config::default()
+        };
+        config
+            .validate()
+            .expect("control-plane default must validate");
     }
 
     #[test]
@@ -306,7 +367,10 @@ mod tests {
 
     #[test]
     fn test_validate_accepts_mtls_with_trusted_proxies() {
-        let mut config = Config::default();
+        let mut config = Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            ..Config::default()
+        };
         config.mtls.enabled = true;
         config.mtls.trusted_proxies = vec!["10.0.0.0/8".to_string()];
         config.validate().expect("must accept mtls + trusted proxy");
@@ -343,7 +407,10 @@ mod tests {
 
     #[test]
     fn test_validate_accepts_sender_constraint_with_dpop_only() {
-        let mut config = Config::default();
+        let mut config = Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            ..Config::default()
+        };
         config.sender_constraint.enabled = true;
         config.dpop.enabled = true;
         config
@@ -379,6 +446,7 @@ mod tests {
     fn test_validate_accepts_none_tcp_rate_limit() {
         let config = Config {
             tcp_rate_limit_per_ip: None,
+            jwt_audience: vec!["stoa-gateway".into()],
             ..Config::default()
         };
         config.validate().expect("None is the documented disable");
@@ -388,6 +456,7 @@ mod tests {
     fn test_validate_accepts_positive_finite_tcp_rate_limit() {
         let config = Config {
             tcp_rate_limit_per_ip: Some(10.0),
+            jwt_audience: vec!["stoa-gateway".into()],
             ..Config::default()
         };
         config.validate().expect("positive finite must validate");
@@ -450,6 +519,53 @@ mod tests {
                 msg.contains("unknown variant") || msg.contains("bitbucket"),
                 "error should surface the rejected value: {msg}"
             );
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn env_stoa_jwt_audience_enables_the_check() {
+        use figment::providers::{Env, Serialized};
+        use figment::{Figment, Jail};
+
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_JWT_AUDIENCE", "stoa-gateway");
+            let figment = Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(Env::prefixed("STOA_").split("__"));
+            let cfg: Config = figment.extract()?;
+            assert_eq!(cfg.jwt_audience, vec!["stoa-gateway".to_string()]);
+            cfg.validate().expect("singular env name must validate");
+            Ok(())
+        });
+    }
+
+    /// The ConfigMap and jwt-proof set STOA_JWT_AUDIENCE. The old plural name
+    /// must stay unbound, leave the list empty, and fail standalone boot.
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn env_stoa_jwt_audiences_plural_does_not_bind_and_refuses_boot() {
+        use figment::providers::{Env, Serialized};
+        use figment::{Figment, Jail};
+
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_JWT_AUDIENCES", "stoa-gateway");
+            let figment = Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(Env::prefixed("STOA_").split("__"));
+            let cfg: Config = figment.extract()?;
+            assert!(
+                cfg.jwt_audience.is_empty(),
+                "plural env name must not fill jwt_audience: {:?}",
+                cfg.jwt_audience
+            );
+            match cfg.validate() {
+                Err(ConfigError::StandaloneRequiresJwtAudience) => {}
+                other => panic!("old env name must fail standalone boot, got {other:?}"),
+            }
             Ok(())
         });
     }

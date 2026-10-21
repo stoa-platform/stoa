@@ -19,6 +19,9 @@ pub struct RestBinder {
     /// Standalone turns this on (`STOA_CONTROL_PLANE_URL` unset). A control
     /// plane still allows an open route.
     require_inbound_auth: bool,
+    /// `STOA_JWT_AUDIENCE`. A JWT route may omit `inboundAuthAudience` only
+    /// when this list is non-empty. Both empty is refused in standalone.
+    global_jwt_audience: Vec<String>,
 }
 
 impl RestBinder {
@@ -39,6 +42,7 @@ impl RestBinder {
             route_registry,
             policy_registry,
             require_inbound_auth: false,
+            global_jwt_audience: Vec::new(),
         }
     }
 
@@ -48,6 +52,20 @@ impl RestBinder {
     /// auth also removes any route already stored for that contract.
     pub fn enforcing_inbound_auth(mut self) -> Self {
         self.require_inbound_auth = true;
+        self
+    }
+
+    /// Global audience from `STOA_JWT_AUDIENCE`. Copied from `Config` when the
+    /// admin handler builds the standalone binder.
+    pub fn with_global_audience(
+        mut self,
+        audiences: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Self {
+        self.global_jwt_audience = audiences
+            .into_iter()
+            .map(|audience| audience.as_ref().trim().to_string())
+            .filter(|audience| !audience.is_empty())
+            .collect();
         self
     }
 
@@ -191,6 +209,23 @@ impl ProtocolBinder for RestBinder {
                 "standalone mode refuses a route with no inbound auth; set inboundAuth to jwt"
                     .to_string(),
             );
+        }
+
+        if self.require_inbound_auth && contract.requires_jwt_validation() {
+            let route_audience = contract
+                .inbound_auth_audience
+                .as_deref()
+                .map(str::trim)
+                .filter(|audience| !audience.is_empty());
+            if route_audience.is_none() && self.global_jwt_audience.is_empty() {
+                self.route_registry.remove_by_contract(&contract_key);
+                self.policy_registry
+                    .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
+                return Err(
+                    "standalone mode refuses a JWT route with no audience; set STOA_JWT_AUDIENCE or inboundAuthAudience"
+                        .to_string(),
+                );
+            }
         }
 
         if contract.requires_jwt_validation() {
@@ -523,5 +558,35 @@ mod tests {
             policies.list_for_api("uac:acme:payments:0")[0].config["audience"].as_str(),
             Some("demo-customer-referential")
         );
+    }
+
+    #[tokio::test]
+    async fn standalone_refuses_jwt_route_when_global_and_route_audience_are_empty() {
+        let routes = Arc::new(RouteRegistry::new());
+        let policies = Arc::new(PolicyRegistry::new());
+        let standalone =
+            RestBinder::with_policies(routes.clone(), policies.clone()).enforcing_inbound_auth();
+        let mut contract = sample_contract();
+        contract.inbound_auth = Some("jwt".into());
+        let error = standalone.bind(&contract).await.expect_err("no audience");
+        assert!(error.contains("no audience"), "{error}");
+        assert!(routes.get("uac:acme:payments:0").is_none());
+    }
+
+    #[tokio::test]
+    async fn standalone_publishes_jwt_route_that_uses_the_global_audience() {
+        let routes = Arc::new(RouteRegistry::new());
+        let policies = Arc::new(PolicyRegistry::new());
+        let standalone = RestBinder::with_policies(routes.clone(), policies.clone())
+            .enforcing_inbound_auth()
+            .with_global_audience(["stoa-gateway"]);
+        let mut contract = sample_contract();
+        contract.inbound_auth = Some("jwt".into());
+        standalone.bind(&contract).await.expect("global audience");
+        assert!(routes.get("uac:acme:payments:0").is_some());
+        assert!(policies.list_for_api("uac:acme:payments:0")[0]
+            .config
+            .get("audience")
+            .is_none());
     }
 }

@@ -881,11 +881,14 @@ pub struct Config {
     pub trusted_proxies: Vec<String>,
 
     /// Accepted JWT `aud` values for published routes and MCP. Empty disables
-    /// audience checks (issuer + RS256 only). Set this on the standalone
-    /// gateway so client_credentials tokens must carry the resource audience.
+    /// audience checks (issuer + RS256 only) when a control plane is configured.
+    /// Standalone boot refuses an empty list: a published route with no
+    /// `inboundAuthAudience` is checked against this list, and `aud=account`
+    /// or a token with no `aud` must not pass. The old name
+    /// `STOA_JWT_AUDIENCES` does not bind.
     /// Env: STOA_JWT_AUDIENCE (CSV or JSON array). Example: `stoa-gateway`.
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
-    pub jwt_audiences: Vec<String>,
+    pub jwt_audience: Vec<String>,
 
     // === Memory Budget (CAB-1829) ===
     /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
@@ -1137,7 +1140,7 @@ impl fmt::Debug for Config {
             .field("ip_blocklist_file", &self.ip_blocklist_file)
             .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
             .field("trusted_proxies", &self.trusted_proxies)
-            .field("jwt_audiences", &self.jwt_audiences)
+            .field("jwt_audience", &self.jwt_audience)
             .field("memory_limit_mb", &self.memory_limit_mb)
             .field("snapshot_enabled", &self.snapshot_enabled)
             .field("snapshot_max_count", &self.snapshot_max_count)

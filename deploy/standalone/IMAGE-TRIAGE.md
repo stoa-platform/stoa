@@ -1,20 +1,21 @@
 # Image triage
 
 Scanned image: `stoa-gateway:standalone`
-Git revision in `org.opencontainers.image.revision`: `29955d56cdee022caf3d57442027902d3ae39fad`
+Git revision in `org.opencontainers.image.revision`: `5b648ef4f7adb761ba4f8f5c4cc2fbba2595e2ae`
 Tar: `deploy/standalone/stoa-gateway-standalone.tar` (not committed)
-Tar sha256: `08184dcb57c2951adb42dafe16a7cb21ac06dc14fee111514794571ba7bb4a33`
+Tar sha256: `3b3c92fc3cf5307fe23657b858691e501b260c440bf62a7554e1dcb166a732d2`
 Base: `debian:bookworm-slim` (Trivy detected Debian 12.15), builder `rust:1.93-bookworm`
-Scanner: Trivy 0.58.1 (`aquasec/trivy:0.58.1`), `--scanners vuln --ignore-unfixed`
-SBOM: `stoa-gateway-standalone.cdx.json`, CycloneDX, 111 components (OS packages). The runtime image has no `Cargo.lock`, so this SBOM does not list Rust crates.
+Build: `cargo chef cook --release --locked` and `cargo auditable build --release --locked` (cargo-auditable 0.7.5). The binary is not stripped; `readelf` finds `.dep-v0`.
+Scanner: Trivy 0.58.1, `--ignore-unfixed` on the tar. It reports the Rust binary (`lang-pkgs rustbinary app/stoa-gateway`).
+SBOM: `stoa-gateway-standalone.cdx.json`, CycloneDX, 414 components, including `pkg:cargo/quick-xml@0.39.4`.
 
-`deploy/standalone/build-image.sh` exits if that scan reports any CRITICAL finding.
-On this image the gate is empty: 0 CRITICAL, 0 HIGH.
+`deploy/standalone/build-image.sh` exits if that scan reports any CRITICAL finding with a fix. On this image the gate is empty: 0 CRITICAL, 0 HIGH.
 
-The same tar with unfixed vulnerabilities included has 1 CRITICAL and 70 HIGH rows (19 unique CVEs). Every one has an empty fixed version (`will_not_fix`, `affected`, or `fix_deferred`). They are accepted below. A Debian fix would fail the script's `--ignore-unfixed` gate and has to be rebuilt, not re-accepted from this table.
+The same tar with unfixed vulnerabilities included has 1 CRITICAL and 70 HIGH rows, all Debian packages with an empty fixed version. Trivy 0.58.1 reports 0 vulnerabilities on the Rust binary. RustSec still lists two HIGH advisories on `quick-xml` 0.39.4 (fixed in 0.41.0) that this database did not emit. They are accepted below only because this switch publishes no SOAP contract.
 
 | Vulnerability | Packages | Disposition |
 | --- | --- | --- |
+| RUSTSEC-2026-0194, RUSTSEC-2026-0195 HIGH (fixed in quick-xml 0.41.0; not emitted by Trivy 0.58.1) | quick-xml 0.39.4 | DoS in XML attribute checks and `NsReader`. The crate is linked for the SOAP module. `STOA_SOAP_PROXY_ENABLED` and `STOA_SOAP_BRIDGE_ENABLED` stay false, and no SOAP contract is published on this switch. Accept only while that stays true. Publishing a SOAP contract voids this row; bump to `quick-xml` >= 0.41.0 first. |
 | CVE-2023-45853 CRITICAL, will_not_fix | zlib1g | MiniZip `zipOpenNewFileInZip4_64` overflow. The gateway does not open zip archives. Accept. |
 | CVE-2026-84782 HIGH, affected | libssl3, openssl | DTLS handshake retransmission disclosure. The process uses TLS, not DTLS. No bookworm fix. Accept for Friday and rebuild when Debian ships a fix. |
 | CVE-2026-12064, CVE-2026-6276, CVE-2026-8286, CVE-2026-8458, CVE-2026-8927 HIGH | curl, libcurl4 | Only the image `HEALTHCHECK` runs curl, against `http://localhost:8080/health`. No SFTP, cookies, or proxy auth. No fixed version. Accept. |

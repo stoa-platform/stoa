@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/part-of: stoa

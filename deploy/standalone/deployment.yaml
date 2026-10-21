@@ -1,0 +1,68 @@
+# Parameterised node selector: __NODE_HOSTNAME__ (params.env, default
+# vmi3109795). The image reference is __IMAGE__ (params.env).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stoa-gateway
+  namespace: __NAMESPACE__
+  labels:
+    app: stoa-gateway
+    app.kubernetes.io/name: stoa-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stoa-gateway
+  template:
+    metadata:
+      labels:
+        app: stoa-gateway
+        app.kubernetes.io/name: stoa-gateway
+    spec:
+      # Single-node k3s. Override STOA_NODE_HOSTNAME in params.env.
+      nodeSelector:
+        kubernetes.io/hostname: __NODE_HOSTNAME__
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: stoa-gateway
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: stoa-gateway
+            - secretRef:
+                name: stoa-gateway-admin
+          volumeMounts:
+            - name: audit-spool
+              mountPath: /var/lib/stoa-gateway/audit-spool
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: audit-spool
+          emptyDir: {}

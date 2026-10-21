@@ -78,6 +78,16 @@ impl Config {
             .or(self.keycloak_url.as_deref())
     }
 
+    /// True when a control-plane base URL is configured.
+    ///
+    /// Unset and blank both mean standalone: registration, heartbeats, and
+    /// the tool-discovery refresh loops must not run.
+    pub fn control_plane_configured(&self) -> bool {
+        self.control_plane_url
+            .as_ref()
+            .is_some_and(|url| !url.trim().is_empty())
+    }
+
     /// Load configuration from file and environment.
     ///
     /// Layer order (later overrides earlier):
@@ -212,6 +222,7 @@ mod tests {
 
         // No URLs configured → None
         assert!(config.keycloak_backend_url().is_none());
+        assert!(!config.control_plane_configured());
 
         // Only external URL → returns external
         config.keycloak_url = Some("https://auth.gostoa.dev".to_string());
@@ -234,6 +245,16 @@ mod tests {
             config.keycloak_backend_url(),
             Some("http://keycloak.stoa-system.svc.cluster.local:8080")
         );
+    }
+
+    #[test]
+    fn blank_control_plane_url_is_not_configured() {
+        let mut config = Config::default();
+        assert!(!config.control_plane_configured());
+        config.control_plane_url = Some("   ".to_string());
+        assert!(!config.control_plane_configured());
+        config.control_plane_url = Some("http://control-plane-api:8000".to_string());
+        assert!(config.control_plane_configured());
     }
 
     #[test]

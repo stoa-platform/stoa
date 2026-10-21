@@ -538,12 +538,16 @@ async fn http_metrics_middleware(
         return next.run(request).await;
     }
 
+    let forwarded = forwarded_client(&request, &state.config.trusted_proxies);
+
     // Fast path: skip metrics + tracing overhead when both are disabled (pure proxy mode).
     // Env: STOA_PROXY_METRICS_ENABLED=false + STOA_PROXY_TRACING_ENABLED=false
     let metrics_enabled = state.config.proxy_metrics_enabled;
     let tracing_enabled = state.config.proxy_tracing_enabled;
     if !metrics_enabled && !tracing_enabled {
-        return next.run(request).await;
+        let mut response = next.run(request).await;
+        response.extensions_mut().insert(forwarded);
+        return response;
     }
 
     let method = request.method().to_string();
@@ -588,26 +592,14 @@ async fn http_metrics_middleware(
     // Skip span creation when proxy tracing is disabled to save ~0.4ms per request.
     // Env: STOA_PROXY_TRACING_ENABLED (default: true)
     use tracing::Instrument;
-    // Extract remote IP (TCP peer) and client IP (X-Forwarded-For / X-Real-IP)
+    // TCP peer plus client IP / scheme after STOA_TRUSTED_PROXIES filtering.
     let remote_ip = request
         .extensions()
         .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
         .map(|ci| ci.0.ip().to_string())
         .unwrap_or_else(|| "-".to_string());
-    let client_ip = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .map(|s| s.trim().to_string())
-        .or_else(|| {
-            request
-                .headers()
-                .get("x-real-ip")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| remote_ip.clone());
+    let client_ip = forwarded.client_ip.clone();
+    let forwarded_scheme = forwarded.scheme.clone();
     let (response, captured_trace_id, captured_span_id) = if tracing_enabled {
         let deployment_mode = state.config.gateway_mode.to_string();
         let request_span = tracing::span!(
@@ -619,6 +611,7 @@ async fn http_metrics_middleware(
             http.route = %path,
             "net.peer.ip" = %remote_ip,
             "http.client_ip" = %client_ip,
+            "http.scheme" = %forwarded_scheme,
             http.status_code = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_message = tracing::field::Empty,
@@ -658,6 +651,7 @@ async fn http_metrics_middleware(
         (resp, "-".to_string(), "-".to_string())
     };
     let mut response = response;
+    response.extensions_mut().insert(forwarded);
     response
         .extensions_mut()
         .insert(crate::access_log::CapturedTraceId(captured_trace_id));
@@ -761,6 +755,29 @@ async fn http_metrics_middleware(
     }
 
     response
+}
+
+fn forwarded_client(
+    request: &axum::extract::Request,
+    trusted_proxies: &[String],
+) -> crate::proxy::forwarded::ForwardedClient {
+    let peer = request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|info| info.0.ip().to_string());
+    let header = |name| {
+        request
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+    };
+    crate::proxy::forwarded::resolve_forwarded(
+        peer.as_deref(),
+        header("x-forwarded-for"),
+        header("x-real-ip"),
+        header("x-forwarded-proto"),
+        trusted_proxies,
+    )
 }
 
 // === Health Endpoints ===

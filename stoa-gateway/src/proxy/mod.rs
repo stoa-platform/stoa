@@ -3,6 +3,7 @@ pub mod api_proxy_handler;
 pub mod consumer_credentials;
 pub mod credentials;
 pub mod dynamic;
+pub mod forwarded;
 pub mod hardening;
 pub mod hop_detection;
 pub mod llm_proxy;

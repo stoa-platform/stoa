@@ -44,16 +44,28 @@ fi
 echo "label org.opencontainers.image.revision=${revision}"
 
 mkdir -p "$OUT"
-docker save "${IMAGE}" -o "$TAR"
+# Redirect, not -o: when docker runs as root the -o file is mode 0600 and
+# the sha256 step cannot read it.
+docker save "${IMAGE}" > "$TAR"
 sha256sum "$TAR" | tee "${TAR}.sha256"
 
-if ! command -v trivy >/dev/null 2>&1; then
-  echo "installing trivy to /tmp/trivy" >&2
-  curl -fsSL -o /tmp/trivy.tgz https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz
-  tar -C /tmp -xzf /tmp/trivy.tgz trivy
+if command -v trivy >/dev/null 2>&1; then
+  TRIVY=trivy
+elif [[ -x /tmp/trivy ]]; then
   TRIVY=/tmp/trivy
 else
-  TRIVY=trivy
+  echo "installing trivy 0.58.1" >&2
+  url="https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz"
+  if curl -fsSL -o /tmp/trivy.tgz "$url"; then
+    tar -C /tmp -xzf /tmp/trivy.tgz trivy
+  else
+    echo "release tarball unavailable; copying the binary from aquasec/trivy:0.58.1" >&2
+    docker pull aquasec/trivy:0.58.1
+    # stdout redirect keeps the binary owned by the caller when docker is root.
+    docker run --rm --entrypoint cat aquasec/trivy:0.58.1 /usr/local/bin/trivy > /tmp/trivy
+    chmod a+rx /tmp/trivy
+  fi
+  TRIVY=/tmp/trivy
 fi
 
 echo "trivy CRITICAL (fail on any)"

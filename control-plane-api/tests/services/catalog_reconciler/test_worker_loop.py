@@ -463,19 +463,26 @@ class TestAdvisoryLock:
         api_id = "petstore"
         key = advisory_lock_key(tenant, api_id)
 
+        held = asyncio.Event()
+        release = asyncio.Event()
+
         async def acquire_and_hold() -> bool:
             async with session_factory() as session, session.begin():
                 result = await session.execute(text("SELECT pg_try_advisory_xact_lock(:k)").bindparams(k=key))
                 acquired = bool(result.scalar())
-                # Hold long enough for the second contender to try.
-                await asyncio.sleep(0.1)
+                held.set()
+                # A fixed sleep loses the race when the holder is slow to
+                # open its transaction. Wait until the contender has tried.
+                await asyncio.wait_for(release.wait(), timeout=5)
                 return acquired
 
         async def try_only() -> bool:
-            await asyncio.sleep(0.02)  # let the holder go first
+            await asyncio.wait_for(held.wait(), timeout=5)
             async with session_factory() as session, session.begin():
                 result = await session.execute(text("SELECT pg_try_advisory_xact_lock(:k)").bindparams(k=key))
-                return bool(result.scalar())
+                acquired = bool(result.scalar())
+            release.set()
+            return acquired
 
         first, second = await asyncio.gather(acquire_and_hold(), try_only())
         assert first is True

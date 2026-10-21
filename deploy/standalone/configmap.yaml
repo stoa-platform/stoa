@@ -17,10 +17,10 @@
 #
 # Trusted proxies are the ingress-nginx pod addresses only. The tunnel's
 # TCP peer is that pod, never a Cloudflare edge address, and the pod CIDR
-# 10.42.0.0/16 also contains untrusted workloads. Replace the sentinel
-# with the pod IPs (or their node /24) from
-# `kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx -o wide`
-# before the switch. Until then forwarded headers are ignored.
+# 10.42.0.0/16 also contains untrusted workloads. This manifest keeps the
+# sentinel. switch.sh replaces it with the pod IPs at switch time and
+# refuses to continue while the sentinel is still set. A node /24 is never
+# used. Until the switch, forwarded headers are ignored.
 #
 # The audit spool is not opened at startup. This ConfigMap does not set
 # STOA_AUDIT_SPOOL_DIR and the Deployment has no volume for it.

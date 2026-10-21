@@ -1,10 +1,8 @@
 # Default-deny ingress for the gateway pods, then the three flows that
 # must reach port 8080. kube-router on k3s enforces this.
 #
-# The reconciler label is not confirmed from the cluster (the review left
-# it as <LABEL_RECONCILER>). It is app.kubernetes.io/name=stoa-reconciler
-# in namespace stoa. Change it before Friday if the pod label differs.
-# Do not widen this to the whole pod CIDR.
+# The reconciler pod label is app.kubernetes.io/name=reconciler, in
+# namespace stoa. Do not widen this to the whole pod CIDR.
 #
 # Kubelet probes are host-originated. kube-router allows node-local probe
 # traffic; if a probe is denied, add worker-3's node IP as a /32 and do
@@ -33,7 +31,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: stoa-reconciler
+              app.kubernetes.io/name: reconciler
       ports:
         - protocol: TCP
           port: 8080

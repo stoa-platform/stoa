@@ -42,6 +42,8 @@ if [[ "$revision" != "$SHA" ]]; then
   exit 1
 fi
 echo "label org.opencontainers.image.revision=${revision}"
+printf '%s\n' "$SHA" > "$OUT/IMAGE-REVISION"
+echo "wrote $OUT/IMAGE-REVISION"
 
 mkdir -p "$OUT"
 # Redirect, not -o: when docker runs as root the -o file is mode 0600 and

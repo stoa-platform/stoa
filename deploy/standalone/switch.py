@@ -27,9 +27,13 @@ without talking to a cluster.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import os
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 NS = "stoa"
 SERVICE = "gateway"
@@ -272,6 +276,282 @@ def switch_to_apisix() -> None:
     )
 
 
+SENTINEL = "REPLACE_WITH_INGRESS_NGINX_POD_IPS"
+INGRESS_NS = "ingress-nginx"
+INGRESS_LABEL = "app.kubernetes.io/name=ingress-nginx"
+IMAGE_REFS = (
+    "docker.io/library/stoa-gateway:standalone",
+    "stoa-gateway:standalone",
+)
+REVISION_LABEL = "org.opencontainers.image.revision"
+HERE = Path(__file__).resolve().parent
+
+
+class PreflightError(Exception):
+    """Switch refused before any live Service or Ingress change."""
+
+
+def ingress_pod_ips(pod_list: dict) -> list[str]:
+    """Pod IPs of Running ingress-nginx pods. Never a node prefix."""
+    ips: list[str] = []
+    for item in pod_list.get("items") or []:
+        status = item.get("status") or {}
+        if status.get("phase") != "Running":
+            continue
+        ip = status.get("podIP")
+        if not isinstance(ip, str) or not ip or "/" in ip:
+            continue
+        ipaddress.ip_address(ip)
+        ips.append(ip)
+    if not ips:
+        raise PreflightError(
+            "no Running ingress-nginx pod IP; refusing to switch"
+        )
+    return sorted(set(ips))
+
+
+def proxy_value(ips: list[str]) -> str:
+    """Comma-separated host addresses. A prefix wider than one host is refused."""
+    if not ips:
+        raise PreflightError("no ingress-nginx pod IP")
+    for ip in ips:
+        if "/" in ip:
+            raise PreflightError(f"refusing prefix {ip}; use the pod IP only")
+        ipaddress.ip_address(ip)
+    return ",".join(ips)
+
+
+def assert_host_only(value: str) -> None:
+    """Accept bare IPs and /32 or /128. Refuse the sentinel and any wider prefix."""
+    if SENTINEL in value or not value.strip():
+        raise PreflightError(
+            "STOA_TRUSTED_PROXIES still contains the sentinel "
+            f"{SENTINEL}; refusing to switch"
+        )
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    if not parts:
+        raise PreflightError("STOA_TRUSTED_PROXIES is empty; refusing to switch")
+    for part in parts:
+        if "/" not in part:
+            ipaddress.ip_address(part)
+            continue
+        network = ipaddress.ip_network(part, strict=False)
+        if network.prefixlen != network.max_prefixlen:
+            raise PreflightError(
+                f"refusing {part}: only the ingress-nginx pod IP is allowed, "
+                "never a node /24"
+            )
+
+
+def find_revision(node) -> str | None:
+    """OCI revision label anywhere in a ctr/crictl inspect document."""
+    if isinstance(node, dict):
+        labels = node.get("Labels")
+        if isinstance(labels, dict) and labels.get(REVISION_LABEL):
+            return str(labels[REVISION_LABEL])
+        info = node.get("info")
+        if isinstance(info, str):
+            try:
+                info = json.loads(info)
+            except json.JSONDecodeError:
+                info = None
+            if info is not None:
+                found = find_revision(info)
+                if found:
+                    return found
+        for value in node.values():
+            found = find_revision(value)
+            if found:
+                return found
+    elif isinstance(node, list):
+        for value in node:
+            found = find_revision(value)
+            if found:
+                return found
+    return None
+
+
+def manifest_digest(inspect: dict) -> str:
+    target = inspect.get("Target") or inspect.get("target") or {}
+    digest = target.get("digest") or target.get("Digest") or ""
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise PreflightError(f"image inspect has no manifest digest ({digest!r})")
+    return digest
+
+
+def config_digest(manifest: dict) -> str:
+    digest = (manifest.get("config") or {}).get("digest") or ""
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise PreflightError(f"image manifest has no config digest ({digest!r})")
+    return digest
+
+
+def expected_revision() -> str:
+    override = os.environ.get("STOA_EXPECTED_REVISION", "").strip()
+    if override:
+        return override
+    path = HERE / "IMAGE-REVISION"
+    if not path.is_file():
+        raise PreflightError(
+            f"missing {path}. Run deploy/standalone/build-image.sh and import "
+            "that tar on worker-3."
+        )
+    line = path.read_text().strip().splitlines()[0].strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", line):
+        raise PreflightError(f"{path} is not a 40-character git SHA ({line!r})")
+    return line
+
+
+def _ssh(host: str, script: str) -> str:
+    result = subprocess.run(
+        [
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            host,
+            script,
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise PreflightError(detail or f"ssh {host} failed")
+    return result.stdout
+
+
+def _ctr_json(host: str, script: str) -> dict:
+    raw = _ssh(host, script).strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise PreflightError(f"ctr on {host} did not return JSON: {exc}") from exc
+
+
+def image_revision_on_node(host: str) -> str:
+    """Read org.opencontainers.image.revision from the imported image."""
+    inspect = None
+    chosen = None
+    for ref in IMAGE_REFS:
+        try:
+            inspect = _ctr_json(
+                host,
+                f"sudo k3s ctr -n k8s.io images inspect {ref}",
+            )
+            chosen = ref
+            break
+        except PreflightError:
+            continue
+    if inspect is None or chosen is None:
+        raise PreflightError(
+            f"{host} has no stoa-gateway:standalone image in k3s containerd. "
+            "Import the tar from build-image.sh before switching. "
+            "imagePullPolicy is Never."
+        )
+    manifest = _ctr_json(
+        host,
+        f"sudo k3s ctr -n k8s.io content get {manifest_digest(inspect)}",
+    )
+    config = _ctr_json(
+        host,
+        f"sudo k3s ctr -n k8s.io content get {config_digest(manifest)}",
+    )
+    found = find_revision(config)
+    if not found:
+        raise PreflightError(
+            f"{chosen} on {host} has no {REVISION_LABEL} label. "
+            "Import the image built by deploy/standalone/build-image.sh."
+        )
+    return found
+
+
+def confirm_image(host: str, revision: str) -> None:
+    found = image_revision_on_node(host)
+    if found != revision:
+        raise PreflightError(
+            f"image on {host} is revision {found}, expected {revision}. "
+            "Import the tar from that build before switching."
+        )
+    print(f"image on {host}: stoa-gateway:standalone revision {found}")
+
+
+def trusted_proxy_value() -> str:
+    cm = kubectl_json("-n", NS, "get", "configmap", "stoa-gateway")
+    value = (cm.get("data") or {}).get("STOA_TRUSTED_PROXIES")
+    if not isinstance(value, str):
+        raise PreflightError("ConfigMap stoa-gateway has no STOA_TRUSTED_PROXIES")
+    return value
+
+
+def install_ingress_pod_ips() -> str:
+    """Write the current ingress-nginx pod IPs into the live ConfigMap."""
+    pods = kubectl_json(
+        "-n",
+        INGRESS_NS,
+        "get",
+        "pods",
+        "-l",
+        INGRESS_LABEL,
+    )
+    value = proxy_value(ingress_pod_ips(pods))
+    patch = json.dumps({"data": {"STOA_TRUSTED_PROXIES": value}})
+    subprocess.run(
+        [
+            "kubectl",
+            "-n",
+            NS,
+            "patch",
+            "configmap",
+            "stoa-gateway",
+            "--type",
+            "merge",
+            "-p",
+            patch,
+        ],
+        check=True,
+    )
+    live = trusted_proxy_value()
+    assert_host_only(live)
+    print(f"STOA_TRUSTED_PROXIES={live}")
+    return live
+
+
+def restart_gateway() -> None:
+    """Reload the ConfigMap. envFrom is read at process start."""
+    subprocess.run(
+        ["kubectl", "-n", NS, "rollout", "restart", "deployment/stoa-gateway"],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "kubectl",
+            "-n",
+            NS,
+            "rollout",
+            "status",
+            "deployment/stoa-gateway",
+            "--timeout=180s",
+        ],
+        check=True,
+    )
+
+
+def preflight() -> None:
+    """Image revision on worker-3, then ingress-nginx pod IPs, then restart.
+
+    Does not retarget Service/gateway or Ingress stoa-api. switch.sh calls
+    this before `switch.py stoa`. A node /24 is never written.
+    """
+    host = os.environ.get("STOA_NODE_SSH", "worker-3").strip() or "worker-3"
+    revision = expected_revision()
+    confirm_image(host, revision)
+    install_ingress_pod_ips()
+    restart_gateway()
+    print("preflight ok")
+
+
 def self_test() -> None:
     paths = stoa_paths()
     assert len(paths) == 1
@@ -293,24 +573,80 @@ def self_test() -> None:
     forbidden = ("/admin", "/metrics", "/mcp", "/oauth/register", "/v1/messages")
     for path in forbidden:
         assert path not in blob
+    ips = ingress_pod_ips(
+        {
+            "items": [
+                {"status": {"phase": "Running", "podIP": "10.42.0.15"}},
+                {"status": {"phase": "Pending", "podIP": "10.42.0.16"}},
+                {"status": {"phase": "Running", "podIP": "10.42.0.15"}},
+            ]
+        }
+    )
+    assert ips == ["10.42.0.15"]
+    assert proxy_value(ips) == "10.42.0.15"
+    assert_host_only("10.42.0.15")
+    assert_host_only("10.42.0.15/32")
+    for bad in (
+        SENTINEL,
+        "10.42.0.0/24",
+        "10.42.0.0/16",
+        "",
+        f"10.42.0.15,{SENTINEL}",
+    ):
+        try:
+            assert_host_only(bad)
+        except PreflightError:
+            pass
+        else:
+            raise AssertionError(bad)
+    try:
+        ingress_pod_ips({"items": []})
+    except PreflightError:
+        pass
+    else:
+        raise AssertionError("empty pod list")
+    label = "29955d56cdee022caf3d57442027902d3ae39fad"
+    doc = {
+        "config": {
+            "Labels": {REVISION_LABEL: label},
+        }
+    }
+    assert find_revision(doc) == label
+    assert find_revision({"info": json.dumps(doc)}) == label
+    assert (
+        manifest_digest({"Target": {"digest": "sha256:" + "ab" * 32}})
+        == "sha256:" + "ab" * 32
+    )
+    assert (
+        config_digest({"config": {"digest": "sha256:" + "cd" * 32}})
+        == "sha256:" + "cd" * 32
+    )
     print("switch.py self-test ok")
 
 
 def main(argv: list[str]) -> None:
-    if len(argv) != 2 or argv[1] not in {"stoa", "apisix", "--self-test"}:
+    if len(argv) != 2 or argv[1] not in {"stoa", "apisix", "preflight", "--self-test"}:
         sys.exit(
-            "usage: switch.py stoa | apisix | --self-test\n"
-            "  stoa    Service/gateway -> app=stoa-gateway, targetPort 8080,\n"
-            "          Ingress host api.gostoa.dev paths replaced with /apis\n"
-            "  apisix  restore the selector, targetPort, and paths saved on\n"
-            "          the first stoa run"
+            "usage: switch.py preflight | stoa | apisix | --self-test\n"
+            "  preflight  require the imported image revision on worker-3,\n"
+            "             set STOA_TRUSTED_PROXIES to the ingress-nginx pod\n"
+            "             IPs (never a node /24), restart the deployment\n"
+            "  stoa       Service/gateway -> app=stoa-gateway, targetPort 8080,\n"
+            "             Ingress host api.gostoa.dev paths replaced with /apis\n"
+            "  apisix     restore the selector, targetPort, and paths saved on\n"
+            "             the first stoa run"
         )
-    if argv[1] == "--self-test":
-        self_test()
-    elif argv[1] == "stoa":
-        switch_to_stoa()
-    else:
-        switch_to_apisix()
+    try:
+        if argv[1] == "--self-test":
+            self_test()
+        elif argv[1] == "preflight":
+            preflight()
+        elif argv[1] == "stoa":
+            switch_to_stoa()
+        else:
+            switch_to_apisix()
+    except PreflightError as exc:
+        sys.exit(str(exc))
 
 
 if __name__ == "__main__":

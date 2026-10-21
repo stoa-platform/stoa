@@ -15,6 +15,10 @@ use super::{BindingOutput, ProtocolBinder};
 pub struct RestBinder {
     route_registry: Arc<RouteRegistry>,
     policy_registry: Arc<PolicyRegistry>,
+    /// When set, a contract with no inbound JWT is not published.
+    /// Standalone turns this on (`STOA_CONTROL_PLANE_URL` unset). A control
+    /// plane still allows an open route.
+    require_inbound_auth: bool,
 }
 
 impl RestBinder {
@@ -34,7 +38,17 @@ impl RestBinder {
         Self {
             route_registry,
             policy_registry,
+            require_inbound_auth: false,
         }
+    }
+
+    /// Refuse to publish a route that has no inbound JWT policy.
+    ///
+    /// Used when the process is standalone. An update that drops inbound
+    /// auth also removes any route already stored for that contract.
+    pub fn enforcing_inbound_auth(mut self) -> Self {
+        self.require_inbound_auth = true;
+        self
     }
 
     /// Generate REST routes from a contract (pure function, no side effects).
@@ -166,6 +180,18 @@ impl ProtocolBinder for RestBinder {
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
         let routes = Self::generate_routes(contract);
         let count = routes.len();
+
+        if self.require_inbound_auth && !contract.requires_jwt_validation() {
+            // Keep the route unpublished. Drop anything already stored so a
+            // republish without inbound auth cannot leave the previous route open.
+            self.route_registry.remove_by_contract(&contract_key);
+            self.policy_registry
+                .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
+            return Err(
+                "standalone mode refuses a route with no inbound auth; set inboundAuth to jwt"
+                    .to_string(),
+            );
+        }
 
         if contract.requires_jwt_validation() {
             // Policy first. A concurrent request can see the new route only
@@ -457,8 +483,45 @@ mod tests {
     async fn contract_without_jwt_policy_stores_none() {
         let routes = Arc::new(RouteRegistry::new());
         let policies = Arc::new(PolicyRegistry::new());
-        let binder = RestBinder::with_policies(routes, policies.clone());
+        let binder = RestBinder::with_policies(routes.clone(), policies.clone());
         binder.bind(&sample_contract()).await.expect("bind");
         assert_eq!(policies.count(), 0);
+        assert!(routes.get("uac:acme:payments:0").is_some());
+    }
+
+    #[tokio::test]
+    async fn standalone_refuses_a_route_without_inbound_auth() {
+        let routes = Arc::new(RouteRegistry::new());
+        let policies = Arc::new(PolicyRegistry::new());
+        let open = RestBinder::with_policies(routes.clone(), policies.clone());
+        open.bind(&sample_contract()).await.expect("open bind");
+        assert!(routes.get("uac:acme:payments:0").is_some());
+
+        let standalone =
+            RestBinder::with_policies(routes.clone(), policies.clone()).enforcing_inbound_auth();
+        let error = standalone
+            .bind(&sample_contract())
+            .await
+            .expect_err("open route");
+        assert!(error.contains("no inbound auth"), "{error}");
+        assert!(routes.get("uac:acme:payments:0").is_none());
+        assert_eq!(policies.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn standalone_publishes_a_route_that_requires_jwt() {
+        let routes = Arc::new(RouteRegistry::new());
+        let policies = Arc::new(PolicyRegistry::new());
+        let standalone =
+            RestBinder::with_policies(routes.clone(), policies.clone()).enforcing_inbound_auth();
+        let mut contract = sample_contract();
+        contract.inbound_auth = Some("jwt".into());
+        contract.inbound_auth_audience = Some("demo-customer-referential".into());
+        standalone.bind(&contract).await.expect("jwt bind");
+        assert!(routes.get("uac:acme:payments:0").is_some());
+        assert_eq!(
+            policies.list_for_api("uac:acme:payments:0")[0].config["audience"].as_str(),
+            Some("demo-customer-referential")
+        );
     }
 }

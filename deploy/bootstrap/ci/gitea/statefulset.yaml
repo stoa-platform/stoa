@@ -32,6 +32,12 @@ spec:
             # sur un réseau Docker isolé, pas dans un cluster.
             - name: GITEA__webhook__ALLOWED_HOST_LIST
               value: "jenkins.ci.svc.cluster.local"
+            # Inscription fermée (WS1, 21/10/2026). REQUIRE_SIGNIN_VIEW reste à false :
+            # les nœuds tirent localhost:30300/ci/* en anonyme (registries.yaml sans identifiants).
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: GITEA__service__SHOW_REGISTRATION_BUTTON
+              value: "false"
           ports:
             - containerPort: 3000
           volumeMounts:

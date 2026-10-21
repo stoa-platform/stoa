@@ -334,5 +334,5 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the comm
 STOA is released under the [Apache License 2.0](LICENSE).
 
 <p align="center">
-  <em>Built by <a href="https://cabingenierie.com">CAB Ingénierie</a> — Paris, France.</em>
+  <em>Built by <a href="https://cabingenierie.com">CAB Ingénierie</a> — France.</em>
 </p>

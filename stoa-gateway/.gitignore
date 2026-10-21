@@ -1,6 +1,7 @@
 # Rust build artifacts
 /target/
-Cargo.lock
+# Cargo.lock is tracked. The image build copies it, and CI checkouts
+# do not have gitignored files.
 
 # IDE
 .idea/

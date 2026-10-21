@@ -12,7 +12,9 @@ passlib[bcrypt]==1.7.4
 # 0.0.30 ; on prend le dernier correctif de la série 0.0.x.
 python-multipart==0.0.32
 httpx==0.28.1
-kafka-python==2.3.1
+# CVE-2026-10142 / CVE-2026-10143 (HIGH) — DoS on a crafted Kafka
+# message header. Fixed in 2.3.2.
+kafka-python==2.3.2
 python-snappy==0.7.3
 python-gitlab==8.3.0
 # GitHub integration (CAB-1890 — dual-provider migration)

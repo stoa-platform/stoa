@@ -122,6 +122,19 @@ pub struct UacEndpoint {
     pub llm: Option<EndpointLlm>,
 }
 
+/// A policy the publisher attached to a contract.
+///
+/// `type: "jwt_validation"` (also `jwt`, `bearer`, `auth-jwt`) is enforced on
+/// the REST proxy. This is distinct from classification `required_policies`,
+/// which always includes `auth-jwt` and stays advisory.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContractPolicy {
+    #[serde(rename = "type", alias = "policy_type", alias = "policyType")]
+    pub policy_type: String,
+    #[serde(default)]
+    pub config: Value,
+}
+
 // =============================================================================
 // UAC Contract Spec
 // =============================================================================
@@ -171,6 +184,18 @@ pub struct UacContractSpec {
     /// When present, `expand_endpoints()` generates synthetic REST/MCP endpoints.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm_config: Option<LlmConfig>,
+    /// Caller authentication declared by the target (`inboundAuth` in stoactl).
+    /// `jwt`, `bearer`, `oauth2`, `oidc`, or `client_credentials` stores a
+    /// `jwt_validation` policy on the generated REST routes.
+    #[serde(
+        default,
+        alias = "inboundAuth",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub inbound_auth: Option<String>,
+    /// Explicit policies. A `jwt_validation` entry is enforced on the REST proxy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub policies: Vec<ContractPolicy>,
 }
 
 impl UacContractSpec {
@@ -197,7 +222,19 @@ impl UacContractSpec {
             source_spec_url: None,
             spec_hash: None,
             llm_config: None,
+            inbound_auth: None,
+            policies: Vec::new(),
         }
+    }
+
+    /// True when this contract's own policy (not the classification list)
+    /// requires a bearer JWT on published REST routes.
+    pub fn requires_jwt_validation(&self) -> bool {
+        inbound_auth_requires_jwt(self.inbound_auth.as_deref())
+            || self
+                .policies
+                .iter()
+                .any(|policy| is_jwt_validation_policy(&policy.policy_type))
     }
 
     /// Recompute required_policies from the current classification.
@@ -303,6 +340,21 @@ impl UacContractSpec {
     }
 }
 
+/// Policy type names that mean "validate the caller RS256 bearer".
+pub fn is_jwt_validation_policy(policy_type: &str) -> bool {
+    matches!(
+        policy_type.trim().to_ascii_lowercase().as_str(),
+        "jwt_validation" | "jwt" | "auth-jwt" | "bearer"
+    )
+}
+
+fn inbound_auth_requires_jwt(value: Option<&str>) -> bool {
+    matches!(
+        value.unwrap_or("").trim().to_ascii_lowercase().as_str(),
+        "jwt" | "bearer" | "oauth2" | "oidc" | "client_credentials" | "jwt_validation"
+    )
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -358,6 +410,33 @@ mod tests {
     fn test_default_classification_is_h() {
         let spec = UacContractSpec::new("test-api", "tenant-1");
         assert_eq!(spec.classification, Classification::H);
+    }
+
+    #[test]
+    fn classification_auth_jwt_does_not_require_route_jwt() {
+        let spec = UacContractSpec::new("test-api", "tenant-1");
+        assert!(spec.required_policies.iter().any(|p| p == "auth-jwt"));
+        assert!(!spec.requires_jwt_validation());
+    }
+
+    #[test]
+    fn inbound_auth_and_policy_require_jwt() {
+        let mut spec = UacContractSpec::new("live-api", "demo");
+        spec.inbound_auth = Some("jwt".into());
+        assert!(spec.requires_jwt_validation());
+
+        let parsed: UacContractSpec = serde_json::from_str(
+            r#"{"name":"live-api","version":"1.0.0","tenant_id":"demo","inboundAuth":"oauth2","endpoints":[]}"#,
+        )
+        .unwrap();
+        assert!(parsed.requires_jwt_validation());
+
+        let from_policy: UacContractSpec = serde_json::from_str(
+            r#"{"name":"live-api","version":"1.0.0","tenant_id":"demo","policies":[{"type":"jwt_validation"}]}"#,
+        )
+        .unwrap();
+        assert!(from_policy.requires_jwt_validation());
+        assert_eq!(from_policy.policies[0].policy_type, "jwt_validation");
     }
 
     #[test]

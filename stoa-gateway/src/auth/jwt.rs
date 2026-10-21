@@ -331,4 +331,149 @@ mod tests {
         assert!(config.validate_exp);
         assert_eq!(config.leeway_seconds, 30);
     }
+
+    const TEST_PEM: &str = "-----BEGIN PRIVATE KEY-----\n\
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDFWYM6hI+Dz8n4\n\
+Oi2U3iGFmmGHAM6Qp2Ytpt8yQM3boJc6Ia9w6jA+78HdT1AkhMjlopB6xstrT36W\n\
+LAzLDp5v0FD4uCD+li5qSAY/y3Gx6k4WbRCKglMu96qg+9zpaGslyg2omfE3KmFS\n\
+DmMyWvarEI7zZ7/U7fsUOMDcxvICGRUQQAJ793kgFmTAAmBy3uiN8EmWiej5+NVn\n\
+FuscveweyBK25yA85ng/4XSjbexKO7Kx2sWNygQu3eHQcFqtefceDhM/diNIz51b\n\
+l1kTqxv2NFAgArwGsX+T5xiLCVvLIhXWceNKwoLM1iCmoQfwC8ihR5S0+CusnpUZ\n\
+PZfsX69/AgMBAAECggEACE4aDa5ic8Oc1ktse6VVd8/lZs8L4l6JGEa7gdvkTefW\n\
+NWYRggj4+s0QNYYO81p7Md7Dgcc37E4uH5e++hSlakM0BSOKj+w2C9b4HFstb7VS\n\
+j/MLDSkq4wEdNyUiSNhSGgcEyCGiWxX3foKIfigB1XUe7vNgyU8yj8lLpH7i1F+y\n\
+1StLfI3Ab4BzgOEQmVXFARE+5f3ZOoAW+hsq8eHyWyyzSN+fE5wYtB7e3uhnstVB\n\
+R+DOZHSv+P13L/oTze7B4V/88sDe/w5S7L5RD9JuFhF4C5fw7Pi94o4B1o2r2/7F\n\
+HIOYEBB9SzeWae1kjyVRGII+5LO5LZGLEhwQFtUoQQKBgQD4yEMLerI/oM89/Bb3\n\
+L29QNW3ia2hl1qvumB9X+bAM4nWIa7zDLXNpzrorLUUCJLoENswHXX0Od1rYOsoi\n\
+Dlu5ucIFz5uYdu6OhBeyxjpYTloI2G30TQHrn2rhoD2nuOl00BTDYL0juoCTrw/v\n\
+UmrGEwyYMp0mwWLRuB9EXnN0TwKBgQDLE0EI1zNPqGh5QJ47jvU5xsHlSj/YISLP\n\
+Nro3JZIG2+BT8KyAxmIiSRgocBnSRPonCuwAt4iC1aNSl/H7uumI74pl61J9dd0p\n\
+Shwp6N6sN/OzaP9521FgyH+FBTPPZDdplZ0eFuUhGDFigAgMILQb0a30QMRKCxjN\n\
+nzQHLCjV0QKBgF6hxqb6MA11/P8GAjJab8wh1r+WvapnQxVJ9jo/txDfn3eaC75u\n\
+boVj5nsACEztbXim42s1y5kSG5M+oZ7cuVVnbH9LXlNbghjh9CXDs3Pdse/Fa+XO\n\
+2Rkolb5ndqxy8RLHB+7dwHRzv+7tW3Fcd1MK8fJ+5jpUu2Ms12/pQZ+PAoGBAIB4\n\
+9NrX8mFBxJ55D+HUBjYAFSiu+YcNJ416LQK4ZRKrxda02x045FqWbY8fpGZPNwa+\n\
+NSIa+mTzLTkSYYeE7zuvd5oU7wHqL/lwJjMpXL4NQ8LL+VwpMOmOzoXkDav11cyZ\n\
+V2XyzBBM0uli4DRz+B3lYCy3ULcbIBztzCeBe3ARAoGBAKIgOvCYnz0wnHBFA+zq\n\
+oRIvaIdbNosKoN+oT1jnnmfczLJ6pj+2Aa5n6j2kxwf5FTDqFlPI2tbmHmTQ7YsK\n\
+p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
+4H/ZaGW5OTrSMEsqHNuImeoC\n\
+-----END PRIVATE KEY-----\n";
+
+    const TEST_N: &str = "xVmDOoSPg8_J-DotlN4hhZphhwDOkKdmLabfMkDN26CXOiGvcOowPu_B3U9QJITI5aKQesbLa09-liwMyw6eb9BQ-Lgg_pYuakgGP8txsepOFm0QioJTLveqoPvc6WhrJcoNqJnxNyphUg5jMlr2qxCO82e_1O37FDjA3MbyAhkVEEACe_d5IBZkwAJgct7ojfBJlono-fjVZxbrHL3sHsgStucgPOZ4P-F0o23sSjuysdrFjcoELt3h0HBarXn3Hg4TP3YjSM-dW5dZE6sb9jRQIAK8BrF_k-cYiwlbyyIV1nHjSsKCzNYgpqEH8AvIoUeUtPgrrJ6VGT2X7F-vfw";
+
+    #[derive(serde::Serialize)]
+    struct MintedClaims {
+        sub: &'static str,
+        exp: i64,
+        iat: i64,
+        iss: String,
+    }
+
+    async fn validator_against_test_key() -> (JwtValidator, String) {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let issuer = format!("{}/realms/stoa", server.uri());
+        let jwks = format!("{}/jwks", server.uri());
+        Mock::given(method("GET"))
+            .and(path("/realms/stoa/.well-known/openid-configuration"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "issuer": issuer,
+                "authorization_endpoint": format!("{issuer}/auth"),
+                "token_endpoint": format!("{issuer}/token"),
+                "jwks_uri": jwks,
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "keys": [{
+                    "kty": "RSA",
+                    "kid": "test-key",
+                    "use": "sig",
+                    "alg": "RS256",
+                    "n": TEST_N,
+                    "e": "AQAB"
+                }]
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = Arc::new(crate::auth::oidc::OidcProvider::new(
+            crate::auth::oidc::OidcProviderConfig {
+                issuer_url: issuer.clone(),
+                audience: "stoa-caller".into(),
+                ..crate::auth::oidc::OidcProviderConfig::default()
+            },
+        ));
+        let validator = JwtValidator::with_config(
+            provider,
+            JwtValidatorConfig {
+                validate_audience: false,
+                ..JwtValidatorConfig::default()
+            },
+        );
+        (validator, issuer)
+    }
+
+    fn mint(issuer: &str, exp: i64) -> String {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        header.kid = Some("test-key".into());
+        jsonwebtoken::encode(
+            &header,
+            &MintedClaims {
+                sub: "svc",
+                exp,
+                iat: now,
+                iss: issuer.to_string(),
+            },
+            &jsonwebtoken::EncodingKey::from_rsa_pem(TEST_PEM.as_bytes()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn rs256_accepts_keycloak_shaped_token_without_audience() {
+        let (validator, issuer) = validator_against_test_key().await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let token = mint(&issuer, now + 300);
+        let claims = validator.validate(&token).await.expect("valid token");
+        assert_eq!(claims.sub, "svc");
+        assert_eq!(claims.iss, issuer);
+    }
+
+    #[tokio::test]
+    async fn rs256_rejects_expired_token() {
+        let (validator, issuer) = validator_against_test_key().await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let token = mint(&issuer, now - 120);
+        let error = validator.validate(&token).await.expect_err("expired");
+        assert!(matches!(error, JwtError::Expired));
+    }
+
+    #[tokio::test]
+    async fn rs256_rejects_wrong_issuer() {
+        let (validator, _issuer) = validator_against_test_key().await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let token = mint("http://evil.example/realms/stoa", now + 300);
+        let error = validator.validate(&token).await.expect_err("wrong iss");
+        assert!(matches!(error, JwtError::InvalidIssuer { .. }));
+    }
 }

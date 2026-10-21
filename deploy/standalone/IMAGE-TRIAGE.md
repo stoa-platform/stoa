@@ -1,9 +1,40 @@
 # Image triage
 
+## Diff `5b648ef4`..`af83503b` (not empty)
+
+`git diff 5b648ef4 af83503b -- stoa-gateway/Cargo.lock stoa-gateway/Dockerfile` is empty.
+`git diff 5b648ef4 af83503b -- stoa-gateway/` is not. The image was rebuilt at `9a6823f31eeb5a8f1a110c0f469d5433701348d7`.
+
+```text
+$ git diff --stat 5b648ef4 af83503b -- stoa-gateway/
+ .../snapshots/stoa_gateway__config__tests__snapshot_default_config.snap | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+$ git diff 5b648ef4 af83503b -- stoa-gateway/Cargo.lock stoa-gateway/Dockerfile
+(empty)
+
+$ git diff 5b648ef4 af83503b -- stoa-gateway/
+diff --git a/stoa-gateway/src/config/snapshots/stoa_gateway__config__tests__snapshot_default_config.snap b/stoa-gateway/src/config/snapshots/stoa_gateway__config__tests__snapshot_default_config.snap
+index e5cbc19a..7b29e2bb 100644
+--- a/stoa-gateway/src/config/snapshots/stoa_gateway__config__tests__snapshot_default_config.snap
++++ b/stoa-gateway/src/config/snapshots/stoa_gateway__config__tests__snapshot_default_config.snap
+@@ -197,7 +197,7 @@ expression: "Config::default()"
+   "ip_blocklist_file": null,
+   "tcp_rate_limit_per_ip": null,
+   "trusted_proxies": [],
+-  "jwt_audiences": [],
++  "jwt_audience": [],
+   "memory_limit_mb": 512,
+   "snapshot_enabled": false,
+   "snapshot_max_count": 100,
+```
+
+## Scan
+
 Scanned image: `stoa-gateway:standalone`
-Git revision in `org.opencontainers.image.revision`: `5b648ef4f7adb761ba4f8f5c4cc2fbba2595e2ae`
+Git revision in `org.opencontainers.image.revision`: `9a6823f31eeb5a8f1a110c0f469d5433701348d7`
 Tar: `deploy/standalone/stoa-gateway-standalone.tar` (not committed)
-Tar sha256: `3b3c92fc3cf5307fe23657b858691e501b260c440bf62a7554e1dcb166a732d2`
+Tar sha256: `7d770d925c2c9cb47ad501da1e0b8aebf48b839135ef8302749bb9ed5c0ac478`
 Base: `debian:bookworm-slim` (Trivy detected Debian 12.15), builder `rust:1.93-bookworm`
 Build: `cargo chef cook --release --locked` and `cargo auditable build --release --locked` (cargo-auditable 0.7.5). The binary is not stripped; `readelf` finds `.dep-v0`.
 Scanner: Trivy 0.58.1, `--ignore-unfixed` on the tar. It reports the Rust binary (`lang-pkgs rustbinary app/stoa-gateway`).

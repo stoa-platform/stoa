@@ -135,8 +135,11 @@ deploy/standalone/overlays/use-apisix/rollback.sh
 ```
 
 It puts Service `gateway` back to selector `app: apisix` and targetPort
-`9080`, and restores the `stoa-api` paths saved at switch time. With no
-backup it applies the baseline in `overlays/use-apisix/stoa-api.yaml`:
+`9080`, and restores the `stoa-api` paths saved at switch time. NotFound
+on the backup ConfigMap is the only read result treated as "no backup".
+Any other read error exits before Service `gateway` or Ingress `stoa-api`
+is replaced. With no backup it applies the baseline in
+`overlays/use-apisix/stoa-api.yaml`:
 Prefix `/` to `gateway:9080`. That rule matches
 `/demo-customer-referential/v1/customers/C-1001`. APISIX on that port
 answers 401 to an anonymous caller. The STOA Prefix `/apis` rule does not
@@ -246,9 +249,16 @@ string is not a CIDR, so no peer is trusted and a spoofed
 `X-Forwarded-For` is ignored. `switch.sh` replaces it, at switch time, with
 the Running pod IPs from
 `kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx`.
-It writes those IPs only. A node `/24` is refused. If the sentinel is still
-in the ConfigMap after that write, the script exits and leaves Service
-`gateway` on APISIX.
+It keeps `status.podIP` only for a Running pod and only when that address
+has no slash, then patches ConfigMap `stoa-gateway` key
+`STOA_TRUSTED_PROXIES` with those bare addresses. It reads the key back.
+`assert_host_only` accepts a bare address and a prefix whose length is the
+maximum for that family (`/32` or `/128`). It refuses the sentinel, an empty
+value, and any wider prefix, including a node `/24`. That refusal is a
+preflight error: Service `gateway` and Ingress `stoa-api` stay on APISIX.
+`switch.py --self-test` covers the host prefix and the wider prefixes with
+the fixture address already in the script. At request time each entry is a
+CIDR: a host prefix contains only that one address.
 
 `networkpolicy.yaml` (`stoa-gateway-ingress`) allows TCP 8080 only from
 ingress-nginx pods and from a pod in `stoa` labelled
@@ -294,7 +304,10 @@ revision `6d23399e4d1a1f4c54a03122640c0469c8b4829c` (`IMAGE-REVISION`).
 Tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031`.
 A later docs commit does not change that binary. The label equals that
 revision; `git diff 6d23399e4d1a1f4c54a03122640c0469c8b4829c HEAD -- stoa-gateway/`
-is empty. An earlier local image id
+is empty. The unknown-`inboundAuth` rejection (commit `5b648ef4`) is already in
+this binary. That commit is an ancestor of the revision above, and
+`resembles_inbound_auth_field` is in `stoa-gateway/src/uac/schema.rs` at
+that revision. That is intentional. An earlier local image id
 `sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
 does not contain audience enforcement, the path guard, or the admin proxy deny.
 Do not import it.

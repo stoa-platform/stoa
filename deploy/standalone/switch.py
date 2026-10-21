@@ -16,10 +16,12 @@ does not include Service/gateway, the Ingress, or the backup ConfigMap, so
 it cannot undo a rollback or repeat a switch.
 
 `apisix` restores the selector, targetPort and Ingress paths saved on the
-first `stoa` run. With no backup it applies the versioned APISIX baseline:
-selector `app=apisix`, port 9080 targetPort 9080, Ingress `stoa-api` host
-`api.gostoa.dev` path Prefix `/`. Root `kubectl apply -k` does not include
-those objects, so it cannot undo this.
+first `stoa` run. Only a kubectl `(NotFound)` on the backup ConfigMap counts
+as no backup. Any other read error exits before Service `gateway` or Ingress
+`stoa-api` is replaced. With no backup it applies the versioned APISIX
+baseline: selector `app=apisix`, port 9080 targetPort 9080, Ingress
+`stoa-api` host `api.gostoa.dev` path Prefix `/`. Root `kubectl apply -k`
+does not include those objects, so it cannot undo this.
 
 `python3 deploy/standalone/switch.py --self-test` checks the public path
 without talking to a cluster.
@@ -129,6 +131,10 @@ def kubectl_replace(obj: dict) -> None:
     )
 
 
+class BackupReadError(Exception):
+    """The switch backup could not be read. Rollback must not write."""
+
+
 def backup_exists() -> bool:
     result = subprocess.run(
         [kubectl_bin(), "-n", NS, "get", "configmap", BACKUP],
@@ -138,14 +144,65 @@ def backup_exists() -> bool:
     return result.returncode == 0
 
 
-def load_backup() -> dict | None:
-    if not backup_exists():
+def backup_get_outcome(returncode: int, stdout: str, stderr: str) -> dict | None:
+    """ConfigMap object, or None when the API reason is NotFound.
+
+    Every other failure raises BackupReadError. A non-zero exit alone is
+    not NotFound: Forbidden and a dead API server use exit 1 as well.
+    """
+    if returncode == 0:
+        try:
+            parsed = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise BackupReadError(
+                f"ConfigMap {NS}/{BACKUP} response is not JSON ({exc}); "
+                "rollback writes nothing"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise BackupReadError(
+                f"ConfigMap {NS}/{BACKUP} response is not an object; "
+                "rollback writes nothing"
+            )
+        return parsed
+    if "(NotFound)" in f"{stderr}\n{stdout}":
         return None
-    cm = kubectl_json("-n", NS, "get", "configmap", BACKUP)
+    detail = (stderr or stdout or "").strip() or f"exit {returncode}"
+    raise BackupReadError(
+        f"reading ConfigMap {NS}/{BACKUP} failed ({detail}); rollback writes nothing"
+    )
+
+
+def kubectl_get_backup() -> dict | None:
+    result = subprocess.run(
+        [kubectl_bin(), "-n", NS, "get", "configmap", BACKUP, "-o", "json"],
+        capture_output=True,
+        text=True,
+    )
+    return backup_get_outcome(result.returncode, result.stdout or "", result.stderr or "")
+
+
+def load_backup() -> dict | None:
+    cm = kubectl_get_backup()
+    if cm is None:
+        return None
     raw = (cm.get("data") or {}).get("backup")
-    if not raw:
-        sys.exit(f"ConfigMap {NS}/{BACKUP} has no data.backup")
-    return json.loads(raw)
+    if not isinstance(raw, str) or not raw:
+        raise BackupReadError(
+            f"ConfigMap {NS}/{BACKUP} has no data.backup; rollback writes nothing"
+        )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise BackupReadError(
+            f"ConfigMap {NS}/{BACKUP} data.backup is not JSON ({exc}); "
+            "rollback writes nothing"
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise BackupReadError(
+            f"ConfigMap {NS}/{BACKUP} data.backup is not an object; "
+            "rollback writes nothing"
+        )
+    return parsed
 
 
 def save_backup(payload: dict) -> None:
@@ -288,8 +345,13 @@ def switch_to_apisix() -> None:
     rules, so a non-default APISIX selector is not flattened. Without a
     backup the versioned baseline above is applied. `kubectl apply -k
     deploy/standalone` does not include Service/gateway or Ingress/stoa-api.
+    NotFound is the only read result that means "no backup". Any other
+    read error stops here, before Service or Ingress are replaced.
     """
-    saved = load_backup()
+    try:
+        saved = load_backup()
+    except BackupReadError as exc:
+        sys.exit(str(exc))
     selector = APISIX_SELECTOR
     target = APISIX_TARGET_PORT
     paths = None
@@ -607,6 +669,159 @@ def preflight() -> None:
     print("preflight ok")
 
 
+def _live_service() -> dict:
+    return {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": {"name": SERVICE, "namespace": NS},
+        "spec": {
+            "selector": {"app": "stoa-gateway"},
+            "ports": [
+                {
+                    "name": "http",
+                    "port": PUBLIC_PORT,
+                    "targetPort": STOA_TARGET_PORT,
+                }
+            ],
+        },
+    }
+
+
+def _live_ingress_list() -> dict:
+    return {
+        "apiVersion": "v1",
+        "kind": "List",
+        "items": [
+            {
+                "apiVersion": "networking.k8s.io/v1",
+                "kind": "Ingress",
+                "metadata": {"name": INGRESS, "namespace": NS},
+                "spec": {
+                    "rules": [
+                        {
+                            "host": HOST,
+                            "http": {"paths": stoa_paths()},
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+
+
+def rollback_backup_cases() -> None:
+    """NotFound applies the APISIX baseline. Every other read error writes nothing."""
+    not_found = (
+        "Error from server (NotFound): configmaps "
+        f'"{BACKUP}" not found'
+    )
+    assert backup_get_outcome(1, "", not_found) is None
+
+    other_reads = (
+        (
+            1,
+            "",
+            "Error from server (Forbidden): configmaps "
+            f'"{BACKUP}" is forbidden: User "system:serviceaccount:stoa/default" '
+            "cannot get resource",
+        ),
+        (1, "", "Unable to connect to the server: dial tcp: connection refused"),
+        (1, "", ""),
+        (0, "not-json", ""),
+        (0, "[]", ""),
+    )
+    for code, stdout, stderr in other_reads:
+        try:
+            backup_get_outcome(code, stdout, stderr)
+        except BackupReadError as exc:
+            assert "writes nothing" in str(exc)
+        else:
+            raise AssertionError((code, stdout, stderr))
+
+    replaced: list[dict] = []
+    real_run = subprocess.run
+    real_check = subprocess.check_output
+
+    def not_found_run(cmd, **kwargs):
+        if "configmap" in cmd and BACKUP in cmd and "get" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", not_found)
+        if "replace" in cmd:
+            replaced.append(json.loads(kwargs["input"]))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        raise AssertionError(cmd)
+
+    def not_found_check(cmd, **kwargs):
+        if "svc" in cmd:
+            return json.dumps(_live_service())
+        if "ingress" in cmd:
+            return json.dumps(_live_ingress_list())
+        raise AssertionError(cmd)
+
+    subprocess.run = not_found_run
+    subprocess.check_output = not_found_check
+    try:
+        switch_to_apisix()
+    finally:
+        subprocess.run = real_run
+        subprocess.check_output = real_check
+
+    kinds = [obj["kind"] for obj in replaced]
+    assert kinds == ["Service", "Ingress"], kinds
+    service = replaced[0]
+    assert service["spec"]["selector"] == APISIX_SELECTOR
+    port = service["spec"]["ports"][0]
+    assert port["port"] == PUBLIC_PORT
+    assert port["targetPort"] == APISIX_TARGET_PORT
+    paths = replaced[1]["spec"]["rules"][0]["http"]["paths"]
+    assert paths == apisix_catch_all_paths()
+    assert legacy_anonymous_status(paths[0], LEGACY_ANON_PATH) == 401
+
+    forbidden = other_reads[0][2]
+    calls: list[tuple] = []
+
+    def forbidden_run(cmd, **kwargs):
+        calls.append(("run", tuple(cmd)))
+        if "configmap" in cmd and BACKUP in cmd and "get" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", forbidden)
+        raise AssertionError(cmd)
+
+    def forbidden_check(cmd, **kwargs):
+        calls.append(("check_output", tuple(cmd)))
+        raise AssertionError(cmd)
+
+    subprocess.run = forbidden_run
+    subprocess.check_output = forbidden_check
+    try:
+        try:
+            switch_to_apisix()
+        except SystemExit as exc:
+            message = str(exc)
+            assert "writes nothing" in message
+            assert "Forbidden" in message
+        else:
+            raise AssertionError("rollback continued after Forbidden")
+        assert calls == [
+            (
+                "run",
+                (
+                    kubectl_bin(),
+                    "-n",
+                    NS,
+                    "get",
+                    "configmap",
+                    BACKUP,
+                    "-o",
+                    "json",
+                ),
+            )
+        ]
+        assert not any(kind == "check_output" or "replace" in cmd for kind, cmd in calls)
+    finally:
+        subprocess.run = real_run
+        subprocess.check_output = real_check
+    print("rollback read cases ok")
+
+
 def self_test() -> None:
     paths = stoa_paths()
     assert len(paths) == 1
@@ -697,6 +912,7 @@ def self_test() -> None:
             else:
                 os.environ[key] = value
     print("kubectl binary selection ok")
+    rollback_backup_cases()
 
 
 def main(argv: list[str]) -> None:

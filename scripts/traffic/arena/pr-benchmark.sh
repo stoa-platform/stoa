@@ -28,7 +28,7 @@ log() { echo "[pr-bench] $(date -u +%H:%M:%S) $*"; }
 # 1. Start gateway
 # -------------------------------------------------------------------
 log "Starting gateway on port ${GATEWAY_PORT}..."
-"$GATEWAY_BINARY" --port "$GATEWAY_PORT" &
+STOA_PORT="$GATEWAY_PORT" STOA_JWT_AUDIENCE=stoa-gateway "$GATEWAY_BINARY" &
 GATEWAY_PID=$!
 
 cleanup() {

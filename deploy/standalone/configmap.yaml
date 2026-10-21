@@ -11,8 +11,8 @@
 #   http://keycloak.stoa.svc:8080/realms/stoa/.well-known/openid-configuration
 #   STOA_JWT_ISSUER is not consulted by the validator.
 #
-# STOA_JWT_AUDIENCE turns audience checks on. Empty would leave them off.
-# There is no allowUnauthenticatedREST bypass. Callers need an audience
+# STOA_JWT_AUDIENCE turns audience checks on. Standalone boot refuses an
+# empty value. There is no allowUnauthenticatedREST bypass. Callers need an audience
 # mapper that adds aud=stoa-gateway (see README).
 #
 # Trusted proxies are the ingress-nginx pod addresses only. The tunnel's

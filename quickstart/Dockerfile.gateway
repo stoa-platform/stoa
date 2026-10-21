@@ -1,4 +1,4 @@
-# Community STOA Gateway for the quickstart.
+# STOA Gateway 0.9.25 for the quickstart. Default features only.
 #
 # The image published to GHCR is built with FEATURES=kafka,pingora.
 # That Pingora proxy closes the connection when it forwards the
@@ -15,8 +15,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-# Cargo.lock is gitignored in stoa-gateway. The wildcard matches when a lockfile is present.
-COPY Cargo.toml Cargo.lock* ./
+# rust-toolchain.toml stays out of the image: channel "stable" would change the compiler.
+COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY benches ./benches
 
@@ -25,7 +25,7 @@ ENV CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
     CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
-RUN cargo build --release \
+RUN cargo build --release --locked \
     && strip target/release/stoa-gateway
 
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8

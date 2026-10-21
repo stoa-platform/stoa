@@ -1,10 +1,29 @@
 #!/usr/bin/env bash
 # Declare one API on the gateway, then check access control:
-#   no token  -> 401
-#   token     -> 200
+#   no token       -> 401
+#   invalid token  -> 401
+#   valid token    -> 200
 # Exits non-zero otherwise. Does not print the admin token or the client secret.
-# SPDX-License-Identifier: Apache-2.0
+# The run is bounded by VERIFY_TIMEOUT seconds (default 120). GNU timeout is
+# used when it exists; macOS uses perl alarm. SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
+
+VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-120}"
+
+if [[ "${VERIFY_BOUNDED:-}" != "1" ]]; then
+  export VERIFY_BOUNDED=1
+  if command -v timeout >/dev/null 2>&1; then
+    exec timeout --signal=TERM "${VERIFY_TIMEOUT}" "$0" "$@"
+  fi
+  if command -v gtimeout >/dev/null 2>&1; then
+    exec gtimeout --signal=TERM "${VERIFY_TIMEOUT}" "$0" "$@"
+  fi
+  if command -v perl >/dev/null 2>&1; then
+    exec perl -e 'alarm shift; exec @ARGV' "${VERIFY_TIMEOUT}" "$0" "$@"
+  fi
+  echo "verify: need timeout, gtimeout, or perl to bound the run" >&2
+  exit 1
+fi
 
 cd "$(dirname "$0")"
 
@@ -13,6 +32,7 @@ CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-http://127.0.0.1:8000}"
 REALM=quickstart
 CLIENT_ID=quickstart-caller
 API_PATH="/apis/quickstart/ping-api/ping"
+expired=0
 
 fail() {
   echo "verify: $*" >&2
@@ -22,7 +42,16 @@ fail() {
 dump_logs() {
   docker compose logs --tail=80 gateway keycloak control-plane >&2 || true
 }
-trap 'status=$?; if [[ "$status" != 0 ]]; then dump_logs; fi' EXIT
+
+on_expire() {
+  expired=1
+  echo "verify: exceeded ${VERIFY_TIMEOUT}s" >&2
+  dump_logs
+  exit 1
+}
+
+trap on_expire TERM ALRM
+trap 'status=$?; if [[ "$status" != 0 && "$expired" != 1 ]]; then dump_logs; fi' EXIT
 
 echo "control plane $(curl -fsS --max-time 10 "$CONTROL_PLANE_URL/health" >/dev/null && echo ok || echo down)"
 cp_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CONTROL_PLANE_URL/health" || true)"
@@ -90,6 +119,17 @@ echo "GET without token $anon_code"
 if [[ "$anon_code" != "401" ]]; then
   cat /tmp/stoa-quickstart-anon.txt >&2
   fail "expected 401 without a token, got $anon_code"
+fi
+
+bad_code="$(
+  curl -sS --max-time 20 -o /tmp/stoa-quickstart-bad.txt -w '%{http_code}' \
+    "$GATEWAY_URL$API_PATH" \
+    -H "authorization: Bearer invalid" || true
+)"
+echo "GET with invalid token $bad_code"
+if [[ "$bad_code" != "401" ]]; then
+  cat /tmp/stoa-quickstart-bad.txt >&2
+  fail "expected 401 with an invalid token, got $bad_code"
 fi
 
 token_json="$(

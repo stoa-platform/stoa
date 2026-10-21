@@ -91,7 +91,7 @@ For local component-by-component development, see [`DEVELOPMENT.md`](DEVELOPMENT
 
 ## Access-control quickstart
 
-[`quickstart/`](quickstart/README.md) starts the control plane, PostgreSQL, Keycloak, STOA Gateway, and a fake backend.
+[`quickstart/`](quickstart/README.md) starts the control plane, PostgreSQL, Keycloak, STOA Gateway, and a fake backend. You need Bash, curl, openssl, Docker Engine, and Docker Compose 2.1.1 or newer (`docker compose up --wait`). GNU `timeout` bounds the startup; it is absent on macOS — use `gtimeout` from coreutils, or `perl -e 'alarm shift; exec @ARGV' 300 docker compose up --wait`. The full prerequisite table is in the quickstart README.
 
 The API is declared with `POST /admin/contracts` and `inboundAuth` on the gateway. `POST /v1/tenants/{id}/apis` on the control plane publishes the route without a valid JWT policy, so the control plane does not protect that route. A later version will declare the API through the control plane.
 
@@ -101,7 +101,7 @@ timeout 300 docker compose up --wait
 ./verify.sh
 ```
 
-`verify.sh` declares the API, expects 401 without a token, then 200 with a token.
+`verify.sh` declares the API, expects 401 without a token, 401 with an invalid token, then 200 with a Keycloak token. Host ports are bound to `127.0.0.1`. The gateway image built here is `stoa-quickstart-gateway:0.9.25`.
 
 ---
 

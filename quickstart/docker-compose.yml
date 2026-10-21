@@ -29,7 +29,7 @@ services:
     image: quay.io/keycloak/keycloak@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a
     command: ["start-dev"]
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: quickstart
       KC_BOOTSTRAP_ADMIN_PASSWORD: placeholder-only
@@ -53,7 +53,7 @@ services:
     image: ghcr.io/stoa-platform/control-plane-api@sha256:a8c01bfac64865f543f7836d6b3f1e626896817913c47715b240760bd3f58c81
     platform: linux/amd64
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       ENVIRONMENT: dev
       BASE_DOMAIN: example.test
@@ -97,14 +97,15 @@ services:
       start_period: 10s
 
   gateway:
-    # Built from this checkout, community features only (no Kafka, no Pingora).
-    # The GHCR image is compiled with Pingora and drops the proxied call.
+    # Built from this checkout at the crate version in stoa-gateway/Cargo.toml.
+    # Default features only (no Kafka, no Pingora). The GHCR image is compiled
+    # with Pingora and drops the proxied call.
     build:
       context: ../stoa-gateway
       dockerfile: ../quickstart/Dockerfile.gateway
-    image: stoa-quickstart-gateway:community
+    image: stoa-quickstart-gateway:0.9.25
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     environment:
       STOA_HOST: 0.0.0.0
       STOA_PORT: "8080"

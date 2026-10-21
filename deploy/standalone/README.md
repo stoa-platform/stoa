@@ -94,18 +94,25 @@ Switch (the deployment must already exist; `/ready` stays 503 until Keycloak ans
 deploy/standalone/overlays/use-stoa-gateway/switch.sh
 ```
 
-The script stops before touching Service `gateway` unless both of these hold:
+The script stops before touching Service `gateway` unless all of these hold:
 
 - `worker-3` has `stoa-gateway:standalone` in the k3s containerd namespace,
   and its `org.opencontainers.image.revision` label equals
   `deploy/standalone/IMAGE-REVISION` (override with `STOA_EXPECTED_REVISION`,
   SSH host with `STOA_NODE_SSH`)
+- `sudo systemctl start stoa-pvc-backup.service` on that node exits 0.
+  The oneshot finishes before the ConfigMap is patched. Confirm the new
+  archive with `sudo journalctl -u stoa-pvc-backup -n 20 --no-pager`.
 - `STOA_TRUSTED_PROXIES` can be set to the Running ingress-nginx pod IPs.
   The ConfigMap in git keeps the sentinel
   `REPLACE_WITH_INGRESS_NGINX_POD_IPS`. The script resolves the pod IPs,
   writes those addresses only (never a node `/24`), reads the ConfigMap
   back, and exits if the sentinel is still there. It then restarts the
   deployment so the process loads the new value. `envFrom` is not live.
+
+kubectl is `kubectl-stoa` when that binary is on `PATH`. Override with
+`KUBECTL` or `K` (the operator value is `K=~/stoa-deploy-bin/kubectl-stoa`).
+`KUBECTL` wins over `K`.
 
 It then sets selector `app: stoa-gateway`, keeps Service port 9080, sets
 `targetPort` 8080, and replaces the `api.gostoa.dev` paths with Prefix `/apis`
@@ -130,8 +137,11 @@ deploy/standalone/overlays/use-apisix/rollback.sh
 It puts Service `gateway` back to selector `app: apisix` and targetPort
 `9080`, and restores the `stoa-api` paths saved at switch time. With no
 backup it applies the baseline in `overlays/use-apisix/stoa-api.yaml`:
-Prefix `/` to `gateway:9080`, which is what serves
-`/demo-customer-referential/v1/...` on APISIX. A later
+Prefix `/` to `gateway:9080`. That rule matches
+`/demo-customer-referential/v1/customers/C-1001`. APISIX on that port
+answers 401 to an anonymous caller. The STOA Prefix `/apis` rule does not
+match that URL. `switch.py --self-test` checks the match and the 401
+without calling the cluster. A later
 `kubectl apply -k deploy/standalone` does not list Service `gateway`,
 Ingress `stoa-api`, or the backup ConfigMap, so it cannot undo the rollback
 or repeat the switch. `desired-service.yaml` and `desired-ingress.yaml` are
@@ -222,19 +232,23 @@ is not updated from this PR. The Deployment uses `stoa-gateway:standalone`
 with `imagePullPolicy: Never` (a reschedule without a local import fails
 closed instead of pulling `docker.io/library/stoa-gateway`). Build from the
 git SHA you are about to import. `FEATURES` is empty: no Pingora, Kafka, or
-Kubernetes watcher. `Cargo.lock` is copied into the build. The image label
-`org.opencontainers.image.revision` is that SHA.
+Kubernetes watcher. The build is `cargo chef cook --locked` and
+`cargo auditable build --release --locked`. The binary is not stripped:
+`strip` removes the `.dep-v0` section Trivy uses to see Rust crates. The
+image label `org.opencontainers.image.revision` is that SHA.
 
 ```bash
 deploy/standalone/build-image.sh
 ```
 
 The script writes `stoa-gateway-standalone.tar`, its sha256, a CycloneDX
-SBOM, the Trivy HIGH table, and `IMAGE-REVISION` (the SHA `switch.sh`
-requires on worker-3). It exits if any CRITICAL finding is reported.
-`deploy/standalone/IMAGE-TRIAGE.md` is where each HIGH is accepted or blocked
-in writing. Import is a separate step, on worker-3, and this script does not
-run it:
+SBOM that must list Rust crates (including `quick-xml`), the Trivy HIGH
+table, and `IMAGE-REVISION` (the SHA `switch.sh` requires on worker-3). It
+exits if any CRITICAL finding is reported. `deploy/standalone/IMAGE-TRIAGE.md`
+is where each HIGH is accepted or blocked in writing. `quick-xml` HIGH is
+accepted only while no SOAP contract is published (`STOA_SOAP_PROXY_ENABLED`
+and `STOA_SOAP_BRIDGE_ENABLED` stay false). Import is a separate step, on
+worker-3, and this script does not run it:
 
 ```bash
 docker save stoa-gateway:standalone | ssh worker-3 'sudo k3s ctr -n k8s.io images import -'
@@ -287,7 +301,7 @@ end. Secrets are never given a default.
 | `STOA_KEYCLOAK_URL` | unset | Public issuer base. |
 | `STOA_KEYCLOAK_REALM` | `stoa` when URL set | Appended as `/realms/{realm}`. |
 | `STOA_KEYCLOAK_CLIENT_ID` | `stoa-mcp-gateway` when URL set | OIDC client id. Not the checked `aud` unless `STOA_JWT_AUDIENCE` is empty and audience checks are forced on in code. |
-| `STOA_JWT_AUDIENCE` | empty | CSV or JSON. Empty leaves audience checks off. Standalone sets `stoa-gateway`. |
+| `STOA_JWT_AUDIENCE` | empty | CSV or JSON. Standalone boot refuses an empty list. `STOA_JWT_AUDIENCES` is not read. A route with no `inboundAuthAudience` is checked against this list. |
 | `STOA_KEYCLOAK_CLIENT_SECRET` | unset | Gateway's own client, not the caller. |
 | `STOA_KEYCLOAK_ADMIN_PASSWORD` | unset | DCR public-client patch. |
 | `STOA_KEYCLOAK_INTERNAL_URL` | unset | Discovery and JWKS fetch base. |
@@ -554,7 +568,10 @@ that policy in the same `POST /admin/contracts` as the routes, before the
 routes are inserted, so the route is not served anonymously between a
 contract call and a later policy call. `inboundAuthAudience` (or
 `policies[].config.audience`) is the audience checked for that route, even
-when the process-wide validator has audience checks off. Issuer is
+when the process-wide validator has audience checks off. A route with no
+audience of its own is checked against `STOA_JWT_AUDIENCE`. Standalone
+refuses to boot when that variable is empty, and refuses the publish when
+both the global list and the route audience are empty. Issuer is
 `{STOA_KEYCLOAK_URL}/realms/{realm}` (`https://auth.gostoa.dev/realms/stoa`
 in the ConfigMap). No header → 401 with `WWW-Authenticate`. Token whose `aud`
 contains the policy audience → proxied. Another client's token, `alg: none`,

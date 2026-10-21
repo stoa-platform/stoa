@@ -56,19 +56,33 @@ WORKDIR /app
 
 # Cook dependencies (cached unless Cargo.toml/Cargo.lock change)
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --features "${FEATURES}" --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
+RUN cargo chef cook --release --locked --features "${FEATURES}" --recipe-path recipe.json
+
+# cargo-auditable embeds the crate list in .dep-v0. strip removes that section,
+# so the binary below is left unstripped. Installed before the cache-bust so
+# a source-only rebuild does not download it again.
+ADD https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.5/cargo-auditable-x86_64-unknown-linux-gnu.tar.xz /tmp/cargo-auditable.tar.xz
+RUN apt-get update && apt-get install -y --no-install-recommends xz-utils \
+      && rm -rf /var/lib/apt/lists/* \
+      && tar -xJf /tmp/cargo-auditable.tar.xz -C /tmp \
+      && install -m 0755 /tmp/cargo-auditable-x86_64-unknown-linux-gnu/cargo-auditable /usr/local/cargo/bin/cargo-auditable \
+      && rm -rf /tmp/cargo-auditable.tar.xz /tmp/cargo-auditable-x86_64-unknown-linux-gnu \
+      && cargo auditable --version
 
 # Cache-bust: ensures source changes always trigger recompilation
 # (GHA Docker layer cache can otherwise serve stale compiled artifacts)
 ARG CACHEBUST=unknown
 RUN echo "Build revision: ${CACHEBUST}"
 
-# Build the actual application (only this layer rebuilds on src changes)
+# Build the actual application (only this layer rebuilds on src changes).
+# --locked refuses a drifted lockfile.
 ARG REVISION=unknown
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY benches ./benches
-RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-gateway
+RUN cargo auditable build --release --locked --features "${FEATURES}" \
+      && readelf -S target/release/stoa-gateway | grep -q '\.dep-v0'
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
 FROM debian:bookworm-slim AS runtime

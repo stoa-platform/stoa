@@ -81,7 +81,7 @@ if command -v syft >/dev/null 2>&1; then
 else
   "$TRIVY" image --input "$TAR" --format cyclonedx --output "$OUT/stoa-gateway-${TAG}.cdx.json"
 fi
-python3 -c 'import json,sys; n=len(json.load(open(sys.argv[1])).get("components") or []); print("sbom components", n); assert n>0' \
+python3 -c 'import json,sys; doc=json.load(open(sys.argv[1])); comps=doc.get("components") or []; names=[(c.get("name") or "") for c in comps]; print("sbom components", len(comps)); assert comps, "empty sbom"; assert any("quick-xml" in name for name in names), "SBOM has no Rust crates (quick-xml missing)"' \
   "$OUT/stoa-gateway-${TAG}.cdx.json"
 
 if [[ ! -f "$TRIAGE" ]]; then

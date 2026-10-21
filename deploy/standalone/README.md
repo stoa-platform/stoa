@@ -169,7 +169,10 @@ There is no `allowUnauthenticatedREST` flag in this repo. With
 stores no route unless the contract sets `inboundAuth` to `jwt` (or a
 `jwt_validation` policy). A route that was already in memory is removed.
 With a control plane URL set, a contract without that policy is still
-published open.
+published open. `inboundAuth` values other than `jwt`, `bearer`, `oauth2`,
+`oidc`, or `client_credentials` are rejected (400), as is a field whose
+name looks like `inboundAuth` (`InboundAuth`, `inboundAut`). Other unknown
+fields are still ignored.
 
 The process returns 400 for an ambiguous path (`..`, `%2e`, `%2f`, `//`) and
 404 for any other path when `X-Forwarded-For` or `X-Forwarded-Host` is set,
@@ -257,12 +260,11 @@ docker save stoa-gateway:standalone | ssh worker-3 'sudo k3s ctr -n k8s.io image
 The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
 (`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). Base image
 tags are not digest-pinned. `stoa-gateway/.dockerignore` excludes `target/`
-so the context is not the local debug build. The image scanned for Friday is
-revision `29955d56cdee022caf3d57442027902d3ae39fad`; the tar sha256 and the
-HIGH dispositions are in `IMAGE-TRIAGE.md`. A docs commit after that SHA does
-not change the binary. An earlier local image id
-`sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb` does
-not contain audience enforcement, the path guard, or the admin proxy deny.
+so the context is not the local debug build. The SHA `switch.sh` requires is
+`IMAGE-REVISION`, written by the build script from the commit that produced
+the binary. A later docs commit does not change that binary. An earlier local
+image id `sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
+does not contain audience enforcement, the path guard, or the admin proxy deny.
 Do not import it.
 
 ## Startup without control-plane-api

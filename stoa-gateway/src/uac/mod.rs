@@ -15,7 +15,9 @@ pub use classifications::Classification;
 pub use enforcer::ClassificationEnforcer;
 pub use llm::{LlmCapabilityType, LlmConfig, LlmProvider};
 pub use registry::ContractRegistry;
-pub use schema::{is_jwt_validation_policy, ContractStatus, UacContractSpec, UacEndpoint};
+pub use schema::{
+    is_jwt_validation_policy, parse_admin_contract, ContractStatus, UacContractSpec, UacEndpoint,
+};
 
 use serde::{Deserialize, Serialize};
 

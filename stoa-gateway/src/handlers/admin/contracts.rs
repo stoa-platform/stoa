@@ -34,7 +34,7 @@ use tracing::warn;
 use crate::state::AppState;
 use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, BindingOutput, ProtocolBinder};
 use crate::uac::registry::ContractRegistry;
-use crate::uac::UacContractSpec;
+use crate::uac::{parse_admin_contract, UacContractSpec};
 
 /// Local abstraction over the REST + MCP binders so the handler logic
 /// can be tested with injected failures.
@@ -99,8 +99,21 @@ impl ContractBinders for RealBinders {
 /// POST /admin/contracts — register or update a UAC contract.
 pub async fn upsert_contract(
     State(state): State<AppState>,
-    Json(contract): Json<UacContractSpec>,
+    Json(body): Json<serde_json::Value>,
 ) -> Response {
+    let contract = match parse_admin_contract(&body) {
+        Ok(contract) => contract,
+        Err(message) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "status": "rejected",
+                    "message": message,
+                })),
+            )
+                .into_response();
+        }
+    };
     let binders = RealBinders::from_state(&state);
     perform_upsert(
         state.contract_registry.clone(),

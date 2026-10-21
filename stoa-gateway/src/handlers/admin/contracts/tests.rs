@@ -42,6 +42,63 @@ async fn test_contract_upsert_create() {
 }
 
 #[tokio::test]
+async fn unknown_or_misspelled_inbound_auth_is_400_and_stores_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+    let endpoint = serde_json::json!({
+        "path": "/ping",
+        "methods": ["GET"],
+        "backend_url": "http://127.0.0.1:9"
+    });
+    let mut base = serde_json::json!({
+        "name": "live-api",
+        "version": "1.0.0",
+        "tenant_id": "demo",
+        "status": "published",
+        "classification": "H",
+        "endpoints": [endpoint]
+    });
+
+    let cases = [
+        ("jtw", "inboundAuth", serde_json::json!("jtw")),
+        ("empty", "inboundAuth", serde_json::json!("")),
+        ("case", "InboundAuth", serde_json::json!("jwt")),
+    ];
+    for (label, key, value) in cases {
+        let mut body = base.clone();
+        body.as_object_mut().unwrap().remove("inboundAuth");
+        body.as_object_mut().unwrap().remove("InboundAuth");
+        body.as_object_mut().unwrap().insert(key.to_string(), value);
+        let response = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", body))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{label}");
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text.contains("unknown inboundAuth") || text.contains("looks like inboundAuth"),
+            "{label}: {text}"
+        );
+        assert_eq!(state.route_registry.count(), 0, "{label}");
+        assert!(state.contract_registry.list().is_empty(), "{label}");
+    }
+
+    base.as_object_mut()
+        .unwrap()
+        .insert("inboundAuth".into(), serde_json::json!("jwt"));
+    let response = app
+        .oneshot(auth_json_req("POST", "/contracts", base))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(state.route_registry.count(), 1);
+}
+
+#[tokio::test]
 async fn test_contract_upsert_update() {
     let state = create_test_state(Some("secret"));
     let app = build_full_admin_router(state);

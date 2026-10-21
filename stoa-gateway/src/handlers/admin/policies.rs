@@ -47,6 +47,18 @@ pub async fn delete_policy(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
+    // DELETE would drop a jwt_validation policy and leave the route open.
+    if !state.config.control_plane_configured() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "status": "rejected",
+                "message": "standalone mode refuses DELETE /admin/policies; republish the contract instead"
+            })),
+        )
+            .into_response();
+    }
+
     match state.policy_registry.remove(&id) {
         Some(_) => StatusCode::NO_CONTENT.into_response(),
         None => (StatusCode::NOT_FOUND, "Policy not found").into_response(),
@@ -58,9 +70,12 @@ mod tests {
     use axum::http::StatusCode;
     use tower::ServiceExt;
 
+    use crate::config::Config;
     use crate::handlers::admin::test_helpers::{
         auth_json_req, auth_req, build_full_admin_router, create_test_state,
     };
+    use crate::routes::PolicyEntry;
+    use crate::state::AppState;
 
     #[tokio::test]
     async fn test_upsert_and_list_policies() {
@@ -95,6 +110,71 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn standalone_refuses_post_apis_and_delete_policies() {
+        let state = AppState::new(Config {
+            admin_api_token: Some("secret".into()),
+            jwt_audience: vec!["stoa-gateway".into()],
+            ..Config::default()
+        });
+        state.policy_registry.upsert(PolicyEntry {
+            id: "jwt-1".into(),
+            name: "jwt".into(),
+            policy_type: "jwt_validation".into(),
+            config: serde_json::json!({"audience": "stoa-gateway"}),
+            priority: 1,
+            api_id: "r1".into(),
+        });
+        let app = build_full_admin_router(state.clone());
+        let route = serde_json::json!({
+            "id": "r1",
+            "name": "payments",
+            "tenant_id": "acme",
+            "path_prefix": "/apis/acme/payments",
+            "backend_url": "https://backend.test",
+            "methods": ["GET"],
+            "spec_hash": "abc",
+            "activated": true
+        });
+
+        let response = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/apis", route))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "rejected");
+        assert!(json["message"]
+            .as_str()
+            .unwrap()
+            .contains("POST /admin/apis"));
+        assert_eq!(state.route_registry.count(), 0);
+
+        let response = app
+            .oneshot(auth_req("DELETE", "/policies/jwt-1"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["message"]
+            .as_str()
+            .unwrap()
+            .contains("DELETE /admin/policies"));
+        assert_eq!(state.policy_registry.count(), 1);
+        assert!(state
+            .policy_registry
+            .list()
+            .iter()
+            .any(|policy| policy.id == "jwt-1"));
     }
 
     // ─── GW-1 P1-6 regression: required fields on upsert_policy ───────

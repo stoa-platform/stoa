@@ -149,9 +149,13 @@ async fn test_ssrf_private_ip_blocked() {
 // === Regression tests: Admin endpoint SSRF pre-check (CAB-1920) ===
 
 fn build_admin_router() -> axum::Router {
+    // CAB-1920 still applies when a control plane is configured and
+    // POST /admin/apis is open. Standalone refuses that route before
+    // the SSRF check (see standalone_refuses_post_apis_and_delete_policies).
     let config = Config {
         admin_api_token: Some("test-token".to_string()),
         auto_register: false,
+        control_plane_url: Some("http://control-plane-api.test:8000".into()),
         ..Config::default()
     };
     let state = AppState::new(config);

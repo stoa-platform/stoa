@@ -1,0 +1,23 @@
+# `cargo audit` scans the whole lockfile, including optional features that
+# the standalone image does not compile (FEATURES is empty).
+# quick-xml 0.39.4 stays. >= 0.41.0 avant tout câblage SOAP.
+
+[advisories]
+ignore = [
+    # Linked. SOAP module only. Proxy and bridge stay off. No SOAP contract.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+    # jsonwebtoken rust_crypto still links rsa. No fixed upgrade. JWT verify, no decrypt.
+    "RUSTSEC-2023-0071",
+    # prometheus is built with default-features = false, so protobuf is not linked.
+    "RUSTSEC-2024-0437",
+    # wasmtime is optional (`--features wasm`) and is not in stoa-gateway:standalone.
+    "RUSTSEC-2026-0327",
+    "RUSTSEC-2026-0316",
+    "RUSTSEC-2026-0363",
+    "RUSTSEC-2026-0269",
+    "RUSTSEC-2026-0379",
+    "RUSTSEC-2026-0359",
+    "RUSTSEC-2026-0222",
+    "RUSTSEC-2026-0362",
+]

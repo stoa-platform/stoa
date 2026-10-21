@@ -260,10 +260,11 @@ docker save stoa-gateway:standalone | ssh worker-3 'sudo k3s ctr -n k8s.io image
 The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
 (`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). Base image
 tags are not digest-pinned. `stoa-gateway/.dockerignore` excludes `target/`
-so the context is not the local debug build. The SHA `switch.sh` requires is
-`IMAGE-REVISION`, written by the build script from the commit that produced
-the binary. A later docs commit does not change that binary. An earlier local
-image id `sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
+so the context is not the local debug build. The image built for Friday is
+revision `5b648ef4f7adb761ba4f8f5c4cc2fbba2595e2ae` (`IMAGE-REVISION`).
+Tar sha256 `3b3c92fc3cf5307fe23657b858691e501b260c440bf62a7554e1dcb166a732d2`.
+A later docs commit does not change that binary. An earlier local image id
+`sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
 does not contain audience enforcement, the path guard, or the admin proxy deny.
 Do not import it.
 

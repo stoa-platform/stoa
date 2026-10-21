@@ -216,7 +216,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // with no such policy stay unchanged. Classification `auth-jwt` is not
     // this check — that list is advisory and log-only.
     if published_route_requires_jwt(&state, &route) {
-        if let Err(response) = require_published_route_jwt(&state, &mut request).await {
+        if let Err(response) = require_published_route_jwt(&state, &route, &mut request).await {
             record_proxy_status(401);
             return response;
         }
@@ -1016,12 +1016,41 @@ fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRout
     })
 }
 
+/// Audiences declared on the route's `jwt_validation` policy (`config.audience`).
+fn policy_audiences(state: &AppState, route: &crate::routes::ApiRoute) -> Vec<String> {
+    let keys = [
+        Some(route.id.as_str()),
+        route.contract_key.as_deref(),
+        Some(route.path_prefix.as_str()),
+    ];
+    let mut audiences = Vec::new();
+    for api_id in keys.into_iter().flatten() {
+        for policy in state.policy_registry.list_for_api(api_id) {
+            if !crate::uac::is_jwt_validation_policy(&policy.policy_type) {
+                continue;
+            }
+            let Some(value) = policy.config.get("audience").and_then(|item| item.as_str()) else {
+                continue;
+            };
+            let value = value.trim();
+            if !value.is_empty() && !audiences.iter().any(|existing| existing == value) {
+                audiences.push(value.to_string());
+            }
+        }
+    }
+    audiences
+}
+
 /// Validate the caller JWT before proxying a route that has `jwt_validation`.
 ///
 /// Missing validator, missing bearer, and invalid tokens all return 401 with
-/// `WWW-Authenticate`. A successful validation inserts [`AuthenticatedUser`].
+/// `WWW-Authenticate`. When the policy config carries `audience`, that value
+/// is required even if the process-wide validator has audience checks off.
+/// A successful validation inserts [`AuthenticatedUser`].
+#[allow(clippy::result_large_err)] // axum Response as Err; rustc 1.99 -D warnings
 async fn require_published_route_jwt(
     state: &AppState,
+    route: &crate::routes::ApiRoute,
     request: &mut Request<Body>,
 ) -> Result<(), Response> {
     let header = request
@@ -1053,6 +1082,13 @@ async fn require_published_route_jwt(
         }
     };
 
+    let audiences = policy_audiences(state, route);
+    let validator = if audiences.is_empty() {
+        validator
+    } else {
+        std::sync::Arc::new(validator.with_audience_override(&audiences))
+    };
+
     let claims = match validator.validate(token).await {
         Ok(claims) => claims,
         Err(error) => {
@@ -1075,6 +1111,7 @@ fn jwt_failure_message(error: &JwtError) -> &'static str {
     match error {
         JwtError::Expired => "Token expired",
         JwtError::InvalidIssuer { .. } => "Invalid token issuer",
+        JwtError::InvalidAudience { .. } => "Invalid token audience",
         _ => "Invalid token",
     }
 }
@@ -1207,6 +1244,79 @@ mod tests {
             .to_str()
             .unwrap();
         assert!(header.contains("error=\"invalid_token\""));
+    }
+
+    fn audience_policy(api_id: &str, audience: &str) -> crate::routes::PolicyEntry {
+        let mut policy = jwt_policy(api_id);
+        policy.config = serde_json::json!({ "audience": audience });
+        policy
+    }
+
+    async fn body_string(response: axum::response::Response) -> String {
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    fn unsigned_none_token() -> String {
+        use base64::Engine;
+        let encode = |bytes: &[u8]| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
+        format!(
+            "{}.{}.",
+            encode(br#"{"alg":"none","typ":"JWT"}"#),
+            encode(
+                br#"{"iss":"https://auth.gostoa.dev/realms/stoa","sub":"x","exp":9999999999,"aud":"demo-customer-referential"}"#
+            )
+        )
+    }
+
+    /// no token, valid token, broken signature, other audience, alg=none, expired.
+    /// The process validator has audience checks off. The policy audience still applies.
+    /// There is no allowUnauthenticatedREST or allowWidenedPrefix switch.
+    #[tokio::test]
+    async fn published_route_jwt_matrix_enforces_policy_audience() {
+        use crate::auth::jwt::tests::{issuer_only, mint, validator_against_test_key};
+
+        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
+        let mut state = AppState::new(crate::config::Config::default());
+        state.jwt_validator = Some(std::sync::Arc::new(validator));
+        let route = ping_route();
+        state
+            .policy_registry
+            .upsert(audience_policy(&route.id, "demo-customer-referential"));
+        state.route_registry.upsert(route);
+
+        let missing = call(state.clone(), None).await;
+        assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let valid = mint(&issuer, now + 300, Some("demo-customer-referential"));
+        let accepted = call(state.clone(), Some(&valid)).await;
+        assert_ne!(accepted.status(), StatusCode::UNAUTHORIZED);
+
+        let broken = format!("{valid}x");
+        let invalid = call(state.clone(), Some(&broken)).await;
+        assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
+
+        let other = mint(&issuer, now + 300, Some("other-client"));
+        let wrong_aud = call(state.clone(), Some(&other)).await;
+        assert_eq!(wrong_aud.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(wrong_aud)
+            .await
+            .contains("Invalid token audience"));
+
+        let none = call(state.clone(), Some(&unsigned_none_token())).await;
+        assert_eq!(none.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(none).await.contains("Invalid token"));
+
+        let expired_token = mint(&issuer, now - 120, Some("demo-customer-referential"));
+        let expired = call(state.clone(), Some(&expired_token)).await;
+        assert_eq!(expired.status(), StatusCode::UNAUTHORIZED);
+        assert!(body_string(expired).await.contains("Token expired"));
     }
 
     #[test]

@@ -24,6 +24,7 @@ use crate::state::AppState;
 /// (GW-1 P0-1): prevents byte-by-byte timing-leak brute-force of the
 /// admin token. The length pre-check is a deliberate early-exit that
 /// leaks only the token length, which is not secret-derived.
+#[allow(clippy::result_large_err)] // axum Response as Err; rustc 1.99 -D warnings
 pub async fn admin_auth(
     State(state): State<AppState>,
     request: Request<Body>,
@@ -76,11 +77,27 @@ pub async fn admin_auth(
 /// transport configs). In prod, `main.rs` wires
 /// `into_make_service_with_connect_info::<SocketAddr>`, so the
 /// extension is always present.
+///
+/// Requests that traversed a reverse proxy carry `X-Forwarded-For` or
+/// `X-Forwarded-Host`. ingress-nginx sets both on the public host. The
+/// admin API has no public path; if a Prefix `/` rule still points here,
+/// this returns 404 before the bearer compare so `/admin/*` is not
+/// distinguishable from an unknown route. In-cluster callers (ClusterIP,
+/// `kubectl port-forward`) do not set those headers and still reach
+/// `admin_auth`.
+#[allow(clippy::result_large_err)] // axum Response as Err; rustc 1.99 -D warnings
 pub async fn admin_rate_limit(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
+    if request.headers().get("x-forwarded-for").is_some()
+        || request.headers().get("x-forwarded-host").is_some()
+    {
+        warn!("Admin API request rejected: forwarded proxy headers present");
+        return Err(StatusCode::NOT_FOUND.into_response());
+    }
+
     let peer_ip = request
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
@@ -388,5 +405,56 @@ mod tests {
             .unwrap();
         // Empty token = disabled
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // A public Ingress with Prefix `/` would deliver /admin to this process.
+    // ingress-nginx sets X-Forwarded-For and X-Forwarded-Host. Those requests
+    // are 404 even with the bearer. A direct in-cluster call has neither
+    // header and still reaches the handler.
+    #[tokio::test]
+    async fn test_admin_hidden_when_forwarded_by_a_proxy() {
+        use axum::{middleware, routing::get as axum_get, Router};
+
+        let state = create_test_state(Some("secret"));
+        let router: Router = Router::new()
+            .route("/contracts", axum_get(super::super::admin_health))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                super::admin_auth,
+            ))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                super::admin_rate_limit,
+            ))
+            .with_state(state);
+
+        for header in ["x-forwarded-for", "x-forwarded-host"] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/contracts")
+                        .header("authorization", "Bearer secret")
+                        .header(header, "203.0.113.10")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{header}");
+        }
+
+        let direct = router
+            .oneshot(
+                Request::builder()
+                    .uri("/contracts")
+                    .header("authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(direct.status(), StatusCode::OK);
     }
 }

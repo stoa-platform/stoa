@@ -238,12 +238,18 @@ impl AppState {
                 ..OidcProviderConfig::default()
             };
             let oidc_provider = Arc::new(OidcProvider::new(oidc_config));
-            // Disable audience validation: user tokens come from various clients
-            // (control-plane-ui, Claude.ai DCR, etc.) and won't have the gateway
-            // client_id in their aud claim unless a Keycloak audience mapper is added.
-            // Issuer + RS256 signature validation is sufficient.
+            // Audience is checked only when STOA_JWT_AUDIENCE is set. Unset keeps
+            // the previous behaviour (issuer + RS256, no aud check) so existing
+            // MCP clients without an audience mapper keep working. The standalone
+            // manifest sets the audience to `stoa-gateway`.
+            let audiences = config.jwt_audiences.clone();
+            let validate_audience = !audiences.is_empty();
+            if validate_audience {
+                tracing::info!(audiences = ?audiences, "JWT audience validation enabled");
+            }
             let jwt_config = JwtValidatorConfig {
-                validate_audience: false,
+                validate_audience,
+                audiences,
                 ..JwtValidatorConfig::default()
             };
             let validator = JwtValidator::with_config(oidc_provider, jwt_config);

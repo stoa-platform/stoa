@@ -21,7 +21,7 @@
 FROM rust:1.93-bookworm AS planner
 RUN cargo install cargo-chef --locked
 WORKDIR /app
-COPY Cargo.toml Cargo.lock* ./
+COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY benches ./benches
 RUN cargo chef prepare --recipe-path recipe.json
@@ -64,7 +64,8 @@ ARG CACHEBUST=unknown
 RUN echo "Build revision: ${CACHEBUST}"
 
 # Build the actual application (only this layer rebuilds on src changes)
-COPY Cargo.toml Cargo.lock* ./
+ARG REVISION=unknown
+COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY benches ./benches
 RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-gateway
@@ -85,6 +86,11 @@ WORKDIR /app
 
 COPY --from=builder /app/target/release/stoa-gateway /app/stoa-gateway
 RUN chown -R stoa:stoa /app
+
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="stoa-gateway" \
+      org.opencontainers.image.source="https://github.com/stoa-platform/stoa" \
+      org.opencontainers.image.revision="${REVISION}"
 
 USER 1000
 EXPOSE 8080

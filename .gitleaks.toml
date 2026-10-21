@@ -45,6 +45,10 @@ paths = [
   # Gateway Rust inline test fixtures (#[cfg(test)] blocks) — test RSA keys and fake JWTs
   '''stoa-gateway/src/oauth/client_auth\.rs''',
   '''stoa-gateway/src/oauth/proxy\.rs''',
+  # cfg(test) RS256 fixture. Not a credential. Generated for unit tests only.
+  '''stoa-gateway/src/auth/jwt\.rs''',
+  # Local disposable Keycloak admin/admin in the JWT proof container.
+  '''deploy/standalone/jwt-proof\.sh''',
   # Gateway proxy module — SSRF blocklist uses IPs in test assertions
   '''stoa-gateway/src/proxy/dynamic\.rs''',
   # UI crypto test fixtures — forge-generated test keys (not real secrets)

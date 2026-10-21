@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::routes::{ApiRoute, PolicyEntry, PolicyRegistry, RouteRegistry};
-use crate::uac::schema::UacContractSpec;
+use crate::uac::schema::{is_jwt_validation_policy, UacContractSpec};
 
 use super::{BindingOutput, ProtocolBinder};
 
@@ -84,48 +84,107 @@ impl RestBinder {
             .collect()
     }
 
-    fn sync_jwt_policy(&self, contract: &UacContractSpec, routes: &[ApiRoute]) {
-        let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
-        self.policy_registry
-            .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
-        if !contract.requires_jwt_validation() {
-            return;
+    fn upsert_jwt_policies(&self, contract: &UacContractSpec, routes: &[ApiRoute]) {
+        let mut config = serde_json::json!({
+            "source": "contract",
+            "inbound_auth": contract.inbound_auth,
+        });
+        if let Some(audience) = contract_audience(contract) {
+            config["audience"] = serde_json::Value::String(audience);
         }
         for route in routes {
             self.policy_registry.upsert(PolicyEntry {
                 id: format!("jwt:{}", route.id),
                 name: "jwt_validation".to_string(),
                 policy_type: "jwt_validation".to_string(),
-                config: serde_json::json!({
-                    "source": "contract",
-                    "inbound_auth": contract.inbound_auth,
-                }),
+                config: config.clone(),
                 priority: 0,
                 api_id: route.id.clone(),
             });
         }
     }
+
+    fn sync_jwt_policy(&self, contract: &UacContractSpec, routes: &[ApiRoute]) {
+        let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
+        self.policy_registry
+            .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
+        if contract.requires_jwt_validation() {
+            self.upsert_jwt_policies(contract, routes);
+        }
+    }
+}
+
+fn contract_audience(contract: &UacContractSpec) -> Option<String> {
+    if let Some(audience) = contract
+        .inbound_auth_audience
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        return Some(audience.to_string());
+    }
+    contract.policies.iter().find_map(|policy| {
+        if !is_jwt_validation_policy(&policy.policy_type) {
+            return None;
+        }
+        policy
+            .config
+            .get("audience")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    })
 }
 
 fn jwt_policy_prefix(contract_key: &str) -> String {
     format!("jwt:uac:{contract_key}:")
 }
 
+impl RestBinder {
+    fn prune_stale_jwt_policies(&self, contract_key: &str, routes: &[ApiRoute]) {
+        let live: std::collections::HashSet<&str> =
+            routes.iter().map(|route| route.id.as_str()).collect();
+        let prefix = jwt_policy_prefix(contract_key);
+        let stale: Vec<String> = self
+            .policy_registry
+            .list()
+            .into_iter()
+            .filter(|policy| {
+                policy.id.starts_with(&prefix) && !live.contains(policy.api_id.as_str())
+            })
+            .map(|policy| policy.id)
+            .collect();
+        for id in stale {
+            self.policy_registry.remove(&id);
+        }
+    }
+}
+
 impl ProtocolBinder for RestBinder {
     async fn bind(&self, contract: &UacContractSpec) -> Result<BindingOutput, String> {
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
-
-        // Remove existing routes for this contract (idempotent re-bind)
-        self.route_registry.remove_by_contract(&contract_key);
-
-        // Generate and register new routes
         let routes = Self::generate_routes(contract);
         let count = routes.len();
 
-        for route in &routes {
-            self.route_registry.upsert(route.clone());
+        if contract.requires_jwt_validation() {
+            // Policy first. A concurrent request can see the new route only
+            // after this returns, and the policy is already in the registry.
+            // There is no second POST /admin/policies and no anonymous window.
+            self.upsert_jwt_policies(contract, &routes);
+            self.route_registry.remove_by_contract(&contract_key);
+            for route in &routes {
+                self.route_registry.upsert(route.clone());
+            }
+            self.prune_stale_jwt_policies(&contract_key, &routes);
+        } else {
+            // Drop the route before the policy so it cannot be served open.
+            self.route_registry.remove_by_contract(&contract_key);
+            self.sync_jwt_policy(contract, &routes);
+            for route in &routes {
+                self.route_registry.upsert(route.clone());
+            }
         }
-        self.sync_jwt_policy(contract, &routes);
 
         tracing::info!(
             contract = %contract_key,
@@ -137,9 +196,10 @@ impl ProtocolBinder for RestBinder {
     }
 
     async fn unbind(&self, contract_key: &str) -> Result<usize, String> {
+        // Routes first, so unbind cannot leave a route with its policy already gone.
+        let removed = self.route_registry.remove_by_contract(contract_key);
         self.policy_registry
             .remove_by_id_prefix(&jwt_policy_prefix(contract_key));
-        let removed = self.route_registry.remove_by_contract(contract_key);
 
         tracing::info!(
             contract = %contract_key,
@@ -366,9 +426,31 @@ mod tests {
         let stored = policies.list_for_api("uac:acme:payments:0");
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].policy_type, "jwt_validation");
+        assert!(routes.get("uac:acme:payments:0").is_some());
 
         binder.unbind("acme:payments").await.expect("unbind");
         assert!(policies.list_for_api("uac:acme:payments:0").is_empty());
+    }
+
+    #[tokio::test]
+    async fn inbound_auth_audience_is_on_the_policy_in_the_same_bind() {
+        let routes = Arc::new(RouteRegistry::new());
+        let policies = Arc::new(PolicyRegistry::new());
+        let binder = RestBinder::with_policies(routes.clone(), policies.clone());
+
+        let mut contract = sample_contract();
+        contract.inbound_auth = Some("jwt".into());
+        contract.inbound_auth_audience = Some("demo-customer-referential".into());
+        binder.bind(&contract).await.expect("bind");
+
+        let stored = policies.list_for_api("uac:acme:payments:0");
+        assert_eq!(
+            stored[0].config["audience"].as_str(),
+            Some("demo-customer-referential")
+        );
+        assert!(routes.get("uac:acme:payments:0").is_some());
+        assert!(routes.get("uac:acme:payments:1").is_some());
+        assert_eq!(policies.list_for_api("uac:acme:payments:1").len(), 1);
     }
 
     #[tokio::test]

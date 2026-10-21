@@ -880,6 +880,13 @@ pub struct Config {
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub trusted_proxies: Vec<String>,
 
+    /// Accepted JWT `aud` values for published routes and MCP. Empty disables
+    /// audience checks (issuer + RS256 only). Set this on the standalone
+    /// gateway so client_credentials tokens must carry the resource audience.
+    /// Env: STOA_JWT_AUDIENCE (CSV or JSON array). Example: `stoa-gateway`.
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub jwt_audiences: Vec<String>,
+
     // === Memory Budget (CAB-1829) ===
     /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
     /// Env: STOA_MEMORY_LIMIT_MB
@@ -1130,6 +1137,7 @@ impl fmt::Debug for Config {
             .field("ip_blocklist_file", &self.ip_blocklist_file)
             .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
             .field("trusted_proxies", &self.trusted_proxies)
+            .field("jwt_audiences", &self.jwt_audiences)
             .field("memory_limit_mb", &self.memory_limit_mb)
             .field("snapshot_enabled", &self.snapshot_enabled)
             .field("snapshot_max_count", &self.snapshot_max_count)

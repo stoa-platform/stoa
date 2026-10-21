@@ -8,6 +8,7 @@ pub mod hardening;
 pub mod hop_detection;
 pub mod llm_proxy;
 mod observe_only_guardrails;
+pub mod path_guard;
 #[cfg(feature = "pingora")]
 pub mod pingora_pool;
 pub mod pool_metrics;

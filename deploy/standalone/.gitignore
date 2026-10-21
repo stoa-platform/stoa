@@ -1,0 +1,5 @@
+# Produced by build-image.sh. The triage note is committed; the tar is not.
+*.tar
+*.tar.sha256
+*.cdx.json
+*.trivy-high.txt

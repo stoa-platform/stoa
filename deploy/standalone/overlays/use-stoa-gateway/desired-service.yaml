@@ -1,0 +1,15 @@
+# Desired end state of the EXISTING Service/gateway after switch.sh.
+# Not applied by kustomize. kubectl apply would merge spec.selector and
+# can leave the APISIX label in place (the pod selector then matches nothing).
+# switch.sh kubectl-replaces the live object so the selector is exactly this.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: stoa
+spec:
+  selector:
+    app: stoa-gateway
+  ports:
+    - port: 9080
+      targetPort: 8080

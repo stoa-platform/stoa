@@ -54,10 +54,10 @@ kubectl -n stoa create secret generic stoa-gateway-admin \
 kubectl apply -k deploy/standalone
 ```
 
-That installs the Deployment (2 replicas, PDB `minAvailable: 1`), ConfigMap,
-PodDisruptionBudget, and the in-cluster Services `stoa-gateway` and
-`stoa-gateway-admin`. It does not create or patch Service `gateway` and it
-does not create an Ingress. APISIX keeps `api.gostoa.dev`.
+That installs one replica, the ConfigMap, and the in-cluster Services
+`stoa-gateway` and `stoa-gateway-admin`. There is no PodDisruptionBudget.
+It does not create or patch Service `gateway` and it does not create an
+Ingress. APISIX keeps `api.gostoa.dev`.
 
 `secret.yaml` is a template (`REPLACE_FROM_VAULT`). It is not in
 `kustomization.yaml`. The Deployment reads `STOA_ADMIN_API_TOKEN` from Secret
@@ -88,15 +88,33 @@ kubectl -n stoa get svc gateway -o yaml
 kubectl -n stoa get ingress -o yaml
 ```
 
-Switch (pods must already be Ready; `/ready` stays 503 until Keycloak answers):
+Switch (the deployment must already exist; `/ready` stays 503 until Keycloak answers):
 
 ```bash
 deploy/standalone/overlays/use-stoa-gateway/switch.sh
 ```
 
-That sets selector `app: stoa-gateway`, keeps Service port 9080, sets
+The script stops before touching Service `gateway` unless both of these hold:
+
+- `worker-3` has `stoa-gateway:standalone` in the k3s containerd namespace,
+  and its `org.opencontainers.image.revision` label equals
+  `deploy/standalone/IMAGE-REVISION` (override with `STOA_EXPECTED_REVISION`,
+  SSH host with `STOA_NODE_SSH`)
+- `STOA_TRUSTED_PROXIES` can be set to the Running ingress-nginx pod IPs.
+  The ConfigMap in git keeps the sentinel
+  `REPLACE_WITH_INGRESS_NGINX_POD_IPS`. The script resolves the pod IPs,
+  writes those addresses only (never a node `/24`), reads the ConfigMap
+  back, and exits if the sentinel is still there. It then restarts the
+  deployment so the process loads the new value. `envFrom` is not live.
+
+It then sets selector `app: stoa-gateway`, keeps Service port 9080, sets
 `targetPort` 8080, and replaces the `api.gostoa.dev` paths with Prefix `/apis`
 only. Other hosts on the same Ingress are left as they are.
+
+A later `kubectl apply -k deploy/standalone` puts the sentinel back into the
+ConfigMap object. The running process keeps the IPs it started with until
+the next restart. Run `switch.sh` again before that restart if the
+ingress-nginx pod IP changed. Do not put a node `/24` in the list.
 
 The public Ingress is `stoa-api`, not a new Ingress. Switch narrows its
 `api.gostoa.dev` rule to Prefix `/apis` only. `/admin`, `/metrics`, `/mcp`,
@@ -136,9 +154,12 @@ public Ingress. Admin stays on the ClusterIP, which has no Ingress rule:
 http://stoa-gateway-admin.stoa.svc:8080/admin/contracts
 ```
 
-There is no `allowUnauthenticatedREST` flag in this repo. A published route
-whose contract sets `inboundAuth: jwt` (or a `jwt_validation` policy) always
-challenges. A route without that policy is unchanged.
+There is no `allowUnauthenticatedREST` flag in this repo. With
+`STOA_CONTROL_PLANE_URL` unset, `POST /admin/contracts` returns 400 and
+stores no route unless the contract sets `inboundAuth` to `jwt` (or a
+`jwt_validation` policy). A route that was already in memory is removed.
+With a control plane URL set, a contract without that policy is still
+published open.
 
 The process returns 400 for an ambiguous path (`..`, `%2e`, `%2f`, `//`) and
 404 for any other path when `X-Forwarded-For` or `X-Forwarded-Host` is set,
@@ -153,11 +174,20 @@ A missing or wrong bearer returns 401. There is no default token.
 
 ## Resilience
 
-Two replicas, `PodDisruptionBudget` `minAvailable: 1`, rolling update
-`maxUnavailable: 1` / `maxSurge: 0` so the single node does not need a third
-pod. Both pods have `nodeSelector` `worker-3`. Memory request 256Mi, limit
-1Gi. The v1 gateway was OOM-killed at 512Mi. `STOA_MEMORY_LIMIT_MB=768` is
-the in-process backpressure line, under that cgroup limit.
+One replica, no PodDisruptionBudget, `nodeSelector` `worker-3`. Memory
+request 256Mi, limit 1Gi. The v1 gateway was OOM-killed at 512Mi.
+`STOA_MEMORY_LIMIT_MB=768` is the in-process backpressure line, under that
+cgroup limit.
+
+Published routes and their JWT policies live in the process. `POST
+/admin/contracts` reaches whichever pod receives the connection. Two
+replicas would answer about half of the public calls with 404, and one
+pod could still be serving a route the other pod had already replaced.
+More than one replica waits on a later change: the publish has to reach
+every pod, or the routes have to live in shared state. Until then the
+Deployment stays at `replicas: 1`. A restart drops every route until
+stoactl publishes again. A rollout of this single pod has a gap with no
+ready endpoint.
 
 The audit spool is only opened from tests (`AuditSpool::open`). Startup does
 not create it. The only volume is an `emptyDir` at `/tmp` because the root
@@ -173,17 +203,17 @@ in the list: the tunnel never presents a Cloudflare address as the TCP peer.
 
 The ConfigMap ships the sentinel `REPLACE_WITH_INGRESS_NGINX_POD_IPS`. That
 string is not a CIDR, so no peer is trusted and a spoofed
-`X-Forwarded-For` is ignored. Before the switch, replace it with the pod IPs
-(or that node's /24) from:
-
-```bash
-kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx -o wide
-```
+`X-Forwarded-For` is ignored. `switch.sh` replaces it, at switch time, with
+the Running pod IPs from
+`kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx`.
+It writes those IPs only. A node `/24` is refused. If the sentinel is still
+in the ConfigMap after that write, the script exits and leaves Service
+`gateway` on APISIX.
 
 `networkpolicy.yaml` (`stoa-gateway-ingress`) allows TCP 8080 only from
 ingress-nginx pods and from a pod in `stoa` labelled
-`app.kubernetes.io/name=stoa-reconciler`. Confirm that label before Friday.
-A pod in `default` calling the Service should time out.
+`app.kubernetes.io/name=reconciler`. A pod in `default` calling the Service
+should time out.
 
 ## Image
 
@@ -200,7 +230,8 @@ deploy/standalone/build-image.sh
 ```
 
 The script writes `stoa-gateway-standalone.tar`, its sha256, a CycloneDX
-SBOM, and the Trivy HIGH table. It exits if any CRITICAL finding is reported.
+SBOM, the Trivy HIGH table, and `IMAGE-REVISION` (the SHA `switch.sh`
+requires on worker-3). It exits if any CRITICAL finding is reported.
 `deploy/standalone/IMAGE-TRIAGE.md` is where each HIGH is accepted or blocked
 in writing. Import is a separate step, on worker-3, and this script does not
 run it:
@@ -527,8 +558,9 @@ when the process-wide validator has audience checks off. Issuer is
 `{STOA_KEYCLOAK_URL}/realms/{realm}` (`https://auth.gostoa.dev/realms/stoa`
 in the ConfigMap). No header → 401 with `WWW-Authenticate`. Token whose `aud`
 contains the policy audience → proxied. Another client's token, `alg: none`,
-a broken signature, and an expired token → 401. A contract without that
-policy is unchanged.
+a broken signature, and an expired token → 401. With no control-plane URL,
+a contract without inbound auth is rejected (400) and the route is not
+stored. With a control-plane URL, that contract is still published open.
 
 stoactl (stoa-v2 PR #8) is not in this repository. It must send
 `inboundAuth: jwt` and `inboundAuthAudience` on the contract. This gateway

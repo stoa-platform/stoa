@@ -13,5 +13,4 @@ resources:
   - configmap.yaml
   - deployment.yaml
   - service.yaml
-  - pdb.yaml
   - networkpolicy.yaml

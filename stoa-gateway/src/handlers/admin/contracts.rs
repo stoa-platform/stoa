@@ -55,10 +55,19 @@ pub(crate) struct RealBinders {
 impl RealBinders {
     pub(crate) fn from_state(state: &AppState) -> Self {
         Self {
-            rest: RestBinder::with_policies(
-                state.route_registry.clone(),
-                state.policy_registry.clone(),
-            ),
+            rest: {
+                let rest = RestBinder::with_policies(
+                    state.route_registry.clone(),
+                    state.policy_registry.clone(),
+                );
+                // No control plane means this process is the only publisher.
+                // An open route would be reachable on /apis with no token.
+                if state.config.control_plane_configured() {
+                    rest
+                } else {
+                    rest.enforcing_inbound_auth()
+                }
+            },
             mcp: McpBinder::new(state.tool_registry.clone()),
         }
     }
@@ -317,9 +326,20 @@ async fn restore_previous_bindings(
     }
 }
 
-fn binder_failure_response(key: &str, which: &str, _err: &str) -> Response {
-    // Client message is deliberately generic; full error is already in
-    // `tracing::warn!` server-side (see callers).
+fn binder_failure_response(key: &str, which: &str, err: &str) -> Response {
+    // The standalone inbound-auth refusal is a caller error. Other binder
+    // failures stay generic; the detail is already in `tracing::warn!`.
+    if err.contains("no inbound auth") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "status": "rejected",
+                "message": err,
+                "key": key,
+            })),
+        )
+            .into_response();
+    }
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(serde_json::json!({

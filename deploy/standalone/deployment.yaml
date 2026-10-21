@@ -8,7 +8,11 @@ metadata:
     app: stoa-gateway
     app.kubernetes.io/name: stoa-gateway
 spec:
-  replicas: 2
+  # One replica. Routes live in the process. A publish hits one pod, so a
+  # second replica would 404 about half the time and could serve a route
+  # the other pod has not published yet. More than one replica needs a
+  # publish to every pod, or shared state. See the standalone README.
+  replicas: 1
   selector:
     matchLabels:
       app: stoa-gateway

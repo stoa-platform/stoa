@@ -4,7 +4,7 @@
 # whose aud contains stoa-gateway, and 401 again once that token is
 # expired, the issuer does not match, or the caller has no audience mapper.
 #
-# A second contract with no policy stays open (200 without a token).
+# A second contract with no inbound auth is rejected (400) and stays unpublished.
 # There is no allowUnauthenticatedREST flag.
 # POST /admin/contracts with X-Forwarded-For is 404.
 #
@@ -228,9 +228,10 @@ test "$health" = 200
 test "$admin_anon" = 401
 test "$admin_fwd" = 404
 test "$protected_status" = 201
-test "$open_status" = 201
+test "$open_status" = 400
+grep -q 'no inbound auth' /tmp/stoa-jwt-open
 test "$anon" = 401
-test "$open_anon" = 200
+test "$open_anon" = 404
 test "$authed" = 200
 test "$noaud" = 401
 grep -q 'Invalid token audience' /tmp/stoa-jwt-noaud

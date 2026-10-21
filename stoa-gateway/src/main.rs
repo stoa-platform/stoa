@@ -265,6 +265,32 @@ fn init_tracing(config: &Config) {
 async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<GatewayRegistrar>>) {
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
 
+    // Standalone mode: no v1 control plane. Do not dial localhost:8000 at
+    // startup and do not spawn the 60s discovery/refresh loops.
+    if !state.config.control_plane_configured() {
+        info!("STOA_CONTROL_PLANE_URL unset — control-plane discovery and refresh loops are not started");
+        if state.config.native_tools_enabled {
+            let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
+            stoa_gateway::mcp::tools::native_tool::register_native_tools(
+                &state.tool_registry,
+                http_client,
+                state.control_plane.base_url(),
+                state.tool_registry.clone(),
+                Some(state.session_manager.clone()),
+                Some(state.circuit_breakers.clone()),
+                Some(state.prompt_cache.clone()),
+            );
+            info!(
+                tools = state.tool_registry.count(),
+                "Builtin tools registered without control-plane discovery"
+            );
+        } else {
+            info!("Native tools disabled — static proxy tools only, no control-plane refresh");
+            stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
+        }
+        return;
+    }
+
     if state.config.native_tools_enabled {
         info!("Native tools enabled (direct CP API calls)");
         match stoa_tools::discover_and_register(

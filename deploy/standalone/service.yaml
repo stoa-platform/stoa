@@ -1,0 +1,37 @@
+# Public Service. The Ingress selects this Service and only publishes
+# non-admin paths. /admin stays reachable on the Service for in-cluster
+# callers; it is not an Ingress rule.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-gateway
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: stoa-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# In-cluster admin endpoint. No Ingress references this Service.
+# stoactl: http://stoa-gateway-admin.__NAMESPACE__.svc:8080/admin/contracts
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-gateway-admin
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: admin
+spec:
+  type: ClusterIP
+  selector:
+    app: stoa-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -462,6 +462,7 @@ impl Default for Config {
             ip_blocklist: String::new(),
             ip_blocklist_file: None,
             tcp_rate_limit_per_ip: None,
+            trusted_proxies: Vec::new(),
             memory_limit_mb: default_memory_limit_mb(),
             snapshot_enabled: false,
             snapshot_max_count: default_snapshot_max_count(),

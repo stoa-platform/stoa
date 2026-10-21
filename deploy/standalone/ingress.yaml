@@ -1,0 +1,61 @@
+# ingress-nginx. Admin is omitted on purpose: a Prefix `/` rule would
+# publish POST /admin/contracts. Do not add one.
+# TLS terminates at Cloudflare. The ingress speaks HTTP and forwards
+# X-Forwarded-Proto. ssl-redirect stays off so Cloudflare's HTTPS does
+# not loop on an HTTP origin.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoa-gateway
+  namespace: __NAMESPACE__
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: __PUBLIC_HOST__
+      http:
+        paths:
+          - path: /apis
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  name: http
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  name: http
+          - path: /.well-known
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  name: http
+          - path: /oauth
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  name: http
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  name: http
+          - path: /ready
+            pathType: Exact
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  name: http

@@ -121,7 +121,8 @@ pub struct Config {
 
     // === Admin API ===
     /// Bearer token for the admin API (Control Plane → gateway calls).
-    /// Env: STOA_ADMIN_API_TOKEN. If not set, admin API returns 403.
+    /// Env: STOA_ADMIN_API_TOKEN. Unset or empty disables the admin API (503).
+    /// A missing or wrong bearer returns 401. There is no default token.
     #[serde(default)]
     pub admin_api_token: Option<String>,
 
@@ -870,6 +871,15 @@ pub struct Config {
     #[serde(default)]
     pub tcp_rate_limit_per_ip: Option<f64>,
 
+    /// CIDRs (or single IPs) allowed to supply `X-Forwarded-For` and
+    /// `X-Forwarded-Proto`. The TCP peer must match before those headers
+    /// affect client IP or scheme. Empty keeps the historical leftmost
+    /// `X-Forwarded-For` behaviour and does not trust `X-Forwarded-Proto`.
+    /// Env: STOA_TRUSTED_PROXIES (comma-separated CIDRs or a JSON array).
+    /// Distinct from `STOA_MTLS__TRUSTED_PROXIES`, which only gates mTLS headers.
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub trusted_proxies: Vec<String>,
+
     // === Memory Budget (CAB-1829) ===
     /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
     /// Env: STOA_MEMORY_LIMIT_MB
@@ -1119,6 +1129,7 @@ impl fmt::Debug for Config {
             .field("ip_blocklist", &self.ip_blocklist)
             .field("ip_blocklist_file", &self.ip_blocklist_file)
             .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
+            .field("trusted_proxies", &self.trusted_proxies)
             .field("memory_limit_mb", &self.memory_limit_mb)
             .field("snapshot_enabled", &self.snapshot_enabled)
             .field("snapshot_max_count", &self.snapshot_max_count)

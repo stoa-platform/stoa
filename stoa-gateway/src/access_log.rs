@@ -130,6 +130,18 @@ pub async fn access_log_middleware(mut request: Request, next: Next) -> Response
     // (inner layer) hasn't set RequestTraceContext yet when access_log (outer layer) starts.
     let trace_id = resolve_trace_id(&response);
     let span_id = resolve_span_id(&response);
+    let forwarded = response
+        .extensions()
+        .get::<crate::proxy::forwarded::ForwardedClient>()
+        .cloned();
+    let client_ip = forwarded
+        .as_ref()
+        .map(|fwd| fwd.client_ip.as_str())
+        .unwrap_or("-");
+    let scheme = forwarded
+        .as_ref()
+        .map(|fwd| fwd.scheme.as_str())
+        .unwrap_or("http");
 
     tracing::info!(
         target: "access_log",
@@ -140,6 +152,8 @@ pub async fn access_log_middleware(mut request: Request, next: Next) -> Response
         tenant_id = %tenant_id,
         consumer_id = %consumer_id,
         user_agent = %user_agent,
+        client_ip = %client_ip,
+        scheme = %scheme,
         trace_id = %trace_id,
         span_id = %span_id,
         "service.name" = %SERVICE_NAME,

@@ -196,6 +196,7 @@ expression: "Config::default()"
   "ip_blocklist": "",
   "ip_blocklist_file": null,
   "tcp_rate_limit_per_ip": null,
+  "trusted_proxies": [],
   "memory_limit_mb": 512,
   "snapshot_enabled": false,
   "snapshot_max_count": 100,

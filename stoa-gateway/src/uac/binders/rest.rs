@@ -138,8 +138,7 @@ impl RestBinder {
 
     fn sync_jwt_policy(&self, contract: &UacContractSpec, routes: &[ApiRoute]) {
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
-        self.policy_registry
-            .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
+        self.remove_contract_jwt_policies(&contract_key);
         if contract.requires_jwt_validation() {
             self.upsert_jwt_policies(contract, routes);
         }
@@ -173,17 +172,41 @@ fn jwt_policy_prefix(contract_key: &str) -> String {
     format!("jwt:uac:{contract_key}:")
 }
 
+/// `jwt:uac:{contract_key}:{index}` with `{index}` made only of digits.
+///
+/// `starts_with` is not enough: contract `demo:a` would also match
+/// `jwt:uac:demo:a:b:0`. The remainder after the key must be the endpoint index.
+fn jwt_policy_belongs_to_contract(policy_id: &str, contract_key: &str) -> bool {
+    let Some(rest) = policy_id.strip_prefix(&jwt_policy_prefix(contract_key)) else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit())
+}
+
 impl RestBinder {
+    fn remove_contract_jwt_policies(&self, contract_key: &str) {
+        let stale: Vec<String> = self
+            .policy_registry
+            .list()
+            .into_iter()
+            .filter(|policy| jwt_policy_belongs_to_contract(&policy.id, contract_key))
+            .map(|policy| policy.id)
+            .collect();
+        for id in stale {
+            self.policy_registry.remove(&id);
+        }
+    }
+
     fn prune_stale_jwt_policies(&self, contract_key: &str, routes: &[ApiRoute]) {
         let live: std::collections::HashSet<&str> =
             routes.iter().map(|route| route.id.as_str()).collect();
-        let prefix = jwt_policy_prefix(contract_key);
         let stale: Vec<String> = self
             .policy_registry
             .list()
             .into_iter()
             .filter(|policy| {
-                policy.id.starts_with(&prefix) && !live.contains(policy.api_id.as_str())
+                jwt_policy_belongs_to_contract(&policy.id, contract_key)
+                    && !live.contains(policy.api_id.as_str())
             })
             .map(|policy| policy.id)
             .collect();
@@ -203,8 +226,7 @@ impl ProtocolBinder for RestBinder {
             // Keep the route unpublished. Drop anything already stored so a
             // republish without inbound auth cannot leave the previous route open.
             self.route_registry.remove_by_contract(&contract_key);
-            self.policy_registry
-                .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
+            self.remove_contract_jwt_policies(&contract_key);
             return Err(
                 "standalone mode refuses a route with no inbound auth; set inboundAuth to jwt"
                     .to_string(),
@@ -219,8 +241,7 @@ impl ProtocolBinder for RestBinder {
                 .filter(|audience| !audience.is_empty());
             if route_audience.is_none() && self.global_jwt_audience.is_empty() {
                 self.route_registry.remove_by_contract(&contract_key);
-                self.policy_registry
-                    .remove_by_id_prefix(&jwt_policy_prefix(&contract_key));
+                self.remove_contract_jwt_policies(&contract_key);
                 return Err(
                     "standalone mode refuses a JWT route with no audience; set STOA_JWT_AUDIENCE or inboundAuthAudience"
                         .to_string(),
@@ -259,8 +280,7 @@ impl ProtocolBinder for RestBinder {
     async fn unbind(&self, contract_key: &str) -> Result<usize, String> {
         // Routes first, so unbind cannot leave a route with its policy already gone.
         let removed = self.route_registry.remove_by_contract(contract_key);
-        self.policy_registry
-            .remove_by_id_prefix(&jwt_policy_prefix(contract_key));
+        self.remove_contract_jwt_policies(contract_key);
 
         tracing::info!(
             contract = %contract_key,
@@ -588,5 +608,118 @@ mod tests {
             .config
             .get("audience")
             .is_none());
+    }
+
+    fn ping_contract(tenant: &str, name: &str) -> UacContractSpec {
+        let mut spec = UacContractSpec::new(name, tenant);
+        spec.status = ContractStatus::Published;
+        spec.inbound_auth = Some("jwt".into());
+        spec.inbound_auth_audience = Some("stoa-gateway".into());
+        spec.endpoints = vec![UacEndpoint {
+            path: "/ping".to_string(),
+            methods: vec!["GET".to_string()],
+            backend_url: "http://127.0.0.1:9".to_string(),
+            method: None,
+            description: None,
+            operation_id: Some(format!("{name}-ping")),
+            input_schema: None,
+            output_schema: None,
+            llm: None,
+        }];
+        spec
+    }
+
+    #[test]
+    fn jwt_policy_match_is_the_contract_key_not_a_prefix() {
+        assert!(jwt_policy_belongs_to_contract("jwt:uac:demo:a:0", "demo:a"));
+        assert!(!jwt_policy_belongs_to_contract(
+            "jwt:uac:demo:a:b:0",
+            "demo:a"
+        ));
+        assert!(jwt_policy_belongs_to_contract(
+            "jwt:uac:demo:a:b:0",
+            "demo:a:b"
+        ));
+    }
+
+    #[tokio::test]
+    async fn contract_name_prefix_does_not_purge_the_other_jwt_policy() {
+        let routes = Arc::new(RouteRegistry::new());
+        let policies = Arc::new(PolicyRegistry::new());
+        let binder = RestBinder::with_policies(routes.clone(), policies.clone());
+        binder
+            .bind(&ping_contract("demo", "a:b"))
+            .await
+            .expect("long");
+        binder
+            .bind(&ping_contract("demo", "a"))
+            .await
+            .expect("short");
+        binder
+            .bind(&ping_contract("demo", "a"))
+            .await
+            .expect("republish short");
+
+        assert_eq!(policies.list_for_api("uac:demo:a:b:0").len(), 1);
+        assert_eq!(policies.list_for_api("uac:demo:a:0").len(), 1);
+        assert!(routes.get("uac:demo:a:b:0").is_some());
+
+        binder.unbind("demo:a").await.expect("unbind short");
+        assert!(routes.get("uac:demo:a:0").is_none());
+        assert!(policies.list_for_api("uac:demo:a:0").is_empty());
+        assert!(routes.get("uac:demo:a:b:0").is_some());
+        assert_eq!(policies.list_for_api("uac:demo:a:b:0").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn overlapped_contract_stays_401_without_a_token() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        use crate::config::Config;
+        use crate::proxy::dynamic_proxy;
+        use crate::state::AppState;
+
+        let state = AppState::new(Config::default());
+        let binder =
+            RestBinder::with_policies(state.route_registry.clone(), state.policy_registry.clone());
+        binder
+            .bind(&ping_contract("demo", "a:b"))
+            .await
+            .expect("long");
+        binder
+            .bind(&ping_contract("demo", "a"))
+            .await
+            .expect("short");
+        binder
+            .bind(&ping_contract("demo", "a"))
+            .await
+            .expect("republish short");
+
+        let app = axum::Router::new()
+            .fallback(dynamic_proxy)
+            .with_state(state);
+        let long = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/apis/demo/a:b/ping")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(long.status(), StatusCode::UNAUTHORIZED);
+        let short = app
+            .oneshot(
+                Request::builder()
+                    .uri("/apis/demo/a/ping")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(short.status(), StatusCode::UNAUTHORIZED);
     }
 }

@@ -7,17 +7,16 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/stoa-platform/stoa/stargazers"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
-  <a href="https://discord.gg/j8tHSSes"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://github.com/stoa-platform/stoa"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
   <a href="https://gostoa.dev">Website</a> ·
   <a href="https://docs.gostoa.dev">Docs</a> ·
-  <a href="https://github.com/stoa-platform/stoa/discussions">Discussions</a> ·
-  <a href="https://discord.gg/j8tHSSes">Discord</a> ·
-  <a href="https://status.gostoa.dev">Status</a>
+  <a href="https://github.com/stoa-platform/stoa/discussions">Discussions</a>
 </p>
+
+> **Self-hosted only.** The public STOA platform — console, developer portal, MCP gateway, and authentication on `*.gostoa.dev` — was shut down on 23 May 2026. There is no hosted signup. Run STOA on your own infrastructure with the [quick start](#quick-start) or the [Helm chart](#kubernetes). The [website](https://gostoa.dev) and the [documentation](https://docs.gostoa.dev) are still online; they are not a control plane.
 
 ---
 
@@ -53,7 +52,7 @@ No gateway replacement. No duplicated API catalog. No untracked agent traffic.
 
 ## Quick start
 
-Run the full local stack with Docker Compose.
+Run the full stack on your own machine with Docker Compose. This is the supported way to evaluate STOA. It does not connect to a hosted service.
 
 ```bash
 # Clone
@@ -121,7 +120,7 @@ STOA does not force a big-bang gateway migration. Existing REST traffic continue
 
 ### Open source and self-hostable
 
-The core platform is Apache 2.0. Run it locally, in Kubernetes, on-premise, or in a hybrid setup. Fork it, inspect it, extend it, or contribute back.
+The core platform is Apache 2.0. Run it locally, on Kubernetes, or on-premise. Fork it, inspect it, extend it, or contribute back.
 
 ### Built for European and regulated environments
 
@@ -214,7 +213,7 @@ After seeding the demo stack, try these flows:
 | Console UI | React, TypeScript, Vite | Admin experience for platform teams |
 | Developer Portal | React, TypeScript, Vite | Self-service API discovery and onboarding |
 | STOA Gateway | Rust, Tokio, axum | API proxy, MCP bridge, auth, quotas, audit |
-| `stoactl` | Go, Cobra | CLI and GitOps-style operations |
+| `stoactl` | Go, Cobra | CLI and GitOps-style operations, in [`stoa-go/`](stoa-go/). The standalone [`stoactl`](https://github.com/stoa-platform/stoactl) repository is archived. |
 | Keycloak | OIDC, SAML, LDAP | Identity, federation, realms, authentication |
 | Kubernetes Operator | Python, Kopf | CRD controller for MCP resources |
 | Helm Chart | Helm 3 | Kubernetes installation and production deployment |
@@ -260,7 +259,7 @@ helm install stoa-platform ./charts/stoa-platform \
   -f charts/stoa-platform/values.yaml
 ```
 
-See the deployment documentation for production and hybrid environments.
+See [`charts/stoa-platform/README.md`](charts/stoa-platform/README.md). A production install is self-hosted on your cluster. STOA does not provide a control plane to attach to.
 
 ---
 
@@ -296,7 +295,7 @@ Great places to contribute:
 - **Docs and tutorials** — quick starts, migration guides, architecture notes, real-world examples.
 - **Developer experience** — `stoactl`, local setup, test ergonomics, CI, Helm values.
 
-Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the community on Discord.
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or use [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions).
 
 <a href="https://github.com/stoa-platform/stoa/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stoa-platform/stoa" alt="Contributors" />
@@ -306,26 +305,40 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the comm
 
 ## Documentation and community
 
+Install from this repository. The sites below publish the website and the reference documentation; they do not offer a hosted STOA account.
+
 | Resource | Link |
 | --- | --- |
 | Documentation | <https://docs.gostoa.dev> |
 | Website | <https://gostoa.dev> |
 | GitHub Discussions | <https://github.com/stoa-platform/stoa/discussions> |
-| Discord | <https://discord.gg/j8tHSSes> |
-| Status | <https://status.gostoa.dev> |
 | Support | [`SUPPORT.md`](SUPPORT.md) |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md) |
+| Quick start in this repository | [Docker Compose](#quick-start) · [`deploy/docker-compose/README.md`](deploy/docker-compose/README.md) |
 
 ---
 
 ## Related repositories
 
+### Active
+
 | Repository | Purpose |
 | --- | --- |
 | [`stoa-docs`](https://github.com/stoa-platform/stoa-docs) | Documentation site, ADRs, guides, API reference |
-| [`stoa-web`](https://github.com/stoa-platform/stoa-web) | Public website |
-| [`stoa-quickstart`](https://github.com/stoa-platform/stoa-quickstart) | Self-hosted quick start |
-| [`stoactl`](https://github.com/stoa-platform/stoactl) | CLI for API management workflows |
+| [`stoa-web`](https://github.com/stoa-platform/stoa-web) | Public website (`gostoa.dev`) |
+| [`stoa-quickstart`](https://github.com/stoa-platform/stoa-quickstart) | Self-hosted Docker Compose quick start |
+| [`homebrew-tap`](https://github.com/stoa-platform/homebrew-tap) | Homebrew formulae. The published formula still packages the archived `stoactl` CLI. The CLI maintained here is [`stoa-go/`](stoa-go/). |
+| [`status`](https://github.com/stoa-platform/status) | Source of the former public status page. `status.gostoa.dev` no longer responds. |
+
+### Archived
+
+Do not send patches to these repositories. The code lives in this one.
+
+| Repository | Replacement in this repository |
+| --- | --- |
+| [`stoactl`](https://github.com/stoa-platform/stoactl) | Archived on GitHub. CLI and connect agent: [`stoa-go/`](stoa-go/). |
+| `stoa-helm` | Archived. No longer resolvable on the public organization page. Charts and CRDs: [`charts/`](charts/). |
+| `control-plane` | Archived. No longer resolvable on the public organization page. Control plane: [`control-plane-api/`](control-plane-api/) and [`control-plane-ui/`](control-plane-ui/). |
 
 ---
 
@@ -334,5 +347,5 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the comm
 STOA is released under the [Apache License 2.0](LICENSE).
 
 <p align="center">
-  <em>Built by <a href="https://cabingenierie.com">CAB Ingénierie</a> — Paris, France.</em>
+  <em>Built by CAB Ingénierie — France.</em>
 </p>

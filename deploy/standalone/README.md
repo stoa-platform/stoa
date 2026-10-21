@@ -199,8 +199,34 @@ pod could still be serving a route the other pod had already replaced.
 More than one replica waits on a later change: the publish has to reach
 every pod, or the routes have to live in shared state. Until then the
 Deployment stays at `replicas: 1`. A restart drops every route until
-stoactl publishes again. A rollout of this single pod has a gap with no
+stoactl publishes again, and `GET /apis/<tenant>/<name>/...` is 404 until
+that publish lands. A rollout of this single pod has a gap with no
 ready endpoint.
+
+## Republish after a restart
+
+Routes and JWT policies are process memory. There is no disk replay.
+stoactl (stoa-v2, not in this repository) is the publisher: the same
+`POST /admin/contracts` as the first publish, with the admin bearer,
+`inboundAuth: jwt`, and an audience. The target is the ClusterIP, not
+the public Ingress:
+
+```text
+http://stoa-gateway-admin.stoa.svc:8080/admin/contracts
+```
+
+`deploy/standalone/republish-contracts.sh` prints that call for each
+contract JSON file. It does not run kubectl or ssh. `--post` sends the
+body only when `STOA_ADMIN_API_TOKEN` and `STOA_GATEWAY_ADMIN_URL` are
+set. A file without `inboundAuth` is refused before any request.
+`POST /admin/apis` and `DELETE /admin/policies` return 403 in standalone:
+the first stores a trusted route with no JWT policy, the second removes
+a policy and leaves the route open.
+
+```bash
+deploy/standalone/republish-contracts.sh contracts/*.json
+deploy/standalone/republish-contracts.sh --self-test
+```
 
 The audit spool is only opened from tests (`AuditSpool::open`). Startup does
 not create it. The only volume is an `emptyDir` at `/tmp` because the root
@@ -248,9 +274,10 @@ The script writes `stoa-gateway-standalone.tar`, its sha256, a CycloneDX
 SBOM that must list Rust crates (including `quick-xml`), the Trivy HIGH
 table, and `IMAGE-REVISION` (the SHA `switch.sh` requires on worker-3). It
 exits if any CRITICAL finding is reported. `deploy/standalone/IMAGE-TRIAGE.md`
-is where each HIGH is accepted or blocked in writing. `quick-xml` HIGH is
-accepted only while no SOAP contract is published (`STOA_SOAP_PROXY_ENABLED`
-and `STOA_SOAP_BRIDGE_ENABLED` stay false). Import is a separate step, on
+is where each HIGH is accepted or blocked in writing. `quick-xml` 0.39.4
+HIGH is accepted only while no SOAP contract is published
+(`STOA_SOAP_PROXY_ENABLED` and `STOA_SOAP_BRIDGE_ENABLED` stay false).
+>= 0.41.0 avant tout câblage SOAP. Import is a separate step, on
 worker-3, and this script does not run it:
 
 ```bash
@@ -585,8 +612,9 @@ stored. With a control-plane URL, that contract is still published open.
 stoactl (stoa-v2 PR #8) is not in this repository. It must send
 `inboundAuth: jwt` and `inboundAuthAudience` on the contract. This gateway
 does not read `allowUnauthenticatedREST` or `allowWidenedPrefix`. After a
-restart the in-memory routes are gone (404) until that same call is published
-again. There is no disk replay.
+restart the in-memory routes are gone and `GET /apis/...` is 404 until
+that same call is published again. `deploy/standalone/republish-contracts.sh`
+prints the stoactl POST. There is no disk replay.
 
 The proof sets `STOA_JWT_AUDIENCE=stoa-gateway` and adds a Keycloak
 `oidc-audience-mapper` with `included.custom.audience=stoa-gateway` on

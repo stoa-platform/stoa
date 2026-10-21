@@ -15,7 +15,7 @@ The same tar with unfixed vulnerabilities included has 1 CRITICAL and 70 HIGH ro
 
 | Vulnerability | Packages | Disposition |
 | --- | --- | --- |
-| RUSTSEC-2026-0194, RUSTSEC-2026-0195 HIGH (fixed in quick-xml 0.41.0; not emitted by Trivy 0.58.1) | quick-xml 0.39.4 | DoS in XML attribute checks and `NsReader`. The crate is linked for the SOAP module. `STOA_SOAP_PROXY_ENABLED` and `STOA_SOAP_BRIDGE_ENABLED` stay false, and no SOAP contract is published on this switch. Accept only while that stays true. Publishing a SOAP contract voids this row; bump to `quick-xml` >= 0.41.0 first. |
+| RUSTSEC-2026-0194, RUSTSEC-2026-0195 HIGH (fixed in quick-xml 0.41.0; not emitted by Trivy 0.58.1) | quick-xml 0.39.4 | DoS in XML attribute checks and `NsReader`. The crate is linked for the SOAP module. `STOA_SOAP_PROXY_ENABLED` and `STOA_SOAP_BRIDGE_ENABLED` stay false, and no SOAP contract is published on this switch. Accept only while that stays true. >= 0.41.0 avant tout câblage SOAP. |
 | CVE-2023-45853 CRITICAL, will_not_fix | zlib1g | MiniZip `zipOpenNewFileInZip4_64` overflow. The gateway does not open zip archives. Accept. |
 | CVE-2026-84782 HIGH, affected | libssl3, openssl | DTLS handshake retransmission disclosure. The process uses TLS, not DTLS. No bookworm fix. Accept for Friday and rebuild when Debian ships a fix. |
 | CVE-2026-12064, CVE-2026-6276, CVE-2026-8286, CVE-2026-8458, CVE-2026-8927 HIGH | curl, libcurl4 | Only the image `HEALTHCHECK` runs curl, against `http://localhost:8080/health`. No SFTP, cookies, or proxy auth. No fixed version. Accept. |

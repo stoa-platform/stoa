@@ -20,6 +20,19 @@ pub async fn upsert_api(
     State(state): State<AppState>,
     Json(route): Json<ApiRoute>,
 ) -> impl IntoResponse {
+    // POST /admin/apis stores a trusted route and applies no JWT policy.
+    // Standalone publishes only through POST /admin/contracts.
+    if !state.config.control_plane_configured() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "status": "rejected",
+                "message": "standalone mode refuses POST /admin/apis; publish with POST /admin/contracts"
+            })),
+        )
+            .into_response();
+    }
+
     let deployment_id = Uuid::new_v4();
     let api_id = route.id.clone();
     let tenant = route.tenant_id.clone();

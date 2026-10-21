@@ -5,7 +5,9 @@
 #   valid token    -> 200
 # Exits non-zero otherwise. Does not print the admin token or the client secret.
 # The run is bounded by VERIFY_TIMEOUT seconds (default 120). GNU timeout is
-# used when it exists; macOS uses perl alarm. SPDX-License-Identifier: Apache-2.0
+# used when it exists. Otherwise a Perl supervisor puts this script in its
+# own session and, at the deadline, sends TERM then KILL to that process group.
+# SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
 
 VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-120}"
@@ -19,7 +21,37 @@ if [[ "${VERIFY_BOUNDED:-}" != "1" ]]; then
     exec gtimeout --signal=TERM "${VERIFY_TIMEOUT}" "$0" "$@"
   fi
   if command -v perl >/dev/null 2>&1; then
-    exec perl -e 'alarm shift; exec @ARGV' "${VERIFY_TIMEOUT}" "$0" "$@"
+    # setsid so the child and every process it starts share one group.
+    # At the deadline, TERM then KILL that group. A blocked docker command is not waited out.
+    exec perl -e '
+      use POSIX qw(setsid WNOHANG);
+      use Time::HiRes qw(time sleep);
+      my $limit = shift @ARGV;
+      my $pid = fork();
+      die "fork: $!\n" unless defined $pid;
+      if ($pid == 0) {
+        setsid() or die "setsid: $!\n";
+        exec @ARGV or die "exec: $!\n";
+      }
+      my $deadline = time() + $limit;
+      while (1) {
+        my $reaped = waitpid($pid, WNOHANG);
+        if ($reaped == $pid) {
+          my $status = $?;
+          exit(($status & 127) ? 128 + ($status & 127) : $status >> 8);
+        }
+        die "waitpid: $!\n" if $reaped == -1;
+        if (time() >= $deadline) {
+          print STDERR "verify: exceeded ${limit}s\n";
+          kill "TERM", -$pid;
+          sleep 0.2;
+          kill "KILL", -$pid;
+          waitpid($pid, 0);
+          exit 124;
+        }
+        sleep 0.05;
+      }
+    ' -- "${VERIFY_TIMEOUT}" "$0" "$@"
   fi
   echo "verify: need timeout, gtimeout, or perl to bound the run" >&2
   exit 1
@@ -50,8 +82,14 @@ on_expire() {
   exit 1
 }
 
-trap on_expire TERM ALRM
+trap on_expire TERM
 trap 'status=$?; if [[ "$status" != 0 && "$expired" != 1 ]]; then dump_logs; fi' EXIT
+
+# Test hook: a foreground child that ignores TERM. Only a group KILL stops it.
+if [[ "${VERIFY_BOUND_FIXTURE:-}" == "1" ]]; then
+  perl -e '$SIG{TERM} = "IGNORE"; sleep 30; exit 0'
+  exit 0
+fi
 
 echo "control plane $(curl -fsS --max-time 10 "$CONTROL_PLANE_URL/health" >/dev/null && echo ok || echo down)"
 cp_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CONTROL_PLANE_URL/health" || true)"

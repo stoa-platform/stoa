@@ -3,6 +3,8 @@
 # quick-xml 0.39.4 stays. >= 0.41.0 avant tout câblage SOAP.
 
 [advisories]
+# Informational (unmaintained, unsound) is not one of the 12 vulnerability exceptions.
+informational_warnings = []
 ignore = [
     # Linked. SOAP module only. Proxy and bridge stay off. No SOAP contract.
     "RUSTSEC-2026-0194",

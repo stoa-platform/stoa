@@ -290,10 +290,10 @@ The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
 base is still a tag, not a digest. The commitment is to move it to
 `gcr.io/distroless/cc` pinned by digest. `stoa-gateway/.dockerignore` excludes `target/`
 so the context is not the local debug build. The image built for Friday is
-revision `fe1e5a3271d47f9788482c972f1a692e2350927c` (`IMAGE-REVISION`).
-Tar sha256 `71cb54076b9e7336031b9ab3363eb10ee41e01217f94fbf63a8099a86bcfcd95`.
+revision `6d23399e4d1a1f4c54a03122640c0469c8b4829c` (`IMAGE-REVISION`).
+Tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031`.
 A later docs commit does not change that binary. The label equals that
-revision; `git diff fe1e5a3271d47f9788482c972f1a692e2350927c HEAD -- stoa-gateway/`
+revision; `git diff 6d23399e4d1a1f4c54a03122640c0469c8b4829c HEAD -- stoa-gateway/`
 is empty. An earlier local image id
 `sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
 does not contain audience enforcement, the path guard, or the admin proxy deny.

@@ -55,7 +55,10 @@ pub(crate) struct RealBinders {
 impl RealBinders {
     pub(crate) fn from_state(state: &AppState) -> Self {
         Self {
-            rest: RestBinder::new(state.route_registry.clone()),
+            rest: RestBinder::with_policies(
+                state.route_registry.clone(),
+                state.policy_registry.clone(),
+            ),
             mcp: McpBinder::new(state.tool_registry.clone()),
         }
     }

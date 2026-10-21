@@ -17,6 +17,8 @@ use rand::rngs::SmallRng;
 use rand::RngExt;
 use std::cell::RefCell;
 
+use crate::auth::jwt::{JwtError, JwtValidator, ValidatedToken};
+use crate::auth::middleware::AuthenticatedUser;
 use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::proxy::hop_detection;
 use crate::resilience::RetryConfig;
@@ -145,7 +147,7 @@ fn record_proxy_status(code: u16) {
     upstream.pool_reuse = tracing::field::Empty,
     upstream.active_conns = tracing::field::Empty,
 ))]
-pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
+pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<Body>) -> Response {
     // Record inbound auth type on the span for observability (by_auth_type breakdown).
     // Detection order: DPoP > Bearer > API key > mTLS > none.
     // DPoP checked first because DPoP requests also carry Authorization: DPoP <token>.
@@ -175,8 +177,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     };
     tracing::Span::current().record("auth_type", inbound_auth);
 
-    let raw_path = request.uri().path();
-    let path = urlencoding::decode(raw_path).unwrap_or(std::borrow::Cow::Borrowed(raw_path));
+    // Own the decoded path before JWT enforcement mutably borrows the request.
+    let path = {
+        let raw_path = request.uri().path();
+        urlencoding::decode(raw_path)
+            .unwrap_or(std::borrow::Cow::Borrowed(raw_path))
+            .into_owned()
+    };
     let method = request.method().clone();
 
     // Find matching route (path is percent-decoded so spaces in API names match)
@@ -202,6 +209,17 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
             "Method not allowed for this API",
         )
             .into_response();
+    }
+
+    // A contract `jwt_validation` policy (from inboundAuth, or posted to
+    // /admin/policies for this route) fail-closes the REST proxy. Routes
+    // with no such policy stay unchanged. Classification `auth-jwt` is not
+    // this check — that list is advisory and log-only.
+    if published_route_requires_jwt(&state, &route) {
+        if let Err(response) = require_published_route_jwt(&state, &mut request).await {
+            record_proxy_status(401);
+            return response;
+        }
     }
 
     // Soft-mode classification enforcement (CAB-1299)
@@ -983,6 +1001,102 @@ fn inject_traceparent(
 ///
 /// Returns the `user_id` from the JWT-populated `AuthenticatedUser` extension,
 /// or `"anonymous"` when no authenticated user is present (CAB-1389).
+fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRoute) -> bool {
+    let keys = [
+        Some(route.id.as_str()),
+        route.contract_key.as_deref(),
+        Some(route.path_prefix.as_str()),
+    ];
+    keys.into_iter().flatten().any(|api_id| {
+        state
+            .policy_registry
+            .list_for_api(api_id)
+            .iter()
+            .any(|policy| crate::uac::is_jwt_validation_policy(&policy.policy_type))
+    })
+}
+
+/// Validate the caller JWT before proxying a route that has `jwt_validation`.
+///
+/// Missing validator, missing bearer, and invalid tokens all return 401 with
+/// `WWW-Authenticate`. A successful validation inserts [`AuthenticatedUser`].
+async fn require_published_route_jwt(
+    state: &AppState,
+    request: &mut Request<Body>,
+) -> Result<(), Response> {
+    let header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    let Some(header) = header else {
+        return Err(bearer_unauthorized(
+            "invalid_request",
+            "Missing Authorization header",
+        ));
+    };
+
+    let Some(validator) = state.jwt_validator.clone() else {
+        warn!("jwt_validation policy present but no Keycloak issuer is configured");
+        return Err(bearer_unauthorized(
+            "invalid_token",
+            "JWT validation is not configured",
+        ));
+    };
+
+    let token = match JwtValidator::extract_token(header) {
+        Ok(token) => token,
+        Err(_) => {
+            return Err(bearer_unauthorized(
+                "invalid_token",
+                "Malformed Authorization header",
+            ));
+        }
+    };
+
+    let claims = match validator.validate(token).await {
+        Ok(claims) => claims,
+        Err(error) => {
+            warn!(error = %error, "JWT validation failed on published route");
+            return Err(bearer_unauthorized(
+                "invalid_token",
+                jwt_failure_message(&error),
+            ));
+        }
+    };
+
+    let validated = ValidatedToken::new(token.to_string(), claims);
+    request
+        .extensions_mut()
+        .insert(AuthenticatedUser::from_token(validated));
+    Ok(())
+}
+
+fn jwt_failure_message(error: &JwtError) -> &'static str {
+    match error {
+        JwtError::Expired => "Token expired",
+        JwtError::InvalidIssuer { .. } => "Invalid token issuer",
+        _ => "Invalid token",
+    }
+}
+
+fn bearer_unauthorized(error: &str, message: &str) -> Response {
+    let mut response = (
+        StatusCode::UNAUTHORIZED,
+        axum::Json(serde_json::json!({
+            "error": "unauthorized",
+            "message": message,
+        })),
+    )
+        .into_response();
+    let value = format!("Bearer realm=\"stoa\", error=\"{error}\"");
+    if let Ok(header) = HeaderValue::from_str(&value) {
+        response
+            .headers_mut()
+            .insert(axum::http::header::WWW_AUTHENTICATE, header);
+    }
+    response
+}
+
 fn extract_user_id(extensions: &axum::http::Extensions) -> String {
     extensions
         .get::<crate::auth::middleware::AuthenticatedUser>()
@@ -1005,6 +1119,95 @@ mod tests {
     use axum::http::{Method, StatusCode};
 
     use super::*;
+
+    fn ping_route() -> crate::routes::ApiRoute {
+        crate::routes::ApiRoute {
+            id: "uac:demo:live-api:0".into(),
+            name: "ping".into(),
+            tenant_id: "demo".into(),
+            path_prefix: "/apis/demo/live-api/ping".into(),
+            backend_url: "http://127.0.0.1:9".into(),
+            methods: vec!["GET".into()],
+            spec_hash: "1".into(),
+            activated: true,
+            classification: None,
+            contract_key: Some("demo:live-api".into()),
+            upstream_http_version: Default::default(),
+            upstreams: vec![],
+            load_balancer: Default::default(),
+            trusted_backend: true,
+        }
+    }
+
+    fn jwt_policy(api_id: &str) -> crate::routes::PolicyEntry {
+        crate::routes::PolicyEntry {
+            id: format!("jwt:{api_id}"),
+            name: "jwt_validation".into(),
+            policy_type: "jwt_validation".into(),
+            config: serde_json::json!({}),
+            priority: 0,
+            api_id: api_id.into(),
+        }
+    }
+
+    async fn call(state: AppState, token: Option<&str>) -> axum::response::Response {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let app = axum::Router::new()
+            .fallback(dynamic_proxy)
+            .with_state(state);
+        let mut builder = Request::builder().uri("/apis/demo/live-api/ping");
+        if let Some(token) = token {
+            builder = builder.header("authorization", format!("Bearer {token}"));
+        }
+        app.oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn route_without_jwt_policy_is_not_challenged() {
+        let state = AppState::new(crate::config::Config::default());
+        state.route_registry.upsert(ping_route());
+        let response = call(state, None).await;
+        assert_ne!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn jwt_policy_missing_token_is_401_with_www_authenticate() {
+        let state = AppState::new(crate::config::Config::default());
+        let route = ping_route();
+        state.policy_registry.upsert(jwt_policy(&route.id));
+        state.route_registry.upsert(route);
+        let response = call(state, None).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let header = response
+            .headers()
+            .get(axum::http::header::WWW_AUTHENTICATE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(header.contains("error=\"invalid_request\""));
+    }
+
+    #[tokio::test]
+    async fn jwt_policy_without_validator_fail_closes() {
+        let state = AppState::new(crate::config::Config::default());
+        let route = ping_route();
+        state.policy_registry.upsert(jwt_policy(&route.id));
+        state.route_registry.upsert(route);
+        let response = call(state, Some("not-a-jwt")).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let header = response
+            .headers()
+            .get(axum::http::header::WWW_AUTHENTICATE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(header.contains("error=\"invalid_token\""));
+    }
 
     #[test]
     fn test_is_retryable_status() {

@@ -74,6 +74,21 @@ impl PolicyRegistry {
     pub fn count(&self) -> usize {
         self.policies.read().len()
     }
+
+    /// Remove every policy whose id starts with `prefix`.
+    pub fn remove_by_id_prefix(&self, prefix: &str) -> usize {
+        let mut policies = self.policies.write();
+        let ids: Vec<String> = policies
+            .keys()
+            .filter(|id| id.starts_with(prefix))
+            .cloned()
+            .collect();
+        let removed = ids.len();
+        for id in ids {
+            policies.remove(&id);
+        }
+        removed
+    }
 }
 
 #[cfg(test)]

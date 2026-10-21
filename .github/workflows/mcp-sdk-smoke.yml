@@ -91,6 +91,7 @@ jobs:
       - name: Boot gateway and wait for /health
         run: |
           STOA_PORT=8080 \
+          STOA_JWT_AUDIENCE=stoa-gateway \
           STOA_JWT_VALIDATION_DISABLED=true \
           STOA_OTEL_ENDPOINT='' \
           ./target/release/stoa-gateway >"${RUNNER_TEMP}/gateway.log" 2>&1 &

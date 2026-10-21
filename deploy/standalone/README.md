@@ -286,12 +286,15 @@ docker save stoa-gateway:standalone | ssh worker-3 'sudo k3s ctr -n k8s.io image
 ```
 
 The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
-(`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). Base image
-tags are not digest-pinned. `stoa-gateway/.dockerignore` excludes `target/`
+(`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). The runtime
+base is still a tag, not a digest. The commitment is to move it to
+`gcr.io/distroless/cc` pinned by digest. `stoa-gateway/.dockerignore` excludes `target/`
 so the context is not the local debug build. The image built for Friday is
-revision `9a6823f31eeb5a8f1a110c0f469d5433701348d7` (`IMAGE-REVISION`).
-Tar sha256 `7d770d925c2c9cb47ad501da1e0b8aebf48b839135ef8302749bb9ed5c0ac478`.
-A later docs commit does not change that binary. An earlier local image id
+revision `fe1e5a3271d47f9788482c972f1a692e2350927c` (`IMAGE-REVISION`).
+Tar sha256 `71cb54076b9e7336031b9ab3363eb10ee41e01217f94fbf63a8099a86bcfcd95`.
+A later docs commit does not change that binary. The label equals that
+revision; `git diff fe1e5a3271d47f9788482c972f1a692e2350927c HEAD -- stoa-gateway/`
+is empty. An earlier local image id
 `sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
 does not contain audience enforcement, the path guard, or the admin proxy deny.
 Do not import it.

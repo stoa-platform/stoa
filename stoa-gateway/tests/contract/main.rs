@@ -12,6 +12,8 @@ mod discovery;
 mod errors;
 mod health;
 mod initialize_schema;
+#[path = "../common/jwt.rs"]
+mod jwt;
 mod mcp_compliance;
 mod mcp_public_methods;
 mod oauth;

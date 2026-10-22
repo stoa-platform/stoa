@@ -212,7 +212,15 @@ pub fn build_router(state: AppState) -> Router {
                 // Routes /proxy/<backend>/... to upstream with credential injection.
                 // Separate from /mcp/* and /apis/* (dynamic proxy routes).
                 // Uses catch-all since axum doesn't allow {param}/{*rest}.
-                .route("/proxy/*path", axum::routing::any(api_proxy_handler))
+                .route(
+                    "/proxy/*path",
+                    axum::routing::any(api_proxy_handler).route_layer(
+                        axum::middleware::from_fn_with_state(
+                            state.clone(),
+                            auth::middleware::api_proxy_jwt_required,
+                        ),
+                    ),
+                )
                 // `/admin/api-proxy/backends` lives inside `admin_router` (see above)
                 // so it inherits the admin_auth middleware — GW-1 P0-2.
                 // CAB-1713/1714: HEGEMON dispatch endpoints
@@ -260,7 +268,15 @@ pub fn build_router(state: AppState) -> Router {
                 )
                 // A2A (Agent-to-Agent) Protocol — Google A2A spec (CAB-1754)
                 .route("/.well-known/agent.json", get(a2a::discovery::agent_card))
-                .route("/a2a", post(a2a::handlers::a2a_handler))
+                .route(
+                    "/a2a",
+                    post(a2a::handlers::a2a_handler).route_layer(
+                        axum::middleware::from_fn_with_state(
+                            state.clone(),
+                            auth::middleware::jwt_required,
+                        ),
+                    ),
+                )
                 .route("/a2a/agents", get(a2a::discovery::list_agents))
                 // WebSocket Proxy (CAB-1758): bidirectional relay with governance
                 .route("/ws/:route_id", get(ws::proxy::ws_proxy_upgrade))

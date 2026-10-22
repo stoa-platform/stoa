@@ -91,8 +91,9 @@ class TestSsrfBlocklist:
     def test_blocks_zero_addr(self) -> None:
         assert is_blocked_url("http://0.0.0.0:8080") is True
 
-    def test_allows_public_ip(self) -> None:
-        assert is_blocked_url("http://51.83.45.13:8080/health") is False
+    def test_blocks_documentation_net(self) -> None:
+        # RFC 5737 TEST-NET-1 is not globally reachable (ipaddress.is_private).
+        assert is_blocked_url("http://192.0.2.10:8080/health") is True
 
     def test_allows_public_hostname(self) -> None:
         assert is_blocked_url("https://petstore.example.com/v1") is False

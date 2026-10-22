@@ -153,4 +153,63 @@ jobs:
         env:
           STOA_GATEWAY_URL: https://mcp.gostoa.dev/mcp/sse
           STOA_SMOKE_CALL_TOOL: '0'
-        run: .venv-mcp/bin/python stoa-gateway/tests/e2e/mcp_sdk_smoke.py
+          MCP_SMOKE_PROBE_URL: ${{ vars.MCP_SMOKE_PROBE_URL }}
+        run: |
+          set -euo pipefail
+          : "${MCP_SMOKE_PROBE_URL:?Configure MCP_SMOKE_PROBE_URL with the validated public MCP endpoint}"
+          case "$MCP_SMOKE_PROBE_URL" in
+            https://*) ;;
+            *)
+              echo "MCP_SMOKE_PROBE_URL must start with https://" >&2
+              exit 1
+              ;;
+          esac
+          case "$MCP_SMOKE_PROBE_URL" in
+            *[[:space:]]*)
+              echo "MCP_SMOKE_PROBE_URL must not contain whitespace" >&2
+              exit 1
+              ;;
+          esac
+          probe_rest="${MCP_SMOKE_PROBE_URL#https://}"
+          probe_authority="${probe_rest%%/*}"
+          probe_authority="${probe_authority%%\?*}"
+          probe_authority="${probe_authority%%#*}"
+          case "$probe_authority" in
+            *@*) probe_authority="${probe_authority##*@}" ;;
+          esac
+          case "$probe_authority" in
+            ""|\[*)
+              echo "MCP_SMOKE_PROBE_URL host must be gostoa.dev or a subdomain of gostoa.dev" >&2
+              exit 1
+              ;;
+          esac
+          probe_host="$probe_authority"
+          case "$probe_host" in
+            *:*)
+              probe_port="${probe_host##*:}"
+              probe_host="${probe_host%%:*}"
+              case "$probe_port" in
+                ""|*[!0-9]*)
+                  echo "MCP_SMOKE_PROBE_URL host must be gostoa.dev or a subdomain of gostoa.dev" >&2
+                  exit 1
+                  ;;
+              esac
+              ;;
+          esac
+          probe_host="$(printf '%s' "$probe_host" | tr '[:upper:]' '[:lower:]')"
+          probe_host="${probe_host%.}"
+          case "$probe_host" in
+            gostoa.dev|*.gostoa.dev) ;;
+            *)
+              echo "MCP_SMOKE_PROBE_URL host must be gostoa.dev or a subdomain of gostoa.dev" >&2
+              exit 1
+              ;;
+          esac
+          case "$probe_host" in
+            *[!a-z0-9.-]*|.*|*.|*..*|-*|*-|*.-*|*-.*)
+              echo "MCP_SMOKE_PROBE_URL host must be gostoa.dev or a subdomain of gostoa.dev" >&2
+              exit 1
+              ;;
+          esac
+          STOA_GATEWAY_URL="$MCP_SMOKE_PROBE_URL" \
+            .venv-mcp/bin/python stoa-gateway/tests/e2e/mcp_sdk_smoke.py

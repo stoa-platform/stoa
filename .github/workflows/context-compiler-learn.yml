@@ -1,5 +1,7 @@
 # Context Compiler — Post-Merge Learning
 # Runs after each merge to main. Compares predicted vs actual changes to improve impact DB accuracy.
+# DB updates are committed on bot/context-compiler-learn and proposed as a pull request into main.
+# The workflow does not push main and does not merge that pull request.
 # Kill-switch: set DISABLE_CONTEXT_COMPILER=true in repo variables to disable.
 
 name: Context Compiler — Post-Merge Learning
@@ -20,16 +22,19 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   learn:
     if: vars.DISABLE_CONTEXT_COMPILER != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2 # Need HEAD~1 for diff
+          # Full history so the bot branch can merge main and fast-forward
+          # without a force-push. post-change-learn.sh still diffs HEAD~1.
+          fetch-depth: 0
 
       - name: Unlock git-crypt
         run: |
@@ -80,15 +85,34 @@ jobs:
             --commit HEAD \
             $TICKET_ARG
 
-      - name: Commit DB updates
+      - name: Open pull request with DB updates
         if: steps.prereq.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TICKET_REF: ${{ steps.ticket.outputs.ref || 'unknown' }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_SERVER: ${{ github.server_url }}
         run: |
           git config user.name "STOA AI Factory"
           git config user.email "factory@gostoa.dev"
-          git add docs/stoa-impact.db docs/learning/ || true
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: post-change learning for ${{ steps.ticket.outputs.ref || 'unknown' }} [skip ci]"
-            git push || echo "::warning::Push failed — DB update will be picked up next run"
-          fi
+          cat > /tmp/commit-msg.txt << EOF
+          chore: post-change learning for ${TICKET_REF} [skip ci]
+          EOF
+          cat > /tmp/pr-body.md << EOF
+          ## Summary
+          Post-merge learning for \`${TICKET_REF}\` at \`${SOURCE_SHA}\`.
+
+          Run: ${SOURCE_SERVER}/${SOURCE_REPO}/actions/runs/${SOURCE_RUN_ID}
+
+          CI opens this pull request and does not merge it.
+          Squash-merge keeps \`[skip ci]\` so this workflow does not run again for the same update.
+          EOF
+          bash .github/scripts/open-or-update-pr.sh \
+            --branch bot/context-compiler-learn \
+            --path docs/stoa-impact.db \
+            --path docs/learning \
+            --message-file /tmp/commit-msg.txt \
+            --title "chore: post-change learning [skip ci]" \
+            --body-file /tmp/pr-body.md

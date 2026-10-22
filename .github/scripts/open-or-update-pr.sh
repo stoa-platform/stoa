@@ -121,7 +121,12 @@ if [[ "$FORGE" == "github" ]]; then
     echo "::error::GH_TOKEN is required to open the pull request" >&2
     exit 1
   fi
-  export GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}"
+  # Resolve the environment fallback explicitly: neither value is a literal.
+  # Keep the literal-default secret scanners active for this entire script.
+  if [[ -z "${GH_TOKEN:-}" ]]; then
+    GH_TOKEN="$GITHUB_TOKEN"
+  fi
+  export GH_TOKEN
   repo_args=()
   [[ -n "$REPO" ]] && repo_args=(--repo "$REPO")
   existing="$(gh pr list "${repo_args[@]}" --head "$selected" --base main --state open --json number --jq '.[0].number')"

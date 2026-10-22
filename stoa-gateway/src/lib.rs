@@ -212,9 +212,12 @@ pub fn build_router(state: AppState) -> Router {
                 // Routes /proxy/<backend>/... to upstream with credential injection.
                 // Separate from /mcp/* and /apis/* (dynamic proxy routes).
                 // Uses catch-all since axum doesn't allow {param}/{*rest}.
+                // `any()` registers a fallback, not a method route. axum 0.7
+                // `route_layer` panics in that case ("no-op"); `layer` covers
+                // the fallback and enforces the JWT guard.
                 .route(
                     "/proxy/*path",
-                    axum::routing::any(api_proxy_handler).route_layer(
+                    axum::routing::any(api_proxy_handler).layer(
                         axum::middleware::from_fn_with_state(
                             state.clone(),
                             auth::middleware::api_proxy_jwt_required,
@@ -270,12 +273,10 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/.well-known/agent.json", get(a2a::discovery::agent_card))
                 .route(
                     "/a2a",
-                    post(a2a::handlers::a2a_handler).route_layer(
-                        axum::middleware::from_fn_with_state(
-                            state.clone(),
-                            auth::middleware::jwt_required,
-                        ),
-                    ),
+                    post(a2a::handlers::a2a_handler).layer(axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        auth::middleware::jwt_required,
+                    )),
                 )
                 .route("/a2a/agents", get(a2a::discovery::list_agents))
                 // WebSocket Proxy (CAB-1758): bidirectional relay with governance

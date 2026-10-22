@@ -8,8 +8,9 @@
 use insta::assert_json_snapshot;
 
 use crate::common::TestApp;
-use crate::jwt::{self, BAD_SIGNATURE_TOKEN, EXPIRED_TOKEN, VALID_TOKEN};
+use crate::jwt::{self, bad_signature_token, expired_token, valid_token};
 
+/// Discovery routes (`GET /.well-known/agent.json`, `GET /a2a/agents`) stay public.
 fn a2a_app() -> TestApp {
     let config = stoa_gateway::config::Config {
         a2a_enabled: true,
@@ -49,7 +50,7 @@ async fn test_a2a_tasks_send_shape() {
         .post_json_with_bearer(
             "/a2a",
             &serde_json::to_string(&body).unwrap(),
-            VALID_TOKEN,
+            valid_token(),
         )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -83,7 +84,7 @@ async fn test_a2a_tasks_get_not_found_shape() {
         .post_json_with_bearer(
             "/a2a",
             &serde_json::to_string(&body).unwrap(),
-            VALID_TOKEN,
+            valid_token(),
         )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -109,7 +110,7 @@ async fn test_a2a_method_not_found_shape() {
         .post_json_with_bearer(
             "/a2a",
             &serde_json::to_string(&body).unwrap(),
-            VALID_TOKEN,
+            valid_token(),
         )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -152,7 +153,7 @@ async fn test_a2a_tool_bridge_not_found_shape() {
         .post_json_with_bearer(
             "/a2a",
             &serde_json::to_string(&body).unwrap(),
-            VALID_TOKEN,
+            valid_token(),
         )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -175,7 +176,7 @@ async fn test_a2a_protocol_version() {
 async fn test_a2a_rejects_invalid_credentials() {
     let oidc = jwt::oidc_server().await;
     let app = TestApp::with_config(jwt::config(&oidc));
-    for token in [BAD_SIGNATURE_TOKEN, EXPIRED_TOKEN] {
+    for token in [bad_signature_token(), expired_token()] {
         let (status, _) = app.post_json_with_bearer("/a2a", "{}", token).await;
         assert_eq!(status, axum::http::StatusCode::UNAUTHORIZED);
     }

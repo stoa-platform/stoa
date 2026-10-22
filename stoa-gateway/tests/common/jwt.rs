@@ -1,21 +1,102 @@
-//! Test-only signed JWTs (expire in 2100) and local OIDC/JWKS fixtures.
-//! Generated with a disposable RSA key; no deployment credentials are used.
+//! Test-only JWTs signed at runtime with a generated RSA key.
+//! No deployment credentials and no committed token strings.
 
+use std::sync::OnceLock;
+
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use jsonwebtoken::{encode, EncodingKey, Header};
+use rsa::pkcs8::{EncodePrivateKey, LineEnding};
+use rsa::traits::PublicKeyParts;
+use rsa::RsaPrivateKey;
+use serde::Serialize;
 use serde_json::json;
 use stoa_gateway::config::Config;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-pub const VALID_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGgtcmVncmVzc2lvbiJ9.eyJzdWIiOiJhdXRoLXJlZ3Jlc3Npb24tdXNlciIsImlzcyI6Imh0dHBzOi8vaXNzdWVyLnRlc3QvcmVhbG1zL3N0b2EiLCJhdWQiOiJzdG9hLW1jcC1nYXRld2F5IiwiaWF0IjoxLCJleHAiOjQxMDI0NDQ4MDB9.dr4oBeLrR60D76XYMu_rNrqW9F6KvAVaKOcVAly6OoRaFA4bVQV06oYlHTo9aJQnCAv1fKDOOLiPFU9J9PdLH6LY2gqVpu-rqb0EXBxmVJVm7QH9lnMua1hzyy9VtlEBNXrzjw6C3ijUTJHW8i9by5tmn9rDTnI9FXRlq1qXowxcECaI4nXkw2f87AW62s_tzAeCOgMAT3j14GLvR8tjJH8PY1ZE4eqUoXe-Hc3hwEuBrpE2HWHRH3Agc-ZVxk_f1oYJN8KjDnSxP39nUDwkoVBbuO90MMz-ru4Gw9itOK29m3BUA5Nm5dQCJv43Ne_auv5DzJp6RmO_JedbZ9l2Kg";
-pub const EXPIRED_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGgtcmVncmVzc2lvbiJ9.eyJzdWIiOiJhdXRoLXJlZ3Jlc3Npb24tdXNlciIsImlzcyI6Imh0dHBzOi8vaXNzdWVyLnRlc3QvcmVhbG1zL3N0b2EiLCJhdWQiOiJzdG9hLW1jcC1nYXRld2F5IiwiaWF0IjoxLCJleHAiOjF9.YbHE0va2P7zYm7MwQhMAqRpVZpnBA7x1GT_CE8RX6RKNm_lNbIFdG073NoleOZDCF3KhrfREM4Z1ktdTlYeaewYDT9QrDbDODbMLOWQ3Eox1f5coxLXaVdOfLJJj3sluckJny_KlQHt60-jNE9--jSWTP7oElhOJaVZyR2MwvooJ0i-gqa6ltV-dC7W2esuLz7K8rcS-YkZRVX7-syGT6g8igV8JJcSJRpr963A6UKNZsSsesoT27r_dJtB3zmCCXefhQETjPoracdQECStitA6zz0eJ7-p_t_EgBdZ7z-YkFFTwDXx916un0vS3SuwJEG6EpLeg7wIhYvyM3rQDNQ";
-pub const BAD_SIGNATURE_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGgtcmVncmVzc2lvbiJ9.eyJzdWIiOiJhdXRoLXJlZ3Jlc3Npb24tdXNlciIsImlzcyI6Imh0dHBzOi8vaXNzdWVyLnRlc3QvcmVhbG1zL3N0b2EiLCJhdWQiOiJzdG9hLW1jcC1nYXRld2F5IiwiaWF0IjoxLCJleHAiOjQxMDI0NDQ4MDB9.Ar4oBeLrR60D76XYMu_rNrqW9F6KvAVaKOcVAly6OoRaFA4bVQV06oYlHTo9aJQnCAv1fKDOOLiPFU9J9PdLH6LY2gqVpu-rqb0EXBxmVJVm7QH9lnMua1hzyy9VtlEBNXrzjw6C3ijUTJHW8i9by5tmn9rDTnI9FXRlq1qXowxcECaI4nXkw2f87AW62s_tzAeCOgMAT3j14GLvR8tjJH8PY1ZE4eqUoXe-Hc3hwEuBrpE2HWHRH3Agc-ZVxk_f1oYJN8KjDnSxP39nUDwkoVBbuO90MMz-ru4Gw9itOK29m3BUA5Nm5dQCJv43Ne_auv5DzJp6RmO_JedbZ9l2Kg";
+const ISSUER: &str = "https://issuer.test/realms/stoa";
+const AUDIENCE: &str = "stoa-mcp-gateway";
+const KEY_ID: &str = "auth-regression";
+
+struct TestKey {
+    pem: String,
+    n: String,
+    e: String,
+}
+
+fn test_key() -> &'static TestKey {
+    static KEY: OnceLock<TestKey> = OnceLock::new();
+    KEY.get_or_init(|| {
+        let mut rng = rsa::rand_core::OsRng;
+        let key = RsaPrivateKey::new(&mut rng, 2048).expect("generate test RSA key");
+        let pem = key
+            .to_pkcs8_pem(LineEnding::LF)
+            .expect("encode test RSA key")
+            .to_string();
+        let n = URL_SAFE_NO_PAD.encode(key.n().to_bytes_be());
+        let e = URL_SAFE_NO_PAD.encode(key.e().to_bytes_be());
+        TestKey { pem, n, e }
+    })
+}
+
+#[derive(Serialize)]
+struct FixtureClaims {
+    sub: &'static str,
+    iss: &'static str,
+    aud: &'static str,
+    iat: i64,
+    exp: i64,
+}
+
+fn sign(exp: i64) -> String {
+    let mut header = Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = Some(KEY_ID.to_string());
+    let key = test_key();
+    encode(
+        &header,
+        &FixtureClaims {
+            sub: "auth-regression-user",
+            iss: ISSUER,
+            aud: AUDIENCE,
+            iat: 1,
+            exp,
+        },
+        &EncodingKey::from_rsa_pem(key.pem.as_bytes()).expect("jwt encoding key"),
+    )
+    .expect("sign test JWT")
+}
+
+pub fn valid_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN.get_or_init(|| sign(4_102_444_800)).as_str()
+}
+
+pub fn expired_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN.get_or_init(|| sign(1)).as_str()
+}
+
+/// Same claims as [`valid_token`], with the signature segment altered.
+pub fn bad_signature_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN
+        .get_or_init(|| {
+            let mut token = valid_token().to_string();
+            let last = token.pop().expect("signed token");
+            token.push(if last == 'A' { 'B' } else { 'A' });
+            token
+        })
+        .as_str()
+}
 
 pub async fn oidc_server() -> MockServer {
     let server = MockServer::start().await;
+    let key = test_key();
     Mock::given(method("GET"))
         .and(path("/realms/stoa/.well-known/openid-configuration"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "issuer": "https://issuer.test/realms/stoa",
+            "issuer": ISSUER,
             "authorization_endpoint": "https://issuer.test/authorize",
             "token_endpoint": "https://issuer.test/token",
             "jwks_uri": "https://issuer.test/jwks"
@@ -25,9 +106,14 @@ pub async fn oidc_server() -> MockServer {
     Mock::given(method("GET"))
         .and(path("/jwks"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "keys": [{"kty": "RSA", "kid": "auth-regression", "alg": "RS256",
-                "use": "sig", "e": "AQAB",
-                "n": "z6_z7s71fKYAaad8mHC7llWMOm2FASVIE8ubZzYk4KcGXIFTxQ74G3Ik4AorIN4LzC2VwyaXwCfe9B7X7h5sT8lEPybM-OvHdYiSO7Q7uPrfPaOYVjCrsYLK1FaVnVJYujzJ41UV2wEz0FBBRTzXSf1kK7yp1Z04XckPHPgECMmoJGFV61TNTu4wkYaNTBUycqga--Az4xMrtJM0uouKuR_p1yOqiUiODmtxs_dBdX4XJjRQtkQ5e3_mkZBWBzYaGiAu1QS11mdj19lQigZ2xOudW8kaMZ55f27657dnssq4zV55eX-czVsO6-G2bLupmShVeAsesOCAl6rPPXCeCw"}]
+            "keys": [{
+                "kty": "RSA",
+                "kid": KEY_ID,
+                "alg": "RS256",
+                "use": "sig",
+                "e": key.e,
+                "n": key.n
+            }]
         })))
         .mount(&server)
         .await;

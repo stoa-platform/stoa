@@ -9,7 +9,7 @@ use tower::ServiceExt;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::jwt::{self, BAD_SIGNATURE_TOKEN, EXPIRED_TOKEN, VALID_TOKEN};
+use crate::jwt::{self, bad_signature_token, expired_token, valid_token};
 use stoa_gateway::config::Config;
 use stoa_gateway::state::AppState;
 
@@ -43,7 +43,7 @@ fn assert_unauthorized(response: Response) {
 }
 
 #[tokio::test]
-async fn a2a_requires_valid_jwt_before_dispatch() {
+async fn regression_a2a_requires_jwt() {
     let oidc = jwt::oidc_server().await;
     let state = AppState::new(jwt::config(&oidc));
     let router = stoa_gateway::build_router(state.clone());
@@ -55,13 +55,13 @@ async fn a2a_requires_valid_jwt_before_dispatch() {
     for token in [
         None,
         Some("invalid"),
-        Some(BAD_SIGNATURE_TOKEN),
-        Some(EXPIRED_TOKEN),
+        Some(bad_signature_token()),
+        Some(expired_token()),
     ] {
         assert_unauthorized(request(&router, "/a2a", token, &body).await);
         assert!(registry.get_task("auth-task").unwrap().is_none());
     }
-    let response = request(&router, "/a2a", Some(VALID_TOKEN), &body).await;
+    let response = request(&router, "/a2a", Some(valid_token()), &body).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert!(registry.get_task("auth-task").unwrap().is_some());
     for method in ["tasks/get", "tasks/cancel"] {
@@ -73,7 +73,7 @@ async fn a2a_requires_valid_jwt_before_dispatch() {
 }
 
 #[tokio::test]
-async fn proxy_defaults_to_requiring_valid_jwt_before_forwarding() {
+async fn regression_proxy_requires_jwt_by_default() {
     let oidc = jwt::oidc_server().await;
     let upstream = MockServer::start().await;
     Mock::given(method("POST"))
@@ -89,20 +89,20 @@ async fn proxy_defaults_to_requiring_valid_jwt_before_forwarding() {
     for token in [
         None,
         Some("invalid"),
-        Some(BAD_SIGNATURE_TOKEN),
-        Some(EXPIRED_TOKEN),
+        Some(bad_signature_token()),
+        Some(expired_token()),
     ] {
         assert_unauthorized(request(&router, "/proxy/test/echo", token, "{}").await);
     }
     assert!(upstream.received_requests().await.unwrap().is_empty());
-    let response = request(&router, "/proxy/test/echo", Some(VALID_TOKEN), "{}").await;
+    let response = request(&router, "/proxy/test/echo", Some(valid_token()), "{}").await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), 1024).await.unwrap();
     assert_eq!(body.as_ref(), b"upstream reached");
 }
 
 #[tokio::test]
-async fn protected_routes_fail_closed_without_validator_or_keys() {
+async fn regression_protected_routes_fail_closed() {
     let upstream = MockServer::start().await;
     let unavailable_oidc = MockServer::start().await;
     let anonymous_config = Config {
@@ -114,7 +114,7 @@ async fn protected_routes_fail_closed_without_validator_or_keys() {
         let state = AppState::new(config);
         let router = stoa_gateway::build_router(state);
         for uri in ["/a2a", "/proxy/test/echo"] {
-            for token in [None, Some("invalid"), Some(VALID_TOKEN)] {
+            for token in [None, Some("invalid"), Some(valid_token())] {
                 assert_unauthorized(request(&router, uri, token, "{}").await);
             }
         }
@@ -123,7 +123,7 @@ async fn protected_routes_fail_closed_without_validator_or_keys() {
 }
 
 #[tokio::test]
-async fn proxy_explicitly_public_stays_open_with_or_without_validator() {
+async fn regression_proxy_public_when_require_auth_false() {
     let oidc = jwt::oidc_server().await;
     let upstream = MockServer::start().await;
     Mock::given(method("POST"))
@@ -136,7 +136,12 @@ async fn proxy_explicitly_public_stays_open_with_or_without_validator() {
         enable_proxy(&mut config, &upstream);
         config.api_proxy.require_auth = false;
         let router = stoa_gateway::build_router(AppState::new(config));
-        for token in [None, Some("invalid"), Some(EXPIRED_TOKEN), Some(VALID_TOKEN)] {
+        for token in [
+            None,
+            Some("invalid"),
+            Some(expired_token()),
+            Some(valid_token()),
+        ] {
             let response = request(&router, "/proxy/test/echo", token, "{}").await;
             assert_eq!(response.status(), StatusCode::OK);
         }

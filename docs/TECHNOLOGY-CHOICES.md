@@ -32,7 +32,7 @@ This document explains the technology choices for the STOA stack and why each co
 | **Ordering** | ✅ Per partition | ❌ Not guaranteed | ✅ Per queue |
 | **Persistence** | ✅ Disk by default | Optional | Optional |
 | **K8s-native** | ✅ (Strimzi, Redpanda) | ✅ (Operator) | ❌ Legacy |
-| **License** | Apache 2.0 | MPL 2.0 | Proprietary SAG |
+| **License** | Apache 2.0 (Apache Kafka) ; BSL 1.1, not open source (Redpanda Community) | MPL 2.0 | Proprietary SAG |
 | **Event sourcing** | ✅ Designed for | ❌ Not suitable | ❌ Not suitable |
 
 ### Why Kafka/Redpanda?
@@ -41,7 +41,7 @@ This document explains the technology choices for the STOA stack and why each co
 2. **Replay** — State can be reconstructed from events
 3. **Auditability** — Permanent log for compliance
 4. **Decoupling** — Independent producers and consumers
-5. **Redpanda** — Kafka-compatible, no JVM, simpler to operate
+5. **Redpanda** — Kafka-compatible, no JVM, simpler to operate. Note: Redpanda Community is licensed under BSL 1.1 (not open source); STOA reference environments are moving to Apache Kafka (KRaft).
 
 ### Why not RabbitMQ?
 

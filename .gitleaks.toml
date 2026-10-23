@@ -217,6 +217,9 @@ allowlist = { paths = [
   '''scripts/traffic/.*''',
   '''scripts/demo/.*''',
   '''deploy/local/.*''',
+  # CI publisher reads a token from the environment. The historical line uses
+  # a shell fallback, which this rule reads as a literal default.
+  '''\.github/scripts/open-or-update-pr\.sh''',
 ]}
 
 # Hardcoded client secrets in scripts

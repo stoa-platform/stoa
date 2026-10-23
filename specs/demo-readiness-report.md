@@ -2,7 +2,7 @@
 
 > **Date**: 2026-04-24
 > **Scope**: Évaluation du chemin démo minimal (`demo-scope.md` §2) versus état réel du monorepo.
-> **Méthode**: inspection statique repo + revue `REWRITE-PLAN.md` actifs (GW-2, GO-2) + mapping endpoints cp-api et gateway.
+> **Méthode**: inspection statique repo + revue `stoa-gateway/REWRITE-PLAN.md` (GW-2) et `stoa-go/docs/connect-architecture.md` (GO-2) + mapping endpoints cp-api et gateway.
 > **Script de référence**: `scripts/demo-smoke-test.sh`
 
 ## 1. Résumé exécutif (10 lignes)

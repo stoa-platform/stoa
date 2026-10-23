@@ -91,7 +91,7 @@ func (s *policySyncer) apply(ctx context.Context, adminURL string, p PendingPoli
 
 // remove routes a disabled PendingPolicy. Only oidc_auth_server has a
 // dedicated Delete on OIDCAdapter (DeleteStrategy / DeleteScope don't
-// exist on the interface — see REWRITE-BUGS.md C.1). All other types
+// exist on the interface — see docs/connect-known-issues.md C.1). All other types
 // fall through to the adapter's generic RemovePolicy, which is expected
 // to handle or no-op based on the policyType hint.
 func (s *policySyncer) remove(ctx context.Context, adminURL string, p PendingPolicy) error {

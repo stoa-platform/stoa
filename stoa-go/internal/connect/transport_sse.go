@@ -31,7 +31,7 @@ const (
 	// sseScannerMaxBuf is the hard cap for a single SSE event payload.
 	// Chosen to accommodate large OpenAPI specs inlined in desired_state.
 	// Default bufio.MaxScanTokenSize (64 KB) was insufficient — see
-	// REWRITE-BUGS.md F.6.
+	// docs/connect-known-issues.md F.6.
 	sseScannerMaxBuf = 1 << 20 // 1 MB
 )
 

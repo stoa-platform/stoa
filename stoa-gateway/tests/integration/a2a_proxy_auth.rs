@@ -204,3 +204,21 @@ async fn proxy_upstream_request_headers() {
     }
     assert_eq!(headers.get("x-request-id").unwrap(), "req-1");
 }
+
+#[test]
+fn bad_signature_fixture_differs_only_by_signature() {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+
+    let valid: Vec<&str> = valid_token().split('.').collect();
+    let altered: Vec<&str> = bad_signature_token().split('.').collect();
+    assert_eq!(valid.len(), 3);
+    assert_eq!(altered.len(), 3);
+    assert_eq!(altered[0], valid[0], "same header and kid");
+    assert_eq!(altered[1], valid[1], "same claims");
+    assert_ne!(altered[2], valid[2]);
+    let signature = URL_SAFE_NO_PAD
+        .decode(altered[2])
+        .expect("signature segment is valid base64url");
+    assert_eq!(signature.len(), 256, "RS256 2048-bit signature");
+}

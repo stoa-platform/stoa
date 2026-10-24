@@ -25,19 +25,28 @@ struct TestKey {
     e: String,
 }
 
+fn generate_key() -> TestKey {
+    let mut rng = rsa::rand_core::OsRng;
+    let key = RsaPrivateKey::new(&mut rng, 2048).expect("generate test RSA key");
+    let pem = key
+        .to_pkcs8_pem(LineEnding::LF)
+        .expect("encode test RSA key")
+        .to_string();
+    let n = URL_SAFE_NO_PAD.encode(key.n().to_bytes_be());
+    let e = URL_SAFE_NO_PAD.encode(key.e().to_bytes_be());
+    TestKey { pem, n, e }
+}
+
+/// Key published by the mock JWKS.
 fn test_key() -> &'static TestKey {
     static KEY: OnceLock<TestKey> = OnceLock::new();
-    KEY.get_or_init(|| {
-        let mut rng = rsa::rand_core::OsRng;
-        let key = RsaPrivateKey::new(&mut rng, 2048).expect("generate test RSA key");
-        let pem = key
-            .to_pkcs8_pem(LineEnding::LF)
-            .expect("encode test RSA key")
-            .to_string();
-        let n = URL_SAFE_NO_PAD.encode(key.n().to_bytes_be());
-        let e = URL_SAFE_NO_PAD.encode(key.e().to_bytes_be());
-        TestKey { pem, n, e }
-    })
+    KEY.get_or_init(generate_key)
+}
+
+/// Second key, never published, used under the same `kid`.
+fn other_key() -> &'static TestKey {
+    static KEY: OnceLock<TestKey> = OnceLock::new();
+    KEY.get_or_init(generate_key)
 }
 
 #[derive(Serialize)]
@@ -50,9 +59,12 @@ struct FixtureClaims {
 }
 
 fn sign(exp: i64) -> String {
+    sign_with(test_key(), exp)
+}
+
+fn sign_with(key: &TestKey, exp: i64) -> String {
     let mut header = Header::new(jsonwebtoken::Algorithm::RS256);
     header.kid = Some(KEY_ID.to_string());
-    let key = test_key();
     encode(
         &header,
         &FixtureClaims {
@@ -77,16 +89,13 @@ pub fn expired_token() -> &'static str {
     TOKEN.get_or_init(|| sign(1)).as_str()
 }
 
-/// Same claims as [`valid_token`], with the signature segment altered.
+/// Same header and claims as [`valid_token`], signed with a key that the
+/// mock JWKS does not publish. The signature is well-formed, so a rejection
+/// comes from signature verification on every run.
 pub fn bad_signature_token() -> &'static str {
     static TOKEN: OnceLock<String> = OnceLock::new();
     TOKEN
-        .get_or_init(|| {
-            let mut token = valid_token().to_string();
-            let last = token.pop().expect("signed token");
-            token.push(if last == 'A' { 'B' } else { 'A' });
-            token
-        })
+        .get_or_init(|| sign_with(other_key(), 4_102_444_800))
         .as_str()
 }
 

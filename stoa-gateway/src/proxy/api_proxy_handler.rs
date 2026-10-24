@@ -260,25 +260,10 @@ pub async fn api_proxy_handler(
     // Set timeout from backend config
     upstream_req = upstream_req.timeout(Duration::from_secs(backend.config.timeout_secs));
 
-    // Copy relevant headers (skip hop-by-hop headers)
-    let skip_headers = [
-        "host",
-        "connection",
-        "transfer-encoding",
-        "te",
-        "trailer",
-        "upgrade",
-        "keep-alive",
-        "proxy-authorization",
-        "proxy-authenticate",
-    ];
-
+    // Copy relevant headers. Gateway-level credentials stay at the gateway;
+    // the backend credential is injected below.
     for (name, value) in request.headers() {
-        let name_lower = name.as_str().to_lowercase();
-        if !skip_headers.contains(&name_lower.as_str())
-            && !name_lower.starts_with("x-stoa-")
-            && name_lower != backend.config.auth_header.to_lowercase()
-        {
+        if is_forwarded_request_header(name.as_str(), &backend.config.auth_header) {
             if let Ok(v) = reqwest::header::HeaderValue::from_bytes(value.as_bytes()) {
                 upstream_req = upstream_req.header(name.as_str(), v);
             }
@@ -407,7 +392,7 @@ pub async fn api_proxy_handler(
     // Copy response headers (strip hop-by-hop)
     for (name, value) in upstream_resp.headers() {
         let name_lower = name.as_str().to_lowercase();
-        if !skip_headers.contains(&name_lower.as_str()) {
+        if !HOP_BY_HOP_HEADERS.contains(&name_lower.as_str()) {
             if let Ok(v) = HeaderValue::from_bytes(value.as_bytes()) {
                 response_builder = response_builder.header(name.as_str(), v);
             }
@@ -501,9 +486,51 @@ pub async fn list_api_proxy_backends(State(state): State<AppState>) -> Response 
         .into_response()
 }
 
+/// Hop-by-hop headers, never copied in either direction.
+const HOP_BY_HOP_HEADERS: [&str; 9] = [
+    "host",
+    "connection",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+    "keep-alive",
+    "proxy-authorization",
+    "proxy-authenticate",
+];
+
+/// Caller credentials for the gateway itself, not relayed to a backend.
+const GATEWAY_CREDENTIAL_HEADERS: [&str; 3] = ["authorization", "cookie", "dpop"];
+
+/// Whether a caller request header is relayed to the backend.
+///
+/// Hop-by-hop headers, gateway credentials, `x-stoa-*` headers and the backend's own credential header are also
+/// dropped, since the gateway sets them itself.
+fn is_forwarded_request_header(name: &str, backend_auth_header: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    !HOP_BY_HOP_HEADERS.contains(&name.as_str())
+        && !GATEWAY_CREDENTIAL_HEADERS.contains(&name.as_str())
+        && !name.starts_with("x-stoa-")
+        && !name.eq_ignore_ascii_case(backend_auth_header)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_forwarded_request_headers() {
+        for name in ["Authorization", "authorization", "Cookie", "DPoP", "dpop"] {
+            assert!(!is_forwarded_request_header(name, "X-API-Key"), "{name}");
+        }
+        for name in ["Host", "Connection", "Proxy-Authorization", "X-Stoa-Tenant"] {
+            assert!(!is_forwarded_request_header(name, "X-API-Key"), "{name}");
+        }
+        assert!(!is_forwarded_request_header("x-api-key", "X-API-Key"));
+        for name in ["Content-Type", "Accept", "X-Request-Id", "X-Custom"] {
+            assert!(is_forwarded_request_header(name, "X-API-Key"), "{name}");
+        }
+    }
 
     #[test]
     fn test_api_proxy_client_created() {

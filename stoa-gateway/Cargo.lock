@@ -4689,6 +4689,7 @@ dependencies = [
  "regex",
  "regorus",
  "reqwest",
+ "rsa",
  "schemars",
  "serde",
  "serde_json",

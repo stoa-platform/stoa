@@ -371,7 +371,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
         iss: String,
     }
 
-    async fn validator_against_test_key() -> (JwtValidator, String) {
+    async fn validator_against_test_key() -> (wiremock::MockServer, JwtValidator, String) {
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -417,7 +417,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
                 ..JwtValidatorConfig::default()
             },
         );
-        (validator, issuer)
+        (server, validator, issuer)
     }
 
     fn mint(issuer: &str, exp: i64) -> String {
@@ -442,7 +442,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_accepts_keycloak_shaped_token_without_audience() {
-        let (validator, issuer) = validator_against_test_key().await;
+        let (_server, validator, issuer) = validator_against_test_key().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -455,7 +455,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_rejects_expired_token() {
-        let (validator, issuer) = validator_against_test_key().await;
+        let (_server, validator, issuer) = validator_against_test_key().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -467,7 +467,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_rejects_wrong_issuer() {
-        let (validator, _issuer) = validator_against_test_key().await;
+        let (_server, validator, _issuer) = validator_against_test_key().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

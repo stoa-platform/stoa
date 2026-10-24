@@ -1,6 +1,6 @@
 # stoa-connect — known issues (`internal/connect/`)
 
-> Ex-`connect-known-issues.md` (refactor GO-2, PR #2490). Liste des points connus
+> Ex-`REWRITE-BUGS.md` (refactor GO-2, PR #2490). Liste des points connus
 > relevés pendant l'inventaire du refactor `internal/connect/`.
 > État au 2026-04-22 ; le suivi actif se fait dans Linear.
 

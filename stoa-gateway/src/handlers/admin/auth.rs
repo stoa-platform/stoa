@@ -14,6 +14,17 @@ use tracing::warn;
 
 use crate::state::AppState;
 
+/// Pointer-sized middleware error. axum 0.7 does not implement `IntoResponse`
+/// for `Box<Response>`, which `from_fn` requires, so the boxed response sits
+/// inside a newtype.
+pub struct BoxedResponse(Box<Response>);
+
+impl IntoResponse for BoxedResponse {
+    fn into_response(self) -> Response {
+        *self.0
+    }
+}
+
 /// Bearer token authentication for admin API.
 ///
 /// Validates the `Authorization: Bearer <token>` header against
@@ -28,16 +39,18 @@ pub async fn admin_auth(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
-) -> Result<Response, Response> {
+) -> Result<Response, BoxedResponse> {
     let expected = match state.config.admin_api_token.as_deref() {
         Some(token) if !token.is_empty() => token,
         _ => {
             warn!("Admin API request rejected: no admin_api_token configured");
-            return Err((
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Admin API disabled - no admin_api_token configured",
-            )
-                .into_response());
+            return Err(BoxedResponse(Box::new(
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Admin API disabled - no admin_api_token configured",
+                )
+                    .into_response(),
+            )));
         }
     };
 
@@ -59,7 +72,9 @@ pub async fn admin_auth(
         Ok(next.run(request).await)
     } else {
         warn!("Admin API request rejected: invalid bearer token");
-        Err(StatusCode::UNAUTHORIZED.into_response())
+        Err(BoxedResponse(Box::new(
+            StatusCode::UNAUTHORIZED.into_response(),
+        )))
     }
 }
 
@@ -80,7 +95,7 @@ pub async fn admin_rate_limit(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
-) -> Result<Response, Response> {
+) -> Result<Response, BoxedResponse> {
     let peer_ip = request
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
@@ -105,7 +120,7 @@ pub async fn admin_rate_limit(
                     response.headers_mut().insert(name, val);
                 }
             }
-            return Err(response);
+            return Err(BoxedResponse(Box::new(response)));
         }
     }
 

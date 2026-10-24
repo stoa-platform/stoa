@@ -218,7 +218,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     if published_route_requires_jwt(&state, &route) {
         if let Err(response) = require_published_route_jwt(&state, &mut request).await {
             record_proxy_status(401);
-            return response;
+            return *response;
         }
     }
 
@@ -378,7 +378,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
             Ok(result) => result,
             Err(response) => {
                 record_proxy_status(response.status().as_u16());
-                return response;
+                return *response;
             }
         };
     observe_only_guardrails::record_observe_only_guardrails(
@@ -1023,33 +1023,33 @@ fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRout
 async fn require_published_route_jwt(
     state: &AppState,
     request: &mut Request<Body>,
-) -> Result<(), Response> {
+) -> Result<(), Box<Response>> {
     let header = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok());
     let Some(header) = header else {
-        return Err(bearer_unauthorized(
+        return Err(Box::new(bearer_unauthorized(
             "invalid_request",
             "Missing Authorization header",
-        ));
+        )));
     };
 
     let Some(validator) = state.jwt_validator.clone() else {
         warn!("jwt_validation policy present but no Keycloak issuer is configured");
-        return Err(bearer_unauthorized(
+        return Err(Box::new(bearer_unauthorized(
             "invalid_token",
             "JWT validation is not configured",
-        ));
+        )));
     };
 
     let token = match JwtValidator::extract_token(header) {
         Ok(token) => token,
         Err(_) => {
-            return Err(bearer_unauthorized(
+            return Err(Box::new(bearer_unauthorized(
                 "invalid_token",
                 "Malformed Authorization header",
-            ));
+            )));
         }
     };
 
@@ -1057,10 +1057,10 @@ async fn require_published_route_jwt(
         Ok(claims) => claims,
         Err(error) => {
             warn!(error = %error, "JWT validation failed on published route");
-            return Err(bearer_unauthorized(
+            return Err(Box::new(bearer_unauthorized(
                 "invalid_token",
                 jwt_failure_message(&error),
-            ));
+            )));
         }
     };
 

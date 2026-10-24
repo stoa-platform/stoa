@@ -203,7 +203,7 @@ func TestPolicySyncerRemovesOIDCAuthServer(t *testing.T) {
 }
 
 // TestPolicySyncerRemovesOIDCStrategyViaGenericFallback documents the
-// asymmetry in the OIDCAdapter interface (C.1 in REWRITE-BUGS.md):
+// asymmetry in the OIDCAdapter interface (C.1 in docs/connect-known-issues.md):
 // DeleteStrategy/DeleteScope do not exist, so disabling an oidc_strategy
 // falls through to adapter.RemovePolicy with the type as a hint. Whether
 // the concrete adapter handles or no-ops is adapter-specific (GO-1 scope).

@@ -58,17 +58,6 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 - **devops**: Deploy/promote (stoa:write, stoa:read)
 - **viewer**: Read-only (stoa:read)
 
-## Key URLs
-| Service | URL |
-|---------|-----|
-| Console | https://console.gostoa.dev |
-| Portal | https://portal.gostoa.dev |
-| API | https://api.gostoa.dev |
-| MCP Gateway | https://mcp.gostoa.dev |
-| Auth (Keycloak) | https://auth.gostoa.dev |
-| Docs | https://docs.gostoa.dev |
-| Vault | https://vault.gostoa.dev |
-
 ## Runtime Versions
 
 | Tool | Version | Components |
@@ -83,12 +72,9 @@ STOA Go: stoactl CLI + stoa-connect agent (ADR-057). stoactl = GitOps CLI, stoa-
 
 ## Session Workflow
 
-1. Read `memory.md` for current state
-2. Read `plan.md` for priorities
-3. **1 thing at a time** — never mix feature + refactor + fix
-4. **Never code without a validated plan**
-5. Update `memory.md` before ending session
-6. Commit often with conventional messages
+1. **1 thing at a time** — never mix feature + refactor + fix
+2. **Never code without a validated plan**
+3. Commit often with conventional messages
 
 ## AI Factory
 
@@ -161,9 +147,9 @@ zh   # hotfix worktree (ephemeral, from main)
 
 | Hook | Workflow | Trigger | What |
 |------|----------|---------|------|
-| Pre-coding | `claude-linear-dispatch.yml` | `/go` on ticket | Generates context pack, alerts on CRITICAL |
 | Post-merge | `context-compiler-learn.yml` | Push to main | Compares predicted vs actual, enriches DB |
-| Weekly | `claude-self-improve.yml` | Friday 18:00 UTC | Co-change discovery, dashboard, doc regen |
+
+Pre-coding and weekly hooks are not published in this repository. The scripts under `docs/scripts/` remain for manual use.
 
 Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all hooks.
 
@@ -179,7 +165,6 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 
 ### Workflow & Sessions
 - 1 MEGA par session. `/clear` entre chaque.
-- `memory.md` mis à jour AVANT chaque `/clear` ou fin de session.
 - Jamais coder sans plan validé. "Tant que j'y suis" interdit.
 - Session-End State Lint (5 checks) obligatoire avant SESSION-END.
 - Context budget: délégation à 60%, `/compact` à 80%, arrêt à 90%.
@@ -217,7 +202,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 ### Sécurité
 - NEVER reset/change/rotate password ou credential. Human-only.
 - NEVER `terraform destroy`, suppression cluster, topic Kafka prod sans confirmation.
-- NEVER hardcode secrets. Vault (`hcvault.gostoa.dev`) = source of truth.
+- NEVER hardcode secrets. Vault is the source of truth.
 - Secrets K8s YAML: `REPLACE_FROM_VAULT` placeholder, jamais valeur réelle.
 - Fichiers interdits en commit: `.env*`, `*.pem`, `*.key`, `*.tfvars`, `*credentials*`.
 

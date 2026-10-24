@@ -26,15 +26,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 # --- URL updates for existing gateways (IP → DNS) ---
+# old_url values are RFC 5737 documentation addresses.
+# Revision id, upgrade/downgrade SQL, and schema are unchanged.
+# Databases that already applied this revision do not re-run it.
 URL_UPDATES = [
-    # kong-prod (seed 057): raw IP → DNS
-    {"name": "kong-prod", "old_url": "http://51.83.45.13:8001", "new_url": "https://kong.gostoa.dev"},
-    # kong-vps (register-gateways.sh): raw IP → DNS
-    {"name": "kong-vps", "old_url": "http://54.36.209.237:8001", "new_url": "https://kong.gostoa.dev"},
-    # gravitee-vps (register-gateways.sh): raw IP → DNS
-    {"name": "gravitee-vps", "old_url": "http://54.36.209.237:8083", "new_url": "https://gravitee.gostoa.dev"},
-    # webmethods-vps (register-gateways.sh): raw IP → DNS
-    {"name": "webmethods-vps", "old_url": "http://51.255.201.17:5555", "new_url": "https://webmethods.gostoa.dev"},
+    # kong-prod (seed 057): documentation address → DNS
+    {"name": "kong-prod", "old_url": "http://192.0.2.10:8001", "new_url": "https://kong.gostoa.dev"},
+    # kong-vps (register-gateways.sh): documentation address → DNS
+    {"name": "kong-vps", "old_url": "http://198.51.100.10:8001", "new_url": "https://kong.gostoa.dev"},
+    # gravitee-vps (register-gateways.sh): documentation address → DNS
+    {"name": "gravitee-vps", "old_url": "http://198.51.100.10:8083", "new_url": "https://gravitee.gostoa.dev"},
+    # webmethods-vps (register-gateways.sh): documentation address → DNS
+    {"name": "webmethods-vps", "old_url": "http://203.0.113.10:5555", "new_url": "https://webmethods.gostoa.dev"},
 ]
 
 # --- New gateway instances: stoa-connect agents ---

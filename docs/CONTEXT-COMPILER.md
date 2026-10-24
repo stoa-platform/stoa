@@ -6,21 +6,19 @@ The Context Compiler is a feedback loop that predicts impact before coding and l
 
 ## Automated Flow
 
+Hooks 1 and 3 ran from agent workflows that are not in this public tree.
+The scripts they called remain under `docs/scripts/` for manual use.
+Hook 2 stays in `.github/workflows/context-compiler-learn.yml`.
+
 ```
-Ticket Linear /go
+Ticket ready
     |
-[Hook 1] context-pack job in claude-linear-dispatch.yml
-    |     -> build-context.sh generates impact analysis
-    |     -> artifact uploaded, impact score passed to Council
-    |     -> CRITICAL (>=31) posts warning on Linear ticket
-    |
-Council validation (Stage 1)
-    |
-Queue -> Contabo Workers implement (with impact context)
+[Hook 1] manual: docs/scripts/build-context.sh
+    |     -> impact analysis for the component
     |
 PR opened
     |
-[Hook 4] (FUTURE) PR impact comment on claude-auto-review.yml
+[Hook 4] (FUTURE) PR impact comment — workflow not in this tree
     |
 Merge to main
     |
@@ -29,22 +27,20 @@ Merge to main
     |     -> DB enriched with precision/recall metrics
     |     -> Results committed with [skip ci]
     |
-Friday 18:00 UTC
+Weekly, manual
     |
-[Hook 3] weekly-impact-review job in claude-self-improve.yml
-    |     -> discover-cochanges.sh (50 last commits)
+[Hook 3] docs/scripts/discover-cochanges.sh
     |     -> regenerate-docs.py
     |     -> dashboard.sh snapshot
-    |     -> Results committed with [skip ci]
 ```
 
 ## Hooks
 
 ### Hook 1: Pre-Coding Context Pack
 
-**Workflow**: `.github/workflows/claude-linear-dispatch.yml` — `context-pack` job
+**Workflow**: not published in this repository (removed agent workflow).
 
-**Trigger**: `repository_dispatch` event (`linear-ticket-started`)
+**Trigger**: manual, via `docs/scripts/build-context.sh`
 
 **What it does**:
 1. Extracts component from ticket payload (field `component`, or `[scope]` / `type(scope)` from title)
@@ -79,9 +75,9 @@ Friday 18:00 UTC
 
 ### Hook 3: Weekly Discovery
 
-**Workflow**: `.github/workflows/claude-self-improve.yml` — `weekly-impact-review` job
+**Workflow**: not published in this repository (removed agent workflow).
 
-**Trigger**: Cron Friday 18:00 UTC (same as self-improve)
+**Trigger**: manual, via the scripts listed below
 
 **What it does**:
 1. Runs `discover-cochanges.sh --commits 50` to find component pairs that co-change without contracts
@@ -103,10 +99,7 @@ Friday 18:00 UTC
 
 ## Kill Switch
 
-All hooks respect `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable). When set:
-- Hook 1: `context-pack` job is skipped entirely (Council still runs)
-- Hook 2: `learn` job is skipped
-- Hook 3: `weekly-impact-review` job is skipped
+Hook 2 respects `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable). When set, the `learn` job is skipped. Hooks 1 and 3 are manual scripts in this tree.
 
 ## Database
 

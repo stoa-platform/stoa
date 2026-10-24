@@ -1246,7 +1246,8 @@ mod tests {
         assert!(is_blocked_url("http://192.168.1.1/api"));
         assert!(is_blocked_url("http://localhost:3000"));
         assert!(!is_blocked_url("http://example.com/api"));
-        assert!(!is_blocked_url("http://51.83.45.13:8080/health"));
+        // RFC 5737 TEST-NET-1 is outside Rust's RFC 1918 private check.
+        assert!(!is_blocked_url("http://192.0.2.10:8080/health"));
     }
 
     #[test]

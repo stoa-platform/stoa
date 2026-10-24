@@ -152,7 +152,7 @@ function TraceWaterfall({ spans, totalMs }: { spans: TransactionSpan[]; totalMs:
   return (
     <div>
       {/* Ruler */}
-      <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-500 mb-1 px-28">
+      <div className="flex justify-between text-[10px] text-muted mb-1 px-28">
         {ruler.map((ms, idx) => (
           <span key={idx} className="tabular-nums">
             {fmtDuration(ms)}
@@ -193,9 +193,7 @@ function TraceWaterfall({ spans, totalMs }: { spans: TransactionSpan[]; totalMs:
                 </span>
               </div>
               <div className="w-20 text-right">
-                <span className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate block">
-                  {span.service}
-                </span>
+                <span className="text-[10px] text-muted truncate block">{span.service}</span>
               </div>
             </div>
           );
@@ -210,9 +208,7 @@ function HeadersPanel({ headers, title }: { headers: Record<string, string>; tit
 
   if (entries.length === 0) {
     return (
-      <div className="text-sm text-neutral-400 dark:text-neutral-500 py-4 text-center">
-        No {title.toLowerCase()} available
-      </div>
+      <div className="text-sm text-muted py-4 text-center">No {title.toLowerCase()} available</div>
     );
   }
 
@@ -227,7 +223,7 @@ function HeadersPanel({ headers, title }: { headers: Record<string, string>; tit
             {key}
           </span>
           <span
-            className={`font-mono break-all ${value === '••••••••' ? 'text-neutral-400 italic' : 'text-neutral-500 dark:text-neutral-400'}`}
+            className={`font-mono break-all ${value === '••••••••' ? 'text-muted italic' : 'text-neutral-500 dark:text-neutral-400'}`}
           >
             {value}
           </span>
@@ -262,9 +258,7 @@ function MiddlewarePipeline({ spans }: { spans: TransactionSpan[] }) {
               <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 capitalize">
                 {span.name.replace(/_/g, ' ')}
               </span>
-              <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-2">
-                ({span.service})
-              </span>
+              <span className="text-xs text-muted ml-2">({span.service})</span>
             </div>
             <span
               className={`text-xs tabular-nums font-medium ${isError ? 'text-red-600' : 'text-neutral-500 dark:text-neutral-400'}`}
@@ -306,7 +300,7 @@ function MetricValue({ value }: { value: string | undefined }) {
   const isNA = !value || value === 'N/A';
   return (
     <span
-      className={`font-mono tabular-nums ${isNA ? 'text-neutral-400 dark:text-neutral-500 italic' : 'text-neutral-700 dark:text-neutral-300'}`}
+      className={`font-mono tabular-nums ${isNA ? 'text-muted italic' : 'text-neutral-700 dark:text-neutral-300'}`}
     >
       {value || 'N/A'}
     </span>
@@ -415,7 +409,7 @@ function KernelMetricsGrid({ spans }: { spans: TransactionSpan[] }) {
         </div>
       ))}
       {!hasAnyReal && (
-        <p className="col-span-2 text-xs text-neutral-400 italic text-center">
+        <p className="col-span-2 text-xs text-muted italic text-center">
           No gateway metrics available for this trace.
         </p>
       )}
@@ -462,9 +456,7 @@ function TraceContextGrid({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
         {fields.map((field) => (
           <div key={field.label} className="min-w-0">
-            <div className="text-[10px] uppercase text-neutral-400 dark:text-neutral-500 mb-1">
-              {field.label}
-            </div>
+            <div className="text-[10px] uppercase text-muted mb-1">{field.label}</div>
             <div className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate">
               {field.value}
             </div>

@@ -172,7 +172,7 @@ export function MyApplications() {
       {!isLoading && !isError && (!applications || applications.items.length === 0) && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
           <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
-            <AppWindow className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+            <AppWindow className="h-8 w-8 text-muted" />
           </div>
           <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
             {t('empty.title')}

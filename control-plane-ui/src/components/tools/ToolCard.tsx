@@ -94,9 +94,7 @@ export const ToolCard = memo(function ToolCard({
               </span>
             ))}
             {tool.tags.length > 3 && (
-              <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                +{tool.tags.length - 3} more
-              </span>
+              <span className="text-xs text-muted">+{tool.tags.length - 3} more</span>
             )}
           </div>
         )}
@@ -122,11 +120,7 @@ export const ToolCard = memo(function ToolCard({
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-neutral-700">
-          {tool.tenantId && (
-            <span className="text-xs text-neutral-400 dark:text-neutral-500">
-              Tenant: {tool.tenantId}
-            </span>
-          )}
+          {tool.tenantId && <span className="text-xs text-muted">Tenant: {tool.tenantId}</span>}
           {!tool.tenantId && <span />}
 
           {onSubscribe && (

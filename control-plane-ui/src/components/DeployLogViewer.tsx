@@ -3,10 +3,10 @@ import { clsx } from 'clsx';
 import type { DeploymentLog } from '../types';
 
 const levelStyles: Record<string, { text: string; icon: string }> = {
-  info: { text: 'text-neutral-400 dark:text-neutral-500', icon: 'text-blue-400' },
+  info: { text: 'text-muted', icon: 'text-blue-400' },
   warn: { text: 'text-yellow-600 dark:text-yellow-400', icon: 'text-yellow-500' },
   error: { text: 'text-red-500 dark:text-red-400', icon: 'text-red-500' },
-  debug: { text: 'text-neutral-500 dark:text-neutral-600', icon: 'text-neutral-400' },
+  debug: { text: 'text-neutral-500 dark:text-neutral-600', icon: 'text-muted' },
 };
 
 function formatLogTime(isoString: string): string {

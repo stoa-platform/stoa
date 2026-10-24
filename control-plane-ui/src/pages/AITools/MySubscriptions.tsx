@@ -179,12 +179,10 @@ export function MySubscriptions() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
-                        <Activity className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                        <Activity className="h-4 w-4 text-muted" />
                         <span>{sub.usageCount} calls</span>
                         {sub.usageLimit && (
-                          <span className="text-neutral-400 dark:text-neutral-500">
-                            / {sub.usageLimit} limit
-                          </span>
+                          <span className="text-muted">/ {sub.usageLimit} limit</span>
                         )}
                       </div>
                     </td>
@@ -198,7 +196,7 @@ export function MySubscriptions() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => navigate(`/ai-tools/${encodeURIComponent(sub.toolName)}`)}
-                          className="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                          className="p-2 text-muted hover:text-neutral-600 transition-colors"
                           title="View details"
                         >
                           <ExternalLink className="h-4 w-4" />

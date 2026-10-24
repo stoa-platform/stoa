@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * API Detail Page
  *
@@ -322,7 +323,7 @@ export function APIDetail() {
                     className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded ${
                       deployed
                         ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                        : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500'
+                        : 'bg-neutral-100 dark:bg-neutral-700 text-muted'
                     }`}
                   >
                     {deployed ? (
@@ -439,9 +440,9 @@ export function APIDetail() {
                           {endpoint.summary}
                         </span>
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                          <ChevronDown className="h-4 w-4 text-muted" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                          <ChevronRight className="h-4 w-4 text-muted" />
                         )}
                       </div>
                     </button>
@@ -492,9 +493,7 @@ export function APIDetail() {
                                             Yes
                                           </span>
                                         ) : (
-                                          <span className="text-neutral-400 dark:text-neutral-500">
-                                            No
-                                          </span>
+                                          <span className="text-muted">No</span>
                                         )}
                                       </td>
                                       <td className="px-3 py-2 text-neutral-600 dark:text-neutral-300">
@@ -548,7 +547,7 @@ export function APIDetail() {
                 <p className="text-neutral-500 dark:text-neutral-400">
                   No endpoint information available
                 </p>
-                <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">
+                <p className="text-sm text-muted mt-1">
                   Check the OpenAPI spec tab for full API documentation
                 </p>
               </div>
@@ -635,16 +634,14 @@ export function APIDetail() {
 
       {/* Subscription Success Modal */}
       {subscriptionResult && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <Modal
+          onClose={() => setSubscriptionResult(null)}
+          className="fixed inset-0 z-50 overflow-y-auto"
+        >
           <div
+            aria-hidden="true"
             className="fixed inset-0 bg-black/50 transition-opacity"
-            role="button"
-            tabIndex={-1}
-            aria-label="Close modal"
             onClick={() => setSubscriptionResult(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setSubscriptionResult(null);
-            }}
           />
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">
@@ -662,11 +659,14 @@ export function APIDetail() {
                     <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
                   )}
                 </div>
-                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
+                <ModalTitle
+                  as="h2"
+                  className="text-xl font-semibold text-neutral-900 dark:text-white"
+                >
                   {subscriptionResult.provisioningStatus === 'failed'
                     ? 'Subscription Created (Provisioning Issue)'
                     : 'Subscription Created!'}
-                </h2>
+                </ModalTitle>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                   {subscriptionResult.subscription.status === 'pending'
                     ? 'Your subscription is pending approval from the API provider.'
@@ -728,6 +728,7 @@ export function APIDetail() {
               </div>
 
               <button
+                type="button"
                 onClick={() => setSubscriptionResult(null)}
                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
@@ -735,7 +736,7 @@ export function APIDetail() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -33,7 +33,7 @@ function NotificationRow({
     >
       <div className="flex-shrink-0 mt-0.5">
         {notification.read ? (
-          <MailOpen className="w-5 h-5 text-neutral-400" />
+          <MailOpen className="w-5 h-5 text-muted" />
         ) : (
           <Mail className="w-5 h-5 text-primary-500" />
         )}
@@ -51,7 +51,7 @@ function NotificationRow({
           {notification.message}
         </p>
         <div className="flex items-center gap-3 mt-2">
-          <time className="text-xs text-neutral-400">
+          <time className="text-xs text-muted">
             {new Date(notification.created_at).toLocaleString()}
           </time>
           {notification.link && (
@@ -137,9 +137,9 @@ export function NotificationsPage() {
         {/* List */}
         <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
           {isLoading ? (
-            <div className="p-8 text-center text-neutral-400">Loading notifications...</div>
+            <div className="p-8 text-center text-muted">Loading notifications...</div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-neutral-400">
+            <div className="p-8 text-center text-muted">
               {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
             </div>
           ) : (

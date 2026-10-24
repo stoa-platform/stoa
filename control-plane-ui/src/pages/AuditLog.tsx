@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import {
   RefreshCw,
@@ -465,8 +466,9 @@ export function AuditLog() {
             <div className="flex items-center gap-3">
               {/* Search */}
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
                 <input
+                  aria-label="Search by actor, resource, or details..."
                   type="text"
                   placeholder="Search by actor, resource, or details..."
                   value={filters.search || ''}
@@ -496,6 +498,7 @@ export function AuditLog() {
             {showFilters && (
               <div className="flex items-center gap-3 mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-700">
                 <select
+                  aria-label="Action"
                   value={filters.action || ''}
                   onChange={(e) => {
                     setFilters((f) => ({ ...f, action: e.target.value || undefined }));
@@ -512,6 +515,7 @@ export function AuditLog() {
                   ))}
                 </select>
                 <select
+                  aria-label="Status"
                   value={filters.status || ''}
                   onChange={(e) => {
                     setFilters((f) => ({ ...f, status: e.target.value || undefined }));
@@ -525,6 +529,7 @@ export function AuditLog() {
                   <option value="warning">Warning</option>
                 </select>
                 <input
+                  aria-label="Start date"
                   type="date"
                   value={filters.start_date || ''}
                   onChange={(e) => {
@@ -533,8 +538,9 @@ export function AuditLog() {
                   }}
                   className="text-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg px-3 py-2"
                 />
-                <span className="text-xs text-neutral-400">to</span>
+                <span className="text-xs text-muted">to</span>
                 <input
+                  aria-label="End date"
                   type="date"
                   value={filters.end_date || ''}
                   onChange={(e) => {
@@ -586,17 +592,22 @@ export function AuditLog() {
                             >
                               <td className="px-4 py-3">
                                 {isExpanded ? (
-                                  <ChevronDown className="h-4 w-4 text-neutral-400" />
+                                  <ChevronDown className="h-4 w-4 text-muted" />
                                 ) : (
-                                  <ChevronRight className="h-4 w-4 text-neutral-400" />
+                                  <ChevronRight className="h-4 w-4 text-muted" />
                                 )}
                               </td>
                               <td className="px-4 py-3 text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
-                                {formatTimestamp(entry.timestamp, locale)}
+                                <RowAction
+                                  onActivate={() => setExpandedId(isExpanded ? null : entry.id)}
+                                  aria-expanded={isExpanded}
+                                >
+                                  {formatTimestamp(entry.timestamp, locale)}
+                                </RowAction>
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
-                                  <User className="h-3.5 w-3.5 text-neutral-400" />
+                                  <User className="h-3.5 w-3.5 text-muted" />
                                   {entry.user_email ? (
                                     <span className="text-neutral-900 dark:text-white">
                                       {entry.user_email}
@@ -624,7 +635,7 @@ export function AuditLog() {
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
-                                  <ActionIcon className="h-3.5 w-3.5 text-neutral-400" />
+                                  <ActionIcon className="h-3.5 w-3.5 text-muted" />
                                   <span className="text-neutral-700 dark:text-neutral-300 capitalize">
                                     {entry.action.replace(/_/g, ' ')}
                                   </span>

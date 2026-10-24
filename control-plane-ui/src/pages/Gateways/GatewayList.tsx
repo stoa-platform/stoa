@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -710,7 +711,7 @@ function GatewayRow({
             </>
           )}
           <span className="text-neutral-300 dark:text-neutral-600">&middot;</span>
-          <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">
+          <span className="text-xs font-mono text-muted truncate">
             {displayUrl(urls.primaryUrl)}
           </span>
         </div>
@@ -748,9 +749,7 @@ function GatewayRow({
       {/* Last check */}
       <div className="flex-shrink-0 hidden md:block text-right w-20">
         {gw.last_health_check ? (
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
-            {timeAgo(gw.last_health_check)}
-          </span>
+          <span className="text-xs text-muted">{timeAgo(gw.last_health_check)}</span>
         ) : (
           <span className="text-xs text-neutral-300 dark:text-neutral-600">never</span>
         )}
@@ -764,7 +763,7 @@ function GatewayRow({
               e.stopPropagation();
               onRestore();
             }}
-            className="p-1.5 rounded-md text-neutral-400 hover:text-green-600 hover:bg-green-50 dark:hover:text-green-400 dark:hover:bg-green-900/20 transition-colors"
+            className="p-1.5 rounded-md text-muted hover:text-green-600 hover:bg-green-50 dark:hover:text-green-400 dark:hover:bg-green-900/20 transition-colors"
             title="Restore gateway"
           >
             <RotateCcw className="w-4 h-4" />
@@ -778,7 +777,7 @@ function GatewayRow({
                   onHealthCheck();
                 }}
                 disabled={isChecking}
-                className="p-1.5 rounded-md text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+                className="p-1.5 rounded-md text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
                 title="Health check"
               >
                 <HeartPulse className={`w-4 h-4 ${isChecking ? 'animate-pulse' : ''}`} />
@@ -792,7 +791,7 @@ function GatewayRow({
               className={`p-1.5 rounded-md transition-colors ${
                 gw.protected
                   ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed'
-                  : 'text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20'
+                  : 'text-muted hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20'
               }`}
               title={gw.protected ? 'Protected — cannot be deleted' : 'Delete'}
             >
@@ -832,7 +831,8 @@ function GatewayDetailPanel({
   const urls = gatewayUrls(gw);
 
   return (
-    <div
+    <Modal
+      onClose={onClose}
       className="fixed inset-0 z-50 flex justify-end"
       onClick={onClose}
       data-testid="gateway-detail-overlay"
@@ -851,13 +851,17 @@ function GatewayDetailPanel({
               <span
                 className={`flex-shrink-0 w-3 h-3 rounded-full ${status.dot} ${live ? 'animate-pulse' : ''}`}
               />
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
+              <ModalTitle
+                as="h2"
+                className="text-lg font-semibold text-neutral-900 dark:text-white truncate"
+              >
                 {gw.display_name}
-              </h2>
+              </ModalTitle>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 text-xl leading-none ml-2"
+              className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300 text-xl leading-none ml-2"
               aria-label="Close"
             >
               &times;
@@ -872,8 +876,8 @@ function GatewayDetailPanel({
                 {modeLabel}
               </span>
             )}
-            <span className="text-xs text-neutral-400">{target}</span>
-            {topology && <span className="text-xs text-neutral-400">{topology}</span>}
+            <span className="text-xs text-muted">{target}</span>
+            {topology && <span className="text-xs text-muted">{topology}</span>}
             {gw.source === 'argocd' && (
               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-medium rounded bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
                 <GitBranch className="w-3 h-3" />
@@ -1014,7 +1018,7 @@ function GatewayDetailPanel({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1058,7 +1062,7 @@ function DetailRow({
 
 function UrlValue({ url }: { url: string | null }) {
   const href = url ? externalUrl(url) : null;
-  if (!url) return <span className="text-neutral-400">--</span>;
+  if (!url) return <span className="text-muted">--</span>;
   if (!href) {
     return (
       <span className="font-mono text-xs text-neutral-500 dark:text-neutral-400">

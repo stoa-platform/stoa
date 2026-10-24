@@ -117,6 +117,7 @@ export function RequestBuilder({
       {/* URL Bar */}
       <div className="flex gap-2">
         <select
+          aria-label="HTTP method"
           value={method}
           onChange={(e) => setMethod(e.target.value as RequestConfig['method'])}
           disabled={disabled}
@@ -136,6 +137,7 @@ export function RequestBuilder({
 
         <div className="flex-1 relative">
           <input
+            aria-label="Request path"
             type="text"
             value={path}
             onChange={(e) => setPath(e.target.value)}
@@ -236,6 +238,7 @@ export function RequestBuilder({
             {queryParams.map((param, index) => (
               <div key={index} className="flex items-center gap-2">
                 <input
+                  aria-label={`Enable query parameter ${index + 1}`}
                   type="checkbox"
                   checked={param.enabled}
                   onChange={(e) => updateQueryParam(index, 'enabled', e.target.checked)}
@@ -243,6 +246,7 @@ export function RequestBuilder({
                   className="h-4 w-4 rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
                 />
                 <input
+                  aria-label={`Query parameter key ${index + 1}`}
                   type="text"
                   value={param.key}
                   onChange={(e) => updateQueryParam(index, 'key', e.target.value)}
@@ -251,6 +255,7 @@ export function RequestBuilder({
                   className="flex-1 px-3 py-1.5 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 dark:bg-neutral-800 dark:text-white"
                 />
                 <input
+                  aria-label={`Query parameter value ${index + 1}`}
                   type="text"
                   value={param.value}
                   onChange={(e) => updateQueryParam(index, 'value', e.target.value)}
@@ -262,7 +267,7 @@ export function RequestBuilder({
                   type="button"
                   onClick={() => removeQueryParam(index)}
                   disabled={disabled}
-                  className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+                  className="p-1.5 text-muted hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -286,6 +291,7 @@ export function RequestBuilder({
             {headers.map((header, index) => (
               <div key={index} className="flex items-center gap-2">
                 <input
+                  aria-label={`Enable header ${index + 1}`}
                   type="checkbox"
                   checked={header.enabled}
                   onChange={(e) => updateHeader(index, 'enabled', e.target.checked)}
@@ -293,6 +299,7 @@ export function RequestBuilder({
                   className="h-4 w-4 rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
                 />
                 <input
+                  aria-label={`Header name ${index + 1}`}
                   type="text"
                   value={header.key}
                   onChange={(e) => updateHeader(index, 'key', e.target.value)}
@@ -301,6 +308,7 @@ export function RequestBuilder({
                   className="flex-1 px-3 py-1.5 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 dark:bg-neutral-800 dark:text-white"
                 />
                 <input
+                  aria-label={`Header value ${index + 1}`}
                   type="text"
                   value={header.value}
                   onChange={(e) => updateHeader(index, 'value', e.target.value)}
@@ -312,7 +320,7 @@ export function RequestBuilder({
                   type="button"
                   onClick={() => removeHeader(index)}
                   disabled={disabled}
-                  className="p-1.5 text-neutral-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+                  className="p-1.5 text-muted hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -354,6 +362,7 @@ export function RequestBuilder({
               </button>
             </div>
             <textarea
+              aria-label="Request body (JSON)"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder='{\n  "key": "value"\n}'

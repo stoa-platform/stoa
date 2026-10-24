@@ -123,7 +123,7 @@ function QuickLinkButton({
       <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
         <Icon className="h-4 w-4" />
         {label}
-        <ExternalLink className="h-3 w-3 text-neutral-400" />
+        <ExternalLink className="h-3 w-3 text-muted" />
       </a>
     );
   }
@@ -232,7 +232,7 @@ export function OperationsDashboard() {
           >
             Full metrics <ExternalLink className="h-3 w-3" />
           </button>
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
+          <span className="text-xs text-muted">
             Last refresh: {lastRefresh.toLocaleTimeString('fr-FR')}
           </span>
           <button

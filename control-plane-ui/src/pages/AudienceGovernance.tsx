@@ -91,6 +91,7 @@ export function AudienceGovernance() {
       <div className="flex flex-wrap gap-4">
         {isCpiAdmin && tenants && (
           <select
+            aria-label="Tenant"
             value={tenantFilter}
             onChange={(e) => setTenantFilter(e.target.value)}
             className="rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-white"
@@ -104,8 +105,9 @@ export function AudienceGovernance() {
           </select>
         )}
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
           <input
+            aria-label="Search APIs..."
             type="text"
             placeholder="Search APIs..."
             value={search}
@@ -182,6 +184,7 @@ export function AudienceGovernance() {
                     <td className="px-6 py-4">
                       {canEdit && editingApi === api.id ? (
                         <select
+                          aria-label={`Audience for ${api.name}`}
                           defaultValue={api.audience ?? 'public'}
                           onChange={(e) =>
                             handleAudienceChange(api.tenant_id, api.name, e.target.value)

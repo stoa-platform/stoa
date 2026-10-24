@@ -406,7 +406,7 @@ export function APITestingSandbox() {
                       >
                         {item.status}
                       </span>
-                      <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                      <span className="text-xs text-muted">
                         {item.timing < 1000
                           ? `${item.timing.toFixed(0)}ms`
                           : `${(item.timing / 1000).toFixed(1)}s`}

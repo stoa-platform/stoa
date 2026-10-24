@@ -95,9 +95,7 @@ export function Collapsible({
         aria-expanded={isExpanded}
       >
         <div className="flex items-center gap-3">
-          {icon && (
-            <span className="text-neutral-400">{icon}</span>
-          )}
+          {icon && <span className="text-muted">{icon}</span>}
           <span className="font-medium text-neutral-900">{title}</span>
           {badge && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600">
@@ -106,7 +104,7 @@ export function Collapsible({
           )}
         </div>
         <ChevronDown
-          className={`h-5 w-5 text-neutral-400 transition-transform duration-200 ${
+          className={`h-5 w-5 text-muted transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : ''
           }`}
         />
@@ -159,28 +157,29 @@ export function Accordion({
   variant = 'bordered',
   className = '',
 }: AccordionProps) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    new Set(defaultExpandedIds)
-  );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultExpandedIds));
 
-  const handleExpand = useCallback((id: string, expanded: boolean) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (expanded) {
-        if (!allowMultiple) {
-          next.clear();
+  const handleExpand = useCallback(
+    (id: string, expanded: boolean) => {
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        if (expanded) {
+          if (!allowMultiple) {
+            next.clear();
+          }
+          next.add(id);
+        } else {
+          next.delete(id);
         }
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
-  }, [allowMultiple]);
+        return next;
+      });
+    },
+    [allowMultiple]
+  );
 
   return (
     <div className={`space-y-2 ${className}`}>
-      {items.map(item => (
+      {items.map((item) => (
         <Collapsible
           key={item.id}
           title={item.title}

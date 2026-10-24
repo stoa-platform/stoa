@@ -1,3 +1,13 @@
+import {
+  Field,
+  FieldLabel,
+  FieldInput,
+  FieldTextarea,
+  FieldSelect,
+  Form,
+  FormError,
+} from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
@@ -111,36 +121,45 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
             {isEdit ? 'Edit External MCP Server' : 'Add External MCP Server'}
-          </h2>
+          </ModalTitle>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+        <Form
+          error={error}
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto p-6 space-y-5"
+        >
           {/* Error Alert */}
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+            <FormError className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
               {error}
-            </div>
+            </FormError>
           )}
 
           {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name <span className="text-red-500">*</span>
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -154,14 +173,14 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               Unique identifier (slug). Used for tool prefixes.
             </p>
-          </div>
+          </Field>
 
           {/* Display Name */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Display Name <span className="text-red-500">*</span>
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={formData.display_name}
               onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
@@ -169,28 +188,28 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               placeholder="Linear"
               required
             />
-          </div>
+          </Field>
 
           {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
-            </label>
-            <textarea
+            </FieldLabel>
+            <FieldTextarea
               value={formData.description || ''}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={2}
               placeholder="Issue tracking for modern software teams"
             />
-          </div>
+          </Field>
 
           {/* Base URL */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Base URL <span className="text-red-500">*</span>
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="url"
               value={formData.base_url}
               onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
@@ -198,14 +217,14 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               placeholder="https://mcp.linear.app/sse"
               required
             />
-          </div>
+          </Field>
 
           {/* Transport */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Transport
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={formData.transport}
               onChange={(e) =>
                 setFormData({ ...formData, transport: e.target.value as ExternalMCPTransport })
@@ -217,15 +236,15 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                   {opt.label} - {opt.description}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Auth Type */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Authentication
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={formData.auth_type}
               onChange={(e) =>
                 setFormData({ ...formData, auth_type: e.target.value as ExternalMCPAuthType })
@@ -237,16 +256,16 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                   {opt.label} - {opt.description}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Credentials - API Key */}
           {formData.auth_type === 'api_key' && (
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 API Key
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="password"
                 value={credentialApiKey}
                 onChange={(e) => setCredentialApiKey(e.target.value)}
@@ -256,16 +275,16 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 Encrypted at rest. Leave empty to keep existing.
               </p>
-            </div>
+            </Field>
           )}
 
           {/* Credentials - Bearer Token */}
           {formData.auth_type === 'bearer_token' && (
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Bearer Token
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="password"
                 value={credentialBearerToken}
                 onChange={(e) => setCredentialBearerToken(e.target.value)}
@@ -275,7 +294,7 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 Encrypted at rest. Leave empty to keep existing.
               </p>
-            </div>
+            </Field>
           )}
 
           {/* Credentials - OAuth2 */}
@@ -284,11 +303,11 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 OAuth2 Configuration
               </h4>
-              <div>
-                <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+              <Field>
+                <FieldLabel className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
                   Client ID
-                </label>
-                <input
+                </FieldLabel>
+                <FieldInput
                   type="text"
                   value={credentialOAuth2.client_id}
                   onChange={(e) =>
@@ -297,12 +316,12 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded px-3 py-2 text-sm bg-white dark:bg-neutral-600 dark:text-white"
                   placeholder="Client ID"
                 />
-              </div>
-              <div>
-                <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+              </Field>
+              <Field>
+                <FieldLabel className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
                   Client Secret
-                </label>
-                <input
+                </FieldLabel>
+                <FieldInput
                   type="password"
                   value={credentialOAuth2.client_secret}
                   onChange={(e) =>
@@ -311,12 +330,12 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded px-3 py-2 text-sm bg-white dark:bg-neutral-600 dark:text-white"
                   placeholder="Client Secret"
                 />
-              </div>
-              <div>
-                <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+              </Field>
+              <Field>
+                <FieldLabel className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
                   Token URL
-                </label>
-                <input
+                </FieldLabel>
+                <FieldInput
                   type="url"
                   value={credentialOAuth2.token_url}
                   onChange={(e) =>
@@ -325,12 +344,12 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded px-3 py-2 text-sm bg-white dark:bg-neutral-600 dark:text-white"
                   placeholder="https://auth.example.com/oauth/token"
                 />
-              </div>
-              <div>
-                <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+              </Field>
+              <Field>
+                <FieldLabel className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
                   Scope (optional)
-                </label>
-                <input
+                </FieldLabel>
+                <FieldInput
                   type="text"
                   value={credentialOAuth2.scope}
                   onChange={(e) =>
@@ -339,16 +358,16 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded px-3 py-2 text-sm bg-white dark:bg-neutral-600 dark:text-white"
                   placeholder="read write"
                 />
-              </div>
+              </Field>
             </div>
           )}
 
           {/* Tool Prefix */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Tool Prefix
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={formData.tool_prefix || ''}
               onChange={(e) => setFormData({ ...formData, tool_prefix: e.target.value })}
@@ -361,21 +380,21 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 {formData.tool_prefix || formData.name || 'prefix'}__tool_name
               </code>
             </p>
-          </div>
+          </Field>
 
           {/* Icon URL */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Icon URL
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="url"
               value={formData.icon || ''}
               onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
               className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="https://example.com/icon.png"
             />
-          </div>
+          </Field>
 
           {/* Test Connection Result */}
           {testResult && (
@@ -385,7 +404,7 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               {testResult.message}
             </div>
           )}
-        </form>
+        </Form>
 
         {/* Footer */}
         <div className="flex justify-between items-center px-6 py-4 border-t dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
@@ -419,6 +438,6 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

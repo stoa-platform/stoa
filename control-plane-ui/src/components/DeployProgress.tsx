@@ -64,9 +64,7 @@ export function DeployProgress({ currentStep, status }: DeployProgressProps) {
                 {stepStatus === 'failed' && (
                   <Circle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 )}
-                {stepStatus === 'pending' && (
-                  <Circle className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
-                )}
+                {stepStatus === 'pending' && <Circle className="h-4 w-4 text-muted" />}
               </div>
               <span
                 className={clsx(
@@ -74,7 +72,7 @@ export function DeployProgress({ currentStep, status }: DeployProgressProps) {
                   stepStatus === 'done' && 'text-green-600 dark:text-green-400',
                   stepStatus === 'active' && 'text-blue-600 dark:text-blue-400 font-medium',
                   stepStatus === 'failed' && 'text-red-600 dark:text-red-400',
-                  stepStatus === 'pending' && 'text-neutral-400 dark:text-neutral-500'
+                  stepStatus === 'pending' && 'text-muted'
                 )}
               >
                 {step.label}

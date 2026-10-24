@@ -299,7 +299,7 @@ export function DiscoverPage() {
             )}
           </div>
           {previewFavorites.length === 0 ? (
-            <p className="text-sm text-neutral-400 dark:text-neutral-500 italic">
+            <p className="text-sm text-muted italic">
               No favorites yet — bookmark items from their detail pages
             </p>
           ) : (
@@ -335,8 +335,9 @@ export function DiscoverPage() {
         <div className="flex flex-col gap-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
             <input
+              aria-label="Search APIs, AI tools, and more"
               type="text"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -367,8 +368,9 @@ export function DiscoverPage() {
             {/* Category dropdown */}
             {(data?.stats?.categories?.length ?? 0) > 0 && (
               <div className="relative sm:w-48">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
                 <select
+                  aria-label="Category"
                   value={categoryFilter}
                   onChange={(e) => handleCategoryChange(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"
@@ -386,8 +388,9 @@ export function DiscoverPage() {
             {/* Universe filter (CAB-848) */}
             {universes.length > 0 && (
               <div className="relative sm:w-44">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
                 <select
+                  aria-label="Universe"
                   value={universeFilter}
                   onChange={(e) => {
                     setUniverseFilter(e.target.value);
@@ -408,8 +411,9 @@ export function DiscoverPage() {
             {/* Audience filter */}
             {visibleAudienceOptions.length > 1 && (
               <div className="relative sm:w-44">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
                 <select
+                  aria-label="Audience"
                   value={audienceFilter}
                   onChange={(e) => {
                     setAudienceFilter(e.target.value);
@@ -429,8 +433,9 @@ export function DiscoverPage() {
 
             {/* Auth type filter (CAB-1906) */}
             <div className="relative sm:w-44">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
               <select
+                aria-label="Authentication type"
                 value={authTypeFilter}
                 onChange={(e) => {
                   setAuthTypeFilter(e.target.value);
@@ -449,6 +454,7 @@ export function DiscoverPage() {
             {/* Sort (CAB-1906) */}
             <div className="relative sm:w-44">
               <select
+                aria-label="Sort"
                 value={sortBy}
                 onChange={(e) => {
                   setSortBy(e.target.value as 'name' | 'updated_at' | 'created_at');
@@ -493,7 +499,7 @@ export function DiscoverPage() {
                 </button>
               ))}
               {availableTags.length > 12 && (
-                <span className="text-xs text-neutral-400">+{availableTags.length - 12} more</span>
+                <span className="text-xs text-muted">+{availableTags.length - 12} more</span>
               )}
             </div>
           )}
@@ -551,7 +557,7 @@ export function DiscoverPage() {
 
           {data.items.length === 0 ? (
             <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
-              <Layers className="h-8 w-8 text-neutral-400 mx-auto mb-4" />
+              <Layers className="h-8 w-8 text-muted mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
                 No items found
               </h2>
@@ -578,16 +584,14 @@ export function DiscoverPage() {
                       className="flex items-center gap-2 w-full text-left group"
                     >
                       {isCollapsed ? (
-                        <ChevronRight className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
+                        <ChevronRight className="h-4 w-4 text-muted group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
+                        <ChevronDown className="h-4 w-4 text-muted group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
                       )}
                       <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
                         {group.name}
                       </h2>
-                      <span className="text-sm text-neutral-400 dark:text-neutral-500">
-                        ({group.items.length})
-                      </span>
+                      <span className="text-sm text-muted">({group.items.length})</span>
                     </button>
 
                     {!isCollapsed && (

@@ -317,9 +317,7 @@ export function PlatformDashboard() {
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Traffic
                   </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    req/s over {rangeCfg.label}
-                  </p>
+                  <p className="text-xs text-muted">req/s over {rangeCfg.label}</p>
                 </div>
                 {trafficTrend.data && trafficTrend.data.length > 1 && (
                   <TrendIndicator data={trafficTrend.data} />
@@ -335,7 +333,7 @@ export function PlatformDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-muted">
                   {trafficTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -351,9 +349,7 @@ export function PlatformDashboard() {
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Errors
                   </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    errors/s over {rangeCfg.label}
-                  </p>
+                  <p className="text-xs text-muted">errors/s over {rangeCfg.label}</p>
                 </div>
                 {errorTrend.data && errorTrend.data.length > 1 && (
                   <TrendIndicator data={errorTrend.data} invertColor />
@@ -369,7 +365,7 @@ export function PlatformDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-muted">
                   {errorTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -431,7 +427,7 @@ export function PlatformDashboard() {
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <p className={`text-xs font-medium ${cfg.color}`}>{gw.status}</p>
-                          <p className="text-xs text-neutral-400 dark:text-neutral-500">
+                          <p className="text-xs text-muted">
                             {formatRelativeTime(gw.last_health_check)}
                           </p>
                         </div>
@@ -440,7 +436,7 @@ export function PlatformDashboard() {
                   })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-neutral-400 dark:text-neutral-500">
+                <div className="flex flex-col items-center justify-center py-8 text-muted">
                   <Server className="h-8 w-8 mb-2" />
                   <p className="text-sm">No gateways registered</p>
                   <a href="/gateways" className="text-xs text-blue-600 hover:underline mt-1">
@@ -462,10 +458,8 @@ export function PlatformDashboard() {
                 <div className="space-y-3">
                   {topApisList.map((api, i) => (
                     <div key={api.name} className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
-                        {i + 1}
-                      </span>
-                      <TrendingUp className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                      <span className="text-xs font-bold text-muted w-5 text-right">{i + 1}</span>
+                      <TrendingUp className="h-4 w-4 text-muted flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
@@ -475,7 +469,7 @@ export function PlatformDashboard() {
                             <span className="text-xs text-neutral-500 dark:text-neutral-400">
                               {formatNumber(api.calls)} calls
                             </span>
-                            <span className="text-xs text-neutral-400 dark:text-neutral-500 w-16 text-right">
+                            <span className="text-xs text-muted w-16 text-right">
                               {Math.round(api.latencyMs)}ms
                             </span>
                             {api.errors > 0 && (
@@ -496,7 +490,7 @@ export function PlatformDashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-neutral-400 dark:text-neutral-500">
+                <div className="flex flex-col items-center justify-center py-8 text-muted">
                   <Activity className="h-8 w-8 mb-2" />
                   <p className="text-sm">
                     {isDemoMode ? 'Connect Prometheus for live data' : 'No API traffic yet'}

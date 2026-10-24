@@ -21,6 +21,7 @@ COMPONENTS = (
     "stoa-go",
     "stoa-operator",
     "helm",
+    "gate-contract",
 )
 JOBS = ("changes", *COMPONENTS, "security")
 
@@ -269,6 +270,67 @@ def test_detect_non_ascii_name(tmp_path: Path) -> None:
     (repo / "portal" / "café.ts").write_text("é\n", encoding="utf-8")
     head = _commit(repo, "non ascii")
     _assert_selected(_detect(repo, base, head), "portal")
+
+
+@pytest.mark.parametrize("code", (2, 3))
+def test_grep_status_other_than_zero_or_one_fails(tmp_path: Path, code: int) -> None:
+    repo, base = _repo(tmp_path)
+    (repo / "docs" / "note.md").write_text("note\n", encoding="utf-8")
+    head = _commit(repo, "note")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    grep = bindir / "grep"
+    grep.write_text(f"#!/bin/sh\nexit {code}\n", encoding="utf-8")
+    grep.chmod(0o755)
+    env = os.environ.copy()
+    env.pop("GITHUB_OUTPUT", None)
+    env["LC_ALL"] = "C"
+    env["PATH"] = f"{bindir}{os.pathsep}{env['PATH']}"
+    proc = subprocess.run(
+        ["bash", str(CHANGES), base, head],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == code, proc.stderr
+    assert f"grep exited {code}" in proc.stderr
+
+
+@pytest.mark.parametrize(
+    "rel",
+    (
+        ".github/scripts/ci-gate-changes.sh",
+        ".github/scripts/ci-gate-aggregate.sh",
+        "scripts/ci/tests/test_ci_gate_contract.py",
+    ),
+)
+def test_gate_script_or_contract_test_selects_contract_job(tmp_path: Path, rel: str) -> None:
+    repo, base = _repo(tmp_path)
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("contract\n", encoding="utf-8")
+    head = _commit(repo, "contract")
+    _assert_selected(_detect(repo, base, head), "gate-contract")
+
+
+def test_contract_job_is_covered_by_aggregation() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci-gate.yml").read_text(encoding="utf-8")
+    aggregate = AGGREGATE.read_text(encoding="utf-8")
+    changes = CHANGES.read_text(encoding="utf-8")
+    assert "\n  gate-contract:" in workflow
+    assert "needs.changes.outputs.gate-contract == 'true'" in workflow
+    assert "- gate-contract" in workflow.split("name: ci-gate", 1)[1]
+    assert "gate-contract" in aggregate
+    assert r"^\.github/scripts/ci-gate-.*\.sh$" in changes
+    assert r"scripts/ci/tests/test_ci_gate_contract\.py" in changes
+    results, outputs = _baseline({"gate-contract"})
+    assert _aggregate(_needs(results, outputs)).returncode == 0
+    results["gate-contract"] = "failure"
+    failed = _aggregate(_needs(results, outputs))
+    assert failed.returncode != 0
+    assert "gate-contract" in failed.stdout
 
 
 def test_actions_directory_selects_stoa_operator(tmp_path: Path) -> None:

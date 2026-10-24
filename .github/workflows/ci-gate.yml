@@ -3,7 +3,7 @@
 # =============================================================================
 # Tourne sur chaque demande de fusion. Le job changes détecte les composants
 # touchés. Les composants attendus sont appelés via workflow_call. Le job
-# ci-gate agrège leurs résultats et s'ajoute aux contrôles déjà requis.
+# ci-gate agrège leurs résultats.
 # changes et security doivent être success. Une sortie true exige success.
 # skipped n'est accepté que si la sortie vaut false.
 # =============================================================================
@@ -135,7 +135,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install pytest
-        run: python -m pip install pytest
+        run: python -m pip install 'pytest==8.4.2'
 
       - name: Run ci-gate contract tests
         run: pytest scripts/ci/tests/test_ci_gate_contract.py -v --tb=short

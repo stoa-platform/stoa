@@ -60,7 +60,7 @@ export function RequestBuilder({
       : en;
     if (!values) return translated;
     return Object.entries(values).reduce(
-      (text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)),
+      (text, [name, value]) => text.split(`{{${name}}}`).join(String(value)),
       translated
     );
   };

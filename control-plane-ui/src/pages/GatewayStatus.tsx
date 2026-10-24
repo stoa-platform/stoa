@@ -424,7 +424,7 @@ export default function GatewayStatus() {
         </div>
       ) : (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm p-8 text-center">
-          <Server className="w-8 h-8 mx-auto text-neutral-400 dark:text-neutral-500 mb-2" />
+          <Server className="w-8 h-8 mx-auto text-muted mb-2" />
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
             No gateways registered yet.
           </p>

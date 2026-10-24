@@ -161,6 +161,9 @@ describe('ExecutionViewDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Users API')).toBeInTheDocument();
       expect(screen.getByText('Orders API')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'View execution Users API' })).toHaveAccessibleName(
+        'View execution Users API'
+      );
     });
   });
 

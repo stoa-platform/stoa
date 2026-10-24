@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Export Config Modal (CAB-296)
  *
@@ -107,16 +108,13 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
   const isValid = clientId.trim().length > 0 && clientSecret.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <Modal onClose={handleClose} className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
         {/* Backdrop */}
         <div
+          aria-hidden="true"
           className="fixed inset-0 bg-black/50 transition-opacity"
           onClick={handleClose}
-          onKeyDown={(e) => e.key === 'Escape' && handleClose()}
-          role="button"
-          aria-label="Close modal"
-          tabIndex={0}
         />
 
         {/* Modal */}
@@ -128,17 +126,22 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                 <FileJson className="h-5 w-5 text-primary-600 dark:text-primary-400" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                <ModalTitle
+                  as="h3"
+                  className="text-lg font-semibold text-neutral-900 dark:text-white"
+                >
                   Export MCP Config
-                </h3>
+                </ModalTitle>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   For Claude Desktop / Cursor
                 </p>
               </div>
             </div>
             <button
+              aria-label="Close dialog"
+              type="button"
               onClick={handleClose}
-              className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+              className="p-2 text-muted hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -277,6 +280,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 rounded-b-xl">
             <button
+              type="button"
               onClick={handleClose}
               className="px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white font-medium transition-colors"
             >
@@ -284,6 +288,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
             </button>
 
             <button
+              type="button"
               onClick={handleCopy}
               disabled={!config}
               className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -302,6 +307,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
             </button>
 
             <button
+              type="button"
               onClick={handleDownload}
               disabled={!config}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -312,7 +318,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -184,9 +184,7 @@ export const CallsTable = memo(function CallsTable({
                       <div className="text-sm font-medium text-neutral-900 dark:text-white">
                         {call.tool_name}
                       </div>
-                      <div className="text-xs text-neutral-400 dark:text-neutral-500">
-                        {call.tool_id}
-                      </div>
+                      <div className="text-xs text-muted">{call.tool_id}</div>
                     </div>
                   </td>
                   <td className="px-4 py-3">

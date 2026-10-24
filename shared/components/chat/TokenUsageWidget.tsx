@@ -77,7 +77,7 @@ export function TokenUsageWidget({ tenantId, getBudgetStatus }: TokenUsageWidget
         data-testid="token-usage-error"
         className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6"
       >
-        <div className="flex items-center gap-3 text-neutral-400 dark:text-neutral-500">
+        <div className="flex items-center gap-3 text-muted">
           <Activity className="w-5 h-5" />
           <span className="text-sm">{t('tokenUsage.unavailable', 'Token usage unavailable')}</span>
         </div>
@@ -134,7 +134,7 @@ export function TokenUsageWidget({ tenantId, getBudgetStatus }: TokenUsageWidget
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-neutral-400" />
+            <Activity className="w-4 h-4 text-muted" />
             <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
               {t('tokenUsage.title', 'Token Budget')}
             </h3>
@@ -145,7 +145,7 @@ export function TokenUsageWidget({ tenantId, getBudgetStatus }: TokenUsageWidget
               budget: formatNumber(budget.daily_budget),
             })}
           </p>
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             {t('tokenUsage.remaining', '{{remaining}} remaining', {
               remaining: formatNumber(budget.remaining),
             })}

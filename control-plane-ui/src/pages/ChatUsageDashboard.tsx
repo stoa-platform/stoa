@@ -257,7 +257,7 @@ export function ChatUsageDashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-60 text-sm text-neutral-400">
+                <div className="flex items-center justify-center h-60 text-sm text-muted">
                   No token usage data for this period.
                 </div>
               )}
@@ -308,7 +308,7 @@ export function ChatUsageDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-60 text-sm text-neutral-400">
+                <div className="flex items-center justify-center h-60 text-sm text-muted">
                   No conversations yet.
                 </div>
               )}

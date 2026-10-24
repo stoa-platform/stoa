@@ -5,6 +5,20 @@ import { createRef } from 'react';
 import { Button } from '@stoa/shared/components/Button';
 
 describe('Button', () => {
+  it('does not submit a form by default and preserves explicit submit', async () => {
+    const submit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form onSubmit={submit}>
+        <Button>Cancel</Button>
+        <Button type="submit">Save</Button>
+      </form>
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(submit).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(submit).toHaveBeenCalledOnce();
+  });
   it('renders with default props (primary, md)', () => {
     render(<Button>Click me</Button>);
     const btn = screen.getByRole('button', { name: 'Click me' });

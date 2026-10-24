@@ -128,11 +128,7 @@ describe('CreateAppModal', () => {
     fireEvent.click(screen.getByText(/add another url/i));
     expect(screen.getAllByPlaceholderText('https://your-app.com/callback')).toHaveLength(2);
 
-    // The trash button is inside the same row div as the first callback input
-    const callbackInputs = screen.getAllByPlaceholderText('https://your-app.com/callback');
-    const firstRow = callbackInputs[0].closest('div');
-    const trashBtn = firstRow?.querySelector('button') as HTMLButtonElement;
-    fireEvent.click(trashBtn);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove callback URL 1' }));
 
     expect(screen.getAllByPlaceholderText('https://your-app.com/callback')).toHaveLength(1);
   });

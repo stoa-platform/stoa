@@ -1,3 +1,5 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
+import { Field, FieldLabel, FieldSelect } from '@stoa/shared/components/Field';
 /**
  * Certificates — Certificate management dashboard (CAB-1786)
  *
@@ -392,11 +394,11 @@ export function Certificates() {
       {/* Filters Bar */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Tenant
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={activeTenant}
               onChange={(e) => {
                 setSelectedTenant(e.target.value);
@@ -409,8 +411,8 @@ export function Certificates() {
                   {tenant.display_name || tenant.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           <div className="text-sm text-neutral-500 dark:text-neutral-400 self-end pb-2">
             {filtered.length} of {counts.total} certificates
@@ -477,6 +479,7 @@ export function Certificates() {
                 {canEdit && (
                   <th className="px-3 py-3 w-10">
                     <input
+                      aria-label="Select all displayed consumers"
                       type="checkbox"
                       checked={sorted.length > 0 && selectedIds.size === sorted.length}
                       onChange={toggleAll}
@@ -514,6 +517,7 @@ export function Certificates() {
                   {canEdit && (
                     <td className="px-3 py-4 w-10" onClick={(e) => e.stopPropagation()}>
                       <input
+                        aria-label={`Select consumer ${consumer.name}`}
                         type="checkbox"
                         checked={selectedIds.has(consumer.id)}
                         onChange={() => toggleSelection(consumer.id)}
@@ -524,7 +528,9 @@ export function Certificates() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <p className="text-sm font-medium text-neutral-900 dark:text-white">
-                        {consumer.name}
+                        <RowAction onActivate={() => setSelectedConsumer(consumer)}>
+                          {consumer.name}
+                        </RowAction>
                       </p>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
                         {consumer.external_id}
@@ -573,7 +579,7 @@ export function Certificates() {
                         </p>
                       </div>
                     ) : (
-                      <span className="text-neutral-400">—</span>
+                      <span className="text-muted">—</span>
                     )}
                   </td>
                   <td
@@ -701,7 +707,7 @@ export function Certificates() {
                           </button>
                         )}
                         {cert.revoked_at && (
-                          <span className="text-xs text-neutral-400">
+                          <span className="text-xs text-muted">
                             {new Date(cert.revoked_at).toLocaleDateString()}
                           </span>
                         )}

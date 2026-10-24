@@ -111,9 +111,7 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
           <div className="px-5 py-8 text-center">
             <Clock className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
             <p className="text-neutral-500 dark:text-neutral-400 text-sm">No recent activity</p>
-            <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
-              Subscribe to tools and start making API calls
-            </p>
+            <p className="text-muted text-xs mt-1">Subscribe to tools and start making API calls</p>
           </div>
         ) : (
           activity.map((item) => {
@@ -138,7 +136,7 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
                     </p>
                   )}
                 </div>
-                <span className="text-xs text-neutral-400 whitespace-nowrap">
+                <span className="text-xs text-muted whitespace-nowrap">
                   {formatRelativeTime(item.timestamp)}
                 </span>
               </div>

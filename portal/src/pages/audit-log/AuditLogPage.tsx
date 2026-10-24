@@ -57,8 +57,9 @@ export function AuditLogPage() {
         {/* Filters */}
         <div className="flex flex-wrap gap-3 mb-6">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
+              aria-label="Search by resource or actor..."
               type="text"
               placeholder="Search by resource or actor..."
               value={searchInput}
@@ -68,8 +69,9 @@ export function AuditLogPage() {
             />
           </div>
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <select
+              aria-label="Action"
               value={filters.action ?? ''}
               onChange={(e) =>
                 setFilters((prev) => ({
@@ -115,13 +117,13 @@ export function AuditLogPage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
+                    <td colSpan={5} className="px-4 py-8 text-center text-muted">
                       Loading audit log...
                     </td>
                   </tr>
                 ) : entries.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
+                    <td colSpan={5} className="px-4 py-8 text-center text-muted">
                       No audit log entries found
                     </td>
                   </tr>
@@ -141,9 +143,7 @@ export function AuditLogPage() {
                       </td>
                       <td className="px-4 py-3 text-neutral-900 dark:text-white">
                         {entry.resource_name}
-                        <span className="text-neutral-400 ml-1 text-xs">
-                          ({entry.resource_type})
-                        </span>
+                        <span className="text-muted ml-1 text-xs">({entry.resource_type})</span>
                       </td>
                       <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
                         {entry.actor_name}

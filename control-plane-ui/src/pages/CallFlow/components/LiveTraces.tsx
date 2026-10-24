@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 import { useState } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 
@@ -187,7 +188,12 @@ export function LiveTraces({
                         <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
                       )}
                       <span className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate max-w-[180px]">
-                        {t.method} {t.route}
+                        <RowAction
+                          aria-label={`View trace ${t.method} ${t.route}`}
+                          onActivate={() => onSelectTrace?.(t.id)}
+                        >
+                          {t.method} {t.route}
+                        </RowAction>
                       </span>
                     </div>
                   </td>

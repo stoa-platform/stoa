@@ -359,6 +359,9 @@
     "deleteContract": "Supprimer le contrat",
     "createNewContract": "Créer un nouveau contrat"
   },
+  "a11y": {
+    "skipToMain": "Passer au contenu principal"
+  },
   "tokenUsage": {
     "unavailable": "Utilisation des tokens indisponible",
     "title": "Budget de tokens",

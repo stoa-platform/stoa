@@ -86,7 +86,7 @@ export function ExecutionHistoryPage() {
               >
                 {CATEGORY_LABELS[item.category] || item.category}: {item.count}
               </span>
-            )) ?? <span className="text-xs text-neutral-400 dark:text-neutral-500">No errors</span>}
+            )) ?? <span className="text-xs text-muted">No errors</span>}
           </div>
         </div>
       </div>

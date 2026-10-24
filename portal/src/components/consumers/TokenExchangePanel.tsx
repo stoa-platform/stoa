@@ -113,7 +113,7 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
             htmlFor="audience"
             className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1"
           >
-            Audience <span className="text-neutral-400 dark:text-neutral-500">(optional)</span>
+            Audience <span className="text-muted">(optional)</span>
           </label>
           <input
             id="audience"
@@ -129,7 +129,7 @@ export function TokenExchangePanel({ tenantId, consumerId }: TokenExchangePanelP
             htmlFor="scope"
             className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1"
           >
-            Scope <span className="text-neutral-400 dark:text-neutral-500">(optional)</span>
+            Scope <span className="text-muted">(optional)</span>
           </label>
           <input
             id="scope"

@@ -1,3 +1,12 @@
+import {
+  Field,
+  FieldLabel,
+  FieldInput,
+  FieldTextarea,
+  Form,
+  FormError,
+} from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { federationService } from '../../services/federationApi';
@@ -16,6 +25,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -23,6 +33,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
       if (!name.trim()) return;
 
       setIsSubmitting(true);
+      setError(null);
       try {
         const result = await federationService.createSubAccount(tenantId, masterId, {
           name: name.trim(),
@@ -32,6 +43,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
         onCreated(result);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to create sub-account';
+        setError(message);
         toast.error('Creation failed', message);
       } finally {
         setIsSubmitting(false);
@@ -41,26 +53,36 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-md p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h3" className="text-lg font-semibold text-neutral-900 dark:text-white">
             Create Sub-Account
-          </h3>
+          </ModalTitle>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+        <Form error={error ?? undefined} onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <FormError className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </FormError>
+          )}
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name <span className="text-red-500">*</span>
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -68,20 +90,20 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
               required
               className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
-            </label>
-            <textarea
+            </FieldLabel>
+            <FieldTextarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
               rows={2}
               className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
+          </Field>
 
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -99,8 +121,8 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
               {isSubmitting ? 'Creating...' : 'Create'}
             </button>
           </div>
-        </form>
+        </Form>
       </div>
-    </div>
+    </Modal>
   );
 }

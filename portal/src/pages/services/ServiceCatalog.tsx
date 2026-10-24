@@ -117,8 +117,9 @@ export function ServiceCatalog() {
       {/* Search + Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
+            aria-label="Search APIs by name, description, or tag..."
             type="text"
             placeholder="Search APIs by name, description, or tag..."
             value={search}
@@ -127,6 +128,7 @@ export function ServiceCatalog() {
           />
         </div>
         <select
+          aria-label="Status"
           value={statusFilter}
           onChange={handleStatusChange}
           className="px-3 py-2 border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
@@ -176,7 +178,7 @@ export function ServiceCatalog() {
       {/* Empty state */}
       {!isLoading && !isError && groupedAPIs.length === 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
-          <Layers className="h-8 w-8 text-neutral-400 mx-auto mb-4" />
+          <Layers className="h-8 w-8 text-muted mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
             No services found
           </h2>
@@ -200,16 +202,14 @@ export function ServiceCatalog() {
                 className="flex items-center gap-2 w-full text-left group"
               >
                 {isCollapsed ? (
-                  <ChevronRight className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
+                  <ChevronRight className="h-4 w-4 text-muted group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
+                  <ChevronDown className="h-4 w-4 text-muted group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
                 )}
                 <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
                   {group.name}
                 </h2>
-                <span className="text-sm text-neutral-400 dark:text-neutral-500">
-                  ({group.apis.length})
-                </span>
+                <span className="text-sm text-muted">({group.apis.length})</span>
               </button>
 
               {!isCollapsed && (
@@ -272,7 +272,7 @@ export function ServiceCatalog() {
                             </span>
                           ))}
                           {api.tags.length > 3 && (
-                            <span className="text-xs text-neutral-400">+{api.tags.length - 3}</span>
+                            <span className="text-xs text-muted">+{api.tags.length - 3}</span>
                           )}
                         </div>
                       )}

@@ -529,7 +529,7 @@ function DeploymentsTab({
                     {d.gateway_resource_id && <span>resource {d.gateway_resource_id}</span>}
                   </div>
                 </div>
-                <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                <span className="text-xs text-muted">
                   {d.last_sync_success
                     ? new Date(d.last_sync_success).toLocaleString()
                     : d.last_sync_attempt
@@ -639,7 +639,7 @@ function PromotionsTab({
                 )}
               </div>
             </div>
-            <div className="text-xs text-neutral-400 dark:text-neutral-500">
+            <div className="text-xs text-muted">
               {p.requested_by && <span>{p.requested_by}</span>}
               {p.completed_at && (
                 <span> · completed {new Date(p.completed_at).toLocaleString()}</span>

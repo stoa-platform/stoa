@@ -33,7 +33,7 @@ export function EnvironmentPipeline({
               className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium rounded ${
                 env.deployed
                   ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500'
+                  : 'bg-neutral-100 text-muted dark:bg-neutral-800 dark:text-neutral-500'
               }`}
             >
               {env.label}
@@ -65,9 +65,7 @@ export function EnvironmentPipeline({
             )}
             <span
               className={`text-xs font-semibold ${
-                env.deployed
-                  ? 'text-green-700 dark:text-green-400'
-                  : 'text-neutral-400 dark:text-neutral-500'
+                env.deployed ? 'text-green-700 dark:text-green-400' : 'text-muted'
               }`}
             >
               {env.label}

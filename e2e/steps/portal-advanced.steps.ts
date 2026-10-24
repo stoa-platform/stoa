@@ -75,7 +75,7 @@ When(
     await nameInput.fill(appName);
 
     // Select security profile from dropdown
-    const profileSelect = page.locator('#security-profile');
+    const profileSelect = page.getByRole('combobox', { name: /security profile/i });
     await expect(profileSelect).toBeVisible({ timeout: 5000 });
     await profileSelect.selectOption(profile);
 

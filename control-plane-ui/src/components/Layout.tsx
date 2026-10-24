@@ -13,6 +13,7 @@ import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
 import { EnvironmentChrome } from '@stoa/shared/components/EnvironmentChrome';
 import { useTranslation } from 'react-i18next';
+import { config } from '../config';
 import { LanguageToggle } from './LanguageToggle';
 import { apiService } from '../services/api';
 import {
@@ -565,6 +566,15 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-900 transition-colors">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:rounded focus:bg-white focus:text-neutral-900 focus:p-3 focus:outline focus:outline-2 focus:outline-primary-700"
+        onClick={() => document.getElementById('main-content')?.focus()}
+      >
+        {config.features.enableI18n
+          ? t('a11y.skipToMain', { defaultValue: 'Skip to main content' })
+          : 'Skip to main content'}
+      </a>
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -595,7 +605,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white lg:hidden"
+            className="rounded-lg p-1.5 text-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -709,7 +719,7 @@ export function Layout({ children }: LayoutProps) {
                         : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                     )}
                   >
-                    <Building2 className="h-4 w-4 flex-shrink-0 text-neutral-400" />
+                    <Building2 className="h-4 w-4 flex-shrink-0 text-muted" />
                     <span className="flex-1 text-left truncate">
                       {tenant.display_name || tenant.name}
                     </span>
@@ -747,7 +757,7 @@ export function Layout({ children }: LayoutProps) {
             {user && (
               <button
                 onClick={logout}
-                className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white flex-shrink-0"
+                className="rounded-lg p-2 text-muted hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white flex-shrink-0"
                 title={t('common.logout')}
               >
                 <LogOut className="h-5 w-5" />
@@ -843,7 +853,7 @@ export function Layout({ children }: LayoutProps) {
                 </span>
                 <ChevronDown
                   className={clsx(
-                    'h-4 w-4 text-neutral-400 transition-transform duration-200',
+                    'h-4 w-4 text-muted transition-transform duration-200',
                     tenantDropdownOpen && 'rotate-180'
                   )}
                 />
@@ -864,7 +874,7 @@ export function Layout({ children }: LayoutProps) {
                             : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                         )}
                       >
-                        <Building2 className="h-4 w-4 flex-shrink-0 text-neutral-400" />
+                        <Building2 className="h-4 w-4 flex-shrink-0 text-muted" />
                         <div className="flex-1 min-w-0">
                           <p className="truncate font-medium">
                             {tenant.display_name || tenant.name}
@@ -892,7 +902,9 @@ export function Layout({ children }: LayoutProps) {
         )}
 
         {/* Page content */}
-        <main className="p-4 sm:p-6">{children}</main>
+        <main id="main-content" tabIndex={-1} className="p-4 sm:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

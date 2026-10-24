@@ -28,6 +28,20 @@
     "noResults": "No results found",
     "viewAll": "View all"
   },
+  "a11y": {
+    "skipToMain": "Skip to main content"
+  },
+  "testing": {
+    "httpMethod": "HTTP method",
+    "requestPath": "Request path",
+    "enableQueryParameter": "Enable query parameter {{index}}",
+    "queryParameterKey": "Query parameter key {{index}}",
+    "queryParameterValue": "Query parameter value {{index}}",
+    "enableHeader": "Enable header {{index}}",
+    "headerName": "Header name {{index}}",
+    "headerValue": "Header value {{index}}",
+    "requestBody": "Request body (JSON)"
+  },
   "footer": {
     "documentation": "Documentation",
     "support": "Support",

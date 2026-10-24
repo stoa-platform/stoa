@@ -94,9 +94,9 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
         <div className="w-4 h-4 mt-0.5 flex-shrink-0">
           {hasChildren || hasArrayItems ? (
             isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+              <ChevronDown className="h-4 w-4 text-muted" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+              <ChevronRight className="h-4 w-4 text-muted" />
             )
           ) : (
             <span className="block w-1 h-1 bg-neutral-300 dark:bg-neutral-600 rounded-full mt-1.5 ml-1.5" />

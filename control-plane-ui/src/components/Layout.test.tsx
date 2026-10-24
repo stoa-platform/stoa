@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import i18n from 'i18next';
+import { config } from '../config';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './Layout';
@@ -78,6 +80,7 @@ vi.mock('react-oidc-context', () => ({
 vi.mock('../config', () => ({
   config: {
     api: { baseUrl: 'https://api.test' },
+    features: { enableI18n: true },
   },
 }));
 
@@ -97,6 +100,11 @@ function renderLayout(children = <div>Page Content</div>) {
 }
 
 describe('Layout', () => {
+  afterEach(async () => {
+    config.features.enableI18n = true;
+    await act(() => i18n.changeLanguage('en'));
+  });
+
   beforeEach(() => {
     localStorage.clear();
     vi.spyOn(global, 'fetch').mockResolvedValue({
@@ -144,6 +152,35 @@ describe('Layout', () => {
   it('renders children in main content area', () => {
     renderLayout(<div>Test Content</div>);
     expect(screen.getByText('Test Content')).toBeInTheDocument();
+  });
+
+  it('provides a keyboard skip link that focuses the main content', async () => {
+    renderLayout();
+    const skip = screen.getByRole('link', { name: 'Skip to main content' });
+    expect(skip).toHaveAttribute('href', '#main-content');
+    fireEvent.click(skip);
+    expect(screen.getByRole('main')).toHaveFocus();
+    expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('translates the skip link and falls back to English when i18n is disabled', async () => {
+    i18n.addResourceBundle(
+      'fr',
+      'common',
+      { a11y: { skipToMain: 'Passer au contenu principal' } },
+      true,
+      true
+    );
+    await act(() => i18n.changeLanguage('fr'));
+    const { unmount } = renderLayout();
+    expect(screen.getByRole('link', { name: 'Passer au contenu principal' })).toBeInTheDocument();
+    unmount();
+    const previous = config.features.enableI18n;
+    config.features.enableI18n = false;
+    renderLayout();
+    expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();
+    config.features.enableI18n = previous;
+    await act(() => i18n.changeLanguage('en'));
   });
 
   it('renders user info in sidebar', () => {

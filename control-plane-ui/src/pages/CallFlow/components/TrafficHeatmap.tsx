@@ -60,10 +60,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
         {/* Hour labels */}
         <div className="flex ml-28 mb-1">
           {hours.map((h) => (
-            <div
-              key={h}
-              className="flex-1 text-center text-[10px] text-neutral-400 dark:text-neutral-500"
-            >
+            <div key={h} className="flex-1 text-center text-[10px] text-muted">
               {h % 3 === 0 ? `${h}h` : ''}
             </div>
           ))}
@@ -113,7 +110,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
 
         {/* Legend */}
         <div className="flex items-center justify-end mt-2 gap-1">
-          <span className="text-[10px] text-neutral-400 mr-1">Low</span>
+          <span className="text-[10px] text-muted mr-1">Low</span>
           {[
             'bg-neutral-100 dark:bg-neutral-800',
             'bg-blue-200 dark:bg-blue-800/40',
@@ -122,7 +119,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
           ].map((cls, i) => (
             <div key={i} className={`w-4 h-3 rounded-sm ${cls}`} />
           ))}
-          <span className="text-[10px] text-neutral-400 ml-1">High</span>
+          <span className="text-[10px] text-muted ml-1">High</span>
         </div>
       </div>
 

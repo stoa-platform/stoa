@@ -175,12 +175,10 @@ export function ToolDetail() {
                   </div>
                 )}
                 {tool.tenantId && (
-                  <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                    Tenant: {tool.tenantId}
-                  </span>
+                  <span className="text-xs text-muted">Tenant: {tool.tenantId}</span>
                 )}
                 {tool.endpoint && (
-                  <span className="flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500">
+                  <span className="flex items-center gap-1 text-xs text-muted">
                     <ExternalLink className="h-3 w-3" />
                     API-backed
                   </span>

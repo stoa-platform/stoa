@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import { Modal, ModalTitle } from '../Modal';
+import React, { useId, useCallback } from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 
 // ============================================================================
@@ -34,29 +35,35 @@ export interface ConfirmDialogProps {
 // Variant Styles
 // ============================================================================
 
-const variantStyles: Record<ConfirmVariant, {
-  icon: React.ReactNode;
-  iconBg: string;
-  iconColor: string;
-  confirmButton: string;
-}> = {
+const variantStyles: Record<
+  ConfirmVariant,
+  {
+    icon: React.ReactNode;
+    iconBg: string;
+    iconColor: string;
+    confirmButton: string;
+  }
+> = {
   default: {
     icon: <AlertTriangle className="h-6 w-6" />,
     iconBg: 'bg-primary-100 dark:bg-primary-900',
     iconColor: 'text-primary-600 dark:text-primary-400',
-    confirmButton: 'bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white',
+    confirmButton:
+      'bg-primary-600 hover:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-700 text-white',
   },
   danger: {
     icon: <Trash2 className="h-6 w-6" />,
     iconBg: 'bg-error-100 dark:bg-error-900',
     iconColor: 'text-error-600 dark:text-error-400',
-    confirmButton: 'bg-error-600 hover:bg-error-700 dark:bg-error-500 dark:hover:bg-error-600 text-white',
+    confirmButton:
+      'bg-error-600 hover:bg-error-700 dark:bg-error-500 dark:hover:bg-error-600 text-white',
   },
   warning: {
     icon: <AlertTriangle className="h-6 w-6" />,
     iconBg: 'bg-warning-100 dark:bg-warning-900',
     iconColor: 'text-warning-600 dark:text-warning-400',
-    confirmButton: 'bg-warning-600 hover:bg-warning-700 dark:bg-warning-500 dark:hover:bg-warning-600 text-white',
+    confirmButton:
+      'bg-warning-600 hover:bg-warning-700 dark:bg-warning-500 dark:hover:bg-warning-600 text-white',
   },
 };
 
@@ -76,72 +83,47 @@ export function ConfirmDialog({
   onCancel,
   icon,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const descriptionId = useId();
   const styles = variantStyles[variant];
 
-  // Focus trap: focus confirm button when dialog opens
-  useEffect(() => {
-    if (open && confirmButtonRef.current) {
-      confirmButtonRef.current.focus();
-    }
-  }, [open]);
-
-  // Handle Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open && !loading) {
+  // Handle backdrop click
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget && !loading) {
         onCancel();
       }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, loading, onCancel]);
-
-  // Prevent body scroll when dialog is open
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [open]);
-
-  // Handle backdrop click
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !loading) {
-      onCancel();
-    }
-  }, [loading, onCancel]);
+    },
+    [loading, onCancel]
+  );
 
   if (!open) return null;
 
   return (
-    <div
+    <Modal
+      onClose={onCancel}
+      closeDisabled={loading}
+      open={open}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-dialog-title"
-      aria-describedby="confirm-dialog-description"
+      aria-describedby={descriptionId}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 animate-fade-in" />
+      <div
+        className="absolute inset-0 bg-black/50 animate-fade-in"
+        aria-hidden="true"
+        onClick={() => {
+          if (!loading) onCancel();
+        }}
+      />
 
       {/* Dialog */}
-      <div
-        ref={dialogRef}
-        className="relative bg-white dark:bg-neutral-900 rounded-modal shadow-modal w-full max-w-md animate-scale-in"
-      >
+      <div className="relative bg-white dark:bg-neutral-900 rounded-modal shadow-modal w-full max-w-md animate-scale-in">
         {/* Close button */}
         <button
+          type="button"
           onClick={onCancel}
           disabled={loading}
-          className="absolute top-4 right-4 p-1 rounded-full text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 p-1 rounded-full text-muted hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50"
           aria-label="Close dialog"
         >
           <X className="h-5 w-5" />
@@ -150,21 +132,23 @@ export function ConfirmDialog({
         {/* Content */}
         <div className="p-6">
           {/* Icon */}
-          <div className={`mx-auto w-12 h-12 rounded-full ${styles.iconBg} ${styles.iconColor} flex items-center justify-center mb-4`}>
+          <div
+            className={`mx-auto w-12 h-12 rounded-full ${styles.iconBg} ${styles.iconColor} flex items-center justify-center mb-4`}
+          >
             {icon || styles.icon}
           </div>
 
           {/* Title */}
-          <h2
-            id="confirm-dialog-title"
+          <ModalTitle
+            as="h2"
             className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 text-center mb-2"
           >
             {title}
-          </h2>
+          </ModalTitle>
 
           {/* Message */}
           <p
-            id="confirm-dialog-description"
+            id={descriptionId}
             className="text-sm text-neutral-600 dark:text-neutral-400 text-center"
           >
             {message}
@@ -174,6 +158,7 @@ export function ConfirmDialog({
         {/* Actions */}
         <div className="flex gap-3 px-6 pb-6">
           <button
+            type="button"
             onClick={onCancel}
             disabled={loading}
             className="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
@@ -181,7 +166,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
-            ref={confirmButtonRef}
+            type="button"
             onClick={onConfirm}
             disabled={loading}
             className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${styles.confirmButton}`}
@@ -212,7 +197,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

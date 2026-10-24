@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Execution Detail Modal — Full execution trace (CAB-1318)
  */
@@ -30,21 +31,21 @@ interface ExecutionDetailModalProps {
 
 export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModalProps) {
   return (
-    <div
+    <Modal
+      onClose={onClose}
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       onClick={onClose}
-      role="dialog"
-      aria-label="Execution Detail"
     >
       <div
         className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
             Execution Detail
-          </h2>
+          </ModalTitle>
           <button
+            type="button"
             onClick={onClose}
             className="text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
             aria-label="Close"
@@ -107,7 +108,7 @@ export function ExecutionDetailModal({ execution, onClose }: ExecutionDetailModa
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

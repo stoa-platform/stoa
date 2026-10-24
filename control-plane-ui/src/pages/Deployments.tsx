@@ -1,3 +1,4 @@
+import { Field, FieldLabel, FieldSelect } from '@stoa/shared/components/Field';
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -143,7 +144,7 @@ function StatsCard({
         <div>
           <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
-          {subtitle && <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -176,7 +177,7 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <StepTypeIcon className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                  <StepTypeIcon className="h-4 w-4 text-muted" />
                   <span className="font-medium text-neutral-900 dark:text-white">
                     {stepInfo.label}
                   </span>
@@ -190,7 +191,7 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
                   <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-300 font-mono bg-white/50 dark:bg-neutral-800/50 rounded p-2">
                     {Object.entries(step.details).map(([key, value]) => (
                       <div key={key} className="flex gap-2">
-                        <span className="text-neutral-400 dark:text-neutral-500">{key}:</span>
+                        <span className="text-muted">{key}:</span>
                         <span className="truncate">
                           {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                         </span>
@@ -205,9 +206,7 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
                 )}
               </div>
               {step.started_at && (
-                <div className="text-xs text-neutral-400 text-right">
-                  {formatTime(step.started_at)}
-                </div>
+                <div className="text-xs text-muted text-right">{formatTime(step.started_at)}</div>
               )}
             </div>
           </div>
@@ -247,7 +246,7 @@ function TraceRow({
         className="flex items-center gap-4 p-4 hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer"
         onClick={onToggle}
       >
-        <button className="text-neutral-400 dark:text-neutral-500">
+        <button className="text-muted">
           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
         </button>
         <div className={clsx('rounded-full p-1.5', cfg.bg)}>
@@ -257,13 +256,13 @@ function TraceRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+            <GitBranch className="h-4 w-4 text-muted" />
             <span className="font-medium text-neutral-900 dark:text-white">
               {trace.trigger_type}
             </span>
             {trace.api_name && (
               <>
-                <span className="text-neutral-400 dark:text-neutral-500">→</span>
+                <span className="text-muted">→</span>
                 <span className="text-blue-600">{trace.api_name}</span>
               </>
             )}
@@ -279,7 +278,7 @@ function TraceRow({
           <span>{trace.git_author || 'unknown'}</span>
         </div>
         {trace.git_commit_sha && (
-          <div className="flex items-center gap-1 text-sm text-neutral-400 dark:text-neutral-500 font-mono">
+          <div className="flex items-center gap-1 text-sm text-muted font-mono">
             <GitCommit className="h-4 w-4" />
             <span>{trace.git_commit_sha}</span>
           </div>
@@ -290,15 +289,13 @@ function TraceRow({
         </div>
         <div className="flex items-center gap-1 text-sm w-16">
           <span className="text-green-600">{trace.steps_completed}</span>
-          <span className="text-neutral-400 dark:text-neutral-500">/</span>
+          <span className="text-muted">/</span>
           <span className="text-neutral-600 dark:text-neutral-300">{trace.steps_count}</span>
           {trace.steps_failed > 0 && (
             <span className="text-red-500 ml-1">({trace.steps_failed})</span>
           )}
         </div>
-        <div className="text-sm text-neutral-400 dark:text-neutral-500 w-24 text-right">
-          {formatTime(trace.created_at)}
-        </div>
+        <div className="text-sm text-muted w-24 text-right">{formatTime(trace.created_at)}</div>
       </div>
 
       {isExpanded && (
@@ -690,11 +687,11 @@ function DeploymentHistoryTab() {
       {/* Filters */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-sm border border-neutral-100 dark:border-neutral-700 p-4">
         <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Tenant
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedTenant}
               onChange={(e) => {
                 setSelectedTenant(e.target.value);
@@ -708,13 +705,13 @@ function DeploymentHistoryTab() {
                   {tenant.display_name || tenant.name}
                 </option>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            </FieldSelect>
+          </Field>
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               API
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedApi}
               onChange={(e) => {
                 setSelectedApi(e.target.value);
@@ -728,21 +725,21 @@ function DeploymentHistoryTab() {
                   {api.display_name || api.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
           <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <p className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Environment
-            </label>
+            </p>
             <div className="w-40 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm capitalize">
               {activeEnvironment || 'All'}
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Status
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
@@ -756,8 +753,8 @@ function DeploymentHistoryTab() {
               <option value="success">Success</option>
               <option value="failed">Failed</option>
               <option value="rolled_back">Rolled Back</option>
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
           <button
             onClick={loadDeploymentsRef}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 text-sm"
@@ -812,7 +809,7 @@ function DeploymentHistoryTab() {
                     onClick={() => handleExpand(deployment.id)}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <button className="text-neutral-400 dark:text-neutral-500 shrink-0">
+                      <button className="text-muted shrink-0">
                         {isExpanded ? (
                           <ChevronDown className="h-4 w-4" />
                         ) : (
@@ -824,7 +821,7 @@ function DeploymentHistoryTab() {
                           {deployment.api_name}
                         </div>
                         {deployment.commit_sha && (
-                          <div className="text-xs text-neutral-400 dark:text-neutral-500 font-mono">
+                          <div className="text-xs text-muted font-mono">
                             {deployment.commit_sha.slice(0, 7)}
                           </div>
                         )}
@@ -1011,13 +1008,13 @@ function GitConfigTab() {
         <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4 font-mono text-sm">
           <div className="text-neutral-500 dark:text-neutral-400 mb-2"># Pipeline flow</div>
           <div className="text-blue-600">{config.services.git.label} Push</div>
-          <div className="text-neutral-400 ml-4">↓ webhook</div>
+          <div className="text-muted ml-4">↓ webhook</div>
           <div className="text-green-600 ml-4">Control-Plane-API</div>
-          <div className="text-neutral-400 ml-8">↓ publish event</div>
+          <div className="text-muted ml-8">↓ publish event</div>
           <div className="text-purple-600 ml-8">Kafka (deploy-requests)</div>
-          <div className="text-neutral-400 ml-12">↓ consume</div>
+          <div className="text-muted ml-12">↓ consume</div>
           <div className="text-orange-600 ml-12">AWX Job Template</div>
-          <div className="text-neutral-400 ml-16">↓ deploy</div>
+          <div className="text-muted ml-16">↓ deploy</div>
           <div className="text-green-600 ml-16">webMethods Gateway</div>
         </div>
       </div>

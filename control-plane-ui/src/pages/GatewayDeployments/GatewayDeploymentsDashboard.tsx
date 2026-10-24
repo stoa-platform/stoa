@@ -202,6 +202,7 @@ export function GatewayDeploymentsDashboard() {
       {/* Filter */}
       <div className="flex items-center gap-4">
         <select
+          aria-label="Status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"

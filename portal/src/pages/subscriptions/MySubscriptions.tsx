@@ -401,8 +401,11 @@ export function MySubscriptions() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
+            aria-label={
+              activeTab === 'servers' ? 'Search by server name...' : 'Search by tool name...'
+            }
             type="text"
             placeholder={
               activeTab === 'servers' ? 'Search by server name...' : 'Search by tool name...'
@@ -415,6 +418,7 @@ export function MySubscriptions() {
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
           <select
+            aria-label="Status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
@@ -450,7 +454,7 @@ export function MySubscriptions() {
           {!serverSubsLoading && !serverSubsError && filteredServerSubs.length === 0 && (
             <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
               <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
-                <Server className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+                <Server className="h-8 w-8 text-muted" />
               </div>
               <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
                 No Server Subscriptions
@@ -567,7 +571,7 @@ export function MySubscriptions() {
           {!toolSubsLoading && !toolSubsError && filteredToolSubs.length === 0 && (
             <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
               <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
-                <Wrench className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+                <Wrench className="h-8 w-8 text-muted" />
               </div>
               <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
                 No Tool Subscriptions
@@ -703,7 +707,7 @@ export function MySubscriptions() {
                         </td>
                         <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                           {sub.api_name}
-                          <span className="text-xs text-neutral-400 ml-1">v{sub.api_version}</span>
+                          <span className="text-xs text-muted ml-1">v{sub.api_version}</span>
                         </td>
                         <td className="px-4 py-3 text-sm text-neutral-500">
                           {sub.plan_name || '—'}

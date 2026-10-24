@@ -10,9 +10,10 @@ spec:
   # irrésoluble. Chaque nœud tape son propre `localhost:30300`, kube-proxy route
   # vers le pod Gitea où qu'il soit.
   #
-  # Ce n'est PAS une exposition publique : ufw est en `-P INPUT DROP` et
-  # n'ouvre au monde que 22, 30080 et 30443 ; 30300 n'est joignable que par la
-  # boucle locale et les pairs du cluster. Vérifié le 2026-07-28.
+  # ATTENTION : kube-proxy DNATe les NodePorts AVANT ufw — ufw ne protège PAS 30300.
+  # Mesuré le 21/10/2026 : Gitea joignable depuis Internet sur les 4 nœuds.
+  # La protection est l'unité systemd `nodeport-guard` (table raw, SYN vers
+  # 30000-32767 sur eth0 acceptés seulement depuis les IP des workers).
   #
   # Pourquoi pas une entrée /etc/hosts pointant la ClusterIP : ce serait une
   # liaison mutable posée hors de Git sur quatre nœuds. La ClusterIP change à

@@ -15,7 +15,7 @@ import (
 //   - handleSyncDeployment (SSE, 1 route per deployment event)
 //
 // Previously these two paths duplicated step construction, per-route status
-// resolution and result assembly — and had diverged. See REWRITE-BUGS.md
+// resolution and result assembly — and had diverged. See docs/connect-known-issues.md
 // B.1..B.3 for the divergences consolidated here; most notably the
 // Generation field (CAB-1950) is now always propagated.
 //

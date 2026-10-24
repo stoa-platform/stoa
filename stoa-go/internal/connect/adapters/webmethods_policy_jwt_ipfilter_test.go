@@ -80,7 +80,7 @@ func TestMapPolicyConfig_IpFilterPolicy(t *testing.T) {
 func TestMapPolicyConfig_IpFilterPolicy_DenyMode(t *testing.T) {
 	result := mapPolicyConfig("ipFilterPolicy", map[string]interface{}{
 		"mode":    "deny",
-		"ip_list": []interface{}{"1.2.3.4"},
+		"ip_list": []interface{}{"203.0.113.4"},
 	})
 	if result["ipFilterMode"] != "DENY" {
 		t.Errorf("ipFilterMode: got %v, want DENY", result["ipFilterMode"])

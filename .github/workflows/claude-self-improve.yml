@@ -147,6 +147,9 @@ jobs:
     if: vars.DISABLE_L4_SELF_IMPROVE != 'true' && vars.DISABLE_CONTEXT_COMPILER != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      pr_url: ${{ steps.impactpr.outputs.pr_url }}
+      branch: ${{ steps.impactpr.outputs.branch }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -156,9 +159,11 @@ jobs:
           fetch-depth: 0
 
       - name: Unlock git-crypt
+        env:
+          GIT_CRYPT_KEY: ${{ secrets.GIT_CRYPT_KEY }}
         run: |
           sudo apt-get install -y git-crypt
-          echo "${{ secrets.GIT_CRYPT_KEY }}" | base64 -d > /tmp/git-crypt.key
+          printf '%s' "$GIT_CRYPT_KEY" | base64 -d > /tmp/git-crypt.key
           git-crypt unlock /tmp/git-crypt.key
           rm /tmp/git-crypt.key
 
@@ -237,27 +242,49 @@ jobs:
             --title "chore: weekly impact analysis update" \
             --body-file /tmp/pr-body.md
 
-      # CAB-2301 F4: a PR opened with GITHUB_TOKEN triggers no pull_request
-      # workflow. Dispatch the workflows that carry the 4 required checks on
-      # the PR branch. Needs `actions: write` for GITHUB_TOKEN, which is not
-      # granted here (pending Christophe's OK). Until then this step only
-      # warns, and the PR stays blocked by the missing required checks.
+  # CAB-2301 F4 (CAB-2331): dispatch the workflows that carry the 4 required
+  # checks on the bot PR branch. A PR opened with GITHUB_TOKEN triggers no
+  # pull_request workflow. This job does only that, and holds no other right.
+  dispatch-required-checks:
+    needs: weekly-impact-review
+    if: needs.weekly-impact-review.outputs.branch != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # TODO(CAB-2331, OK Christophe requis) : permissions: actions: write
+    permissions: {}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_URL: ${{ needs.weekly-impact-review.outputs.pr_url }}
+      PR_BRANCH: ${{ needs.weekly-impact-review.outputs.branch }}
+    steps:
       - name: Dispatch required checks on the bot PR
-        if: steps.impactpr.outputs.branch != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_URL: ${{ steps.impactpr.outputs.pr_url }}
-          PR_BRANCH: ${{ steps.impactpr.outputs.branch }}
         run: |
-          set -u
+          set -uo pipefail
           PR_NUMBER="${PR_URL##*/}"
           if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
-            echo "::warning::Cannot read the PR number from ${PR_URL}; required checks not dispatched"
-            exit 0
+            echo "::error::Cannot read the PR number from ${PR_URL}"
+            exit 1
           fi
-          ok=true
-          gh workflow run required-checks.yml --ref "$PR_BRANCH" || ok=false
-          gh workflow run regression-guard.yml --ref "$PR_BRANCH" -f pr_number="$PR_NUMBER" || ok=false
-          if [ "$ok" != true ]; then
-            echo "::warning::Required checks not dispatched on ${PR_BRANCH} (GITHUB_TOKEN needs actions: write). PR #${PR_NUMBER} stays blocked until its 4 required checks are green."
-          fi
+          # Fail on any dispatch error, except HTTP 403 (actions: write not
+          # granted yet): then warn, and the PR stays blocked by its missing
+          # required checks. Once actions: write is granted, no 403 is
+          # expected and every failure fails this job.
+          dispatch() {
+            local out
+            if out=$(gh workflow run "$@" 2>&1); then
+              echo "$out"
+              return 0
+            fi
+            echo "$out"
+            if grep -q "HTTP 403" <<<"$out"; then
+              echo "::warning::Dispatch refused (HTTP 403): GITHUB_TOKEN lacks actions: write (CAB-2331). PR #${PR_NUMBER} stays blocked until its 4 required checks are green."
+              return 0
+            fi
+            echo "::error::Dispatch failed: gh workflow run $*"
+            return 1
+          }
+          rc=0
+          dispatch required-checks.yml --ref "$PR_BRANCH" || rc=1
+          dispatch regression-guard.yml --ref "$PR_BRANCH" -f pr_number="$PR_NUMBER" || rc=1
+          exit "$rc"

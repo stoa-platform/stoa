@@ -8,7 +8,9 @@
 use insta::assert_json_snapshot;
 
 use crate::common::TestApp;
+use crate::jwt::{self, bad_signature_token, expired_token, valid_token};
 
+/// Discovery routes (`GET /.well-known/agent.json`, `GET /a2a/agents`) stay public.
 fn a2a_app() -> TestApp {
     let config = stoa_gateway::config::Config {
         a2a_enabled: true,
@@ -30,7 +32,8 @@ async fn test_agent_card_shape() {
 
 #[tokio::test]
 async fn test_a2a_tasks_send_shape() {
-    let app = a2a_app();
+    let oidc = jwt::oidc_server().await;
+    let app = TestApp::with_config(jwt::config(&oidc));
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "tasks/send",
@@ -44,7 +47,11 @@ async fn test_a2a_tasks_send_shape() {
         "id": 1
     });
     let (status, response) = app
-        .post_json("/a2a", &serde_json::to_string(&body).unwrap())
+        .post_json_with_bearer(
+            "/a2a",
+            &serde_json::to_string(&body).unwrap(),
+            valid_token(),
+        )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&response).expect("valid JSON");
@@ -65,7 +72,8 @@ async fn test_a2a_tasks_send_shape() {
 
 #[tokio::test]
 async fn test_a2a_tasks_get_not_found_shape() {
-    let app = a2a_app();
+    let oidc = jwt::oidc_server().await;
+    let app = TestApp::with_config(jwt::config(&oidc));
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "tasks/get",
@@ -73,7 +81,11 @@ async fn test_a2a_tasks_get_not_found_shape() {
         "id": 2
     });
     let (status, response) = app
-        .post_json("/a2a", &serde_json::to_string(&body).unwrap())
+        .post_json_with_bearer(
+            "/a2a",
+            &serde_json::to_string(&body).unwrap(),
+            valid_token(),
+        )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&response).expect("valid JSON");
@@ -86,7 +98,8 @@ async fn test_a2a_tasks_get_not_found_shape() {
 
 #[tokio::test]
 async fn test_a2a_method_not_found_shape() {
-    let app = a2a_app();
+    let oidc = jwt::oidc_server().await;
+    let app = TestApp::with_config(jwt::config(&oidc));
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "unknown/method",
@@ -94,7 +107,11 @@ async fn test_a2a_method_not_found_shape() {
         "id": 3
     });
     let (status, response) = app
-        .post_json("/a2a", &serde_json::to_string(&body).unwrap())
+        .post_json_with_bearer(
+            "/a2a",
+            &serde_json::to_string(&body).unwrap(),
+            valid_token(),
+        )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&response).expect("valid JSON");
@@ -115,7 +132,8 @@ async fn test_a2a_agents_list_shape() {
 
 #[tokio::test]
 async fn test_a2a_tool_bridge_not_found_shape() {
-    let app = a2a_app();
+    let oidc = jwt::oidc_server().await;
+    let app = TestApp::with_config(jwt::config(&oidc));
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "tasks/send",
@@ -132,7 +150,11 @@ async fn test_a2a_tool_bridge_not_found_shape() {
         "id": 4
     });
     let (status, response) = app
-        .post_json("/a2a", &serde_json::to_string(&body).unwrap())
+        .post_json_with_bearer(
+            "/a2a",
+            &serde_json::to_string(&body).unwrap(),
+            valid_token(),
+        )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&response).expect("valid JSON");
@@ -148,4 +170,14 @@ async fn test_a2a_protocol_version() {
     let (_, body) = app.get("/.well-known/agent.json").await;
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     assert_eq!(json["protocolVersion"], "1.0");
+}
+
+#[tokio::test]
+async fn test_a2a_rejects_invalid_credentials() {
+    let oidc = jwt::oidc_server().await;
+    let app = TestApp::with_config(jwt::config(&oidc));
+    for token in [bad_signature_token(), expired_token()] {
+        let (status, _) = app.post_json_with_bearer("/a2a", "{}", token).await;
+        assert_eq!(status, axum::http::StatusCode::UNAUTHORIZED);
+    }
 }

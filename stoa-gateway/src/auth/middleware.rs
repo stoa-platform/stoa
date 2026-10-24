@@ -325,7 +325,34 @@ pub async fn mcp_jwt_required(
     next.run(request).await
 }
 
-/// Build the 401 response for `mcp_jwt_required` with a uniform body shape.
+/// Require a validated JWT, including when no validator is configured.
+/// Uses the same token validation and authenticated user context as MCP.
+pub async fn jwt_required(
+    State(state): State<AppState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    if state.jwt_validator.is_none() {
+        warn!("JWT validator not configured — protected route denied");
+        return mcp_auth_challenge("Bearer", "JWT authentication unavailable");
+    }
+    mcp_jwt_required(State(state), request, next).await
+}
+
+/// Only an explicit require_auth=false permits anonymous API proxy requests.
+pub async fn api_proxy_jwt_required(
+    State(state): State<AppState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    if state.config.api_proxy.require_auth {
+        jwt_required(State(state), request, next).await
+    } else {
+        next.run(request).await
+    }
+}
+
+/// Build a JWT 401 response with a uniform body shape.
 fn mcp_auth_challenge(www_authenticate: &'static str, message: &str) -> Response {
     let body = AuthError::unauthorized(message);
     let mut response = (StatusCode::UNAUTHORIZED, Json(body)).into_response();

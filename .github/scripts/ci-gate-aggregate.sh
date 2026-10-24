@@ -15,6 +15,7 @@ COMPONENTS=(
   stoa-go
   stoa-operator
   helm
+  gate-contract
 )
 
 fail() {

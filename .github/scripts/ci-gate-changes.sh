@@ -20,8 +20,14 @@ check() {
   local name="$1"
   local pattern="$2"
   local value="false"
-  if grep -z -qE -- "$pattern" "$changed"; then
+  local status=0
+  # grep: 0 = match, 1 = no match. Any other status is an error, not "unchanged".
+  grep -z -qE -- "$pattern" "$changed" || status=$?
+  if [[ "$status" -eq 0 ]]; then
     value="true"
+  elif [[ "$status" -ne 1 ]]; then
+    printf 'ci-gate-changes: grep exited %s for %s\n' "$status" "$name" >&2
+    exit "$status"
   fi
   printf '%s=%s\n' "$name" "$value"
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
@@ -38,3 +44,4 @@ check portal "^portal/|^shared/|^\.github/workflows/(stoa-portal-ci|reusable-nod
 check stoa-go "^stoa-go/|^\.github/workflows/stoa-go-ci\.yml$|^\.github/workflows/ci-gate\.yml$"
 check stoa-operator "^stoa-operator/|^\.github/workflows/(stoa-operator-ci|reusable-python-ci)\.yml$|^\.github/workflows/ci-gate\.yml$|^\.github/actions/"
 check helm "^charts/|^\.github/workflows/helm-lint\.yml$|^\.github/workflows/ci-gate\.yml$"
+check gate-contract '^\.github/scripts/ci-gate-.*\.sh$|^scripts/ci/tests/test_ci_gate_contract\.py$'

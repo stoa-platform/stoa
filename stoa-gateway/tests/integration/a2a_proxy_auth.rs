@@ -222,3 +222,96 @@ fn bad_signature_fixture_differs_only_by_signature() {
         .expect("signature segment is valid base64url");
     assert_eq!(signature.len(), 256, "RS256 2048-bit signature");
 }
+
+#[tokio::test]
+async fn a2a_jwt_guard_covers_all_methods() {
+    let oidc = jwt::oidc_server().await;
+    let router = stoa_gateway::build_router(AppState::new(jwt::config(&oidc)));
+    let bearer = format!("Bearer {}", valid_token());
+    for method in ["GET", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] {
+        let response = send(&router, method, "/a2a", &[]).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{method}");
+        let response = send(
+            &router,
+            method,
+            "/a2a",
+            &[("Authorization", bearer.as_str())],
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::METHOD_NOT_ALLOWED,
+            "{method}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn proxy_jwt_guard_covers_all_methods() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(path("/echo"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let mut config = jwt::config(&oidc);
+    enable_proxy(&mut config, &upstream);
+    let router = stoa_gateway::build_router(AppState::new(config));
+    let methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+    for method in methods {
+        assert_unauthorized(send(&router, method, "/proxy/test/echo", &[]).await);
+    }
+    assert!(upstream.received_requests().await.unwrap().is_empty());
+    let bearer = format!("Bearer {}", valid_token());
+    for method in methods {
+        let response = send(
+            &router,
+            method,
+            "/proxy/test/echo",
+            &[("Authorization", bearer.as_str())],
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK, "{method}");
+    }
+    assert_eq!(
+        upstream.received_requests().await.unwrap().len(),
+        methods.len()
+    );
+}
+
+#[tokio::test]
+async fn proxy_path_variants_without_token() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(path("/echo"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let mut config = jwt::config(&oidc);
+    enable_proxy(&mut config, &upstream);
+    let router = stoa_gateway::build_router(AppState::new(config));
+    for uri in [
+        "/proxy",
+        "/proxy/",
+        "/proxy/test",
+        "/proxy/test/",
+        "//proxy/test/echo",
+        "/PROXY/test/echo",
+        "/Proxy/test/echo",
+        "/proxy/%74est/echo",
+        "/proxy/test/%65cho",
+        "/proxy/test//echo",
+        "/proxy/test/./echo",
+        "/proxy/test/echo?x=1",
+        "/proxy/test/echo#frag",
+    ] {
+        for method in ["GET", "POST"] {
+            let status = send(&router, method, uri, &[]).await.status();
+            assert!(
+                status == StatusCode::UNAUTHORIZED || status == StatusCode::NOT_FOUND,
+                "{method} {uri}: {status}"
+            );
+        }
+    }
+    assert!(upstream.received_requests().await.unwrap().is_empty());
+}

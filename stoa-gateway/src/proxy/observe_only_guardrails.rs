@@ -52,7 +52,7 @@ pub(crate) fn resolve_guardrails_config(
 
 pub(crate) async fn buffer_json_request_for_observe_only(
     request: Request<Body>,
-) -> Result<(Request<Body>, GuardrailBodyApplicability), Response> {
+) -> Result<(Request<Body>, GuardrailBodyApplicability), Box<Response>> {
     if !is_json_content_type(request.headers()) {
         return Ok((request, skipped(GuardrailBodySkipReason::NonJson)));
     }
@@ -73,7 +73,9 @@ pub(crate) async fn buffer_json_request_for_observe_only(
                 error = %error,
                 "Failed to buffer JSON request body for observe-only guardrails"
             );
-            return Err((StatusCode::BAD_REQUEST, "Failed to read request body").into_response());
+            return Err(Box::new(
+                (StatusCode::BAD_REQUEST, "Failed to read request body").into_response(),
+            ));
         }
     };
     let applicability = classify_buffered_json_body(&parts.headers, &bytes);

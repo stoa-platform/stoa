@@ -14,8 +14,8 @@ name: Security Scan
 on:
   push:
     branches: [main, develop]
-  pull_request:
-    branches: [main]
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
   schedule:
     - cron: '0 6 * * *' # Daily 6:00 AM UTC
   workflow_dispatch:
@@ -26,7 +26,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: security-scan-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

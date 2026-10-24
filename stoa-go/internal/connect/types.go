@@ -33,7 +33,7 @@ type RegistrationResponse struct {
 // --- Heartbeat (POST /v1/internal/gateways/{id}/heartbeat) ---
 
 // HeartbeatPayload is the payload sent to the heartbeat endpoint.
-// PoliciesCount is currently always zero (see REWRITE-BUGS.md F.8).
+// PoliciesCount is currently always zero (see docs/connect-known-issues.md F.8).
 type HeartbeatPayload struct {
 	UptimeSeconds  int `json:"uptime_seconds"`
 	RoutesCount    int `json:"routes_count"`
@@ -62,7 +62,7 @@ type DiscoveredAPIPayload struct {
 // --- Gateway config fetch (GET /v1/internal/gateways/{id}/config) ---
 
 // GatewayConfigResponse is the response from the config endpoint.
-// PendingDeployments is currently unused by the agent (see REWRITE-BUGS.md F.9).
+// PendingDeployments is currently unused by the agent (see docs/connect-known-issues.md F.9).
 type GatewayConfigResponse struct {
 	GatewayID          string          `json:"gateway_id"`
 	Name               string          `json:"name"`

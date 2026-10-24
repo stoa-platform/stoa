@@ -44,4 +44,4 @@ check portal "^portal/|^shared/|^\.github/workflows/(stoa-portal-ci|reusable-nod
 check stoa-go "^stoa-go/|^\.github/workflows/stoa-go-ci\.yml$|^\.github/workflows/ci-gate\.yml$"
 check stoa-operator "^stoa-operator/|^\.github/workflows/(stoa-operator-ci|reusable-python-ci)\.yml$|^\.github/workflows/ci-gate\.yml$|^\.github/actions/"
 check helm "^charts/|^\.github/workflows/helm-lint\.yml$|^\.github/workflows/ci-gate\.yml$"
-check gate-contract '^\.github/scripts/ci-gate-.*\.sh$|^scripts/ci/tests/test_ci_gate_contract\.py$'
+check gate-contract '^\.github/scripts/ci-gate-.*\.sh$|^scripts/ci/tests/test_ci_gate_contract\.py$|^\.github/workflows/'

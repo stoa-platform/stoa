@@ -304,6 +304,7 @@ def test_grep_status_other_than_zero_or_one_fails(tmp_path: Path, code: int) -> 
         ".github/scripts/ci-gate-changes.sh",
         ".github/scripts/ci-gate-aggregate.sh",
         "scripts/ci/tests/test_ci_gate_contract.py",
+        ".github/workflows/notes.yml",
     ),
 )
 def test_gate_script_or_contract_test_selects_contract_job(tmp_path: Path, rel: str) -> None:
@@ -325,6 +326,7 @@ def test_contract_job_is_covered_by_aggregation() -> None:
     assert "gate-contract" in aggregate
     assert r"^\.github/scripts/ci-gate-.*\.sh$" in changes
     assert r"scripts/ci/tests/test_ci_gate_contract\.py" in changes
+    assert r"|^\.github/workflows/" in changes
     results, outputs = _baseline({"gate-contract"})
     assert _aggregate(_needs(results, outputs)).returncode == 0
     results["gate-contract"] = "failure"

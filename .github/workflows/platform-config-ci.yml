@@ -116,14 +116,18 @@ jobs:
           fi
 
   # ============================================
-  # Stage 2: Sync to Git repository (main branch only)
-  # Supports GitLab (default) and GitHub via GIT_PROVIDER
+  # Stage 2: Propose the sync as a pull request into the GitOps repo main.
+  # Supports GitLab (default) and GitHub via GIT_PROVIDER.
+  # Does not push that main branch and does not merge the pull request.
+  # ArgoCD reconciles only after a human merges it.
   # ============================================
   sync-gitops:
     name: Sync to GitOps repo
     needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      pr_url: ${{ steps.publish.outputs.pr_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -176,38 +180,62 @@ jobs:
             cp gitops-templates/webmethods/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/ 2>/dev/null || true  # intentional: glob may match zero files
           fi
 
-      - name: Commit and push
+      - name: Commit and open pull request
+        id: publish
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          GH_GITOPS_TOKEN: ${{ secrets.GITHUB_GITOPS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_GITOPS_TOKEN }}
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_WORKFLOW: ${{ github.workflow }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_SERVER: ${{ github.server_url }}
         run: |
           cd /tmp/stoa-gitops
+          cat > /tmp/commit-msg.txt << EOF
+          sync: platform configs from GitHub
 
-          git add -A
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
+          Source: ${SOURCE_REPO}@${SOURCE_SHA}
+          Workflow: ${SOURCE_WORKFLOW}
+          Run: ${SOURCE_RUN_ID}
+          EOF
+          cat > /tmp/pr-body.md << EOF
+          ## Summary
+          Sync platform-bootstrap configs from \`${SOURCE_REPO}\`@\`${SOURCE_SHA}\`.
+
+          Workflow: ${SOURCE_WORKFLOW}
+          Run: ${SOURCE_SERVER}/${SOURCE_REPO}/actions/runs/${SOURCE_RUN_ID}
+
+          CI opens this pull request and does not merge it. ArgoCD syncs after a human merges it to main.
+          EOF
+          args=(
+            --branch bot/platform-config-sync
+            --path webmethods
+            --path platform
+            --message-file /tmp/commit-msg.txt
+            --title "sync: platform configs from ${SOURCE_REPO}"
+            --body-file /tmp/pr-body.md
+          )
+          if [ "$GIT_PROVIDER" = "github" ]; then
+            bash "$GITHUB_WORKSPACE/.github/scripts/open-or-update-pr.sh" \
+              --repo "$GITHUB_GITOPS_REPO" \
+              "${args[@]}"
           else
-            git commit -m "sync: platform configs from GitHub
-
-          Source: ${{ github.repository }}@${{ github.sha }}
-          Workflow: ${{ github.workflow }}
-          Run: ${{ github.run_id }}"
-
-            git push origin main
-            echo "CONFIGS_PUSHED=true" >> $GITHUB_ENV
+            bash "$GITHUB_WORKSPACE/.github/scripts/open-or-update-pr.sh" \
+              --forge gitlab \
+              --gitlab-project "$GITLAB_PROJECT" \
+              "${args[@]}"
           fi
 
       - name: Output sync result
+        env:
+          PR_URL: ${{ steps.publish.outputs.pr_url }}
         run: |
-          if [ "$CONFIGS_PUSHED" = "true" ]; then
-            echo "✅ Configs synced to ${GIT_PROVIDER} successfully"
-            if [ "$GIT_PROVIDER" = "github" ]; then
-              echo "GitHub will trigger ArgoCD for deployment via CRD reconciliation"
-            else
-              echo "GitLab will trigger ArgoCD for deployment via CRD reconciliation"
-            fi
+          if [ -n "$PR_URL" ]; then
+            echo "Pull request opened on ${GIT_PROVIDER}: $PR_URL"
+            echo "ArgoCD reconciles only after that pull request is merged to main."
           else
-            echo "ℹ️ No changes to sync"
+            echo "No changes to sync"
           fi
 
   # ============================================
@@ -266,16 +294,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Determine status
+        env:
+          PR_URL: ${{ needs.sync-gitops.outputs.pr_url }}
         run: |
           if [ "${{ needs.verify.result }}" = "success" ]; then
-            echo "STATUS=success" >> $GITHUB_ENV
-            echo "MESSAGE=✅ Platform configs deployed successfully" >> $GITHUB_ENV
+            echo "STATUS=success" >> "$GITHUB_ENV"
+            if [ -n "$PR_URL" ]; then
+              echo "MESSAGE=Platform configs validated. GitOps pull request opened; deployment waits for its merge. ${PR_URL}" >> "$GITHUB_ENV"
+            else
+              echo "MESSAGE=✅ Platform configs validated successfully" >> "$GITHUB_ENV"
+            fi
           elif [ "${{ needs.validate.result }}" = "failure" ]; then
-            echo "STATUS=failure" >> $GITHUB_ENV
-            echo "MESSAGE=❌ Config validation failed" >> $GITHUB_ENV
+            echo "STATUS=failure" >> "$GITHUB_ENV"
+            echo "MESSAGE=❌ Config validation failed" >> "$GITHUB_ENV"
           else
-            echo "STATUS=warning" >> $GITHUB_ENV
-            echo "MESSAGE=⚠️ Deployment completed with warnings" >> $GITHUB_ENV
+            echo "STATUS=warning" >> "$GITHUB_ENV"
+            echo "MESSAGE=⚠️ Deployment completed with warnings" >> "$GITHUB_ENV"
           fi
 
       - name: Send Slack notification

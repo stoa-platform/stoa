@@ -463,19 +463,31 @@ class TestAdvisoryLock:
         api_id = "petstore"
         key = advisory_lock_key(tenant, api_id)
 
+        # Deterministic ordering (no sleep-based timing): the holder keeps its
+        # transaction open until the contender has tried. A fixed sleep was
+        # flaky in CI, where opening the second pooled connection can take
+        # longer than the holder's hold window.
+        held = asyncio.Event()
+        tried = asyncio.Event()
+
         async def acquire_and_hold() -> bool:
             async with session_factory() as session, session.begin():
                 result = await session.execute(text("SELECT pg_try_advisory_xact_lock(:k)").bindparams(k=key))
                 acquired = bool(result.scalar())
-                # Hold long enough for the second contender to try.
-                await asyncio.sleep(0.1)
+                held.set()
+                await asyncio.wait_for(tried.wait(), timeout=10)
                 return acquired
 
         async def try_only() -> bool:
-            await asyncio.sleep(0.02)  # let the holder go first
-            async with session_factory() as session, session.begin():
-                result = await session.execute(text("SELECT pg_try_advisory_xact_lock(:k)").bindparams(k=key))
-                return bool(result.scalar())
+            await asyncio.wait_for(held.wait(), timeout=10)
+            acquired = False
+            try:
+                async with session_factory() as session, session.begin():
+                    result = await session.execute(text("SELECT pg_try_advisory_xact_lock(:k)").bindparams(k=key))
+                    acquired = bool(result.scalar())
+            finally:
+                tried.set()
+            return acquired
 
         first, second = await asyncio.gather(acquire_and_hold(), try_only())
         assert first is True

@@ -204,6 +204,7 @@ jobs:
       # Decision still open: this scheduled workflow may no longer be worth
       # running. It is kept. The publish below no longer pushes main.
       - name: Open pull request with impact updates
+        id: impactpr
         if: steps.prereq.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -214,7 +215,7 @@ jobs:
           git config user.name "STOA AI Factory"
           git config user.email "factory@gostoa.dev"
           cat > /tmp/commit-msg.txt << EOF
-          chore: weekly impact analysis update [skip ci]
+          chore: weekly impact analysis update
           EOF
           cat > /tmp/pr-body.md << EOF
           ## Summary
@@ -223,7 +224,8 @@ jobs:
           Run: ${SOURCE_SERVER}/${SOURCE_REPO}/actions/runs/${SOURCE_RUN_ID}
 
           CI opens this pull request and does not merge it.
-          Squash-merge keeps \`[skip ci]\`.
+          Merging it does not start the learning workflow: its paths are in \`paths-ignore\`.
+          CI runs on this branch through \`workflow_dispatch\` (CAB-2301 F4).
           EOF
           bash .github/scripts/open-or-update-pr.sh \
             --branch bot/weekly-impact-review \
@@ -232,5 +234,30 @@ jobs:
             --path docs/DEPENDENCIES.md \
             --path docs/SCENARIOS.md \
             --message-file /tmp/commit-msg.txt \
-            --title "chore: weekly impact analysis update [skip ci]" \
+            --title "chore: weekly impact analysis update" \
             --body-file /tmp/pr-body.md
+
+      # CAB-2301 F4: a PR opened with GITHUB_TOKEN triggers no pull_request
+      # workflow. Dispatch the workflows that carry the 4 required checks on
+      # the PR branch. Needs `actions: write` for GITHUB_TOKEN, which is not
+      # granted here (pending Christophe's OK). Until then this step only
+      # warns, and the PR stays blocked by the missing required checks.
+      - name: Dispatch required checks on the bot PR
+        if: steps.impactpr.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.impactpr.outputs.pr_url }}
+          PR_BRANCH: ${{ steps.impactpr.outputs.branch }}
+        run: |
+          set -u
+          PR_NUMBER="${PR_URL##*/}"
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::warning::Cannot read the PR number from ${PR_URL}; required checks not dispatched"
+            exit 0
+          fi
+          ok=true
+          gh workflow run required-checks.yml --ref "$PR_BRANCH" || ok=false
+          gh workflow run regression-guard.yml --ref "$PR_BRANCH" -f pr_number="$PR_NUMBER" || ok=false
+          if [ "$ok" != true ]; then
+            echo "::warning::Required checks not dispatched on ${PR_BRANCH} (GITHUB_TOKEN needs actions: write). PR #${PR_NUMBER} stays blocked until its 4 required checks are green."
+          fi

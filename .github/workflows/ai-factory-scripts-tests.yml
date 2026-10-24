@@ -127,7 +127,7 @@ jobs:
           if [ -f scripts/ci/requirements.txt ]; then
             pip install -r scripts/ci/requirements.txt
           fi
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov 'PyYAML==6.0.3'
       - name: Run pytest
         # scripts/ci/tests/ covers both Python helpers and bash
         # helpers (bash via pytest+subprocess per Phase 2a K1).

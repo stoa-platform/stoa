@@ -15,17 +15,12 @@ on:
       - 'charts/**'
       - '.github/workflows/helm-lint.yml'
 
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'charts/**'
-      - '.github/workflows/helm-lint.yml'
-
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: helm-lint-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

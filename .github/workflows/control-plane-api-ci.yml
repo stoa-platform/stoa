@@ -19,15 +19,8 @@ on:
       - '.github/workflows/reusable-gitops-deploy.yml'
       - '.github/actions/**'
 
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'control-plane-api/**'
-      - '.github/workflows/control-plane-api-ci.yml'
-      - '.github/workflows/reusable-python-ci.yml'
-      - '.github/actions/**'
-
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
   workflow_dispatch:
     inputs:
       environment:
@@ -40,7 +33,7 @@ on:
           - prod
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: control-plane-api-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -58,8 +51,10 @@ jobs:
   git-config-gate:
     name: Git provider config gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Check for legacy settings.GIT_* reads
         working-directory: control-plane-api
         run: |
@@ -88,6 +83,8 @@ jobs:
     name: Integration Tests
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       postgres:
         image: postgres:16
@@ -103,7 +100,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/setup-python-env
         with:
           python-version: '3.11'
@@ -127,7 +124,7 @@ jobs:
           pytest tests/ -v -m integration --ignore=tests/test_opensearch.py --tb=short --junit-xml=junit-integration.xml
       - name: Upload integration test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: integration-test-results
           path: control-plane-api/junit-integration.xml

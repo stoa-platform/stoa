@@ -1,10 +1,8 @@
 name: STOA Operator CI
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'stoa-operator/**'
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
   push:
     branches: [main]
     paths:
@@ -12,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   test:

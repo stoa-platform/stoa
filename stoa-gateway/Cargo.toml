@@ -139,6 +139,7 @@ tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }
 wiremock = "0.6"
 tempfile = "3"
+rsa = { version = "0.9.10", features = ["getrandom"] }
 
 [[bench]]
 name = "gateway_bench"

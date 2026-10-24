@@ -217,6 +217,9 @@ allowlist = { paths = [
   '''scripts/traffic/.*''',
   '''scripts/demo/.*''',
   '''deploy/local/.*''',
+], commits = [
+  # Only the commit that added GH_TOKEN:-$GITHUB_TOKEN. The next commit removed it.
+  "88a2c8c3b8e7f8dee95d8ea09e5ea68f310a8281",
 ]}
 
 # Hardcoded client secrets in scripts

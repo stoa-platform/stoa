@@ -51,6 +51,8 @@ jobs:
   git-config-gate:
     name: Git provider config gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Check for legacy settings.GIT_* reads
@@ -81,6 +83,8 @@ jobs:
     name: Integration Tests
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       postgres:
         image: postgres:16

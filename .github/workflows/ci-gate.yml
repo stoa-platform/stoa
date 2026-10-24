@@ -1,12 +1,11 @@
 # =============================================================================
-# GitHub Actions: CI Gate — check requis unique
+# GitHub Actions: CI Gate
 # =============================================================================
-# Un seul workflow sans filtre de chemins au niveau workflow : il tourne sur
-# chaque PR, détecte les composants touchés (job `changes`), appelle les
-# workflows de composant concernés (workflow_call) et agrège leurs résultats
-# dans le job `ci-gate`, seul check à rendre requis dans la protection de
-# branche. Un composant non touché est `skipped` (accepté) ; un échec ou une
-# annulation fait échouer la porte.
+# Tourne sur chaque demande de fusion. Le job changes détecte les composants
+# touchés. Les composants attendus sont appelés via workflow_call. Le job
+# ci-gate agrège leurs résultats et s'ajoute aux contrôles déjà requis.
+# changes et security doivent être success. Une sortie true exige success.
+# skipped n'est accepté que si la sortie vaut false.
 # =============================================================================
 
 name: CI Gate
@@ -47,24 +46,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-        run: |
-          set -euo pipefail
-          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed.txt
-          echo "Changed files: $(wc -l < changed.txt)"
-          check() { # $1 = output name, $2 = ERE of paths
-            if grep -qE "$2" changed.txt; then v=true; else v=false; fi
-            echo "$1=$v" >> "$GITHUB_OUTPUT"
-            echo "$1: $v"
-          }
-          # Shared triggers: the gate itself and composite actions.
-          COMMON='^\.github/workflows/ci-gate\.yml$|^\.github/actions/'
-          check control-plane-api "^control-plane-api/|^\.github/workflows/(control-plane-api-ci|reusable-python-ci)\.yml$|$COMMON"
-          check stoa-gateway      "^stoa-gateway/|^\.github/workflows/(stoa-gateway-ci|reusable-rust-ci)\.yml$|$COMMON"
-          check control-plane-ui  "^control-plane-ui/|^shared/|^\.github/workflows/(control-plane-ui-ci|reusable-node-ci)\.yml$|$COMMON"
-          check portal            "^portal/|^shared/|^\.github/workflows/(stoa-portal-ci|reusable-node-ci)\.yml$|$COMMON"
-          check stoa-go           "^stoa-go/|^\.github/workflows/stoa-go-ci\.yml$|^\.github/workflows/ci-gate\.yml$"
-          check stoa-operator     "^stoa-operator/|^\.github/workflows/(stoa-operator-ci|reusable-python-ci)\.yml$|^\.github/workflows/ci-gate\.yml$"
-          check helm              "^charts/|^\.github/workflows/helm-lint\.yml$|^\.github/workflows/ci-gate\.yml$"
+        run: bash .github/scripts/ci-gate-changes.sh "$BASE_SHA" "$HEAD_SHA"
 
   control-plane-api:
     needs: changes
@@ -160,21 +142,11 @@ jobs:
       - security
     runs-on: ubuntu-latest
     steps:
-      - name: Aggregate results (failure/cancelled = red, skipped = ok)
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Aggregate results
         shell: bash
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: |
-          set -euo pipefail
-          {
-            echo "## CI Gate"
-            echo "| Job | Result |"
-            echo "| --- | --- |"
-            echo "$NEEDS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"'
-          } >> "$GITHUB_STEP_SUMMARY"
-          bad=$(echo "$NEEDS" | jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")')
-          if [ -n "$bad" ]; then
-            echo "::error::CI Gate failed: $bad"
-            exit 1
-          fi
-          echo "CI Gate passed (skipped jobs accepted)."
+        run: bash .github/scripts/ci-gate-aggregate.sh

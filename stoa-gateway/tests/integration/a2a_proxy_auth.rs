@@ -147,3 +147,60 @@ async fn regression_proxy_public_when_require_auth_false() {
         }
     }
 }
+
+async fn send(router: &Router, method: &str, uri: &str, headers: &[(&str, &str)]) -> Response {
+    let mut builder = Request::builder().method(method).uri(uri);
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    router
+        .clone()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn proxy_upstream_request_headers() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/echo"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&upstream)
+        .await;
+    let mut config = jwt::config(&oidc);
+    config.api_proxy = serde_json::from_value(json!({
+        "enabled": true,
+        "backends": {"test": {
+            "enabled": true,
+            "base_url": upstream.uri(),
+            "auth_header": "X-API-Key"
+        }}
+    }))
+    .unwrap();
+    let router = stoa_gateway::build_router(AppState::new(config));
+    let bearer = format!("Bearer {}", valid_token());
+    let response = send(
+        &router,
+        "GET",
+        "/proxy/test/echo",
+        &[
+            ("Authorization", bearer.as_str()),
+            ("Cookie", "session=fixture"),
+            ("DPoP", "fixture-proof"),
+            ("X-API-Key", "caller-value"),
+            ("X-Request-Id", "req-1"),
+        ],
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let received = upstream.received_requests().await.unwrap();
+    assert_eq!(received.len(), 1);
+    let headers = &received[0].headers;
+    for name in ["authorization", "cookie", "dpop", "x-api-key"] {
+        assert!(!headers.contains_key(name), "{name} relayed upstream");
+    }
+    assert_eq!(headers.get("x-request-id").unwrap(), "req-1");
+}

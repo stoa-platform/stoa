@@ -53,7 +53,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.control-plane-api == 'true'
     uses: ./.github/workflows/control-plane-api-ci.yml
-    secrets: inherit
     permissions:
       contents: read
       id-token: write
@@ -65,7 +64,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.stoa-gateway == 'true'
     uses: ./.github/workflows/stoa-gateway-ci.yml
-    secrets: inherit
     permissions:
       contents: read
       id-token: write
@@ -77,7 +75,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.control-plane-ui == 'true'
     uses: ./.github/workflows/control-plane-ui-ci.yml
-    secrets: inherit
     permissions:
       contents: read
       id-token: write
@@ -89,7 +86,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.portal == 'true'
     uses: ./.github/workflows/stoa-portal-ci.yml
-    secrets: inherit
     permissions:
       contents: read
       id-token: write
@@ -116,7 +112,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.helm == 'true'
     uses: ./.github/workflows/helm-lint.yml
-    secrets: inherit
     permissions:
       contents: read
 
@@ -142,7 +137,6 @@ jobs:
 
   security:
     uses: ./.github/workflows/security-scan.yml
-    secrets: inherit
     permissions:
       contents: read
       security-events: write

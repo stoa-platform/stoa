@@ -1,0 +1,5 @@
+# Reviewed synthetic fixtures; exact no-git Gitleaks fingerprints only.
+# Negative JWT test: wrong issuer/signing key, expected response is rejection.
+deploy/standalone/jwt-proof.sh:jwt:179
+# RSA signing fixture inside cfg(test), paired with a wiremock JWKS.
+stoa-gateway/src/auth/jwt.rs:private-key:335

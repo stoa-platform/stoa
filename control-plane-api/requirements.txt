@@ -12,7 +12,7 @@ passlib[bcrypt]==1.7.4
 # 0.0.30 ; on prend le dernier correctif de la série 0.0.x.
 python-multipart==0.0.32
 httpx==0.28.1
-kafka-python==2.3.1
+kafka-python==2.3.2
 python-snappy==0.7.3
 python-gitlab==8.3.0
 # GitHub integration (CAB-1890 — dual-provider migration)

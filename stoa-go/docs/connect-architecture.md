@@ -302,4 +302,3 @@ find internal/connect -maxdepth 1 -name '*.go' -not -name '*_test.go' | xargs wc
 5. **Fix in-flight** : F.1 (race gatewayID, S1), F.2 (race slice, S1), F.6 (Scanner buffer, S5), F.10 (`ReportDiscovery` typé, S4).
 6. **`failedRoutesProvider`** reste un helper local dans `sync_route.go`, pas d'export `adapters/`.
 7. **Nouvelle branche** `refactor/go-2-connect-split` depuis `main`.
-

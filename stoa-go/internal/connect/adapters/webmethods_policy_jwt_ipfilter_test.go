@@ -85,6 +85,13 @@ func TestMapPolicyConfig_IpFilterPolicy_DenyMode(t *testing.T) {
 	if result["ipFilterMode"] != "DENY" {
 		t.Errorf("ipFilterMode: got %v, want DENY", result["ipFilterMode"])
 	}
+	list, ok := result["ipList"].([]interface{})
+	if !ok || len(list) != 1 {
+		t.Fatalf("ipList: got %v", result["ipList"])
+	}
+	if list[0] != "203.0.113.4" {
+		t.Errorf("ipList contents: got %v", list)
+	}
 }
 
 // TestMapPolicyConfig_UnknownTypePassthrough — baseline: types that are

@@ -3,6 +3,15 @@ name: Regression Guard
 on:
   pull_request:
     types: [opened, synchronize]
+  # CAB-2301 F4: bot PRs are opened with GITHUB_TOKEN, which does not trigger
+  # pull_request workflows. The bot workflow dispatches this workflow on the PR
+  # branch with the PR number. The PR head must match the dispatched SHA.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number whose head is the dispatched ref"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -22,9 +31,32 @@ jobs:
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref }}
+          RUN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Dispatched for a bot PR: read the PR from the API and refuse to
+            # report a result for a SHA that is not the PR head.
+            if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+              echo "::error::workflow_dispatch needs a numeric pr_number input"
+              exit 1
+            fi
+            PR_JSON=$(gh pr view "$PR_NUMBER" --json title,baseRefName,headRefOid,state)
+            PR_TITLE=$(jq -r '.title' <<<"$PR_JSON")
+            BASE_REF=$(jq -r '.baseRefName' <<<"$PR_JSON")
+            PR_HEAD=$(jq -r '.headRefOid' <<<"$PR_JSON")
+            PR_STATE=$(jq -r '.state' <<<"$PR_JSON")
+            if [ "$PR_STATE" != "OPEN" ] || [ "$PR_HEAD" != "$RUN_SHA" ]; then
+              echo "::error::PR #$PR_NUMBER is $PR_STATE with head $PR_HEAD; dispatched SHA is $RUN_SHA"
+              exit 1
+            fi
+            git fetch --no-tags origin "$BASE_REF"
+          fi
 
           # --- Label bypass: skip-regression ---
           LABELS=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' 2>/dev/null || echo "")
@@ -35,7 +67,6 @@ jobs:
           fi
 
           # Detect if this PR is a bug fix
-          PR_TITLE="${{ github.event.pull_request.title }}"
           PR_BODY=$(gh pr view "$PR_NUMBER" --json body -q '.body' 2>/dev/null || echo "")
 
           IS_FIX="false"
@@ -63,7 +94,7 @@ jobs:
           echo "is_fix=true" >> "$GITHUB_OUTPUT"
 
           # --- Docs-only bypass: fix() PRs that only touch docs/config ---
-          CODE_CHANGES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" 2>/dev/null \
+          CODE_CHANGES=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null \
             | grep -vE '\.(md|yml|yaml|json|toml)$' \
             | grep -vE '^\.claude/' \
             | grep -vE '^\.github/' \
@@ -75,7 +106,7 @@ jobs:
           fi
 
           # Get changed files in this PR
-          CHANGED_FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" 2>/dev/null || git diff --name-only HEAD~1)
+          CHANGED_FILES=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1)
 
           # Check if any regression test was added/modified
           HAS_REGRESSION="false"
@@ -99,7 +130,7 @@ jobs:
 
           # Rust regression tests (inline, detected via diff content)
           if echo "$CHANGED_FILES" | grep -qE '\.rs$'; then
-            RUST_MATCHES=$(git diff "origin/${{ github.base_ref }}...HEAD" -- '*.rs' 2>/dev/null | grep -cE '^\+.*fn regression_' || true)
+            RUST_MATCHES=$(git diff "origin/${BASE_REF}...HEAD" -- '*.rs' 2>/dev/null | grep -cE '^\+.*fn regression_' || true)
             if [ "${RUST_MATCHES:-0}" -gt 0 ]; then
               HAS_REGRESSION="true"
               echo "Found Rust regression test"
@@ -110,7 +141,7 @@ jobs:
           # either a new test func explicitly named TestRegression*, or a
           # comment of the form `// regression for CAB-XXXX` next to a test.
           if echo "$CHANGED_FILES" | grep -qE '_test\.go$'; then
-            GO_MATCHES=$(git diff "origin/${{ github.base_ref }}...HEAD" -- '*_test.go' 2>/dev/null \
+            GO_MATCHES=$(git diff "origin/${BASE_REF}...HEAD" -- '*_test.go' 2>/dev/null \
               | grep -cE '^\+.*(func TestRegression|// [Rr]egression for CAB-|// [Rr]egression test for CAB-)' || true)
             if [ "${GO_MATCHES:-0}" -gt 0 ]; then
               HAS_REGRESSION="true"
@@ -120,7 +151,7 @@ jobs:
 
           # E2E regression-tagged scenarios
           if echo "$CHANGED_FILES" | grep -qE '\.feature$'; then
-            E2E_MATCHES=$(git diff "origin/${{ github.base_ref }}...HEAD" -- '*.feature' 2>/dev/null | grep -cE '^\+.*@regression' || true)
+            E2E_MATCHES=$(git diff "origin/${BASE_REF}...HEAD" -- '*.feature' 2>/dev/null | grep -cE '^\+.*@regression' || true)
             if [ "${E2E_MATCHES:-0}" -gt 0 ]; then
               HAS_REGRESSION="true"
               echo "Found E2E regression scenario"

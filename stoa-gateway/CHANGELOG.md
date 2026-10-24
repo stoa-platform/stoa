@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.9.26](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.25...stoa-gateway-v0.9.26) (2026-10-24)
+
+
+### Features
+
+* **gateway:** CAB-2227 durable audit spool ([#2792](https://github.com/stoa-platform/stoa/issues/2792)) ([28e5dd8](https://github.com/stoa-platform/stoa/commit/28e5dd81db9fbeb362a18dbadcbbee65a9a5de7a))
+* **gateway:** enforce jwt_validation on published REST routes ([#2856](https://github.com/stoa-platform/stoa/issues/2856)) ([06407ca](https://github.com/stoa-platform/stoa/commit/06407ca8173f8fe2813a1800ff2c9aa229a0d377))
+* **gateway:** porter le smoke MCP vers l'API 2.x, et lever l'épinglage d'attente ([#2840](https://github.com/stoa-platform/stoa/issues/2840)) ([10ea9d4](https://github.com/stoa-platform/stoa/commit/10ea9d468dc1c653db807e93e00e3ca477cfe2fb))
+* **quickstart:** prouver le contrôle d'accès de la passerelle ([#2858](https://github.com/stoa-platform/stoa/issues/2858)) ([90e5a0b](https://github.com/stoa-platform/stoa/commit/90e5a0be53e3ac6908595650f63e919956f638d0))
+
+
+### Bug Fixes
+
+* **gateway:** apply JWT guards with MethodRouter::layer ([f4d3004](https://github.com/stoa-platform/stoa/commit/f4d300473543a9536bff964af9ef3370632488e6))
+* **gateway:** decouple /ready from tool-permission fetch (CAB-2227) ([#2796](https://github.com/stoa-platform/stoa/issues/2796)) ([71704cf](https://github.com/stoa-platform/stoa/commit/71704cff2b298486c2dbe38deb0477b8bd5e2a14))
+* **gateway:** fail-closed policy boot in regulated profiles ([#2789](https://github.com/stoa-platform/stoa/issues/2789)) ([f84a469](https://github.com/stoa-platform/stoa/commit/f84a46962b365baf40003fa30c7b4d4fa07c27cf))
+* **gateway:** fail-closed tool permissions on cp outage ([#2787](https://github.com/stoa-platform/stoa/issues/2787)) ([18629b4](https://github.com/stoa-platform/stoa/commit/18629b46ed66a6ac7397f55ab940b6e00a100148))
+* **gateway:** require JWT for A2A and protected API proxy (draft) ([3772be7](https://github.com/stoa-platform/stoa/commit/3772be744918d73eefcb0e88665b0827e12d3f92))
+* **gateway:** require JWT for A2A and protected API proxy requests ([8f9c3f3](https://github.com/stoa-platform/stoa/commit/8f9c3f37fe451af9b6c24a5f4a927440935cb78f))
+* **gateway:** use a single request header filter in the API proxy ([cb8ab44](https://github.com/stoa-platform/stoa/commit/cb8ab4446738474607423a0192fe4d81f3baaba1))
+
 ## [0.9.25](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.24...stoa-gateway-v0.9.25) (2026-05-12)
 
 

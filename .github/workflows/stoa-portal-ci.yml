@@ -20,16 +20,8 @@ on:
       - '.github/workflows/reusable-gitops-deploy.yml'
       - '.github/actions/**'
 
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'portal/**'
-      - 'shared/**'
-      - '.github/workflows/stoa-portal-ci.yml'
-      - '.github/workflows/reusable-node-ci.yml'
-      - '.github/actions/**'
-
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
   workflow_dispatch:
     inputs:
       environment:
@@ -42,7 +34,7 @@ on:
           - prod
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: stoa-portal-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

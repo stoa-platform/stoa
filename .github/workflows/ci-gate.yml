@@ -1,0 +1,180 @@
+# =============================================================================
+# GitHub Actions: CI Gate — check requis unique
+# =============================================================================
+# Un seul workflow sans filtre de chemins au niveau workflow : il tourne sur
+# chaque PR, détecte les composants touchés (job `changes`), appelle les
+# workflows de composant concernés (workflow_call) et agrège leurs résultats
+# dans le job `ci-gate`, seul check à rendre requis dans la protection de
+# branche. Un composant non touché est `skipped` (accepté) ; un échec ou une
+# annulation fait échouer la porte.
+# =============================================================================
+
+name: CI Gate
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+
+concurrency:
+  group: ci-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      control-plane-api: ${{ steps.diff.outputs.control-plane-api }}
+      stoa-gateway: ${{ steps.diff.outputs.stoa-gateway }}
+      control-plane-ui: ${{ steps.diff.outputs.control-plane-ui }}
+      portal: ${{ steps.diff.outputs.portal }}
+      stoa-go: ${{ steps.diff.outputs.stoa-go }}
+      stoa-operator: ${{ steps.diff.outputs.stoa-operator }}
+      helm: ${{ steps.diff.outputs.helm }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed components
+        id: diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed.txt
+          echo "Changed files: $(wc -l < changed.txt)"
+          check() { # $1 = output name, $2 = ERE of paths
+            if grep -qE "$2" changed.txt; then v=true; else v=false; fi
+            echo "$1=$v" >> "$GITHUB_OUTPUT"
+            echo "$1: $v"
+          }
+          # Shared triggers: the gate itself and composite actions.
+          COMMON='^\.github/workflows/ci-gate\.yml$|^\.github/actions/'
+          check control-plane-api "^control-plane-api/|^\.github/workflows/(control-plane-api-ci|reusable-python-ci)\.yml$|$COMMON"
+          check stoa-gateway      "^stoa-gateway/|^\.github/workflows/(stoa-gateway-ci|reusable-rust-ci)\.yml$|$COMMON"
+          check control-plane-ui  "^control-plane-ui/|^shared/|^\.github/workflows/(control-plane-ui-ci|reusable-node-ci)\.yml$|$COMMON"
+          check portal            "^portal/|^shared/|^\.github/workflows/(stoa-portal-ci|reusable-node-ci)\.yml$|$COMMON"
+          check stoa-go           "^stoa-go/|^\.github/workflows/stoa-go-ci\.yml$|^\.github/workflows/ci-gate\.yml$"
+          check stoa-operator     "^stoa-operator/|^\.github/workflows/(stoa-operator-ci|reusable-python-ci)\.yml$|^\.github/workflows/ci-gate\.yml$"
+          check helm              "^charts/|^\.github/workflows/helm-lint\.yml$|^\.github/workflows/ci-gate\.yml$"
+
+  control-plane-api:
+    needs: changes
+    if: needs.changes.outputs.control-plane-api == 'true'
+    uses: ./.github/workflows/control-plane-api-ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  stoa-gateway:
+    needs: changes
+    if: needs.changes.outputs.stoa-gateway == 'true'
+    uses: ./.github/workflows/stoa-gateway-ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  control-plane-ui:
+    needs: changes
+    if: needs.changes.outputs.control-plane-ui == 'true'
+    uses: ./.github/workflows/control-plane-ui-ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  portal:
+    needs: changes
+    if: needs.changes.outputs.portal == 'true'
+    uses: ./.github/workflows/stoa-portal-ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  stoa-go:
+    needs: changes
+    if: needs.changes.outputs.stoa-go == 'true'
+    uses: ./.github/workflows/stoa-go-ci.yml
+    permissions:
+      contents: read
+
+  stoa-operator:
+    needs: changes
+    if: needs.changes.outputs.stoa-operator == 'true'
+    uses: ./.github/workflows/stoa-operator-ci.yml
+    permissions:
+      contents: read
+      checks: write
+
+  helm:
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    uses: ./.github/workflows/helm-lint.yml
+    secrets: inherit
+    permissions:
+      contents: read
+
+  security:
+    uses: ./.github/workflows/security-scan.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs:
+      - changes
+      - control-plane-api
+      - stoa-gateway
+      - control-plane-ui
+      - portal
+      - stoa-go
+      - stoa-operator
+      - helm
+      - security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate results (failure/cancelled = red, skipped = ok)
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## CI Gate"
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            echo "$NEEDS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+          bad=$(echo "$NEEDS" | jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")')
+          if [ -n "$bad" ]; then
+            echo "::error::CI Gate failed: $bad"
+            exit 1
+          fi
+          echo "CI Gate passed (skipped jobs accepted)."

@@ -19,15 +19,8 @@ on:
       - '.github/workflows/reusable-gitops-deploy.yml'
       - '.github/actions/**'
 
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'control-plane-api/**'
-      - '.github/workflows/control-plane-api-ci.yml'
-      - '.github/workflows/reusable-python-ci.yml'
-      - '.github/actions/**'
-
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
   workflow_dispatch:
     inputs:
       environment:
@@ -40,7 +33,7 @@ on:
           - prod
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: control-plane-api-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

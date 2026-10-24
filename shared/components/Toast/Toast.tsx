@@ -1,5 +1,14 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { activeToastHost, subscribeToastHost } from '../Modal/Modal';
 
 // ============================================================================
 // Types
@@ -106,7 +115,14 @@ interface ToastContainerProps {
 }
 
 function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
-  return (
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const sync = () => setHost(activeToastHost());
+    sync();
+    return subscribeToastHost(sync);
+  }, []);
+
+  const region = (
     <div
       aria-live="polite"
       aria-label="Notifications"
@@ -117,6 +133,9 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
       ))}
     </div>
   );
+  // A modal dialog makes the rest of the document inert. Mount notifications
+  // inside the open dialog so the live region and its buttons stay reachable.
+  return host ? createPortal(region, host) : region;
 }
 
 // ============================================================================

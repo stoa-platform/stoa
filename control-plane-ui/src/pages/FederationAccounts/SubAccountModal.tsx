@@ -1,4 +1,11 @@
-import { Field, FieldLabel, FieldInput, FieldTextarea } from '@stoa/shared/components/Field';
+import {
+  Field,
+  FieldLabel,
+  FieldInput,
+  FieldTextarea,
+  Form,
+  FormError,
+} from '@stoa/shared/components/Field';
 import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useCallback } from 'react';
 import { X } from 'lucide-react';
@@ -18,6 +25,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -25,6 +33,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
       if (!name.trim()) return;
 
       setIsSubmitting(true);
+      setError(null);
       try {
         const result = await federationService.createSubAccount(tenantId, masterId, {
           name: name.trim(),
@@ -34,6 +43,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
         onCreated(result);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to create sub-account';
+        setError(message);
         toast.error('Creation failed', message);
       } finally {
         setIsSubmitting(false);
@@ -62,7 +72,12 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <Form error={error ?? undefined} onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <FormError className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </FormError>
+          )}
           <Field>
             <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name <span className="text-red-500">*</span>
@@ -106,7 +121,7 @@ export function SubAccountModal({ tenantId, masterId, onClose, onCreated }: SubA
               {isSubmitting ? 'Creating...' : 'Create'}
             </button>
           </div>
-        </form>
+        </Form>
       </div>
     </Modal>
   );

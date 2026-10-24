@@ -593,8 +593,10 @@ export function TryItForm({
                 {JSON.stringify(response, null, 2)}
               </pre>
               <button
+                type="button"
                 onClick={handleCopyResponse}
-                className="absolute top-2 right-2 p-2 text-muted hover:text-white bg-neutral-800 rounded-lg transition-colors"
+                aria-label={copied ? 'Copied response' : 'Copy response'}
+                className="absolute top-2 right-2 p-2 text-neutral-400 hover:text-white bg-neutral-800 rounded-lg transition-colors"
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-green-400" />

@@ -245,7 +245,7 @@ export function CreateAppModal({
                 <div className="space-y-2">
                   {callbackUrls.map((url, index) => (
                     <div key={index} className="flex gap-2">
-                      <Field className="flex-1">
+                      <Field className="flex-1 w-full">
                         <FieldLabel className="sr-only">Callback URL {index + 1}</FieldLabel>
                         <FieldInput
                           type="url"
@@ -253,7 +253,7 @@ export function CreateAppModal({
                           onChange={(e) => handleCallbackUrlChange(index, e.target.value)}
                           placeholder="https://your-app.com/callback"
                           disabled={isLoading}
-                          className="flex-1 px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed"
+                          className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed"
                         />
                       </Field>
                       {callbackUrls.length > 1 && (

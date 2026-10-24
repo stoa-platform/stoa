@@ -13,6 +13,7 @@ import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
 import { EnvironmentChrome } from '@stoa/shared/components/EnvironmentChrome';
 import { useTranslation } from 'react-i18next';
+import { config } from '../config';
 import { LanguageToggle } from './LanguageToggle';
 import { apiService } from '../services/api';
 import {
@@ -570,7 +571,9 @@ export function Layout({ children }: LayoutProps) {
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:rounded focus:bg-white focus:text-neutral-900 focus:p-3 focus:outline focus:outline-2 focus:outline-primary-700"
         onClick={() => document.getElementById('main-content')?.focus()}
       >
-        Skip to main content
+        {config.features.enableI18n
+          ? t('a11y.skipToMain', { defaultValue: 'Skip to main content' })
+          : 'Skip to main content'}
       </a>
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (

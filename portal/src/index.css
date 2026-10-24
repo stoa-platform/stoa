@@ -52,8 +52,14 @@ body {
 /* Accessibility: Focus visible styles (CAB-327) */
 @layer base {
   /* Ensure focus-visible ring is visible on all interactive elements */
+  :root {
+    --stoa-focus: #047857;
+  }
+  .dark {
+    --stoa-focus: #6ee7b7;
+  }
   :focus-visible {
-    outline: 2px solid #047857; /* primary-600 */
+    outline: 2px solid var(--stoa-focus);
     outline-offset: 2px;
   }
 
@@ -66,7 +72,7 @@ body {
   a:focus-visible,
   button:focus-visible,
   [role='button']:focus-visible {
-    outline: 2px solid #047857;
+    outline: 2px solid var(--stoa-focus);
     outline-offset: 2px;
     border-radius: 4px;
   }

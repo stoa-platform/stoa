@@ -12,7 +12,25 @@ import { createPortal } from 'react-dom';
 const TitleContext = createContext('');
 const dialogs: HTMLDialogElement[] = [];
 const returnTargets = new Map<HTMLDialogElement, HTMLElement | null>();
+const toastHosts: HTMLElement[] = [];
+const toastHostListeners = new Set<() => void>();
 let previousOverflow = '';
+
+/** The topmost open dialog, where notifications stay inside the top layer. */
+export function activeToastHost(): HTMLElement | null {
+  return toastHosts[toastHosts.length - 1] ?? null;
+}
+
+export function subscribeToastHost(listener: () => void): () => void {
+  toastHostListeners.add(listener);
+  return () => {
+    toastHostListeners.delete(listener);
+  };
+}
+
+function notifyToastHosts() {
+  for (const listener of toastHostListeners) listener();
+}
 
 interface ModalProps extends Omit<DialogHTMLAttributes<HTMLDialogElement>, 'onClose' | 'open'> {
   'data-testid'?: string;
@@ -30,6 +48,7 @@ export function Modal({
   ...props
 }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const latest = useRef({ onClose, closeDisabled });
   useLayoutEffect(() => {
@@ -72,6 +91,11 @@ export function Modal({
     }
     dialogs.push(dialog);
     returnTargets.set(dialog, previousFocus);
+    const host = hostRef.current;
+    if (host) {
+      toastHosts.push(host);
+      notifyToastHosts();
+    }
     dialog.showModal();
     focusInitial();
 
@@ -115,6 +139,11 @@ export function Modal({
       }
       returnTargets.delete(dialog);
       dialogs.splice(dialogs.indexOf(dialog), 1);
+      if (host) {
+        const hostIndex = toastHosts.indexOf(host);
+        if (hostIndex >= 0) toastHosts.splice(hostIndex, 1);
+        notifyToastHosts();
+      }
       dialog.close();
       if (!dialogs.length) document.body.style.overflow = previousOverflow;
       if (!wasTop) return;
@@ -151,6 +180,7 @@ export function Modal({
         }}
       >
         {children}
+        <div ref={hostRef} data-notification-host="" />
       </dialog>
     </TitleContext.Provider>,
     document.body

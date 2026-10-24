@@ -208,8 +208,10 @@ function ReplayCommand({ snapshotId }: { snapshotId: string }) {
             </div>
           )}
           <button
+            type="button"
             onClick={copyToClipboard}
-            className="absolute top-2 right-2 text-muted hover:text-white"
+            aria-label={copied ? 'Copied cURL command' : 'Copy cURL command'}
+            className="absolute top-2 right-2 text-neutral-400 hover:text-white"
           >
             {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
           </button>

@@ -4653,7 +4653,7 @@ dependencies = [
 
 [[package]]
 name = "stoa-gateway"
-version = "0.9.25"
+version = "0.9.26"
 dependencies = [
  "arc-swap",
  "async-trait",

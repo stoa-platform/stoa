@@ -86,7 +86,7 @@ export function FirstCall({ app, selectedApi, useCase, onFinish }: FirstCallProp
                   </code>
                   <button
                     onClick={() => handleCopy(app.client_secret!, 'secret')}
-                    className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                    className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
                     title={t('firstCall.copySecret')}
                   >
                     {copied === 'secret' ? (

@@ -1,3 +1,5 @@
+import { Field, FieldLabel, FieldInput, FieldSelect } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * CertificateGenerationWizard — 3-step client-side cert generation (CAB-1788).
  *
@@ -185,19 +187,24 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
   const stepIndex = steps.findIndex((s) => s.id === step);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={handleClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-neutral-700">
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
               Generate Client Certificate
-            </h2>
+            </ModalTitle>
           </div>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={handleClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -218,7 +225,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                         ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                         : isActive
                           ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                          : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500'
+                          : 'bg-neutral-100 dark:bg-neutral-700 text-muted'
                     }`}
                   >
                     {isDone ? (
@@ -251,11 +258,11 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
                   Common Name (CN) <span className="text-red-500">*</span>
-                </label>
-                <input
+                </FieldLabel>
+                <FieldInput
                   type="text"
                   value={commonName}
                   onChange={(e) => setCommonName(e.target.value)}
@@ -265,13 +272,13 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                   Identifies this client certificate. Usually the application or service name.
                 </p>
-              </div>
+              </Field>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
                   Validity (days)
-                </label>
-                <select
+                </FieldLabel>
+                <FieldSelect
                   value={validityDays}
                   onChange={(e) => setValidityDays(Number(e.target.value))}
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -280,8 +287,8 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                   <option value={180}>180 days</option>
                   <option value={365}>1 year</option>
                   <option value={730}>2 years</option>
-                </select>
-              </div>
+                </FieldSelect>
+              </Field>
 
               <Button
                 onClick={handleGenerate}
@@ -404,6 +411,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                 </p>
                 <div className="flex gap-2">
                   <input
+                    aria-label="Bundle password"
                     type="password"
                     value={p12Password}
                     onChange={(e) => setP12Password(e.target.value)}
@@ -438,6 +446,6 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -1,3 +1,5 @@
+import { Form, FormError } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Webhooks Management Page (CAB-1647)
  *
@@ -246,6 +248,7 @@ export function Webhooks() {
           </p>
           <div className="flex gap-3">
             <input
+              aria-label="Enter tenant ID (e.g., acme, team-alpha)"
               type="text"
               value={selectedTenantId}
               onChange={(e) => setSelectedTenantId(e.target.value)}
@@ -617,28 +620,21 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div
-        className="fixed inset-0 bg-black/50"
-        onClick={onClose}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
-      />
+    <Modal onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto">
+      <div aria-hidden="true" className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full">
           <div className="p-6 border-b border-neutral-200 dark:border-neutral-700">
-            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
+            <ModalTitle as="h2" className="text-xl font-semibold text-neutral-900 dark:text-white">
               {webhook ? 'Edit Webhook' : 'Create Webhook'}
-            </h2>
+            </ModalTitle>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <Form error={error} onSubmit={handleSubmit} className="p-6 space-y-6">
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+              <FormError className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
                 {error}
-              </div>
+              </FormError>
             )}
 
             <div>
@@ -681,9 +677,7 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                 className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
               >
                 Secret (optional)
-                <span className="text-neutral-400 dark:text-neutral-500 font-normal ml-2">
-                  For HMAC signature verification
-                </span>
+                <span className="text-muted font-normal ml-2">For HMAC signature verification</span>
               </label>
               <input
                 id="webhook-secret"
@@ -748,10 +742,10 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                 {webhook ? 'Save Changes' : 'Create Webhook'}
               </button>
             </div>
-          </form>
+          </Form>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -781,23 +775,17 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
   });
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div
-        className="fixed inset-0 bg-black/50"
-        onClick={onClose}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
-      />
+    <Modal onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto">
+      <div aria-hidden="true" className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
           <div className="p-6 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
+            <ModalTitle as="h2" className="text-xl font-semibold text-neutral-900 dark:text-white">
               Delivery History
-            </h2>
+            </ModalTitle>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => refetch()}
                 className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg"
                 aria-label="Refresh"
@@ -805,6 +793,7 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
                 <RefreshCw className="h-5 w-5" aria-hidden="true" />
               </button>
               <button
+                type="button"
                 onClick={onClose}
                 className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg"
                 aria-label="Close"
@@ -838,7 +827,7 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

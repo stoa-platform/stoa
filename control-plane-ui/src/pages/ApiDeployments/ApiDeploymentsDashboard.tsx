@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 /**
  * API Deployments Dashboard — Top-level aggregated view (CAB-1888)
  *
@@ -291,6 +292,7 @@ export function ApiDeploymentsDashboard() {
       {/* Filters */}
       <div className="flex items-center gap-3">
         <select
+          aria-label="Environment"
           value={envFilter}
           onChange={(e) => {
             const nextEnv = e.target.value as EnvironmentFilter;
@@ -307,6 +309,7 @@ export function ApiDeploymentsDashboard() {
           ))}
         </select>
         <select
+          aria-label="Status"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
@@ -389,7 +392,12 @@ export function ApiDeploymentsDashboard() {
                       className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 cursor-pointer"
                     >
                       <td className="px-4 py-3 text-neutral-900 dark:text-white font-medium">
-                        {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}
+                        <RowAction
+                          aria-label={`View deployment ${d.id}`}
+                          onActivate={() => setSelectedDeployment(d)}
+                        >
+                          {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}
+                        </RowAction>
                       </td>
                       <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
                         {d.gateway_name || d.gateway_instance_id?.slice(0, 8)}

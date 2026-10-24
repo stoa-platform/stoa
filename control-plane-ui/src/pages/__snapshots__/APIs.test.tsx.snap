@@ -4,8 +4,10 @@ exports[`APIs > snapshot: cpi-admin persona > matches structural snapshot 1`] = 
 {
   "buttons": [
     "Create API",
+    "Payment API",
     "Edit",
     "Delete",
+    "User API",
     "Edit",
     "Delete",
   ],
@@ -27,8 +29,10 @@ exports[`APIs > snapshot: devops persona > matches structural snapshot 1`] = `
 {
   "buttons": [
     "Create API",
+    "Payment API",
     "Edit",
     "Delete",
+    "User API",
     "Edit",
     "Delete",
   ],
@@ -50,8 +54,10 @@ exports[`APIs > snapshot: tenant-admin persona > matches structural snapshot 1`]
 {
   "buttons": [
     "Create API",
+    "Payment API",
     "Edit",
     "Delete",
+    "User API",
     "Edit",
     "Delete",
   ],
@@ -73,8 +79,10 @@ exports[`APIs > snapshot: viewer persona > matches structural snapshot 1`] = `
 {
   "buttons": [
     "Create API",
+    "Payment API",
     "Edit",
     "Delete",
+    "User API",
     "Edit",
     "Delete",
   ],

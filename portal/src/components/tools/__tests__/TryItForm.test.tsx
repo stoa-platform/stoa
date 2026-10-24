@@ -161,6 +161,9 @@ describe('TryItForm', () => {
       expect(screen.getByText(/Validation failed/)).toBeInTheDocument();
     });
     expect(mockOnInvoke).not.toHaveBeenCalled();
+    const email = screen.getByRole('textbox', { name: /^email/ });
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription(/required property 'email'/);
   });
 
   it('shows error for invalid pattern', async () => {

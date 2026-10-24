@@ -103,8 +103,9 @@ export function UsageDashboard() {
         <div className="flex items-center gap-3">
           {/* Period Selector */}
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-neutral-400" />
+            <Calendar className="h-4 w-4 text-muted" />
             <select
+              aria-label="Period"
               value={period}
               onChange={(e) => setPeriod(e.target.value as PeriodType)}
               className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"

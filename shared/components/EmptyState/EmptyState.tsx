@@ -1,5 +1,16 @@
 import { ReactNode } from 'react';
-import { Plus, Search, FileText, Server, Layers, Wrench, Rocket, Users, Package, WifiOff } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  FileText,
+  Server,
+  Layers,
+  Wrench,
+  Rocket,
+  Users,
+  Package,
+  WifiOff,
+} from 'lucide-react';
 
 // ============================================================================
 // Types
@@ -50,7 +61,7 @@ function DefaultIllustration() {
   return (
     <div className="relative">
       <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
-        <FileText className="w-10 h-10 text-neutral-400" />
+        <FileText className="w-10 h-10 text-muted" />
       </div>
       <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
         <Plus className="w-4 h-4 text-primary-600 dark:text-primary-400" />
@@ -63,7 +74,7 @@ function SearchIllustration() {
   return (
     <div className="relative">
       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
-        <Search className="w-10 h-10 text-neutral-400" />
+        <Search className="w-10 h-10 text-muted" />
       </div>
       <div className="absolute top-0 right-0 w-6 h-6 rounded-full bg-warning-100 dark:bg-warning-900 flex items-center justify-center">
         <span className="text-warning-600 dark:text-warning-400 text-xs font-bold">?</span>
@@ -107,8 +118,14 @@ function ServersIllustration() {
         <Server className="w-10 h-10 text-accent-500" />
       </div>
       <div className="absolute bottom-2 left-2 w-3 h-3 rounded-full bg-neutral-300 animate-pulse" />
-      <div className="absolute bottom-2 left-7 w-3 h-3 rounded-full bg-neutral-300 animate-pulse" style={{ animationDelay: '0.2s' }} />
-      <div className="absolute bottom-2 left-12 w-3 h-3 rounded-full bg-neutral-300 animate-pulse" style={{ animationDelay: '0.4s' }} />
+      <div
+        className="absolute bottom-2 left-7 w-3 h-3 rounded-full bg-neutral-300 animate-pulse"
+        style={{ animationDelay: '0.2s' }}
+      />
+      <div
+        className="absolute bottom-2 left-12 w-3 h-3 rounded-full bg-neutral-300 animate-pulse"
+        style={{ animationDelay: '0.4s' }}
+      />
     </div>
   );
 }
@@ -164,11 +181,14 @@ function SubscriptionsIllustration() {
 // Variant Configurations
 // ============================================================================
 
-const variantConfig: Record<EmptyStateVariant, {
-  illustration: ReactNode;
-  title: string;
-  description: string;
-}> = {
+const variantConfig: Record<
+  EmptyStateVariant,
+  {
+    illustration: ReactNode;
+    title: string;
+    description: string;
+  }
+> = {
   default: {
     illustration: <DefaultIllustration />,
     title: 'Nothing here yet',
@@ -177,7 +197,7 @@ const variantConfig: Record<EmptyStateVariant, {
   search: {
     illustration: <SearchIllustration />,
     title: 'No results found',
-    description: 'Try adjusting your search or filters to find what you\'re looking for.',
+    description: "Try adjusting your search or filters to find what you're looking for.",
   },
   apis: {
     illustration: <APIsIllustration />,
@@ -239,9 +259,7 @@ export function EmptyState({
       } ${className}`}
     >
       {/* Illustration */}
-      <div className={compact ? 'mb-4' : 'mb-6'}>
-        {illustration || config.illustration}
-      </div>
+      <div className={compact ? 'mb-4' : 'mb-6'}>{illustration || config.illustration}</div>
 
       {/* Title */}
       <h3
@@ -263,11 +281,13 @@ export function EmptyState({
 
       {/* Actions */}
       {(action || secondaryAction) && (
-        <div className={`flex flex-col sm:flex-row items-center gap-3 ${compact ? 'mt-4' : 'mt-6'}`}>
+        <div
+          className={`flex flex-col sm:flex-row items-center gap-3 ${compact ? 'mt-4' : 'mt-6'}`}
+        >
           {action && (
             <button
               onClick={action.onClick}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-700 transition-colors"
             >
               {action.icon || <Plus className="w-4 h-4" />}
               {action.label}

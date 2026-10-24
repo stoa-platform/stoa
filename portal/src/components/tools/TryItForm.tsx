@@ -1,3 +1,12 @@
+import {
+  Field,
+  FieldLabel,
+  FieldSelect,
+  FieldTextarea,
+  FieldInput,
+  Form,
+  FormError,
+} from '@stoa/shared/components/Field';
 /**
  * Try It Form Component
  *
@@ -111,12 +120,12 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     // Enum - render as select
     if (property.enum) {
       return (
-        <div className="space-y-1">
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+        <Field error={error} className="space-y-1">
+          <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
-          </label>
-          <select
+          </FieldLabel>
+          <FieldSelect
             value={(value as string) || ''}
             onChange={(e) => handleChange(e.target.value)}
             className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
@@ -131,24 +140,23 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
                 {opt}
               </option>
             ))}
-          </select>
+          </FieldSelect>
           {property.description && (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
           )}
-          {error && <p className="text-xs text-red-600">{error}</p>}
-        </div>
+        </Field>
       );
     }
 
     // Textarea for long text
     if (property.maxLength && property.maxLength > 200) {
       return (
-        <div className="space-y-1">
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+        <Field error={error} className="space-y-1">
+          <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
-          </label>
-          <textarea
+          </FieldLabel>
+          <FieldTextarea
             value={(value as string) || ''}
             onChange={(e) => handleChange(e.target.value)}
             placeholder={property.description || `Enter ${name}...`}
@@ -162,28 +170,27 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           {property.description && (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
           )}
-          {error && <p className="text-xs text-red-600">{error}</p>}
-        </div>
+        </Field>
       );
     }
 
     // Regular text input
     return (
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+      <Field error={error} className="space-y-1">
+        <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
           {property.description && (
             <button
               type="button"
               onClick={() => setShowDescription(!showDescription)}
-              className="ml-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
+              className="ml-1 text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
             >
               <Info className="h-3 w-3 inline" />
             </button>
           )}
-        </label>
-        <input
+        </FieldLabel>
+        <FieldInput
           type={property.format === 'email' ? 'email' : property.format === 'uri' ? 'url' : 'text'}
           value={(value as string) || ''}
           onChange={(e) => handleChange(e.target.value)}
@@ -199,20 +206,19 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             {property.description}
           </p>
         )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
-      </div>
+      </Field>
     );
   }
 
   // Number input
   if (property.type === 'number' || property.type === 'integer') {
     return (
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+      <Field error={error} className="space-y-1">
+        <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
-        </label>
-        <input
+        </FieldLabel>
+        <FieldInput
           type="number"
           value={value !== undefined ? (value as number) : ''}
           onChange={(e) => handleChange(e.target.value ? Number(e.target.value) : undefined)}
@@ -230,23 +236,22 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
         )}
         {(property.minimum !== undefined || property.maximum !== undefined) && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500">
+          <p className="text-xs text-muted">
             {property.minimum !== undefined && `Min: ${property.minimum}`}
             {property.minimum !== undefined && property.maximum !== undefined && ' • '}
             {property.maximum !== undefined && `Max: ${property.maximum}`}
           </p>
         )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
-      </div>
+      </Field>
     );
   }
 
   // Boolean input
   if (property.type === 'boolean') {
     return (
-      <div className="space-y-1">
+      <Field error={error} className="space-y-1">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input
+          <FieldInput
             type="checkbox"
             checked={!!value}
             onChange={(e) => handleChange(e.target.checked)}
@@ -260,8 +265,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
         {property.description && (
           <p className="text-xs text-neutral-500 ml-6">{property.description}</p>
         )}
-        {error && <p className="text-xs text-red-600 ml-6">{error}</p>}
-      </div>
+      </Field>
     );
   }
 
@@ -270,15 +274,18 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     const arrayValue = (value as string[]) || [];
 
     return (
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+      <fieldset className="space-y-2">
+        <legend className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
-        </label>
+        </legend>
         <div className="space-y-2">
           {arrayValue.map((item, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <input
+            <Field error={error} key={idx} className="flex items-center gap-2">
+              <FieldLabel className="sr-only">
+                {name} {idx + 1}
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={item}
                 onChange={(e) => {
@@ -289,16 +296,17 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
                 className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <button
+                aria-label={`Remove ${name} ${idx + 1}`}
                 type="button"
                 onClick={() => {
                   const newArray = arrayValue.filter((_, i) => i !== idx);
                   handleChange(newArray);
                 }}
-                className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                className="p-2 text-muted hover:text-red-600 dark:hover:text-red-400 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
-            </div>
+            </Field>
           ))}
           <button
             type="button"
@@ -312,8 +320,12 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
         {property.description && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
         )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
-      </div>
+        {error && arrayValue.length === 0 && (
+          <p role="alert" className="text-sm text-error-700 dark:text-error-300">
+            {error}
+          </p>
+        )}
+      </fieldset>
     );
   }
 
@@ -322,13 +334,13 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     const jsonValue = value ? JSON.stringify(value, null, 2) : '';
 
     return (
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+      <Field error={jsonError || error} className="space-y-1">
+        <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
-          <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-2">(JSON)</span>
-        </label>
-        <textarea
+          <span className="text-xs text-muted ml-2">(JSON)</span>
+        </FieldLabel>
+        <FieldTextarea
           value={jsonValue}
           onChange={(e) => {
             try {
@@ -350,19 +362,18 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
         {property.description && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400">{property.description}</p>
         )}
-        {(jsonError || error) && <p className="text-xs text-red-600">{jsonError || error}</p>}
-      </div>
+      </Field>
     );
   }
 
   // Default fallback - text input
   return (
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+    <Field error={error} className="space-y-1">
+      <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
         {name}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      <input
+      </FieldLabel>
+      <FieldInput
         type="text"
         value={(value as string) || ''}
         onChange={(e) => handleChange(e.target.value)}
@@ -373,8 +384,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             : 'border-neutral-300 dark:border-neutral-600'
         }`}
       />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-    </div>
+    </Field>
   );
 }
 
@@ -503,9 +513,7 @@ export function TryItForm({
           <p className="text-neutral-500 dark:text-neutral-400 text-sm">
             No input schema available
           </p>
-          <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
-            This tool doesn't define input parameters
-          </p>
+          <p className="text-muted text-xs mt-1">This tool doesn't define input parameters</p>
         </div>
       </div>
     );
@@ -523,15 +531,15 @@ export function TryItForm({
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      <Form error={error} onSubmit={handleSubmit} className="p-6 space-y-4">
         {renderFormFields()}
 
         {/* Error Display */}
         {error && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <FormError className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-          </div>
+          </FormError>
         )}
 
         {/* Actions */}
@@ -561,7 +569,7 @@ export function TryItForm({
             Reset
           </button>
         </div>
-      </form>
+      </Form>
 
       {/* Response Section */}
       {response !== null && (
@@ -586,7 +594,7 @@ export function TryItForm({
               </pre>
               <button
                 onClick={handleCopyResponse}
-                className="absolute top-2 right-2 p-2 text-neutral-400 hover:text-white bg-neutral-800 rounded-lg transition-colors"
+                className="absolute top-2 right-2 p-2 text-muted hover:text-white bg-neutral-800 rounded-lg transition-colors"
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-green-400" />

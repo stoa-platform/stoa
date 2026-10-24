@@ -1,3 +1,5 @@
+import { Form, FormError } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Service Accounts Management Page (CAB-296)
  *
@@ -131,7 +133,7 @@ export function ServiceAccountsPage() {
       {/* Loading/Error States */}
       {isLoading && (
         <div className="text-center py-12">
-          <RefreshCw className="h-8 w-8 text-neutral-400 dark:text-neutral-500 animate-spin mx-auto mb-4" />
+          <RefreshCw className="h-8 w-8 text-muted animate-spin mx-auto mb-4" />
           <p className="text-neutral-500 dark:text-neutral-400">Loading service accounts...</p>
         </div>
       )}
@@ -253,7 +255,7 @@ function ServiceAccountCard({
               </code>
               <button
                 onClick={handleCopyClientId}
-                className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300"
+                className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
                 title="Copy client_id"
               >
                 {copied ? (
@@ -351,21 +353,14 @@ function CreateServiceAccountModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="fixed inset-0 bg-black/50"
-        onClick={onClose}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
-      />
+    <Modal onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div aria-hidden="true" className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
+        <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
           Create Service Account
-        </h2>
+        </ModalTitle>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <Form error={error} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="sa-name"
@@ -406,9 +401,9 @@ function CreateServiceAccountModal({
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <FormError className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-            </div>
+            </FormError>
           )}
 
           <div className="flex justify-end gap-3 pt-4">
@@ -437,9 +432,9 @@ function CreateServiceAccountModal({
               )}
             </button>
           </div>
-        </form>
+        </Form>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -490,24 +485,17 @@ function NewAccountCreatedModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="fixed inset-0 bg-black/50"
-        onClick={onClose}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
-      />
+    <Modal onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div aria-hidden="true" className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
             <Check className="h-6 w-6 text-green-600 dark:text-green-400" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
               Service Account Created!
-            </h2>
+            </ModalTitle>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">{account.name}</p>
           </div>
         </div>
@@ -552,6 +540,7 @@ function NewAccountCreatedModal({
                 {showSecret ? account.client_secret : '••••••••••••••••••••••••••••••••'}
               </code>
               <button
+                type="button"
                 onClick={() => setShowSecret(!showSecret)}
                 className="p-2 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
                 aria-label={showSecret ? 'Hide client secret' : 'Show client secret'}
@@ -568,6 +557,7 @@ function NewAccountCreatedModal({
 
         <div className="flex flex-wrap gap-3">
           <button
+            type="button"
             onClick={handleCopyAll}
             className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 dark:text-neutral-300"
           >
@@ -575,6 +565,7 @@ function NewAccountCreatedModal({
             {copied ? 'Copied!' : 'Copy Credentials'}
           </button>
           <button
+            type="button"
             onClick={handleDownloadConfig}
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
@@ -585,6 +576,7 @@ function NewAccountCreatedModal({
 
         <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
           <button
+            type="button"
             onClick={onClose}
             className="w-full px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white font-medium"
           >
@@ -592,7 +584,7 @@ function NewAccountCreatedModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -607,23 +599,16 @@ function DeleteConfirmModal({
   isDeleting: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="fixed inset-0 bg-black/50"
-        onClick={onCancel}
-        onKeyDown={(e) => e.key === 'Escape' && onCancel()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
-      />
+    <Modal onClose={onCancel} className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div aria-hidden="true" className="fixed inset-0 bg-black/50" onClick={onCancel} />
       <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-sm w-full p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-full">
             <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
           </div>
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
             Delete Service Account?
-          </h2>
+          </ModalTitle>
         </div>
 
         <p className="text-neutral-600 dark:text-neutral-400 mb-6">
@@ -633,12 +618,14 @@ function DeleteConfirmModal({
 
         <div className="flex justify-end gap-3">
           <button
+            type="button"
             onClick={onCancel}
             className="px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             disabled={isDeleting}
             className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
@@ -657,7 +644,7 @@ function DeleteConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

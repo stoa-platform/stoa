@@ -250,3 +250,13 @@ class MockResizeObserver {
   disconnect = vi.fn();
 }
 (globalThis as Record<string, unknown>).ResizeObserver = MockResizeObserver;
+
+// jsdom models neither the native top layer nor inertness; browser checks remain required.
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute('open', '');
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute('open');
+  };
+}

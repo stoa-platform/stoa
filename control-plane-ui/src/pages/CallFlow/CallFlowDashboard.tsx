@@ -526,6 +526,7 @@ export function CallFlowDashboard() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <select
+            aria-label="Service type"
             value={serviceType}
             onChange={(e) => setServiceType(e.target.value)}
             className="border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm"
@@ -668,7 +669,7 @@ export function CallFlowDashboard() {
               icon={CheckCircle}
               colorClass={
                 successRateVal === null
-                  ? 'text-neutral-400'
+                  ? 'text-muted'
                   : successRateVal >= 99
                     ? 'text-green-600'
                     : successRateVal >= 95
@@ -764,7 +765,7 @@ export function CallFlowDashboard() {
           {/* ─── Traffic Heatmap ─── */}
           <ChartCard
             title="Traffic Heatmap (24h × Routes)"
-            icon={<Activity className="h-5 w-5 text-neutral-400" />}
+            icon={<Activity className="h-5 w-5 text-muted" />}
           >
             <TrafficHeatmap
               cells={heatmapCells.cells}
@@ -792,7 +793,7 @@ export function CallFlowDashboard() {
                     {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} — clear
                   </button>
                 )}
-                <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                <span className="text-xs text-muted">
                   {filteredTraces.length}/{traces.length} traces
                 </span>
               </div>
@@ -842,7 +843,7 @@ export function CallFlowDashboard() {
                       className="w-full"
                     />
                   ) : (
-                    <div className="h-[100px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                    <div className="h-[100px] flex items-center justify-center text-sm text-muted">
                       {trend.error
                         ? 'Unavailable'
                         : key === 'edge-mcp'

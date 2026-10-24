@@ -43,7 +43,7 @@ export function MetricTimeseries({
         />
       ) : error ? (
         <div
-          className="flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500 rounded border border-dashed border-neutral-300 dark:border-neutral-600"
+          className="flex items-center justify-center text-sm text-muted rounded border border-dashed border-neutral-300 dark:border-neutral-600"
           style={{ height }}
         >
           Metrics unavailable
@@ -51,10 +51,7 @@ export function MetricTimeseries({
       ) : data && data.length >= 2 ? (
         <SparklineChart data={data} color={color} height={height} width={800} showArea />
       ) : (
-        <div
-          className="flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
-          style={{ height }}
-        >
+        <div className="flex items-center justify-center text-sm text-muted" style={{ height }}>
           No data
         </div>
       )}

@@ -17,7 +17,7 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
         <span className="text-neutral-600 dark:text-neutral-300">
           {used.toLocaleString()} / {limit.toLocaleString()}
         </span>
-        <span className="text-neutral-400">{pct.toFixed(0)}%</span>
+        <span className="text-muted">{pct.toFixed(0)}%</span>
       </div>
       <div className="h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
         <div
@@ -44,7 +44,7 @@ function RateLimitCard({ rl }: { rl: RateLimitStatus }) {
         {pct >= 90 && <AlertTriangle className="w-5 h-5 text-red-500" />}
       </div>
       <UsageBar used={rl.used} limit={rl.limit} />
-      <div className="flex justify-between mt-2 text-xs text-neutral-400">
+      <div className="flex justify-between mt-2 text-xs text-muted">
         <span>{rl.remaining.toLocaleString()} remaining</span>
         <span>Resets {new Date(rl.reset_at).toLocaleTimeString()}</span>
       </div>
@@ -78,14 +78,14 @@ export function RateLimitsPage() {
 
         {/* Grid */}
         {isLoading ? (
-          <div className="text-center py-8 text-neutral-400">Loading rate limits...</div>
+          <div className="text-center py-8 text-muted">Loading rate limits...</div>
         ) : rateLimits.length === 0 ? (
           <div className="text-center py-16">
             <Gauge className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-4" />
             <h2 className="text-lg font-medium text-neutral-600 dark:text-neutral-300">
               No active rate limits
             </h2>
-            <p className="text-sm text-neutral-400 mt-1">
+            <p className="text-sm text-muted mt-1">
               Subscribe to APIs to see your usage quotas here
             </p>
           </div>

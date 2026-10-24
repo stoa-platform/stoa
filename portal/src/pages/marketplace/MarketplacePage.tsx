@@ -102,7 +102,7 @@ export function MarketplacePage() {
             )}
           </div>
           {previewFavorites.length === 0 ? (
-            <p className="text-sm text-neutral-400 dark:text-neutral-500 italic">
+            <p className="text-sm text-muted italic">
               No favorites yet — bookmark items from their detail pages
             </p>
           ) : (

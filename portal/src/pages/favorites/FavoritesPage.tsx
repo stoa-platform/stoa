@@ -38,7 +38,7 @@ function FavoriteCard({
           {favorite.item_description}
         </p>
         <div className="flex items-center gap-3 mt-2">
-          <time className="text-xs text-neutral-400">
+          <time className="text-xs text-muted">
             Added {new Date(favorite.added_at).toLocaleDateString()}
           </time>
           <a
@@ -52,7 +52,7 @@ function FavoriteCard({
       <button
         onClick={() => onRemove(favorite.id)}
         disabled={isRemoving}
-        className="p-2 text-neutral-400 hover:text-red-500 transition-colors disabled:opacity-50"
+        className="p-2 text-muted hover:text-red-500 transition-colors disabled:opacity-50"
         aria-label={`Remove ${favorite.item_name} from favorites`}
       >
         <Trash2 className="w-4 h-4" />
@@ -88,14 +88,14 @@ export function FavoritesPage() {
 
         {/* List */}
         {isLoading ? (
-          <div className="text-center py-8 text-neutral-400">Loading favorites...</div>
+          <div className="text-center py-8 text-muted">Loading favorites...</div>
         ) : favorites.length === 0 ? (
           <div className="text-center py-16">
             <Star className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-4" />
             <h2 className="text-lg font-medium text-neutral-600 dark:text-neutral-300">
               No favorites yet
             </h2>
-            <p className="text-sm text-neutral-400 mt-1">
+            <p className="text-sm text-muted mt-1">
               Bookmark APIs and MCP servers from their detail pages
             </p>
           </div>

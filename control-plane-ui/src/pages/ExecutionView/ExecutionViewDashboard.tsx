@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 /**
  * Execution View Dashboard — Consumer execution view + error taxonomy (CAB-1318)
  *
@@ -267,7 +268,12 @@ export function ExecutionViewDashboard() {
                     {new Date(exec.started_at).toLocaleTimeString()}
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white">
-                    {exec.api_name || exec.tool_name || exec.path || '—'}
+                    <RowAction
+                      aria-label={`View execution ${exec.id}`}
+                      onActivate={() => handleRowClick(exec)}
+                    >
+                      {exec.api_name || exec.tool_name || exec.path || '—'}
+                    </RowAction>
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
                     {exec.method || '—'}

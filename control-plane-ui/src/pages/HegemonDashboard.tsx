@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -250,9 +251,9 @@ function SessionRow({ trace }: { trace: TraceSummary }) {
         onClick={() => setExpanded(!expanded)}
       >
         <td className="px-4 py-3">
-          <button className="text-gray-400">
+          <span className="text-gray-400">
             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
+          </span>
         </td>
         <td className="px-4 py-3">
           {isSuccess ? (
@@ -262,7 +263,13 @@ function SessionRow({ trace }: { trace: TraceSummary }) {
           )}
         </td>
         <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
-          {trace.api_name || '—'}
+          <RowAction
+            aria-label={`Session ${trace.api_name || trace.id}`}
+            onActivate={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+          >
+            {trace.api_name || '—'}
+          </RowAction>
         </td>
         <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
           {trace.trigger_source || trace.trigger_type}
@@ -484,6 +491,7 @@ export function HegemonDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <select
+            aria-label="Period in days"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"

@@ -18,7 +18,7 @@ const syncStatusColors: Record<string, string> = {
   OutOfSync: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 dark:text-yellow-400',
   Unknown: 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-400',
   Error: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400',
-  NotFound: 'text-neutral-400 bg-neutral-50 dark:bg-neutral-800 dark:text-neutral-500',
+  NotFound: 'text-muted bg-neutral-50 dark:bg-neutral-800 dark:text-neutral-500',
 };
 
 const healthStatusColors: Record<string, string> = {
@@ -26,7 +26,7 @@ const healthStatusColors: Record<string, string> = {
   Progressing: 'text-blue-600 dark:text-blue-400',
   Degraded: 'text-red-600 dark:text-red-400',
   Suspended: 'text-yellow-600 dark:text-yellow-400',
-  Missing: 'text-neutral-400 dark:text-neutral-500',
+  Missing: 'text-muted',
   Unknown: 'text-neutral-500 dark:text-neutral-400',
 };
 
@@ -152,7 +152,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
     return (
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow dark:shadow-none p-6">
         <div className="flex items-center justify-center">
-          <RefreshIcon className="w-5 h-5 animate-spin text-neutral-400" />
+          <RefreshIcon className="w-5 h-5 animate-spin text-muted" />
           <span className="ml-2 text-neutral-500 dark:text-neutral-400">
             Loading platform status...
           </span>
@@ -168,7 +168,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-neutral-100 dark:bg-neutral-700">
-              <ExclamationCircleIcon className="w-5 h-5 text-neutral-400 dark:text-neutral-500" />
+              <ExclamationCircleIcon className="w-5 h-5 text-muted" />
             </div>
             <div>
               <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -310,7 +310,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
 
         {/* Last Updated */}
         {lastUpdated && (
-          <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700 text-xs text-neutral-400 dark:text-neutral-500 text-right">
+          <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700 text-xs text-muted text-right">
             Last updated: {lastUpdated.toLocaleTimeString()}
           </div>
         )}
@@ -362,9 +362,7 @@ const ComponentCard = memo(function ComponentCard({
 
       <div className="mt-3 flex items-center justify-between">
         {component.last_sync && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500">
-            {formatRelativeTime(component.last_sync)}
-          </p>
+          <p className="text-xs text-muted">{formatRelativeTime(component.last_sync)}</p>
         )}
         {isOutOfSync && (
           <PermissionGate permission="apis:deploy">

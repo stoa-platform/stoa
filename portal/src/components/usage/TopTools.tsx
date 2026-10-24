@@ -62,9 +62,7 @@ export const TopTools = memo(function TopTools({ tools, isLoading = false }: Top
               <div key={tool.tool_id} className="group">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500 w-4">
-                      {index + 1}.
-                    </span>
+                    <span className="text-xs font-medium text-muted w-4">{index + 1}.</span>
                     <span className="text-sm font-medium text-neutral-900 dark:text-white truncate max-w-[150px]">
                       {tool.tool_name}
                     </span>
@@ -84,10 +82,10 @@ export const TopTools = memo(function TopTools({ tools, isLoading = false }: Top
 
                 {/* Stats on hover */}
                 <div className="ml-6 flex items-center gap-4 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                  <span className="text-xs text-muted">
                     {tool.success_rate.toFixed(1)}% success
                   </span>
-                  <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                  <span className="text-xs text-muted">
                     {formatLatency(tool.avg_latency_ms)} avg
                   </span>
                 </div>

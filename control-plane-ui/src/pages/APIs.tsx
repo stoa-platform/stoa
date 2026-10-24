@@ -1,3 +1,12 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
+import {
+  Field,
+  FieldLabel,
+  FieldSelect,
+  FieldInput,
+  FieldTextarea,
+} from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -359,11 +368,11 @@ export function APIs() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Tenant Selector */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Tenant
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedTenant}
               onChange={(e) => setSelectedTenant(e.target.value)}
               className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -374,16 +383,16 @@ export function APIs() {
                   {tenant.display_name || tenant.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Search Input */}
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field className="flex-1 min-w-[200px]">
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Search
-            </label>
+            </FieldLabel>
             <div className="relative">
-              <input
+              <FieldInput
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -391,7 +400,7 @@ export function APIs() {
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <svg
-                className="absolute left-3 top-2.5 h-5 w-5 text-neutral-400"
+                className="absolute left-3 top-2.5 h-5 w-5 text-muted"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -406,7 +415,7 @@ export function APIs() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
+                  className="absolute right-3 top-2.5 text-muted hover:text-neutral-600"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -419,14 +428,14 @@ export function APIs() {
                 </button>
               )}
             </div>
-          </div>
+          </Field>
 
           {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Status
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-36 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -435,8 +444,8 @@ export function APIs() {
               <option value="draft">Draft</option>
               <option value="published">Published</option>
               <option value="deprecated">Deprecated</option>
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Results count */}
           <div className="text-sm text-neutral-500 dark:text-neutral-400 self-end pb-2">
@@ -574,7 +583,13 @@ export function APIs() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-neutral-900 dark:text-white">
-                          {api.display_name || api.name}
+                          <RowAction
+                            onActivate={() =>
+                              navigate(`/apis/${api.tenant_id || selectedTenant}/${api.name}`)
+                            }
+                          >
+                            {api.display_name || api.name}
+                          </RowAction>
                         </div>
                         <div className="text-sm text-neutral-500 dark:text-neutral-400">
                           {api.backend_url}
@@ -609,9 +624,7 @@ export function APIs() {
                           Published
                         </span>
                       ) : (
-                        <span className="text-neutral-400 dark:text-neutral-500 text-xs">
-                          Not promoted
-                        </span>
+                        <span className="text-muted text-xs">Not promoted</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -881,13 +894,19 @@ function APIFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">{title}</h2>
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
+            {title}
+          </ModalTitle>
           <button
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -945,12 +964,12 @@ function APIFormModal({
           {/* OpenAPI Import Section */}
           {mode === 'openapi' && !isEdit && (
             <div className="space-y-4 pb-4 border-b dark:border-neutral-700">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                   Upload OpenAPI/Swagger File
-                </label>
+                </FieldLabel>
                 <div className="flex gap-2">
-                  <input
+                  <FieldInput
                     ref={fileInputRef}
                     type="file"
                     accept=".json,.yaml,.yml"
@@ -963,7 +982,7 @@ function APIFormModal({
                     className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-neutral-300 dark:border-neutral-600 rounded-lg hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors dark:text-neutral-300"
                   >
                     <svg
-                      className="w-5 h-5 text-neutral-400"
+                      className="w-5 h-5 text-muted"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -978,13 +997,13 @@ function APIFormModal({
                     Choose File (.json, .yaml, .yml)
                   </button>
                 </div>
-              </div>
+              </Field>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                   Or Paste OpenAPI/Swagger Content
-                </label>
-                <textarea
+                </FieldLabel>
+                <FieldTextarea
                   value={formData.openapi_spec}
                   onChange={(e) => {
                     setFormData({ ...formData, openapi_spec: e.target.value });
@@ -1006,7 +1025,7 @@ paths:
     get:
       summary: Health check`}
                 />
-              </div>
+              </Field>
 
               {parseError && (
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
@@ -1032,11 +1051,11 @@ paths:
           >
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <Field>
+                  <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                     Name (slug)
-                  </label>
-                  <input
+                  </FieldLabel>
+                  <FieldInput
                     data-testid="api-form-name"
                     type="text"
                     value={formData.name}
@@ -1050,12 +1069,12 @@ paths:
                     placeholder="payment-api"
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                </Field>
+                <Field>
+                  <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                     Version
-                  </label>
-                  <input
+                  </FieldLabel>
+                  <FieldInput
                     type="text"
                     value={formData.version}
                     onChange={(e) => setFormData({ ...formData, version: e.target.value })}
@@ -1063,14 +1082,14 @@ paths:
                     placeholder="1.0.0"
                     required
                   />
-                </div>
+                </Field>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 mb-1">
                   Display Name
-                </label>
-                <input
+                </FieldLabel>
+                <FieldInput
                   data-testid="api-form-display-name"
                   type="text"
                   value={formData.display_name}
@@ -1079,13 +1098,13 @@ paths:
                   placeholder="Payment API"
                   required
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 mb-1">
                   Description
-                </label>
-                <textarea
+                </FieldLabel>
+                <FieldTextarea
                   data-testid="api-form-description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -1093,7 +1112,7 @@ paths:
                   rows={2}
                   placeholder="API for handling payments..."
                 />
-              </div>
+              </Field>
             </div>
           </Collapsible>
 
@@ -1104,11 +1123,11 @@ paths:
             defaultExpanded={true}
             variant="bordered"
           >
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Backend URL
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 data-testid="api-form-backend-url"
                 type="url"
                 value={formData.backend_url}
@@ -1120,7 +1139,7 @@ paths:
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 The backend service URL that the Gateway will proxy requests to
               </p>
-            </div>
+            </Field>
           </Collapsible>
 
           {/* OpenAPI Spec for manual/lifecycle modes */}
@@ -1133,17 +1152,19 @@ paths:
               variant="bordered"
             >
               <div className="space-y-3">
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  OpenAPI Spec
-                </label>
-                <textarea
-                  data-testid="api-form-openapi-spec"
-                  value={formData.openapi_spec}
-                  onChange={(e) => setFormData({ ...formData, openapi_spec: e.target.value })}
-                  className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                  rows={6}
-                  placeholder="Paste OpenAPI/Swagger spec here (YAML or JSON)..."
-                />
+                <Field>
+                  <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                    OpenAPI Spec
+                  </FieldLabel>
+                  <FieldTextarea
+                    data-testid="api-form-openapi-spec"
+                    value={formData.openapi_spec}
+                    onChange={(e) => setFormData({ ...formData, openapi_spec: e.target.value })}
+                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                    rows={6}
+                    placeholder="Paste OpenAPI/Swagger spec here (YAML or JSON)..."
+                  />
+                </Field>
                 {mode === 'lifecycle' && (
                   <label className="block text-sm">
                     <span className="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">
@@ -1201,6 +1222,6 @@ paths:
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

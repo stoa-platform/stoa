@@ -63,8 +63,9 @@ export function APIComparePage() {
           </div>
           <div className="flex gap-2">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input
+                aria-label="Enter API ID to compare..."
                 type="text"
                 placeholder="Enter API ID to compare..."
                 value={inputValue}
@@ -83,7 +84,7 @@ export function APIComparePage() {
               Add
             </button>
           </div>
-          <p className="text-xs text-neutral-400 mt-2">
+          <p className="text-xs text-muted mt-2">
             Select 2-5 APIs to compare. {selectedIds.length}/5 selected.
           </p>
         </div>
@@ -92,9 +93,9 @@ export function APIComparePage() {
         {selectedIds.length >= 2 && (
           <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
             {isLoading || isFetching ? (
-              <div className="p-8 text-center text-neutral-400">Comparing APIs...</div>
+              <div className="p-8 text-center text-muted">Comparing APIs...</div>
             ) : fields.length === 0 ? (
-              <div className="p-8 text-center text-neutral-400">No comparison data available</div>
+              <div className="p-8 text-center text-muted">No comparison data available</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -127,7 +128,7 @@ export function APIComparePage() {
                                 {val ? (
                                   <span className="text-emerald-500">Yes</span>
                                 ) : (
-                                  <span className="text-neutral-400">No</span>
+                                  <span className="text-muted">No</span>
                                 )}
                               </td>
                             );
@@ -156,7 +157,7 @@ export function APIComparePage() {
             <h2 className="text-lg font-medium text-neutral-600 dark:text-neutral-300">
               Select at least 2 APIs to compare
             </h2>
-            <p className="text-sm text-neutral-400 mt-1">
+            <p className="text-sm text-muted mt-1">
               Add API IDs above to see a side-by-side feature comparison
             </p>
           </div>

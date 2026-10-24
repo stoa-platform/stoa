@@ -57,9 +57,7 @@ function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatC
       <div className="mt-3">
         <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{label}</p>
-        {subtext && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">{subtext}</p>
-        )}
+        {subtext && <p className="text-xs text-muted mt-1">{subtext}</p>}
       </div>
     </div>
   );
@@ -127,7 +125,7 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
           <p className="text-neutral-500 dark:text-neutral-400 text-sm">
             No usage data available yet
           </p>
-          <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
+          <p className="text-muted text-xs mt-1">
             Statistics will appear once you start using this tool
           </p>
         </div>
@@ -200,7 +198,7 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
               />
             ))}
           </div>
-          <div className="flex justify-between mt-2 text-xs text-neutral-400 dark:text-neutral-500">
+          <div className="flex justify-between mt-2 text-xs text-muted">
             <span>Mon</span>
             <span>Tue</span>
             <span>Wed</span>

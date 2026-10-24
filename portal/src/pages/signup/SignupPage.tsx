@@ -165,7 +165,7 @@ export function SignupPage() {
               aria-label="Organization name"
             />
             {slug && (
-              <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
+              <p className="mt-1 text-xs text-muted">
                 Slug: <span className="font-mono">{slug}</span>
               </p>
             )}
@@ -305,7 +305,7 @@ export function SignupPage() {
         </p>
 
         {/* ToS */}
-        <p className="text-xs text-neutral-400 dark:text-neutral-500 text-center mt-3">
+        <p className="text-xs text-muted text-center mt-3">
           By creating an organization, you agree to our{' '}
           <a
             href={`${config.services.docs.url}/legal/terms`}

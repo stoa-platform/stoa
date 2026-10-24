@@ -71,7 +71,7 @@ function ApprovalRow({
         <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
           Requested by {approval.requester_name} ({approval.requester_email})
         </p>
-        <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
+        <p className="text-xs text-muted mt-0.5">
           {new Date(approval.created_at).toLocaleDateString()}
         </p>
       </div>

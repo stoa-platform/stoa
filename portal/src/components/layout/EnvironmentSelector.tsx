@@ -64,7 +64,7 @@ export function EnvironmentSelector({ variant = 'header' }: EnvironmentSelectorP
   if (variant === 'mobile') {
     return (
       <div className="mb-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1.5 px-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-1.5 px-1">
           Environment
         </p>
         <div className="flex flex-col gap-1">
@@ -141,9 +141,7 @@ function EnvOption({
     >
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} aria-hidden="true" />
       <span className="flex-1 text-left">{env.label}</span>
-      {isReadOnly && (
-        <Lock className="h-3 w-3 text-neutral-400 dark:text-neutral-500" aria-label="Read-only" />
-      )}
+      {isReadOnly && <Lock className="h-3 w-3 text-muted" aria-label="Read-only" />}
       {isActive && (
         <Check className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
       )}

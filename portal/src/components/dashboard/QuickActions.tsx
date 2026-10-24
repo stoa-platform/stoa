@@ -120,13 +120,13 @@ export function QuickActions() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-neutral-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors flex items-center gap-1">
                     {title}
-                    {action.external && <ExternalLink className="h-3 w-3 text-neutral-400" />}
+                    {action.external && <ExternalLink className="h-3 w-3 text-muted" />}
                   </h3>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
                     {description}
                   </p>
                 </div>
-                <ArrowRight className="h-5 w-5 text-neutral-400 dark:text-neutral-500 group-hover:text-primary-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                <ArrowRight className="h-5 w-5 text-muted group-hover:text-primary-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
               </div>
             </div>
           );

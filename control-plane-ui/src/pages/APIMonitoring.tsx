@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { apiService } from '../services/api';
 import type {
@@ -133,9 +134,7 @@ function StatsCard({
           <div>
             <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
             <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
-            {subtitle && (
-              <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>
-            )}
+            {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
           </div>
         </div>
         {trend && (
@@ -209,7 +208,7 @@ function SpanWaterfall({
         {ticks.map((ms, i) => (
           <span
             key={i}
-            className="absolute text-[10px] text-neutral-400 dark:text-neutral-500 -translate-x-1/2"
+            className="absolute text-[10px] text-muted -translate-x-1/2"
             style={{ left: `${(ms / scale) * 100}%` }}
           >
             {ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`}
@@ -231,9 +230,7 @@ function SpanWaterfall({
               <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate block">
                 {span.name}
               </span>
-              <span className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate block">
-                {span.service}
-              </span>
+              <span className="text-[10px] text-muted truncate block">{span.service}</span>
             </div>
 
             {/* Bar track */}
@@ -293,9 +290,9 @@ function TransactionRow({
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-neutral-400" />
+            <ChevronDown className="h-4 w-4 text-muted" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-neutral-400" />
+            <ChevronRight className="h-4 w-4 text-muted" />
           )}
           <code className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
             {transaction.trace_id.slice(0, 8)}...
@@ -316,7 +313,9 @@ function TransactionRow({
       <td className="px-4 py-3">
         <div className="flex flex-col">
           <span className="font-medium text-neutral-900 dark:text-white">
-            {transaction.api_name}
+            <RowAction onActivate={onToggle} aria-expanded={isExpanded}>
+              {transaction.api_name}
+            </RowAction>
           </span>
           <span className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[200px]">
             {transaction.path}
@@ -728,8 +727,9 @@ export function APIMonitoring() {
         <div className="flex flex-wrap items-center gap-4">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
             <input
+              aria-label="Search by trace ID, API, or path..."
               type="text"
               placeholder="Search by trace ID, API, or path..."
               value={searchTerm}
@@ -740,8 +740,9 @@ export function APIMonitoring() {
 
           {/* Status Filter */}
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-neutral-400" />
+            <Filter className="h-4 w-4 text-muted" />
             <select
+              aria-label="Status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as TransactionStatus | 'all')}
               className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -755,6 +756,7 @@ export function APIMonitoring() {
 
           {/* API Filter */}
           <select
+            aria-label="API"
             value={apiFilter}
             onChange={(e) => setApiFilter(e.target.value)}
             className="border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"

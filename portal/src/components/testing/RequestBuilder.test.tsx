@@ -5,6 +5,20 @@ import { RequestBuilder } from './RequestBuilder';
 import { renderWithProviders } from '../../test/helpers';
 
 describe('RequestBuilder', () => {
+  it('names request controls and distinguishes repeated parameter fields', async () => {
+    renderWithProviders(
+      <RequestBuilder baseUrl="https://example.com" onSubmit={vi.fn()} initialMethod="POST" />
+    );
+    expect(screen.getByRole('combobox', { name: 'HTTP method' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Request path' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add Parameter' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add Parameter' }));
+    expect(screen.getByRole('textbox', { name: 'Query parameter key 1' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Query parameter key 2' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Enable query parameter 2' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Body/ }));
+    expect(screen.getByRole('textbox', { name: 'Request body (JSON)' })).toBeInTheDocument();
+  });
   const onSubmit = vi.fn();
 
   const defaultProps = {

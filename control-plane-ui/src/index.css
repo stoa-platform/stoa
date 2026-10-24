@@ -13,7 +13,7 @@ body {
 /* Accessibility: Focus visible styles (CAB-1322) */
 @layer base {
   :focus-visible {
-    outline: 2px solid #059669;
+    outline: 2px solid #047857;
     outline-offset: 2px;
   }
 
@@ -24,7 +24,7 @@ body {
   a:focus-visible,
   button:focus-visible,
   [role='button']:focus-visible {
-    outline: 2px solid #059669;
+    outline: 2px solid #047857;
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -88,4 +88,23 @@ body {
   50% {
     opacity: 1;
   }
+}
+
+/* Backdrops remain styled by each modal surface. */
+dialog[aria-modal='true']::backdrop {
+  background: transparent;
+}
+
+:root {
+  --stoa-text-muted: #525252;
+}
+.dark {
+  --stoa-text-muted: #a3a3a3;
+}
+
+/* Zero specificity lets each migrated surface retain its own padding and background. */
+:where(dialog[aria-modal='true']) {
+  padding: 0;
+  background: transparent;
+  color: inherit;
 }

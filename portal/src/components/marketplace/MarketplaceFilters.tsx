@@ -43,6 +43,7 @@ export function MarketplaceFilterBar({
       {/* Category dropdown */}
       {categories.length > 0 && (
         <select
+          aria-label="Category"
           value={selectedCategory}
           onChange={(e) => onCategoryChange(e.target.value)}
           className="px-3 py-2 text-sm rounded-lg border border-neutral-200 bg-white

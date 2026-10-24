@@ -255,9 +255,7 @@ function ConversationList({
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
         {conversations.length === 0 ? (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 text-center py-4">
-            No conversations yet
-          </p>
+          <p className="text-xs text-muted text-center py-4">No conversations yet</p>
         ) : (
           conversations.map((conv) => (
             <div
@@ -780,7 +778,7 @@ export function FloatingChat({
                           <ToolBlock key={tool.tool_use_id} tool={tool} />
                         ))}
                       </div>
-                      <span className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
+                      <span className="text-xs text-muted mt-1">
                         {formatTime(message.timestamp)}
                       </span>
                     </div>
@@ -836,7 +834,7 @@ export function FloatingChat({
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1.5 text-center">
+                <p className="text-xs text-muted mt-1.5 text-center">
                   Press Enter to send, Shift+Enter for new line
                 </p>
               </div>

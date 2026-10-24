@@ -75,9 +75,9 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
         {/* Expand/Collapse Icon */}
         {hasNestedProperties || hasItems ? (
           isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+            <ChevronDown className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+            <ChevronRight className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
           )
         ) : (
           <Circle className="h-2 w-2 text-neutral-300 dark:text-neutral-600 mt-1.5 ml-1 mr-1 flex-shrink-0" />
@@ -99,12 +99,10 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
               </span>
             )}
             {property.enum && (
-              <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                enum: [{property.enum.join(', ')}]
-              </span>
+              <span className="text-xs text-muted">enum: [{property.enum.join(', ')}]</span>
             )}
             {property.default !== undefined && (
-              <span className="text-xs text-neutral-400 dark:text-neutral-500">
+              <span className="text-xs text-muted">
                 default: {JSON.stringify(property.default)}
               </span>
             )}
@@ -135,7 +133,7 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
       {/* Array Items */}
       {isExpanded && hasItems && property.items?.properties && (
         <div className="mt-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 ml-2">
-          <div className="text-xs text-neutral-400 dark:text-neutral-500 mb-1">Array items:</div>
+          <div className="text-xs text-muted mb-1">Array items:</div>
           {Object.entries(property.items.properties).map(([itemName, itemProp]) => (
             <PropertyRow
               key={itemName}

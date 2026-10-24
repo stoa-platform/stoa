@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Sandbox Confirmation Modal
  *
@@ -32,15 +33,12 @@ export function SandboxConfirmationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <Modal onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
+        aria-hidden="true"
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={onClose}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
       />
 
       {/* Modal */}
@@ -48,8 +46,10 @@ export function SandboxConfirmationModal({
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full transform transition-all">
           {/* Close button */}
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 p-1 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+            className="absolute top-4 right-4 p-1 text-muted hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -61,9 +61,12 @@ export function SandboxConfirmationModal({
                 <AlertTriangle className="h-6 w-6 text-amber-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
+                <ModalTitle
+                  as="h2"
+                  className="text-xl font-semibold text-neutral-900 dark:text-white"
+                >
                   Production Environment Warning
-                </h2>
+                </ModalTitle>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                   You are about to test against <strong>{environmentName}</strong>
                 </p>
@@ -129,12 +132,14 @@ export function SandboxConfirmationModal({
           {/* Footer */}
           <div className="px-6 py-4 bg-neutral-50 dark:bg-neutral-900 rounded-b-xl flex items-center justify-end gap-3">
             <button
+              type="button"
               onClick={onClose}
               className="px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleConfirm}
               disabled={!understood}
               className={`
@@ -142,7 +147,7 @@ export function SandboxConfirmationModal({
                 ${
                   understood
                     ? 'bg-amber-600 text-white hover:bg-amber-700'
-                    : 'bg-neutral-200 dark:bg-neutral-600 text-neutral-400 dark:text-neutral-400 cursor-not-allowed'
+                    : 'bg-neutral-200 dark:bg-neutral-600 text-muted dark:text-neutral-400 cursor-not-allowed'
                 }
               `}
             >
@@ -151,7 +156,7 @@ export function SandboxConfirmationModal({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

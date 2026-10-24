@@ -73,10 +73,7 @@ export function ChartEmptyState({
   height = CHART_EMPTY_STATE_HEIGHT,
 }: ChartEmptyStateProps) {
   return (
-    <div
-      className="flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500"
-      style={{ height }}
-    >
+    <div className="flex items-center justify-center text-sm text-muted" style={{ height }}>
       {message}
     </div>
   );

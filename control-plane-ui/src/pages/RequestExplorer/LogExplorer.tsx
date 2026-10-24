@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, RefreshCw, Search, X } from 'lucide-react';
@@ -244,8 +245,9 @@ export function LogExplorer() {
         </select>
 
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
+            aria-label="Search logs..."
             type="text"
             placeholder="Search logs..."
             value={search}
@@ -287,9 +289,7 @@ export function LogExplorer() {
             <div className="flex flex-col items-center justify-center py-16">
               <Search className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mb-2" />
               <p className="text-sm text-neutral-500 dark:text-neutral-400">No logs found</p>
-              <p className="text-xs text-neutral-400 mt-1">
-                Try adjusting your filters or time range
-              </p>
+              <p className="text-xs text-muted mt-1">Try adjusting your filters or time range</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -315,11 +315,13 @@ export function LogExplorer() {
                       }`}
                     >
                       <td className="px-4 py-2.5 text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })}
+                        <RowAction onActivate={() => setSelectedLog(log)}>
+                          {new Date(log.timestamp).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </RowAction>
                       </td>
                       <td className="px-4 py-2.5">
                         <span
@@ -354,7 +356,7 @@ export function LogExplorer() {
           )}
           {/* Footer */}
           {logs.length > 0 && (
-            <div className="px-4 py-2 border-t border-neutral-100 dark:border-neutral-700 text-xs text-neutral-400">
+            <div className="px-4 py-2 border-t border-neutral-100 dark:border-neutral-700 text-xs text-muted">
               {logs.length} entries &middot; {queryTimeMs.toFixed(0)}ms
             </div>
           )}
@@ -369,7 +371,7 @@ export function LogExplorer() {
               </h3>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-neutral-400 hover:text-neutral-600"
+                className="text-muted hover:text-neutral-600"
               >
                 <X className="h-4 w-4" />
               </button>

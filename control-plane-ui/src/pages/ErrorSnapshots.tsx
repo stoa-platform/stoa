@@ -117,7 +117,7 @@ function StatsCard({
         <div>
           <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
-          {subtitle && <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -209,7 +209,7 @@ function ReplayCommand({ snapshotId }: { snapshotId: string }) {
           )}
           <button
             onClick={copyToClipboard}
-            className="absolute top-2 right-2 text-neutral-400 hover:text-white"
+            className="absolute top-2 right-2 text-muted hover:text-white"
           >
             {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
           </button>
@@ -257,7 +257,7 @@ function SnapshotRow({
         onClick={onToggle}
       >
         {/* Expand icon */}
-        <button className="text-neutral-400">
+        <button className="text-muted">
           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
         </button>
 
@@ -311,7 +311,7 @@ function SnapshotRow({
         />
 
         {/* Timestamp */}
-        <span className="text-xs text-neutral-400 dark:text-neutral-500 w-24 text-right">
+        <span className="text-xs text-muted w-24 text-right">
           {formatDateTime(snapshot.timestamp)}
         </span>
       </div>
@@ -690,8 +690,9 @@ export function ErrorSnapshots() {
         <div className="flex flex-wrap gap-4">
           {/* Search */}
           <form onSubmit={handleSearch} className="relative flex-1 min-w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
             <input
+              aria-label="Search by path..."
               type="text"
               placeholder="Search by path..."
               value={searchQuery}
@@ -702,6 +703,7 @@ export function ErrorSnapshots() {
 
           {/* Trigger filter */}
           <select
+            aria-label="Trigger"
             value={filters.trigger || ''}
             onChange={(e) =>
               setFilters((f) => ({
@@ -721,6 +723,7 @@ export function ErrorSnapshots() {
 
           {/* Source filter */}
           <select
+            aria-label="Source"
             value={filters.source || ''}
             onChange={(e) =>
               setFilters((f) => ({
@@ -740,6 +743,7 @@ export function ErrorSnapshots() {
 
           {/* Resolution status filter */}
           <select
+            aria-label="Resolution status"
             value={filters.resolution_status || ''}
             onChange={(e) =>
               setFilters((f) => ({

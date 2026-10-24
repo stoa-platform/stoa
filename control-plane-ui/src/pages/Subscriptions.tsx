@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
@@ -334,6 +335,7 @@ export function Subscriptions() {
         </div>
         {/* Tenant Selector */}
         <select
+          aria-label="Tenant"
           value={selectedTenant}
           onChange={(e) => setSelectedTenant(e.target.value)}
           className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white text-sm"
@@ -355,6 +357,7 @@ export function Subscriptions() {
       {/* Search + Bulk Actions Bar */}
       <div className="flex items-center gap-4">
         <input
+          aria-label="Search by application, email, or API..."
           type="text"
           placeholder="Search by application, email, or API..."
           value={searchQuery}
@@ -405,12 +408,10 @@ export function Subscriptions() {
             >
               {tab.label}
               {stats && tab.key !== 'all' && stats.by_status[tab.key] !== undefined && (
-                <span className="ml-1.5 text-xs text-neutral-400">
-                  ({stats.by_status[tab.key]})
-                </span>
+                <span className="ml-1.5 text-xs text-muted">({stats.by_status[tab.key]})</span>
               )}
               {stats && tab.key === 'all' && (
-                <span className="ml-1.5 text-xs text-neutral-400">({stats.total})</span>
+                <span className="ml-1.5 text-xs text-muted">({stats.total})</span>
               )}
             </button>
           ))}
@@ -444,6 +445,7 @@ export function Subscriptions() {
                 {activeTab === 'pending' && (
                   <th className="px-4 py-3 w-10">
                     <input
+                      aria-label="Select all displayed subscriptions"
                       type="checkbox"
                       checked={
                         selectedIds.size > 0 && selectedIds.size === filteredSubscriptions.length
@@ -485,6 +487,7 @@ export function Subscriptions() {
                   {activeTab === 'pending' && (
                     <td className="px-4 py-3">
                       <input
+                        aria-label={`Select subscription ${sub.application_name} / ${sub.api_name}`}
                         type="checkbox"
                         checked={selectedIds.has(sub.id)}
                         onChange={() => toggleSelect(sub.id)}
@@ -497,7 +500,7 @@ export function Subscriptions() {
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                     {sub.api_name}
-                    <span className="text-xs text-neutral-400 ml-1">v{sub.api_version}</span>
+                    <span className="text-xs text-muted ml-1">v{sub.api_version}</span>
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                     {sub.subscriber_email}
@@ -526,7 +529,7 @@ export function Subscriptions() {
                       {sub.gateway_app_id && (
                         <span
                           title={sub.gateway_app_id}
-                          className="max-w-[12rem] truncate text-xs text-neutral-400 dark:text-neutral-500 font-mono"
+                          className="max-w-[12rem] truncate text-xs text-muted font-mono"
                         >
                           {sub.gateway_app_id}
                         </span>
@@ -607,10 +610,7 @@ export function Subscriptions() {
                         </>
                       )}
                       {sub.status_reason && (
-                        <span
-                          title={sub.status_reason}
-                          className="text-neutral-400 cursor-help text-xs"
-                        >
+                        <span title={sub.status_reason} className="text-muted cursor-help text-xs">
                           (reason)
                         </span>
                       )}
@@ -653,16 +653,26 @@ export function Subscriptions() {
 
       {/* Reject Modal */}
       {rejectModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <Modal
+          onClose={() => {
+            setRejectModalOpen(false);
+            setRejectTarget(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        >
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+            <ModalTitle
+              as="h3"
+              className="text-lg font-semibold text-neutral-900 dark:text-white mb-2"
+            >
               Reject Subscription
-            </h3>
+            </ModalTitle>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
               Reject {rejectTarget?.application_name}&apos;s subscription to{' '}
               {rejectTarget?.api_name}?
             </p>
             <textarea
+              aria-label="Reason for rejection (required)"
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Reason for rejection (required)"
@@ -688,17 +698,24 @@ export function Subscriptions() {
               </Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Bulk Reject Modal */}
       {bulkRejectOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <Modal
+          onClose={() => setBulkRejectOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        >
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+            <ModalTitle
+              as="h3"
+              className="text-lg font-semibold text-neutral-900 dark:text-white mb-2"
+            >
               Reject {selectedIds.size} Subscription(s)
-            </h3>
+            </ModalTitle>
             <textarea
+              aria-label="Reason for rejection (required)"
               value={bulkRejectReason}
               onChange={(e) => setBulkRejectReason(e.target.value)}
               placeholder="Reason for rejection (required)"
@@ -718,7 +735,7 @@ export function Subscriptions() {
               </Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

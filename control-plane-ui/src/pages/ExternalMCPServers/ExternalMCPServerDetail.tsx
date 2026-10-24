@@ -303,9 +303,9 @@ export function ExternalMCPServerDetail() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Health Status */}
           <div>
-            <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+            <p className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
               Health Status
-            </label>
+            </p>
             <div
               className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${healthConfig.bgColor}`}
             >
@@ -323,9 +323,9 @@ export function ExternalMCPServerDetail() {
 
           {/* Base URL */}
           <div>
-            <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+            <p className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
               Base URL
-            </label>
+            </p>
             <a
               href={server.base_url}
               target="_blank"
@@ -339,9 +339,9 @@ export function ExternalMCPServerDetail() {
 
           {/* Transport & Auth */}
           <div>
-            <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+            <p className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
               Transport / Auth
-            </label>
+            </p>
             <p className="text-sm text-neutral-900 dark:text-white">
               {server.transport.toUpperCase()} / {server.auth_type.replace('_', ' ')}
             </p>
@@ -349,9 +349,9 @@ export function ExternalMCPServerDetail() {
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+            <p className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
               Status
-            </label>
+            </p>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
@@ -371,9 +371,9 @@ export function ExternalMCPServerDetail() {
         {/* Description */}
         {server.description && (
           <div className="mt-6 pt-6 border-t dark:border-neutral-700">
-            <label className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+            <p className="block text-sm font-medium text-neutral-500 dark:text-neutral-400 mb-1">
               Description
-            </label>
+            </p>
             <p className="text-sm text-neutral-700 dark:text-neutral-300">{server.description}</p>
           </div>
         )}
@@ -448,7 +448,7 @@ export function ExternalMCPServerDetail() {
                       {tool.description}
                     </p>
                   )}
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
+                  <p className="text-xs text-muted mt-1">
                     Synced: {new Date(tool.synced_at).toLocaleString()}
                   </p>
                 </div>

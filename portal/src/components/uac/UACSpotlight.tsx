@@ -57,7 +57,7 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
             onClick={onDismiss}
             className="
               p-1 -m-1
-              text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300
+              text-muted hover:text-neutral-600 dark:hover:text-neutral-300
               rounded-md
               hover:bg-neutral-100 dark:hover:bg-neutral-700
               transition-colors

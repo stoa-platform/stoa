@@ -146,6 +146,15 @@ describe('Layout', () => {
     expect(screen.getByText('Test Content')).toBeInTheDocument();
   });
 
+  it('provides a keyboard skip link that focuses the main content', async () => {
+    renderLayout();
+    const skip = screen.getByRole('link', { name: 'Skip to main content' });
+    expect(skip).toHaveAttribute('href', '#main-content');
+    fireEvent.click(skip);
+    expect(screen.getByRole('main')).toHaveFocus();
+    expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1');
+  });
+
   it('renders user info in sidebar', () => {
     renderLayout();
     expect(screen.getByText('Parzival')).toBeInTheDocument();

@@ -1,3 +1,4 @@
+import { Field, FieldLabel, FieldSelect } from '@stoa/shared/components/Field';
 import { useState, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -130,17 +131,17 @@ export function DiagnosticsPage() {
       </div>
 
       {/* Gateway selector */}
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+      <Field className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm p-4">
+        <FieldLabel className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
           Select Gateway
-        </label>
+        </FieldLabel>
         {gatewaysLoading ? (
           <div className="flex items-center gap-2 text-gray-400">
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading gateways...
           </div>
         ) : (
-          <select
+          <FieldSelect
             value={selectedGateway}
             onChange={(e) => setSelectedGateway(e.target.value)}
             className="block w-full max-w-md rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -151,9 +152,9 @@ export function DiagnosticsPage() {
                 {gw.name}
               </option>
             ))}
-          </select>
+          </FieldSelect>
         )}
-      </div>
+      </Field>
 
       {/* Diagnostic results */}
       {diagError && (

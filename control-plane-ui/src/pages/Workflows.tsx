@@ -116,7 +116,7 @@ function TemplatesTab({ tenantId, canManage }: { tenantId: string; canManage: bo
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted" />
       </div>
     );
   }
@@ -267,7 +267,7 @@ function InstancesTab({ tenantId, canManage }: { tenantId: string; canManage: bo
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted" />
       </div>
     );
   }
@@ -294,6 +294,7 @@ function InstancesTab({ tenantId, canManage }: { tenantId: string; canManage: bo
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <select
+            aria-label="Status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm"

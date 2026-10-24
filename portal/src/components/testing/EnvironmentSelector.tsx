@@ -70,8 +70,8 @@ export function EnvironmentSelector({
             ))
           )}
         </select>
-        <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
-        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500 pointer-events-none" />
+        <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
       </div>
 
       {/* Production Warning */}

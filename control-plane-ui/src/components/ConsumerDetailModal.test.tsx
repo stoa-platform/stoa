@@ -128,9 +128,8 @@ describe('ConsumerDetailModal', () => {
 
   it('calls onClose when clicking backdrop', () => {
     const onClose = vi.fn();
-    const { container } = renderModal(baseConsumer, onClose);
-    // The backdrop is the first fixed div
-    const backdrop = container.querySelector('.bg-black\\/50');
+    renderModal(baseConsumer, onClose);
+    const backdrop = screen.getByRole('dialog', { name: baseConsumer.name });
     expect(backdrop).toBeInTheDocument();
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);

@@ -269,7 +269,7 @@ export function ExecutionViewDashboard() {
                   </td>
                   <td className="px-4 py-3 text-sm text-neutral-900 dark:text-white">
                     <RowAction
-                      aria-label={`View execution ${exec.id}`}
+                      aria-label={`View execution ${exec.api_name || exec.tool_name || exec.path || '—'}`}
                       onActivate={() => handleRowClick(exec)}
                     >
                       {exec.api_name || exec.tool_name || exec.path || '—'}

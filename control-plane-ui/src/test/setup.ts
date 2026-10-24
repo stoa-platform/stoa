@@ -14,6 +14,9 @@ i18n.use(initReactI18next).init({
   resources: {
     en: {
       common: {
+        a11y: {
+          skipToMain: 'Skip to main content',
+        },
         nav: {
           overview: 'Overview',
           dashboard: 'Dashboard',

@@ -1,4 +1,11 @@
-import { Field, FieldLabel, FieldInput, FieldTextarea } from '@stoa/shared/components/Field';
+import {
+  Field,
+  FieldLabel,
+  FieldInput,
+  FieldTextarea,
+  Form,
+  FormError,
+} from '@stoa/shared/components/Field';
 import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState } from 'react';
 import { X } from 'lucide-react';
@@ -17,12 +24,14 @@ export function MasterAccountModal({ tenantId, onClose, onCreated }: MasterAccou
   const [description, setDescription] = useState('');
   const [maxSubAccounts, setMaxSubAccounts] = useState(10);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
     setSubmitting(true);
+    setError(null);
     try {
       await federationService.createMasterAccount(tenantId, {
         name: name.trim(),
@@ -33,6 +42,7 @@ export function MasterAccountModal({ tenantId, onClose, onCreated }: MasterAccou
       onCreated();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create account';
+      setError(message);
       toast.error('Creation failed', message);
     } finally {
       setSubmitting(false);
@@ -59,7 +69,12 @@ export function MasterAccountModal({ tenantId, onClose, onCreated }: MasterAccou
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <Form error={error ?? undefined} onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <FormError className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </FormError>
+          )}
           <Field>
             <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name <span className="text-red-500">*</span>
@@ -117,7 +132,7 @@ export function MasterAccountModal({ tenantId, onClose, onCreated }: MasterAccou
               {submitting ? 'Creating...' : 'Create'}
             </button>
           </div>
-        </form>
+        </Form>
       </div>
     </Modal>
   );

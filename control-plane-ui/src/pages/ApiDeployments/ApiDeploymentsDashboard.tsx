@@ -393,7 +393,7 @@ export function ApiDeploymentsDashboard() {
                     >
                       <td className="px-4 py-3 text-neutral-900 dark:text-white font-medium">
                         <RowAction
-                          aria-label={`View deployment ${d.id}`}
+                          aria-label={`View deployment ${(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8) || '—'}`}
                           onActivate={() => setSelectedDeployment(d)}
                         >
                           {(d.desired_state?.api_name as string) || d.api_catalog_id?.slice(0, 8)}

@@ -569,7 +569,7 @@ export function SecurityPostureDashboard() {
                           <button
                             type="button"
                             onClick={() => toggleSort('severity')}
-                            className="inline-flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700"
+                            className="inline-flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700 dark:focus-visible:outline-primary-300"
                           >
                             Severity
                             <SortIcon field="severity" />
@@ -588,7 +588,7 @@ export function SecurityPostureDashboard() {
                           <button
                             type="button"
                             onClick={() => toggleSort('category')}
-                            className="inline-flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700"
+                            className="inline-flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700 dark:focus-visible:outline-primary-300"
                           >
                             Category
                             <SortIcon field="category" />

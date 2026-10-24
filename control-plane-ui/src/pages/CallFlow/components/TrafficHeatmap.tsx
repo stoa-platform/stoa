@@ -137,7 +137,7 @@ export function TrafficHeatmap({ cells, routes, activeRoute, onCellClick }: Traf
           }}
         >
           <div className="font-medium">{tooltip.value.toLocaleString()} requests</div>
-          <div className="text-muted">
+          <div className="text-neutral-400">
             {tooltip.route} @ {tooltip.hour}:00
           </div>
         </div>

@@ -5,6 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import i18n from 'i18next';
 import { RouteMetadata } from './RouteMetadata';
 import { routeTitles } from '../routeTitles';
+import { config } from '../config';
 import { readFileSync } from 'node:fs';
 
 function Navigation() {
@@ -23,7 +24,11 @@ describe('RouteMetadata', () => {
       .map((match) => match[1])
       .filter((path) => !path.includes('*'));
     for (const path of paths)
-      expect(routeTitles.some(([pattern, title]) => pattern === path && title.trim())).toBe(true);
+      expect(
+        routeTitles.some(
+          ([pattern, title]) => pattern === path && title.en.trim() && title.fr.trim()
+        )
+      ).toBe(true);
   });
   it('updates titles on navigation without including record identifiers', async () => {
     render(
@@ -46,7 +51,23 @@ describe('RouteMetadata', () => {
       </MemoryRouter>
     );
     expect(document.documentElement.lang).toBe('fr');
+    expect(document.title).toBe('Tableau de bord | STOA Console');
     await act(() => i18n.changeLanguage('en'));
     expect(document.documentElement.lang).toBe('en');
+    expect(document.title).toBe('Dashboard | STOA Console');
+  });
+
+  it('keeps English titles when i18n is disabled', async () => {
+    const previous = config.features.enableI18n;
+    config.features.enableI18n = false;
+    await act(() => i18n.changeLanguage('fr'));
+    render(
+      <MemoryRouter initialEntries={['/consumers']}>
+        <RouteMetadata />
+      </MemoryRouter>
+    );
+    expect(document.documentElement.lang).toBe('en');
+    expect(document.title).toBe('Consumers | STOA Console');
+    config.features.enableI18n = previous;
   });
 });

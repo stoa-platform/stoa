@@ -68,6 +68,9 @@ describe('LiveTraces', () => {
   it('renders trace table with data', () => {
     render(<LiveTraces traces={[mockTrace]} />);
     expect(screen.getByText(/GET \/api\/customers/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'View trace GET /api/customers' })
+    ).toHaveAccessibleName('View trace GET /api/customers');
     expect(screen.getByText('45ms')).toBeInTheDocument();
     expect(screen.getByText('200')).toBeInTheDocument();
     expect(screen.getByText('Gateway')).toBeInTheDocument();

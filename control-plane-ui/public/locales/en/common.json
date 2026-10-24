@@ -359,6 +359,9 @@
     "deleteContract": "Delete Contract",
     "createNewContract": "Create New Contract"
   },
+  "a11y": {
+    "skipToMain": "Skip to main content"
+  },
   "tokenUsage": {
     "unavailable": "Token usage unavailable",
     "title": "Token Budget",

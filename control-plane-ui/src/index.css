@@ -12,8 +12,14 @@ body {
 
 /* Accessibility: Focus visible styles (CAB-1322) */
 @layer base {
+  :root {
+    --stoa-focus: #047857;
+  }
+  .dark {
+    --stoa-focus: #6ee7b7;
+  }
   :focus-visible {
-    outline: 2px solid #047857;
+    outline: 2px solid var(--stoa-focus);
     outline-offset: 2px;
   }
 
@@ -24,7 +30,7 @@ body {
   a:focus-visible,
   button:focus-visible,
   [role='button']:focus-visible {
-    outline: 2px solid #047857;
+    outline: 2px solid var(--stoa-focus);
     outline-offset: 2px;
     border-radius: 4px;
   }

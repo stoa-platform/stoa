@@ -31,4 +31,29 @@ describe('text contrast tokens', () => {
     for (const background of ['#262626', '#171717'])
       expect(ratio(values[1], background)).toBeGreaterThanOrEqual(4.5);
   });
+
+  it.each(['portal', 'control-plane-ui'])(
+    'keeps the %s focus indicator above 3:1 on light and dark surfaces',
+    (app) => {
+      const css = readFileSync(`../${app}/src/index.css`, 'utf8');
+      const values = [...css.matchAll(/--stoa-focus:\s*(#[\da-f]{6})/gi)].map((match) => match[1]);
+      expect(values).toHaveLength(2);
+      for (const background of ['#ffffff', '#fafafa', '#f5f5f5'])
+        expect(ratio(values[0], background)).toBeGreaterThanOrEqual(3);
+      for (const background of ['#262626', '#171717'])
+        expect(ratio(values[1], background)).toBeGreaterThanOrEqual(3);
+    }
+  );
+
+  it('keeps primary focus outlines above 3:1 on their surfaces', () => {
+    expect(ratio(tokens.colors.primary[700], '#ffffff')).toBeGreaterThanOrEqual(3);
+    expect(ratio(tokens.colors.primary[300], tokens.colors.neutral[800])).toBeGreaterThanOrEqual(3);
+    expect(ratio(tokens.colors.primary[300], tokens.colors.neutral[900])).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps fixed light text readable on always-dark surfaces', () => {
+    const foreground = '#a3a3a3';
+    for (const background of ['#171717', '#0a0a0a', '#262626', '#1f2937'])
+      expect(ratio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  });
 });

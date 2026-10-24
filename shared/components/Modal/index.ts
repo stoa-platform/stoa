@@ -1,1 +1,1 @@
-export { Modal, ModalTitle } from './Modal';
+export { Modal, ModalTitle, activeToastHost, subscribeToastHost } from './Modal';

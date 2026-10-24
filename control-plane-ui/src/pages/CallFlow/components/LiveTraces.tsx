@@ -189,7 +189,7 @@ export function LiveTraces({
                       )}
                       <span className="font-mono text-xs text-neutral-700 dark:text-neutral-300 truncate max-w-[180px]">
                         <RowAction
-                          aria-label={`View trace ${t.id}`}
+                          aria-label={`View trace ${t.method} ${t.route}`}
                           onActivate={() => onSelectTrace?.(t.id)}
                         >
                           {t.method} {t.route}

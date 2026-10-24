@@ -465,7 +465,7 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
   );
 }
 
-function ProspectDetailModal({
+export function ProspectDetailModal({
   prospect,
   isLoading,
   onClose,
@@ -484,24 +484,23 @@ function ProspectDetailModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-neutral-700">
           <div>
+            <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
+              {isLoading || !prospect
+                ? 'Prospect'
+                : prospect.first_name || prospect.last_name
+                  ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
+                  : prospect.company || prospect.email}
+            </ModalTitle>
             {isLoading ? (
-              <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-40 animate-pulse" />
-            ) : prospect ? (
-              <>
-                <ModalTitle
-                  as="h2"
-                  className="text-lg font-semibold text-neutral-900 dark:text-white"
-                >
-                  {prospect.first_name || prospect.last_name
-                    ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
-                    : prospect.company || prospect.email}
-                </ModalTitle>
+              <div className="mt-2 h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-40 animate-pulse" />
+            ) : (
+              prospect && (
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   {prospect.email}
                   {prospect.company && ` · ${prospect.company}`}
                 </p>
-              </>
-            ) : null}
+              )
+            )}
           </div>
           <button
             aria-label="Close dialog"

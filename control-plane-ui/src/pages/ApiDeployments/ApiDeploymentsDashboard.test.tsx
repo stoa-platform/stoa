@@ -186,6 +186,9 @@ describe('ApiDeploymentsDashboard', () => {
     renderWithProviders(<ApiDeploymentsDashboard />);
 
     expect(await screen.findByText('Payments')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View deployment Payments' })).toHaveAccessibleName(
+      'View deployment Payments'
+    );
     expect(screen.getByText('synced')).toBeInTheDocument();
     expect(screen.getByText('db_shortcut/missing_commit')).toBeInTheDocument();
     expect(screen.getByText('No Git commit')).toBeInTheDocument();

@@ -6,11 +6,8 @@ on:
     paths:
       - "stoa-go/**"
       - ".github/workflows/stoa-go-ci.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "stoa-go/**"
-      - ".github/workflows/stoa-go-ci.yml"
+  # PR runs are driven by ci-gate.yml: called via workflow_call.
+  workflow_call:
 
 permissions:
   contents: read

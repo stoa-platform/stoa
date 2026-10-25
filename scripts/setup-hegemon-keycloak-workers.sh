@@ -49,11 +49,10 @@ fi
 KCADM="kubectl exec -n stoa-system $KEYCLOAK_POD -- /opt/keycloak/bin/kcadm.sh"
 
 echo "Logging into Keycloak..."
-$KCADM config credentials \
+printf '%s\n' "$KEYCLOAK_ADMIN_PASSWORD" | kubectl exec -i -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://localhost:8080 \
   --realm master \
-  --user admin \
-  --password "$KEYCLOAK_ADMIN_PASSWORD"
+  --user admin
 
 echo ""
 echo "=== Creating HEGEMON Worker Service Accounts ==="
@@ -131,7 +130,7 @@ for ROLE in "${WORKERS[@]}"; do
     continue
   fi
 
-  echo "  Client secret retrieved (${#CLIENT_SECRET} chars)"
+  echo "  Client secret retrieved for direct storage."
 
   # Store in Infisical if token is available.
   if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
@@ -150,7 +149,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/lib/secret-input.sh"
       }" > /dev/null 2>&1 && echo "    Stored successfully" || echo "    WARN: Infisical storage failed (store manually)"
   else
     echo "  WARN: INFISICAL_TOKEN not set — secret not stored automatically"
-    echo "Sensitive values are withheld; use the approved secret store."
+    echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage."
   fi
 
   echo ""

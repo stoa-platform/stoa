@@ -281,3 +281,5 @@ echo "  Workers: ${#WORKERS[@]}"
 echo "  Token TTL: ${TOKEN_TTL_SECONDS}s (5 min)"
 echo "  Claims: worker_name, worker_roles"
 echo "  Secrets: Infisical /hegemon/worker-{1-5}/KC_CLIENT_SECRET"
+
+echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage and cookie rotation."

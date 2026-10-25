@@ -111,7 +111,7 @@ echo ""
 echo "=== Admin Client Created Successfully ==="
 echo ""
 echo "Client ID: $CLIENT_ID_NAME"
-echo "Sensitive values are withheld; use the approved secret store."
+echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage."
 echo ""
 
 # Update the Kubernetes secret

@@ -129,18 +129,11 @@ else
   exit 1
 fi
 
-# Step 4: Report completion without reading sensitive values
-echo "[4/4] Client configuration complete."
-
-
-echo ""
-echo "=== Setup Complete ==="
-echo ""
-echo "Add the following to your .env file:"
-echo ""
-echo "Sensitive values are withheld; use the approved secret store."
-echo "Sensitive values are withheld; use the approved secret store."
-echo ""
-echo "Then restart the stack:"
-echo "  docker compose down && docker compose up -d"
-echo ""
+# Store both values without printing credentials or placing them in arguments.
+CLIENT_UUID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" | jq -er '.[0].id')
+curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" |
+  python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/security/store_oidc_secret.py" \
+    --client-id "$CLIENT_ID" --cookie --namespace "${OAUTH2_PROXY_NAMESPACE:-stoa-monitoring}"
+echo "See docs/runbooks/first-admin-bootstrap.md for secret verification and rotation."

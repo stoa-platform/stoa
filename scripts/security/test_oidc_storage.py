@@ -77,3 +77,21 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual(["vault", "kv", "patch", "secret/oidc", "-"], calls[0][0])
         self.assertIn("oidc-client-secret", json.loads(calls[0][1]))
+
+    def test_operator_scripts_restore_direct_storage_and_document_followup(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        for name in (
+            "deploy/observability/setup-keycloak-client.sh",
+            "deploy/observability/create-keycloak-client.sh",
+            "deploy/scripts/setup-observability-oidc.sh",
+            "deploy/scripts/setup-netbox-oidc.sh",
+        ):
+            source = (root / name).read_text()
+            self.assertIn("store_oidc_secret.py", source, name)
+            self.assertIn("client-secret", source, name)
+            self.assertIn("docs/runbooks/first-admin-bootstrap.md", source, name)
+            self.assertNotIn("Sensitive values are withheld", source, name)
+        source = (root / "deploy/scripts/setup-observability-oidc.sh").read_text()
+        self.assertNotIn('echo "  OAUTH2_PROXY_COOKIE_SECRET=', source)

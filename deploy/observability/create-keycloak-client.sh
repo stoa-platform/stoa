@@ -72,21 +72,9 @@ else
   CLIENT_ID=$(kubectl exec -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh get clients -r stoa --fields id,clientId 2>/dev/null | grep -B1 '"observability"' | grep '"id"' | cut -d'"' -f4)
 fi
 
-# Get the client secret
-echo "Getting client secret..."
-CLIENT_SECRET=$(kubectl exec -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh get "clients/$CLIENT_ID/client-secret" -r stoa --fields value 2>/dev/null | grep '"value"' | cut -d'"' -f4)
-
-if [ -z "$CLIENT_SECRET" ]; then
-  echo "ERROR: Could not retrieve client secret"
-  exit 1
-fi
-
-echo ""
-echo "=== Client Created Successfully ==="
-echo ""
-echo "Client ID: observability"
-echo "Sensitive values are withheld; use the approved secret store."
-echo ""
-echo "Now run the setup script with this secret:"
-echo ""
-echo "Sensitive values are withheld; use the approved secret store."
+# Feed the response directly to the Secret writer; no value is printed.
+kubectl exec -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh \
+  get "clients/$CLIENT_ID/client-secret" -r stoa --fields value |
+  python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/security/store_oidc_secret.py" \
+    --client-id observability --cookie --namespace "${OAUTH2_PROXY_NAMESPACE:-stoa-monitoring}"
+echo "See docs/runbooks/first-admin-bootstrap.md for secret verification and rotation."

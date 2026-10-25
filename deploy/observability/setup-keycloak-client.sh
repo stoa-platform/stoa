@@ -43,7 +43,6 @@ EXISTING=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/client
 if [ -n "$EXISTING" ]; then
   echo "Client 'observability' already exists (ID: $EXISTING)"
   # Client lookup above already establishes the client identity.
-  echo "Sensitive values are withheld; use the approved secret store."
 else
   # Create the client
   echo "Creating client 'observability'..."
@@ -95,7 +94,6 @@ EOF
     # Client lookup above already establishes the client identity.
 
     echo "Client ID (internal): $CLIENT_ID"
-    echo "Sensitive values are withheld; use the approved secret store."
   else
     echo "ERROR: Failed to create client (HTTP $HTTP_CODE)"
     echo "Request failed; response details are withheld."
@@ -104,23 +102,9 @@ EOF
 fi
 
 echo ""
-echo "=== Configuration Values ==="
-echo ""
-echo "Client ID: observability"
-echo "Sensitive values are withheld; use the approved secret store."
-echo "Sensitive values are withheld; use the approved secret store."
-echo ""
-echo "=== Next Steps ==="
-echo ""
-echo "1. Update Grafana with OIDC config (helm upgrade)"
-echo "2. Create oauth2-proxy secrets:"
-echo ""
-echo "kubectl create secret generic oauth2-proxy-secret -n stoa-monitoring \\"
-echo "Sensitive values are withheld; use the approved secret store."
-echo "Sensitive values are withheld; use the approved secret store."
-echo "  --dry-run=client -o yaml | kubectl apply -f -"
-echo ""
-echo "kubectl create secret generic oauth2-proxy-secret -n stoa-system \\"
-echo "Sensitive values are withheld; use the approved secret store."
-echo "Sensitive values are withheld; use the approved secret store."
-echo "  --dry-run=client -o yaml | kubectl apply -f -"
+CLIENT_UUID="${EXISTING:-${CLIENT_ID:-}}"
+curl -sf "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients/${CLIENT_UUID}/client-secret" \
+  -H "Authorization: Bearer $TOKEN" |
+  python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/security/store_oidc_secret.py" \
+    --client-id observability --cookie --namespace "${OAUTH2_PROXY_NAMESPACE:-stoa-monitoring}"
+echo "See docs/runbooks/first-admin-bootstrap.md for secret verification and rotation."

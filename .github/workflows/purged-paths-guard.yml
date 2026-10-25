@@ -5,13 +5,15 @@ name: purged-paths-guard
 on:
   push:
     branches: ['**']
+    tags: ['**']
   pull_request:
 
 permissions: {}
 
 concurrency:
   group: purged-paths-guard-${{ github.ref }}
-  cancel-in-progress: true
+  # Seules les PR sont annulées ; aucun push n'est jamais annulé.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   purged-paths-guard:
@@ -33,6 +35,7 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
           PUSH_CREATED: ${{ github.event.created }}
+          REF_TYPE: ${{ github.ref_type }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -42,15 +45,16 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ]; then
             # Arbre de la fusion de test + commits propres à la PR.
             ./scripts/ci/purged-paths-guard.sh "${PR_BASE}..${PR_HEAD}"
-          elif [ "$PUSH_CREATED" = "true" ] || [ "$PUSH_BEFORE" = "$zero" ] \
+          elif [ "$REF_TYPE" = "tag" ] || [ "$PUSH_CREATED" = "true" ] || [ "$PUSH_BEFORE" = "$zero" ] \
                || ! git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
-            # Nouvelle branche (ou ancien sommet inconnu) : arbre, plus les commits
+            # Tag, nouvelle branche ou ancien sommet inconnu : arbre, plus les commits
             # absents de la branche par défaut quand elle est disponible.
+            # ^{commit} déréférence un tag annoté.
             if git rev-parse -q --verify "refs/remotes/origin/${DEFAULT_BRANCH}^{commit}" >/dev/null; then
-              ./scripts/ci/purged-paths-guard.sh "$PUSH_AFTER" --not "refs/remotes/origin/${DEFAULT_BRANCH}"
+              ./scripts/ci/purged-paths-guard.sh "${PUSH_AFTER}^{commit}" --not "refs/remotes/origin/${DEFAULT_BRANCH}"
             else
               ./scripts/ci/purged-paths-guard.sh
             fi
           else
-            ./scripts/ci/purged-paths-guard.sh "${PUSH_BEFORE}..${PUSH_AFTER}"
+            ./scripts/ci/purged-paths-guard.sh "${PUSH_BEFORE}^{commit}..${PUSH_AFTER}^{commit}"
           fi

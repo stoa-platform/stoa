@@ -7,6 +7,10 @@
   by the Keycloak Operator via KeycloakRealmImport CR in stoa-infra.
 */}}
 {{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values.AsMap)) }}
+{{- if .Values.stoa.bootstrap.keycloak.adminPassword }}
+{{- fail "Inline bootstrap admin passwords are unsupported; use keycloak.existingSecret" }}
+{{- end }}
+{{- $credentials := required "stoa.bootstrap.keycloak.existingSecret is required when bootstrap is enabled" .Values.stoa.bootstrap.keycloak.existingSecret }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -263,6 +267,7 @@ data:
     #   for stoa-mcp-gateway / control-plane-api above; follow-up ticket
     #   if we ever want these chart-configurable uniformly.
     # ---------------------------------------------------------------
+    {{- if .Values.stoa.bootstrap.adminServiceAccount.enabled }}
     STOACTL_ADMIN_CLIENT=stoactl-admin
     STOACTL_ADMIN_ROLE=cpi-admin
     # access.token.lifespan=300 caps JWTs to 5 minutes regardless of realm
@@ -315,7 +320,9 @@ data:
     log "NOTE: run docs/runbooks/cab-2108-stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to Infisical"
 
     # ---------------------------------------------------------------
+    {{- end }}
     # Admin invitation is an explicit operator step; no default admin user.
+    # See docs/runbooks/first-admin-bootstrap.md before enabling admin service accounts.
     # Existing users and role assignments are not modified by this hook.
     # ---------------------------------------------------------------
     # Wait for Control Plane API
@@ -384,6 +391,7 @@ spec:
       labels:
         app.kubernetes.io/component: bootstrap
     spec:
+      automountServiceAccountToken: false
       restartPolicy: OnFailure
       containers:
         - name: bootstrap
@@ -393,15 +401,10 @@ spec:
             - name: KC_ADMIN_USER
               value: {{ .Values.stoa.bootstrap.keycloak.adminUser | quote }}
             - name: KC_ADMIN_PASSWORD
-              {{- if .Values.stoa.bootstrap.keycloak.adminPassword }}
-              value: {{ .Values.stoa.bootstrap.keycloak.adminPassword | quote }}
-              {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: keycloak-credentials
-                  key: admin-password
-                  optional: true
-              {{- end }}
+                  name: {{ $credentials | quote }}
+                  key: {{ .Values.stoa.bootstrap.keycloak.passwordKey | quote }}
           volumeMounts:
             - name: scripts
               mountPath: /scripts
@@ -414,6 +417,7 @@ spec:
               cpu: 200m
               memory: 64Mi
           securityContext:
+            readOnlyRootFilesystem: true
             privileged: false
             runAsNonRoot: true
             runAsUser: 100

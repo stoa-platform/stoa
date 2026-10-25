@@ -18,7 +18,11 @@ stoa:
     # Keycloak admin credentials (required when enabled)
     keycloak:
       adminUser: 'admin'
-      adminPassword: ''
+      existingSecret: ''
+      passwordKey: 'admin-password'
+    # Create the privileged CLI service account only after the first human admin.
+    adminServiceAccount:
+      enabled: false
     # Default tenant created during bootstrap
     defaultTenant:
       name: 'default'

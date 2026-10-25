@@ -19,6 +19,8 @@
 
 set -euo pipefail
 set +x
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib/secret-input.sh"
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -136,8 +138,6 @@ for ROLE in "${WORKERS[@]}"; do
   # Store in Infisical if token is available.
   if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
     echo "  Storing secret in Infisical at /hegemon/worker-${ROLE}/KC_CLIENT_SECRET..."
-# shellcheck source=scripts/lib/secret-input.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/lib/secret-input.sh"
     curl -s -X POST "https://vault.gostoa.dev/api/v3/secrets/raw/KC_CLIENT_SECRET" \
       -H "Authorization: Bearer $INFISICAL_TOKEN" \
       -H "Content-Type: application/json" \

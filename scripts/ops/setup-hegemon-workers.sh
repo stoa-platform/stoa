@@ -20,6 +20,8 @@
 # =============================================================================
 set -euo pipefail
 set +x
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
 
 # --- Configuration ---
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
@@ -81,8 +83,6 @@ fi
 # --- Helpers ---
 kc_curl() {
   if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
-# shellcheck source=scripts/lib/secret-input.sh
-source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
     curl -s -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
          -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "$@"
   else

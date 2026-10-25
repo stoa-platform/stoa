@@ -6,7 +6,7 @@
   CAB-1958: Skipped when keycloak.operator.enabled=true — realm is managed
   by the Keycloak Operator via KeycloakRealmImport CR in stoa-infra.
 */}}
-{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values)) }}
+{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values.AsMap)) }}
 ---
 apiVersion: v1
 kind: ConfigMap

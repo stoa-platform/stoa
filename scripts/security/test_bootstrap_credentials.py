@@ -39,3 +39,14 @@ class CredentialTests(unittest.TestCase):
         ).read_text()
         self.assertNotIn("28800  # 24 hours", source)
         self.assertNotIn("300  # 1 hour", source)
+
+    def test_federation_passwords_are_temporary_on_site_inputs(self):
+        for path in (ROOT / "deploy/demo-federation/keycloak").glob("*.json"):
+            realm = json.loads(path.read_text())
+            for user in realm.get("users", []):
+                for credential in user.get("credentials", []):
+                    self.assertRegex(credential["value"], r"^\$\{[A-Z0-9_]+\}$")
+                    self.assertIs(True, credential["temporary"])
+            for client in realm.get("clients", []):
+                if "secret" in client:
+                    self.assertRegex(client["secret"], r"^\$\{[A-Z0-9_]+\}$")

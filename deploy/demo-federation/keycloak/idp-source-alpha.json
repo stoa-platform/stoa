@@ -17,7 +17,7 @@
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "REPLACE_FROM_VAULT",
+      "secret": "${FEDERATION_ALPHA_BROKER_SECRET}",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
@@ -56,8 +56,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_ALPHA_ALICE_ALPHA_PASSWORD}",
+          "temporary": true
         }
       ]
     },
@@ -79,8 +79,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_ALPHA_BOB_ALPHA_PASSWORD}",
+          "temporary": true
         }
       ]
     }

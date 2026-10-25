@@ -70,7 +70,7 @@
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "REPLACE_FROM_VAULT",
+      "secret": "${FEDERATION_DEMO_CLIENT_SECRET}",
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
@@ -134,8 +134,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_DEMO_ORG_BETA_DEMO_BETA_PASSWORD}",
+          "temporary": true
         }
       ],
       "realmRoles": [

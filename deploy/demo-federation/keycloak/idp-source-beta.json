@@ -51,8 +51,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_BETA_CAROL_BETA_PASSWORD}",
+          "temporary": true
         }
       ]
     },
@@ -74,8 +74,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_BETA_DAVE_BETA_PASSWORD}",
+          "temporary": true
         }
       ]
     }

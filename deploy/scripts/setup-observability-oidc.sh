@@ -23,7 +23,7 @@ set -euo pipefail
 
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost/auth}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
-KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 REALM="${KEYCLOAK_REALM:-stoa}"
 CLIENT_ID="stoa-observability"
 
@@ -38,6 +38,8 @@ echo ""
 
 # Step 1: Obtain admin access token
 echo "[1/4] Obtaining admin access token..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -s -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
@@ -49,7 +51,7 @@ TOKEN_RESPONSE=$(curl -s -X POST \
 ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.access_token')
 if [ "${ACCESS_TOKEN}" = "null" ] || [ -z "${ACCESS_TOKEN}" ]; then
   echo "ERROR: Failed to obtain access token. Response:"
-  echo "${TOKEN_RESPONSE}" | jq .
+  echo "Authentication failed; response details are withheld."
   exit 1
 fi
 echo "  Access token obtained."
@@ -138,7 +140,6 @@ echo "Add the following to your .env file:"
 echo ""
 echo "Sensitive values are withheld; use the approved secret store."
 echo "Sensitive values are withheld; use the approved secret store."
-echo "  OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n')"
 echo ""
 echo "Then restart the stack:"
 echo "  docker compose down && docker compose up -d"

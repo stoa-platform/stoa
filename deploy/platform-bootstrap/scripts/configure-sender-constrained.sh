@@ -56,6 +56,8 @@ log_skip() { echo "[$(date +%H:%M:%S)] SKIP: $*"; }
 log_err() { echo "[$(date +%H:%M:%S)] ERROR: $*" >&2; }
 
 get_token() {
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
   curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -d "client_id=admin-cli" \
     -d "username=${ADMIN_USER}" \

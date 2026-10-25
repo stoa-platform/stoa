@@ -42,6 +42,8 @@ echo ""
 
 # Step 1: Obtain admin access token
 echo "[1/4] Obtaining admin access token..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -s -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \

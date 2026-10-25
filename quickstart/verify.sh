@@ -92,6 +92,8 @@ if [[ "${VERIFY_BOUND_FIXTURE:-}" == "1" ]]; then
 fi
 
 echo "control plane $(curl -fsS --max-time 10 "$CONTROL_PLANE_URL/health" >/dev/null && echo ok || echo down)"
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../scripts/lib/secret-input.sh"
 cp_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CONTROL_PLANE_URL/health" || true)"
 [[ "$cp_code" == "200" ]] || fail "control plane /health returned $cp_code"
 

@@ -25,9 +25,12 @@ metadata:
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
 data:
+  curl-config.sh: |
+    {{- .Files.Get "files/curl-config.sh" | nindent 4 }}
   bootstrap.sh: |
     #!/bin/sh
     set -eu
+    . /scripts/curl-config.sh
 
     KEYCLOAK_URL="http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80"
     REALM="{{ .Values.stoaGateway.keycloakRealm | default "stoa" }}"

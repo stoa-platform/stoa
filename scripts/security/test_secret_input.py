@@ -61,3 +61,36 @@ class SecretInputTests(unittest.TestCase):
         )
         self.assertEqual(2, run.returncode)
         self.assertNotIn(token, run.stdout + run.stderr)
+
+    def test_hook_curl_config_escaping(self):
+        token = secrets.token_urlsafe(32) + '\\"\n'
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            fake = base / "curl"
+            fake.write_text(
+                "#!/usr/bin/python3\nimport os, sys\nfrom pathlib import Path\n"
+                "Path(os.environ['CAPTURE']).write_text(sys.stdin.read())\n"
+                "print('request completed')\n"
+            )
+            fake.chmod(0o700)
+            run = subprocess.run(
+                ["/bin/sh", "-ec", '. "$HELPER"; curl -sf http://keycloak:8080 -H "$TOKEN"'],
+                env={
+                    **os.environ,
+                    "PATH": str(base) + ":/usr/bin",
+                    "TOKEN": token,
+                    "HELPER": str(ROOT / "charts/stoa-platform/files/curl-config.sh"),
+                    "CAPTURE": str(base / "capture"),
+                },
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, run.returncode, run.stderr)
+            self.assertNotIn(token, run.stdout + run.stderr)
+            config = (base / "capture").read_text()
+            value = next(
+                line.partition(" = ")[2]
+                for line in config.splitlines()
+                if line.startswith("header")
+            )
+            self.assertEqual(token, json.loads(value))

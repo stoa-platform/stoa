@@ -136,6 +136,8 @@ for ROLE in "${WORKERS[@]}"; do
   # Store in Infisical if token is available.
   if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
     echo "  Storing secret in Infisical at /hegemon/worker-${ROLE}/KC_CLIENT_SECRET..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib/secret-input.sh"
     curl -s -X POST "https://vault.gostoa.dev/api/v3/secrets/raw/KC_CLIENT_SECRET" \
       -H "Authorization: Bearer $INFISICAL_TOKEN" \
       -H "Content-Type: application/json" \
@@ -184,7 +186,7 @@ for ROLE in "${WORKERS[@]}"; do
 
   if [[ -z "$ACCESS_TOKEN" ]]; then
     echo "  FAIL: $CLIENT_ID — could not get token"
-    echo "    Response: $(echo "$TOKEN_RESPONSE" | head -c 200)"
+    echo "    Request failed; response details are withheld."
     continue
   fi
 

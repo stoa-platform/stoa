@@ -92,6 +92,8 @@ if [[ -z "${KEYCLOAK_ADMIN_USER:-}" ]] || [[ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]
 fi
 
 # Get admin token
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
 ADMIN_TOKEN=$(curl -s -X POST \
     "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \

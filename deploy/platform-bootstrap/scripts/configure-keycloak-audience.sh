@@ -90,6 +90,8 @@ log_step "Authenticating with Keycloak Admin API"
 
 get_admin_token() {
     local response
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
     response=$(curl -s -X POST \
         "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \

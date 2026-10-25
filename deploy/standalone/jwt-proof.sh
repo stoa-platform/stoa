@@ -117,6 +117,8 @@ fi
 echo "waiting for gateway /health"
 ready=0
 for _ in $(seq 1 40); do
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib/secret-input.sh"
   if curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1; then
     ready=1
     break

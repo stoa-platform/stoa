@@ -73,3 +73,37 @@ class EngineTests(unittest.TestCase):
         with self.assertRaises(engine.Refused):
             engine.provision(self.kc, {**self.identity, "bootstrap_id": secrets.token_urlsafe(32)})
         self.assertEqual(writes, self.kc.writes)
+
+    def test_service_account_admin_is_checked_even_when_user_listing_omits_it(self):
+        self.kc.clients = [{"id": "sa-client", "serviceAccountsEnabled": True}]
+        self.kc.service_accounts["sa-client"] = {"id": "sa-user"}
+        self.kc.roles["/users/sa-user/role-mappings/realm/composite"] = [{"name": "cpi-admin"}]
+        self.assertEqual(20, engine.provision(self.kc, self.identity)[0])
+        self.assertEqual([], self.kc.writes)
+
+    def test_parent_group_administration_is_refused(self):
+        self.kc.users = [{"id": "existing", "username": "existing"}]
+        self.kc.groups["existing"] = [{"id": "child"}]
+        self.kc.parent_groups["child"] = {"id": "child", "parentId": "parent"}
+        self.kc.roles["/groups/parent/role-mappings/realm/composite"] = [{"name": "cpi-admin"}]
+        self.assertEqual(20, engine.provision(self.kc, self.identity)[0])
+        self.assertFalse(self.kc.writes)
+
+    def test_consumption_survives_deletion_of_the_created_admin(self):
+        self.assertEqual(0, engine.provision(self.kc, self.identity)[0])
+        self.kc.users.clear()
+        writes = list(self.kc.writes)
+        self.assertEqual(10, engine.provision(self.kc, self.identity)[0])
+        self.assertEqual(writes, self.kc.writes)
+
+    def test_preexisting_username_is_never_adopted(self):
+        self.kc.users = [
+            {
+                "id": "unprivileged",
+                "username": self.identity["username"],
+                "email": self.identity["email"],
+            }
+        ]
+        with self.assertRaisesRegex(engine.Refused, "identity_exists"):
+            engine.provision(self.kc, self.identity)
+        self.assertFalse(self.kc.writes)

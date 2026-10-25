@@ -10,6 +10,8 @@ class FakeKeycloak:
         self.clients = []
         self.roles = {}
         self.groups = {}
+        self.service_accounts = {}
+        self.parent_groups = {}
         self.writes = []
         self.interrupt_after = None
 
@@ -23,6 +25,10 @@ class FakeKeycloak:
         if method == "GET":
             if route == "":
                 return {**self.realm, "attributes": dict(self.realm["attributes"])}
+            if route == "/roles/cpi-admin/users":
+                return []
+            if route.endswith("/service-account-user"):
+                return self.service_accounts[route.split("/")[2]]
             if route == "/clients":
                 return self.clients
             if route == "/users":
@@ -32,7 +38,7 @@ class FakeKeycloak:
             if route.endswith("/composite"):
                 return self.roles.get(route, [])
             if route.startswith("/groups/"):
-                return {"id": route.split("/")[2]}
+                return self.parent_groups.get(route.split("/")[2], {"id": route.split("/")[2]})
             if route == "/roles/cpi-admin":
                 return {"id": "admin-role", "name": "cpi-admin"}
             if route == "/authentication/required-actions":

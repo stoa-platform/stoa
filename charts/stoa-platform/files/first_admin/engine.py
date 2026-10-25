@@ -17,7 +17,16 @@ def now() -> str:
 
 def administrators(kc):
     """Include service accounts and roles inherited through groups/composites."""
-    for user in kc.pages("/users"):
+    direct = next(iter(kc.pages("/roles/cpi-admin/users")), None)
+    if direct:
+        return direct["id"]
+    # Some Keycloak versions omit service accounts from the general user list.
+    subjects = {user["id"]: user for user in kc.pages("/users")}
+    for client in kc.pages("/clients"):
+        if client.get("serviceAccountsEnabled"):
+            user = kc.call("GET", f"/clients/{client['id']}/service-account-user")
+            subjects[user["id"]] = user
+    for user in subjects.values():
         paths = [f"/users/{user['id']}/role-mappings/realm/composite"]
         seen = set()
         for group in kc.pages(f"/users/{user['id']}/groups"):

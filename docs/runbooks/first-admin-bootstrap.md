@@ -134,6 +134,12 @@ allows only Keycloak in the namespace and DNS in `kube-system`. No RBAC grant is
 needed. Adapt existing Keycloak pod labels and service configuration on site if
 they differ from the chart's bootstrap conventions.
 
+By default the Job reaches Keycloak over plain HTTP on the namespace service; the
+master administrator password and the initial password are therefore protected
+only by the cluster network and the egress policy. Set
+`stoa.bootstrap.firstAdmin.keycloakUrl` to an `https://` address when Keycloak
+exposes a certificate trusted by the Python image's CA store.
+
 ## Compose or a host-side command
 
 The default Compose import has no preconfigured human users. Generate the required database,

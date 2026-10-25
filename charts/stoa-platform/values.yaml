@@ -28,6 +28,8 @@ stoa:
       enabled: false
       existingSecret: ''
       image: 'python:3.11.10-alpine'
+      # Empty: the in-namespace Keycloak service over HTTP. Set an https:// URL to verify TLS.
+      keycloakUrl: ''
     # Default tenant created during bootstrap
     defaultTenant:
       name: 'default'

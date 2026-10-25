@@ -58,6 +58,8 @@ class FirstAdminChartTests(unittest.TestCase):
         self.assertTrue(allows_egress(policy, {"app": "keycloak"}, "stoa-system", 8080))
         self.assertFalse(allows_egress(policy, {"app": "keycloak"}, "other", 8080))
         self.assertFalse(allows_egress(policy, {"app": "unrelated"}, "stoa-system", 8080))
+        self.assertTrue(allows_egress(policy, {"app": "keycloak"}, "stoa-system", 8443))
+        self.assertFalse(allows_egress(policy, {"app": "unrelated"}, "stoa-system", 8443))
         self.assertFalse(
             allows_egress(policy, {"app": "stoa-control-plane-api"}, "stoa-system", 80)
         )

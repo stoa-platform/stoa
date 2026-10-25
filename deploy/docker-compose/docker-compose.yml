@@ -250,7 +250,7 @@ services:
       ENABLE_DEPLOYMENT_WORKER: "false"
       ENABLE_SNAPSHOT_CONSUMER: "false"
       # Gateway registration (ADR-028) — shared key for local dev
-      GATEWAY_API_KEYS: "${GATEWAY_API_KEY:-local-dev-key}"
+      GATEWAY_API_KEYS: "${GATEWAY_API_KEY:?GATEWAY_API_KEY is required}"
       # MCP Gateway URL (base URL — used for REST proxy and Streamable HTTP tool sync)
       MCP_GATEWAY_URL: http://stoa-gateway:8080
       # Chat Assistant (CAB-286)
@@ -346,7 +346,7 @@ services:
       STOA_AUTO_REGISTER: "${STOA_AUTO_REGISTER:-false}"
       STOA_INSTANCE_NAME: "${GATEWAY_ID:-gateway-demo}"
       STOA_ENVIRONMENT: "dev"
-      STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:-local-dev-key}"
+      STOA_CONTROL_PLANE_API_KEY: "${GATEWAY_API_KEY:?GATEWAY_API_KEY is required}"
       STOA_ADMIN_API_TOKEN: "${GATEWAY_ADMIN_TOKEN:-local-dev-key}"
       STOA_ROUTE_RELOAD_ENABLED: "${STOA_ROUTE_RELOAD_ENABLED:-true}"
       STOA_ROUTE_RELOAD_INTERVAL_SECS: "${STOA_ROUTE_RELOAD_INTERVAL_SECS:-2}"

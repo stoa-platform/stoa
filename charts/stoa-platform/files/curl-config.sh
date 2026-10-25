@@ -10,6 +10,7 @@ curl() (
         -sf) printf 'silent\nfail\n'; continue ;;
         -X) key=request ;; -H) key=header ;; -d) key=data ;;
         -o) key=output ;; -w) key=write-out ;;
+        -u) key=user ;; -F) key=form ;;
         -*) echo "Unsupported curl option." >&2; exit 2 ;;
         *) key=url; set -- "$option" "$@" ;;
       esac

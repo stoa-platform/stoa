@@ -133,7 +133,9 @@ they differ from the chart's bootstrap conventions.
 The default Compose import has no platform users. Generate the required database,
 service and realm client credentials on site and supply the empty variables in
 `.env.example` through a private environment file or local secret manager. The
-optional federation demo imports also require their own generated inputs.
+optional federation demo imports also require their own generated inputs. LDAP
+seed entries have no password; set individual passwords on site through the
+approved directory administration procedure before using those accounts.
 
 After Keycloak is ready, run from the repository root. This command uses the
 Keycloak port bound to loopback; it needs no Internet access or additional image.

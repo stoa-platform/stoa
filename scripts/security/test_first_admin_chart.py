@@ -65,3 +65,15 @@ class FirstAdminChartTests(unittest.TestCase):
             self.assertTrue(
                 allows_egress(policy, {"k8s-app": "kube-dns"}, "kube-system", 53, protocol)
             )
+
+    def test_signup_mode_is_invite_by_default_and_exposed(self):
+        values = yaml.safe_load((ROOT / "charts/stoa-platform/values.yaml").read_text())
+        self.assertEqual("invite", values["controlPlaneApi"]["signupMode"])
+        source = (ROOT / "charts/stoa-platform/templates/signup-configmap.yaml").read_text()
+        self.assertIn('list "invite" "open"', source)
+        self.assertIn("SIGNUP_MODE:", source)
+        compose = yaml.safe_load((ROOT / "deploy/docker-compose/docker-compose.yml").read_text())
+        self.assertEqual(
+            "${SIGNUP_MODE:-invite}",
+            compose["services"]["control-plane-api"]["environment"]["SIGNUP_MODE"],
+        )

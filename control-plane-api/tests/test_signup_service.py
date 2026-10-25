@@ -1,6 +1,6 @@
 """Tests for signup service — email validation, invite codes, plan selection (CAB-1541)."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -100,45 +100,60 @@ class TestValidateEmailDomain:
 
 
 class TestValidateInviteCode:
-    def _mock_settings(self, codes: str = ""):
-        return type("S", (), {"signup_invite_codes_list": [c.strip() for c in codes.split(",") if c.strip()]})()
+    def configure(self, monkeypatch, mode="invite", codes=()):
+        settings = type("S", (), {"SIGNUP_MODE": mode, "signup_invite_codes_list": list(codes)})()
+        monkeypatch.setattr("src.services.signup_service.settings", settings)
 
-    def test_trial_no_code_no_config_passes(self, monkeypatch):
-        monkeypatch.setattr("src.services.signup_service.settings", self._mock_settings(""))
-        validate_invite_code(None, SignupPlan.TRIAL)  # must not raise
-
-    def test_trial_valid_code_passes(self, monkeypatch):
-        monkeypatch.setattr("src.services.signup_service.settings", self._mock_settings("BETA2026"))
-        validate_invite_code("BETA2026", SignupPlan.TRIAL)  # must not raise
-
-    def test_trial_invalid_code_raises(self, monkeypatch):
+    @pytest.mark.parametrize("plan", [SignupPlan.TRIAL, SignupPlan.STANDARD])
+    def test_default_refuses_without_invitation(self, monkeypatch, plan):
         from fastapi import HTTPException
 
-        monkeypatch.setattr("src.services.signup_service.settings", self._mock_settings("BETA2026"))
-        with pytest.raises(HTTPException) as exc_info:
-            validate_invite_code("WRONG", SignupPlan.TRIAL)
-        assert exc_info.value.status_code == 400
+        self.configure(monkeypatch)
+        with pytest.raises(HTTPException) as caught:
+            validate_invite_code(None, plan)
+        assert caught.value.status_code == 400
+        assert caught.value.detail == "Signup is unavailable."
 
-    def test_standard_requires_code(self, monkeypatch):
+    @pytest.mark.parametrize("plan", [SignupPlan.TRIAL, SignupPlan.STANDARD])
+    def test_valid_invitation_passes(self, monkeypatch, plan):
+        import secrets
+
+        code = secrets.token_urlsafe(32)
+        self.configure(monkeypatch, codes=[code])
+        validate_invite_code(code, plan)
+
+    def test_open_trial_is_explicit(self, monkeypatch):
+        self.configure(monkeypatch, mode="open")
+        validate_invite_code(None, SignupPlan.TRIAL)
+
+    def test_open_standard_still_requires_invitation(self, monkeypatch):
         from fastapi import HTTPException
 
-        monkeypatch.setattr("src.services.signup_service.settings", self._mock_settings("STD-CODE"))
-        with pytest.raises(HTTPException) as exc_info:
+        self.configure(monkeypatch, mode="open")
+        with pytest.raises(HTTPException):
             validate_invite_code(None, SignupPlan.STANDARD)
-        assert exc_info.value.status_code == 400
-        assert "required" in exc_info.value.detail.lower()
 
-    def test_standard_valid_code_passes(self, monkeypatch):
-        monkeypatch.setattr("src.services.signup_service.settings", self._mock_settings("STD-CODE"))
-        validate_invite_code("STD-CODE", SignupPlan.STANDARD)  # must not raise
+    def test_invalid_and_missing_codes_have_same_response(self, monkeypatch):
+        import secrets
 
-    def test_standard_invalid_code_raises(self, monkeypatch):
         from fastapi import HTTPException
 
-        monkeypatch.setattr("src.services.signup_service.settings", self._mock_settings("STD-CODE"))
-        with pytest.raises(HTTPException) as exc_info:
-            validate_invite_code("BAD-CODE", SignupPlan.STANDARD)
-        assert exc_info.value.status_code == 400
+        self.configure(monkeypatch, codes=[secrets.token_urlsafe(32)])
+        details = []
+        for code in (None, secrets.token_urlsafe(32)):
+            with pytest.raises(HTTPException) as caught:
+                validate_invite_code(code, SignupPlan.TRIAL)
+            details.append(caught.value.detail)
+        assert details == ["Signup is unavailable."] * 2
+
+    def test_settings_default_and_unknown_mode(self):
+        from pydantic import ValidationError
+
+        from src.config import Settings
+
+        assert Settings.model_fields["SIGNUP_MODE"].default == "invite"
+        with pytest.raises(ValidationError):
+            Settings(SIGNUP_MODE="unsupported", _env_file=None)
 
 
 # ── signup_tenant (integration-level unit tests) ──
@@ -170,6 +185,7 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+            "SIGNUP_MODE": "open",
             "signup_invite_codes_list": [],
         })())
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
@@ -202,6 +218,7 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+            "SIGNUP_MODE": "open",
             "signup_invite_codes_list": [],
         })())
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
@@ -230,6 +247,7 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+            "SIGNUP_MODE": "open",
             "signup_invite_codes_list": [],
         })())
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
@@ -252,6 +270,7 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+            "SIGNUP_MODE": "open",
             "signup_invite_codes_list": [],
         })())
 
@@ -273,7 +292,8 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "signup_invite_codes_list": ["VALID-CODE"],
+            "SIGNUP_MODE": "invite",
+            "signup_invite_codes_list": [],
         })())
 
         req = SelfServiceSignupRequest(
@@ -289,6 +309,9 @@ class TestSignupTenant:
     @pytest.mark.asyncio
     async def test_standard_plan_with_valid_code_succeeds(self, monkeypatch):
         """Standard plan signup with valid invite code succeeds."""
+        import secrets
+
+        code = secrets.token_urlsafe(32)
         from src.services.signup_service import signup_tenant
 
         mock_repo = MagicMock()
@@ -299,7 +322,8 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "signup_invite_codes_list": ["ENTERPRISE-2026"],
+            "SIGNUP_MODE": "invite",
+            "signup_invite_codes_list": [code],
         })())
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
@@ -309,7 +333,7 @@ class TestSignupTenant:
             display_name="Enterprise Corp",
             owner_email="cto@enterprise.com",
             plan=SignupPlan.STANDARD,
-            invite_code="ENTERPRISE-2026",
+            invite_code=code,
         )
         result = await signup_tenant(mock_db, req)
 
@@ -334,6 +358,7 @@ class TestSignupTenant:
 
         monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
             "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+            "SIGNUP_MODE": "open",
             "signup_invite_codes_list": [],
         })())
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)

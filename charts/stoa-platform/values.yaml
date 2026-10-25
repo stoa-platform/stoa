@@ -425,6 +425,7 @@ prometheus:
 # This ServiceMonitor enables Prometheus autodiscovery (kube-prometheus-stack).
 # Deployed as a standalone k8s manifest — Service: stoa-control-plane-api
 controlPlaneApi:
+  signupMode: invite
   serviceMonitor:
     enabled: true
     interval: 15s

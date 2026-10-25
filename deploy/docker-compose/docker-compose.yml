@@ -221,6 +221,8 @@ services:
       TEMPO_INTERNAL_URL: http://tempo:3200
       # CORS
       CORS_ORIGINS: http://localhost:3000,http://localhost:3002,http://localhost:${PORT_CONSOLE:-3000},http://console.stoa.local,http://portal.stoa.local
+      SIGNUP_MODE: ${SIGNUP_MODE:-invite}
+      SIGNUP_INVITE_CODES: ${SIGNUP_INVITE_CODES:-}
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: text

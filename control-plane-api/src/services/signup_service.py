@@ -9,6 +9,7 @@ Extracts business logic from the self-service router:
 """
 
 import asyncio
+import hmac
 import logging
 import re
 import uuid
@@ -79,22 +80,14 @@ def validate_email_domain(email: str) -> None:
 
 
 def validate_invite_code(code: str | None, plan: SignupPlan) -> None:
-    """Validate invite code if required.
-
-    - Standard plan always requires a valid invite code.
-    - Trial plan: invite code optional (accepted but not required).
-    """
-    if plan == SignupPlan.STANDARD:
-        if not code:
-            raise HTTPException(status_code=400, detail="Invite code required for standard plan signup.")
-        valid_codes = settings.signup_invite_codes_list
-        if code not in valid_codes:
-            raise HTTPException(status_code=400, detail="Invalid invite code.")
-    elif code:
-        # Trial plan with optional code — validate if provided
-        valid_codes = settings.signup_invite_codes_list
-        if valid_codes and code not in valid_codes:
-            raise HTTPException(status_code=400, detail="Invalid invite code.")
+    """Require an invitation unless open trial signup was explicitly selected."""
+    required = settings.SIGNUP_MODE != "open" or plan == SignupPlan.STANDARD
+    if required or code:
+        valid = bool(code) and any(
+            hmac.compare_digest(code.encode(), candidate.encode()) for candidate in settings.signup_invite_codes_list
+        )
+        if not valid:
+            raise HTTPException(status_code=400, detail="Signup is unavailable.")
 
 
 def slugify_tenant_name(name: str) -> str:

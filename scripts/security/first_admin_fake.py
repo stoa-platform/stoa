@@ -12,6 +12,8 @@ class FakeKeycloak:
         self.groups = {}
         self.service_accounts = {}
         self.parent_groups = {}
+        self.all_mappings = {}
+        self.composites = {}
         self.writes = []
         self.interrupt_after = None
 
@@ -35,6 +37,10 @@ class FakeKeycloak:
                 return [u for u in self.users if not query or u["username"] == query["username"][0]]
             if route.endswith("/groups"):
                 return self.groups.get(route.split("/")[2], [])
+            if route.endswith("/role-mappings"):
+                return self.all_mappings.get(route, {})
+            if route.startswith("/roles-by-id/"):
+                return self.composites.get(route.split("/")[2], [])
             if route.endswith("/composite"):
                 return self.roles.get(route, [])
             if route.startswith("/groups/"):

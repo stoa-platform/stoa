@@ -107,3 +107,26 @@ class EngineTests(unittest.TestCase):
         with self.assertRaisesRegex(engine.Refused, "identity_exists"):
             engine.provision(self.kc, self.identity)
         self.assertFalse(self.kc.writes)
+
+    def test_client_composite_can_confer_platform_admin(self):
+        self.kc.users = [{"id": "existing", "username": "existing"}]
+        self.kc.all_mappings["/users/existing/role-mappings"] = {
+            "clientMappings": {
+                "client": {
+                    "mappings": [{"id": "composite", "clientRole": True, "composite": True}]
+                },
+            }
+        }
+        self.kc.composites["composite"] = [{"name": "cpi-admin", "clientRole": False}]
+        self.assertEqual(20, engine.provision(self.kc, self.identity)[0])
+        self.assertFalse(self.kc.writes)
+
+    def test_same_named_client_role_does_not_count_as_realm_admin(self):
+        self.kc.users = [{"id": "existing", "username": "existing"}]
+        self.kc.all_mappings["/users/existing/role-mappings"] = {
+            "clientMappings": {
+                "client": {"mappings": [{"name": "cpi-admin", "clientRole": True}]},
+            }
+        }
+        self.assertEqual(0, engine.provision(self.kc, self.identity)[0])
+        self.assertEqual(2, len(self.kc.users))

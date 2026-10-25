@@ -15,6 +15,25 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def client_composite_admin(kc, path: str) -> bool:
+    """Inspect realm roles reached through assigned client-role composites."""
+    mappings = kc.call("GET", path)
+    pending = [
+        role
+        for client in mappings.get("clientMappings", {}).values()
+        for role in client.get("mappings", [])
+    ]
+    seen = set()
+    while pending:
+        role = pending.pop()
+        if role.get("clientRole") is False and role.get("name") == "cpi-admin":
+            return True
+        if role.get("composite") and role["id"] not in seen:
+            seen.add(role["id"])
+            pending.extend(kc.call("GET", f"/roles-by-id/{role['id']}/composites"))
+    return False
+
+
 def administrators(kc):
     """Include service accounts and roles inherited through groups/composites."""
     direct = next(iter(kc.pages("/roles/cpi-admin/users")), None)
@@ -38,6 +57,8 @@ def administrators(kc):
                 group = {"id": parent} if parent else None
         for path in paths:
             if any(role["name"] == "cpi-admin" for role in kc.call("GET", path)):
+                return user["id"]
+            if client_composite_admin(kc, path.removesuffix("/realm/composite")):
                 return user["id"]
     return None
 

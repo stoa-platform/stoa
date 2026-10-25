@@ -35,10 +35,12 @@ class Keycloak:
             raise Refused("invalid_endpoint", 22)
         self.url = url.rstrip("/")
         self.root = "/admin/realms/" + urllib.parse.quote(realm, safe="")
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.load_default_certs()
         self.opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}),
             NoRedirect(),
-            urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+            urllib.request.HTTPSHandler(context=context),
         )
         self.token = ""
         form = urllib.parse.urlencode(

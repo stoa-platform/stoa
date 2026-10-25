@@ -71,3 +71,35 @@ class TransportTests(unittest.TestCase):
 
         with self.assertRaisesRegex(transport.Refused, "response_too_large"):
             self.make_client(Opener())
+
+    def test_tls_verification_does_not_enable_environment_key_logging(self):
+        import os
+        import ssl
+        import tempfile
+
+        contexts = []
+
+        class Opener:
+            def open(self, request, timeout):
+                return Reply(json.dumps({"access_token": secrets.token_urlsafe(32)}).encode())
+
+        def build(*handlers):
+            contexts.extend(
+                handler._context for handler in handlers if hasattr(handler, "_context")
+            )
+            return Opener()
+
+        with tempfile.TemporaryDirectory() as directory:
+            keylog = Path(directory) / "tls.log"
+            with (
+                patch.dict(os.environ, {"SSLKEYLOGFILE": str(keylog)}),
+                patch.object(transport.urllib.request, "build_opener", build),
+            ):
+                transport.Keycloak(
+                    "https://keycloak.test", "stoa", "operator", secrets.token_urlsafe(32)
+                )
+            self.assertFalse(keylog.exists())
+        self.assertEqual(1, len(contexts))
+        self.assertEqual(ssl.CERT_REQUIRED, contexts[0].verify_mode)
+        self.assertTrue(contexts[0].check_hostname)
+        self.assertIsNone(contexts[0].keylog_filename)

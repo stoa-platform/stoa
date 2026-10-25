@@ -54,12 +54,18 @@ request = {
 fd = os.open("bootstrap.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, "w") as stream:
     json.dump(request, stream)
+recipient = {key: request[key] for key in ("username", "email", "initial_password")}
+fd = os.open("recipient.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, "w") as stream:
+    json.dump(recipient, stream)
 PY
 ```
 
-The file contains the initial password and the request identifier. Import it
-into the approved secret store for delivery without printing it. Keep the same
-file for a retry; do not change the identity or request identifier.
+Keep `bootstrap.json` in operator-only storage: it also contains the master
+administrator password and the request identifier. Never deliver that file to
+the recipient. Import only `recipient.json` into the recipient's approved secret
+record without printing it. Keep the original operator request unchanged for a
+retry, and dispose of both local files after successful delivery.
 
 ## Helm
 
@@ -130,7 +136,7 @@ they differ from the chart's bootstrap conventions.
 
 ## Compose or a host-side command
 
-The default Compose import has no platform users. Generate the required database,
+The default Compose import has no preconfigured human users. Generate the required database,
 service and realm client credentials on site and supply the empty variables in
 `.env.example` through a private environment file or local secret manager. The
 optional federation demo imports also require their own generated inputs. LDAP

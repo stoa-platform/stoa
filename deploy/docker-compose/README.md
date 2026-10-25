@@ -33,15 +33,15 @@ All services are accessible through the nginx reverse proxy on port 80:
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Console** | http://localhost | halliday / readyplayerone |
-| **Portal** | http://localhost/portal | (self-registration) |
-| **API Docs** | http://localhost/api/docs | - |
-| **Keycloak** | http://localhost/auth | see `.env` (`KEYCLOAK_ADMIN_PASSWORD`) |
-| **Grafana** | http://localhost/grafana | see `.env` (`GRAFANA_PASSWORD`) |
-| **STOA Logs** | http://localhost/logs | see `.env` (`OPENSEARCH_ADMIN_PASSWORD`) |
-| **Prometheus** | http://localhost:9090 | - |
-| **AlertManager** | http://localhost:9093 | - |
-| **Rust Gateway** | http://localhost/gateway/health | - |
+| **Console** | http://localhost | Provided on site |
+| **Portal** | http://localhost/portal | Provided on site |
+| **API Docs** | http://localhost/api/docs | Provided on site |
+| **Keycloak** | http://localhost/auth | Provided on site |
+| **Grafana** | http://localhost/grafana | Provided on site |
+| **STOA Logs** | http://localhost/logs | Provided on site |
+| **Prometheus** | http://localhost:9090 | Provided on site |
+| **AlertManager** | http://localhost:9093 | Provided on site |
+| **Rust Gateway** | http://localhost/gateway/health | Provided on site |
 
 Direct access (bypassing proxy):
 

@@ -1,8 +1,7 @@
 #!/bin/sh
 # The bootstrap hook passes request credentials over stdin to curl.
 set +x
-curl() {
-  local config key value option
+curl() (
   config=$(
     while [ "$#" -gt 0 ]; do
       option=$1; shift
@@ -36,4 +35,4 @@ curl() {
     done
   ) || return 2
   printf '%s\n' "$config" | command curl -q --config -
-}
+)

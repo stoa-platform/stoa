@@ -49,7 +49,7 @@
             "cn=admin,dc=demo,dc=stoa"
           ],
           "bindCredential": [
-            "admin-password"
+            "${LDAP_ADMIN_PASSWORD}"
           ],
           "usersDn": [
             "ou=users,dc=demo,dc=stoa"

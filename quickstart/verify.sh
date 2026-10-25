@@ -110,11 +110,10 @@ admin_token="${admin_token//$'\r'/}"
 [[ -n "$kc_user" && -n "$kc_pass" && -n "$admin_token" ]] || fail "missing demo credentials in the running containers"
 
 echo "configuring keycloak realm"
-docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+printf '%s\n' "$kc_pass" | docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://127.0.0.1:8080 \
   --realm master \
-  --user "$kc_user" \
-  --password "$kc_pass" >/dev/null
+  --user "$kc_user" >/dev/null
 
 if ! docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh get "realms/$REALM" >/dev/null 2>&1; then
   docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create realms \
@@ -130,9 +129,8 @@ if [[ -n "$existing_id" ]]; then
 fi
 
 client_secret="$(openssl rand -hex 24)"
-docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
+printf '{"secret":"%s"}\n' "$client_secret" | docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" -f - \
   -s "clientId=$CLIENT_ID" \
-  -s "secret=$client_secret" \
   -s serviceAccountsEnabled=true \
   -s publicClient=false \
   -s standardFlowEnabled=false \

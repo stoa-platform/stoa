@@ -15,6 +15,8 @@ IMAGE="${1:-stoa-gateway:0.9.25}"
 PROOF_BIN="${STOA_PROOF_BIN:-}"
 NET=stoa-jwt-proof
 ADMIN_TOKEN="$(openssl rand -hex 32)"
+: "${KEYCLOAK_ADMIN_PASSWORD:?Set an on-site admin password}"
+export KC_BOOTSTRAP_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD"
 CLIENT_SECRET="$(openssl rand -hex 24)"
 KC_IMAGE=quay.io/keycloak/keycloak:26.4.2
 
@@ -31,9 +33,9 @@ trap cleanup EXIT
 sudo docker network create "$NET" >/dev/null
 if [[ -n "$PROOF_BIN" ]]; then
   sudo docker run -d --name stoa-jwt-echo -p 18082:80 nginx:1.27-alpine >/dev/null
-  sudo docker run -d --name stoa-jwt-kc -p 18081:8080 \
+  sudo --preserve-env=KC_BOOTSTRAP_ADMIN_PASSWORD docker run -d --name stoa-jwt-kc -p 18081:8080 \
     -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-    -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+    -e KC_BOOTSTRAP_ADMIN_PASSWORD \
     -e KC_HOSTNAME=http://127.0.0.1:18081 \
     -e KC_HOSTNAME_STRICT=false \
     -e KC_HTTP_ENABLED=true \
@@ -43,9 +45,9 @@ if [[ -n "$PROOF_BIN" ]]; then
   export KC_URL BACKEND_URL
 else
   sudo docker run -d --name stoa-jwt-echo --network "$NET" nginx:1.27-alpine >/dev/null
-  sudo docker run -d --name stoa-jwt-kc --network "$NET" --network-alias keycloak \
+  sudo --preserve-env=KC_BOOTSTRAP_ADMIN_PASSWORD docker run -d --name stoa-jwt-kc --network "$NET" --network-alias keycloak \
     -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-    -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+    -e KC_BOOTSTRAP_ADMIN_PASSWORD \
     -e KC_HOSTNAME=http://keycloak:8080 \
     -e KC_HOSTNAME_STRICT=false \
     -e KC_HTTP_ENABLED=true \
@@ -70,13 +72,12 @@ if [[ "$ready" != 1 ]]; then
   exit 1
 fi
 
-sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://127.0.0.1:8080 --realm master --user admin --password admin >/dev/null
+printf '%s\n' "$KEYCLOAK_ADMIN_PASSWORD" | sudo docker exec -i stoa-jwt-kc /opt/keycloak/bin/kcadm.sh config credentials \
+  --server http://127.0.0.1:8080 --realm master --user admin >/dev/null
 sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create realms \
   -s realm=stoa -s enabled=true -s registrationAllowed=false -s resetPasswordAllowed=false -s 'passwordPolicy=length(12) and notUsername and maxLength(128)' -s ssoSessionIdleTimeout=1800 -s ssoSessionMaxLifespan=28800 -s offlineSessionIdleTimeout=86400 -s offlineSessionMaxLifespanEnabled=true -s offlineSessionMaxLifespan=604800 -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 -s accessTokenLifespan=1 >/dev/null
-sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create clients -r stoa \
+printf '{"secret":"%s"}\n' "$CLIENT_SECRET" | sudo docker exec -i stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create clients -r stoa -f - \
   -s clientId=stoa-caller \
-  -s secret="$CLIENT_SECRET" \
   -s serviceAccountsEnabled=true \
   -s publicClient=false \
   -s standardFlowEnabled=false \

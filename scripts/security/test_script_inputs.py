@@ -66,3 +66,16 @@ class ScriptInputTests(unittest.TestCase):
         )
         for name in names:
             self.assertIn("set -euo pipefail", (ROOT / name).read_text(), name)
+
+    def test_demo_passwords_have_no_builtin_fallback(self):
+        import re
+        import shlex
+
+        for name in ("scripts/setup-e2e-rpo-users.sh", "scripts/demo/setup-rpo-keycloak-users.sh"):
+            source = (ROOT / name).read_text()
+            for line in source.splitlines():
+                if line.startswith("create_user "):
+                    password = shlex.split(line)[5]
+                    self.assertTrue(password.startswith("$"), name)
+                self.assertIsNone(re.search(r"PASSWORD:-[^}]+", line), name)
+            self.assertNotRegex(source, r"echo .*PASSWORD=")

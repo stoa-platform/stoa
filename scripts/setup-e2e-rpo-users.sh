@@ -52,6 +52,13 @@ if [ -z "$ADMIN_PASSWORD" ]; then
     exit 1
 fi
 
+: "${PARZIVAL_PASSWORD:?PARZIVAL_PASSWORD is required}"
+: "${ART3MIS_PASSWORD:?ART3MIS_PASSWORD is required}"
+: "${AECH_PASSWORD:?AECH_PASSWORD is required}"
+: "${SORRENTO_PASSWORD:?SORRENTO_PASSWORD is required}"
+: "${I_R0K_PASSWORD:?I_R0K_PASSWORD is required}"
+: "${ANORAK_PASSWORD:?ANORAK_PASSWORD is required}"
+
 # Get admin token
 log_info "Getting admin token..."
 # shellcheck source=scripts/lib/secret-input.sh
@@ -82,7 +89,9 @@ create_user() {
     echo ""
     log_info "Creating user: ${username} (${first} ${last}) - ${role}"
 
-    local response=$(curl -s -w "\n%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
+    local response
+
+    response=$(curl -s -w "\n%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
@@ -102,13 +111,16 @@ create_user() {
             }]
         }")
 
-    local status=$(echo "$response" | tail -n1)
+    local status
+
+    status=$(echo "$response" | tail -n1)
 
     if [ "$status" = "201" ]; then
         log_success "User created"
 
         # Get user ID and assign role
-        local user_id=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=${username}&exact=true" \
+        local user_id
+        user_id=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=${username}&exact=true" \
             -H "Authorization: Bearer ${TOKEN}" | jq -r '.[0].id // empty')
 
         if [ -n "$user_id" ] && [ "$user_id" != "null" ]; then
@@ -119,7 +131,8 @@ create_user() {
         log_warning "User already exists - updating password"
 
         # Get user ID
-        local user_id=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=${username}&exact=true" \
+        local user_id
+        user_id=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=${username}&exact=true" \
             -H "Authorization: Bearer ${TOKEN}" | jq -r '.[0].id // empty')
 
         if [ -n "$user_id" ] && [ "$user_id" != "null" ]; then
@@ -145,7 +158,9 @@ assign_role() {
 
     log_info "  Assigning role: ${role_name}"
 
-    local role=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
+    local role
+
+    role=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
         -H "Authorization: Bearer ${TOKEN}")
 
     if [ "$(echo "$role" | jq -r '.name // empty')" = "" ]; then
@@ -153,7 +168,9 @@ assign_role() {
         return 0
     fi
 
-    local status=$(curl -s -o /dev/null -w "%{http_code}" \
+    local status
+
+    status=$(curl -s -o /dev/null -w "%{http_code}" \
         -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${user_id}/role-mappings/realm" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
@@ -170,39 +187,20 @@ echo "Creating Ready Player One Users"
 echo "=============================================="
 
 # HIGH-FIVE Tenant (the good guys)
-create_user "parzival" "parzival@high-five.io" "Wade" "Watts" "***DEMO_PASSWORD_REMOVED***" "high-five" "tenant-admin"
-create_user "art3mis" "art3mis@high-five.io" "Samantha" "Cook" "***DEMO_PASSWORD_REMOVED***" "high-five" "devops"
-create_user "aech" "aech@high-five.io" "Helen" "Harris" "***DEMO_PASSWORD_REMOVED***" "high-five" "viewer"
+create_user "parzival" "parzival@example.com" "Wade" "Watts" "${PARZIVAL_PASSWORD}" "high-five" "tenant-admin"
+create_user "art3mis" "art3mis@example.com" "Samantha" "Cook" "${ART3MIS_PASSWORD}" "high-five" "devops"
+create_user "aech" "aech@example.com" "Helen" "Harris" "${AECH_PASSWORD}" "high-five" "viewer"
 
 # IOI Tenant (the competitors)
-create_user "sorrento" "sorrento@ioi.corp" "Nolan" "Sorrento" "***DEMO_PASSWORD_REMOVED***" "ioi" "tenant-admin"
-create_user "i-r0k" "i-r0k@ioi.corp" "Todd" "Paluga" "***DEMO_PASSWORD_REMOVED***" "ioi" "viewer"
+create_user "sorrento" "sorrento@example.com" "Nolan" "Sorrento" "${SORRENTO_PASSWORD}" "ioi" "tenant-admin"
+create_user "i-r0k" "i-r0k@example.com" "Todd" "Paluga" "${I_R0K_PASSWORD}" "ioi" "viewer"
 
 # Platform Admin
-create_user "anorak" "anorak@gostoa.dev" "James" "Halliday" "***DEMO_PASSWORD_REMOVED***" "oasis" "cpi-admin"
+create_user "anorak" "anorak@example.com" "James" "Halliday" "${ANORAK_PASSWORD}" "oasis" "cpi-admin"
 
 echo ""
 echo "=============================================="
 echo "E2E Users Setup Complete"
 echo "=============================================="
 echo ""
-echo "Credentials for GitHub Secrets:"
-echo ""
-echo "  PARZIVAL_USER=parzival"
-echo "  PARZIVAL_PASSWORD=***DEMO_PASSWORD_REMOVED***"
-echo ""
-echo "  ART3MIS_USER=art3mis"
-echo "  ART3MIS_PASSWORD=***DEMO_PASSWORD_REMOVED***"
-echo ""
-echo "  AECH_USER=aech"
-echo "  AECH_PASSWORD=***DEMO_PASSWORD_REMOVED***"
-echo ""
-echo "  SORRENTO_USER=sorrento"
-echo "  SORRENTO_PASSWORD=***DEMO_PASSWORD_REMOVED***"
-echo ""
-echo "  I_R0K_USER=i-r0k"
-echo "  I_R0K_PASSWORD=***DEMO_PASSWORD_REMOVED***"
-echo ""
-echo "  ANORAK_USER=anorak"
-echo "  ANORAK_PASSWORD=***DEMO_PASSWORD_REMOVED***"
-echo ""
+echo "Credentials are supplied by the operator; retain them in the on-site secret store."

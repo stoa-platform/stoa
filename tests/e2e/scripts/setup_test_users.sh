@@ -51,6 +51,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "$KEYCLOAK_REALM" in
+  stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
+esac
+
 # Generate secure random passwords
 generate_password() {
     openssl rand -hex 20

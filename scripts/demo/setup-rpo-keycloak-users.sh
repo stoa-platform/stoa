@@ -52,6 +52,10 @@ if [ -z "$ADMIN_PASSWORD" ]; then
     exit 1
 fi
 
+: "${PARZIVAL_PASSWORD:?PARZIVAL_PASSWORD is required}"
+: "${SORRENTO_PASSWORD:?SORRENTO_PASSWORD is required}"
+: "${HALLIDAY_PASSWORD:?HALLIDAY_PASSWORD is required}"
+
 # Get admin token
 echo "Getting admin token..."
 # shellcheck source=scripts/lib/secret-input.sh
@@ -81,7 +85,9 @@ create_user() {
     echo ""
     echo "Creating user: ${username} (${first} ${last})"
 
-    local response=$(curl -s -w "\n%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
+    local response
+
+    response=$(curl -s -w "\n%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
@@ -101,8 +107,11 @@ create_user() {
             }]
         }")
 
-    local status=$(echo "$response" | tail -n1)
-    local body=$(echo "$response" | head -n-1)
+    local status
+
+    status=$(echo "$response" | tail -n1)
+    local body
+    body=$(echo "$response" | sed '$d')
 
     if [ "$status" = "201" ]; then
         echo -e "  ${GREEN}[OK] User created${NC}"
@@ -132,7 +141,8 @@ assign_role() {
     echo "  Assigning role: ${role_name}"
 
     # Get role
-    local role=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
+    local role
+    role=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
         -H "Authorization: Bearer ${TOKEN}")
 
     if [ "$(echo "$role" | jq -r '.name // empty')" = "" ]; then
@@ -141,7 +151,8 @@ assign_role() {
     fi
 
     # Assign role
-    local status=$(curl -s -o /dev/null -w "%{http_code}" \
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" \
         -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${user_id}/role-mappings/realm" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
@@ -166,7 +177,7 @@ echo "Creating Ready Player One Users"
 echo "=============================================="
 
 # Parzival (Wade Watts) - High Five tenant admin
-PARZIVAL_PWD="${PARZIVAL_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+PARZIVAL_PWD="${PARZIVAL_PASSWORD:?PARZIVAL_PASSWORD is required}"
 create_user "parzival" "parzival@highfive.oasis" "Wade" "Watts" "$PARZIVAL_PWD" "high-five"
 USER_ID=$(get_user_id "parzival")
 if [ -n "$USER_ID" ]; then
@@ -174,7 +185,7 @@ if [ -n "$USER_ID" ]; then
 fi
 
 # Sorrento (Nolan Sorrento) - IOI tenant admin
-SORRENTO_PWD="${SORRENTO_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+SORRENTO_PWD="${SORRENTO_PASSWORD:?SORRENTO_PASSWORD is required}"
 create_user "sorrento" "sorrento@ioi.corp" "Nolan" "Sorrento" "$SORRENTO_PWD" "ioi"
 USER_ID=$(get_user_id "sorrento")
 if [ -n "$USER_ID" ]; then
@@ -182,7 +193,7 @@ if [ -n "$USER_ID" ]; then
 fi
 
 # Halliday (James Halliday) - Platform admin
-HALLIDAY_PWD="${HALLIDAY_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+HALLIDAY_PWD="${HALLIDAY_PASSWORD:?HALLIDAY_PASSWORD is required}"
 create_user "halliday" "halliday@oasis.admin" "James" "Halliday" "$HALLIDAY_PWD" "oasis"
 USER_ID=$(get_user_id "halliday")
 if [ -n "$USER_ID" ]; then
@@ -198,13 +209,4 @@ echo "=============================================="
 echo "Ready Player One Demo - Setup Complete"
 echo "=============================================="
 echo ""
-echo "Demo Credentials (passwords from env vars or defaults):"
-echo "Sensitive values are withheld; use the approved secret store."
-echo "Sensitive values are withheld; use the approved secret store."
-echo "Sensitive values are withheld; use the approved secret store."
-echo ""
-echo "Test login:"
-echo "  curl -X POST '${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token' \\"
-echo "    -d 'client_id=control-plane-ui' -d 'username=parzival' \\"
-echo "Sensitive values are withheld; use the approved secret store."
-echo ""
+echo "Credentials were supplied by the operator; retain them in the on-site secret store."

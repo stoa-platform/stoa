@@ -138,8 +138,7 @@ jobs:
     if: needs.learn.outputs.branch != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # TODO(CAB-2331, OK Christophe requis) : permissions: actions: write
-    permissions: {}
+    permissions: { actions: write }
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}

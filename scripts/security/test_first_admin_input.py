@@ -92,3 +92,12 @@ class InputTests(unittest.TestCase):
         with patch.object(sys, "stdin", io.StringIO(self.token)):
             with self.assertRaises(ValueError):
                 bootstrap.read_identity(None)
+
+    def test_compose_wrapper_reads_stdin_and_redacts_invalid_input(self):
+        root = MODULES.parents[3]
+        script = root / "deploy/docker-compose/scripts/first-admin.sh"
+        run = subprocess.run(
+            ["/bin/bash", str(script)], input=self.token, capture_output=True, text=True
+        )
+        self.assertEqual(22, run.returncode)
+        self.assertNotIn(self.token, run.stdout + run.stderr)

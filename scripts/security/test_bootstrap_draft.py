@@ -65,14 +65,9 @@ class DraftTests(unittest.TestCase):
                 self.assertEqual(28800, obj["ssoSessionMaxLifespan"])
                 self.assertTrue(obj["offlineSessionMaxLifespanEnabled"])
 
-    def test_local_import_is_rejected_as_production(self):
-        name = "deploy/docker-compose/init/keycloak-realm.json"
-        result = kc.Audit("prod")
-        result.audit_text(name, load(name))
-        self.assertIn("KC_DEFAULT_USERS", {f.rule for f in result.findings if f.severity == "HIGH"})
-        self.assertIn(
-            "KC_HARDCODED_SECRET", {f.rule for f in result.findings if f.severity == "HIGH"}
-        )
+    def test_local_import_does_not_seed_users(self):
+        obj = json.loads(load("deploy/docker-compose/init/keycloak-realm.json"))
+        self.assertEqual([], obj["users"])
 
     def test_helm_new_realms_and_browser_clients(self):
         name = "charts/stoa-platform/templates/bootstrap-job.yaml"

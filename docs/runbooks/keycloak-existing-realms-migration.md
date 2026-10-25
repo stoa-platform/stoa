@@ -1,5 +1,7 @@
 # Préparation de la migration des realms Keycloak
 
+For a new installation, use [First administrator and invitation setup](first-admin-bootstrap.md).
+
 Ce brouillon accompagne l’amorçage et propose une procédure explicite pour les
 realms existants. Aucun déploiement du chart ne lance cette procédure. Python 3.11
 et la bibliothèque standard suffisent à son exécution. La compatibilité avec

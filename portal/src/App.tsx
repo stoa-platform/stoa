@@ -81,9 +81,9 @@ function LoadingScreen() {
   return <StoaLoader variant="fullscreen" />;
 }
 
-// Login screen — registration-first design with enterprise access fallback
+// Login screen with account access and access requests.
 function LoginScreen() {
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const [showEnterprise, setShowEnterprise] = useState(false);
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -152,29 +152,27 @@ function LoginScreen() {
           </a>
         </div>
 
-        {/* Right panel — registration-first */}
+        {/* Account access */}
         <div className="p-8 md:w-1/2">
           <div className="mx-auto mb-6">
             <StoaLogo size="lg" />
           </div>
 
-          {/* Primary: Create account */}
+          {/* Primary: Sign in */}
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
-            Create your free developer account
+            Access your developer account
           </h3>
-          <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1 mb-4">
-            <li>&#x2713; Instant access to the API &amp; MCP catalog</li>
-            <li>&#x2713; Personal workspace with API keys</li>
-            <li>&#x2713; Free tier &mdash; no credit card required</li>
-          </ul>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            Accounts are created by invitation. Contact your platform administrator for access.
+          </p>
           <button
-            onClick={register}
+            onClick={login}
             className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors"
           >
-            Create Free Account
+            Continue to sign in
           </button>
           <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-2 text-center">
-            By creating an account, you agree to our{' '}
+            By signing in, you agree to our{' '}
             <a
               href={`${config.services.docs.url}/legal/terms`}
               target="_blank"

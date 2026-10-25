@@ -1033,8 +1033,6 @@
       "addReadTokenRoleOnCreate": false,
       "firstBrokerLoginFlowAlias": "first broker login",
       "config": {
-        "clientId": "${GOOGLE_CLIENT_ID:-google-placeholder-client-id}",
-        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
         "defaultScope": "openid profile email",
         "syncMode": "IMPORT",
         "guiOrder": "1"

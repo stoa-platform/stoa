@@ -50,3 +50,21 @@ class CredentialTests(unittest.TestCase):
             for client in realm.get("clients", []):
                 if "secret" in client:
                     self.assertRegex(client["secret"], r"^\$\{[A-Z0-9_]+\}$")
+
+    def test_native_import_parameters_are_all_supplied_to_compose_keycloak(self):
+        import secrets
+
+        compose = yaml.safe_load((ROOT / "deploy/docker-compose/docker-compose.yml").read_text())
+        environment = compose["services"]["keycloak"]["environment"]
+        paths = [
+            ROOT / "deploy/docker-compose/init/keycloak-realm.json",
+            *(ROOT / "deploy/demo-federation/keycloak").glob("*.json"),
+        ]
+        for path in paths:
+            source = path.read_text()
+            names = set(re.findall(r"\$\{([A-Z0-9_]+)\}", source))
+            for name in names:
+                self.assertIn(name, environment, path.name)
+                source = source.replace("${" + name + "}", secrets.token_urlsafe(32))
+            self.assertFalse(re.search(r"\$\{[A-Z0-9_]+\}", source), path.name)
+            self.assertIs(False, json.loads(source)["registrationAllowed"])

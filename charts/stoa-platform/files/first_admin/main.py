@@ -46,7 +46,7 @@ def read_identity(filename: str | None) -> dict:
         not isinstance(identity.get(k), str) or not identity[k] for k in fields
     ):
         raise Refused("invalid_input", 22)
-    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", identity["username"]):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,63}", identity["username"]):
         raise Refused("invalid_identity", 22)
     if not re.fullmatch(r"[^\s@]+@[^\s@]+", identity["email"]):
         raise Refused("invalid_identity", 22)

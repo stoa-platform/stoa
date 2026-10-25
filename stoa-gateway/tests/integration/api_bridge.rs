@@ -39,7 +39,7 @@ fn make_catalog_tool(name: &str, description: &str, endpoint: &str) -> Arc<dyn T
 
 #[tokio::test]
 async fn test_api_bridge_discovered_tool_appears_in_mcp_list() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
 
     // Simulate API bridge discovery by registering a tool directly
     let tool = make_catalog_tool(
@@ -50,7 +50,9 @@ async fn test_api_bridge_discovered_tool_appears_in_mcp_list() {
     app.state.tool_registry.register(tool);
 
     // Verify tool appears in MCP tools/list
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
 
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
@@ -71,7 +73,7 @@ async fn test_api_bridge_discovered_tool_appears_in_mcp_list() {
 
 #[tokio::test]
 async fn test_api_bridge_rediscovery_replaces_tools() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let registry = &app.state.tool_registry;
 
     // First discovery: register tool v1
@@ -93,7 +95,9 @@ async fn test_api_bridge_rediscovery_replaces_tools() {
     registry.register(tool_v2);
 
     // Verify updated tool is served via MCP
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
 
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
@@ -117,7 +121,7 @@ async fn test_api_bridge_rediscovery_replaces_tools() {
 
 #[tokio::test]
 async fn test_api_bridge_call_unknown_tool_returns_error() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
 
     // Register one tool but try to call a different name
     let tool = make_catalog_tool("catalog_tool_a", "Tool A", "http://localhost:9999/a");
@@ -152,7 +156,7 @@ async fn test_api_bridge_call_unknown_tool_returns_error() {
 
 #[tokio::test]
 async fn test_api_bridge_tools_visible_via_rest_api() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
 
     // Register multiple bridged tools
     for (name, desc) in [
@@ -164,7 +168,7 @@ async fn test_api_bridge_tools_visible_via_rest_api() {
     }
 
     // Verify REST /mcp/v1/tools returns both
-    let (status, body) = app.get("/mcp/v1/tools").await;
+    let (status, body) = app.get_with_bearer("/mcp/v1/tools", app.mcp_token()).await;
     assert_eq!(status, StatusCode::OK);
 
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
@@ -189,7 +193,7 @@ async fn test_api_bridge_tools_visible_via_rest_api() {
 
 #[tokio::test]
 async fn test_api_bridge_concurrent_discovery_safe() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let registry = app.state.tool_registry.clone();
 
     // Spawn concurrent tool registrations simulating parallel discovery
@@ -215,7 +219,9 @@ async fn test_api_bridge_concurrent_discovery_safe() {
     assert_eq!(registry.count(), 10);
 
     // And all should appear in MCP tools/list
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
 
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");

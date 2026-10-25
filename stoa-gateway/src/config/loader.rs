@@ -64,6 +64,18 @@ pub enum ConfigError {
     /// NaN / -inf / +inf would silently disable or fully-open the limiter.
     #[error("tcp_rate_limit_per_ip must be a finite positive f64 when set (got {0})")]
     TcpRateLimitNotFinite(f64),
+
+    /// MCP entrypoints need an explicit token audience. There is no default,
+    /// and a production gateway does not start without it.
+    #[error(
+        "environment=prod requires mcp_audience (set `STOA_MCP_AUDIENCE` to the \
+         resource audience carried by MCP access tokens)"
+    )]
+    McpAudienceRequired,
+
+    /// The `private_key_jwt` key file must exist when its path is configured.
+    #[error("keycloak_client_key_path does not point to a readable file: {0}")]
+    ClientKeyUnreadable(String),
 }
 
 impl Config {
@@ -170,7 +182,37 @@ impl Config {
             }
         }
 
+        let mcp_audience_missing = self
+            .mcp_audience
+            .as_deref()
+            .is_none_or(|audience| audience.trim().is_empty());
+        if mcp_audience_missing && self.environment == super::Environment::Prod {
+            return Err(ConfigError::McpAudienceRequired);
+        }
+
+        if let Some(ref key_path) = self.keycloak_client_key_path {
+            let readable = std::fs::File::open(key_path)
+                .and_then(|file| file.metadata())
+                .is_ok_and(|metadata| metadata.is_file());
+            if !readable {
+                return Err(ConfigError::ClientKeyUnreadable(key_path.clone()));
+            }
+        }
+
         // --- Soft warnings (proceed) ---
+
+        if mcp_audience_missing {
+            tracing::warn!(
+                "STOA_MCP_AUDIENCE not set - MCP entrypoints will reject authenticated requests"
+            );
+        }
+
+        if self.keycloak_client_key_path.is_none() && self.control_plane_url.is_some() {
+            tracing::warn!(
+                "STOA_KEYCLOAK_CLIENT_KEY_PATH not set - tenant tool permissions cannot be read, \
+                 tool calls will be denied"
+            );
+        }
 
         if self.control_plane_url.is_none() {
             tracing::warn!("CONTROL_PLANE_URL not set - some features will be disabled");
@@ -258,6 +300,75 @@ mod tests {
         // Default config has no CP URL and no JWT — validate logs warnings
         // but does not fail.
         config.validate().expect("default config must validate");
+    }
+
+    #[test]
+    fn test_validate_rejects_prod_without_mcp_audience() {
+        for audience in [None, Some(String::new()), Some("  ".to_string())] {
+            let config = Config {
+                environment: super::super::Environment::Prod,
+                mcp_audience: audience,
+                ..Config::default()
+            };
+            match config.validate() {
+                Err(ConfigError::McpAudienceRequired) => {}
+                other => panic!("expected McpAudienceRequired, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
+    fn test_validate_accepts_prod_with_mcp_audience() {
+        let config = Config {
+            environment: super::super::Environment::Prod,
+            mcp_audience: Some("stoa-mcp".to_string()),
+            ..Config::default()
+        };
+        config
+            .validate()
+            .expect("prod with an explicit MCP audience must validate");
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
+    fn test_prod_startup_fails_without_mcp_audience_env() {
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_ENVIRONMENT", "prod");
+            let config = Config::load().expect("load");
+            assert!(config.mcp_audience.is_none(), "no default audience");
+            assert!(matches!(
+                config.validate(),
+                Err(ConfigError::McpAudienceRequired)
+            ));
+
+            jail.set_env("STOA_MCP_AUDIENCE", "stoa-mcp");
+            let config = Config::load().expect("load");
+            assert_eq!(config.mcp_audience.as_deref(), Some("stoa-mcp"));
+            config.validate().expect("audience set");
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_validate_rejects_missing_client_key_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config {
+            keycloak_client_key_path: Some(dir.path().join("absent.pem").display().to_string()),
+            ..Config::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigError::ClientKeyUnreadable(_))
+        ));
+
+        let key = dir.path().join("key.pem");
+        std::fs::write(&key, "placeholder").unwrap();
+        let config = Config {
+            keycloak_client_key_path: Some(key.display().to_string()),
+            ..Config::default()
+        };
+        config.validate().expect("existing key file");
     }
 
     #[test]

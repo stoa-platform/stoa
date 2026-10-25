@@ -42,7 +42,7 @@ async fn test_1000_concurrent_tool_calls() {
     // All requests should get a response (not hang or crash)
     for (i, status) in results.iter().enumerate() {
         assert!(
-            status.is_success() || *status == StatusCode::BAD_REQUEST,
+            *status == StatusCode::UNAUTHORIZED,
             "Request {} unexpected status: {}",
             i,
             status

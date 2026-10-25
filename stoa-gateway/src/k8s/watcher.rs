@@ -24,6 +24,11 @@ use crate::mcp::tools::dynamic_tool::{schema_from_value, DynamicTool};
 use crate::mcp::tools::{ToolAnnotations, ToolRegistry};
 use crate::skills::resolver::{SkillResolver, SkillScope, StoredSkill};
 
+/// Missing metadata cannot imply membership of Kubernetes' default namespace.
+fn tenant_namespace(namespace: Option<&str>) -> Option<&str> {
+    namespace.filter(|value| !value.is_empty() && *value == value.trim())
+}
+
 /// CRD Watcher for dynamic tool + skill + guardrail policy registration
 pub struct CrdWatcher {
     client: Client,
@@ -200,7 +205,10 @@ impl CrdWatcher {
 
     /// Handle Skill CRD apply — upsert into resolver (sync, no .await needed)
     fn handle_skill_apply(&self, skill: &Skill) {
-        let namespace = skill.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(namespace) = tenant_namespace(skill.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let meta_name = skill.metadata.name.as_deref().unwrap_or("unknown");
         let key = format!("{}/{}", namespace, meta_name);
 
@@ -245,7 +253,10 @@ impl CrdWatcher {
 
     /// Handle Skill CRD delete — remove from resolver (sync)
     fn handle_skill_delete(&self, skill: &Skill) {
-        let namespace = skill.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(namespace) = tenant_namespace(skill.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let meta_name = skill.metadata.name.as_deref().unwrap_or("unknown");
         let key = format!("{}/{}", namespace, meta_name);
 
@@ -258,7 +269,10 @@ impl CrdWatcher {
 
     /// Handle Tool CRD apply (create/update)
     async fn handle_tool_apply(&self, tool: &Tool) {
-        let namespace = tool.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(namespace) = tenant_namespace(tool.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let name = tool.metadata.name.as_deref().unwrap_or("unknown");
 
         // Generate tool name: {namespace}_{name}
@@ -321,7 +335,10 @@ impl CrdWatcher {
 
     /// Handle Tool CRD delete
     fn handle_tool_delete(&self, tool: &Tool) {
-        let namespace = tool.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(namespace) = tenant_namespace(tool.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let name = tool.metadata.name.as_deref().unwrap_or("unknown");
 
         let tool_name = format!("{}_{}", namespace, to_snake_case(name));
@@ -354,7 +371,10 @@ impl CrdWatcher {
 
     /// Handle ToolSet CRD apply — connect to upstream MCP server and register federated tools
     async fn handle_toolset_apply(&self, toolset: &ToolSet) {
-        let namespace = toolset.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(namespace) = tenant_namespace(toolset.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let name = toolset.metadata.name.as_deref().unwrap_or("unknown");
         let prefix = toolset.spec.prefix.as_deref().unwrap_or("");
 
@@ -497,7 +517,10 @@ impl CrdWatcher {
 
     /// Handle ToolSet CRD delete — unregister all tools with matching prefix
     fn handle_toolset_delete(&self, toolset: &ToolSet) {
-        let namespace = toolset.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(namespace) = tenant_namespace(toolset.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let name = toolset.metadata.name.as_deref().unwrap_or("unknown");
         let prefix = toolset.spec.prefix.as_deref().unwrap_or("");
 
@@ -580,7 +603,10 @@ impl CrdWatcher {
     /// Handle GuardrailPolicy CRD apply — upsert into policy store.
     fn handle_guardrail_policy_apply(&self, crd: &GuardrailPolicy) {
         // Namespace = tenant_id (K8s namespace isolation model)
-        let tenant_id = crd.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(tenant_id) = tenant_namespace(crd.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let name = crd.metadata.name.as_deref().unwrap_or("unknown");
 
         let policy = TenantGuardrailPolicy {
@@ -605,7 +631,10 @@ impl CrdWatcher {
 
     /// Handle GuardrailPolicy CRD delete — remove from policy store.
     fn handle_guardrail_policy_delete(&self, crd: &GuardrailPolicy) {
-        let tenant_id = crd.metadata.namespace.as_deref().unwrap_or("default");
+        let Some(tenant_id) = tenant_namespace(crd.metadata.namespace.as_deref()) else {
+            warn!("Ignoring tenant-scoped CRD without namespace");
+            return;
+        };
         let name = crd.metadata.name.as_deref().unwrap_or("unknown");
 
         let removed = self.guardrail_policy_store.remove(tenant_id);
@@ -665,5 +694,20 @@ mod tests {
         assert_eq!(to_snake_case("weather-api"), "weather_api");
         assert_eq!(to_snake_case("weatherApi"), "weather_api");
         assert_eq!(to_snake_case("simple"), "simple");
+    }
+}
+
+#[cfg(test)]
+mod tenant_namespace_tests {
+    use super::tenant_namespace;
+
+    #[test]
+    fn regression_namespace_never_defaults_for_any_watcher() {
+        for missing in [None, Some(""), Some(" "), Some(" tenant-a")] {
+            assert_eq!(tenant_namespace(missing), None);
+        }
+        assert_eq!(tenant_namespace(Some("tenant-a")), Some("tenant-a"));
+        // An explicitly named real tenant remains valid, including "default".
+        assert_eq!(tenant_namespace(Some("default")), Some("default"));
     }
 }

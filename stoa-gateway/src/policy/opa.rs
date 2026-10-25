@@ -51,6 +51,8 @@ pub struct PolicyInput {
     pub user_email: Option<String>,
     /// Tenant identifier
     pub tenant_id: String,
+    /// Owning tenant from the trusted tool registry; None means global.
+    pub resource_tenant_id: Option<String>,
     /// Tool being invoked
     pub tool_name: String,
     /// Action required by the tool
@@ -76,6 +78,7 @@ impl PolicyInput {
             user_id,
             user_email,
             tenant_id,
+            resource_tenant_id: None,
             tool_name,
             action: format!("{:?}", action),
             scopes,
@@ -151,6 +154,13 @@ impl PolicyEngine {
 
     /// Evaluate policy for a given input
     pub fn evaluate(&self, input: &PolicyInput) -> PolicyDecision {
+        // Missing caller tenant is always denied, including development mode.
+        if input.tenant_id.trim().is_empty() || input.tenant_id.trim() != input.tenant_id {
+            return PolicyDecision::Deny {
+                reason: "Missing or invalid tenant context".to_string(),
+            };
+        }
+
         // If disabled, allow all
         if !self.config.enabled {
             debug!("Policy engine disabled — allowing access");
@@ -278,130 +288,7 @@ impl PolicyEngine {
 /// - stoa:execute  — Tool execution (invoke MCP tools)
 /// - stoa:deploy   — Deployment operations (promote, manage versions)
 /// - stoa:audit    — Audit operations (view audit log, export metrics)
-const DEFAULT_POLICY: &str = r#"
-package stoa.authz
-
-import future.keywords.if
-import future.keywords.in
-
-# Default deny
-default allow := false
-
-# Admin scope grants full access
-allow if {
-    "stoa:admin" in input.scopes
-}
-
-# cpi-admin role grants full access (backwards compatibility)
-allow if {
-    "cpi-admin" in input.roles
-}
-
-# Read actions allowed with stoa:read scope
-allow if {
-    action_is_read
-    "stoa:read" in input.scopes
-}
-
-# Write actions allowed with stoa:write scope
-allow if {
-    action_is_write
-    "stoa:write" in input.scopes
-}
-
-# Execute actions (tool invocation) allowed with stoa:execute or stoa:read
-allow if {
-    action_is_execute
-    scope_allows_execute
-}
-
-# Metrics/logs viewing allowed with stoa:read or stoa:audit
-allow if {
-    action_is_view
-    scope_allows_view
-}
-
-# Deployment actions allowed with stoa:deploy
-allow if {
-    action_is_deploy
-    "stoa:deploy" in input.scopes
-}
-
-# Audit actions allowed with stoa:audit
-allow if {
-    action_is_audit
-    "stoa:audit" in input.scopes
-}
-
-# ─── Action Categories ────────────────────────────────
-
-action_is_read if {
-    input.action in ["Read", "List", "Search"]
-}
-
-action_is_write if {
-    input.action in ["Create", "Update", "Delete", "CreateApi", "UpdateApi", "DeleteApi", "PublishApi", "DeprecateApi"]
-}
-
-action_is_execute if {
-    input.action in ["Read", "List", "Search", "Subscribe", "Unsubscribe", "ManageSubscription"]
-}
-
-action_is_view if {
-    input.action in ["ViewMetrics", "ViewLogs"]
-}
-
-action_is_deploy if {
-    input.action in ["PublishApi", "DeprecateApi"]
-}
-
-action_is_audit if {
-    input.action in ["ViewAudit"]
-}
-
-# ─── Scope Helpers ────────────────────────────────────
-
-scope_allows_execute if {
-    "stoa:execute" in input.scopes
-}
-
-scope_allows_execute if {
-    "stoa:read" in input.scopes
-}
-
-scope_allows_view if {
-    "stoa:read" in input.scopes
-}
-
-scope_allows_view if {
-    "stoa:audit" in input.scopes
-}
-
-# ─── Denial Reason ────────────────────────────────────
-
-denial_reason := reason if {
-    not allow
-    action_is_write
-    not "stoa:write" in input.scopes
-    reason := "Write operations require 'stoa:write' scope"
-}
-
-denial_reason := reason if {
-    not allow
-    action_is_admin
-    not "stoa:admin" in input.scopes
-    reason := "Admin operations require 'stoa:admin' scope"
-}
-
-denial_reason := reason if {
-    not allow
-    reason := sprintf("Action '%s' not permitted. Check your scopes.", [input.action])
-}
-
-action_is_admin if {
-    input.action in ["ManageUsers", "ManageTenants", "ManageContracts"]
-}
-"#;
+const DEFAULT_POLICY: &str = include_str!("../../policies/default.rego");
 
 // ============================================
 // Tests
@@ -419,7 +306,8 @@ mod tests {
         PolicyInput {
             user_id: Some("user-123".to_string()),
             user_email: Some("user@test.com".to_string()),
-            tenant_id: "tenant-acme".to_string(),
+            tenant_id: "acme".to_string(),
+            resource_tenant_id: Some("acme".to_string()),
             tool_name: "stoa_catalog".to_string(),
             action: format!("{:?}", action),
             scopes: scopes.iter().map(|s| s.to_string()).collect(),
@@ -428,19 +316,142 @@ mod tests {
     }
 
     #[test]
-    fn test_admin_scope_allows_all() {
-        let engine = make_engine();
-        let input = make_input(Action::ManageTenants, vec!["stoa:admin"], vec![]);
-        let decision = engine.evaluate(&input);
-        assert!(decision.is_allowed());
+    fn test_missing_tenant_denied_even_when_disabled_or_admin() {
+        for enabled in [true, false] {
+            let engine = PolicyEngine::new(PolicyEngineConfig {
+                enabled,
+                ..Default::default()
+            })
+            .unwrap();
+            let mut input = make_input(Action::Read, vec!["stoa:admin"], vec!["cpi-admin"]);
+            for tenant in ["", " ", " acme "] {
+                input.tenant_id = tenant.to_string();
+                assert!(!engine.evaluate(&input).is_allowed());
+            }
+        }
     }
 
     #[test]
-    fn test_cpi_admin_role_allows_all() {
+    fn test_resource_tenant_is_checked() {
+        let engine = make_engine();
+        let mut input = make_input(Action::Read, vec!["stoa:read"], vec![]);
+        input.resource_tenant_id = Some("beta".to_string());
+        assert!(!engine.evaluate(&input).is_allowed());
+        input.resource_tenant_id = Some("tenant-acme".to_string());
+        assert!(!engine.evaluate(&input).is_allowed());
+        input.resource_tenant_id = None;
+        assert!(engine.evaluate(&input).is_allowed());
+    }
+
+    #[test]
+    fn test_read_only_roles_follow_action_and_owner_matrix() {
+        let engine = make_engine();
+        for role in ["viewer", "read-only", "readonly"] {
+            for owner in [Some("acme"), Some("beta"), None] {
+                for action in [
+                    Action::Read,
+                    Action::List,
+                    Action::Search,
+                    Action::Create,
+                    Action::Update,
+                    Action::Delete,
+                    Action::CreateApi,
+                    Action::UpdateApi,
+                    Action::DeleteApi,
+                    Action::PublishApi,
+                    Action::DeprecateApi,
+                    Action::Subscribe,
+                    Action::Unsubscribe,
+                    Action::ManageSubscription,
+                    Action::ManageUsers,
+                    Action::ManageTenants,
+                    Action::ManageContracts,
+                    Action::ViewMetrics,
+                    Action::ViewLogs,
+                    Action::ViewAudit,
+                ] {
+                    let mut input = make_input(action, vec!["stoa:read"], vec![role]);
+                    input.resource_tenant_id = owner.map(str::to_string);
+                    let expected = owner != Some("beta")
+                        && matches!(
+                            action,
+                            Action::Read
+                                | Action::List
+                                | Action::Search
+                                | Action::ViewMetrics
+                                | Action::ViewLogs
+                        );
+                    assert_eq!(
+                        engine.evaluate(&input).is_allowed(),
+                        expected,
+                        "role={role}, owner={owner:?}, action={action:?}"
+                    );
+                    input.tenant_id.clear();
+                    assert!(!engine.evaluate(&input).is_allowed());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_platform_admin_requires_known_action() {
+        let engine = make_engine();
+        for (scopes, roles) in [(vec!["stoa:admin"], vec!["cpi-admin"])] {
+            let mut input = make_input(Action::ManageTenants, scopes, roles);
+            input.resource_tenant_id = Some("beta".to_string());
+            assert!(engine.evaluate(&input).is_allowed());
+            for action in ["", "UnknownAction"] {
+                input.action = action.to_string();
+                assert!(!engine.evaluate(&input).is_allowed());
+            }
+        }
+    }
+
+    #[test]
+    fn test_denial_reason_precedence() {
+        let engine = make_engine();
+        let mut input = make_input(Action::Read, vec!["stoa:read"], vec!["viewer"]);
+        for (tenant, owner, expected) in [
+            ("", "", "Missing or invalid tenant context"),
+            ("acme", " beta ", "Missing or invalid resource tenant"),
+            ("acme", "beta", "Cross-tenant access denied"),
+        ] {
+            input.tenant_id = tenant.to_string();
+            input.resource_tenant_id = Some(owner.to_string());
+            match engine.evaluate(&input) {
+                PolicyDecision::Deny { reason } => assert_eq!(reason, expected),
+                PolicyDecision::Allow => {
+                    panic!("expected denial for tenant={tenant}, owner={owner}")
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_admin_scope_without_role_denied() {
+        let engine = make_engine();
+        let input = make_input(Action::ManageTenants, vec!["stoa:admin"], vec![]);
+        let decision = engine.evaluate(&input);
+        assert!(!decision.is_allowed());
+    }
+
+    #[test]
+    fn test_cpi_admin_without_scope_denied() {
         let engine = make_engine();
         let input = make_input(Action::ManageTenants, vec![], vec!["cpi-admin"]);
         let decision = engine.evaluate(&input);
-        assert!(decision.is_allowed());
+        assert!(!decision.is_allowed());
+    }
+
+    #[test]
+    fn regression_privileged_admin_conjunction() {
+        let engine = make_engine();
+        let mut input = make_input(Action::ManageTenants, vec!["stoa:admin"], vec!["cpi-admin"]);
+        assert!(engine.evaluate(&input).is_allowed());
+        for tenant in ["", " ", " alpha "] {
+            input.tenant_id = tenant.to_string();
+            assert!(!engine.evaluate(&input).is_allowed());
+        }
     }
 
     #[test]

@@ -11,8 +11,6 @@ use serde_json::{json, Value};
 
 use crate::common::TestApp;
 
-const TEST_TOKEN: &str = "test-bearer-token";
-
 fn initialize_body(id: i64) -> String {
     json!({
         "jsonrpc": "2.0",
@@ -67,13 +65,13 @@ fn content_type(headers: &axum::http::HeaderMap) -> String {
 /// here reopens that bug.
 #[tokio::test]
 async fn regression_cab_2106_initialize_returns_sse_when_accept_is_event_stream() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, body) = app
         .post_raw(
             "/mcp/sse",
             &initialize_body(1),
             Some("text/event-stream"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -101,13 +99,13 @@ async fn regression_cab_2106_initialize_returns_sse_when_accept_is_event_stream(
 
 #[tokio::test]
 async fn initialize_returns_sse_when_accept_lists_both() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, body) = app
         .post_raw(
             "/mcp/sse",
             &initialize_body(2),
             Some("application/json, text/event-stream"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -122,13 +120,13 @@ async fn initialize_returns_sse_when_accept_lists_both() {
 
 #[tokio::test]
 async fn initialize_returns_sse_with_q_values() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, _) = app
         .post_raw(
             "/mcp/sse",
             &initialize_body(3),
             Some("application/json;q=0.8, text/event-stream;q=0.9"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -142,13 +140,13 @@ async fn initialize_returns_sse_with_q_values() {
 
 #[tokio::test]
 async fn initialize_case_insensitive_accept() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, _) = app
         .post_raw(
             "/mcp/sse",
             &initialize_body(4),
             Some("Text/Event-Stream"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -162,13 +160,13 @@ async fn initialize_case_insensitive_accept() {
 
 #[tokio::test]
 async fn initialize_returns_json_when_accept_is_json_only() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, body) = app
         .post_raw(
             "/mcp/sse",
             &initialize_body(5),
             Some("application/json"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -188,9 +186,9 @@ async fn initialize_returns_json_when_accept_is_json_only() {
 
 #[tokio::test]
 async fn initialize_returns_json_when_accept_absent() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, body) = app
-        .post_raw("/mcp/sse", &initialize_body(6), None, Some(TEST_TOKEN))
+        .post_raw("/mcp/sse", &initialize_body(6), None, Some(app.mcp_token()))
         .await;
 
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -209,13 +207,13 @@ async fn initialize_returns_json_when_accept_absent() {
 
 #[tokio::test]
 async fn tools_list_sse_wraps_json_rpc_response() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, body) = app
         .post_raw(
             "/mcp/sse",
             &tools_list_body(10),
             Some("text/event-stream"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -227,13 +225,13 @@ async fn tools_list_sse_wraps_json_rpc_response() {
 
 #[tokio::test]
 async fn tools_call_sse_wraps_error_for_unknown_tool() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, headers, body) = app
         .post_raw(
             "/mcp/sse",
             &tools_call_unknown_body(11),
             Some("text/event-stream"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
 
@@ -253,7 +251,7 @@ async fn tools_call_sse_wraps_error_for_unknown_tool() {
 
 #[tokio::test]
 async fn session_reuse_does_not_create_new_session() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
 
     // First call: initialize, no session_id → server mints one
     let (_, headers, _) = app
@@ -261,7 +259,7 @@ async fn session_reuse_does_not_create_new_session() {
             "/mcp/sse",
             &initialize_body(20),
             Some("application/json"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
     let session_id = headers
@@ -282,7 +280,7 @@ async fn session_reuse_does_not_create_new_session() {
             &uri,
             &tools_list_body(21),
             Some("application/json"),
-            Some(TEST_TOKEN),
+            Some(app.mcp_token()),
         )
         .await;
     assert_eq!(status, axum::http::StatusCode::OK);

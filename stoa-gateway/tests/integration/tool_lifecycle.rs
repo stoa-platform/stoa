@@ -45,7 +45,7 @@ fn make_tool(name: &str, description: &str) -> Arc<dyn Tool> {
 
 #[tokio::test]
 async fn test_tool_register_appears_in_list_then_unregister_removes() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let registry = &app.state.tool_registry;
 
     // Initially no tools registered
@@ -61,7 +61,9 @@ async fn test_tool_register_appears_in_list_then_unregister_removes() {
     assert!(registry.get("lifecycle-tool").is_some());
 
     // Verify it appears via MCP tools/list endpoint
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     let tools = json["tools"].as_array().expect("tools is array");
@@ -77,7 +79,9 @@ async fn test_tool_register_appears_in_list_then_unregister_removes() {
     assert!(!registry.exists("lifecycle-tool"));
 
     // Verify it's gone from MCP endpoint
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     let tools = json["tools"].as_array().expect("tools is array");
@@ -93,7 +97,7 @@ async fn test_tool_register_appears_in_list_then_unregister_removes() {
 
 #[tokio::test]
 async fn test_registered_tools_visible_in_both_mcp_and_rest_endpoints() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let registry = &app.state.tool_registry;
 
     // Register two tools
@@ -101,7 +105,9 @@ async fn test_registered_tools_visible_in_both_mcp_and_rest_endpoints() {
     registry.register(make_tool("tool-beta", "Second tool"));
 
     // Check MCP tools/list (POST /mcp/tools/list)
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     let mcp_tools = json["tools"].as_array().expect("tools array");
@@ -116,7 +122,7 @@ async fn test_registered_tools_visible_in_both_mcp_and_rest_endpoints() {
     assert_eq!(mcp_names, vec!["tool-alpha", "tool-beta"]);
 
     // Check REST API (GET /mcp/v1/tools)
-    let (status, body) = app.get("/mcp/v1/tools").await;
+    let (status, body) = app.get_with_bearer("/mcp/v1/tools", app.mcp_token()).await;
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     let rest_tools = json.as_array().expect("REST returns array");
@@ -140,7 +146,7 @@ async fn test_registered_tools_visible_in_both_mcp_and_rest_endpoints() {
 
 #[tokio::test]
 async fn test_try_register_rejects_invalid_tools() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let registry = &app.state.tool_registry;
 
     // Tool with empty name — rejected
@@ -220,7 +226,7 @@ async fn test_try_register_rejects_invalid_tools() {
 
 #[tokio::test]
 async fn test_concurrent_register_list_unregister_is_safe() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let registry = app.state.tool_registry.clone();
 
     // Spawn 20 tasks: 10 registering tools, 10 listing
@@ -278,7 +284,9 @@ async fn test_concurrent_register_list_unregister_is_safe() {
     assert_eq!(registry.count(), 5);
 
     // Verify via MCP endpoint
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
     let tools = json["tools"].as_array().expect("tools array");

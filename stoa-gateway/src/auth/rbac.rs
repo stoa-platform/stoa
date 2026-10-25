@@ -383,6 +383,8 @@ mod tests {
 
     fn make_user(role: &str, tenant: Option<&str>, scopes: &str) -> AuthenticatedUser {
         let claims = Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -395,6 +397,7 @@ mod tests {
             name: None,
             given_name: None,
             family_name: None,
+            legacy_tenant: None,
             tenant: tenant.map(|s| s.to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec![role.to_string()],

@@ -31,7 +31,11 @@ impl IntoResponse for BoxedResponse {
 /// `config.admin_api_token`. If no token is configured, returns 503
 /// (admin API disabled -- no token configured).
 ///
-/// Comparison is performed in constant time via `subtle::ConstantTimeEq`
+/// In production, when strong authentication is enabled, an enabled admin API
+/// requires an OIDC JWT with role, scope, tenant and assurance. A configured
+/// admin_api_token remains the explicit enablement switch in both modes.
+///
+/// Comparison in the compatibility mode is performed in constant time via `subtle::ConstantTimeEq`
 /// (GW-1 P0-1): prevents byte-by-byte timing-leak brute-force of the
 /// admin token. The length pre-check is a deliberate early-exit that
 /// leaks only the token length, which is not secret-derived.
@@ -53,6 +57,34 @@ pub async fn admin_auth(
             )));
         }
     };
+
+    if crate::auth::strong_auth::enabled(&state.config) {
+        let raw_token = request
+            .headers()
+            .get(AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "));
+        if let (Some(validator), Some(token)) = (state.jwt_validator.as_ref(), raw_token) {
+            if let Ok(claims) = validator.validate(token).await {
+                if crate::auth::strong_auth::validate_privileged_claims(&state.config, &claims)
+                    .is_ok()
+                {
+                    return Ok(next.run(request).await);
+                }
+            }
+        }
+        return Err(BoxedResponse(Box::new(
+            (
+                StatusCode::UNAUTHORIZED,
+                [(
+                    "WWW-Authenticate",
+                    "Bearer error=\"insufficient_user_authentication\"",
+                )],
+                "Administrative JWT with strong authentication required",
+            )
+                .into_response(),
+        )));
+    }
 
     let auth_header = request
         .headers()
@@ -136,6 +168,43 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::handlers::admin::test_helpers::{build_admin_router, create_test_state};
+
+    #[tokio::test]
+    async fn regression_privileged_prod_disabled_without_enablement() {
+        let mut state = create_test_state(None);
+        state.config.environment = crate::config::Environment::Prod;
+        let response = build_admin_router(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn regression_privileged_shared_token_rejected_in_prod() {
+        let mut state = create_test_state(Some("synthetic-shared-token"));
+        state.config.environment = crate::config::Environment::Prod;
+        let response = build_admin_router(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .header("Authorization", "Bearer synthetic-shared-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(response.headers()["WWW-Authenticate"]
+            .to_str()
+            .unwrap()
+            .contains("insufficient_user_authentication"));
+    }
 
     #[tokio::test]
     async fn test_admin_auth_valid_token() {

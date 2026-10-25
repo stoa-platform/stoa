@@ -204,6 +204,8 @@ mod tests {
 
     fn sample_claims() -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: Utc::now().timestamp() + 3600,
             iat: Utc::now().timestamp(),
@@ -216,6 +218,7 @@ mod tests {
             name: Some("John Doe".to_string()),
             given_name: Some("John".to_string()),
             family_name: Some("Doe".to_string()),
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string()],

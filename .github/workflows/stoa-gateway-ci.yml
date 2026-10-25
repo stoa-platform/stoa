@@ -48,7 +48,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-ci.yml
     with:
       component: stoa-gateway
-      cargo-features: '--features kafka,pingora'
+      cargo-features: '--features kafka,pingora,phases'
       # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré
       # (0 au 2026-07-30), donc ce job restait en file indéfiniment — le CI
       # Rust de la gateway ne s'exécutait tout simplement plus.

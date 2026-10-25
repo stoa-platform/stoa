@@ -68,6 +68,25 @@ impl SessionManager {
         debug!(session_id = %id, "Session created");
     }
 
+    /// Atomically claim a session ID without replacing another tenant's session.
+    pub fn ensure_tenant_session(&self, id: &str, tenant_id: &str) -> bool {
+        let mut sessions = self.sessions.write();
+        match sessions.get_mut(id) {
+            Some(session) if session.tenant_id != tenant_id => false,
+            Some(session) => {
+                session.touch();
+                true
+            }
+            None => {
+                sessions.insert(
+                    id.to_string(),
+                    Session::new(id.to_string(), tenant_id.to_string()),
+                );
+                true
+            }
+        }
+    }
+
     /// Get session by ID (and touch it)
     pub async fn get(&self, id: &str) -> Option<Session> {
         let mut sessions = self.sessions.write();
@@ -81,9 +100,25 @@ impl SessionManager {
 
     /// Remove session and its notification channels (SSE + WS)
     pub async fn remove(&self, id: &str) -> bool {
+        self.remove_owned(id, None)
+    }
+
+    /// Check the owner and remove its channels in the same critical section.
+    pub fn remove_for_tenant(&self, id: &str, tenant_id: &str) -> bool {
+        self.remove_owned(id, Some(tenant_id))
+    }
+
+    fn remove_owned(&self, id: &str, tenant_id: Option<&str>) -> bool {
+        let mut sessions = self.sessions.write();
+        let Some(session) = sessions.get(id) else {
+            return false;
+        };
+        if tenant_id.is_some_and(|tenant| tenant != session.tenant_id) {
+            return false;
+        }
         self.channels.write().remove(id);
         self.ws_channels.write().remove(id);
-        self.sessions.write().remove(id).is_some()
+        sessions.remove(id).is_some()
     }
 
     /// Update session metadata
@@ -105,6 +140,42 @@ impl SessionManager {
     }
 
     // === NotificationBus (CAB-1178) ===
+
+    /// Claim/check the owner and publish the channel under the session lock.
+    /// A concurrent DELETE/reconnect cannot bind another tenant to this sender.
+    pub fn register_tenant_channel(
+        &self,
+        id: &str,
+        tenant_id: &str,
+        tx: mpsc::Sender<Event>,
+        create: bool,
+    ) -> bool {
+        let mut sessions = self.sessions.write();
+        match sessions.get_mut(id) {
+            Some(session) if session.tenant_id != tenant_id => return false,
+            Some(session) => session.touch(),
+            None if !create => return false,
+            None => {
+                sessions.insert(
+                    id.to_string(),
+                    Session::new(id.to_string(), tenant_id.to_string()),
+                );
+            }
+        }
+        self.channels.write().insert(id.to_string(), tx);
+        true
+    }
+
+    /// A disconnected stream must not unregister a newer stream's sender.
+    pub fn unregister_channel_if_same(&self, id: &str, tx: &mpsc::Sender<Event>) {
+        let mut channels = self.channels.write();
+        if channels
+            .get(id)
+            .is_some_and(|current| current.same_channel(tx))
+        {
+            channels.remove(id);
+        }
+    }
 
     /// Register an SSE event channel for a session.
     /// Called from handle_sse_get when a new SSE connection is established.
@@ -151,24 +222,14 @@ impl SessionManager {
     /// Uses try_send() for non-blocking delivery — slow consumers get events dropped.
     /// Returns the number of sessions that received the event.
     pub fn broadcast_to_tenant(&self, tenant_id: &str, event_type: &str, data: &str) -> usize {
-        // Phase 1: collect matching session IDs (read lock on sessions)
-        let matching_ids: Vec<String> = {
-            let sessions = self.sessions.read();
-            sessions
-                .iter()
-                .filter(|(_, s)| s.tenant_id == tenant_id)
-                .map(|(id, _)| id.clone())
-                .collect()
-        };
-
-        if matching_ids.is_empty() {
-            return 0;
-        }
-
-        // Phase 2: send to matching channels (read lock on channels)
+        // Hold ownership and channels in the same lock order as removal.
+        let sessions = self.sessions.read();
         let channels = self.channels.read();
         let mut sent = 0;
-        for id in &matching_ids {
+        for (id, session) in sessions.iter() {
+            if session.tenant_id != tenant_id {
+                continue;
+            }
             if let Some(tx) = channels.get(id) {
                 let evt = Event::default().event(event_type).data(data);
                 match tx.try_send(evt) {
@@ -226,22 +287,14 @@ impl SessionManager {
 
     /// Broadcast a text message to all WS sessions belonging to a tenant.
     pub fn broadcast_to_tenant_ws(&self, tenant_id: &str, message: &str) -> usize {
-        let matching_ids: Vec<String> = {
-            let sessions = self.sessions.read();
-            sessions
-                .iter()
-                .filter(|(_, s)| s.tenant_id == tenant_id)
-                .map(|(id, _)| id.clone())
-                .collect()
-        };
-
-        if matching_ids.is_empty() {
-            return 0;
-        }
-
+        // Hold ownership and channels in the same lock order as removal.
+        let sessions = self.sessions.read();
         let channels = self.ws_channels.read();
         let mut sent = 0;
-        for id in &matching_ids {
+        for (id, session) in sessions.iter() {
+            if session.tenant_id != tenant_id {
+                continue;
+            }
             if let Some(tx) = channels.get(id) {
                 match tx.try_send(message.to_string()) {
                     Ok(()) => sent += 1,
@@ -583,5 +636,48 @@ mod tests {
         let sent = manager.broadcast_to_tenant("t", "e2", "d2");
         // First call sent 1, second call: channel full → 0
         assert_eq!(sent, 0);
+    }
+    #[test]
+    fn regression_session_id_cannot_be_reassigned_to_another_tenant() {
+        let manager = SessionManager::new(30);
+        assert!(manager.ensure_tenant_session("session", "tenant-a"));
+        assert!(!manager.ensure_tenant_session("session", "tenant-b"));
+        assert!(manager.ensure_tenant_session("session", "tenant-a"));
+        assert_eq!(manager.count(), 1);
+    }
+
+    #[tokio::test]
+    async fn regression_channel_rebind_cannot_cross_tenants_or_drop_new_sender() {
+        let manager = SessionManager::new(30);
+        let (old_tx, _old_rx) = mpsc::channel(2);
+        let (new_tx, mut new_rx) = mpsc::channel(2);
+        assert!(manager.register_tenant_channel("same-id", "tenant-a", old_tx.clone(), true));
+        assert!(!manager.remove_for_tenant("same-id", "tenant-b"));
+        assert!(manager.remove_for_tenant("same-id", "tenant-a"));
+        assert!(!manager.register_tenant_channel("same-id", "tenant-b", old_tx.clone(), false));
+        assert!(manager.register_tenant_channel("same-id", "tenant-b", new_tx, true));
+        assert!(!manager.register_tenant_channel("same-id", "tenant-a", old_tx.clone(), true));
+        manager.unregister_channel_if_same("same-id", &old_tx);
+        assert_eq!(
+            manager.broadcast_to_tenant("tenant-a", "test", "synthetic"),
+            0
+        );
+        assert_eq!(
+            manager.broadcast_to_tenant("tenant-b", "test", "synthetic"),
+            1
+        );
+        assert!(new_rx.try_recv().is_ok());
+    }
+
+    #[tokio::test]
+    async fn regression_old_stream_cannot_unregister_same_tenant_reconnect() {
+        let manager = SessionManager::new(30);
+        let (old_tx, _old_rx) = mpsc::channel(2);
+        let (new_tx, mut new_rx) = mpsc::channel(2);
+        assert!(manager.register_tenant_channel("id", "tenant-a", old_tx.clone(), true));
+        assert!(manager.register_tenant_channel("id", "tenant-a", new_tx, true));
+        manager.unregister_channel_if_same("id", &old_tx);
+        assert!(manager.send_to_session("id", "test", "synthetic"));
+        assert!(new_rx.try_recv().is_ok());
     }
 }

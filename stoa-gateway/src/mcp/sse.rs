@@ -5,7 +5,7 @@
 //! Supports JSON-RPC batch requests (array of requests).
 
 use axum::{
-    body::Bytes,
+    body::{to_bytes, Bytes},
     extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{sse::Event, IntoResponse, Response, Sse},
@@ -17,14 +17,15 @@ use serde_json::{json, Value};
 use std::{convert::Infallible, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
+use crate::mcp::handlers::{extract_auth_context, AuthContext, AuthError, ToolsCallRequest};
 use crate::mcp::session::Session;
 use crate::mcp::tools::ToolContext;
 use crate::metrics;
 use crate::optimization::{OptimizationSettings, TokenOptimizer};
-use crate::state::{AppState, PolicyCallerCtx};
+use crate::state::AppState;
 
 // ============================================
 // JSON-RPC Types
@@ -88,27 +89,37 @@ pub const METHOD_NOT_FOUND: i32 = -32601;
 pub const INVALID_PARAMS: i32 = -32602;
 pub const INTERNAL_ERROR: i32 = -32603;
 
-/// JSON-RPC methods that are part of the MCP capability-negotiation /
-/// discovery surface. MCP clients (claude.ai, MCP Inspector, claude-code)
-/// call these right after `initialize` — before any OAuth flow has
-/// attached a Bearer token — so 401-ing them breaks the whole handshake
-/// even when the server later advertises OAuth on protected operations.
-///
-/// CAB-2121: tightened to the bare handshake surface only. `tools/list`,
-/// `resources/*`, `prompts/*`, `completion/complete`, `roots/list`, and
-/// `logging/setLevel` were removed because they leak tool/resource
-/// inventory to anonymous callers over Streamable HTTP (`POST /mcp`) —
-/// the REST equivalents (`/mcp/tools/list`, `/mcp/v1/tools`, …) are
-/// JWT-gated by the router-level `mcp_jwt_required` middleware.
-///
-/// `notifications/*` are fire-and-forget client messages with no response
-/// body, equally safe to accept anonymously.
-const PUBLIC_METHODS: &[&str] = &[
-    "initialize",
-    "ping",
-    "notifications/initialized",
-    "notifications/cancelled",
-];
+// Anonymous handshake is stateless; tenant sessions require verified identity.
+
+fn rpc_auth_failure(error: AuthError, id: Option<Value>) -> Response {
+    let (status, message) = error;
+    let mut response = (status, Json(JsonRpcResponse::error(id, -32001, message))).into_response();
+    if status == StatusCode::UNAUTHORIZED {
+        response.headers_mut().insert(
+            "WWW-Authenticate",
+            axum::http::HeaderValue::from_static(
+                r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+            ),
+        );
+    }
+    response
+}
+
+fn identity_context(auth: AuthContext) -> ToolContext {
+    ToolContext {
+        tenant_id: auth.tenant_id,
+        user_id: auth.user_id,
+        user_email: auth.user_email,
+        request_id: Uuid::new_v4().to_string(),
+        roles: auth.roles,
+        scopes: auth.scopes,
+        raw_token: auth.raw_token,
+        skill_instructions: None,
+        progress_token: None,
+        consumer_id: auth.consumer_id,
+        from_control_plane: false,
+    }
+}
 
 // ============================================
 // MCP Protocol Version Negotiation (2025-11-25)
@@ -179,8 +190,25 @@ pub struct SseQueryParams {
 /// - SSE stream for streaming responses
 pub async fn handle_sse_post(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    mut headers: HeaderMap,
     Query(params): Query<SseQueryParams>,
+    body: Bytes,
+) -> Response {
+    let request_id = crate::mcp::handlers::request_id(&headers);
+    if let Ok(value) = request_id.parse() {
+        headers.insert("x-request-id", value);
+    }
+    let mut response = handle_sse_post_inner(state, headers, params, body).await;
+    if let Ok(value) = request_id.parse() {
+        response.headers_mut().insert("x-request-id", value);
+    }
+    response
+}
+
+async fn handle_sse_post_inner(
+    state: AppState,
+    headers: HeaderMap,
+    params: SseQueryParams,
     body: Bytes,
 ) -> Response {
     // === Phase 5: Batch Request Detection (MCP 2025-03-26) ===
@@ -215,7 +243,7 @@ pub async fn handle_sse_post(
         }
     };
 
-    let request_id = Uuid::new_v4().to_string();
+    let request_id = crate::mcp::handlers::request_id(&headers);
     debug!(
         request_id = %request_id,
         method = %request.method,
@@ -233,106 +261,27 @@ pub async fn handle_sse_post(
         .into_response();
     }
 
-    // === OAuth 2.1 Auth Challenge (RFC 9728) ===
-    // Public methods = the MCP capability-negotiation / discovery surface;
-    // see `PUBLIC_METHODS` for the rationale. Tool invocation is gated by
-    // the UAC / OPA layer in `handle_tools_call`, not here.
-    let has_auth = headers.get(header::AUTHORIZATION).is_some();
-
-    if !PUBLIC_METHODS.contains(&request.method.as_str()) && !has_auth {
-        debug!(
-            method = %request.method,
-            "Unauthenticated request to protected method — returning 401"
-        );
-        return (
-            StatusCode::UNAUTHORIZED,
-            [(
-                "WWW-Authenticate",
-                r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
-            )],
-            Json(JsonRpcResponse::error(
-                request.id,
-                -32001,
-                "Authentication required",
-            )),
-        )
-            .into_response();
-    }
-
-    // === JWT Validation & Identity Extraction ===
-    // Extract Bearer token from Authorization header
-    let raw_token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|auth| {
-            let parts: Vec<&str> = auth.splitn(2, ' ').collect();
-            if parts.len() == 2 && parts[0].to_lowercase() == "bearer" {
-                Some(parts[1].trim().to_string())
-            } else {
-                None
+    if !headers.contains_key(header::AUTHORIZATION) {
+        if let Some(response) = anonymous_handshake(&state, &request).await {
+            if request.id.is_none() && request.method.starts_with("notifications/") {
+                return StatusCode::NO_CONTENT.into_response();
             }
-        });
-
-    // Validate JWT and extract user identity (including scopes for OPA policy evaluation)
-    let (tenant_id, user_id, user_email, roles, scopes, validated_token) = if let Some(ref token) =
-        raw_token
-    {
-        if let Some(ref validator) = state.jwt_validator {
-            match validator.validate(token).await {
-                Ok(claims) => {
-                    let tenant = claims
-                        .tenant_id()
-                        .map(|t| t.to_string())
-                        .or_else(|| extract_tenant(&headers))
-                        .unwrap_or_else(|| "default".to_string());
-                    let uid = Some(claims.user_id().to_string());
-                    let email = claims.email.clone();
-                    let r: Vec<String> =
-                        claims.realm_roles().iter().map(|s| s.to_string()).collect();
-                    // Extract OAuth scopes from JWT (ADR-012 12-Scope Model)
-                    let s: Vec<String> = claims.scopes().iter().map(|s| s.to_string()).collect();
-                    debug!(
-                        user_id = ?uid,
-                        tenant_id = %tenant,
-                        scopes = ?s,
-                        "JWT validated — user authenticated"
-                    );
-                    (tenant, uid, email, r, s, Some(token.clone()))
-                }
-                Err(e) => {
-                    warn!(error = %e, "JWT validation failed");
-                    return (
-                            StatusCode::UNAUTHORIZED,
-                            [(
-                                "WWW-Authenticate",
-                                r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
-                            )],
-                            Json(JsonRpcResponse::error(
-                                request.id,
-                                -32001,
-                                format!("Invalid token: {}", e),
-                            )),
-                        )
-                            .into_response();
-                }
-            }
-        } else {
-            // No JWT validator configured — accept token but don't validate
-            debug!("JWT validator not configured — skipping token validation");
-            let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-            (tenant, None, None, vec![], vec![], Some(token.clone()))
+            return Json(response).into_response();
         }
-    } else {
-        // No token present (public methods only reach here)
-        let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-        (tenant, None, None, vec![], vec![], None)
+    }
+    let auth = match extract_auth_context(&state, &headers).await {
+        Ok(auth) => auth,
+        Err(error) => return rpc_auth_failure(error, request.id),
     };
+    let tenant_id = auth.tenant_id.clone();
 
     // Resolve or create session
     let session_id = match params.session_id {
         Some(ref id) => {
-            // Touch existing session
-            let _ = state.session_manager.get(id).await;
+            match state.session_manager.get(id).await {
+                Some(session) if session.tenant_id == tenant_id => {}
+                _ => return StatusCode::FORBIDDEN.into_response(),
+            }
             id.clone()
         }
         None => {
@@ -345,28 +294,16 @@ pub async fn handle_sse_post(
         }
     };
 
-    let ctx = ToolContext {
-        tenant_id,
-        user_id,
-        user_email,
-        request_id: request_id.clone(),
-        roles,
-        scopes,
-        raw_token: validated_token,
-        skill_instructions: None, // SSE: skills resolved per-tool in handler
-        progress_token: None,     // SSE: no progress push (half-duplex)
-        consumer_id: "unknown".to_string(), // SSE: azp not yet extracted in SSE path
-        from_control_plane: false,
-    };
+    let ctx = identity_context(auth.clone());
 
     // Route to handler
     let response = match request.method.as_str() {
-        "initialize" => handle_initialize(&state, &request, &ctx, &session_id).await,
+        "initialize" => handle_initialize(&state, &request, &session_id).await,
         "ping" => handle_ping(&request),
         "tools/list" => handle_tools_list(&state, &request, &ctx).await,
-        "tools/call" => handle_tools_call(&state, &request, &ctx, &session_id).await,
-        "resources/list" => handle_resources_list(&state, &request).await,
-        "resources/read" => handle_resources_read(&state, &request).await,
+        "tools/call" => handle_tools_call(&state, &request, &headers, &session_id, auth).await,
+        "resources/list" => handle_resources_list(&state, &request, &ctx).await,
+        "resources/read" => handle_resources_read(&state, &request, &ctx).await,
         "resources/templates/list" => handle_resources_templates_list(&request),
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompts_get(&request),
@@ -493,31 +430,31 @@ pub async fn handle_sse_get(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<SseQueryParams>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+) -> Response {
+    let create_session = params.session_id.is_none();
     let session_id = params
         .session_id
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-    let tenant_id = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-
-    info!(
-        session_id = %session_id,
-        tenant_id = %tenant_id,
-        "SSE connection established"
-    );
-
-    // Create session
-    let session = Session::new(session_id.clone(), tenant_id.clone());
-    state.session_manager.create(session).await;
+    let (claims, _) = match crate::auth::tenant::request_identity(&state, &headers).await {
+        Ok(identity) => identity,
+        Err(error) => return error.into_response(),
+    };
+    let tenant_id = match crate::auth::tenant::require_tenant(&claims) {
+        Ok(tenant) => tenant.to_string(),
+        Err(error) => return error.into_response(),
+    };
+    let (tx, rx) = mpsc::channel::<Event>(32);
+    if !state.session_manager.register_tenant_channel(
+        &session_id,
+        &tenant_id,
+        tx.clone(),
+        create_session,
+    ) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    info!(session_id = %session_id, tenant_id = %tenant_id, "SSE connection established");
     metrics::track_sse_connect();
     metrics::update_session_count(state.session_manager.count());
-
-    // Create event stream
-    let (tx, rx) = mpsc::channel::<Event>(32);
-
-    // Register channel for NotificationBus (CAB-1178: enables push events from Kafka consumer)
-    state
-        .session_manager
-        .register_channel(&session_id, tx.clone());
 
     // Send initial endpoint event
     let endpoint_event = Event::default()
@@ -532,11 +469,15 @@ pub async fn handle_sse_get(
     let tenant_id_clone = tenant_id.clone();
     let session_manager = state.session_manager.clone();
     let connect_time = std::time::Instant::now();
+    let authorization_deadline = crate::auth::tenant::authorization_deadline(claims.exp);
 
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = tokio::time::sleep_until(authorization_deadline) => break,
+                _ = interval.tick() => {},
+            }
 
             // Check if session still exists
             if session_manager.get(&session_id_clone).await.is_none() {
@@ -552,7 +493,7 @@ pub async fn handle_sse_get(
             }
         }
         // Unregister NotificationBus channel on disconnect (CAB-1178)
-        session_manager.unregister_channel(&session_id_clone);
+        session_manager.unregister_channel_if_same(&session_id_clone, &tx_keepalive);
 
         // Track disconnect with duration
         let duration = connect_time.elapsed().as_secs_f64();
@@ -561,33 +502,40 @@ pub async fn handle_sse_get(
     });
 
     // Convert to stream
-    let stream = ReceiverStream::new(rx).map(Ok);
+    let stream = ReceiverStream::new(rx).map(Ok::<_, Infallible>);
 
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("ping"),
-    )
+    Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("ping"),
+        )
+        .into_response()
 }
 
 /// DELETE /mcp/sse - Close session
 pub async fn handle_sse_delete(
     State(state): State<AppState>,
     Query(params): Query<SseQueryParams>,
-) -> impl IntoResponse {
+    headers: HeaderMap,
+) -> Response {
+    let (claims, _) = match crate::auth::tenant::request_identity(&state, &headers).await {
+        Ok(identity) => identity,
+        Err(error) => return error.into_response(),
+    };
     if let Some(session_id) = params.session_id {
-        // Unregister NotificationBus channel before removing session (CAB-1178)
-        state.session_manager.unregister_channel(&session_id);
-
-        if state.session_manager.remove(&session_id).await {
+        let tenant = claims
+            .tenant_id()
+            .expect("request_identity requires tenant");
+        if state.session_manager.remove_for_tenant(&session_id, tenant) {
             info!(session_id = %session_id, "Session closed");
             metrics::update_session_count(state.session_manager.count());
-            StatusCode::NO_CONTENT
+            StatusCode::NO_CONTENT.into_response()
         } else {
-            StatusCode::NOT_FOUND
+            StatusCode::FORBIDDEN.into_response()
         }
     } else {
-        StatusCode::BAD_REQUEST
+        StatusCode::BAD_REQUEST.into_response()
     }
 }
 
@@ -605,6 +553,10 @@ async fn handle_batch_request(
     params: SseQueryParams,
     batch: Value,
 ) -> Response {
+    let auth = match extract_auth_context(&state, &headers).await {
+        Ok(auth) => auth,
+        Err(error) => return rpc_auth_failure(error, None),
+    };
     let requests: Vec<Value> = match batch.as_array() {
         Some(arr) => arr.clone(),
         None => {
@@ -630,6 +582,7 @@ async fn handle_batch_request(
         .map(|req_value| {
             let state = state.clone();
             let headers = headers.clone();
+            let auth = auth.clone();
             let params_clone = SseQueryParams {
                 session_id: params.session_id.clone(),
             };
@@ -650,7 +603,7 @@ async fn handle_batch_request(
                 };
 
                 // Route to appropriate handler
-                process_single_request(&state, &headers, &params_clone, request).await
+                process_authenticated_request(&state, &headers, &params_clone, request, auth).await
             }
         })
         .collect();
@@ -679,43 +632,50 @@ pub async fn process_single_request(
         return JsonRpcResponse::error(request.id, INVALID_REQUEST, "Invalid JSON-RPC version");
     }
 
-    // For batch processing, we need simplified auth check
-    // Full auth is handled in the main handler for single requests
-    let has_auth = headers.get(header::AUTHORIZATION).is_some();
-
-    if !PUBLIC_METHODS.contains(&request.method.as_str()) && !has_auth {
-        return JsonRpcResponse::error(request.id, -32001, "Authentication required");
+    // The same validator is used by single HTTP, batch HTTP and WebSocket messages.
+    // Revalidation here also rejects tokens that expire after a WebSocket upgrade.
+    if !headers.contains_key(header::AUTHORIZATION) {
+        if let Some(response) = anonymous_handshake(state, &request).await {
+            return response;
+        }
     }
+    let auth = match extract_auth_context(state, headers).await {
+        Ok(auth) => auth,
+        Err((_, message)) => return JsonRpcResponse::error(request.id, -32001, message),
+    };
+    process_authenticated_request(state, headers, params, request, auth).await
+}
 
-    // Extract tenant and create minimal context
-    let tenant_id = extract_tenant(headers).unwrap_or_else(|| "default".to_string());
+async fn process_authenticated_request(
+    state: &AppState,
+    headers: &HeaderMap,
+    params: &SseQueryParams,
+    request: JsonRpcRequest,
+    auth: AuthContext,
+) -> JsonRpcResponse {
+    if request.jsonrpc != "2.0" {
+        return JsonRpcResponse::error(request.id, INVALID_REQUEST, "Invalid JSON-RPC version");
+    }
     let session_id = params
         .session_id
         .clone()
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-
-    let ctx = ToolContext {
-        tenant_id,
-        user_id: None,
-        user_email: None,
-        request_id: Uuid::new_v4().to_string(),
-        roles: vec![],
-        scopes: vec![],
-        raw_token: None,
-        skill_instructions: None,
-        progress_token: None,
-        consumer_id: "unknown".to_string(),
-        from_control_plane: false,
-    };
+    if let Some(id) = &params.session_id {
+        match state.session_manager.get(id).await {
+            Some(session) if session.tenant_id == auth.tenant_id => {}
+            _ => return JsonRpcResponse::error(request.id, -32003, "Session tenant mismatch"),
+        }
+    }
+    let ctx = identity_context(auth.clone());
 
     // Route to handler
     match request.method.as_str() {
-        "initialize" => handle_initialize(state, &request, &ctx, &session_id).await,
+        "initialize" => handle_initialize(state, &request, &session_id).await,
         "ping" => handle_ping(&request),
         "tools/list" => handle_tools_list(state, &request, &ctx).await,
-        "tools/call" => handle_tools_call(state, &request, &ctx, &session_id).await,
-        "resources/list" => handle_resources_list(state, &request).await,
-        "resources/read" => handle_resources_read(state, &request).await,
+        "tools/call" => handle_tools_call(state, &request, headers, &session_id, auth).await,
+        "resources/list" => handle_resources_list(state, &request, &ctx).await,
+        "resources/read" => handle_resources_read(state, &request, &ctx).await,
         "resources/templates/list" => handle_resources_templates_list(&request),
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompts_get(&request),
@@ -746,10 +706,24 @@ pub async fn process_single_request(
 // JSON-RPC Method Handlers
 // ============================================
 
+/// Capability negotiation never reads tools or creates a tenant-scoped session.
+async fn anonymous_handshake(
+    state: &AppState,
+    request: &JsonRpcRequest,
+) -> Option<JsonRpcResponse> {
+    match request.method.as_str() {
+        "initialize" => Some(handle_initialize(state, request, "").await),
+        "ping" => Some(handle_ping(request)),
+        "notifications/initialized" | "notifications/cancelled" => {
+            Some(JsonRpcResponse::success(request.id.clone(), json!({})))
+        }
+        _ => None,
+    }
+}
+
 async fn handle_initialize(
     state: &AppState,
     request: &JsonRpcRequest,
-    _ctx: &ToolContext,
     session_id: &str,
 ) -> JsonRpcResponse {
     debug!("Handling initialize request");
@@ -860,6 +834,10 @@ async fn handle_tools_list(
     request: &JsonRpcRequest,
     ctx: &ToolContext,
 ) -> JsonRpcResponse {
+    if ctx.tenant_id.is_empty() {
+        return JsonRpcResponse::error(request.id.clone(), -32003, "Missing tenant context");
+    }
+
     let tools = state.tool_registry.list(Some(&ctx.tenant_id));
 
     let result = json!({
@@ -869,125 +847,111 @@ async fn handle_tools_list(
     JsonRpcResponse::success(request.id.clone(), result)
 }
 
+/// Adapt JSON-RPC to the existing execution pipeline, including tenant permissions,
+/// guardrails, rate limits, budgets, policy, metrics and metering.
 async fn handle_tools_call(
     state: &AppState,
     request: &JsonRpcRequest,
-    ctx: &ToolContext,
+    headers: &HeaderMap,
     session_id: &str,
+    auth: AuthContext,
 ) -> JsonRpcResponse {
     let params = match &request.params {
-        Some(p) => p,
+        Some(params) => params,
         None => {
-            return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS, "Missing params");
+            return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS, "Missing params")
         }
     };
-
-    let tool_name = match params.get("name").and_then(|v| v.as_str()) {
-        Some(n) => n,
+    let name = match params.get("name").and_then(Value::as_str) {
+        Some(name) => name.to_string(),
         None => {
-            return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS, "Missing tool name");
+            return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS, "Missing tool name")
         }
     };
-
-    let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
-
-    // Get tool from registry
-    let tool = match state.tool_registry.get(tool_name) {
-        Some(t) => t,
-        None => {
+    let arguments = params
+        .get("arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let response = crate::mcp::handlers::mcp_tools_call_with_auth(
+        state.clone(),
+        headers.clone(),
+        ToolsCallRequest { name, arguments },
+        Some(auth),
+    )
+    .await;
+    let status = response.status();
+    let request_id = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    let body = match to_bytes(response.into_body(), 16 * 1024 * 1024).await {
+        Ok(body) => body,
+        Err(_) => {
             return JsonRpcResponse::error(
                 request.id.clone(),
-                METHOD_NOT_FOUND,
-                format!("Tool '{}' not found", tool_name),
-            );
+                INTERNAL_ERROR,
+                "Tool response too large",
+            )
         }
     };
-
-    // Check UAC permission using OPA policy engine (Phase 2: CAB-1094)
-    // Default to stoa:read scope for authenticated users without explicit scopes
-    let required_action = tool.required_action();
-    let effective_scopes = if ctx.scopes.is_empty() && ctx.user_id.is_some() {
-        vec!["stoa:read".to_string()]
-    } else {
-        ctx.scopes.clone()
+    let result: Value = match serde_json::from_slice(&body) {
+        Ok(result) => result,
+        Err(_) => {
+            return JsonRpcResponse::error(
+                request.id.clone(),
+                INTERNAL_ERROR,
+                "Invalid tool response",
+            )
+        }
     };
-
-    if let Err(e) = state.uac_enforcer.check_with_context(
-        PolicyCallerCtx {
-            user_id: ctx.user_id.clone(),
-            user_email: ctx.user_email.clone(),
-            scopes: effective_scopes.clone(),
-            roles: ctx.roles.clone(),
-        },
-        &ctx.tenant_id,
-        tool_name,
-        required_action,
-    ) {
-        warn!(
-            tool = %tool_name,
-            action = ?required_action,
-            tenant = %ctx.tenant_id,
-            scopes = ?effective_scopes,
-            "UAC policy denied: {}",
-            e
-        );
-        return JsonRpcResponse::error(
-            request.id.clone(),
-            -32001, // Permission denied
-            format!("Permission denied: {}", e),
-        );
+    if !status.is_success() {
+        let code = match status {
+            StatusCode::UNAUTHORIZED
+            | StatusCode::FORBIDDEN
+            | StatusCode::BAD_REQUEST
+            | StatusCode::SERVICE_UNAVAILABLE => -32001,
+            StatusCode::TOO_MANY_REQUESTS => -32029,
+            StatusCode::NOT_FOUND => METHOD_NOT_FOUND,
+            _ => INTERNAL_ERROR,
+        };
+        let mut response = JsonRpcResponse::error(request.id.clone(), code, "Tool call rejected");
+        if let Some(error) = &mut response.error {
+            error.data = Some(
+                if matches!(
+                    status,
+                    StatusCode::BAD_REQUEST | StatusCode::SERVICE_UNAVAILABLE
+                ) {
+                    json!({"requestId": request_id})
+                } else {
+                    json!({"httpStatus": status.as_u16(), "result": result})
+                },
+            );
+        }
+        return response;
     }
-
-    // === Phase 4: Token Optimization (ADR-015) ===
-    // Retrieve optimization settings from session metadata
-    let opt_settings = state
+    // Preserve the session's negotiated response optimization after execution controls.
+    let settings = state
         .session_manager
         .get_metadata(session_id, "optimization_settings")
         .await
         .and_then(|json| OptimizationSettings::from_metadata(&json).ok())
         .unwrap_or_default();
-
-    // Execute tool
-    match tool.execute(arguments, ctx).await {
-        Ok(result) => {
-            let mut result_json = json!({
-                "content": result.content
-            });
-            if let Some(true) = result.is_error {
-                result_json["isError"] = json!(true);
-            }
-
-            // Apply token optimization if enabled (Phase 4: ADR-015)
-            let optimized_result = if opt_settings.is_enabled() {
-                let optimizer = TokenOptimizer::new(opt_settings.clone());
-                let (optimized, stats) = optimizer.optimize(&result_json);
-
-                debug!(
-                    tool = %tool_name,
-                    opt_level = ?opt_settings.level,
-                    input_bytes = stats.input_bytes,
-                    output_bytes = stats.output_bytes,
-                    reduction_pct = stats.reduction_pct,
-                    "Token optimization applied"
-                );
-
-                optimized
-            } else {
-                result_json
-            };
-
-            JsonRpcResponse::success(request.id.clone(), optimized_result)
-        }
-        Err(e) => {
-            error!(tool = %tool_name, error = %e, "Tool execution failed");
-            JsonRpcResponse::error(request.id.clone(), INTERNAL_ERROR, e.to_string())
-        }
-    }
+    let result = if settings.is_enabled() {
+        TokenOptimizer::new(settings).optimize(&result).0
+    } else {
+        result
+    };
+    JsonRpcResponse::success(request.id.clone(), result)
 }
 
-async fn handle_resources_list(state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
+async fn handle_resources_list(
+    state: &AppState,
+    request: &JsonRpcRequest,
+    ctx: &ToolContext,
+) -> JsonRpcResponse {
     // Map registered tools to MCP resources (each tool is also a resource)
-    let tools = state.tool_registry.list(None);
+    let tools = state.tool_registry.list(Some(&ctx.tenant_id));
     let resources: Vec<serde_json::Value> = tools
         .iter()
         .map(|t| {
@@ -1146,7 +1110,11 @@ async fn handle_logging_set_level(
 ///
 /// Supports `stoa://tools/{name}` URIs, returning the full tool schema as JSON.
 /// Returns ResourceNotFound (-32002) for unknown tools or unsupported URI schemes.
-async fn handle_resources_read(state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
+async fn handle_resources_read(
+    state: &AppState,
+    request: &JsonRpcRequest,
+    ctx: &ToolContext,
+) -> JsonRpcResponse {
     let uri = match request
         .params
         .as_ref()
@@ -1179,7 +1147,7 @@ async fn handle_resources_read(state: &AppState, request: &JsonRpcRequest) -> Js
     };
 
     // Look up tool in registry
-    let tools = state.tool_registry.list(None);
+    let tools = state.tool_registry.list(Some(&ctx.tenant_id));
     let found = tools.iter().find(|t| t.name == tool_name);
 
     match found {
@@ -1222,21 +1190,33 @@ pub fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
         })
 }
 
-fn extract_tenant(headers: &HeaderMap) -> Option<String> {
-    // Try X-Tenant-ID header first
-    if let Some(tenant) = headers.get("X-Tenant-ID") {
-        return tenant.to_str().ok().map(|s| s.to_string());
-    }
-
-    // JWT-based tenant extraction happens at the SSE POST handler layer
-    // (lines 254-306) where the full auth context is available.
-    // This fallback returns None when no X-Tenant-ID header is present.
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_batch_ws_tenant_header_is_not_identity() {
+        let mut state = AppState::new(crate::config::Config::default());
+        state.jwt_validator = None;
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Tenant-ID", "acme".parse().unwrap());
+        headers.insert(header::AUTHORIZATION, "Bearer unverified".parse().unwrap());
+        for method in ["tools/list", "tools/call"] {
+            let response = process_single_request(
+                &state,
+                &headers,
+                &SseQueryParams { session_id: None },
+                JsonRpcRequest {
+                    jsonrpc: "2.0".to_string(),
+                    method: method.to_string(),
+                    params: None,
+                    id: Some(json!(1)),
+                },
+            )
+            .await;
+            assert_eq!(response.error.unwrap().code, -32001);
+        }
+    }
 
     #[test]
     fn test_json_rpc_response_success() {
@@ -1287,28 +1267,6 @@ mod tests {
         assert_eq!(SUPPORTED_VERSIONS[0], "2025-11-25");
         assert!(SUPPORTED_VERSIONS.contains(&"2025-03-26"));
         assert!(SUPPORTED_VERSIONS.contains(&"2024-11-05"));
-    }
-
-    // === extract_tenant tests ===
-
-    #[test]
-    fn test_extract_tenant_from_header() {
-        let mut headers = HeaderMap::new();
-        headers.insert("X-Tenant-ID", "acme-corp".parse().unwrap());
-        assert_eq!(extract_tenant(&headers), Some("acme-corp".to_string()));
-    }
-
-    #[test]
-    fn test_extract_tenant_missing_header() {
-        let headers = HeaderMap::new();
-        assert_eq!(extract_tenant(&headers), None);
-    }
-
-    #[test]
-    fn test_extract_tenant_empty_header() {
-        let mut headers = HeaderMap::new();
-        headers.insert("X-Tenant-ID", "".parse().unwrap());
-        assert_eq!(extract_tenant(&headers), Some("".to_string()));
     }
 
     // === JsonRpcResponse edge cases ===

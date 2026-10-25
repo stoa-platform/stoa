@@ -158,7 +158,11 @@ pub async fn sender_constraint_middleware(
         return Ok(next.run(request).await);
     };
 
-    let tenant = user.tenant_id.as_deref().unwrap_or("unknown");
+    let tenant =
+        super::tenant::require_tenant(&user.claims).map_err(|_| SenderConstraintError {
+            error: "TENANT_REQUIRED".to_string(),
+            detail: "tenant_required".to_string(),
+        })?;
     let cnf = user.claims.cnf.as_ref();
 
     // Check DPoP binding
@@ -324,6 +328,8 @@ mod tests {
 
     fn sample_claims(cnf: Option<CnfClaim>) -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: Utc::now().timestamp() + 3600,
             iat: Utc::now().timestamp(),
@@ -336,6 +342,7 @@ mod tests {
             name: Some("John Doe".to_string()),
             given_name: Some("John".to_string()),
             family_name: Some("Doe".to_string()),
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string()],

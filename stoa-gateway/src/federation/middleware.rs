@@ -6,8 +6,9 @@
 use axum::{body::Body, extract::State, http::Request, middleware::Next, response::Response};
 use tracing::{debug, warn};
 
-use crate::auth::middleware::AuthenticatedUser;
+use crate::auth::middleware::{AuthError, AuthenticatedUser};
 use crate::state::AppState;
+use axum::response::IntoResponse;
 
 use super::context::SubAccountContext;
 
@@ -47,14 +48,14 @@ pub async fn federation_middleware(
                     sub_account_id = %sub_id,
                     "sub_account_id present but master_account_id missing"
                 );
-                return next.run(request).await;
+                return AuthError::forbidden("Invalid federation identity").into_response();
             }
         };
 
-        let tenant = user
-            .tenant_id
-            .clone()
-            .unwrap_or_else(|| "unknown".to_string());
+        let tenant = match crate::auth::tenant::require_tenant(&user.claims) {
+            Ok(tenant) => tenant.to_string(),
+            Err(error) => return error.into_response(),
+        };
 
         (sub_id, master_id, tenant)
     };
@@ -125,6 +126,8 @@ mod tests {
     fn base_claims() -> Claims {
         use crate::auth::claims::RealmAccess;
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-1".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -137,6 +140,7 @@ mod tests {
             name: None,
             given_name: None,
             family_name: None,
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string()],
@@ -217,7 +221,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sub_account_without_master_passes_through_without_context() {
+    async fn test_sub_account_without_master_is_rejected() {
         // When sub_account_id is set but master_account_id is absent, the middleware
         // should emit a warning and pass through WITHOUT injecting SubAccountContext.
         let state = test_state(true);
@@ -250,7 +254,7 @@ mod tests {
         });
 
         let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

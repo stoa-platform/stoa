@@ -140,6 +140,11 @@ impl MeteringProducer {
 
 impl MeteringProducerTrait for MeteringProducer {
     fn send_metering_event(&self, event: ToolCallEvent) {
+        if event.tenant_id.trim().is_empty() || matches!(event.tenant_id.as_str(), "*" | "all") {
+            warn!("Kafka event rejected: missing or broadcast tenant");
+            return;
+        }
+
         self.events_count.fetch_add(1, Ordering::Relaxed);
 
         #[cfg(feature = "kafka")]
@@ -182,6 +187,13 @@ impl MeteringProducerTrait for MeteringProducer {
     }
 
     fn send_error_snapshot(&self, snapshot: ErrorSnapshot) {
+        if snapshot.base_event.tenant_id.trim().is_empty()
+            || matches!(snapshot.base_event.tenant_id.as_str(), "*" | "all")
+        {
+            warn!("Kafka event rejected: missing or broadcast tenant");
+            return;
+        }
+
         self.errors_count.fetch_add(1, Ordering::Relaxed);
 
         #[cfg(feature = "kafka")]
@@ -238,6 +250,22 @@ impl MeteringProducer {
     /// Used by `DeployProgressEmitter` and other modules that need to publish
     /// pre-serialized events to custom topics beyond metering/errors.
     pub fn send_raw(&self, topic: &str, key: &str, payload: &str) {
+        let valid_tenant = serde_json::from_str::<serde_json::Value>(payload)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("tenant_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+            })
+            .is_some_and(|tenant| {
+                !tenant.trim().is_empty() && !matches!(tenant.as_str(), "*" | "all")
+            });
+        if !valid_tenant {
+            warn!("Raw Kafka event rejected: missing tenant");
+            return;
+        }
+
         #[cfg(feature = "kafka")]
         if let Some(ref producer) = self.producer {
             let topic = topic.to_string();
@@ -429,5 +457,13 @@ mod tests {
         });
         producer.send_error_snapshot(snapshot);
         assert_eq!(producer.errors_sent(), 1);
+    }
+    #[test]
+    fn test_metering_rejects_empty_tenant_before_counting() {
+        let producer = MeteringProducer::noop(make_config());
+        let mut event = make_event();
+        event.tenant_id.clear();
+        producer.send_metering_event(event);
+        assert_eq!(producer.events_sent(), 0);
     }
 }

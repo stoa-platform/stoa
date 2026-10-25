@@ -141,7 +141,7 @@ pub struct PollQuery {
     pub types: Option<String>,
     /// Maximum number of events to return (default: 100)
     pub limit: Option<usize>,
-    /// Tenant ID (extracted from JWT in production, query param for dev)
+    /// Optional consistency check; must equal the verified tenant_id claim.
     pub tenant_id: Option<String>,
 }
 
@@ -157,8 +157,23 @@ pub struct PollResponse {
 pub async fn poll_events(
     State(state): State<AppState>,
     Query(query): Query<PollQuery>,
-) -> impl IntoResponse {
-    let tenant_id = query.tenant_id.as_deref().unwrap_or("default");
+    headers: axum::http::HeaderMap,
+) -> axum::response::Response {
+    let (claims, _) = match crate::auth::tenant::request_identity(&state, &headers).await {
+        Ok(identity) => identity,
+        Err(error) => return error.into_response(),
+    };
+    let tenant_id = match crate::auth::tenant::require_tenant(&claims) {
+        Ok(tenant) => tenant,
+        Err(error) => return error.into_response(),
+    };
+    if query
+        .tenant_id
+        .as_deref()
+        .is_some_and(|requested| requested != tenant_id)
+    {
+        return StatusCode::FORBIDDEN.into_response();
+    }
 
     let since = query.since.as_ref().and_then(|s| {
         DateTime::parse_from_rfc3339(s)
@@ -187,6 +202,7 @@ pub async fn poll_events(
             server_time: Utc::now().to_rfc3339(),
         }),
     )
+        .into_response()
 }
 
 #[cfg(test)]

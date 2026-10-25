@@ -15,21 +15,13 @@ use super::{PhaseContext, PhaseResult, ProxyPhase};
 /// before the phase chain runs. This phase acts as a guard, rejecting requests
 /// that made it through without identity (e.g., misconfigured bypass routes).
 pub struct AuthPhase {
-    /// Header name containing the tenant ID (set by auth middleware).
-    tenant_header: String,
-    /// Header name containing the user ID (optional, from JWT sub).
-    user_header: String,
     /// If true, requests without a tenant ID are rejected.
     require_tenant: bool,
 }
 
 impl AuthPhase {
     pub fn new(require_tenant: bool) -> Self {
-        Self {
-            tenant_header: "x-stoa-tenant-id".to_string(),
-            user_header: "x-stoa-user-id".to_string(),
-            require_tenant,
-        }
+        Self { require_tenant }
     }
 }
 
@@ -46,27 +38,15 @@ impl ProxyPhase for AuthPhase {
     }
 
     async fn request_filter(&self, ctx: &mut PhaseContext) -> PhaseResult {
-        // Extract tenant ID from headers (set by JWT/API-key middleware)
-        if ctx.tenant_id.is_none() {
-            let tenant = ctx
-                .request_headers
-                .get(&self.tenant_header)
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string());
-            ctx.tenant_id = tenant;
-        }
+        // Tenant identity must be populated from verified JWT/API-key middleware.
+        // Caller-controlled headers are never an identity source.
 
-        // Extract user ID from headers
-        if ctx.user_id.is_none() {
-            let user = ctx
-                .request_headers
-                .get(&self.user_header)
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string());
-            ctx.user_id = user;
-        }
-
-        if self.require_tenant && ctx.tenant_id.is_none() {
+        if self.require_tenant
+            && ctx
+                .tenant_id
+                .as_deref()
+                .is_none_or(|t| t.is_empty() || t != t.trim())
+        {
             return PhaseResult::Reject {
                 status: StatusCode::UNAUTHORIZED,
                 body: "Missing tenant identity".to_string(),
@@ -87,7 +67,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_extracts_tenant_from_header() {
+    async fn test_rejects_tenant_header_as_identity() {
         let phase = AuthPhase::default();
         let mut headers = HeaderMap::new();
         headers.insert("x-stoa-tenant-id", HeaderValue::from_static("acme"));
@@ -96,9 +76,9 @@ mod tests {
         let mut ctx = make_ctx_with_headers(headers);
         let result = phase.request_filter(&mut ctx).await;
 
-        assert!(matches!(result, PhaseResult::Continue));
-        assert_eq!(ctx.tenant_id.as_deref(), Some("acme"));
-        assert_eq!(ctx.user_id.as_deref(), Some("user-42"));
+        assert!(matches!(result, PhaseResult::Reject { .. }));
+        assert!(ctx.tenant_id.is_none());
+        assert!(ctx.user_id.is_none());
     }
 
     #[tokio::test]
@@ -137,5 +117,21 @@ mod tests {
         let result = phase.request_filter(&mut ctx).await;
         assert!(matches!(result, PhaseResult::Continue));
         assert_eq!(ctx.tenant_id.as_deref(), Some("already-set"));
+    }
+
+    #[tokio::test]
+    async fn regression_verified_tenant_does_not_make_user_header_trusted() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-stoa-user-id", HeaderValue::from_static("victim"));
+        let mut ctx = make_ctx_with_headers(headers);
+        ctx.tenant_id = Some("tenant-a".into());
+        assert!(matches!(
+            AuthPhase::default().request_filter(&mut ctx).await,
+            PhaseResult::Continue
+        ));
+        assert!(ctx.user_id.is_none());
+        ctx.user_id = Some("verified-user".into());
+        AuthPhase::default().request_filter(&mut ctx).await;
+        assert_eq!(ctx.user_id.as_deref(), Some("verified-user"));
     }
 }

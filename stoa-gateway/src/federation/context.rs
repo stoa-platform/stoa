@@ -23,11 +23,11 @@ impl SubAccountContext {
     /// Check if a tool is allowed for this sub-account.
     ///
     /// - `Some(set)` → tool must be in the set
-    /// - `None` → allow-list not loaded (permissive, log warning)
+    /// - `None` → allow-list unavailable, deny
     pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
         match &self.allowed_tools {
             Some(allowed) => allowed.contains(tool_name),
-            None => true,
+            None => false,
         }
     }
 }
@@ -59,14 +59,14 @@ mod tests {
     }
 
     #[test]
-    fn test_none_is_permissive() {
+    fn test_none_is_denied() {
         let ctx = SubAccountContext {
             sub_account_id: "sub-1".to_string(),
             master_account_id: "master-1".to_string(),
             tenant_id: "acme".to_string(),
             allowed_tools: None,
         };
-        assert!(ctx.is_tool_allowed("anything"));
+        assert!(!ctx.is_tool_allowed("anything"));
     }
 
     #[test]

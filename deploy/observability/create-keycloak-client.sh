@@ -5,7 +5,15 @@
 #
 # This script creates the 'observability' client in Keycloak with proper redirect URIs
 
+# Optional origins (absolute URLs without a trailing slash):
+# GRAFANA_ORIGIN defaults to http://localhost:3001.
+# PROMETHEUS_ORIGIN defaults to http://localhost:9090.
+# LOKI_ORIGIN defaults to http://localhost:3100.
 set -e
+
+GRAFANA_ORIGIN="${GRAFANA_ORIGIN:-http://localhost:3001}"
+PROMETHEUS_ORIGIN="${PROMETHEUS_ORIGIN:-http://localhost:9090}"
+LOKI_ORIGIN="${LOKI_ORIGIN:-http://localhost:3100}"
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <KEYCLOAK_ADMIN_PASSWORD>"
@@ -54,9 +62,9 @@ else
     -s publicClient=false \
     -s standardFlowEnabled=true \
     -s implicitFlowEnabled=false \
-    -s directAccessGrantsEnabled=true \
+    -s directAccessGrantsEnabled=false \
     -s serviceAccountsEnabled=false \
-    -s 'redirectUris=["https://grafana.gostoa.dev/*","https://prometheus.gostoa.dev/oauth2/callback","https://loki.gostoa.dev/oauth2/callback"]' \
+    -s "redirectUris=[\"${GRAFANA_ORIGIN}/login/generic_oauth\",\"${PROMETHEUS_ORIGIN}/oauth2/callback\",\"${LOKI_ORIGIN}/oauth2/callback\"]" \
     -s 'webOrigins=["+"]' \
     -s 'defaultClientScopes=["openid","profile","email","roles"]'
 
@@ -79,8 +87,8 @@ echo ""
 echo "=== Client Created Successfully ==="
 echo ""
 echo "Client ID: observability"
-echo "Client Secret: $CLIENT_SECRET"
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""
 echo "Now run the setup script with this secret:"
 echo ""
-echo "  ./deploy/observability/setup-keycloak-auth.sh $CLIENT_SECRET"
+echo "Sensitive values are withheld; use the approved secret store."

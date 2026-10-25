@@ -4,6 +4,8 @@
 
 set -e
 
+: "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
+
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-stoa}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
@@ -37,10 +39,8 @@ EXISTING=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/client
 
 if [ -n "$EXISTING" ]; then
   echo "Client 'observability' already exists (ID: $EXISTING)"
-  # Get client secret
-  CLIENT_SECRET=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients/${EXISTING}/client-secret" \
-    -H "Authorization: Bearer $TOKEN" | jq -r '.value')
-  echo "Client Secret: $CLIENT_SECRET"
+  # Client lookup above already establishes the client identity.
+  echo "Sensitive values are withheld; use the approved secret store."
 else
   # Create the client
   echo "Creating client 'observability'..."
@@ -55,18 +55,18 @@ else
   "publicClient": false,
   "standardFlowEnabled": true,
   "implicitFlowEnabled": false,
-  "directAccessGrantsEnabled": true,
+  "directAccessGrantsEnabled": false,
   "serviceAccountsEnabled": false,
   "authorizationServicesEnabled": false,
   "redirectUris": [
-    "https://grafana.${BASE_DOMAIN}/*",
+    "https://grafana.${BASE_DOMAIN}/login/generic_oauth",
     "https://prometheus.${BASE_DOMAIN}/oauth2/callback",
     "https://loki.${BASE_DOMAIN}/oauth2/callback"
   ],
   "webOrigins": ["+"],
   "attributes": {
     "pkce.code.challenge.method": "S256",
-    "post.logout.redirect.uris": "https://grafana.${BASE_DOMAIN}/*##https://prometheus.${BASE_DOMAIN}/*##https://loki.${BASE_DOMAIN}/*"
+    "post.logout.redirect.uris": "https://grafana.${BASE_DOMAIN}/login/generic_oauth##https://prometheus.${BASE_DOMAIN}/##https://loki.${BASE_DOMAIN}/"
   },
   "defaultClientScopes": ["openid", "profile", "email", "roles"],
   "optionalClientScopes": []
@@ -89,12 +89,10 @@ EOF
     CLIENT_ID=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients?clientId=observability" \
       -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
-    # Get client secret
-    CLIENT_SECRET=$(curl -s -X GET "${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}/clients/${CLIENT_ID}/client-secret" \
-      -H "Authorization: Bearer $TOKEN" | jq -r '.value')
+    # Client lookup above already establishes the client identity.
 
     echo "Client ID (internal): $CLIENT_ID"
-    echo "Client Secret: $CLIENT_SECRET"
+    echo "Sensitive values are withheld; use the approved secret store."
   else
     echo "ERROR: Failed to create client (HTTP $HTTP_CODE)"
     echo "$RESPONSE"
@@ -102,15 +100,12 @@ EOF
   fi
 fi
 
-# Generate cookie secret for oauth2-proxy
-COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n')
-
 echo ""
 echo "=== Configuration Values ==="
 echo ""
 echo "Client ID: observability"
-echo "Client Secret: $CLIENT_SECRET"
-echo "Cookie Secret (for oauth2-proxy): $COOKIE_SECRET"
+echo "Sensitive values are withheld; use the approved secret store."
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""
 echo "=== Next Steps ==="
 echo ""
@@ -118,11 +113,11 @@ echo "1. Update Grafana with OIDC config (helm upgrade)"
 echo "2. Create oauth2-proxy secrets:"
 echo ""
 echo "kubectl create secret generic oauth2-proxy-secret -n stoa-monitoring \\"
-echo "  --from-literal=cookie-secret='$COOKIE_SECRET' \\"
-echo "  --from-literal=client-secret='$CLIENT_SECRET' \\"
+echo "Sensitive values are withheld; use the approved secret store."
+echo "Sensitive values are withheld; use the approved secret store."
 echo "  --dry-run=client -o yaml | kubectl apply -f -"
 echo ""
 echo "kubectl create secret generic oauth2-proxy-secret -n stoa-system \\"
-echo "  --from-literal=cookie-secret='$COOKIE_SECRET' \\"
-echo "  --from-literal=client-secret='$CLIENT_SECRET' \\"
+echo "Sensitive values are withheld; use the approved secret store."
+echo "Sensitive values are withheld; use the approved secret store."
 echo "  --dry-run=client -o yaml | kubectl apply -f -"

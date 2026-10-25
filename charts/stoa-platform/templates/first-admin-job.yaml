@@ -1,0 +1,91 @@
+{{- if .Values.stoa.bootstrap.firstAdmin.enabled }}
+{{- $secret := required "stoa.bootstrap.firstAdmin.existingSecret is required when firstAdmin is enabled" .Values.stoa.bootstrap.firstAdmin.existingSecret }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-first-admin-script
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  {{- range $path, $_ := .Files.Glob "files/first_admin/*.py" }}
+  {{ base $path }}: |
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stoa-first-admin
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: first-admin
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: first-admin
+          image: {{ .Values.stoa.bootstrap.firstAdmin.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              result=0;
+              python3 /scripts/main.py < /run/bootstrap/bootstrap.json || result=$?;
+              [ "$result" = 0 ] || [ "$result" = 10 ]
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: KEYCLOAK_URL
+              value: "http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80"
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.stoaGateway.keycloakRealm | default "stoa" | quote }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: input
+              mountPath: /run/bootstrap
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: stoa-first-admin-script
+        - name: input
+          secret:
+            secretName: {{ $secret | quote }}
+            defaultMode: 0440
+            items:
+              - key: bootstrap.json
+                path: bootstrap.json
+{{- end }}

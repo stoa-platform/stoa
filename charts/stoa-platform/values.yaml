@@ -23,6 +23,11 @@ stoa:
     # Create the privileged CLI service account only after the first human admin.
     adminServiceAccount:
       enabled: false
+    # One-time first administrator request, created on site as bootstrap.json.
+    firstAdmin:
+      enabled: false
+      existingSecret: ''
+      image: 'python:3.11.10-alpine'
     # Default tenant created during bootstrap
     defaultTenant:
       name: 'default'

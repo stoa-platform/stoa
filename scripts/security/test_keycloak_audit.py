@@ -1,7 +1,11 @@
 """Régressions hors ligne ; données synthétiques, aucun accès au clone nécessaire."""
 
+import contextlib
+import io
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import keycloak_audit as kc
 
@@ -195,3 +199,157 @@ class PolicyTests(unittest.TestCase):
         obj = safe_client()
         obj["protocolMappers"][1]["config"]["claim.value"] = "${TENANT}"
         self.assertIn("KC_TENANT_TRUST", rules(audit(obj)))
+
+    def test_secrets_and_users_detected_without_values(self):
+        obj = safe_realm()
+        marker = "SYNTHETIC_SENSITIVE_VALUE_8c7a"
+        obj["clients"] = [dict(safe_client(), secret=marker)]
+        obj["users"] = [
+            {"username": "private-identity", "credentials": [{"type": "password", "value": marker}]}
+        ]
+        result = audit(obj)
+        self.assertTrue(
+            {"KC_DEFAULT_USERS", "KC_HARDCODED_SECRET", "KC_USER_PASSWORD"} <= rules(result)
+        )
+        output = json.dumps([kc.asdict(f) for f in result.findings])
+        self.assertNotIn(marker, output)
+        self.assertNotIn("private-identity", output)
+
+    def test_placeholders_are_not_secrets(self):
+        for value in ["${CLIENT_SECRET}", "REPLACE_FROM_VAULT", "<from-secret-store>"]:
+            self.assertNotIn("KC_HARDCODED_SECRET", rules(audit(dict(safe_client(), secret=value))))
+
+    def test_component_credentials_in_arrays_are_redacted(self):
+        obj = safe_realm()
+        obj["components"] = {"ldap": [{"config": {"bindCredential": ["SYNTHETIC_PRIVATE_MARKER"]}}]}
+        result = audit(obj)
+        self.assertIn("KC_HARDCODED_SECRET", rules(result))
+        self.assertNotIn("SYNTHETIC_PRIVATE_MARKER", str(result.findings))
+
+
+class FormatTests(unittest.TestCase):
+    def test_yaml_keycloak_admin_literal_is_redacted(self):
+        marker = "_".join(["SYNTHETIC", "PRIVATE", "MARKER"])
+        text = (
+            "services:\n  keycloak:\n    environment:\n      KC_BOOTSTRAP_ADMIN_PASSWORD: "
+            + marker
+            + "\n"
+        )
+        result = run_text(text, "deploy/unit.yaml")
+        self.assertIn("KC_HARDCODED_SECRET", rules(result))
+        self.assertNotIn(marker, str(result.findings))
+
+    def test_dcr_session_and_token_bounds(self):
+        text = 'kind: Application\nspec:\n  tokenLifespans:\n    idToken: 3600\n  keycloakAttributes:\n    client.session.max.lifespan: "86400"\n'
+        self.assertTrue(
+            {"KC_DECLARED_LIFETIME", "KC_CLIENT_LIFETIME"}
+            <= rules(run_text(text, "deploy/unit.yaml"))
+        )
+
+    def test_malformed_client_collections_fail_closed(self):
+        for key, value in [
+            ("protocolMappers", "invalid"),
+            ("defaultClientScopes", True),
+            ("grantTypes", 42),
+        ]:
+            obj = safe_client()
+            obj[key] = value
+            result = audit(obj)
+            self.assertTrue(result.errors)
+            self.assertIn("KC_PARSE", rules(result))
+
+    def test_unrelated_command_substitution_is_not_secret_output(self):
+        text = 'keycloak=yes\nENCODED=$(echo -n "$CLIENT_SECRET" | base64)\n'
+        self.assertNotIn("KC_SECRET_OUTPUT", rules(run_text(text, "scripts/unit.sh")))
+
+    def test_shell_heredoc_and_escaped_helm_payloads(self):
+        payload = json.dumps(dict(safe_client(), directAccessGrantsEnabled=True), indent=2)
+        for text, path in [
+            ("CONFIG=$(cat <<EOF\n" + payload + "\nEOF\n)", "scripts/setup-test.sh"),
+            (
+                'data:\n  bootstrap.sh: |\n    curl -d "' + payload.replace('"', '\\"') + '"',
+                "charts/x/templates/bootstrap-job.yaml",
+            ),
+        ]:
+            with self.subTest(path=path):
+                self.assertIn("KC_DIRECT_GRANT", rules(run_text(text, path)))
+
+    def test_kcadm_continuations_and_quoted_attributes(self):
+        text = """#!/bin/bash
+keycloak=/unused
+$KCADM create clients -r example \\
+  -s clientId=unit-client \\
+  -s publicClient=true \\
+  -s directAccessGrantsEnabled=true \\
+  -s 'redirectUris=["https://unit.example/*"]' \\
+  -s 'attributes={"pkce.code.challenge.method":"S256"}'
+"""
+        found = rules(run_text(text, "scripts/unit.sh"))
+        self.assertTrue({"KC_DIRECT_GRANT", "KC_REDIRECT_WILDCARD"} <= found)
+        self.assertNotIn("KC_PKCE", found)
+
+    def test_multidocument_yaml_nested_realm(self):
+        text = "kind: KeycloakRealmImport\nspec:\n  realm:\n" + "\n".join(
+            "    " + line for line in kc.yaml.safe_dump(safe_realm()).splitlines()
+        )
+        text += "\n---\n" + kc.yaml.safe_dump(dict(safe_client(), implicitFlowEnabled=True))
+        self.assertIn("KC_IMPLICIT", rules(run_text(text, "deploy/unit.yaml")))
+
+    def test_line_numbers_discriminate_clients(self):
+        obj = safe_realm()
+        obj["clients"] = [
+            safe_client(),
+            dict(safe_client(), clientId="second", implicitFlowEnabled=True),
+        ]
+        text = json.dumps(obj, indent=2)
+        result = run_text(text, "deploy/unit.json")
+        finding = next(f for f in result.findings if f.rule == "KC_IMPLICIT")
+        self.assertIn("implicitFlowEnabled", text.splitlines()[finding.line - 1])
+        self.assertIn("true", text.splitlines()[finding.line - 1])
+
+    def test_malformed_json_does_not_leak_parser_context(self):
+        result = run_text('{"secret": "SENSITIVE_SENTINEL", INVALID}', "deploy/unit.json")
+        self.assertTrue(result.errors)
+        self.assertIn("KC_PARSE", rules(result))
+        self.assertNotIn("SENSITIVE_SENTINEL", str(result.findings))
+
+    def test_static_analysis_does_not_execute_shell_or_python(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            marker = Path(temp) / "must-not-exist"
+            text = f"keycloak=yes\n$(touch {marker})\n$KCADM update realms/x -s registrationAllowed=true\n"
+            self.assertIn("KC_REGISTRATION", rules(run_text(text, "scripts/unit.sh")))
+            self.assertFalse(marker.exists())
+
+    def test_environment_override_does_not_silently_whitelist_dev(self):
+        self.assertEqual("prod", kc.environment("scripts/new-bootstrap.sh"))
+        self.assertEqual("dev", kc.environment("deploy/docker-compose/init/realm.json"))
+        self.assertEqual("prod", kc.environment("deploy/docker-compose/init/realm.json", "prod"))
+
+    def test_symlinks_credentials_and_encrypted_files_are_not_read(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            root = Path(temp)
+            (root / "realm.json").write_text(json.dumps(safe_realm()))
+            (root / "credentials.json").write_text("{this would cause a parse error")
+            (root / "opaque.md").write_bytes(b"\x00GITCRYPT\xff")
+            (root / "link").symlink_to("/does-not-exist", target_is_directory=True)
+            result = kc.Audit().scan(root)
+            self.assertFalse(result.errors)
+            statuses = {x["status"] for x in result.inventory}
+            self.assertIn("credential-path-not-read", statuses)
+            self.assertIn("encrypted-not-decrypted", statuses)
+
+    def test_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            root = Path(temp)
+            p = root / "realm.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                p.write_text(json.dumps(safe_realm()))
+                self.assertEqual(0, kc.main([str(root)]))
+                p.write_text(json.dumps(dict(safe_realm(), registrationAllowed=True)))
+                self.assertEqual(1, kc.main([str(root)]))
+                p.write_text('{"realm": INVALID}')
+                self.assertEqual(2, kc.main([str(root)]))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -79,3 +79,13 @@ class ScriptInputTests(unittest.TestCase):
                     self.assertTrue(password.startswith("$"), name)
                 self.assertIsNone(re.search(r"PASSWORD:-[^}]+", line), name)
             self.assertNotRegex(source, r"echo .*PASSWORD=")
+
+    def test_default_broker_does_not_create_uninvited_accounts(self):
+        import json
+
+        realm = json.loads((ROOT / "deploy/docker-compose/init/keycloak-realm.json").read_text())
+        self.assertTrue(all(not item["enabled"] for item in realm["identityProviders"]))
+        source = (ROOT / "scripts/setup-keycloak-google-idp.sh").read_text()
+        self.assertNotIn("-s enabled=true", source)
+        self.assertNotIn('-s "config.clientSecret=', source)
+        self.assertIn('"enabled": False', source)

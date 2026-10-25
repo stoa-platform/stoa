@@ -49,34 +49,30 @@ if [ "$DRY_RUN" = false ]; then
     --user admin
 fi
 
-# Step 2: Create Google Identity Provider
-echo "[2/5] Creating Google Identity Provider..."
+# Step 2: Configure the provider without enabling broker account creation.
+echo "[2/5] Configuring Google Identity Provider (disabled)..."
 if [ "$DRY_RUN" = false ]; then
-  # Check if google IDP already exists
   EXISTING=$($KCADM get "identity-provider/instances/google" -r "$REALM" 2>/dev/null || echo "NOT_FOUND")
+  OPERATION=update
+  RESOURCE=identity-provider/instances/google
   if [ "$EXISTING" = "NOT_FOUND" ]; then
-    $KCADM create "identity-provider/instances" -r "$REALM" \
-      -s alias=google \
-      -s displayName=Google \
-      -s providerId=google \
-      -s enabled=true \
-      -s trustEmail=true \
-      -s storeToken=false \
-      -s addReadTokenRoleOnCreate=false \
-      -s "firstBrokerLoginFlowAlias=first broker login" \
-      -s "config.clientId=$GOOGLE_CLIENT_ID" \
-      -s "config.clientSecret=$GOOGLE_CLIENT_SECRET" \
-      -s "config.defaultScope=openid profile email" \
-      -s "config.syncMode=IMPORT" \
-      -s "config.guiOrder=1"
-    echo "  Google IDP created."
-  else
-    echo "  Google IDP already exists. Updating credentials..."
-    $KCADM update "identity-provider/instances/google" -r "$REALM" \
-      -s "config.clientId=$GOOGLE_CLIENT_ID" \
-      -s "config.clientSecret=$GOOGLE_CLIENT_SECRET" \
-      -s enabled=true
-    echo "  Google IDP updated."
+    OPERATION=create
+    RESOURCE=identity-provider/instances
+  fi
+  export GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+  if ! python3 -c '
+import json, os
+print(json.dumps({
+    "alias": "google", "displayName": "Google", "providerId": "google",
+    "enabled": False, "trustEmail": True, "storeToken": False,
+    "firstBrokerLoginFlowAlias": "first broker login",
+    "config": {"clientId": os.environ["GOOGLE_CLIENT_ID"],
+               "clientSecret": os.environ["GOOGLE_CLIENT_SECRET"],
+               "defaultScope": "openid profile email", "syncMode": "IMPORT"},
+}))' | kubectl exec -i -n stoa-system "$KC_POD" -- /opt/keycloak/bin/kcadm.sh \
+    "$OPERATION" "$RESOURCE" -r "$REALM" -f - >/dev/null 2>&1; then
+    echo "Provider configuration failed; response details are withheld." >&2
+    exit 1
   fi
 fi
 
@@ -145,17 +141,5 @@ fi
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "Social login flow:"
-echo "  1. User visits console.gostoa.dev"
-echo "  2. Clicks 'Login with Keycloak'"
-echo "  3. Keycloak login page shows 'Sign in with Google' button"
-echo "  4. User authenticates with Google"
-echo "  5. First broker login creates Keycloak account (email trusted)"
-echo "  6. User gets 'viewer' role by default"
-echo "  7. User lands in Console with read-only access"
-echo ""
-echo "REMINDER: Store Google OAuth credentials in Infisical (vault.gostoa.dev)"
-echo "  infisical secrets set GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID --env=prod --path=/keycloak"
-echo "  infisical secrets set GOOGLE_CLIENT_SECRET=<value> --env=prod --path=/keycloak"
-echo ""
-echo "Clear shell history: history -c"
+echo "The provider remains disabled. Configure the approved-user broker flow before enabling it."
+echo "See docs/runbooks/first-admin-bootstrap.md for invitations and secret storage."

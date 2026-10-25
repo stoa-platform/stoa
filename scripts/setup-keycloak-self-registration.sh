@@ -54,11 +54,19 @@ fi
 
 # Step 2: Configure SMTP
 echo "[2/6] Configuring SMTP server..."
-SMTP_JSON="{\"host\":\"$SMTP_HOST\",\"port\":\"$SMTP_PORT\",\"from\":\"$SMTP_FROM\",\"fromDisplayName\":\"STOA Platform\",\"auth\":\"true\",\"user\":\"$SMTP_USER\",\"password\":\"$SMTP_PWD\",\"starttls\":\"true\",\"ssl\":\"false\"}"
-echo "  Host: $SMTP_HOST:$SMTP_PORT"
-echo "  From: $SMTP_FROM"
 if [ "$DRY_RUN" = false ]; then
-  printf '{"smtpServer":%s}\n' "$SMTP_JSON" | kubectl exec -i -n stoa-system "$KC_POD" -- /opt/keycloak/bin/kcadm.sh update "realms/$REALM" -f -
+  export SMTP_HOST SMTP_PORT SMTP_USER SMTP_PWD SMTP_FROM
+  if ! python3 -c '
+import json, os
+smtp = {"host": os.environ["SMTP_HOST"], "port": os.environ["SMTP_PORT"],
+        "from": os.environ["SMTP_FROM"], "user": os.environ["SMTP_USER"],
+        "password": os.environ["SMTP_PWD"], "auth": "true", "starttls": "true", "ssl": "false"}
+print(json.dumps({"smtpServer": smtp}))' |
+    kubectl exec -i -n stoa-system "$KC_POD" -- /opt/keycloak/bin/kcadm.sh \
+      update "realms/$REALM" -f - >/dev/null 2>&1; then
+    echo "SMTP configuration failed; response details are withheld." >&2
+    exit 1
+  fi
 fi
 
 # Step 3: Enable email verification

@@ -18,7 +18,8 @@
 #   ./update-keycloak-console-redirect.sh gostoa.dev
 # =============================================================================
 
-set -e
+set -euo pipefail
+set +x
 
 : "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
@@ -28,7 +29,7 @@ NAMESPACE="${KEYCLOAK_NAMESPACE:-stoa-system}"
 REALM="${KEYCLOAK_REALM:-stoa}"
 CLIENT_ID="control-plane-ui"
 ADMIN_USER="${KEYCLOAK_ADMIN:-admin}"
-ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-demo}"
+ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
 CONSOLE_URL="https://console.${BASE_DOMAIN}"
 
@@ -52,12 +53,11 @@ echo "Found Keycloak pod: ${KEYCLOAK_POD}"
 # Authenticate to Keycloak
 echo ""
 echo "=== Authenticating to Keycloak ==="
-kubectl exec -n ${NAMESPACE} ${KEYCLOAK_POD} -- \
+printf '%s\n' "$ADMIN_PASS" | kubectl exec -i -n "${NAMESPACE}" "${KEYCLOAK_POD}" -- \
     /opt/keycloak/bin/kcadm.sh config credentials \
     --server http://localhost:8080 \
     --realm master \
-    --user ${ADMIN_USER} \
-    --password ${ADMIN_PASS}
+    --user "${ADMIN_USER}"
 
 # Get current client configuration
 echo ""

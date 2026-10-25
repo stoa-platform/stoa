@@ -11,7 +11,8 @@
 #   ./setup_test_users.sh [--keycloak-url URL] [--realm REALM] [--aws-region REGION]
 #
 
-set -eo pipefail
+set -euo pipefail
+set +x
 
 # Demo accounts must never target a shared production realm by default.
 if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then
@@ -52,7 +53,7 @@ done
 
 # Generate secure random passwords
 generate_password() {
-    openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20
+    openssl rand -hex 20
 }
 
 log_info "Setting up E2E test users for STOA Platform"
@@ -233,16 +234,16 @@ EOF
 # Check if secret exists
 if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
     log_info "Updating existing secret: $SECRET_NAME"
-    aws secretsmanager update-secret \
+    printf '%s' "$SECRET_VALUE" | aws secretsmanager update-secret \
         --secret-id "$SECRET_NAME" \
-        --secret-string "$SECRET_VALUE" \
+        --secret-string file:///dev/stdin \
         --region "$AWS_REGION"
 else
     log_info "Creating new secret: $SECRET_NAME"
-    aws secretsmanager create-secret \
+    printf '%s' "$SECRET_VALUE" | aws secretsmanager create-secret \
         --name "$SECRET_NAME" \
         --description "E2E test user credentials for STOA Platform (CAB-238)" \
-        --secret-string "$SECRET_VALUE" \
+        --secret-string file:///dev/stdin \
         --region "$AWS_REGION" \
         --tags Key=Project,Value=STOA Key=Environment,Value=test Key=Purpose,Value=e2e-testing
 fi

@@ -6,7 +6,8 @@
 # Creates all 6 RPO personas in Keycloak for E2E testing
 #===============================================================================
 
-set -e
+set -euo pipefail
+set +x
 
 # Demo accounts must never target a shared production realm by default.
 if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then

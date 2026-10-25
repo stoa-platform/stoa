@@ -2,7 +2,8 @@
 # Setup Keycloak Client for Observability Stack
 # This script creates the OIDC client in Keycloak
 
-set -e
+set -euo pipefail
+set +x
 
 : "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 

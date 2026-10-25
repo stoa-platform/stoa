@@ -12,7 +12,8 @@
 #   ./scripts/demo/setup-rpo-keycloak-users.sh
 # =============================================================================
 
-set -e
+set -euo pipefail
+set +x
 
 # Demo accounts must never target a shared production realm by default.
 if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then

@@ -1,5 +1,6 @@
 """Régressions sur les fichiers du brouillon, jamais sur un serveur Keycloak."""
 
+import json
 import unittest
 from pathlib import Path
 
@@ -42,6 +43,36 @@ def allows_egress(policy, dest_labels, dest_namespace, port, protocol="TCP"):
 
 
 class DraftTests(unittest.TestCase):
+    def test_local_import_no_high_findings(self):
+        name = "deploy/docker-compose/init/keycloak-realm.json"
+        result = kc.Audit()
+        result.audit_text(name, load(name))
+        self.assertEqual([], [f.rule for f in result.findings if f.severity in {"HIGH", "ERROR"}])
+
+    def test_all_realms_have_closed_registration_and_bounded_sessions(self):
+        paths = [
+            ROOT / "deploy/docker-compose/init/keycloak-realm.json",
+            *sorted((ROOT / "deploy/demo-federation/keycloak").glob("*.json")),
+        ]
+        self.assertEqual(6, len(paths))
+        for p in paths:
+            obj = json.loads(p.read_text())
+            with self.subTest(file=p.name):
+                self.assertIs(obj["registrationAllowed"], False)
+                self.assertIs(obj["resetPasswordAllowed"], False)
+                self.assertEqual(300, obj["accessTokenLifespan"])
+                self.assertEqual(28800, obj["ssoSessionMaxLifespan"])
+                self.assertTrue(obj["offlineSessionMaxLifespanEnabled"])
+
+    def test_local_import_is_rejected_as_production(self):
+        name = "deploy/docker-compose/init/keycloak-realm.json"
+        result = kc.Audit("prod")
+        result.audit_text(name, load(name))
+        self.assertIn("KC_DEFAULT_USERS", {f.rule for f in result.findings if f.severity == "HIGH"})
+        self.assertIn(
+            "KC_HARDCODED_SECRET", {f.rule for f in result.findings if f.severity == "HIGH"}
+        )
+
     def test_helm_new_realms_and_browser_clients(self):
         name = "charts/stoa-platform/templates/bootstrap-job.yaml"
         result = kc.Audit()
@@ -99,6 +130,34 @@ class DraftTests(unittest.TestCase):
         for filename in ["values-dev.yaml", "values-staging.yaml", "values-prod.yaml"]:
             obj = kc.yaml.safe_load(load("charts/stoa-platform/" + filename))
             self.assertEqual(obj["global"]["domain"], obj["stoa"]["domain"])
+
+    def test_realm_import_environment_defaults_are_wired(self):
+        defaults = {
+            "CONSOLE_ORIGIN": "http://localhost:3000",
+            "PORTAL_ORIGIN": "http://localhost:3002",
+            "FEDERATION_KEYCLOAK_URL": "http://keycloak:8080",
+        }
+        compose = kc.yaml.safe_load(load("deploy/docker-compose/docker-compose.yml"))
+        environment = compose["services"]["keycloak"]["environment"]
+        for name, value in defaults.items():
+            self.assertEqual("${" + name + ":-" + value + "}", environment[name])
+            self.assertIn(name + "=" + value, load("deploy/docker-compose/.env.example"))
+        federation = kc.yaml.safe_load(load("deploy/demo-federation/docker-compose.yml"))
+        self.assertEqual(
+            environment["FEDERATION_KEYCLOAK_URL"],
+            federation["services"]["keycloak"]["environment"]["FEDERATION_KEYCLOAK_URL"],
+        )
+        for name in (
+            "deploy/docker-compose/init/keycloak-realm.json",
+            "deploy/demo-federation/keycloak/idp-source-alpha.json",
+            "deploy/demo-federation/keycloak/idp-source-beta.json",
+        ):
+            raw = load(name)
+            for parameter, value in defaults.items():
+                raw = raw.replace("${" + parameter + "}", value)
+            for parameter in defaults:
+                self.assertTrue("${" + parameter + "}" not in raw)
+            self.assertIsInstance(json.loads(raw), dict)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def client_composite_admin(kc, path: str) -> bool:
     mappings = kc.call("GET", path)
     pending = [
         role
-        for client in mappings.get("clientMappings", {}).values()
+        for client in (mappings.get("clientMappings") or {}).values()
         for role in client.get("mappings", [])
     ]
     seen = set()

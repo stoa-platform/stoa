@@ -216,3 +216,25 @@ docker compose up -d stoa-gateway
 
 - **Documentation**: https://docs.gostoa.dev
 - **Issues**: https://github.com/stoa-platform/stoa/issues
+
+## Realm import origins
+
+Keycloak imports the mounted JSON files directly with `--import-realm`. Its
+native `${VARIABLE}` replacement reads the container environment; Compose does
+not interpolate bind-mounted JSON. No preprocessing command is needed.
+
+Set these absolute base URLs without a trailing slash in `.env` before the first
+import (see `.env.example`):
+
+| Variable | Local default | Purpose |
+|----------|---------------|---------|
+| `CONSOLE_ORIGIN` | `http://localhost:3000` | Console redirects and web origins |
+| `PORTAL_ORIGIN` | `http://localhost:3002` | Portal redirects and web origins |
+| `FEDERATION_KEYCLOAK_URL` | `http://keycloak:8080` | Broker callback base for both IdP source realms |
+
+The standalone federation Compose file also passes `FEDERATION_KEYCLOAK_URL`
+with the same default. Loopback callbacks remain available for local browsers.
+Startup import skips realms that already exist; changing these variables does
+not reconcile an existing realm. Review and apply its redirect/origin policy
+explicitly when updating an installation. Offline installations must already
+have their container images available locally.

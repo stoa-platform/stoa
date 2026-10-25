@@ -418,3 +418,265 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaises(m.MigrationError):
             m.rollback(self.api, journal, True, self.output)
         self.assertEqual(count, len(self.fake.writes))
+
+    def test_rollback_refuses_absent_original_scalar_before_any_write(self):
+        del self.fake.objects[ROOT]["accessCodeLifespan"]
+        self.apply()
+        count = len(self.fake.writes)
+        with self.assertRaises(m.MigrationError):
+            m.rollback(self.api, Path(self.temp.name) / "journal.json", True, self.output)
+        self.assertEqual(count, len(self.fake.writes))
+
+    def test_journal_fsync_failure_aborts_before_any_mutation(self):
+        with patch.object(m.os, "fsync", side_effect=OSError(SECRET)):
+            with self.assertRaises(m.MigrationError) as caught:
+                self.apply()
+        self.assertNotIn(SECRET, str(caught.exception))
+        self.assertFalse(self.fake.writes)
+
+    def test_error_and_postflight_cli_are_sanitized(self):
+        pol = Path(self.temp.name) / "policy.json"
+        pol.write_text(json.dumps(self.p))
+        journal = Path(self.temp.name) / "journal.json"
+        approved = Path(self.temp.name) / "plan.json"
+        m.create_journal(approved, self.api, self.plan())
+        with patch("sys.stdin", io.StringIO(SECRET)), patch("sys.stdout", self.output):
+            code = m.main(
+                [
+                    "--url",
+                    "https://auth.example.invalid",
+                    "--policy",
+                    str(pol),
+                    "--apply",
+                    "--expect-plan",
+                    str(approved),
+                    "--journal",
+                    str(journal),
+                ]
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(self.plan(), [])
+        self.assertNotIn(SECRET, self.output.getvalue())
+        with patch("sys.stderr", self.output):
+            with self.assertRaises(SystemExit) as caught:
+                m.main(["--unknown-" + SECRET])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertNotIn(SECRET, self.output.getvalue())
+
+    def test_apply_requires_journal_before_api_access(self):
+        with patch("sys.stderr", self.output):
+            self.assertEqual(
+                m.main(["--url", "https://auth.example.invalid", "--policy", "unused", "--apply"]),
+                2,
+            )
+        self.assertFalse(self.fake.requests)
+
+    def test_policy_duplicate_keys_rejected_without_echo(self):
+        pol = Path(self.temp.name) / "policy.json"
+        pol.write_text('{"version": 1, "version": "' + SECRET + '"}')
+        with self.assertRaises(m.MigrationError) as caught:
+            m.read_policy(pol)
+        self.assertNotIn(SECRET, str(caught.exception))
+
+    def test_corrupt_json_and_oversized_response_are_sanitized(self):
+        original = self.fake.request
+        for body in (SECRET.encode(), b"x" * (m.MAX_BYTES + 1)):
+
+            def invalid(*args, body=body):
+                result = Response(200, None)
+                result.body = body
+                return result
+
+            self.fake.request = invalid
+            with self.assertRaises(m.MigrationError) as caught:
+                self.api.get("")
+            self.assertNotIn(SECRET, str(caught.exception))
+        self.fake.request = original
+
+    def test_service_client_closes_browser_flows_without_inventing_tenant(self):
+        self.p["clients"]["portal"] = {
+            "browser": False,
+            "redirect_uris": [],
+            "web_origins": [],
+            "post_logout_redirect_uris": [],
+            "mappers": {"api-audience": "audience"},
+        }
+        self.apply()
+        client = self.fake.objects[ROOT + "/clients/c1"]
+        self.assertFalse(client["standardFlowEnabled"])
+        self.assertEqual(client["redirectUris"], [])
+        self.assertFalse(
+            any(
+                x.get("config", {}).get("claim.name") == "tenant_id"
+                for x in self.fake.objects[ROOT + "/clients/c1/protocol-mappers/models"]
+            )
+        )
+        self.assertEqual(self.plan(), [])
+
+    def test_required_claims_cannot_come_only_from_optional_scope(self):
+        self.p["clients"]["portal"]["mappers"] = {}
+        self.fake.objects[ROOT + "/clients/c1/optional-client-scopes"] = [{"id": "s1"}]
+        self.fake.objects[ROOT + "/client-scopes/s1/protocol-mappers/models"] = [
+            dict(m.mapper("tenant", "scope-tenant"), id="tenant"),
+            dict(m.mapper("audience", "scope-audience"), id="aud"),
+        ]
+        with self.assertRaises(m.MigrationError):
+            self.plan()
+        self.assertFalse(self.fake.writes)
+        self.fake.objects[ROOT + "/clients/c1/default-client-scopes"] = [{"id": "s1"}]
+        self.fake.objects[ROOT + "/clients/c1/optional-client-scopes"] = []
+        self.assertTrue(self.plan())
+
+    def test_incomplete_managed_mapper_rejected_before_mutation(self):
+        self.fake.objects[ROOT + "/clients/c1/protocol-mappers/models"] = [
+            {
+                "id": "legacy",
+                "name": "tenant-id",
+                "protocolMapper": "oidc-usermodel-attribute-mapper",
+                "config": {"claim.name": "tenant_id", "user.attribute": "tenant"},
+            }
+        ]
+        with self.assertRaises(m.MigrationError):
+            self.plan()
+        self.assertFalse(self.fake.writes)
+
+    def test_existing_mapper_update_then_rollback_restores_full_config(self):
+        legacy = dict(m.mapper("tenant", "tenant-id"), id="existing")
+        legacy["config"] = {
+            "claim.name": "tenant_id",
+            "user.attribute": "tenant",
+            "unrelated-config": SECRET,
+        }
+        path = ROOT + "/clients/c1/protocol-mappers/models"
+        self.fake.objects[path] = [copy.deepcopy(legacy)]
+        self.apply()
+        m.rollback(self.api, Path(self.temp.name) / "journal.json", True, self.output)
+        self.assertEqual(self.fake.objects[path], [legacy])
+        self.assertNotIn(SECRET, self.output.getvalue())
+
+    def test_simulation_can_write_private_complete_plan_without_api_mutation(self):
+        pol, approved = Path(self.temp.name) / "policy.json", Path(self.temp.name) / "plan.json"
+        pol.write_text(json.dumps(self.p))
+        with patch("sys.stdin", io.StringIO(SECRET)), patch("sys.stdout", self.output):
+            code = m.main(
+                [
+                    "--url",
+                    "https://auth.example.invalid",
+                    "--policy",
+                    str(pol),
+                    "--journal",
+                    str(approved),
+                ]
+            )
+        self.assertEqual(code, 0)
+        self.assertFalse(self.fake.writes)
+        self.assertEqual(m.load_journal(approved, self.api), self.plan())
+        self.assertNotIn(SECRET, self.output.getvalue())
+        self.assertEqual(approved.stat().st_mode & 0o777, 0o600)
+
+    def test_changed_plan_rejected_without_mutation(self):
+        pol = Path(self.temp.name) / "policy.json"
+        pol.write_text(json.dumps(self.p))
+        approved = Path(self.temp.name) / "plan.json"
+        m.create_journal(approved, self.api, self.plan())
+        self.fake.objects[ROOT]["ssoSessionMaxLifespan"] = 900
+        with patch("sys.stdin", io.StringIO(SECRET)), patch("sys.stderr", self.output):
+            code = m.main(
+                [
+                    "--url",
+                    "https://auth.example.invalid",
+                    "--policy",
+                    str(pol),
+                    "--apply",
+                    "--expect-plan",
+                    str(approved),
+                    "--journal",
+                    str(Path(self.temp.name) / "run.json"),
+                ]
+            )
+        self.assertEqual(code, 2)
+        self.assertFalse(self.fake.writes)
+
+    def test_migration_apply_requires_reviewed_plan(self):
+        with patch("sys.stderr", self.output):
+            code = m.main(
+                [
+                    "--url",
+                    "https://auth.example.invalid",
+                    "--policy",
+                    "unused",
+                    "--apply",
+                    "--journal",
+                    str(Path(self.temp.name) / "run.json"),
+                ]
+            )
+        self.assertEqual(code, 2)
+        self.assertFalse(self.fake.requests)
+
+    def test_modified_journal_cannot_target_unmanaged_fields_or_endpoints(self):
+        for path, key in (
+            ("/users/someone", ["enabled"]),
+            ("", ["smtpServer"]),
+            ("/clients/c1", ["secret"]),
+            ("/clients/%2E%2E", ["redirectUris"]),
+        ):
+            with self.subTest(path=path, key=key):
+                op = {
+                    "kind": "fields",
+                    "path": path,
+                    "changes": [
+                        {
+                            "key": key,
+                            "before": {"exists": True, "value": SECRET},
+                            "after": {"exists": True, "value": False},
+                        }
+                    ],
+                }
+                with self.assertRaises(m.MigrationError) as caught:
+                    m.validate_operation(op)
+                self.assertNotIn(SECRET, str(caught.exception))
+
+    def test_double_encoded_wildcard_and_path_traversal_identifiers_refused(self):
+        for value in ("https://portal.example.invalid/%252a", "https://portal.example.invalid/%00"):
+            with self.assertRaises(m.MigrationError):
+                m.exact_uri(value)
+        for value in (".", "..", "x/y", "x%2fy"):
+            with self.assertRaises(m.MigrationError):
+                m.identifier(value)
+
+    def test_empty_query_fragment_and_userinfo_delimiters_refused(self):
+        for value in (
+            "https://portal.example.invalid/?",
+            "https://portal.example.invalid/#",
+            "https://@portal.example.invalid/",
+            "https://:@portal.example.invalid/",
+        ):
+            with self.subTest(value=value), self.assertRaises(m.MigrationError):
+                m.exact_uri(value)
+        m.exact_uri("https://portal.example.invalid/call%62ack")
+        m.exact_uri("https://portal.example.invalid/callback%3Fpart%23part")
+
+    def test_client_caps_respect_stricter_realm_bounds(self):
+        self.fake.objects[ROOT]["accessTokenLifespan"] = 60
+        self.apply()
+        self.assertEqual(
+            self.fake.objects[ROOT + "/clients/c1"]["attributes"]["access.token.lifespan"], "60"
+        )
+
+    def test_failure_at_every_write_boundary_then_resume_and_restore(self):
+        total = len(self.plan())
+        for boundary in range(1, total + 1):
+            with self.subTest(boundary=boundary):
+                self.fake = FakeKeycloak()
+                self.fake.fail_write = boundary
+                first = Path(self.temp.name) / f"failed-{boundary}.json"
+                resumed = Path(self.temp.name) / f"resumed-{boundary}.json"
+                with self.assertRaises(m.MigrationError):
+                    m.execute(self.api, self.plan(), first, self.output)
+                self.assertEqual(len(self.fake.writes), boundary)
+                self.fake.fail_write = None
+                m.execute(self.api, self.plan(), resumed, self.output)
+                self.assertEqual(self.plan(), [])
+                m.rollback(self.api, resumed, True, self.output)
+                m.rollback(self.api, first, True, self.output)
+                self.assertEqual(self.fake.objects, FakeKeycloak().objects)

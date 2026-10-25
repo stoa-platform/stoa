@@ -184,11 +184,18 @@ class TestSignupTenant:
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "open",
-            "signup_invite_codes_list": [],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "open",
+                    "signup_invite_codes_list": [],
+                },
+            )(),
+        )
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
 
@@ -217,11 +224,18 @@ class TestSignupTenant:
         mock_repo.get_by_id = AsyncMock(return_value=existing)
         mock_db = AsyncMock()
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "open",
-            "signup_invite_codes_list": [],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "open",
+                    "signup_invite_codes_list": [],
+                },
+            )(),
+        )
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
 
         req = SelfServiceSignupRequest(
@@ -246,11 +260,18 @@ class TestSignupTenant:
         mock_repo.get_by_id = AsyncMock(return_value=existing)
         mock_db = AsyncMock()
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "open",
-            "signup_invite_codes_list": [],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "open",
+                    "signup_invite_codes_list": [],
+                },
+            )(),
+        )
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
 
         req = SelfServiceSignupRequest(
@@ -269,11 +290,18 @@ class TestSignupTenant:
 
         from src.services.signup_service import signup_tenant
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "open",
-            "signup_invite_codes_list": [],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "open",
+                    "signup_invite_codes_list": [],
+                },
+            )(),
+        )
 
         req = SelfServiceSignupRequest(
             name="Spammer Inc",
@@ -291,11 +319,18 @@ class TestSignupTenant:
 
         from src.services.signup_service import signup_tenant
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "invite",
-            "signup_invite_codes_list": [],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "invite",
+                    "signup_invite_codes_list": [],
+                },
+            )(),
+        )
 
         req = SelfServiceSignupRequest(
             name="Enterprise Corp",
@@ -321,11 +356,18 @@ class TestSignupTenant:
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "invite",
-            "signup_invite_codes_list": [code],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "invite",
+                    "signup_invite_codes_list": [code],
+                },
+            )(),
+        )
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
 
@@ -357,11 +399,18 @@ class TestSignupTenant:
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
 
-        monkeypatch.setattr("src.services.signup_service.settings", type("S", (), {
-            "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
-            "SIGNUP_MODE": "open",
-            "signup_invite_codes_list": [],
-        })())
+        monkeypatch.setattr(
+            "src.services.signup_service.settings",
+            type(
+                "S",
+                (),
+                {
+                    "SIGNUP_BLOCKED_EMAIL_DOMAINS": "",
+                    "SIGNUP_MODE": "open",
+                    "signup_invite_codes_list": [],
+                },
+            )(),
+        )
         monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
 

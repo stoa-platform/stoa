@@ -97,23 +97,17 @@ docker compose --profile federation --profile monitoring-oidc up -d
 | `federation` | OpenLDAP, Federation Gateway | ~256MB |
 | `monitoring-oidc` | oauth2-proxy | ~64MB |
 
-## Demo Users (OASIS Theme)
+## First administrator
 
-| Username | Password | Role | Tenant |
-|----------|----------|------|--------|
-| halliday | readyplayerone | Platform Admin | Gregarious Games |
-| morrow | ogdensmcguffin | Platform Admin | Gregarious Games |
-| parzival | copperkeystart | Tenant Admin | OASIS Gunters |
-| art3mis | samantha2045 | DevOps | OASIS Gunters |
-| aech | helen2045 | Viewer | OASIS Gunters |
-| sorrento | ioi101 | Tenant Admin | IOI Sixers |
-| sixer42 | loyalty2045 | Viewer | IOI Sixers |
+The default realm contains no user accounts. Create the first administrator with
+[the bootstrap runbook](../../docs/runbooks/first-admin-bootstrap.md). Registration
+requires an invitation by default; demo credentials must be generated on site.
 
 ## Demo Data Seeding
 
 ```bash
 # Seed everything (APIs, consumers, OpenSearch errors, traffic)
-ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh
+../../scripts/demo/seed-all.sh  # Supply the credential through the environment.
 
 # Seed only OpenSearch error snapshots
 ../../scripts/demo/seed-all.sh --opensearch-only

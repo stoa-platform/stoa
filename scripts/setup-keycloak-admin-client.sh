@@ -113,7 +113,7 @@ echo ""
 echo "=== Admin Client Created Successfully ==="
 echo ""
 echo "Client ID: $CLIENT_ID_NAME"
-echo "Client Secret: $CLIENT_SECRET"
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""
 
 # Update the Kubernetes secret

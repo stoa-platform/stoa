@@ -1,6 +1,7 @@
 """Régressions sur les fichiers du brouillon, jamais sur un serveur Keycloak."""
 
 import json
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -95,6 +96,49 @@ class DraftTests(unittest.TestCase):
             )
         self.assertNotIn("Create admin user (if adminEmail provided)", source)
 
+    def test_browser_origin_forms_are_exact(self):
+        obj = json.loads(load("deploy/docker-compose/init/keycloak-realm.json"))
+        for client in obj["clients"]:
+            if client.get("publicClient"):
+                for origin in client["webOrigins"]:
+                    self.assertIn(origin, client["redirectUris"])
+                    self.assertIn(origin + "/", client["redirectUris"])
+        # Dots in a KC attribute name must be quoted as one JSON path member.
+        setter = load("scripts/update-keycloak-console-redirect.sh")
+        self.assertIn('attributes."pkce.code.challenge.method"=S256', setter)
+
+    def test_seeders_fail_before_any_external_command_by_default(self):
+        for name in [
+            "scripts/setup-e2e-rpo-users.sh",
+            "scripts/demo/setup-rpo-keycloak-users.sh",
+            "tests/e2e/scripts/setup_test_users.sh",
+        ]:
+            # PATH deliberately invalid: the default guard must terminate before
+            # even looking for curl, jq, kubectl, AWS or openssl.
+            run = subprocess.run(
+                ["/bin/bash", "--noprofile", "--norc", str(ROOT / name)],
+                env={"PATH": "/nonexistent"},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(1, run.returncode, name)
+            self.assertIn("KEYCLOAK_BOOTSTRAP_ENV=dev", run.stderr, name)
+
+    def test_explicit_secret_guards_fail_before_network(self):
+        for name in [
+            "deploy/observability/setup-keycloak-client.sh",
+            "deploy/scripts/setup-observability-oidc.sh",
+            "scripts/update-keycloak-console-redirect.sh",
+        ]:
+            run = subprocess.run(
+                ["/bin/bash", "--noprofile", "--norc", str(ROOT / name)],
+                env={"PATH": "/nonexistent"},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(0, run.returncode, name)
+            self.assertIn("An explicit admin password is required", run.stderr, name)
+
     def test_api_and_gateway_keycloak_peers_are_scoped_and_complete(self):
         policies = list(kc.yaml.safe_load_all(load("k8s/networkpolicy-control-plane.yaml")))
         for policy in policies[:2]:
@@ -126,10 +170,57 @@ class DraftTests(unittest.TestCase):
                 allows_egress(policy, {"app": "unrelated"}, "kube-system", 53, protocol)
             )
 
+    def test_audience_helper_counter_does_not_abort_first_success(self):
+        source = load("deploy/platform-bootstrap/scripts/configure-keycloak-audience.sh")
+        self.assertNotIn("((CONFIGURED_COUNT++))", source)
+        statement = next(
+            line.strip()
+            for line in source.splitlines()
+            if line.strip().startswith("CONFIGURED_COUNT=$((")
+        )
+        run = subprocess.run(
+            [
+                "/bin/bash",
+                "--noprofile",
+                "--norc",
+                "-ec",
+                "CONFIGURED_COUNT=0; " + statement + '; test "$CONFIGURED_COUNT" = 1',
+            ],
+            env={"PATH": "/nonexistent"},
+            capture_output=True,
+        )
+        self.assertEqual(0, run.returncode)
+
     def test_environment_values_feed_the_domain_consumed_by_bootstrap(self):
         for filename in ["values-dev.yaml", "values-staging.yaml", "values-prod.yaml"]:
             obj = kc.yaml.safe_load(load("charts/stoa-platform/" + filename))
             self.assertEqual(obj["global"]["domain"], obj["stoa"]["domain"])
+
+    def test_dcr_declarations_follow_the_session_ceiling(self):
+        for name in [
+            "deploy/platform-bootstrap/applications/dcr-service-account-template.yaml",
+            "deploy/platform-bootstrap/policies/dcr-policy.yaml",
+        ]:
+            result = kc.Audit()
+            result.audit_text(name, load(name))
+            self.assertNotIn("KC_DECLARED_LIFETIME", {f.rule for f in result.findings})
+            self.assertNotIn("KC_CLIENT_LIFETIME", {f.rule for f in result.findings})
+
+    def test_imperative_local_realms_close_registration(self):
+        for name in ["quickstart/verify.sh", "deploy/standalone/jwt-proof.sh"]:
+            result = kc.Audit()
+            result.audit_text(name, load(name))
+            found = {f.rule for f in result.findings}
+            self.assertFalse(
+                {
+                    "KC_REGISTRATION",
+                    "KC_RESET",
+                    "KC_PASSWORD_POLICY",
+                    "KC_LIFETIME",
+                    "KC_OFFLINE_UNBOUNDED",
+                }
+                & found
+            )
 
     def test_realm_import_environment_defaults_are_wired(self):
         defaults = {

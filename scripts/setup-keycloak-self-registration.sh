@@ -1,5 +1,6 @@
 #!/bin/bash
-# Enable Keycloak Self-Registration for STOA Developer Portal (CAB-1170)
+# Configure email verification and keep self-registration closed
+# TERMS_URL defaults to http://localhost:3000/legal/terms; set an on-site URL if needed.
 #
 # Usage: ./setup-keycloak-self-registration.sh <KC_ADMIN_PWD> <SMTP_HOST> <SMTP_PORT> <SMTP_USER> <SMTP_PWD> <SMTP_FROM>
 #
@@ -7,10 +8,12 @@
 #   1. Configure SMTP (so email verification works)
 #   2. Enable email verification
 #   3. Enable VERIFY_EMAIL required action
-#   4. Enable registration (LAST — so users never register without email verification)
+#   4. Keep registration closed; use an approved invitation process
 #
 # Security: Store SMTP credentials in Infisical, not shell history.
 #   Run with: set +o history  (or use env vars)
+
+TERMS_URL="${TERMS_URL:-http://localhost:3000/legal/terms}"
 
 set -e
 
@@ -89,22 +92,21 @@ fi
 # Step 4: Enable VERIFY_EMAIL required action
 echo "[4/6] Enabling VERIFY_EMAIL required action..."
 if [ "$DRY_RUN" = false ]; then
-  $KCADM update "realms/$REALM" \
-    -s 'requiredActions=[{"alias":"VERIFY_EMAIL","name":"Verify Email","providerId":"VERIFY_EMAIL","enabled":true,"defaultAction":true,"priority":50}]' 2>/dev/null || \
-  echo "  (VERIFY_EMAIL may already be configured — checking...)"
+  $KCADM update authentication/required-actions/VERIFY_EMAIL -r "$REALM" \
+    -s enabled=true -s defaultAction=true
 fi
 
-# Step 5: Enable registration
-echo "[5/6] Enabling self-registration..."
+# Step 5: Keep registration closed
+echo "[5/6] Closing self-registration..."
 if [ "$DRY_RUN" = false ]; then
-  $KCADM update "realms/$REALM" -s registrationAllowed=true
+  $KCADM update "realms/$REALM" -s registrationAllowed=false -s resetPasswordAllowed=false
 fi
 
 # Step 6: Add Terms of Service URL
 echo "[6/6] Setting Terms of Service URL..."
 if [ "$DRY_RUN" = false ]; then
   $KCADM update "realms/$REALM" \
-    -s 'attributes={"termsUrl":"https://docs.gostoa.dev/legal/terms"}'
+    -s "attributes.termsUrl=${TERMS_URL}"
 fi
 
 # Verify
@@ -112,19 +114,13 @@ echo ""
 echo "=== Verification ==="
 if [ "$DRY_RUN" = false ]; then
   echo "Current realm settings:"
-  $KCADM get "realms/$REALM" --fields registrationAllowed,verifyEmail,smtpServer 2>/dev/null | head -20
+  $KCADM get "realms/$REALM" --fields registrationAllowed,verifyEmail,resetPasswordAllowed 2>/dev/null | head -20
 fi
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "Self-registration flow:"
-echo "  1. Developer visits portal.gostoa.dev"
-echo "  2. Clicks 'Create Free Account'"
-echo "  3. Redirected to Keycloak registration form"
-echo "  4. Receives email verification"
-echo "  5. Verifies email -> lands in Portal"
-echo "  6. Auto-provisioned: personal tenant + viewer role"
+echo "Registration is closed. Onboarding requires an approved invitation."
 echo ""
 echo "REMINDER: Store SMTP credentials in Infisical (vault.gostoa.dev)"
 echo "  infisical secrets set SMTP_HOST=$SMTP_HOST --env=prod --path=/keycloak"

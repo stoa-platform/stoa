@@ -169,7 +169,7 @@ for entry in "${WORKERS[@]}"; do
         \"directAccessGrantsEnabled\": false,
         \"serviceAccountsEnabled\": true,
         \"attributes\": {
-          \"access.token.lifespan\": \"${TOKEN_TTL_SECONDS}\"
+          \"access.token.lifespan\": \"300\"
         }
       }" -w '%{header_json}' | jq -r '.location[0] // empty' | grep -oP '[^/]+$')
 

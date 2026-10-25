@@ -13,6 +13,17 @@
 
 set -eo pipefail
 
+# Demo accounts must never target a shared production realm by default.
+if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then
+  echo "This account seeder requires KEYCLOAK_BOOTSTRAP_ENV=dev." >&2
+  exit 1
+fi
+: "${KEYCLOAK_URL:?Set an explicit development Keycloak URL}"
+: "${KEYCLOAK_REALM:?Set a dedicated development realm}"
+case "$KEYCLOAK_REALM" in
+  stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
+esac
+
 # Default configuration
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-stoa}"

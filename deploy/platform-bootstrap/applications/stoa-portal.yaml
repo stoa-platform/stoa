@@ -22,12 +22,12 @@ spec:
       - authorization_code
       - refresh_token
     redirectUris:
-      - https://portal.${BASE_DOMAIN}/*
-      - http://localhost:5173/*
+      - https://portal.${BASE_DOMAIN}
+      - https://portal.${BASE_DOMAIN}/
     webOrigins:
       - https://portal.${BASE_DOMAIN}
-      - http://localhost:5173
     pkce: true
+    pkceCodeChallengeMethod: S256
     publicClient: true
 
   # API Subscriptions

@@ -162,7 +162,7 @@ if [ "$DRY_RUN" = false ]; then
   echo ""
   echo "Google IDP configuration:"
   $KCADM get "identity-provider/instances/google" -r "$REALM" \
-    --fields alias,displayName,enabled,trustEmail,config 2>/dev/null | head -20
+    --fields alias,displayName,enabled,trustEmail 2>/dev/null | head -20
   echo ""
   echo "IDP mappers:"
   $KCADM get "identity-provider/instances/google/mappers" -r "$REALM" \

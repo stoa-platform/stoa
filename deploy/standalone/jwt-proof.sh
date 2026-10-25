@@ -73,7 +73,7 @@ fi
 sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://127.0.0.1:8080 --realm master --user admin --password admin >/dev/null
 sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create realms \
-  -s realm=stoa -s enabled=true -s accessTokenLifespan=1 >/dev/null
+  -s realm=stoa -s enabled=true -s registrationAllowed=false -s resetPasswordAllowed=false -s 'passwordPolicy=length(12) and notUsername and maxLength(128)' -s ssoSessionIdleTimeout=1800 -s ssoSessionMaxLifespan=28800 -s offlineSessionIdleTimeout=86400 -s offlineSessionMaxLifespanEnabled=true -s offlineSessionMaxLifespan=604800 -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 -s accessTokenLifespan=1 >/dev/null
 sudo docker exec stoa-jwt-kc /opt/keycloak/bin/kcadm.sh create clients -r stoa \
   -s clientId=stoa-caller \
   -s secret="$CLIENT_SECRET" \

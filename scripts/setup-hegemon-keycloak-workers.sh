@@ -148,7 +148,7 @@ for ROLE in "${WORKERS[@]}"; do
       }" > /dev/null 2>&1 && echo "    Stored successfully" || echo "    WARN: Infisical storage failed (store manually)"
   else
     echo "  WARN: INFISICAL_TOKEN not set — secret not stored automatically"
-    echo "  Store manually: infisical secrets set KC_CLIENT_SECRET=$CLIENT_SECRET --env=prod --path=/hegemon/worker-${ROLE}"
+    echo "Sensitive values are withheld; use the approved secret store."
   fi
 
   echo ""

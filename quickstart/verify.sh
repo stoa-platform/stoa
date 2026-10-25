@@ -116,7 +116,7 @@ docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials \
 
 if ! docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh get "realms/$REALM" >/dev/null 2>&1; then
   docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create realms \
-    -s "realm=$REALM" -s enabled=true >/dev/null
+    -s "realm=$REALM" -s enabled=true -s registrationAllowed=false -s resetPasswordAllowed=false -s 'passwordPolicy=length(12) and notUsername and maxLength(128)' -s accessTokenLifespan=300 -s ssoSessionIdleTimeout=1800 -s ssoSessionMaxLifespan=28800 -s offlineSessionIdleTimeout=86400 -s offlineSessionMaxLifespanEnabled=true -s offlineSessionMaxLifespan=604800 -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 >/dev/null
 fi
 
 existing_id="$(

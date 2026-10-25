@@ -156,29 +156,26 @@ else
   exit 1
 fi
 
-# Step 4: Retrieve and display the client secret
-echo "[4/4] Retrieving client secret..."
+# Step 4: Retrieve the client identifier for the completion report
+echo "[4/4] Retrieving client identifier..."
 
 CLIENT_INFO=$(curl -s \
   "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}")
 CLIENT_UUID=$(echo "${CLIENT_INFO}" | jq -r '.[0].id')
 
-SECRET_RESPONSE=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_SECRET=$(echo "${SECRET_RESPONSE}" | jq -r '.value')
+# The identifier is used in the completion report below.
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Client UUID: ${CLIENT_UUID}"
-echo "Client Secret: ${CLIENT_SECRET}"
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""
 echo "Next steps:"
 echo ""
 echo "  1. Store the secret in Vault:"
-echo "     vault kv patch stoa/vps/netbox NETBOX_OIDC_CLIENT_SECRET=${CLIENT_SECRET}"
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""
 echo "  2. Restart Vault Agent on VPS to render new .env:"
 echo "     ssh root@${VPS_N8N_IP} systemctl restart vault-agent"

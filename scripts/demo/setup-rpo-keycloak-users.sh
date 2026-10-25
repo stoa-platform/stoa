@@ -14,6 +14,17 @@
 
 set -e
 
+# Demo accounts must never target a shared production realm by default.
+if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then
+  echo "This account seeder requires KEYCLOAK_BOOTSTRAP_ENV=dev." >&2
+  exit 1
+fi
+: "${KEYCLOAK_URL:?Set an explicit development Keycloak URL}"
+: "${KEYCLOAK_REALM:?Set a dedicated development realm}"
+case "$KEYCLOAK_REALM" in
+  stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
+esac
+
 # Configuration
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 REALM="${KEYCLOAK_REALM:-stoa}"
@@ -185,12 +196,12 @@ echo "Ready Player One Demo - Setup Complete"
 echo "=============================================="
 echo ""
 echo "Demo Credentials (passwords from env vars or defaults):"
-echo "  parzival / \$PARZIVAL_PASSWORD - High Five (resistance)"
-echo "  sorrento / \$SORRENTO_PASSWORD - IOI (corporation)"
-echo "  halliday / \$HALLIDAY_PASSWORD - OASIS (platform admin)"
+echo "Sensitive values are withheld; use the approved secret store."
+echo "Sensitive values are withheld; use the approved secret store."
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""
 echo "Test login:"
 echo "  curl -X POST '${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token' \\"
 echo "    -d 'client_id=control-plane-ui' -d 'username=parzival' \\"
-echo "    -d 'password=\$PARZIVAL_PASSWORD' -d 'grant_type=password'"
+echo "Sensitive values are withheld; use the approved secret store."
 echo ""

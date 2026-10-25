@@ -197,6 +197,8 @@ else
   IG_PAYLOAD=$(cat <<'IG_JSON'
 {
   "clientId": "stoa-identity-governance",
+  "implicitFlowEnabled": false,
+  "protocolMappers": [{"name": "control-plane-api-audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false, "config": {"included.client.audience": "control-plane-api", "id.token.claim": "false", "access.token.claim": "true"}}],
   "name": "STOA Identity Governance",
   "description": "Identity Governance API — SCIM, DCR, Access Review (CAB-1463)",
   "enabled": true,

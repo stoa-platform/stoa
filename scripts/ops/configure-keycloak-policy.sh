@@ -36,7 +36,7 @@ REALMS=("stoa" "master")
 # passwordHistory(5): DORA "credential rotation"
 # maxLength(128): support passphrases
 # No forceExpiredPasswordChange — NIST 800-63B discourages forced expiration
-PASSWORD_POLICY="length(12) and lowerCase(1) and upperCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5) and maxLength(128)"
+PASSWORD_POLICY="length(16) and lowerCase(1) and upperCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5) and maxLength(128)"
 
 # Brute-force protection settings
 BRUTE_FORCE_MAX_FAILURES=5

@@ -19,6 +19,8 @@
 
 set -euo pipefail
 
+: "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
+
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost/auth}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
@@ -89,7 +91,6 @@ CLIENT_PAYLOAD=$(cat <<ENDJSON
     "${PROMETHEUS_REDIRECT_URI}"
   ],
   "webOrigins": [
-    "http://localhost",
     "https://grafana.gostoa.dev",
     "https://prometheus.gostoa.dev"
   ],
@@ -126,26 +127,17 @@ else
   exit 1
 fi
 
-# Step 4: Retrieve and display the client secret
-echo "[4/4] Retrieving client secret..."
+# Step 4: Report completion without reading sensitive values
+echo "[4/4] Client configuration complete."
 
-CLIENT_INFO=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_UUID=$(echo "${CLIENT_INFO}" | jq -r '.[0].id')
-
-SECRET_RESPONSE=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_SECRET=$(echo "${SECRET_RESPONSE}" | jq -r '.value')
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Add the following to your .env file:"
 echo ""
-echo "  GRAFANA_OIDC_CLIENT_SECRET=${CLIENT_SECRET}"
-echo "  OAUTH2_PROXY_CLIENT_SECRET=${CLIENT_SECRET}"
+echo "Sensitive values are withheld; use the approved secret store."
+echo "Sensitive values are withheld; use the approved secret store."
 echo "  OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n')"
 echo ""
 echo "Then restart the stack:"

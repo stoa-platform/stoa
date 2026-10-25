@@ -12,7 +12,6 @@ from src.services.signup_service import (
     validate_invite_code,
 )
 
-
 # ── slugify_tenant_name ──
 
 
@@ -196,7 +195,7 @@ class TestSignupTenant:
                 },
             )(),
         )
-        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
+        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda _: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
 
         req = SelfServiceSignupRequest(
@@ -236,7 +235,7 @@ class TestSignupTenant:
                 },
             )(),
         )
-        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
+        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda _: mock_repo)
 
         req = SelfServiceSignupRequest(
             name="My Company",
@@ -272,7 +271,7 @@ class TestSignupTenant:
                 },
             )(),
         )
-        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
+        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda _: mock_repo)
 
         req = SelfServiceSignupRequest(
             name="My Company",
@@ -368,7 +367,7 @@ class TestSignupTenant:
                 },
             )(),
         )
-        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
+        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda _: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
 
         req = SelfServiceSignupRequest(
@@ -411,7 +410,7 @@ class TestSignupTenant:
                 },
             )(),
         )
-        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda db: mock_repo)
+        monkeypatch.setattr("src.services.signup_service.TenantRepository", lambda _: mock_repo)
         monkeypatch.setattr("src.services.signup_service.provision_tenant", AsyncMock())
 
         req = SelfServiceSignupRequest(

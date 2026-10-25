@@ -1,4 +1,6 @@
 {
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
   "$schema": "https://raw.githubusercontent.com/keycloak/keycloak/main/js/libs/keycloak-admin-client/src/defs/realmRepresentation.json",
   "_comment": "TOTP/2FA Configuration for STOA Realm - CAB-XXX Secure API Key Management",
 

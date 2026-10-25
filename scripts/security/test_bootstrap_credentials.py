@@ -25,3 +25,17 @@ class CredentialTests(unittest.TestCase):
                 key, value = line.split("=", 1)
                 if "PASSWORD" in key or "SECRET" in key:
                     self.assertEqual("", value, key)
+
+    def test_import_origins_are_unique_and_totp_registration_is_closed(self):
+        realm = json.loads((ROOT / "deploy/docker-compose/init/keycloak-realm.json").read_text())
+        for client in realm["clients"]:
+            for key in ("redirectUris", "webOrigins"):
+                entries = client.get(key, [])
+                self.assertEqual(len(entries), len(set(entries)))
+        totp = json.loads((ROOT / "deploy/keycloak/stoa-realm-totp.json").read_text())
+        self.assertIs(False, totp["registrationAllowed"])
+        source = (
+            ROOT / "deploy/platform-bootstrap/applications/dcr-service-account-template.yaml"
+        ).read_text()
+        self.assertNotIn("28800  # 24 hours", source)
+        self.assertNotIn("300  # 1 hour", source)

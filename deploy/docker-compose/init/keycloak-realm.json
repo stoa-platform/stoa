@@ -712,15 +712,12 @@
         "http://localhost:5173/",
         "${CONSOLE_ORIGIN}",
         "${CONSOLE_ORIGIN}/",
-        "${CONSOLE_ORIGIN}",
-        "${CONSOLE_ORIGIN}/",
         "http://localhost",
         "http://localhost/"
       ],
       "webOrigins": [
         "http://localhost:3000",
         "http://localhost:5173",
-        "${CONSOLE_ORIGIN}",
         "${CONSOLE_ORIGIN}",
         "http://localhost"
       ],
@@ -768,13 +765,10 @@
         "http://localhost:3002",
         "http://localhost:3002/",
         "${PORTAL_ORIGIN}",
-        "${PORTAL_ORIGIN}/",
-        "${PORTAL_ORIGIN}",
         "${PORTAL_ORIGIN}/"
       ],
       "webOrigins": [
         "http://localhost:3002",
-        "${PORTAL_ORIGIN}",
         "${PORTAL_ORIGIN}"
       ],
       "defaultClientScopes": [

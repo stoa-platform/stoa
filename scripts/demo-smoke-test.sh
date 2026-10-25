@@ -71,7 +71,7 @@ DRY_RUN_CONTRACT="${DRY_RUN_CONTRACT:-0}"
 OBS_VISIBILITY_CHECK="${OBS_VISIBILITY_CHECK:-auto}" # auto | off
 GRAFANA_URL="${GRAFANA_URL:-http://localhost:3001}"
 GRAFANA_USER="${GRAFANA_USER:-admin}"
-GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-admin}"
+GRAFANA_PASSWORD="${GRAFANA_PASSWORD:?GRAFANA_PASSWORD is required}"
 CONSOLE_URL="${CONSOLE_URL:-http://localhost:3000}"
 PORTAL_URL="${PORTAL_URL:-http://localhost:3002}"
 QUIET="${QUIET:-0}"
@@ -118,6 +118,8 @@ die() {
 
 check_deps() {
     local missing=0
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib/secret-input.sh"
     for cmd in curl jq; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             echo "missing: $cmd" >&2

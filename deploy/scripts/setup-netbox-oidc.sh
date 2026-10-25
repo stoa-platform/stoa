@@ -52,7 +52,7 @@ TOKEN_RESPONSE=$(curl -s -X POST \
 ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.access_token')
 if [ "${ACCESS_TOKEN}" = "null" ] || [ -z "${ACCESS_TOKEN}" ]; then
   echo "ERROR: Failed to obtain access token. Response:"
-  echo "${TOKEN_RESPONSE}" | jq .
+  echo "Authentication failed; response details are withheld."
   exit 1
 fi
 echo "  Access token obtained."

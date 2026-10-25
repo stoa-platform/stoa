@@ -110,8 +110,6 @@ create_user() {
     local status
 
     status=$(echo "$response" | tail -n1)
-    local body
-    body=$(echo "$response" | sed '$d')
 
     if [ "$status" = "201" ]; then
         echo -e "  ${GREEN}[OK] User created${NC}"
@@ -121,7 +119,7 @@ create_user() {
         return 0
     else
         echo -e "  ${RED}[FAIL] HTTP ${status}${NC}"
-        echo "  Response: ${body}"
+        echo "  Request failed; response details are withheld."
         return 1
     fi
 }

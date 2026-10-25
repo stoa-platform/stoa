@@ -102,7 +102,7 @@ TOKEN_RESPONSE=$(curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid
 TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 if [ -z "$TOKEN" ]; then
   echo -e "${RED}Failed to get admin token. Check credentials.${NC}"
-  echo "Response: $(echo "$TOKEN_RESPONSE" | jq -r 'del(.access_token) | .error_description // .error // "unknown"')"
+  echo "Authentication failed; response details are withheld."
   exit 1
 fi
 echo -e "  ${GREEN}OK${NC} — admin token obtained"

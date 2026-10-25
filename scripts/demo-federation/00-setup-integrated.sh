@@ -27,6 +27,8 @@ echo ""
 
 # Check Keycloak is ready
 echo -e "${YELLOW}Checking Keycloak...${NC}"
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
 if ! curl -sf "${KEYCLOAK_URL}/health/ready" > /dev/null 2>&1; then
   echo -e "${RED}Keycloak not ready at ${KEYCLOAK_URL}${NC}"
   echo "Start the stack first: docker compose --profile federation up -d"
@@ -67,7 +69,7 @@ ADMIN_TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-con
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "client_id=admin-cli" \
   -d "username=admin" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD:-admin}" \
+  -d "password=${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}" \
   -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
 
 if [ -n "${ADMIN_TOKEN}" ] && [ "${ADMIN_TOKEN}" != "None" ]; then

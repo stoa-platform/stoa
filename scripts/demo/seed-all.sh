@@ -31,7 +31,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-http://localhost:8000}"
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
 OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
-OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:${OPENSEARCH_ADMIN_PASSWORD:-admin}}"
+OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:${OPENSEARCH_ADMIN_PASSWORD:?OPENSEARCH_ADMIN_PASSWORD is required}}"
 SKIP_TRAFFIC="${SKIP_TRAFFIC:-false}"
 SKIP_MTLS="${SKIP_MTLS:-false}"
 FEDERATION="${FEDERATION:-false}"
@@ -99,6 +99,8 @@ run_step() {
 
 check_api() {
   info "Checking Control Plane API at $CONTROL_PLANE_URL..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
   if curl -sf "$CONTROL_PLANE_URL/health" > /dev/null 2>&1; then
     log "API is healthy"
     return 0

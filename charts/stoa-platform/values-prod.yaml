@@ -78,3 +78,7 @@ stoaGateway:
     limits:
       cpu: 1000m
       memory: 512Mi
+
+# Bootstrap derives its origins from stoa.domain.
+stoa:
+  domain: gostoa.dev

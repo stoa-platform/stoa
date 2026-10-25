@@ -680,3 +680,65 @@ class MigrationTests(unittest.TestCase):
                 m.rollback(self.api, resumed, True, self.output)
                 m.rollback(self.api, first, True, self.output)
                 self.assertEqual(self.fake.objects, FakeKeycloak().objects)
+
+    def test_rollback_resume_after_ambiguous_lost_delete_response(self):
+        self.apply()
+        original = self.fake.request
+
+        def lose_delete(method, *args):
+            if method == "DELETE":
+                self.fake.lost_response = True
+                self.fake.request = original
+            return original(method, *args)
+
+        self.fake.request = lose_delete
+        journal = Path(self.temp.name) / "journal.json"
+        with self.assertRaises(m.MigrationError):
+            m.rollback(self.api, journal, True, self.output)
+        m.rollback(self.api, journal, True, self.output)
+        self.assertEqual(self.fake.objects, FakeKeycloak().objects)
+
+    def test_refresh_rotation_pkce_and_exact_logout_are_enforced(self):
+        self.fake.objects[ROOT]["revokeRefreshToken"] = False
+        self.fake.objects[ROOT]["refreshTokenMaxReuse"] = 5
+        self.apply()
+        realm = self.fake.objects[ROOT]
+        client = self.fake.objects[ROOT + "/clients/c1"]
+        self.assertTrue(realm["revokeRefreshToken"])
+        self.assertEqual(realm["refreshTokenMaxReuse"], 0)
+        self.assertEqual(client["attributes"]["pkce.code.challenge.method"], "S256")
+        self.assertEqual(
+            client["attributes"]["post.logout.redirect.uris"], "https://portal.example.invalid/"
+        )
+        self.assertEqual(client["redirectUris"], self.p["clients"]["portal"]["redirect_uris"])
+        self.assertEqual(client["webOrigins"], self.p["clients"]["portal"]["web_origins"])
+
+    def test_unmanaged_attributes_changed_after_plan_are_preserved(self):
+        ops = self.plan()
+        self.fake.objects[ROOT + "/clients/c1"]["attributes"]["concurrent-unmanaged"] = SECRET
+        m.execute(self.api, ops, Path(self.temp.name) / "journal.json", self.output)
+        self.assertEqual(
+            self.fake.objects[ROOT + "/clients/c1"]["attributes"]["concurrent-unmanaged"], SECRET
+        )
+        m.rollback(self.api, Path(self.temp.name) / "journal.json", True, self.output)
+        self.assertEqual(
+            self.fake.objects[ROOT + "/clients/c1"]["attributes"]["concurrent-unmanaged"], SECRET
+        )
+        self.assertNotIn(SECRET, self.output.getvalue())
+
+    def test_rollback_symlink_and_cross_realm_journal_refused(self):
+        self.apply()
+        journal = Path(self.temp.name) / "journal.json"
+        link = Path(self.temp.name) / "alias.json"
+        link.symlink_to(journal)
+        with self.assertRaises(m.MigrationError):
+            m.rollback(self.api, link, True, self.output)
+        other = m.Admin("https://auth.example.invalid", "other", SECRET)
+        count = len(self.fake.writes)
+        with self.assertRaises(m.MigrationError):
+            m.rollback(other, journal, True, self.output)
+        self.assertEqual(len(self.fake.writes), count)
+
+
+if __name__ == "__main__":
+    unittest.main()

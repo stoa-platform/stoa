@@ -1,0 +1,60 @@
+# Garde anti-réapparition des chemins purgés (CAB-2327 P2).
+# Les chemins ne figurent qu'en empreintes SHA-256 dans scripts/ci/purged-paths-guard.sh.
+name: purged-paths-guard
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: purged-paths-guard-${{ github.ref }}
+  # Seules les PR sont annulées ; aucun push n'est jamais annulé.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  purged-paths-guard:
+    name: purged-paths-guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Contrôle des chemins purgés
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          PUSH_CREATED: ${{ github.event.created }}
+          REF_TYPE: ${{ github.ref_type }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          zero="0000000000000000000000000000000000000000"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # Arbre de la fusion de test + commits propres à la PR.
+            ./scripts/ci/purged-paths-guard.sh "${PR_BASE}..${PR_HEAD}"
+          elif [ "$REF_TYPE" = "tag" ] || [ "$PUSH_CREATED" = "true" ] || [ "$PUSH_BEFORE" = "$zero" ] \
+               || ! git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            # Tag, nouvelle branche ou ancien sommet inconnu : arbre, plus les commits
+            # absents de la branche par défaut quand elle est disponible.
+            # ^{commit} déréférence un tag annoté.
+            if git rev-parse -q --verify "refs/remotes/origin/${DEFAULT_BRANCH}^{commit}" >/dev/null; then
+              ./scripts/ci/purged-paths-guard.sh "${PUSH_AFTER}^{commit}" --not "refs/remotes/origin/${DEFAULT_BRANCH}"
+            else
+              ./scripts/ci/purged-paths-guard.sh
+            fi
+          else
+            ./scripts/ci/purged-paths-guard.sh "${PUSH_BEFORE}^{commit}..${PUSH_AFTER}^{commit}"
+          fi

@@ -1,0 +1,168 @@
+# =============================================================================
+# GitHub Actions: CI Gate
+# =============================================================================
+# Tourne sur chaque demande de fusion. Le job changes détecte les composants
+# touchés. Les composants attendus sont appelés via workflow_call. Le job
+# ci-gate agrège leurs résultats.
+# changes et security doivent être success. Une sortie true exige success.
+# skipped n'est accepté que si la sortie vaut false.
+# =============================================================================
+
+name: CI Gate
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+
+concurrency:
+  group: ci-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      control-plane-api: ${{ steps.diff.outputs.control-plane-api }}
+      stoa-gateway: ${{ steps.diff.outputs.stoa-gateway }}
+      control-plane-ui: ${{ steps.diff.outputs.control-plane-ui }}
+      portal: ${{ steps.diff.outputs.portal }}
+      stoa-go: ${{ steps.diff.outputs.stoa-go }}
+      stoa-operator: ${{ steps.diff.outputs.stoa-operator }}
+      helm: ${{ steps.diff.outputs.helm }}
+      gate-contract: ${{ steps.diff.outputs.gate-contract }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed components
+        id: diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: bash .github/scripts/ci-gate-changes.sh "$BASE_SHA" "$HEAD_SHA"
+
+  control-plane-api:
+    needs: changes
+    if: needs.changes.outputs.control-plane-api == 'true'
+    uses: ./.github/workflows/control-plane-api-ci.yml
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  stoa-gateway:
+    needs: changes
+    if: needs.changes.outputs.stoa-gateway == 'true'
+    uses: ./.github/workflows/stoa-gateway-ci.yml
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  control-plane-ui:
+    needs: changes
+    if: needs.changes.outputs.control-plane-ui == 'true'
+    uses: ./.github/workflows/control-plane-ui-ci.yml
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  portal:
+    needs: changes
+    if: needs.changes.outputs.portal == 'true'
+    uses: ./.github/workflows/stoa-portal-ci.yml
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+      attestations: write
+      packages: write # callee docker job declares it (push-only, but validated at parse time)
+
+  stoa-go:
+    needs: changes
+    if: needs.changes.outputs.stoa-go == 'true'
+    uses: ./.github/workflows/stoa-go-ci.yml
+    permissions:
+      contents: read
+
+  stoa-operator:
+    needs: changes
+    if: needs.changes.outputs.stoa-operator == 'true'
+    uses: ./.github/workflows/stoa-operator-ci.yml
+    permissions:
+      contents: read
+      checks: write
+
+  helm:
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    uses: ./.github/workflows/helm-lint.yml
+    permissions:
+      contents: read
+
+  gate-contract:
+    needs: changes
+    if: needs.changes.outputs.gate-contract == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: python -m pip install 'pytest==8.4.2' 'PyYAML==6.0.3'
+
+      - name: Run ci-gate contract tests
+        run: pytest scripts/ci/tests/test_ci_gate_contract.py -v --tb=short
+
+  security:
+    uses: ./.github/workflows/security-scan.yml
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs:
+      - changes
+      - control-plane-api
+      - stoa-gateway
+      - control-plane-ui
+      - portal
+      - stoa-go
+      - stoa-operator
+      - helm
+      - gate-contract
+      - security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Aggregate results
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: bash .github/scripts/ci-gate-aggregate.sh

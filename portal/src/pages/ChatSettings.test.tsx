@@ -163,6 +163,7 @@ describe('ChatSettings', () => {
     });
 
     const input = screen.getByLabelText(/daily token budget/i);
+    await waitFor(() => expect(input).toBeEnabled());
     await user.clear(input);
     await user.type(input, '50000');
     expect(input).toHaveValue(50000);

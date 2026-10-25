@@ -320,7 +320,7 @@ make help
 
 ## Community
 
-- [Discord](https://discord.gg/j8tHSSes) — Chat with the community
+- [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions) — Ask questions and discuss with the community
 - [Twitter/X](https://x.com/gostoa) — Follow for updates
 - [Email](mailto:hello@gostoa.dev) — Reach out directly
 

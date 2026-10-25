@@ -10,7 +10,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        > **Tip**: For quicker responses, consider asking on our [Discord](https://discord.gg/j8tHSSes) where the community can help!
+        > **Tip**: You can also ask questions on [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions), where the community can help.
 
   - type: dropdown
     id: component

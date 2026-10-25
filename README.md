@@ -8,14 +8,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/control-plane-api-ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/stoa-platform/stoa/stargazers"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
-  <a href="https://discord.gg/j8tHSSes"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 <p align="center">
   <a href="https://gostoa.dev">Website</a> ·
   <a href="https://docs.gostoa.dev">Docs</a> ·
   <a href="https://github.com/stoa-platform/stoa/discussions">Discussions</a> ·
-  <a href="https://discord.gg/j8tHSSes">Discord</a> ·
   <a href="https://status.gostoa.dev">Status</a>
 </p>
 
@@ -310,7 +308,7 @@ Great places to contribute:
 - **Docs and tutorials** — quick starts, migration guides, architecture notes, real-world examples.
 - **Developer experience** — `stoactl`, local setup, test ergonomics, CI, Helm values.
 
-Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the community on Discord.
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the community on [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions).
 
 <a href="https://github.com/stoa-platform/stoa/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stoa-platform/stoa" alt="Contributors" />
@@ -325,7 +323,6 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), open an issue, or join the comm
 | Documentation | <https://docs.gostoa.dev> |
 | Website | <https://gostoa.dev> |
 | GitHub Discussions | <https://github.com/stoa-platform/stoa/discussions> |
-| Discord | <https://discord.gg/j8tHSSes> |
 | Status | <https://status.gostoa.dev> |
 | Support | [`SUPPORT.md`](SUPPORT.md) |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md) |

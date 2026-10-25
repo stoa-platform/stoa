@@ -29,7 +29,7 @@ body:
       description: What has this person contributed? (PRs, issues, docs, community help, etc.)
       placeholder: |
         - PR #123: Added rate limiting for MCP tools
-        - Helped 5 users in Discord with migration questions
+        - Helped 5 users in GitHub Discussions with migration questions
         - Wrote a blog post about STOA deployment
     validations:
       required: true

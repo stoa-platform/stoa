@@ -33,7 +33,7 @@
             <span>&bull;</span>
             <a href="https://github.com/stoa-platform" target="_blank">GitHub</a>
             <span>&bull;</span>
-            <a href="https://discord.gg/j8tHSSes" target="_blank">Discord</a>
+            <a href="https://github.com/stoa-platform/stoa/discussions" target="_blank">GitHub Discussions</a>
         </div>
     </div>
 </body>

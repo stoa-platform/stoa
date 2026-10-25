@@ -4,10 +4,6 @@
 blank_issues_enabled: false
 
 contact_links:
-  - name: 💬 Discord Community
-    url: https://discord.gg/j8tHSSes
-    about: Join our Discord for real-time help and discussions
-
   - name: 📖 Documentation
     url: https://docs.gostoa.dev
     about: Check our documentation for guides and references

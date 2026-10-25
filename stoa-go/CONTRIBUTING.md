@@ -171,7 +171,7 @@ This triggers:
 
 ## Community
 
-- 💬 [Discord](https://discord.gg/stoa) — Chat with the community
+- 💬 [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions) — Ask questions and discuss with the community
 - 📧 [Email](mailto:hello@gostoa.dev) — Reach out directly
 
 ## Recognition

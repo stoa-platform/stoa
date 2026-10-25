@@ -44,7 +44,7 @@ def administrators(kc):
 
 def provision(kc, identity: dict) -> tuple[int, str, str | None]:
     realm = kc.call("GET")
-    if realm.get("attributes", {}).get(CONSUMED):
+    if (realm.get("attributes") or {}).get(CONSUMED):
         return 10, "already_consumed", None
     admin = administrators(kc)
     if admin:
@@ -70,7 +70,7 @@ def provision(kc, identity: dict) -> tuple[int, str, str | None]:
             },
         )
         clients = kc.call("GET", "/clients?" + urlencode({"clientId": MARKER}))
-    if len(clients) != 1 or clients[0].get("attributes", {}).get("request") != fingerprint:
+    if len(clients) != 1 or (clients[0].get("attributes") or {}).get("request") != fingerprint:
         raise Refused("different_request_pending", 21)
     if not users:
         actions = kc.call("GET", "/authentication/required-actions")
@@ -100,7 +100,7 @@ def provision(kc, identity: dict) -> tuple[int, str, str | None]:
         return 20, "administrator_exists", admin
     role = kc.call("GET", "/roles/cpi-admin")
     kc.call("POST", f"/users/{user_id}/role-mappings/realm", [role])
-    attributes = kc.call("GET").get("attributes", {})
+    attributes = kc.call("GET").get("attributes") or {}
     attributes[CONSUMED] = now()
     kc.call(
         "PUT",

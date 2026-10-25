@@ -101,3 +101,22 @@ class InputTests(unittest.TestCase):
         )
         self.assertEqual(22, run.returncode)
         self.assertNotIn(self.token, run.stdout + run.stderr)
+
+    def test_refusal_audit_has_no_secret_and_performs_no_write(self):
+        kc = FakeKeycloak()
+        kc.users = [{"id": "existing", "username": "existing"}]
+        kc.roles["/users/existing/role-mappings/realm/composite"] = [{"name": "cpi-admin"}]
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            patch.object(sys, "argv", ["bootstrap"]),
+            patch.object(sys, "stdin", io.StringIO(json.dumps(self.request))),
+            patch.object(bootstrap, "Keycloak", return_value=kc),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(err),
+        ):
+            self.assertEqual(20, bootstrap.main())
+        self.assertNotIn(self.token, out.getvalue() + err.getvalue())
+        self.assertEqual([], kc.writes)
+        self.assertEqual(
+            "administrator_exists", json.loads(out.getvalue().splitlines()[0])["reason"]
+        )

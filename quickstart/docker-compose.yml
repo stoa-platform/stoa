@@ -57,10 +57,12 @@ services:
     environment:
       ENVIRONMENT: dev
       BASE_DOMAIN: example.test
-      DATABASE_URL: postgresql+asyncpg://quickstart:placeholder-only@postgres:5432/quickstart
+      DATABASE_URL: postgresql+asyncpg://quickstart:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/quickstart
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_REALM: quickstart
+      SIGNUP_MODE: ${SIGNUP_MODE:-invite}
+      SIGNUP_INVITE_CODES: ${SIGNUP_INVITE_CODES:-}
       KEYCLOAK_CLIENT_ID: quickstart-control-plane
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET is required}
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:?KEYCLOAK_ADMIN_CLIENT_SECRET is required}

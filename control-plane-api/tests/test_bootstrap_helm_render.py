@@ -1,23 +1,18 @@
 """Render contracts in the existing API CI job (Helm must be available)."""
 
+import importlib
 import secrets
-import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-CHART = ROOT / "charts/stoa-platform"
-
-
-def render(*arguments):
-    return subprocess.run(
-        ["helm", "template", "installation", str(CHART), *arguments],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+sys.path.insert(0, str(ROOT / "scripts/security"))
+helm_support = importlib.import_module("helm_contract_support")
+CHART = helm_support.CHART
+render = helm_support.render
 
 
 def objects(result):

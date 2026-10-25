@@ -152,8 +152,9 @@ class TestValidateInviteCode:
         from src.config import Settings
 
         assert Settings.model_fields["SIGNUP_MODE"].default == "invite"
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as caught:
             Settings(SIGNUP_MODE="unsupported", _env_file=None)
+        assert any(error["loc"] == ("SIGNUP_MODE",) for error in caught.value.errors(include_input=False))
 
 
 # ── signup_tenant (integration-level unit tests) ──

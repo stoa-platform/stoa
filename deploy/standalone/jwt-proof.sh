@@ -8,6 +8,7 @@
 # Usage: deploy/standalone/jwt-proof.sh [image]
 # Does not print the admin token or the Keycloak client secret.
 set -euo pipefail
+set +x
 
 IMAGE="${1:-stoa-gateway:0.9.25}"
 # Set STOA_PROOF_BIN to a gateway binary to run it on the host. Keycloak and

@@ -85,9 +85,7 @@ def main() -> int:
     except (ValueError, KeyError, TypeError, OSError):
         print("Secret storage failed; input and command output are withheld.", file=sys.stderr)
         return 1
-    print(
-        "Secret stored. See docs/runbooks/first-admin-bootstrap.md for verification and rotation."
-    )
+    print("Secret stored.")
     return 0
 
 

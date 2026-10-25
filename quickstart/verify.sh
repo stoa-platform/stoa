@@ -9,6 +9,7 @@
 # own session and, at the deadline, sends TERM then KILL to that process group.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
+set +x
 
 VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-120}"
 

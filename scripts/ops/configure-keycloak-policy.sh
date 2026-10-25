@@ -21,6 +21,7 @@
 #   - curl + jq installed
 # =============================================================================
 set -euo pipefail
+set +x
 
 # --- Configuration ---
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"

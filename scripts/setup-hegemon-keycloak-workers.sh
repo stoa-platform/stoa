@@ -18,6 +18,7 @@
 # CAB-1712: HEGEMON Keycloak service accounts
 
 set -euo pipefail
+set +x
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then

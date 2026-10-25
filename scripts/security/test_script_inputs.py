@@ -16,7 +16,7 @@ class ScriptInputTests(unittest.TestCase):
             "scripts/setup-keycloak-google-idp.sh",
         ):
             run = subprocess.run(
-                ["/bin/bash", str(ROOT / name), token],
+                ["/bin/bash", "-x", str(ROOT / name), token],
                 env={"PATH": "/nonexistent"},
                 capture_output=True,
                 text=True,
@@ -44,7 +44,7 @@ class ScriptInputTests(unittest.TestCase):
             "scripts/setup-keycloak-admin-client.sh",
         ):
             run = subprocess.run(
-                ["/bin/bash", str(ROOT / name), token],
+                ["/bin/bash", "-x", str(ROOT / name), token],
                 env={"PATH": "/nonexistent"},
                 capture_output=True,
                 text=True,

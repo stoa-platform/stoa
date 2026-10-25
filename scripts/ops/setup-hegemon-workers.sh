@@ -19,6 +19,7 @@
 #   --no-infisical  Skip Infisical storage (useful for testing)
 # =============================================================================
 set -euo pipefail
+set +x
 
 # --- Configuration ---
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"

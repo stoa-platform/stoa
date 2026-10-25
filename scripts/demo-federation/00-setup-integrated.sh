@@ -10,6 +10,7 @@
 # This script only needs to run once to seed LDAP users for gamma org.
 # =============================================================================
 set -euo pipefail
+set +x
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

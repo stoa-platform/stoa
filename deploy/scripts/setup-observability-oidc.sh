@@ -18,6 +18,7 @@
 # =============================================================================
 
 set -euo pipefail
+set +x
 
 : "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 

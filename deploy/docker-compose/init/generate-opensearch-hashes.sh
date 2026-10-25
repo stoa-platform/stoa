@@ -8,6 +8,7 @@
 # =============================================================================
 
 set -e
+set +x
 
 HASH_TOOL="/usr/share/opensearch/plugins/opensearch-security/tools/hash.sh"
 OUTPUT_DIR="/output/security"

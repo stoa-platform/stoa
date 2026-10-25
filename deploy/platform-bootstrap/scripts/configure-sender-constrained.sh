@@ -18,6 +18,7 @@
 #   ./configure-sender-constrained.sh [--keycloak-url URL] [--realm REALM] [--dry-run]
 
 set -euo pipefail
+set +x
 
 # --- Configuration ---
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"

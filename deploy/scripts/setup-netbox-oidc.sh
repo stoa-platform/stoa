@@ -44,8 +44,8 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -s -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=${KEYCLOAK_ADMIN}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  --data-urlencode "username=${KEYCLOAK_ADMIN}" \
+  --data-urlencode "password=${KEYCLOAK_ADMIN_PASSWORD}" \
   -d "grant_type=password" \
   -d "client_id=admin-cli")
 

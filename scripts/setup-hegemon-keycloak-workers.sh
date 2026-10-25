@@ -178,7 +178,7 @@ for ROLE in "${WORKERS[@]}"; do
 
   TOKEN_RESPONSE=$(curl -s -X POST "$TOKEN_URL" \
     -d "client_id=$CLIENT_ID" \
-    -d "client_secret=$CLIENT_SECRET" \
+    --data-urlencode "client_secret=$CLIENT_SECRET" \
     -d "grant_type=client_credentials" 2>/dev/null)
 
   ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)

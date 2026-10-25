@@ -68,8 +68,8 @@ echo -e "${YELLOW}Triggering LDAP sync for demo-org-gamma...${NC}"
 ADMIN_TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "client_id=admin-cli" \
-  -d "username=admin" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}" \
+  --data-urlencode "username=admin" \
+  --data-urlencode "password=${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}" \
   -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
 
 if [ -n "${ADMIN_TOKEN}" ] && [ "${ADMIN_TOKEN}" != "None" ]; then

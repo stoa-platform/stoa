@@ -64,8 +64,8 @@ data:
       curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
         -d "grant_type=password" \
         -d "client_id=admin-cli" \
-        -d "username=${ADMIN_USER}" \
-        -d "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
+        --data-urlencode "username=${ADMIN_USER}" \
+        --data-urlencode "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
     }
 
     TOKEN=$(get_token)
@@ -350,8 +350,8 @@ data:
       "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
       -d "grant_type=password" \
       -d "client_id=admin-cli" \
-      -d "username=${ADMIN_USER}" \
-      -d "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+      --data-urlencode "username=${ADMIN_USER}" \
+      --data-urlencode "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 
     if [ -n "$SVC_TOKEN" ]; then
       STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \

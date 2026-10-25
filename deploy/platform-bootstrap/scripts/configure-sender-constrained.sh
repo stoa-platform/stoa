@@ -60,8 +60,8 @@ get_token() {
 source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
   curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -d "client_id=admin-cli" \
-    -d "username=${ADMIN_USER}" \
-    -d "password=${ADMIN_PASS}" \
+    --data-urlencode "username=${ADMIN_USER}" \
+    --data-urlencode "password=${ADMIN_PASS}" \
     -d "grant_type=password" | jq -r '.access_token'
 }
 

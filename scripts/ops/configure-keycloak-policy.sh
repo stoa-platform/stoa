@@ -95,8 +95,8 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "client_id=admin-cli" \
-  -d "username=${ADMIN_USER}" \
-  -d "password=${ADMIN_PASSWORD}" \
+  --data-urlencode "username=${ADMIN_USER}" \
+  --data-urlencode "password=${ADMIN_PASSWORD}" \
   -d "grant_type=password" 2>/dev/null || echo '{"error":"failed"}')
 
 TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')

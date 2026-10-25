@@ -120,8 +120,8 @@ echo ""
 echo -e "${CYAN}[1/4] Authenticating to Keycloak...${NC}"
 ADMIN_TOKEN=$(kc_curl -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" \
-  -d "username=${KC_ADMIN_USER}" \
-  -d "password=${KC_ADMIN_PASSWORD}" \
+  --data-urlencode "username=${KC_ADMIN_USER}" \
+  --data-urlencode "password=${KC_ADMIN_PASSWORD}" \
   -d "grant_type=password" | jq -r '.access_token')
 
 if [ -z "$ADMIN_TOKEN" ] || [ "$ADMIN_TOKEN" = "null" ]; then
@@ -239,7 +239,7 @@ else
     token_response=$(kc_curl -X POST \
       "${KEYCLOAK_URL}/realms/${KC_REALM}/protocol/openid-connect/token" \
       -d "client_id=${client_id}" \
-      -d "client_secret=${secret}" \
+      --data-urlencode "client_secret=${secret}" \
       -d "grant_type=client_credentials")
 
     access_token=$(echo "$token_response" | jq -r '.access_token // empty')

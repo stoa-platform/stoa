@@ -63,8 +63,8 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
 TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "client_id=admin-cli" \
-    -d "username=${ADMIN_USER}" \
-    -d "password=${ADMIN_PASSWORD}" \
+    --data-urlencode "username=${ADMIN_USER}" \
+    --data-urlencode "password=${ADMIN_PASSWORD}" \
     -d "grant_type=password" | jq -r '.access_token')
 
 if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then

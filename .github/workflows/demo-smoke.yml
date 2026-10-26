@@ -25,18 +25,49 @@ jobs:
     timeout-minutes: 35
     env:
       DEMO_SMOKE_BLOCKING: ${{ inputs.blocking || vars.DEMO_SMOKE_BLOCKING || 'false' }}
-      POSTGRES_PASSWORD: stoa
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      OPENSEARCH_ADMIN_PASSWORD: admin
-      OPENSEARCH_DASHBOARDS_PASSWORD: admin
-      OPENSEARCH_LOGWRITER_PASSWORD: admin
-      OPENSEARCH_OIDC_CLIENT_SECRET: x
       STOA_DISABLE_AUTH: "true"
       GATEWAY_URL: http://localhost:8081
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Generate isolated Compose credentials
+        id: compose-ci-inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            DEMO_DEMO_ORG_ALPHA_DEMO_ALPHA_PASSWORD \
+            DEMO_DEMO_ORG_BETA_DEMO_BETA_PASSWORD \
+            DEMO_IDP_SOURCE_ALPHA_ALICE_ALPHA_PASSWORD \
+            DEMO_IDP_SOURCE_ALPHA_BOB_ALPHA_PASSWORD \
+            DEMO_IDP_SOURCE_BETA_CAROL_BETA_PASSWORD \
+            DEMO_IDP_SOURCE_BETA_DAVE_BETA_PASSWORD \
+            E2E_DPOP_CLIENT_SECRET \
+            FEDERATION_ALPHA_BROKER_SECRET \
+            FEDERATION_DEMO_CLIENT_SECRET \
+            GATEWAY_API_KEY \
+            GRAFANA_PASSWORD \
+            IDENTITY_GOVERNANCE_CLIENT_SECRET \
+            KEYCLOAK_ADMIN_PASSWORD \
+            KEYCLOAK_CLIENT_SECRET \
+            LDAP_ADMIN_PASSWORD \
+            MCP_KEYCLOAK_CLIENT_SECRET \
+            OAUTH2_PROXY_CLIENT_SECRET \
+            OPENSEARCH_ADMIN_PASSWORD \
+            OPENSEARCH_DASHBOARDS_PASSWORD \
+            OPENSEARCH_LOGWRITER_PASSWORD \
+            OPENSEARCH_OIDC_CLIENT_SECRET \
+            POSTGRES_PASSWORD
+          do
+            value="Ci-$(openssl rand -hex 24)Aa1!"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+            if [[ "$name" == "OPENSEARCH_ADMIN_PASSWORD" ]]; then
+              printf 'OPENSEARCH_PASSWORD=%s\n' "$value" >> "$GITHUB_ENV"
+            fi
+          done
 
       - name: Boot demo smoke stack
         shell: bash

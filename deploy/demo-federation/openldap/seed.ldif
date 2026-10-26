@@ -9,7 +9,6 @@ cn: Eve Gamma
 sn: Gamma
 givenName: Eve
 mail: eve@gamma.demo
-userPassword: demo
 
 dn: uid=frank-gamma,ou=users,dc=demo,dc=stoa
 objectClass: inetOrgPerson
@@ -18,4 +17,3 @@ cn: Frank Gamma
 sn: Gamma
 givenName: Frank
 mail: frank@gamma.demo
-userPassword: demo

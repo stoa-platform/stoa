@@ -15,16 +15,13 @@
 #   - curl and jq installed
 #   - KEYCLOAK_URL, KEYCLOAK_ADMIN, KEYCLOAK_ADMIN_PASSWORD set (or defaults used)
 #
-# After running:
-#   1. Store the client secret in Vault:
-#      vault kv patch stoa/vps/netbox NETBOX_OIDC_CLIENT_SECRET=<secret>
-#   2. Restart Vault Agent on VPS to render new .env
-#   3. Restart Netbox: docker compose down && docker compose up -d
-#
+# Client credentials are written to the configured on-site Vault path through stdin.
 # WARNING: This script calls live Keycloak APIs. Run manually, not in CI.
 # =============================================================================
 
 set -euo pipefail
+set +x
+: "${NETBOX_SECRET_PATH:?Set NETBOX_SECRET_PATH to the on-site Vault path}"
 
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
@@ -42,18 +39,20 @@ echo ""
 
 # Step 1: Obtain admin access token
 echo "[1/4] Obtaining admin access token..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -s -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=${KEYCLOAK_ADMIN}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  --data-urlencode "username=${KEYCLOAK_ADMIN}" \
+  --data-urlencode "password=${KEYCLOAK_ADMIN_PASSWORD}" \
   -d "grant_type=password" \
   -d "client_id=admin-cli")
 
 ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.access_token')
 if [ "${ACCESS_TOKEN}" = "null" ] || [ -z "${ACCESS_TOKEN}" ]; then
   echo "ERROR: Failed to obtain access token. Response:"
-  echo "${TOKEN_RESPONSE}" | jq .
+  echo "Authentication failed; response details are withheld."
   exit 1
 fi
 echo "  Access token obtained."
@@ -156,35 +155,11 @@ else
   exit 1
 fi
 
-# Step 4: Retrieve and display the client secret
-echo "[4/4] Retrieving client secret..."
-
-CLIENT_INFO=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_UUID=$(echo "${CLIENT_INFO}" | jq -r '.[0].id')
-
-SECRET_RESPONSE=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_SECRET=$(echo "${SECRET_RESPONSE}" | jq -r '.value')
-
-echo ""
-echo "=== Setup Complete ==="
-echo ""
-echo "Client UUID: ${CLIENT_UUID}"
-echo "Client Secret: ${CLIENT_SECRET}"
-echo ""
-echo "Next steps:"
-echo ""
-echo "  1. Store the secret in Vault:"
-echo "     vault kv patch stoa/vps/netbox NETBOX_OIDC_CLIENT_SECRET=${CLIENT_SECRET}"
-echo ""
-echo "  2. Restart Vault Agent on VPS to render new .env:"
-echo "     ssh root@${VPS_N8N_IP} systemctl restart vault-agent"
-echo ""
-echo "  3. Restart Netbox on VPS:"
-echo "     ssh root@${VPS_N8N_IP} 'cd /opt/netbox && docker compose down && docker compose up -d'"
-echo ""
-echo "  4. Verify SSO: open https://netbox.gostoa.dev and check for OIDC login button"
-echo ""
+# Store the retrieved value directly in the on-site vault.
+CLIENT_UUID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" | jq -er '.[0].id')
+curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" |
+  python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/security/store_oidc_secret.py" \
+    --vault-path "$NETBOX_SECRET_PATH" --key NETBOX_OIDC_CLIENT_SECRET
+echo "See docs/runbooks/first-admin-bootstrap.md for secret verification and rotation."

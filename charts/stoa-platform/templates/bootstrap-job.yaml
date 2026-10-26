@@ -1,12 +1,16 @@
 {{/*
   Bootstrap Job (CAB-1864) — provisions Keycloak realm, OIDC clients, roles,
   scopes, and default tenant on first install.
-  Runs as a Helm post-install hook. Idempotent — safe to re-run.
+  Runs as a Helm post-install hook. Existing realms require a separate reviewed migration.
 
   CAB-1958: Skipped when keycloak.operator.enabled=true — realm is managed
   by the Keycloak Operator via KeycloakRealmImport CR in stoa-infra.
 */}}
-{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values)) }}
+{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values.AsMap)) }}
+{{- if .Values.stoa.bootstrap.keycloak.adminPassword }}
+{{- fail "Inline bootstrap admin passwords are unsupported; use keycloak.existingSecret" }}
+{{- end }}
+{{- $credentials := required "stoa.bootstrap.keycloak.existingSecret is required when bootstrap is enabled" .Values.stoa.bootstrap.keycloak.existingSecret }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -21,9 +25,12 @@ metadata:
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
 data:
+  curl-config.sh: |
+    {{- .Files.Get "files/curl-config.sh" | nindent 4 }}
   bootstrap.sh: |
     #!/bin/sh
     set -eu
+    . /scripts/curl-config.sh
 
     KEYCLOAK_URL="http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80"
     REALM="{{ .Values.stoaGateway.keycloakRealm | default "stoa" }}"
@@ -57,8 +64,8 @@ data:
       curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
         -d "grant_type=password" \
         -d "client_id=admin-cli" \
-        -d "username=${ADMIN_USER}" \
-        -d "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
+        --data-urlencode "username=${ADMIN_USER}" \
+        --data-urlencode "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
     }
 
     TOKEN=$(get_token)
@@ -77,7 +84,23 @@ data:
         \"realm\": \"${REALM}\",
         \"enabled\": true,
         \"displayName\": \"STOA Platform\",
-        \"registrationAllowed\": true,
+        \"registrationAllowed\": false,
+        \"resetPasswordAllowed\": false,
+        \"passwordPolicy\": \"length(16) and notUsername and passwordHistory(5) and maxLength(128)\",
+        \"accessTokenLifespan\": 300,
+        \"ssoSessionIdleTimeout\": 1800,
+        \"ssoSessionMaxLifespan\": 28800,
+        \"clientSessionIdleTimeout\": 1800,
+        \"clientSessionMaxLifespan\": 28800,
+        \"offlineSessionIdleTimeout\": 86400,
+        \"offlineSessionMaxLifespanEnabled\": true,
+        \"offlineSessionMaxLifespan\": 604800,
+        \"revokeRefreshToken\": true,
+        \"refreshTokenMaxReuse\": 0,
+        \"accessCodeLifespan\": 60,
+        \"accessCodeLifespanUserAction\": 300,
+        \"actionTokenGeneratedByUserLifespan\": 300,
+        \"actionTokenGeneratedByAdminLifespan\": 3600,
         \"loginWithEmailAllowed\": true,
         \"duplicateEmailsAllowed\": false,
         \"sslRequired\": \"external\"
@@ -85,7 +108,7 @@ data:
     case $STATUS in
       201) log "Realm created" ;;
       409) log "Realm already exists (OK)" ;;
-      *)   log "WARN: Realm creation returned ${STATUS}" ;;
+      *)   log "ERROR: Realm creation returned ${STATUS}"; exit 1 ;;
     esac
 
     # Refresh token after realm creation (may take a moment)
@@ -145,7 +168,7 @@ data:
       case $STATUS in
         201) log "Client '${CLIENT_ID}' created" ;;
         409) log "Client '${CLIENT_ID}' exists (OK)" ;;
-        *)   log "WARN: Client '${CLIENT_ID}' returned ${STATUS}" ;;
+        *)   log "ERROR: Client '${CLIENT_ID}' returned ${STATUS}"; exit 1 ;;
       esac
     }
 
@@ -159,9 +182,11 @@ data:
       \"publicClient\": true,
       \"standardFlowEnabled\": true,
       \"directAccessGrantsEnabled\": false,
-      \"redirectUris\": [\"https://console.${DOMAIN}/*\", \"http://localhost:3000/*\"],
-      \"webOrigins\": [\"https://console.${DOMAIN}\", \"http://localhost:3000\"],
-      \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
+      \"redirectUris\": [\"https://console.${DOMAIN}\", \"https://console.${DOMAIN}/\"],
+      \"webOrigins\": [\"https://console.${DOMAIN}\"],
+      \"attributes\": {\"pkce.code.challenge.method\": \"S256\"},
+      \"implicitFlowEnabled\": false,
+      \"protocolMappers\": [{\"name\": \"control-plane-api-audience\", \"protocol\": \"openid-connect\", \"protocolMapper\": \"oidc-audience-mapper\", \"consentRequired\": false, \"config\": {\"included.client.audience\": \"control-plane-api\", \"id.token.claim\": \"false\", \"access.token.claim\": \"true\"}}, {\"name\": \"tenant-id\", \"protocol\": \"openid-connect\", \"protocolMapper\": \"oidc-usermodel-attribute-mapper\", \"consentRequired\": false, \"config\": {\"user.attribute\": \"tenant_id\", \"claim.name\": \"tenant_id\", \"jsonType.label\": \"String\", \"multivalued\": \"false\", \"id.token.claim\": \"true\", \"access.token.claim\": \"true\", \"userinfo.token.claim\": \"true\"}}]
     }"
 
     # ---------------------------------------------------------------
@@ -174,9 +199,11 @@ data:
       \"publicClient\": true,
       \"standardFlowEnabled\": true,
       \"directAccessGrantsEnabled\": false,
-      \"redirectUris\": [\"https://portal.${DOMAIN}/*\", \"http://localhost:5173/*\"],
-      \"webOrigins\": [\"https://portal.${DOMAIN}\", \"http://localhost:5173\"],
-      \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
+      \"redirectUris\": [\"https://portal.${DOMAIN}\", \"https://portal.${DOMAIN}/\"],
+      \"webOrigins\": [\"https://portal.${DOMAIN}\"],
+      \"attributes\": {\"pkce.code.challenge.method\": \"S256\"},
+      \"implicitFlowEnabled\": false,
+      \"protocolMappers\": [{\"name\": \"control-plane-api-audience\", \"protocol\": \"openid-connect\", \"protocolMapper\": \"oidc-audience-mapper\", \"consentRequired\": false, \"config\": {\"included.client.audience\": \"control-plane-api\", \"id.token.claim\": \"false\", \"access.token.claim\": \"true\"}}, {\"name\": \"tenant-id\", \"protocol\": \"openid-connect\", \"protocolMapper\": \"oidc-usermodel-attribute-mapper\", \"consentRequired\": false, \"config\": {\"user.attribute\": \"tenant_id\", \"claim.name\": \"tenant_id\", \"jsonType.label\": \"String\", \"multivalued\": \"false\", \"id.token.claim\": \"true\", \"access.token.claim\": \"true\", \"userinfo.token.claim\": \"true\"}}]
     }"
 
     # ---------------------------------------------------------------
@@ -189,7 +216,9 @@ data:
       \"publicClient\": false,
       \"serviceAccountsEnabled\": true,
       \"standardFlowEnabled\": false,
-      \"directAccessGrantsEnabled\": false
+      \"directAccessGrantsEnabled\": false,
+      \"implicitFlowEnabled\": false,
+      \"protocolMappers\": [{\"name\": \"control-plane-api-audience\", \"protocol\": \"openid-connect\", \"protocolMapper\": \"oidc-audience-mapper\", \"consentRequired\": false, \"config\": {\"included.client.audience\": \"control-plane-api\", \"id.token.claim\": \"false\", \"access.token.claim\": \"true\"}}]
     }"
 
     # ---------------------------------------------------------------
@@ -241,6 +270,7 @@ data:
     #   for stoa-mcp-gateway / control-plane-api above; follow-up ticket
     #   if we ever want these chart-configurable uniformly.
     # ---------------------------------------------------------------
+    {{- if .Values.stoa.bootstrap.adminServiceAccount.enabled }}
     STOACTL_ADMIN_CLIENT=stoactl-admin
     STOACTL_ADMIN_ROLE=cpi-admin
     # access.token.lifespan=300 caps JWTs to 5 minutes regardless of realm
@@ -293,41 +323,10 @@ data:
     log "NOTE: run docs/runbooks/cab-2108-stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to Infisical"
 
     # ---------------------------------------------------------------
-    # Create admin user (if adminEmail provided)
-    # ---------------------------------------------------------------
-    if [ -n "${ADMIN_EMAIL}" ]; then
-      STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-        "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
-        -H "${AUTH}" -H "Content-Type: application/json" \
-        -d "{
-          \"username\": \"admin\",
-          \"email\": \"${ADMIN_EMAIL}\",
-          \"enabled\": true,
-          \"emailVerified\": true,
-          \"requiredActions\": [\"UPDATE_PASSWORD\"]
-        }")
-      case $STATUS in
-        201) log "Admin user created (password change required on first login)" ;;
-        409) log "Admin user exists (OK)" ;;
-        *)   log "WARN: Admin user creation returned ${STATUS}" ;;
-      esac
-
-      # Assign cpi-admin role to admin user
-      ADMIN_ID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/users?username=admin" \
-        -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
-      if [ -n "$ADMIN_ID" ]; then
-        ROLE_ID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/cpi-admin" \
-          -H "${AUTH}" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
-        if [ -n "$ROLE_ID" ]; then
-          curl -sf -X POST \
-            "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${ADMIN_ID}/role-mappings/realm" \
-            -H "${AUTH}" -H "Content-Type: application/json" \
-            -d "[{\"id\": \"${ROLE_ID}\", \"name\": \"cpi-admin\"}]" >/dev/null 2>&1 || true
-          log "Assigned cpi-admin role to admin user"
-        fi
-      fi
-    fi
-
+    {{- end }}
+    # Admin invitation is an explicit operator step; no default admin user.
+    # See docs/runbooks/first-admin-bootstrap.md before enabling admin service accounts.
+    # Existing users and role assignments are not modified by this hook.
     # ---------------------------------------------------------------
     # Wait for Control Plane API
     # ---------------------------------------------------------------
@@ -351,8 +350,8 @@ data:
       "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
       -d "grant_type=password" \
       -d "client_id=admin-cli" \
-      -d "username=${ADMIN_USER}" \
-      -d "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+      --data-urlencode "username=${ADMIN_USER}" \
+      --data-urlencode "password=${ADMIN_PASS}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 
     if [ -n "$SVC_TOKEN" ]; then
       STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
@@ -395,6 +394,7 @@ spec:
       labels:
         app.kubernetes.io/component: bootstrap
     spec:
+      automountServiceAccountToken: false
       restartPolicy: OnFailure
       containers:
         - name: bootstrap
@@ -404,15 +404,10 @@ spec:
             - name: KC_ADMIN_USER
               value: {{ .Values.stoa.bootstrap.keycloak.adminUser | quote }}
             - name: KC_ADMIN_PASSWORD
-              {{- if .Values.stoa.bootstrap.keycloak.adminPassword }}
-              value: {{ .Values.stoa.bootstrap.keycloak.adminPassword | quote }}
-              {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: keycloak-credentials
-                  key: admin-password
-                  optional: true
-              {{- end }}
+                  name: {{ $credentials | quote }}
+                  key: {{ .Values.stoa.bootstrap.keycloak.passwordKey | quote }}
           volumeMounts:
             - name: scripts
               mountPath: /scripts
@@ -425,6 +420,7 @@ spec:
               cpu: 200m
               memory: 64Mi
           securityContext:
+            readOnlyRootFilesystem: true
             privileged: false
             runAsNonRoot: true
             runAsUser: 100

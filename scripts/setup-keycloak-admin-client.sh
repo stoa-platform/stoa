@@ -1,7 +1,7 @@
 #!/bin/bash
 # Create Keycloak Admin Client for Control-Plane API Service Account Management
 #
-# Usage: ./setup-keycloak-admin-client.sh <KEYCLOAK_ADMIN_PASSWORD>
+# Usage: KEYCLOAK_ADMIN_PASSWORD from the environment; no positional arguments.
 #
 # This script creates the 'control-plane-api-admin' client with:
 # - Service account enabled (for client credentials flow)
@@ -9,22 +9,21 @@
 #
 # The client secret is then stored in the control-plane-api-secrets
 
-set -e
+set -euo pipefail
+set +x
 
-if [ -z "$1" ]; then
-  echo "Usage: $0 <KEYCLOAK_ADMIN_PASSWORD>"
-  echo ""
-  echo "Get the admin password from: kubectl get secret keycloak -n stoa-system -o jsonpath='{.data.admin-password}' | base64 -d"
-  exit 1
+if [ $# -ne 0 ]; then
+  echo "Positional credentials are unsupported; use KEYCLOAK_ADMIN_PASSWORD." >&2
+  exit 2
 fi
+: "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
-KEYCLOAK_ADMIN_PASSWORD="$1"
 CLIENT_ID_NAME="control-plane-api-admin"
 
 # Find Keycloak pod
-KEYCLOAK_POD=$(kubectl get pods -n stoa-system -l app=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+KEYCLOAK_POD=$(kubectl get pods -n stoa-system -l app=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 if [ -z "$KEYCLOAK_POD" ]; then
-  KEYCLOAK_POD=$(kubectl get pods -n stoa-system -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  KEYCLOAK_POD=$(kubectl get pods -n stoa-system -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 fi
 
 if [ -z "$KEYCLOAK_POD" ]; then
@@ -37,15 +36,14 @@ echo "Using Keycloak pod: $KEYCLOAK_POD"
 
 # Login to Keycloak
 echo "Logging into Keycloak..."
-kubectl exec -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh config credentials \
+printf '%s\n' "$KEYCLOAK_ADMIN_PASSWORD" | kubectl exec -i -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://localhost:8080 \
   --realm master \
-  --user admin \
-  --password "$KEYCLOAK_ADMIN_PASSWORD"
+  --user admin
 
 # Check if client already exists
 echo "Checking if client '$CLIENT_ID_NAME' exists..."
-EXISTING=$(kubectl exec -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh get clients -r stoa --fields clientId 2>/dev/null | grep -c "\"$CLIENT_ID_NAME\"" || echo "0")
+EXISTING=$(kubectl exec -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh get clients -r stoa --fields clientId 2>/dev/null | grep -c "\"$CLIENT_ID_NAME\"" || true)
 
 if [ "$EXISTING" != "0" ]; then
   echo "Client '$CLIENT_ID_NAME' already exists. Getting client ID..."
@@ -113,15 +111,15 @@ echo ""
 echo "=== Admin Client Created Successfully ==="
 echo ""
 echo "Client ID: $CLIENT_ID_NAME"
-echo "Client Secret: $CLIENT_SECRET"
+echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage."
 echo ""
 
 # Update the Kubernetes secret
 echo "Updating control-plane-api-secrets..."
 SECRET_BASE64=$(echo -n "$CLIENT_SECRET" | base64)
 
-kubectl patch secret control-plane-api-secrets -n stoa-system --type='json' \
-  -p="[{\"op\": \"replace\", \"path\": \"/data/KEYCLOAK_ADMIN_CLIENT_SECRET\", \"value\": \"$SECRET_BASE64\"}]"
+printf '[{"op":"replace","path":"/data/KEYCLOAK_ADMIN_CLIENT_SECRET","value":"%s"}]' "$SECRET_BASE64" |
+  kubectl patch secret control-plane-api-secrets -n stoa-system --type=json --patch-file=/dev/stdin
 
 echo ""
 echo "=== Secret Updated ==="

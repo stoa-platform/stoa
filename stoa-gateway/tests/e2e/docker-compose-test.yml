@@ -18,7 +18,7 @@ services:
       STOA_HOST: "0.0.0.0"
       STOA_PORT: "8080"
       STOA_GATEWAY_MODE: "edge-mcp"
-      STOA_ADMIN_API_TOKEN: "test-admin-token"
+      STOA_ADMIN_API_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required; use run-e2e.sh}
       STOA_CONTROL_PLANE_URL: "http://wiremock:8080"
       STOA_GATEWAY_EXTERNAL_URL: "http://localhost:18080"
       STOA_LOG_LEVEL: "debug"
@@ -68,7 +68,7 @@ services:
       - "18083:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${E2E_KEYCLOAK_ADMIN_PASSWORD:?E2E_KEYCLOAK_ADMIN_PASSWORD is required; use run-e2e.sh}
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
       # FAPI 2.0: token exchange + DPoP + PAR (CAB-1733)

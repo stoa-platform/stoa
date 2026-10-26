@@ -33,15 +33,15 @@ All services are accessible through the nginx reverse proxy on port 80:
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Console** | http://localhost | halliday / readyplayerone |
-| **Portal** | http://localhost/portal | (self-registration) |
-| **API Docs** | http://localhost/api/docs | - |
-| **Keycloak** | http://localhost/auth | see `.env` (`KEYCLOAK_ADMIN_PASSWORD`) |
-| **Grafana** | http://localhost/grafana | see `.env` (`GRAFANA_PASSWORD`) |
-| **STOA Logs** | http://localhost/logs | see `.env` (`OPENSEARCH_ADMIN_PASSWORD`) |
-| **Prometheus** | http://localhost:9090 | - |
-| **AlertManager** | http://localhost:9093 | - |
-| **Rust Gateway** | http://localhost/gateway/health | - |
+| **Console** | http://localhost | Provided on site |
+| **Portal** | http://localhost/portal | Provided on site |
+| **API Docs** | http://localhost/api/docs | Provided on site |
+| **Keycloak** | http://localhost/auth | Provided on site |
+| **Grafana** | http://localhost/grafana | Provided on site |
+| **STOA Logs** | http://localhost/logs | Provided on site |
+| **Prometheus** | http://localhost:9090 | Provided on site |
+| **AlertManager** | http://localhost:9093 | Provided on site |
+| **Rust Gateway** | http://localhost/gateway/health | Provided on site |
 
 Direct access (bypassing proxy):
 
@@ -97,23 +97,17 @@ docker compose --profile federation --profile monitoring-oidc up -d
 | `federation` | OpenLDAP, Federation Gateway | ~256MB |
 | `monitoring-oidc` | oauth2-proxy | ~64MB |
 
-## Demo Users (OASIS Theme)
+## First administrator
 
-| Username | Password | Role | Tenant |
-|----------|----------|------|--------|
-| halliday | readyplayerone | Platform Admin | Gregarious Games |
-| morrow | ogdensmcguffin | Platform Admin | Gregarious Games |
-| parzival | copperkeystart | Tenant Admin | OASIS Gunters |
-| art3mis | samantha2045 | DevOps | OASIS Gunters |
-| aech | helen2045 | Viewer | OASIS Gunters |
-| sorrento | ioi101 | Tenant Admin | IOI Sixers |
-| sixer42 | loyalty2045 | Viewer | IOI Sixers |
+The default realm contains no user accounts. Create the first administrator with
+[the bootstrap runbook](../../docs/runbooks/first-admin-bootstrap.md). Registration
+requires an invitation by default; demo credentials must be generated on site.
 
 ## Demo Data Seeding
 
 ```bash
 # Seed everything (APIs, consumers, OpenSearch errors, traffic)
-ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh
+../../scripts/demo/seed-all.sh  # Supply the credential through the environment.
 
 # Seed only OpenSearch error snapshots
 ../../scripts/demo/seed-all.sh --opensearch-only
@@ -216,3 +210,25 @@ docker compose up -d stoa-gateway
 
 - **Documentation**: https://docs.gostoa.dev
 - **Issues**: https://github.com/stoa-platform/stoa/issues
+
+## Realm import origins
+
+Keycloak imports the mounted JSON files directly with `--import-realm`. Its
+native `${VARIABLE}` replacement reads the container environment; Compose does
+not interpolate bind-mounted JSON. No preprocessing command is needed.
+
+Set these absolute base URLs without a trailing slash in `.env` before the first
+import (see `.env.example`):
+
+| Variable | Local default | Purpose |
+|----------|---------------|---------|
+| `CONSOLE_ORIGIN` | `http://localhost:3000` | Console redirects and web origins |
+| `PORTAL_ORIGIN` | `http://localhost:3002` | Portal redirects and web origins |
+| `FEDERATION_KEYCLOAK_URL` | `http://keycloak:8080` | Broker callback base for both IdP source realms |
+
+The standalone federation Compose file also passes `FEDERATION_KEYCLOAK_URL`
+with the same default. Loopback callbacks remain available for local browsers.
+Startup import skips realms that already exist; changing these variables does
+not reconcile an existing realm. Review and apply its redirect/origin policy
+explicitly when updating an installation. Offline installations must already
+have their container images available locally.

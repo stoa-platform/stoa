@@ -78,7 +78,7 @@ spec:
       rotateOnUse: true        # RFC 7592: rotate RAT on every management call
     clientDefaults:
       accessTokenLifespan: 300        # 5 minutes
-      refreshTokenLifespan: 86400     # 24 hours
+      refreshTokenLifespan: 28800     # 8 hours
       consentRequired: false
       fullScopeAllowed: false         # Restrict to explicitly assigned scopes
 

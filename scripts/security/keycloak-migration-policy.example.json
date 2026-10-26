@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "realm": "stoa",
+  "reset_password_allowed": false,
+  "tenant_attribute_reviewed": false,
+  "reviewed_clients": [
+    "account",
+    "account-console",
+    "admin-cli",
+    "broker",
+    "realm-management",
+    "security-admin-console"
+  ],
+  "idps": ["google"],
+  "scopes": {},
+  "clients": {
+    "control-plane-ui": {
+      "browser": true,
+      "redirect_uris": ["https://console.example.invalid", "https://console.example.invalid/"],
+      "web_origins": ["https://console.example.invalid"],
+      "post_logout_redirect_uris": ["https://console.example.invalid", "https://console.example.invalid/"],
+      "mappers": {"control-plane-api-audience": "audience", "tenant-id": "tenant"}
+    },
+    "stoa-portal": {
+      "browser": true,
+      "redirect_uris": ["https://portal.example.invalid", "https://portal.example.invalid/"],
+      "web_origins": ["https://portal.example.invalid"],
+      "post_logout_redirect_uris": ["https://portal.example.invalid", "https://portal.example.invalid/"],
+      "mappers": {"control-plane-api-audience": "audience", "tenant-id": "tenant"}
+    },
+    "stoa-mcp-gateway": {
+      "browser": false,
+      "redirect_uris": [],
+      "web_origins": [],
+      "post_logout_redirect_uris": [],
+      "mappers": {"control-plane-api-audience": "audience"}
+    },
+    "control-plane-api": {
+      "browser": false,
+      "redirect_uris": [],
+      "web_origins": [],
+      "post_logout_redirect_uris": [],
+      "mappers": {}
+    }
+  }
+}

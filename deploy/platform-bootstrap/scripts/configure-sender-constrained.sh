@@ -18,6 +18,7 @@
 #   ./configure-sender-constrained.sh [--keycloak-url URL] [--realm REALM] [--dry-run]
 
 set -euo pipefail
+set +x
 
 # --- Configuration ---
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
@@ -56,10 +57,12 @@ log_skip() { echo "[$(date +%H:%M:%S)] SKIP: $*"; }
 log_err() { echo "[$(date +%H:%M:%S)] ERROR: $*" >&2; }
 
 get_token() {
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
   curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -d "client_id=admin-cli" \
-    -d "username=${ADMIN_USER}" \
-    -d "password=${ADMIN_PASS}" \
+    --data-urlencode "username=${ADMIN_USER}" \
+    --data-urlencode "password=${ADMIN_PASS}" \
     -d "grant_type=password" | jq -r '.access_token'
 }
 
@@ -197,6 +200,8 @@ else
   IG_PAYLOAD=$(cat <<'IG_JSON'
 {
   "clientId": "stoa-identity-governance",
+  "implicitFlowEnabled": false,
+  "protocolMappers": [{"name": "control-plane-api-audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false, "config": {"included.client.audience": "control-plane-api", "id.token.claim": "false", "access.token.claim": "true"}}],
   "name": "STOA Identity Governance",
   "description": "Identity Governance API — SCIM, DCR, Access Review (CAB-1463)",
   "enabled": true,

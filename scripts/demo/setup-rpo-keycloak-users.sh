@@ -12,7 +12,19 @@
 #   ./scripts/demo/setup-rpo-keycloak-users.sh
 # =============================================================================
 
-set -e
+set -euo pipefail
+set +x
+
+# Demo accounts must never target a shared production realm by default.
+if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then
+  echo "This account seeder requires KEYCLOAK_BOOTSTRAP_ENV=dev." >&2
+  exit 1
+fi
+: "${KEYCLOAK_URL:?Set an explicit development Keycloak URL}"
+: "${KEYCLOAK_REALM:?Set a dedicated development realm}"
+case "$KEYCLOAK_REALM" in
+  stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
+esac
 
 # Configuration
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
@@ -40,13 +52,19 @@ if [ -z "$ADMIN_PASSWORD" ]; then
     exit 1
 fi
 
+: "${PARZIVAL_PASSWORD:?PARZIVAL_PASSWORD is required}"
+: "${SORRENTO_PASSWORD:?SORRENTO_PASSWORD is required}"
+: "${HALLIDAY_PASSWORD:?HALLIDAY_PASSWORD is required}"
+
 # Get admin token
 echo "Getting admin token..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
 TOKEN=$(curl -s -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "client_id=admin-cli" \
-    -d "username=${ADMIN_USER}" \
-    -d "password=${ADMIN_PASSWORD}" \
+    --data-urlencode "username=${ADMIN_USER}" \
+    --data-urlencode "password=${ADMIN_PASSWORD}" \
     -d "grant_type=password" | jq -r '.access_token')
 
 if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
@@ -67,7 +85,9 @@ create_user() {
     echo ""
     echo "Creating user: ${username} (${first} ${last})"
 
-    local response=$(curl -s -w "\n%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
+    local response
+
+    response=$(curl -s -w "\n%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
@@ -87,8 +107,9 @@ create_user() {
             }]
         }")
 
-    local status=$(echo "$response" | tail -n1)
-    local body=$(echo "$response" | head -n-1)
+    local status
+
+    status=$(echo "$response" | tail -n1)
 
     if [ "$status" = "201" ]; then
         echo -e "  ${GREEN}[OK] User created${NC}"
@@ -98,7 +119,7 @@ create_user() {
         return 0
     else
         echo -e "  ${RED}[FAIL] HTTP ${status}${NC}"
-        echo "  Response: ${body}"
+        echo "  Request failed; response details are withheld."
         return 1
     fi
 }
@@ -118,7 +139,8 @@ assign_role() {
     echo "  Assigning role: ${role_name}"
 
     # Get role
-    local role=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
+    local role
+    role=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/roles/${role_name}" \
         -H "Authorization: Bearer ${TOKEN}")
 
     if [ "$(echo "$role" | jq -r '.name // empty')" = "" ]; then
@@ -127,7 +149,8 @@ assign_role() {
     fi
 
     # Assign role
-    local status=$(curl -s -o /dev/null -w "%{http_code}" \
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" \
         -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/users/${user_id}/role-mappings/realm" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
@@ -152,7 +175,7 @@ echo "Creating Ready Player One Users"
 echo "=============================================="
 
 # Parzival (Wade Watts) - High Five tenant admin
-PARZIVAL_PWD="${PARZIVAL_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+PARZIVAL_PWD="${PARZIVAL_PASSWORD:?PARZIVAL_PASSWORD is required}"
 create_user "parzival" "parzival@highfive.oasis" "Wade" "Watts" "$PARZIVAL_PWD" "high-five"
 USER_ID=$(get_user_id "parzival")
 if [ -n "$USER_ID" ]; then
@@ -160,7 +183,7 @@ if [ -n "$USER_ID" ]; then
 fi
 
 # Sorrento (Nolan Sorrento) - IOI tenant admin
-SORRENTO_PWD="${SORRENTO_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+SORRENTO_PWD="${SORRENTO_PASSWORD:?SORRENTO_PASSWORD is required}"
 create_user "sorrento" "sorrento@ioi.corp" "Nolan" "Sorrento" "$SORRENTO_PWD" "ioi"
 USER_ID=$(get_user_id "sorrento")
 if [ -n "$USER_ID" ]; then
@@ -168,7 +191,7 @@ if [ -n "$USER_ID" ]; then
 fi
 
 # Halliday (James Halliday) - Platform admin
-HALLIDAY_PWD="${HALLIDAY_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+HALLIDAY_PWD="${HALLIDAY_PASSWORD:?HALLIDAY_PASSWORD is required}"
 create_user "halliday" "halliday@oasis.admin" "James" "Halliday" "$HALLIDAY_PWD" "oasis"
 USER_ID=$(get_user_id "halliday")
 if [ -n "$USER_ID" ]; then
@@ -184,13 +207,4 @@ echo "=============================================="
 echo "Ready Player One Demo - Setup Complete"
 echo "=============================================="
 echo ""
-echo "Demo Credentials (passwords from env vars or defaults):"
-echo "  parzival / \$PARZIVAL_PASSWORD - High Five (resistance)"
-echo "  sorrento / \$SORRENTO_PASSWORD - IOI (corporation)"
-echo "  halliday / \$HALLIDAY_PASSWORD - OASIS (platform admin)"
-echo ""
-echo "Test login:"
-echo "  curl -X POST '${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token' \\"
-echo "    -d 'client_id=control-plane-ui' -d 'username=parzival' \\"
-echo "    -d 'password=\$PARZIVAL_PASSWORD' -d 'grant_type=password'"
-echo ""
+echo "Credentials were supplied by the operator; retain them in the on-site secret store."

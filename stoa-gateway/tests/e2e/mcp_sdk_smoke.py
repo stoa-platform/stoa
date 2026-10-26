@@ -107,10 +107,8 @@ async def run_smoke(
 
                     # 2. Discovery surface — CAB-2121 gated these behind Bearer.
                     #    Without a bearer, record an AUTH_SKIP so post-deploy cron
-                    #    without a CI secret doesn't flap; pre-merge injects a
-                    #    dummy bearer so `jwt_validator=None` accepts it
-                    #    (stoa-gateway/src/mcp/sse.rs:280) and we exercise the
-                    #    real discovery surface.
+                    #    without a CI secret doesn't flap. The local pre-merge
+                    #    harness uses a signed token and a loopback OIDC peer.
                     if bearer is None:
                         results.append(
                             StageResult(
@@ -174,7 +172,7 @@ async def run_smoke(
                     # 3. One concrete tool invocation (no external deps).
                     #    `stoa_platform_info` is a self-describing health tool.
                     #    Requires a bearer for the same CAB-2121 reason as
-                    #    discovery; pre-merge supplies a dummy bearer.
+                    #    discovery; the local harness tests discovery only.
                     if call_tool and bearer is not None:
                         info = await session.call_tool(
                             "stoa_platform_info", arguments={}

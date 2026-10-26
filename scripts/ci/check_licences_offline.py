@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # Copyright 2026 Christophe Aboulicam
 # SPDX-License-Identifier: Apache-2.0
-"""Contrôle local des licences: avertissement par défaut, blocage activable. Python >= 3.11."""
+"""Contrôle local des licences: avertissement par défaut, blocage en deux temps (deny puis enforce). Python >= 3.11."""
 import argparse
 import csv
 from collections import Counter
 from datetime import date
 import hashlib
+import os
 import json
 from pathlib import Path
 import re
 import sys
 import tarfile
 
+MODES = ('warn', 'deny', 'enforce')
 SKIP = {'.git', '.claude', '.codex', '.aws', '.ssh', 'node_modules', 'vendor',
         '.venv', 'venv', '__pycache__', 'target'}
 MANIFESTS = {'Cargo.toml', 'package.json', 'pyproject.toml', 'go.mod', 'go.sum',
@@ -114,9 +116,9 @@ def check(root, inventory, snapshot, policy):
 def validate_policy(policy):
     if 'enabled' in policy and type(policy['enabled']) is not bool:
         raise ValueError('enabled incorrect')
-    if policy.get('mode', 'warn') not in {'warn', 'enforce'}:
+    if policy.get('mode', 'warn') not in MODES:
         raise ValueError('mode incorrect')
-    for key in ('allowed', 'denied_prefixes', 'allowed_exceptions'):
+    for key in ('allowed', 'denied_prefixes', 'phase1_denied_prefixes', 'allowed_exceptions'):
         if not isinstance(policy[key], list) or not all(isinstance(x, str) and x for x in policy[key]):
             raise ValueError('configuration incorrecte')
     if policy['allowed_exceptions']:
@@ -144,9 +146,12 @@ def validate_policy(policy):
 
 def evaluate(rows, sources, policy):
     keys = ('ecosystem', 'name', 'version', 'source', 'license')
+    phase1 = dict(policy, denied_prefixes=policy['phase1_denied_prefixes'])
     for row in rows:
         row['original_status'] = classify(row['license'], policy)
         row['status'] = row['original_status']
+        # Premier temps du blocage: seules les licences de la liste phase 1.
+        row['phase1_denied'] = classify(row['license'], phase1) == 'incompatible'
     for entry in policy.get('exceptions', []):
         identity = tuple(entry[k] for k in keys)
         matches = [r for r in rows if tuple(r[k] for k in keys) == identity]
@@ -168,13 +173,41 @@ def evaluate(rows, sources, policy):
     return dict(Counter(row['status'] for row in rows))
 
 
+def summary(line):
+    target = os.environ.get('GITHUB_STEP_SUMMARY')
+    if target:
+        try:
+            with open(target, 'a', encoding='utf8') as stream:
+                stream.write(line + '\n')
+        except OSError:
+            pass
+
+
+def requested_mode(args):
+    """Mode demandé, lisible même si la politique est invalide (repli: warn)."""
+    if args.enforce:
+        return 'enforce'
+    if args.mode:
+        return args.mode
+    try:
+        policy = json.loads(args.config.read_text(encoding='utf8'))
+        if 'enabled' in policy:
+            if type(policy['enabled']) is not bool:
+                return 'enforce'
+            return 'enforce' if policy['enabled'] else 'warn'
+        mode = policy.get('mode', 'warn')
+        return mode if mode in MODES else 'enforce'
+    except Exception:
+        return 'enforce'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--config', type=Path, default=Path(__file__).with_name('licences-policy.json'))
     parser.add_argument('--inventory', type=Path, help='CSV historique; exige --snapshot')
     parser.add_argument('--snapshot', type=Path, help='snapshot associé au CSV historique')
-    parser.add_argument('--mode', choices=['warn', 'enforce'])
+    parser.add_argument('--mode', choices=list(MODES))
     parser.add_argument('--enforce', action='store_true', help='équivalent de --mode enforce')
     parser.add_argument('--report', type=Path, help='rapport JSON incluant toutes les références et preuves')
     args = parser.parse_args()
@@ -193,7 +226,8 @@ def main():
             raise ValueError('aucune référence collectée')
         counts = evaluate(rows, sources, policy)
         findings = counts.get('à confirmer', 0) + counts.get('incompatible', 0)
-        report = dict(schema=2, mode=mode, counts=counts, rows=rows, sources=sources,
+        phase1 = sum(1 for row in rows if row['phase1_denied'] and row['status'] != 'dérogation')
+        report = dict(schema=2, mode=mode, counts=counts, phase1_denied=phase1, rows=rows, sources=sources,
                       policy_sha256=sha256(args.config),
                       result='findings' if findings else ('accepted-with-exceptions' if counts.get('dérogation') else 'pass'))
         if args.report:
@@ -203,7 +237,15 @@ def main():
               f"{counts.get('dérogation', 0)} dérogation(s).")
         if findings:
             print('AVERTISSEMENT: confirmations requises; voir le rapport détaillé.')
-        return 1 if mode == 'enforce' and findings else 0
+            print(f'::warning title=Licences::{findings} référence(s) à confirmer ou interdite(s), '
+                  f'dont {phase1} interdite(s) dès le premier temps; voir license-report.json.')
+        summary(f"Licences (mode {mode}): {len(rows)} références, {findings} à confirmer ou interdites, "
+                f"{phase1} interdites (premier temps), {counts.get('dérogation', 0)} dérogation(s).")
+        if mode == 'enforce' and findings:
+            return 1
+        if mode == 'deny' and phase1:
+            return 1
+        return 0
     except (OSError, ValueError, KeyError, TypeError, csv.Error, IndexError, AttributeError, tarfile.TarError, UnicodeError):
         # Never echo untrusted input, URLs, manifest contents or exception text.
         if args.report:
@@ -213,6 +255,11 @@ def main():
             except OSError:
                 pass
         print('Entrées invalides ou périmées: contrôle fermé, régénération requise.', file=sys.stderr)
+        if requested_mode(args) == 'warn':
+            # Mode avertissement: ne jamais faire échouer la CI, mais rester visible.
+            print('::warning title=Licences::entrées invalides ou périmées, contrôle non concluant.')
+            summary('Licences (mode warn): contrôle non concluant, entrées invalides ou périmées.')
+            return 0
         return 2
 
 

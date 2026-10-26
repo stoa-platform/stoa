@@ -14,7 +14,7 @@ elle ne constitue ni une SBOM de livraison complète ni un avis juridique.
 python3 -B -m unittest discover -s tests/licences -v
 python3 -B scripts/ci/check_licences_offline.py --root . --report license-report.json
 python3 -B scripts/ci/check_licences_offline.py --root . --enforce --report license-report.json
-# Autre syntaxe: --mode warn ou --mode enforce
+# Autre syntaxe: --mode warn, --mode deny (1er temps) ou --mode enforce
 ```
 
 Le mode par défaut est `warn` dans `scripts/ci/licences-policy.json`. Le contrôle
@@ -23,20 +23,27 @@ collecte réellement les sources dans ce mode. Il ne dispose plus d'un mode
 configuration externe, active le blocage; `enabled: false` signifie avertissement.
 `--mode` prime sur la configuration et `--enforce` impose le blocage.
 
-| Situation | Mode avertissement | Mode bloquant |
-| --- | --- | --- |
-| Déclarations admises ou dérogations ciblées valides | 0 | 0 |
-| Licence interdite par politique ou À CONFIRMER | 0, message et rapport | 1 |
-| Entrées illisibles, invalides, périmées; périmètre vide | 2 | 2 |
+| Situation | `warn` (défaut) | `deny` (1er temps) | `enforce` (2e temps) |
+| --- | --- | --- | --- |
+| Déclarations admises ou dérogations ciblées valides | 0 | 0 | 0 |
+| Licence de `phase1_denied_prefixes` (AGPL, SSPL, BUSL, Elastic, non commerciale, commerciale ou propriétaire) | 0, annotation et rapport | 1 | 1 |
+| Autre licence interdite par politique ou À CONFIRMER | 0, annotation et rapport | 0, annotation et rapport | 1 |
+| Entrées illisibles, invalides, périmées; périmètre vide | 0, annotation « non concluant » | 2 | 2 |
+
+Le mode `warn` ne fait jamais échouer la CI : le script rend 0 et le job
+déclare ses deux étapes en `continue-on-error`. Le blocage se fait en deux temps :
+`deny` bloque d'abord les seules licences de `phase1_denied_prefixes`, puis
+`enforce` bloque tout ce qui n'est pas conforme, une fois les références
+À CONFIRMER résolues et les dérogations validées. `BSL-1.0` (Boost) est admise;
+la Business Source License est `BUSL-*`.
 
 Le job existant **License Compliance** dans `required-checks.yml` conserve son nom.
 Il exécute les tests puis le contrôle local et conserve le rapport avec
-`if: always()`. Son `continue-on-error` et le masquage des codes de sortie sont
-retirés. La variable de dépôt `LICENSES_ENFORCE` exactement égale à `true` choisit
-le mode bloquant; toute autre valeur choisit l'avertissement. La modifier est une
-action d'administration distincte de ce brouillon. Aucune variable n'est modifiée
-par le patch. Le job impose son mode CLI: changer seulement le JSON ne change pas
-le mode de ce workflow. Un appel local sans option utilise le JSON.
+`if: always()`. La variable de dépôt `LICENSES_MODE` (`warn`, `deny` ou `enforce`)
+choisit le mode; absente, c'est `warn`. La modifier est une action
+d'administration distincte de ce changement. Aucune variable n'est modifiée ici.
+Le job impose son mode CLI: changer seulement le JSON ne change pas le mode de ce
+workflow. Un appel local sans option utilise le JSON.
 
 Après checkout, les commandes de tests et de contrôle fonctionnent sans réseau.
 Le checkout, le téléversement du rapport et les autres jobs existants restent des

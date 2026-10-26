@@ -72,7 +72,7 @@ class LocalCI(unittest.TestCase):
         self.assertEqual(dep['license'], 'MIT')
         self.assertIn(entry['path'], sources)
         self.write(entry['path'], 'changed')
-        self.assertEqual(self.run_cli(), 2)
+        self.assertEqual(self.run_cli('--enforce'), 2)
         self.assertEqual(self.run_cli('--enforce'), 2)
 
     def test_python_metadata_and_go_image_text(self):
@@ -98,20 +98,20 @@ class LocalCI(unittest.TestCase):
         self.write('.ssh/credentials','secret')
         self.write('vendor/credentials','secret')
         (self.root/'package.json').symlink_to(outside)
-        self.assertEqual(self.run_cli(),2)
+        self.assertEqual(self.run_cli('--enforce'),2)
         (self.root/'package.json').unlink()
         entry = self.evidence()
         entry['path'] = '.ssh/credentials'
         self.write('audit/licences/local-evidence.json',json.dumps(dict(schema=1,entries=[entry])))
-        self.assertEqual(self.run_cli(),2)
+        self.assertEqual(self.run_cli('--enforce'),2)
 
     def test_malformed_manifest_fails_in_warning(self):
         self.write('pyproject.toml','[broken')
-        self.assertEqual(self.run_cli(),2)
+        self.assertEqual(self.run_cli('--enforce'),2)
 
     def test_empty_scope_is_not_compliant(self):
         (self.root/'Cargo.toml').unlink(); (self.root/'Cargo.lock').unlink()
-        self.assertEqual(self.run_cli(),2)
+        self.assertEqual(self.run_cli('--enforce'),2)
 
     def test_targeted_exception_expiry_and_unused(self):
         # A lock-only scope has one reference and no resolution claim.
@@ -141,10 +141,11 @@ class LocalCI(unittest.TestCase):
     def test_ci_gate_propagates_failures_and_exposes_switch(self):
         text = (ROOT / '.github/workflows/required-checks.yml').read_text()
         job = text.split('  license-compliance:', 1)[1].split('  sbom-generation:', 1)[0]
-        self.assertNotIn('continue-on-error', job)
+        gate = "continue-on-error: ${{ env.LICENSES_MODE != 'deny' && env.LICENSES_MODE != 'enforce' }}"
+        self.assertEqual(job.count(gate), 2)
         self.assertNotIn('uses: aquasecurity/trivy', job.lower())
         self.assertNotIn('|| echo', job)
-        self.assertIn("vars.LICENSES_ENFORCE == 'true'", job)
+        self.assertIn("vars.LICENSES_MODE || 'warn'", job)
         self.assertIn('--mode "$LICENSES_MODE"', job)
         self.assertIn('if: always()', job)
 
@@ -158,10 +159,35 @@ class LocalCI(unittest.TestCase):
         path.write_text(json.dumps(policy))
         self.assertEqual(self.run_cli('--config', str(path)), 2)
 
+    def test_warning_mode_never_fails_on_invalid_input(self):
+        self.write('Cargo.toml', '[broken')
+        self.assertEqual(self.run_cli(), 0)
+        self.assertEqual(self.run_cli('--mode', 'warn'), 0)
+        self.assertEqual(json.loads(self.output.read_text())['result'], 'invalid-input')
+        self.assertEqual(self.run_cli('--mode', 'deny'), 2)
+        self.assertEqual(self.run_cli('--enforce'), 2)
+
+    def test_two_step_blocking(self):
+        # À CONFIRMER seul: deny laisse passer, enforce bloque.
+        self.assertEqual(self.run_cli('--mode', 'deny'), 0)
+        self.assertEqual(self.run_cli('--mode', 'enforce'), 1)
+        for spdx, deny_rc in [('AGPL-3.0-only', 1), ('SSPL-1.0', 1), ('BUSL-1.1', 1),
+                              ('LicenseRef-Commercial', 1), ('GPL-3.0-only', 0), ('BSL-1.0', 0)]:
+            self.write('Cargo.toml', f'[package]\nname="local"\nversion="1.0"\nlicense="{spdx}"\n')
+            self.write('Cargo.lock', 'version=3\n')
+            self.assertEqual(self.run_cli('--mode', 'deny'), deny_rc, spdx)
+        self.assertEqual(json.loads(self.output.read_text())['phase1_denied'], 0)
+
+    def test_committed_legal_copies_match_root(self):
+        for d in ('control-plane-api', 'control-plane-ui', 'keycloak', 'portal',
+                  'scripts/security', 'stoa-gateway', 'stoa-go'):
+            for name in ('LICENSE', 'NOTICE'):
+                self.assertEqual((ROOT / d / name).read_bytes(), (ROOT / name).read_bytes(), f'{d}/{name}')
+
     def test_findings_report_is_replaced_on_invalid_input(self):
         self.assertEqual(self.run_cli(), 0)
         self.write('Cargo.toml', '[broken')
-        self.assertEqual(self.run_cli(), 2)
+        self.assertEqual(self.run_cli('--enforce'), 2)
         self.assertEqual(json.loads(self.output.read_text())['result'], 'invalid-input')
 
     def test_conflicting_spdx_metadata_stays_unknown(self):
@@ -183,7 +209,7 @@ class LocalCI(unittest.TestCase):
 
     def test_bad_archive_is_invalid_input(self):
         self.write('chart.tgz', 'not an archive')
-        self.assertEqual(self.run_cli(), 2)
+        self.assertEqual(self.run_cli('--enforce'), 2)
 
     def test_image_evidence_needs_immutable_digest(self):
         self.write('Dockerfile', 'FROM image:latest\n')
@@ -192,13 +218,13 @@ class LocalCI(unittest.TestCase):
             source_sha256=collector.digest(self.root/'Dockerfile'), path='evidence/LICENSE',
             sha256=collector.digest(p), kind='spdx-text', reason='fixture tag mutable')
         self.write('audit/licences/local-evidence.json', json.dumps(dict(schema=1, entries=[entry])))
-        self.assertEqual(self.run_cli(), 2)
+        self.assertEqual(self.run_cli('--enforce'), 2)
 
     def test_same_crate_version_different_origins_requires_locator(self):
         self.write('Cargo.lock', 'version=3\n[[package]]\nname="missing"\nversion="1.0.0"\nsource="registry+fixture"\n'
                    '[[package]]\nname="missing"\nversion="1.0.0"\nsource="git+fixture"\n')
         entry = self.evidence()
-        self.assertEqual(self.run_cli(), 2)
+        self.assertEqual(self.run_cli('--enforce'), 2)
         entry['locator'] = 'registry+fixture'
         self.write('audit/licences/local-evidence.json', json.dumps(dict(schema=1, entries=[entry])))
         rows, _ = collector.collect(self.root)

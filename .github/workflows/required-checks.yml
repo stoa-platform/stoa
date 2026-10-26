@@ -92,16 +92,21 @@ jobs:
   license-compliance:
     name: License Compliance
     runs-on: ubuntu-latest
+    # warn (défaut): ne fait jamais échouer la CI. deny: 1er temps, licences interdites
+    # (AGPL, SSPL, BUSL, commerciales). enforce: 2e temps, blocage complet.
+    # Variable de dépôt LICENSES_MODE; la changer relève de l'administrateur.
     env:
-      LICENSES_MODE: ${{ vars.LICENSES_ENFORCE == 'true' && 'enforce' || 'warn' }}
+      LICENSES_MODE: ${{ vars.LICENSES_MODE || 'warn' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Self-test offline license and packaging controls
+        continue-on-error: ${{ env.LICENSES_MODE != 'deny' && env.LICENSES_MODE != 'enforce' }}
         run: python3 -B -m unittest discover -s tests/licences -v
 
       - name: Check licenses without network
+        continue-on-error: ${{ env.LICENSES_MODE != 'deny' && env.LICENSES_MODE != 'enforce' }}
         run: >-
           python3 -B scripts/ci/check_licences_offline.py
           --mode "$LICENSES_MODE" --report license-report.json
@@ -113,7 +118,7 @@ jobs:
           name: license-report
           path: license-report.json
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: ${{ (env.LICENSES_MODE == 'deny' || env.LICENSES_MODE == 'enforce') && 'error' || 'warn' }}
 
   # ==========================================================================
   # 3. SBOM Generation (Trivy CycloneDX + SPDX)

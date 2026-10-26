@@ -19,7 +19,20 @@
     "SSPL-",
     "BUSL-",
     "CC-BY-NC",
-    "LicenseRef-NonCommercial"
+    "LicenseRef-NonCommercial",
+    "Elastic-",
+    "LicenseRef-Commercial",
+    "LicenseRef-Proprietary"
+  ],
+  "phase1_denied_prefixes": [
+    "AGPL-",
+    "SSPL-",
+    "BUSL-",
+    "Elastic-",
+    "CC-BY-NC",
+    "LicenseRef-NonCommercial",
+    "LicenseRef-Commercial",
+    "LicenseRef-Proprietary"
   ],
   "allowed_exceptions": [],
   "mode": "warn",

@@ -76,9 +76,11 @@ class Command(unittest.TestCase):
             '--config', str(self.policy), '--inventory', str(self.inventory),
             '--snapshot', str(self.snapshot), *args], capture_output=True).returncode
 
-    def test_missing_inputs_fail_even_in_warning(self):
+    def test_missing_inputs_warn_then_fail_when_blocking(self):
         self.inventory.unlink()
-        self.assertEqual(self.run_check(), 2)
+        self.assertEqual(self.run_check(), 0)
+        self.assertEqual(self.run_check('--mode', 'deny'), 2)
+        self.assertEqual(self.run_check('--enforce'), 2)
 
     def test_enabled_policy_and_cli(self):
         self.assertEqual(self.run_check('--enforce'), 0)

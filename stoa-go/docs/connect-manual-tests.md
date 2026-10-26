@@ -1,4 +1,6 @@
-# TEST-PLAN — GO-2 pre-merge validation
+# stoa-connect — manual end-to-end checks
+
+> Ex-`TEST-PLAN.md` (validation pré-merge GO-2, PR #2490), conservé comme runbook de tests manuels.
 
 Status: automated checks green (104 tests `-race`, `go vet`, `golangci-lint`,
 2 mock-CP smoke tests). This file documents the MANUAL end-to-end checks
@@ -75,7 +77,7 @@ read back after ClearGatewayID + Register).
 ## Manual end-to-end checks before merge
 
 These require a real CP-API reachable. Recommended path: a local Tilt
-stack (`cd ~/hlfh-repos/stoa && tilt up`) with the CP-API pod up and
+stack (`cd <stoa-checkout> && tilt up`) with the CP-API pod up and
 reachable at `https://api.gostoa.local` (or whatever Tilt binds).
 
 The agent config should target that CP and a real third-party gateway
@@ -124,7 +126,7 @@ Watch for:
 - [ ] On deployment: `sse-stream: received deployment <dep-id> (status=pending)`
 - [ ] `sse-stream: sync deployment <dep-id> applied`
 - [ ] **In CP-API database or admin UI**: the ack carries `generation` != 0
-      (B.1 regression — see REWRITE-BUGS.md)
+      (B.1 regression — see connect-known-issues.md)
 
 ### Check E3 — SSE reconnect on network drop (B.6 fix + retry policy)
 
@@ -159,7 +161,7 @@ truncate; now the scanner buffer is 1 MB.
 Requires Vault reachable with a pre-populated `stoa/data/consumers/<tenant_id>`.
 
 ```bash
-export VAULT_ADDR=https://hcvault.gostoa.dev
+export VAULT_ADDR=https://vault.example.com  # your Vault
 export VAULT_ROLE_ID=<role>
 export VAULT_SECRET_ID=<secret>
 export STOA_TENANT_ID=<tenant>
@@ -195,7 +197,7 @@ time kill -TERM $(pgrep -f stoa-connect)
 
 The following are KNOWN latent issues documented but NOT fixed in GO-2:
 
-- F.3 / F.4 / F.5 / F.7 / F.8 / F.9 — see `REWRITE-BUGS.md`
+- F.3 / F.4 / F.5 / F.7 / F.8 / F.9 — see `connect-known-issues.md`
 - C.1 — `OIDCAdapter` asymmetric delete surface (would need GO-1-bis)
 - C.2 — `AliasAdapter` dead code on agent side
 

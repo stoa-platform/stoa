@@ -1,7 +1,8 @@
-# REWRITE-BUGS — GO-2
+# stoa-connect — known issues (`internal/connect/`)
 
-Bugs découverts pendant la Phase 1 d'inventaire du refactor `internal/connect/`.
-État au 2026-04-22.
+> Ex-`REWRITE-BUGS.md` (refactor GO-2, PR #2490). Liste des points connus
+> relevés pendant l'inventaire du refactor `internal/connect/`.
+> État au 2026-04-22 ; le suivi actif se fait dans Linear.
 
 Colonne `Fix` :
 - `S<n>` = corrigé in-flight dans l'étape correspondante de GO-2.
@@ -64,7 +65,7 @@ Slice header (ptr+len+cap) non-atomique. Lecture concurrente sans sync = data ra
 3. `scanner.Err()` ÉTAIT lu (ligne 172 pré-S5) mais l'erreur retournée était ensuite écrasée par le sentinel `fmt.Errorf("SSE stream ended")` — donc le reconnect loop ne voyait jamais la cause réelle dans ses logs.
 4. Worst case : reconnect infini avec même event qui retruncate silencieusement.
 
-**Impact en prod** : latent. Jamais observé (les OpenAPI specs actuels passent sous 64KB). Devient un bug visible si un client pousse un spec volumineux (démo client A type : spec webMethods complet avec ~200 paths).
+**Impact en prod** : latent. Jamais observé (les OpenAPI specs actuels passent sous 64KB). Devient un bug visible si un spec volumineux est poussé (par exemple un spec webMethods complet avec ~200 paths).
 
 **Fix appliqué (S5)** :
 ```go
@@ -188,9 +189,7 @@ Caller side (`sse.go:StartDeploymentStream`) logue maintenant `"sse-stream: term
 
 **Conséquence runtime** : quand le CP émet une `PendingPolicy{PolicyType: "oidc_strategy", Enabled: false}` (i.e. "désactive cette stratégie"), le `policySyncer.remove` tombe sur le fallback `adapter.RemovePolicy(ctx, adminURL, name, "oidc_strategy")`. C'est à l'implémentation concrète (webmethods / kong / gravitee) de reconnaître ce hint string et de faire la bonne chose — ou de no-op silencieusement.
 
-**Bug latent potentiel** : si webmethods.RemovePolicy ne gère pas le type `oidc_strategy`, on a un leak — la strategy reste configurée côté gateway alors que le CP pense l'avoir supprimée. Pas vérifié dans cette passe (hors scope).
-
-**Pourquoi pas fixé en GO-2** : ajouter `DeleteStrategy` / `DeleteScope` touche l'interface dans `adapters/`, qui est le territoire de GO-1 (rewrite adapters terminé). GO-2 se limite à `internal/connect/` hors adapters. Un ticket GO-3 ou un fix ciblé côté webmethods est le bon chemin.
+**Suivi** : la couverture du chemin de suppression côté adapters est suivie dans Linear (hors scope GO-2, qui se limite à `internal/connect/` hors adapters).
 
 **Preuve de comportement préservé** :
 - `TestPolicySyncerRemovesOIDCStrategyViaGenericFallback` vérifie que le disabled `oidc_strategy` passe bien par `RemovePolicy("oidc_strategy")` (pas un crash, pas un chemin typé).

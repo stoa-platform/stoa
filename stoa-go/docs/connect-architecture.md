@@ -1,6 +1,6 @@
-# REWRITE-PLAN — GO-2 : durcir `internal/connect/`
+# stoa-connect — architecture de `internal/connect/` (GO-2)
 
-**Status** : VALIDATED 2026-04-22 (avec amendements). Prêt pour Phase 2.
+> Ex-`REWRITE-PLAN.md`. **Status** : implémenté (GO-2, PR #2490). Document de conception conservé comme référence d'architecture.
 
 **Scope** : `internal/connect/*.go` (hors `adapters/`, hors `telemetry/`)
 **LOC actuels (prod)** : 2 127 LOC sur 8 fichiers + `cmd/stoa-connect/main.go` (177 LOC)
@@ -275,7 +275,7 @@ find internal/connect -maxdepth 1 -name '*.go' -not -name '*_test.go' | xargs wc
 
 | # | Champ | Traitement |
 |---|-------|------------|
-| F.8 | `HeartbeatPayload.PoliciesCount` déclaré, jamais populé. | Documenté dans `REWRITE-BUGS.md`, laissé en place (wire stability). Fix follow-up. |
+| F.8 | `HeartbeatPayload.PoliciesCount` déclaré, jamais populé. | Documenté dans `connect-known-issues.md`, laissé en place (wire stability). Fix follow-up. |
 | F.9 | `GatewayConfigResponse.PendingDeployments []interface{}` déclaré, jamais lu. | Idem. Vérifier côté CP si encore émis. |
 
 ### Type safety
@@ -302,7 +302,3 @@ find internal/connect -maxdepth 1 -name '*.go' -not -name '*_test.go' | xargs wc
 5. **Fix in-flight** : F.1 (race gatewayID, S1), F.2 (race slice, S1), F.6 (Scanner buffer, S5), F.10 (`ReportDiscovery` typé, S4).
 6. **`failedRoutesProvider`** reste un helper local dans `sync_route.go`, pas d'export `adapters/`.
 7. **Nouvelle branche** `refactor/go-2-connect-split` depuis `main`.
-
----
-
-**GO Phase 2.**

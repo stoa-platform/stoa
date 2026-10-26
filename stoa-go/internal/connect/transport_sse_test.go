@@ -31,7 +31,7 @@ func sseTestServer(t *testing.T, dataSize int) *httptest.Server {
 	}))
 }
 
-// TestSSEStreamAcceptsLargeEvent is the regression guard for REWRITE-BUGS.md F.6.
+// TestSSEStreamAcceptsLargeEvent is the regression guard for docs/connect-known-issues.md F.6.
 // Default bufio.Scanner buffer (64 KB) would silently drop events whose `data:`
 // line exceeds that size; the fix raises max to sseScannerMaxBuf (1 MB) and
 // relies on scanner.Err() propagation to surface bufio.ErrTooLong if ever hit.

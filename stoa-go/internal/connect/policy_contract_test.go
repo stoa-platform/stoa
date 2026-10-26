@@ -15,6 +15,7 @@ import (
 	"github.com/stoa-platform/stoa-go/internal/connect/adapters"
 )
 
+// regression for CAB-2280
 func TestPolicySyncerJWTValidationAliases(t *testing.T) {
 	for _, kind := range []string{"jwt", "jwt_validation"} {
 		t.Run(kind, func(t *testing.T) {
@@ -22,13 +23,21 @@ func TestPolicySyncerJWTValidationAliases(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == "GET" {
 					if strings.HasSuffix(r.URL.Path, "/apis") {
-						io.WriteString(w, `{"apiResponse":[{"id":"id","apiName":"api"}]}`)
+						if _, err := io.WriteString(w, `{"apiResponse":[{"id":"id","apiName":"api"}]}`); err != nil {
+							t.Errorf("write response: %v", err)
+						}
 					} else {
-						io.WriteString(w, `{"policyActions":[]}`)
+						if _, err := io.WriteString(w, `{"policyActions":[]}`); err != nil {
+							t.Errorf("write response: %v", err)
+						}
 					}
 					return
 				}
-				json.NewDecoder(r.Body).Decode(&payload)
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "invalid request", http.StatusBadRequest)
+					return
+				}
 				w.WriteHeader(201)
 			}))
 			defer server.Close()
@@ -44,6 +53,8 @@ func TestPolicySyncerJWTValidationAliases(t *testing.T) {
 		})
 	}
 }
+
+// regression for CAB-2280
 func TestPolicySyncerOIDCUnsupportedExplicitRefusal(t *testing.T) {
 	for _, kind := range []string{"oidc_auth_server", "oidc_strategy", "oidc_scope"} {
 		m := &policyMock{}
@@ -55,6 +66,7 @@ func TestPolicySyncerOIDCUnsupportedExplicitRefusal(t *testing.T) {
 }
 
 // T07: alias is outside the authoritative STOA type set, with or without OIDC.
+// regression for CAB-2280
 func TestPolicySyncerAliasTranslationOrRefusal(t *testing.T) {
 	for _, a := range []adapters.GatewayAdapter{&policyMock{}, &policyMockOIDC{}} {
 		result := newPolicySyncer(a).SyncPolicies(context.Background(), "http://synthetic.invalid", []PendingPolicy{{ID: "p", Name: "api", PolicyType: "alias", Enabled: true}})[0]
@@ -63,6 +75,8 @@ func TestPolicySyncerAliasTranslationOrRefusal(t *testing.T) {
 		}
 	}
 }
+
+// regression for CAB-2280
 func TestPolicySyncDiagnosticsRedacted(t *testing.T) {
 	var logs bytes.Buffer
 	old := log.Writer()
@@ -91,6 +105,7 @@ func TestPolicySyncDiagnosticsRedacted(t *testing.T) {
 	}
 }
 
+// regression for CAB-2280
 func TestPolicySyncerRejectsInvalidConfigBeforeDispatch(t *testing.T) {
 	for _, kind := range []string{"cors", "rate_limit", "jwt_validation", "ip_filter", "logging", "oidc_auth_server", "oidc_strategy", "oidc_scope"} {
 		t.Run(kind, func(t *testing.T) {
@@ -105,6 +120,8 @@ func TestPolicySyncerRejectsInvalidConfigBeforeDispatch(t *testing.T) {
 		})
 	}
 }
+
+// regression for CAB-2280
 func TestPolicySyncerRealAdaptersRefuseLocally(t *testing.T) {
 	for name, a := range map[string]adapters.GatewayAdapter{"kong": adapters.NewKongAdapter(adapters.AdapterConfig{}), "gravitee": adapters.NewGraviteeAdapter(adapters.AdapterConfig{})} {
 		for _, kind := range []string{"cors", "rate_limit", "jwt_validation", "ip_filter", "logging", "caching", "transform", "oidc_auth_server", "oidc_strategy", "oidc_scope"} {
@@ -122,16 +139,23 @@ func TestPolicySyncerRealAdaptersRefuseLocally(t *testing.T) {
 }
 
 // Explicit empty values are preserved; only absent optional fields get defaults.
+// regression for CAB-2280
 func TestPolicyOIDCExplicitEmptyValuesContract(t *testing.T) {
 	for _, kind := range []string{"oidc_auth_server", "oidc_scope"} {
 		t.Run(kind, func(t *testing.T) {
 			var payload map[string]interface{}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == "GET" {
-					io.WriteString(w, `{}`)
+					if _, err := io.WriteString(w, `{}`); err != nil {
+						t.Errorf("write response: %v", err)
+					}
 					return
 				}
-				json.NewDecoder(r.Body).Decode(&payload)
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "invalid request", http.StatusBadRequest)
+					return
+				}
 				w.WriteHeader(201)
 			}))
 			defer server.Close()
@@ -155,6 +179,7 @@ func TestPolicyOIDCExplicitEmptyValuesContract(t *testing.T) {
 	}
 }
 
+// regression for CAB-2280
 func TestPolicyHTTPDiagnosticsThroughAckContract(t *testing.T) {
 	for _, kind := range []string{"logging", "oidc_auth_server", "oidc_strategy", "oidc_scope"} {
 		t.Run(kind, func(t *testing.T) {
@@ -165,14 +190,20 @@ func TestPolicyHTTPDiagnosticsThroughAckContract(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == "GET" {
 					if strings.HasSuffix(r.URL.Path, "/apis") {
-						io.WriteString(w, `{"apiResponse":[{"id":"id","apiName":"api\nSYNTHETIC_NAME_TOKEN"}]}`)
+						if _, err := io.WriteString(w, `{"apiResponse":[{"id":"id","apiName":"api\nSYNTHETIC_NAME_TOKEN"}]}`); err != nil {
+							t.Errorf("write response: %v", err)
+						}
 					} else {
-						io.WriteString(w, `{}`)
+						if _, err := io.WriteString(w, `{}`); err != nil {
+							t.Errorf("write response: %v", err)
+						}
 					}
 					return
 				}
 				w.WriteHeader(403)
-				io.WriteString(w, `SYNTHETIC_BODY_TOKEN Authorization: Bearer SYNTHETIC_CONFIG_TOKEN`)
+				if _, err := io.WriteString(w, `SYNTHETIC_BODY_TOKEN Authorization: Bearer SYNTHETIC_CONFIG_TOKEN`); err != nil {
+					t.Errorf("write response: %v", err)
+				}
 			}))
 			defer server.Close()
 			configs := map[string]map[string]interface{}{
@@ -190,7 +221,9 @@ func TestPolicyHTTPDiagnosticsThroughAckContract(t *testing.T) {
 				b, _ := io.ReadAll(r.Body)
 				ack = string(b)
 				w.WriteHeader(403)
-				io.WriteString(w, "SYNTHETIC_ACK_TOKEN")
+				if _, err := io.WriteString(w, "SYNTHETIC_ACK_TOKEN"); err != nil {
+					t.Errorf("write response: %v", err)
+				}
 			}))
 			defer cp.Close()
 			err := newCPClient(cp.URL, "synthetic-test-token", http.DefaultTransport).ReportSyncAck(context.Background(), "gateway", SyncAckPayload{SyncedPolicies: []SyncedPolicyResult{result}})

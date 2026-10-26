@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Preserve the project distribution notices in the runtime image.
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
+
 WORKDIR /app
 
 # Upgrade system packages (fix CVEs in base image) + install dependencies

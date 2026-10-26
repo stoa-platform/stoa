@@ -54,11 +54,17 @@ jobs:
           ls -lh hegemon
           file hegemon
 
+      - name: Include project license and notice with binary
+        run: python3 -B scripts/ci/release_legal.py --dest hegemon/daemon
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hegemon-binary
-          path: hegemon/daemon/hegemon
+          path: |
+            hegemon/daemon/hegemon
+            hegemon/daemon/LICENSE
+            hegemon/daemon/NOTICE
           retention-days: 7
 
   deploy:

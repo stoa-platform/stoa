@@ -74,6 +74,9 @@ RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
 FROM debian:bookworm-slim AS runtime
 
+# Preserve the project distribution notices in the runtime image.
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
+
 RUN apt-get update && apt-get install -y \
       ca-certificates \
       libssl3 \

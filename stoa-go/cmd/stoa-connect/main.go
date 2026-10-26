@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -78,10 +79,24 @@ func main() {
 
 	// Start gateway discovery loop
 	dcfg := connect.DiscoveryConfigFromEnv()
-	agent.StartDiscovery(ctx, dcfg)
+	envoyMode := strings.EqualFold(dcfg.GatewayType, "envoy")
+	if envoyMode {
+		ads, adsErr := startEnvoy(ctx)
+		if adsErr != nil {
+			log.Fatalf("envoy setup: %v", adsErr)
+		}
+		defer ads.Close()
+		dcfg.EnvoyServer = ads
+		// Route and policy loops require a nonempty target; Envoy uses ADS.
+		if dcfg.GatewayAdminURL == "" {
+			dcfg.GatewayAdminURL = "envoy"
+		}
+	} else {
+		agent.StartDiscovery(ctx, dcfg)
+	}
 
 	// Start policy sync loop and route sync loop (reuse discovery adapter)
-	if dcfg.GatewayAdminURL != "" {
+	if dcfg.GatewayAdminURL != "" || envoyMode {
 		adapter, _, resolveErr := connect.ResolveAdapter(ctx, dcfg)
 		if resolveErr != nil {
 			log.Printf("warning: cannot resolve adapter for sync: %v", resolveErr)

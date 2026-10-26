@@ -302,3 +302,5 @@ impl Authorization for ExtAuthzService {
     }
 }
 
+#[cfg(test)]
+mod tests;

@@ -103,7 +103,8 @@ echo "  New LoadBalancer IP: $NEW_IP"
 echo ""
 echo "[8/$TOTAL] Validating HTTPRoutes on new LB IP..."
 echo ""
-OLD_IP="5.196.236.53"
+# Previous ingress address, printed in the cutover note only. Override with OLD_LB_IP.
+OLD_IP="${OLD_LB_IP:-192.0.2.1}"
 HOSTS=(
   "argocd.gostoa.dev"
   "console.gostoa.dev"

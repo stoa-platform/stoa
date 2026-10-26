@@ -1212,8 +1212,9 @@ async def _link_event_generator(
         gateway_id=gateway_id,
         event_types=event_types or LINK_EVENT_TYPES,
     )
+    listener = event_bus.listen(sub)
     try:
-        async for event in event_bus.listen(sub):
+        async for event in listener:
             if await request.is_disconnected():
                 break
             data = event.get("data", {})
@@ -1224,7 +1225,7 @@ async def _link_event_generator(
     except asyncio.CancelledError:
         pass
     finally:
-        event_bus.unsubscribe(sub)
+        await listener.aclose()
 
 
 @router.get("/{gateway_id}/events")

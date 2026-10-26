@@ -74,8 +74,9 @@ async def event_generator(
     subscriber queue with tenant + event-type filtering.
     """
     sub = event_bus.subscribe(tenant_id=tenant_id, event_types=event_types)
+    listener = event_bus.listen(sub)
     try:
-        async for event in event_bus.listen(sub):
+        async for event in listener:
             if await request.is_disconnected():
                 break
             data = event.get("data", {})
@@ -86,7 +87,7 @@ async def event_generator(
     except asyncio.CancelledError:
         pass
     finally:
-        event_bus.unsubscribe(sub)
+        await listener.aclose()
 
 
 @router.get("/stream/global")

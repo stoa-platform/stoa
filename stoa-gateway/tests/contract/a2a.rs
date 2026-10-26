@@ -131,7 +131,7 @@ async fn test_a2a_agents_list_shape() {
 }
 
 #[tokio::test]
-async fn test_a2a_tool_bridge_not_found_shape() {
+async fn test_a2a_tool_bridge_unavailable_permissions_reject_before_lookup() {
     let oidc = jwt::oidc_server().await;
     let app = TestApp::with_config(jwt::config(&oidc));
     let body = serde_json::json!({
@@ -156,12 +156,23 @@ async fn test_a2a_tool_bridge_not_found_shape() {
             valid_token(),
         )
         .await;
-    assert_eq!(status, axum::http::StatusCode::OK);
+    // CP authorization must precede lookup, including unknown tool names.
+    assert_eq!(status, axum::http::StatusCode::SERVICE_UNAVAILABLE);
     let json: serde_json::Value = serde_json::from_str(&response).expect("valid JSON");
-
-    // Tool bridge returns a failed task (not a JSON-RPC error)
-    let task = &json["result"];
-    assert_eq!(task["status"]["state"], "failed");
+    assert_eq!(json["jsonrpc"], "2.0");
+    assert_eq!(json["id"], 4);
+    assert_eq!(json["error"]["code"], -32001);
+    assert_eq!(json["error"]["message"], "Tool call rejected");
+    assert!(json["result"].is_null());
+    assert!(!response.contains("Available"));
+    assert!(app
+        .state
+        .a2a_registry
+        .as_ref()
+        .unwrap()
+        .get_task("tool-task-001")
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]

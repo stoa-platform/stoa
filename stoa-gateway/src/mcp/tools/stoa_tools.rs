@@ -64,6 +64,7 @@ fn register_generated_tool(
     registry: &ToolRegistry,
     def: &GeneratedToolDef,
     cp: &Arc<ToolProxyClient>,
+    tenant_id: &str,
 ) {
     // Build input schema from the definition (or default to empty object)
     let tool_schema = match &def.input_schema {
@@ -89,19 +90,28 @@ fn register_generated_tool(
         },
     };
 
-    let action = infer_action(&def.tool_name);
+    let inferred = infer_action(&def.tool_name);
+    // Keep the existing audit/admin restriction when classifying the HTTP operation.
+    let action = if inferred.is_admin() {
+        inferred
+    } else {
+        super::dynamic_tool::action_for_http_method(def.http_method.as_deref().unwrap_or("POST"))
+    };
     let description = def
         .description
         .clone()
         .unwrap_or_else(|| format!("UAC-generated tool: {}", def.tool_name));
 
-    registry.register(Arc::new(ProxyTool::new(
-        &def.tool_name,
-        &description,
-        tool_schema,
-        action,
-        cp.clone(),
-    )));
+    registry.register(Arc::new(
+        ProxyTool::new(
+            &def.tool_name,
+            &description,
+            tool_schema,
+            action,
+            cp.clone(),
+        )
+        .with_tenant(tenant_id),
+    ));
 
     tracing::info!(
         tool = %def.tool_name,
@@ -182,38 +192,8 @@ pub async fn discover_and_register(
         }
     }
 
-    // CAB-606: Discover UAC-generated tools (best-effort, non-blocking)
-    discover_generated_tools_best_effort(&registry, cp).await;
-
+    // Generated tools require a concrete tenant; refreshed on tenant requests.
     Ok(registry.count())
-}
-
-/// Discover UAC-generated tools from CP (CAB-606).
-///
-/// Best-effort: logs a warning on failure but doesn't block startup.
-/// Uses a default tenant ID for initial discovery; per-tenant discovery
-/// happens in `refresh_tools_for_tenant()`.
-async fn discover_generated_tools_best_effort(registry: &ToolRegistry, cp: &Arc<ToolProxyClient>) {
-    match cp.discover_generated_tools("_default").await {
-        Ok(gen_tools) => {
-            let mut gen_count = 0;
-            for def in &gen_tools {
-                if !registry.exists(&def.tool_name) {
-                    register_generated_tool(registry, def, cp);
-                    gen_count += 1;
-                }
-            }
-            if gen_count > 0 {
-                tracing::info!(gen_count, "UAC-generated tools registered (CAB-606)");
-            }
-        }
-        Err(e) => {
-            tracing::debug!(
-                error = %e,
-                "Generated tools discovery unavailable (CAB-606 endpoint may not exist yet)"
-            );
-        }
-    }
 }
 
 /// Discover tools from CP with circuit breaker + retry.
@@ -281,8 +261,7 @@ pub fn start_tool_refresh_task(
                 }
             }
 
-            // CAB-606: Also refresh generated tools
-            discover_generated_tools_best_effort(&registry, &cp).await;
+            // Generated tools are refreshed only with a verified tenant context.
         }
     });
 }
@@ -344,7 +323,7 @@ pub async fn refresh_tools_for_tenant(
         Ok(gen_tools) => {
             for def in &gen_tools {
                 if !registry.exists(&def.tool_name) {
-                    register_generated_tool(registry, def, cp);
+                    register_generated_tool(registry, def, cp, tenant_id);
                     new_count += 1;
                 }
             }
@@ -731,12 +710,43 @@ mod tests {
             None,
         ));
         let def = make_generated_def("billing:create_invoice");
-        register_generated_tool(&registry, &def, &cp);
+        register_generated_tool(&registry, &def, &cp, "tenant-a");
 
         assert_eq!(registry.count(), 1);
         let tool = registry.get("billing:create_invoice").unwrap();
         assert_eq!(tool.name(), "billing:create_invoice");
-        assert_eq!(tool.required_action(), Action::Create); // inferred from "create"
+        assert_eq!(tool.required_action(), Action::Create); // HTTP POST
+    }
+
+    #[test]
+    fn generated_tool_action_from_http_method() {
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "https://cp.example",
+            None,
+        ));
+        for (method, action) in [
+            ("GET", Action::Read),
+            ("POST", Action::Create),
+            ("DELETE", Action::Delete),
+            ("PATCH", Action::Update),
+        ] {
+            let registry = ToolRegistry::new();
+            let mut def = make_generated_def("catalog:get_something");
+            def.http_method = Some(method.to_string());
+            register_generated_tool(&registry, &def, &cp, "tenant-a");
+            assert_eq!(
+                registry.get(&def.tool_name).unwrap().required_action(),
+                action
+            );
+        }
+        let registry = ToolRegistry::new();
+        let mut audit = make_generated_def("catalog:audit_export");
+        audit.http_method = Some("GET".to_string());
+        register_generated_tool(&registry, &audit, &cp, "tenant-a");
+        assert_eq!(
+            registry.get(&audit.tool_name).unwrap().required_action(),
+            Action::ViewAudit
+        );
     }
 
     #[test]
@@ -757,7 +767,7 @@ mod tests {
             version: "1.0.0".to_string(),
             enabled: true,
         };
-        register_generated_tool(&registry, &def, &cp);
+        register_generated_tool(&registry, &def, &cp, "tenant-a");
 
         assert_eq!(registry.count(), 1);
         let tool = registry.get("simple_tool").unwrap();
@@ -774,11 +784,34 @@ mod tests {
             None,
         ));
         let def = make_generated_def("billing:create_invoice");
-        register_generated_tool(&registry, &def, &cp);
+        register_generated_tool(&registry, &def, &cp, "tenant-a");
 
         let tool = registry.get("billing:create_invoice").unwrap();
         let schema = tool.input_schema();
         assert!(schema.properties.contains_key("id"));
         assert_eq!(schema.required, vec!["id".to_string()]);
+    }
+
+    #[test]
+    fn regression_generated_tool_is_visible_only_to_discovery_owner() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "invalid-url",
+            None,
+        ));
+        register_generated_tool(
+            &registry,
+            &make_generated_def("contract:read"),
+            &cp,
+            "tenant-a",
+        );
+        registry.register_alias("legacy_read", "contract:read");
+        assert_eq!(registry.list(Some("tenant-a")).len(), 1);
+        assert!(registry.list(Some("tenant-b")).is_empty());
+        assert!(registry
+            .get_for_tenant("contract:read", "tenant-b")
+            .is_none());
+        assert!(registry.get_for_tenant("legacy_read", "tenant-b").is_none());
+        assert!(registry.get_for_tenant("legacy_read", "tenant-a").is_some());
     }
 }

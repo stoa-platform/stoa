@@ -17,4 +17,6 @@ pub mod oidc;
 pub mod profile_enforcement;
 pub mod rbac;
 pub mod sender_constraint;
+pub mod strong_auth;
 pub mod subscription;
+pub mod tenant;

@@ -52,6 +52,7 @@ fn other_key() -> &'static TestKey {
 #[derive(Serialize)]
 struct FixtureClaims {
     sub: &'static str,
+    tenant_id: &'static str,
     iss: &'static str,
     aud: &'static str,
     iat: i64,
@@ -69,6 +70,7 @@ fn sign_with(key: &TestKey, exp: i64) -> String {
         &header,
         &FixtureClaims {
             sub: "auth-regression-user",
+            tenant_id: "tenant-a",
             iss: ISSUER,
             aud: AUDIENCE,
             iat: 1,
@@ -136,6 +138,7 @@ pub fn config(server: &MockServer) -> Config {
         keycloak_url: Some("https://issuer.test".to_string()),
         keycloak_internal_url: Some(server.uri()),
         keycloak_realm: Some("stoa".to_string()),
+        mcp_audience: Some(AUDIENCE.to_string()),
         ..Config::default()
     }
 }

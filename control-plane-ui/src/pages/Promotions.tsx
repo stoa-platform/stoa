@@ -1,3 +1,12 @@
+import {
+  Field,
+  FieldLabel,
+  FieldSelect,
+  FieldTextarea,
+  Form,
+  FormError,
+} from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -308,7 +317,7 @@ function DiffViewer({ diff }: { diff: Schemas['PromotionDiffResponse'] }) {
               {JSON.stringify(diff.source_spec, null, 2)}
             </pre>
           ) : (
-            <p className="text-sm text-neutral-400">No deployment found</p>
+            <p className="text-sm text-muted">No deployment found</p>
           )}
         </div>
         <div>
@@ -320,7 +329,7 @@ function DiffViewer({ diff }: { diff: Schemas['PromotionDiffResponse'] }) {
               {JSON.stringify(diff.target_spec, null, 2)}
             </pre>
           ) : (
-            <p className="text-sm text-neutral-400">No prior deployment (first deploy to target)</p>
+            <p className="text-sm text-muted">No prior deployment (first deploy to target)</p>
           )}
         </div>
       </div>
@@ -509,34 +518,39 @@ function CreatePromotionDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-700 px-6 py-4">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
             Create Promotion
-          </h2>
+          </ModalTitle>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <Form error={error} onSubmit={handleSubmit} className="p-6 space-y-5">
           {error && (
-            <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+            <FormError className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
-            </div>
+            </FormError>
           )}
 
           {/* API selector */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               API
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedApi}
               onChange={(e) => setSelectedApi(e.target.value)}
               className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
@@ -554,16 +568,17 @@ function CreatePromotionDialog({
                   {api.display_name} ({api.name})
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Environment chain */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <fieldset>
+            <legend className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Promotion Path
-            </label>
+            </legend>
             <div className="flex items-center gap-3">
               <select
+                aria-label="Source environment"
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
                 className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
@@ -571,8 +586,9 @@ function CreatePromotionDialog({
                 <option value="dev">Dev</option>
                 <option value="staging">Staging</option>
               </select>
-              <ArrowRight className="h-5 w-5 text-neutral-400 shrink-0" />
+              <ArrowRight className="h-5 w-5 text-muted shrink-0" />
               <select
+                aria-label="Target environment"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
@@ -586,14 +602,14 @@ function CreatePromotionDialog({
                 Invalid chain. Only dev &rarr; staging and staging &rarr; production are allowed.
               </p>
             )}
-          </div>
+          </fieldset>
 
           {/* Source deployment */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Source Deployment
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedSourceDeploymentId}
               onChange={(e) => {
                 setSelectedSourceDeploymentId(e.target.value);
@@ -617,20 +633,20 @@ function CreatePromotionDialog({
                   · {deployment.gateway_type || 'gateway'} · {deployment.id.slice(0, 8)}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
             {selectedApi && !loadingSourceDeployments && matchingSourceDeployments.length === 0 && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                 No synced {source} gateway deployment exists for this API.
               </p>
             )}
-          </div>
+          </Field>
 
           {/* Target gateways */}
-          <div>
+          <fieldset aria-label="Target Gateways">
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 Target Gateways
-              </label>
+              </span>
               {selectedSourceGateway && (
                 <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   {gatewayFamily(selectedSourceGateway)}
@@ -686,14 +702,14 @@ function CreatePromotionDialog({
                 ))
               )}
             </div>
-          </div>
+          </fieldset>
 
           {/* Message */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Message <span className="text-red-500">*</span>
-            </label>
-            <textarea
+            </FieldLabel>
+            <FieldTextarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Why are you promoting this API? (audit trail)"
@@ -702,8 +718,8 @@ function CreatePromotionDialog({
               className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm resize-none"
               required
             />
-            <p className="text-xs text-neutral-400 mt-1">{message.length}/1000</p>
-          </div>
+            <p className="text-xs text-muted mt-1">{message.length}/1000</p>
+          </Field>
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2 border-t border-neutral-200 dark:border-neutral-700">
@@ -734,9 +750,9 @@ function CreatePromotionDialog({
               )}
             </Button>
           </div>
-        </form>
+        </Form>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -867,7 +883,7 @@ function PromotionRow({
       >
         {/* API + Message */}
         <div className="flex items-center gap-2 min-w-0">
-          <button className="text-neutral-400 dark:text-neutral-500 shrink-0">
+          <button className="text-muted shrink-0">
             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
           <div className="min-w-0">
@@ -890,7 +906,7 @@ function PromotionRow({
           >
             {promotion.source_environment.toUpperCase()}
           </span>
-          <ArrowRight className="h-3.5 w-3.5 text-neutral-400" />
+          <ArrowRight className="h-3.5 w-3.5 text-muted" />
           <span
             className={clsx(
               'px-2 py-0.5 text-xs font-medium rounded',
@@ -1172,6 +1188,7 @@ export function Promotions() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <select
+          aria-label="Tenant"
           value={selectedTenant}
           onChange={(e) => setSelectedTenant(e.target.value)}
           className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm"
@@ -1185,6 +1202,7 @@ export function Promotions() {
           ))}
         </select>
         <select
+          aria-label="API"
           value={selectedApi}
           onChange={(e) => {
             setSelectedApi(e.target.value);
@@ -1202,6 +1220,7 @@ export function Promotions() {
           ))}
         </select>
         <select
+          aria-label="Status"
           value={selectedStatus}
           onChange={(e) => {
             setSelectedStatus(e.target.value);

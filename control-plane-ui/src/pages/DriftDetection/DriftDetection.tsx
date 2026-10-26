@@ -251,6 +251,7 @@ export function DriftDetection() {
         </div>
         <div className="flex items-center gap-3">
           <select
+            aria-label="Gateway type"
             value={gatewayTypeFilter}
             onChange={(e) => {
               setGatewayTypeFilter(e.target.value);
@@ -387,7 +388,7 @@ export function DriftDetection() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Server className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                      <Server className="w-4 h-4 text-muted flex-shrink-0" />
                       <span className="font-medium text-neutral-900 dark:text-white text-sm truncate">
                         {gw.display_name || gw.name}
                       </span>

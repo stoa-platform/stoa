@@ -1321,6 +1321,37 @@ pub fn record_api_proxy_circuit_open(backend: &str) {
     API_PROXY_CIRCUIT_OPEN.with_label_values(&[backend]).inc();
 }
 
+/// Add canonical ownership to exported metrics while retaining legacy labels.
+/// Unattributed/platform aggregates remain unlabeled and admin-only. Runtime
+/// metrics must not gain a tenant dimension just because they share a registry.
+pub fn canonicalize_tenant_labels(families: &mut [prometheus::proto::MetricFamily]) {
+    for family in families {
+        for metric in family.mut_metric() {
+            if metric
+                .get_label()
+                .iter()
+                .any(|label| label.get_name() == "tenant_id")
+            {
+                continue;
+            }
+            let Some(tenant) = metric
+                .get_label()
+                .iter()
+                .find(|label| label.get_name() == "tenant" && !label.get_value().is_empty())
+                .map(|label| label.get_value().to_string())
+            else {
+                continue;
+            };
+            let mut label = prometheus::proto::LabelPair::default();
+            label.set_name("tenant_id".to_string());
+            label.set_value(tenant);
+            let mut labels = metric.get_label().to_vec();
+            labels.push(label);
+            metric.set_label(labels.into());
+        }
+    }
+}
+
 // === HTTP metrics helpers ===
 
 /// Record an HTTP request with method, normalized route, status, and duration.
@@ -1454,16 +1485,15 @@ pub fn init_all_metrics() {
 }
 
 fn init_guardrails_full_metric_series() {
+    init_guardrails_metric_series(&GUARDRAILS_EVALUATIONS_TOTAL, &GUARDRAILS_DECISIONS_TOTAL);
+}
+
+fn init_guardrails_metric_series(evaluations: &CounterVec, decisions: &CounterVec) {
     for (deployment_mode, surface) in GUARDRAILS_FULL_ZERO_INIT_SURFACES {
         for guardrail in GUARDRAILS_FULL_GUARDRAILS {
-            GUARDRAILS_EVALUATIONS_TOTAL.with_label_values(&[deployment_mode, surface, guardrail]);
+            evaluations.with_label_values(&[deployment_mode, surface, guardrail]);
             for decision in GUARDRAILS_FULL_DECISIONS {
-                GUARDRAILS_DECISIONS_TOTAL.with_label_values(&[
-                    deployment_mode,
-                    surface,
-                    guardrail,
-                    decision,
-                ]);
+                decisions.with_label_values(&[deployment_mode, surface, guardrail, decision]);
             }
         }
     }
@@ -1681,8 +1711,29 @@ mod tests {
 
     #[test]
     fn spec_ac10_guardrails_full_metrics_zero_initialize_bounded_series() {
-        init_all_metrics();
-        let body = encode_metrics();
+        // A fresh registry proves initial zeros independently of concurrent tool calls.
+        let registry = prometheus::Registry::new();
+        let evaluations = CounterVec::new(
+            prometheus::Opts::new("stoa_guardrails_evaluations_total", "Test evaluations"),
+            &["deployment_mode", "surface", "guardrail"],
+        )
+        .unwrap();
+        let decisions = CounterVec::new(
+            prometheus::Opts::new("stoa_guardrails_decisions_total", "Test decisions"),
+            &["deployment_mode", "surface", "guardrail", "decision"],
+        )
+        .unwrap();
+        registry.register(Box::new(evaluations.clone())).unwrap();
+        registry.register(Box::new(decisions.clone())).unwrap();
+        init_guardrails_metric_series(&evaluations, &decisions);
+        let mut encoded = Vec::new();
+        prometheus::Encoder::encode(
+            &prometheus::TextEncoder::new(),
+            &registry.gather(),
+            &mut encoded,
+        )
+        .unwrap();
+        let body = String::from_utf8(encoded).unwrap();
 
         for (deployment_mode, surface) in GUARDRAILS_FULL_ZERO_INIT_SURFACES {
             for guardrail in GUARDRAILS_FULL_GUARDRAILS {
@@ -1915,6 +1966,27 @@ mod tests {
     fn test_init_all_metrics_no_panic() {
         // Should not panic — forces all Lazy statics to initialize
         init_all_metrics();
+    }
+
+    #[test]
+    fn canonical_tenant_labels_preserve_legacy_without_labeling_runtime() {
+        let mut legacy = prometheus::proto::Metric::default();
+        let mut tenant = prometheus::proto::LabelPair::default();
+        tenant.set_name("tenant".to_string());
+        tenant.set_value("tenant-a".to_string());
+        legacy.set_label(vec![tenant].into());
+        let mut family = prometheus::proto::MetricFamily::default();
+        family.set_metric(vec![legacy, prometheus::proto::Metric::default()].into());
+        let mut families = vec![family];
+        canonicalize_tenant_labels(&mut families);
+        canonicalize_tenant_labels(&mut families);
+        let metrics = families[0].get_metric();
+        assert_eq!(metrics[0].get_label().len(), 2);
+        assert!(metrics[0]
+            .get_label()
+            .iter()
+            .any(|l| l.get_name() == "tenant_id" && l.get_value() == "tenant-a"));
+        assert!(metrics[1].get_label().is_empty());
     }
 
     fn encode_metrics() -> String {

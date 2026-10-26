@@ -98,6 +98,13 @@ Key variables:
 - `STOA_KEYCLOAK_URL` / `STOA_KEYCLOAK_REALM` — Authentication
 - `STOA_CONTROL_PLANE_URL` — Control Plane API for tool sync
 - `STOA_GATEWAY_MODE` — Deployment mode (edge-mcp, sidecar, proxy, shadow)
+- `STOA_MCP_AUDIENCE` — Audience required on MCP tokens. No default; the gateway refuses to start in `prod` without it
+- `STOA_KEYCLOAK_CLIENT_KEY_PATH` / `STOA_KEYCLOAK_CLIENT_KEY_ID` — Service identity using `private_key_jwt` (RFC 7523). Mount the key file from a Kubernetes Secret; its content is never logged
+- `STOA_SERVICE_TOKEN_MAX_TTL_SECS` — Upper bound on the cached service-token lifetime (default 300)
+
+Tools are denied by default: a tenant can call a tool only when the Control Plane
+returns an explicit allow for it. Without a `private_key_jwt` service identity, the
+gateway cannot read tool permissions and every tool call is denied.
 
 ## Dependencies
 

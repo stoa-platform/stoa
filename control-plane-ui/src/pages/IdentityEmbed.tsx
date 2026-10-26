@@ -91,7 +91,7 @@ export function IdentityEmbed() {
         {/* Account Details */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
-            <Key className="h-5 w-5 text-neutral-400" />
+            <Key className="h-5 w-5 text-muted" />
             Account Details
           </h3>
           <dl className="space-y-4">
@@ -131,7 +131,7 @@ export function IdentityEmbed() {
         {/* Organization */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-neutral-400" />
+            <Building2 className="h-5 w-5 text-muted" />
             Organization
           </h3>
           <dl className="space-y-4">
@@ -170,7 +170,7 @@ export function IdentityEmbed() {
       {/* Quick Actions */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
         <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-neutral-400" />
+          <Clock className="h-5 w-5 text-muted" />
           Security Actions
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

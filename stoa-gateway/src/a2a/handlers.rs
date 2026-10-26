@@ -5,12 +5,18 @@
 //! - tasks/get — Retrieve task status and history
 //! - tasks/cancel — Cancel a running task
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    Json,
+};
 use serde_json::json;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::mcp::tools::{ToolContent, ToolContext};
+use crate::mcp::handlers::request_tool_context;
+use crate::mcp::tools::ToolContent;
 use crate::state::AppState;
 
 use super::types::{
@@ -25,6 +31,7 @@ use super::types::{
 /// Applies STOA governance (auth, rate limit, audit) via middleware layers.
 pub async fn a2a_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
     let Some(ref registry) = state.a2a_registry else {
@@ -41,21 +48,27 @@ pub async fn a2a_handler(
 
     info!(method = %request.method, id = %request.id, "A2A JSON-RPC request");
 
-    let response = match request.method.as_str() {
-        "tasks/send" => handle_tasks_send(&state, registry, &request).await,
-        "tasks/get" => handle_tasks_get(registry, &request).await,
-        "tasks/cancel" => handle_tasks_cancel(registry, &request).await,
+    let (status, response) = match request.method.as_str() {
+        "tasks/send" => handle_tasks_send_with_headers(&state, registry, &request, &headers).await,
+        "tasks/get" => (StatusCode::OK, handle_tasks_get(registry, &request).await),
+        "tasks/cancel" => (
+            StatusCode::OK,
+            handle_tasks_cancel(registry, &request).await,
+        ),
         other => {
             warn!(method = other, "Unknown A2A method");
-            JsonRpcResponse::error(
-                request.id,
-                METHOD_NOT_FOUND,
-                format!("Method not found: {other}"),
+            (
+                StatusCode::OK,
+                JsonRpcResponse::error(
+                    request.id,
+                    METHOD_NOT_FOUND,
+                    format!("Method not found: {other}"),
+                ),
             )
         }
     };
 
-    Json(response).into_response()
+    (status, Json(response)).into_response()
 }
 
 /// Extract a ToolInvocation from a message's Data parts, if present.
@@ -73,34 +86,55 @@ fn extract_tool_invocation(message: &Message) -> Option<ToolInvocation> {
 }
 
 /// Handle tasks/send — create or continue a task, with MCP tool bridge
+#[cfg(test)]
 async fn handle_tasks_send(
     state: &AppState,
     registry: &super::registry::AgentRegistry,
     request: &JsonRpcRequest,
 ) -> JsonRpcResponse {
+    handle_tasks_send_with_headers(state, registry, request, &HeaderMap::new())
+        .await
+        .1
+}
+
+async fn handle_tasks_send_with_headers(
+    state: &AppState,
+    registry: &super::registry::AgentRegistry,
+    request: &JsonRpcRequest,
+    headers: &HeaderMap,
+) -> (StatusCode, JsonRpcResponse) {
     let params: TaskSendParams = match serde_json::from_value(request.params.clone()) {
         Ok(p) => p,
         Err(e) => {
-            return JsonRpcResponse::error(
-                request.id.clone(),
-                INVALID_PARAMS,
-                format!("Invalid params: {e}"),
+            return (
+                StatusCode::OK,
+                JsonRpcResponse::error(
+                    request.id.clone(),
+                    INVALID_PARAMS,
+                    format!("Invalid params: {e}"),
+                ),
             );
         }
     };
 
     // Check for MCP tool invocation in message data parts
     if let Some(invocation) = extract_tool_invocation(&params.message) {
-        return handle_tool_bridge(state, registry, &params, &invocation, request).await;
+        return handle_tool_bridge(state, registry, &params, &invocation, request, headers).await;
     }
 
     // Check if this is a continuation of an existing task
     if let Ok(Some(_)) = registry.get_task(&params.id) {
-        return handle_continuation(registry, &params, request).await;
+        return (
+            StatusCode::OK,
+            handle_continuation(registry, &params, request).await,
+        );
     }
 
     // Create a new task
-    handle_new_task(registry, &params, request).await
+    (
+        StatusCode::OK,
+        handle_new_task(registry, &params, request).await,
+    )
 }
 
 /// Handle MCP tool bridge: route A2A task to an MCP tool
@@ -110,63 +144,24 @@ async fn handle_tool_bridge(
     params: &TaskSendParams,
     invocation: &ToolInvocation,
     request: &JsonRpcRequest,
-) -> JsonRpcResponse {
+    headers: &HeaderMap,
+) -> (StatusCode, JsonRpcResponse) {
+    let (ctx, tool) = match request_tool_context(state, headers, &invocation.tool).await {
+        Ok(authorized) => authorized,
+        Err((status, message)) => {
+            return (
+                status,
+                JsonRpcResponse::error(request.id.clone(), -32001, message),
+            );
+        }
+    };
     let task_id = if params.id.is_empty() {
         Uuid::new_v4().to_string()
     } else {
         params.id.clone()
     };
 
-    let tool = match state.tool_registry.get(&invocation.tool) {
-        Some(t) => t,
-        None => {
-            let available: Vec<String> = state
-                .tool_registry
-                .list(None)
-                .iter()
-                .map(|d| d.name.clone())
-                .collect();
-            return create_failed_task_response(
-                registry,
-                &task_id,
-                params,
-                request,
-                &format!(
-                    "Tool '{}' not found. Available: {}",
-                    invocation.tool,
-                    available.join(", ")
-                ),
-            );
-        }
-    };
-
-    let ctx = ToolContext {
-        tenant_id: params
-            .metadata
-            .get("tenantId")
-            .and_then(|v| v.as_str())
-            .unwrap_or("a2a-default")
-            .to_string(),
-        user_id: Some(
-            params
-                .metadata
-                .get("agentId")
-                .and_then(|v| v.as_str())
-                .unwrap_or("a2a-agent")
-                .to_string(),
-        ),
-        user_email: None,
-        request_id: format!("a2a-{task_id}"),
-        roles: vec!["agent".to_string()],
-        scopes: vec!["stoa:read".to_string(), "stoa:execute".to_string()],
-        raw_token: None,
-        consumer_id: "a2a-bridge".to_string(),
-        from_control_plane: false,
-        progress_token: None,
-        skill_instructions: None,
-    };
-
-    match tool.execute(invocation.arguments.clone(), &ctx).await {
+    let response = match tool.execute(invocation.arguments.clone(), &ctx).await {
         Ok(result) => {
             let parts: Vec<Part> = result
                 .content
@@ -209,10 +204,13 @@ async fn handle_tool_bridge(
             };
 
             if let Err(e) = registry.store_task(task.clone()) {
-                return JsonRpcResponse::error(
-                    request.id.clone(),
-                    AGENT_UNAVAILABLE,
-                    format!("Failed to store task: {e}"),
+                return (
+                    StatusCode::OK,
+                    JsonRpcResponse::error(
+                        request.id.clone(),
+                        AGENT_UNAVAILABLE,
+                        format!("Failed to store task: {e}"),
+                    ),
                 );
             }
 
@@ -229,7 +227,8 @@ async fn handle_tool_bridge(
             request,
             &format!("Tool execution failed: {e}"),
         ),
-    }
+    };
+    (StatusCode::OK, response)
 }
 
 /// Handle continuation of an existing task
@@ -791,13 +790,9 @@ mod tests {
             id: json!(1),
         };
         let resp = handle_tasks_send(&state, registry, &req).await;
-        assert!(resp.error.is_none()); // Returns success with failed task status
-        let result = resp.result.unwrap();
-        assert_eq!(result["status"]["state"], "failed");
-        assert!(result["status"]["message"]["parts"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("not found"));
+        assert_eq!(resp.error.as_ref().unwrap().code, -32001);
+        assert!(resp.result.is_none());
+        assert!(registry.get_task("tool-task-1").unwrap().is_none());
     }
 
     #[test]

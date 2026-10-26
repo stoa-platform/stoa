@@ -19,7 +19,6 @@ use uuid::Uuid;
 use super::dynamic_tool::DynamicTool;
 use super::{ToolAnnotations, ToolRegistry, ToolSchema};
 use crate::config::ExpansionMode;
-use crate::uac::Action;
 
 /// Refresh interval for API tool discovery
 const API_TOOL_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
@@ -149,9 +148,8 @@ pub async fn discover_api_tools(
             &backend_url,
             "POST",
             schema,
-            "default", // tenant_id unused for public tools
+            "_public", // explicit marker; tenant_id unused for public tools
         )
-        .with_action(Action::Read)
         .with_annotations(ToolAnnotations {
             title: Some(api.name.clone()),
             open_world_hint: Some(true),
@@ -213,7 +211,6 @@ pub async fn discover_expanded_api_tools(
             schema,
             &tool.tenant_id,
         )
-        .with_action(Action::Read)
         .with_annotations(ToolAnnotations {
             title: Some(tool.name.clone()),
             open_world_hint: Some(true),

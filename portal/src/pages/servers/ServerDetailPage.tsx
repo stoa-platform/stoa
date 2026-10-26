@@ -261,11 +261,7 @@ export function ServerDetailPage() {
               <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
                 {server.displayName}
               </h1>
-              {server.version && (
-                <span className="text-sm text-neutral-400 dark:text-neutral-500">
-                  v{server.version}
-                </span>
-              )}
+              {server.version && <span className="text-sm text-muted">v{server.version}</span>}
               <span
                 className={`px-2 py-1 text-xs font-medium rounded ${
                   server.status === 'active'
@@ -504,7 +500,7 @@ export function ServerDetailPage() {
                 {/* Tool Info */}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <Wrench className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                    <Wrench className="h-4 w-4 text-muted" />
                     <span className="font-medium text-neutral-900 dark:text-white">
                       {tool.displayName}
                     </span>
@@ -527,7 +523,7 @@ export function ServerDetailPage() {
                         ? 'text-green-600'
                         : accessStatus.status === 'pending_approval'
                           ? 'text-amber-600'
-                          : 'text-neutral-400'
+                          : 'text-muted'
                     }`}
                   >
                     {accessStatus.status === 'enabled' ? (

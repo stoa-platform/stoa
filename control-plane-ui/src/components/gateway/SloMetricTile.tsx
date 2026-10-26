@@ -31,7 +31,7 @@ export const SloMetricTile = memo(function SloMetricTile({
           Unavailable
         </p>
       ) : value === null ? (
-        <p className="mt-1 text-sm text-neutral-400 dark:text-neutral-500">—</p>
+        <p className="mt-1 text-sm text-muted">—</p>
       ) : (
         <p className="mt-1 text-xl font-semibold text-neutral-900 dark:text-white">
           {value.toFixed(digits)}

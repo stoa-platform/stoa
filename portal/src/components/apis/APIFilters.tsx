@@ -59,8 +59,9 @@ export function APIFilters({
       <div className="flex flex-col sm:flex-row gap-4">
         {/* Search input */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
+            aria-label="Search APIs by name or description..."
             type="text"
             placeholder="Search APIs by name or description..."
             value={search}
@@ -72,8 +73,9 @@ export function APIFilters({
         {/* Universe filter (CAB-848) */}
         {universes.length > 0 && (
           <div className="relative sm:w-44">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
             <select
+              aria-label="Universe"
               value={universe}
               onChange={(e) => onUniverseChange(e.target.value)}
               disabled={isLoading}
@@ -92,8 +94,9 @@ export function APIFilters({
         {/* Audience filter (CAB-1323) */}
         {audienceOptions.length > 1 && (
           <div className="relative sm:w-44">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
             <select
+              aria-label="Audience"
               value={audience}
               onChange={(e) => onAudienceChange(e.target.value)}
               disabled={isLoading}
@@ -111,8 +114,9 @@ export function APIFilters({
 
         {/* Category filter */}
         <div className="relative sm:w-48">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <select
+            aria-label="Category"
             value={category}
             onChange={(e) => onCategoryChange(e.target.value)}
             disabled={isLoading}

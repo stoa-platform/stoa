@@ -65,6 +65,8 @@ spec:
               value: "edge-mcp"
             - name: STOA_ENVIRONMENT
               value: "prod"
+            - name: STOA_MCP_AUDIENCE
+              value: "control-plane-api"
             - name: STOA_AUTO_REGISTER
               value: "true"
             - name: STOA_RATE_LIMIT_DEFAULT

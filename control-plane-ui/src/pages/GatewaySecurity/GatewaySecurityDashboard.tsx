@@ -198,7 +198,7 @@ export function GatewaySecurityDashboard() {
               ))}
               {gateways.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-neutral-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted">
                     No gateways registered
                   </td>
                 </tr>
@@ -263,7 +263,7 @@ function FeatureBadge({ enabled }: { enabled: boolean }) {
       ✓
     </span>
   ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500">
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-muted dark:bg-neutral-800 dark:text-neutral-500">
       —
     </span>
   );

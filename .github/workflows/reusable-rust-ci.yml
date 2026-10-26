@@ -75,6 +75,19 @@ jobs:
             echo "sccache not functional — proceeding without it"
           fi
 
+      # The gateway permission test runs the production CP router locally.
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: inputs.component == 'stoa-gateway'
+        with:
+          python-version: '3.11'
+
+      - name: Prepare local control-plane test peer
+        if: inputs.component == 'stoa-gateway'
+        run: |
+          python -m venv "${RUNNER_TEMP}/cp-test"
+          "${RUNNER_TEMP}/cp-test/bin/pip" install -r ../control-plane-api/requirements.txt aiosqlite
+          echo "STOA_CP_TEST_PYTHON=${RUNNER_TEMP}/cp-test/bin/python" >> "$GITHUB_ENV"
+
       # --- Step 1: Format check (no compilation, instant) ---
       - name: Check formatting
         run: cargo fmt --all -- --check

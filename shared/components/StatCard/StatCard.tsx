@@ -43,7 +43,7 @@ function inferBg(colorClass: string | undefined): string {
 const TREND_CONFIG: Record<TrendDirection, { symbol: string; color: string }> = {
   up: { symbol: '\u2191', color: 'text-green-500' },
   down: { symbol: '\u2193', color: 'text-red-500' },
-  stable: { symbol: '\u2192', color: 'text-neutral-400' },
+  stable: { symbol: '\u2192', color: 'text-muted' },
 };
 
 /**
@@ -68,7 +68,11 @@ export function StatCard({
   const bgClass = inferBg(colorClass);
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4" aria-label={label} data-testid={testId}>
+    <div
+      className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4"
+      aria-label={label}
+      data-testid={testId}
+    >
       {Icon && (
         <div className={`p-2 rounded-lg ${bgClass}`}>
           <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
@@ -79,23 +83,17 @@ export function StatCard({
           {label}
         </p>
         <div className="flex items-baseline gap-1">
-          <p
-            className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}
-          >
+          <p className={`text-2xl font-bold ${colorClass || 'text-neutral-900 dark:text-white'}`}>
             {value}
           </p>
-          {unit && (
-            <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>
-          )}
+          {unit && <span className="text-sm text-neutral-500 dark:text-neutral-400">{unit}</span>}
           {trend && (
             <span className={`text-sm font-medium ${TREND_CONFIG[trend].color}`}>
               {TREND_CONFIG[trend].symbol}
             </span>
           )}
         </div>
-        {subtitle && (
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
         {sparkline && <div className="mt-2">{sparkline}</div>}
       </div>
     </div>

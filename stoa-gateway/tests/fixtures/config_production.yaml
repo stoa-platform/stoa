@@ -12,6 +12,8 @@ keycloak_url: "https://auth.gostoa.dev"
 keycloak_realm: "stoa"
 keycloak_client_id: "stoa-gateway"
 keycloak_internal_url: "http://keycloak.stoa-system.svc.cluster.local"
+# MCP token audience — required when environment is prod.
+mcp_audience: "control-plane-api"
 
 gateway_public_url: "https://mcp.gostoa.dev"
 gateway_external_url: "https://mcp.gostoa.dev"

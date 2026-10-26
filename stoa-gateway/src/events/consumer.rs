@@ -112,6 +112,11 @@ fn process_cns_message(
         }
     };
 
+    if event.tenant_id.trim().is_empty() || matches!(event.tenant_id.as_str(), "*" | "all") {
+        warn!("CNS event rejected: missing or broadcast tenant");
+        return;
+    }
+
     debug!(
         event_id = %event.id,
         event_type = %event.type_,
@@ -246,5 +251,16 @@ mod tests {
         let event_str = format!("{:?}", event);
         assert!(event_str.contains("notifications/send"));
         assert!(event_str.contains("jsonrpc"));
+    }
+    #[test]
+    fn test_cns_rejects_empty_tenant_before_buffering() {
+        let manager = SessionManager::new(30);
+        let buffer = EventBuffer::new();
+        let payload = serde_json::json!({
+            "id":"rejected", "type":"api-created", "source":"test", "tenant_id":"",
+            "timestamp":"2026-01-01T00:00:00Z", "payload":{}
+        });
+        process_cns_message(payload.to_string().as_bytes(), &manager, &buffer);
+        assert_eq!(buffer.count(), 0);
     }
 }

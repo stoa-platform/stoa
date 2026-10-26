@@ -282,4 +282,5 @@ fn regression_fixture_production_parses_and_validates() {
     assert!(cfg.sender_constraint.enabled);
     assert!(cfg.dpop.enabled || cfg.mtls.enabled);
     assert_eq!(cfg.snapshot_extra_pii_patterns.len(), 2);
+    assert_eq!(cfg.mcp_audience.as_deref(), Some("control-plane-api"));
 }

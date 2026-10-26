@@ -88,12 +88,132 @@ struct CachedToken {
     expires_at: Instant,
 }
 
-/// OIDC configuration for client credentials flow
+/// Assertion type for `private_key_jwt` client authentication (RFC 7523).
+const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
+/// Lifetime of a signed client assertion.
+const CLIENT_ASSERTION_TTL_SECS: i64 = 60;
+
+/// Default upper bound for the lifetime of a cached service access token.
+pub const DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS: u64 = 300;
+
+/// How the gateway authenticates to the token endpoint.
+#[derive(Clone)]
+pub enum ClientCredential {
+    /// Shared client secret. Kept for tool discovery on deployments that have
+    /// not moved to a signing key yet; not accepted for tool permissions.
+    Secret(String),
+    /// `private_key_jwt`: a short-lived RS256 assertion signed with a private
+    /// key read from a mounted file (for example a Kubernetes Secret volume).
+    /// The file is read when a token is requested, so key rotation only needs
+    /// the mounted file to be updated. Its content is never logged.
+    PrivateKeyJwt {
+        key_path: std::path::PathBuf,
+        key_id: Option<String>,
+    },
+}
+
+impl ClientCredential {
+    /// True when the credential is a signing key (`private_key_jwt`).
+    pub fn is_private_key_jwt(&self) -> bool {
+        matches!(self, Self::PrivateKeyJwt { .. })
+    }
+}
+
+impl std::fmt::Debug for ClientCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Secret(_) => f.write_str("Secret([REDACTED])"),
+            Self::PrivateKeyJwt { key_path, key_id } => f
+                .debug_struct("PrivateKeyJwt")
+                .field("key_path", key_path)
+                .field("key_id", key_id)
+                .finish(),
+        }
+    }
+}
+
+/// OIDC configuration for the client credentials grant.
 #[derive(Clone, Debug)]
 pub struct OidcConfig {
     pub token_url: String,
     pub client_id: String,
-    pub client_secret: String,
+    pub credential: ClientCredential,
+    /// Upper bound applied to `expires_in` when caching service tokens.
+    pub max_token_ttl: Duration,
+}
+
+impl OidcConfig {
+    pub fn new(token_url: String, client_id: String, credential: ClientCredential) -> Self {
+        Self {
+            token_url,
+            client_id,
+            credential,
+            max_token_ttl: Duration::from_secs(DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS),
+        }
+    }
+
+    /// Form parameters that authenticate the client at the token endpoint.
+    async fn client_auth_params(&self) -> Result<Vec<(&'static str, String)>, String> {
+        match &self.credential {
+            ClientCredential::Secret(secret) => Ok(vec![("client_secret", secret.clone())]),
+            ClientCredential::PrivateKeyJwt { key_path, key_id } => {
+                let assertion =
+                    sign_client_assertion(&self.client_id, &self.token_url, key_path, key_id)
+                        .await?;
+                Ok(vec![
+                    ("client_assertion_type", CLIENT_ASSERTION_TYPE.to_string()),
+                    ("client_assertion", assertion),
+                ])
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ClientAssertionClaims<'a> {
+    iss: &'a str,
+    sub: &'a str,
+    aud: &'a str,
+    jti: String,
+    iat: i64,
+    nbf: i64,
+    exp: i64,
+}
+
+/// Build and sign a `private_key_jwt` client assertion.
+///
+/// Errors never include key material: only the file path and a generic reason.
+async fn sign_client_assertion(
+    client_id: &str,
+    token_url: &str,
+    key_path: &std::path::Path,
+    key_id: &Option<String>,
+) -> Result<String, String> {
+    let pem = tokio::fs::read(key_path)
+        .await
+        .map_err(|e| format!("client key {} unreadable: {}", key_path.display(), e.kind()))?;
+    let key = jsonwebtoken::EncodingKey::from_rsa_pem(&pem).map_err(|_| {
+        format!(
+            "client key {} is not a valid RSA PEM key",
+            key_path.display()
+        )
+    })?;
+    drop(pem);
+    let now = chrono::Utc::now().timestamp();
+    let claims = ClientAssertionClaims {
+        iss: client_id,
+        sub: client_id,
+        aud: token_url,
+        jti: uuid::Uuid::new_v4().to_string(),
+        iat: now,
+        nbf: now,
+        exp: now + CLIENT_ASSERTION_TTL_SECS,
+    };
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = key_id.clone();
+    jsonwebtoken::encode(&header, &claims, &key)
+        .map_err(|_| "client assertion signing failed".to_string())
 }
 
 /// HTTP client that proxies MCP tool operations to the Control Plane.
@@ -157,8 +277,26 @@ impl ToolProxyClient {
         &self.client
     }
 
+    /// True when the service client authenticates with `private_key_jwt`.
+    pub fn uses_private_key_jwt(&self) -> bool {
+        self.oidc
+            .as_ref()
+            .is_some_and(|oidc| oidc.credential.is_private_key_jwt())
+    }
+
+    /// Invalidate only the rejected token, preserving a concurrent refresh.
+    pub(super) fn invalidate_token(&self, rejected: &str) {
+        let mut cache = self.token_cache.write();
+        if cache
+            .as_ref()
+            .is_some_and(|cached| cached.access_token == rejected)
+        {
+            *cache = None;
+        }
+    }
+
     /// Get a valid access token, refreshing if expired.
-    async fn get_token(&self) -> Result<String, String> {
+    pub(super) async fn get_token(&self) -> Result<String, String> {
         let oidc = match &self.oidc {
             Some(o) => o,
             None => return Err("OIDC not configured".into()),
@@ -175,16 +313,23 @@ impl ToolProxyClient {
         }
 
         // Fetch new token via client_credentials grant
-        debug!(token_url = %oidc.token_url, client_id = %oidc.client_id, "Fetching OIDC token");
+        debug!(
+            token_url = %oidc.token_url,
+            client_id = %oidc.client_id,
+            private_key_jwt = oidc.credential.is_private_key_jwt(),
+            "Fetching OIDC token"
+        );
+
+        let mut form = vec![
+            ("grant_type", "client_credentials".to_string()),
+            ("client_id", oidc.client_id.clone()),
+        ];
+        form.extend(oidc.client_auth_params().await?);
 
         let resp = self
             .client
             .post(&oidc.token_url)
-            .form(&[
-                ("grant_type", "client_credentials"),
-                ("client_id", &oidc.client_id),
-                ("client_secret", &oidc.client_secret),
-            ])
+            .form(&form)
             .send()
             .await
             .map_err(|e| format!("Token request failed: {}", e))?;
@@ -200,7 +345,8 @@ impl ToolProxyClient {
             .await
             .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
-        let expires_at = Instant::now() + Duration::from_secs(token_resp.expires_in);
+        let lifetime = Duration::from_secs(token_resp.expires_in).min(oidc.max_token_ttl);
+        let expires_at = Instant::now() + lifetime;
         let access_token = token_resp.access_token.clone();
 
         // Cache the token
@@ -448,12 +594,7 @@ impl ToolProxyClient {
         ctx: &ToolContext,
     ) -> Result<Value, String> {
         if ctx.raw_token.is_some() || self.oidc.is_some() {
-            match self.call_authenticated(tool, &args, ctx).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    warn!(tool, error = %e, "Authenticated call failed, trying unauthenticated");
-                }
-            }
+            return self.call_authenticated(tool, &args, ctx).await;
         }
         self.call_unauthenticated(tool, &args, &ctx.tenant_id).await
     }
@@ -592,7 +733,8 @@ mod tests {
         let oidc = OidcConfig {
             token_url: "http://kc/token".to_string(),
             client_id: "gw".to_string(),
-            client_secret: "secret".to_string(),
+            credential: ClientCredential::Secret("secret".to_string()),
+            max_token_ttl: Duration::from_secs(DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS),
         };
         let client = ToolProxyClient::new("http://localhost:8000/", Some(oidc));
         // Trailing slash stripped
@@ -712,7 +854,8 @@ mod tests {
         let oidc = OidcConfig {
             token_url: format!("{}/token", mock_server.uri()),
             client_id: "gw".to_string(),
-            client_secret: "secret".to_string(),
+            credential: ClientCredential::Secret("secret".to_string()),
+            max_token_ttl: Duration::from_secs(DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS),
         };
 
         let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
@@ -968,7 +1111,8 @@ mod tests {
         let oidc = OidcConfig {
             token_url: format!("{}/token", mock_server.uri()),
             client_id: "gw".to_string(),
-            client_secret: "s3cret".to_string(),
+            credential: ClientCredential::Secret("s3cret".to_string()),
+            max_token_ttl: Duration::from_secs(DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS),
         };
 
         let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
@@ -995,7 +1139,8 @@ mod tests {
         let oidc = OidcConfig {
             token_url: format!("{}/token", mock_server.uri()),
             client_id: "gw".to_string(),
-            client_secret: "wrong".to_string(),
+            credential: ClientCredential::Secret("wrong".to_string()),
+            max_token_ttl: Duration::from_secs(DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS),
         };
 
         let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
@@ -1070,7 +1215,8 @@ mod tests {
         let oidc = OidcConfig {
             token_url: format!("{}/token", mock_server.uri()),
             client_id: "gw".to_string(),
-            client_secret: "secret".to_string(),
+            credential: ClientCredential::Secret("secret".to_string()),
+            max_token_ttl: Duration::from_secs(DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS),
         };
 
         let client =
@@ -1121,5 +1267,226 @@ mod tests {
         let result = client.discover_tools().await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("401"));
+    }
+
+    #[tokio::test]
+    async fn tool_refusal_is_returned_as_is() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/mcp/tools/denied/invoke"))
+            .respond_with(ResponseTemplate::new(403))
+            .mount(&server)
+            .await;
+        let client = ToolProxyClient::new(&server.uri(), None);
+        let mut context = make_tool_context();
+        context.raw_token = Some("fixture-user-token".to_string());
+        assert!(client
+            .call_tool("denied", serde_json::json!({}), &context)
+            .await
+            .is_err());
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].headers.contains_key("Authorization"));
+    }
+
+    // === private_key_jwt service authentication ===
+
+    fn write_test_key(dir: &tempfile::TempDir) -> std::path::PathBuf {
+        let key_path = dir.path().join("client-key.pem");
+        std::fs::write(&key_path, crate::auth::jwt::tests::test_signing_pem()).unwrap();
+        key_path
+    }
+
+    fn key_jwt_oidc(server: &MockServer, key_path: std::path::PathBuf) -> OidcConfig {
+        OidcConfig::new(
+            format!("{}/token", server.uri()),
+            "stoa-mcp-gateway".to_string(),
+            ClientCredential::PrivateKeyJwt {
+                key_path,
+                key_id: Some("gw-key-1".to_string()),
+            },
+        )
+    }
+
+    fn form_value(body: &[u8], key: &str) -> Option<String> {
+        url::form_urlencoded::parse(body)
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.into_owned())
+    }
+
+    #[tokio::test]
+    async fn private_key_jwt_sends_signed_short_lived_assertion() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains("client_assertion_type="))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "service-access", "expires_in": 300
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let client = ToolProxyClient::new(
+            &server.uri(),
+            Some(key_jwt_oidc(&server, write_test_key(&dir))),
+        );
+
+        assert_eq!(client.get_token().await.unwrap(), "service-access");
+
+        let requests = server.received_requests().await.unwrap();
+        let body = &requests[0].body;
+        assert_eq!(
+            form_value(body, "grant_type").as_deref(),
+            Some("client_credentials")
+        );
+        assert_eq!(
+            form_value(body, "client_assertion_type").as_deref(),
+            Some(CLIENT_ASSERTION_TYPE)
+        );
+        assert!(form_value(body, "client_secret").is_none());
+        let assertion = form_value(body, "client_assertion").expect("client assertion");
+
+        let header = jsonwebtoken::decode_header(&assertion).unwrap();
+        assert_eq!(header.alg, jsonwebtoken::Algorithm::RS256);
+        assert_eq!(header.kid.as_deref(), Some("gw-key-1"));
+        let key = jsonwebtoken::DecodingKey::from_rsa_components(
+            crate::auth::jwt::tests::test_modulus(),
+            "AQAB",
+        )
+        .unwrap();
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
+        let token_url = format!("{}/token", server.uri());
+        validation.set_audience(&[token_url.as_str()]);
+        validation.set_issuer(&["stoa-mcp-gateway"]);
+        let claims = jsonwebtoken::decode::<serde_json::Value>(&assertion, &key, &validation)
+            .expect("assertion signed with the configured key")
+            .claims;
+        assert_eq!(claims["sub"], "stoa-mcp-gateway");
+        assert!(claims["jti"].as_str().is_some_and(|jti| !jti.is_empty()));
+        let lifetime = claims["exp"].as_i64().unwrap() - claims["iat"].as_i64().unwrap();
+        assert!(lifetime > 0 && lifetime <= CLIENT_ASSERTION_TTL_SECS);
+    }
+
+    #[tokio::test]
+    async fn service_token_lifetime_is_capped() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "long-lived", "expires_in": 86_400
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let mut oidc = key_jwt_oidc(&server, write_test_key(&dir));
+        // Below the 30 s refresh margin: every call must request a new token.
+        oidc.max_token_ttl = Duration::from_secs(10);
+        let client = ToolProxyClient::new(&server.uri(), Some(oidc));
+        client.get_token().await.unwrap();
+        client.get_token().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn private_key_jwt_missing_key_file_fails_without_secret_fallback() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "unexpected", "expires_in": 300
+            })))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let client = ToolProxyClient::new(
+            &server.uri(),
+            Some(key_jwt_oidc(&server, dir.path().join("absent.pem"))),
+        );
+        let error = client.get_token().await.unwrap_err();
+        assert!(error.contains("unreadable"), "{error}");
+    }
+
+    /// In-memory writer used to capture log output.
+    #[derive(Clone, Default)]
+    struct LogBuffer(Arc<parking_lot::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for LogBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
+        type Writer = LogBuffer;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    #[tokio::test]
+    async fn private_key_is_never_logged() {
+        let pem = crate::auth::jwt::tests::test_signing_pem();
+        // A line from the middle of the key body, and an invalid key with a marker.
+        let key_line = pem.lines().nth(3).unwrap().to_string();
+        let marker = "MARKER-KEY-CONTENT-7f3a";
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("invalid_client"))
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let valid = write_test_key(&dir);
+        let invalid = dir.path().join("invalid.pem");
+        // PEM armour assembled at runtime so the test source holds no key block.
+        let armour = |edge: &str| format!("-----{edge} {}-----", ["PRIVATE", "KEY"].join(" "));
+        std::fs::write(
+            &invalid,
+            format!("{}\n{marker}\n{}\n", armour("BEGIN"), armour("END")),
+        )
+        .unwrap();
+
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .with_writer(logs.clone())
+            .with_ansi(false)
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let mut errors = Vec::new();
+        for key_path in [valid, invalid] {
+            let oidc = key_jwt_oidc(&server, key_path);
+            errors.push(format!("{oidc:?}"));
+            let client = ToolProxyClient::new(&server.uri(), Some(oidc));
+            let error = client.get_token().await.unwrap_err();
+            tracing::warn!(error = %error, "service token request failed");
+            errors.push(error);
+        }
+
+        let captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+        assert!(!captured.is_empty(), "log capture must be active");
+        for output in errors.iter().map(String::as_str).chain([captured.as_str()]) {
+            assert!(!output.contains(&key_line), "key material in output");
+            assert!(!output.contains(marker), "key file content in output");
+            assert!(!output.contains("BEGIN PRIVATE KEY"), "PEM in output");
+        }
+    }
+
+    #[test]
+    fn client_secret_is_redacted_in_debug() {
+        let oidc = OidcConfig::new(
+            "http://kc/token".into(),
+            "gw".into(),
+            ClientCredential::Secret("do-not-print".into()),
+        );
+        assert!(!format!("{oidc:?}").contains("do-not-print"));
     }
 }

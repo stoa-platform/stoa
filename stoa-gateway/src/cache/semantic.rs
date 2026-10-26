@@ -98,7 +98,16 @@ impl SemanticCache {
         args_str.hash(&mut hasher);
         let args_hash = hasher.finish();
 
-        format!("{}:{}:{:016x}", tenant_id, tool_name, args_hash)
+        // Length-prefix both components: ("a:b", "c") and ("a", "b:c")
+        // must never address the same entry, even with identical arguments.
+        format!(
+            "{}:{}{}:{}:{:016x}",
+            tenant_id.len(),
+            tenant_id,
+            tool_name.len(),
+            tool_name,
+            args_hash
+        )
     }
 
     /// Check if a tool is cacheable based on annotations
@@ -342,5 +351,14 @@ mod tests {
         assert_eq!(config.max_entries, 10_000);
         assert_eq!(config.default_ttl, Duration::from_secs(60));
         assert_eq!(config.expensive_ttl, Duration::from_secs(300));
+    }
+
+    #[tokio::test]
+    async fn regression_colon_components_do_not_share_an_entry() {
+        let cache = SemanticCache::new(SemanticCacheConfig::default());
+        let args = json!({});
+        cache.put("c", "a:b", &args, json!({"owner": "a:b"})).await;
+        assert!(cache.get("b:c", "a", &args).await.is_none());
+        assert!(cache.get("c", "a:b", &args).await.is_some());
     }
 }

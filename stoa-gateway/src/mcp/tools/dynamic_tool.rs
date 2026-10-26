@@ -13,6 +13,17 @@ use tracing::{debug, warn};
 use super::{Tool, ToolAnnotations, ToolContext, ToolError, ToolResult, ToolSchema};
 use crate::uac::Action;
 
+/// Classify the actual HTTP operation; unknown methods require write permission.
+pub(super) fn action_for_http_method(method: &str) -> Action {
+    match method.to_ascii_uppercase().as_str() {
+        "GET" | "HEAD" | "OPTIONS" => Action::Read,
+        "POST" => Action::Create,
+        "PUT" | "PATCH" => Action::Update,
+        "DELETE" => Action::Delete,
+        _ => Action::Update,
+    }
+}
+
 /// A dynamically registered tool that calls an HTTP endpoint.
 ///
 /// Created from K8s Tool CRDs or admin API.
@@ -57,15 +68,17 @@ impl DynamicTool {
         input_schema: ToolSchema,
         tenant_id: impl Into<String>,
     ) -> Self {
+        let method = method.into();
+        let action = action_for_http_method(&method);
         Self {
             name: name.into(),
             description: description.into(),
             endpoint: endpoint.into(),
-            method: method.into(),
+            method,
             input_schema,
             output_schema: None,
             annotations: None,
-            action: Action::Read,
+            action,
             tenant_id: tenant_id.into(),
             public: false,
             path_pattern: None,
@@ -95,7 +108,10 @@ impl DynamicTool {
     }
 
     pub fn with_action(mut self, action: Action) -> Self {
-        self.action = action;
+        // The HTTP method sets the minimum required action.
+        if !self.action.is_write() || action.is_write() {
+            self.action = action;
+        }
         self
     }
 
@@ -170,6 +186,8 @@ impl Tool for DynamicTool {
         // Build HTTP request
         let mut req = match self.method.to_uppercase().as_str() {
             "GET" => self.client.get(&final_url),
+            "HEAD" => self.client.head(&final_url),
+            "OPTIONS" => self.client.request(reqwest::Method::OPTIONS, &final_url),
             "POST" => self.client.post(&final_url),
             "PUT" => self.client.put(&final_url),
             "DELETE" => self.client.delete(&final_url),
@@ -368,7 +386,7 @@ mod tests {
 
         assert_eq!(tool.name(), "tenant_weather");
         assert_eq!(tool.description(), "Get weather");
-        assert_eq!(tool.required_action(), Action::Read);
+        assert_eq!(tool.required_action(), Action::Create);
     }
 
     #[test]

@@ -439,63 +439,8 @@ impl TrafficCapture {
     /// Messages are expected as JSON-serialized `CapturedTransaction` objects.
     /// Uses rdkafka `StreamConsumer` for async consumption.
     #[cfg(feature = "kafka")]
-    async fn capture_kafka_replay(&self, brokers: &[String], topic: &str, group_id: &str) {
-        use rdkafka::config::ClientConfig;
-        use rdkafka::consumer::{Consumer, StreamConsumer};
-        use rdkafka::Message;
-
-        let consumer: StreamConsumer = match ClientConfig::new()
-            .set("bootstrap.servers", brokers.join(","))
-            .set("group.id", group_id)
-            .set("auto.offset.reset", "earliest")
-            .set("enable.auto.commit", "true")
-            .create()
-        {
-            Ok(c) => c,
-            Err(e) => {
-                error!(error = %e, "Failed to create Kafka consumer");
-                return;
-            }
-        };
-
-        if let Err(e) = consumer.subscribe(&[topic]) {
-            error!(error = %e, topic = %topic, "Failed to subscribe to Kafka topic");
-            return;
-        }
-
-        info!(topic = %topic, group = %group_id, "Kafka replay capture started");
-
-        while self.running.load(std::sync::atomic::Ordering::SeqCst) {
-            match tokio::time::timeout(std::time::Duration::from_secs(1), consumer.recv()).await {
-                Ok(Ok(msg)) => {
-                    if let Some(payload) = msg.payload() {
-                        match serde_json::from_slice::<CapturedTransaction>(payload) {
-                            Ok(tx) => {
-                                if self.tx.send(tx).await.is_err() {
-                                    info!("Capture channel closed, stopping Kafka replay");
-                                    return;
-                                }
-                            }
-                            Err(e) => {
-                                warn!(
-                                    error = %e,
-                                    offset = msg.offset(),
-                                    "Failed to deserialize Kafka message as CapturedTransaction"
-                                );
-                            }
-                        }
-                    }
-                }
-                Ok(Err(e)) => {
-                    warn!(error = %e, "Kafka consumer error");
-                }
-                Err(_) => {
-                    // Timeout — loop back to check running flag
-                }
-            }
-        }
-
-        info!("Kafka replay capture stopped");
+    async fn capture_kafka_replay(&self, _brokers: &[String], _topic: &str, _group_id: &str) {
+        warn!("Kafka replay disabled: CapturedTransaction has no verified tenant attribution");
     }
 
     /// Fallback when kafka feature is not enabled

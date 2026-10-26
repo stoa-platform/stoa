@@ -36,10 +36,10 @@ struct SubAccountToolRef {
 
 /// Cache for federation sub-account tool allow-lists.
 ///
-/// Keyed by sub_account_id, values are sets of allowed tool names.
+/// Keyed by (tenant, master account, sub-account); values are allowed tool names.
 /// Populated lazily from CP API on first request per sub-account.
 pub struct FederationCache {
-    cache: Cache<String, HashSet<String>>,
+    cache: Cache<(String, String, String), HashSet<String>>,
     control_plane: Arc<ToolProxyClient>,
     hits: AtomicU64,
     misses: AtomicU64,
@@ -64,15 +64,20 @@ impl FederationCache {
     /// Get allowed tools for a sub-account.
     ///
     /// Returns `Some(tools)` on cache hit or successful CP fetch.
-    /// Returns `None` on fetch error (permissive — log warning).
+    /// Returns an empty allow-list on fetch error; never opens the policy on outage.
     pub async fn get_allowed_tools(
         &self,
         sub_account_id: &str,
         tenant_id: &str,
         master_account_id: &str,
     ) -> Option<HashSet<String>> {
-        // Cache hit
-        if let Some(tools) = self.cache.get(sub_account_id).await {
+        let key = (
+            tenant_id.to_string(),
+            master_account_id.to_string(),
+            sub_account_id.to_string(),
+        );
+        // Cache hit in the exact signed ownership scope only.
+        if let Some(tools) = self.cache.get(&key).await {
             self.hits.fetch_add(1, Ordering::Relaxed);
             return Some(tools);
         }
@@ -89,34 +94,39 @@ impl FederationCache {
             .await
         {
             Ok(tools) => {
-                self.cache
-                    .insert(sub_account_id.to_string(), tools.clone())
-                    .await;
+                self.cache.insert(key, tools.clone()).await;
                 Some(tools)
             }
             Err(e) => {
                 warn!(
                     sub_account_id,
                     error = %e,
-                    "Failed to fetch federation allow-list from CP API, using permissive mode"
+                    "Failed to fetch federation allow-list from CP API, denying tools"
                 );
-                None
+                Some(HashSet::new())
             }
         }
     }
 
     /// Return whether `sub_account_id` is currently cached (GW-1 P2-5).
-    /// Synchronous O(1) probe used by the admin invalidation handler so
-    /// the response body can tell the caller whether an entry was
-    /// actually purged. moka may expose an entry that is about to
-    /// expire; accepting that tiny window keeps the admin call cheap.
+    /// Admin probe across tenant/master scopes for this sub-account ID.
+    /// Invalidation below removes every matching scoped entry. Moka iteration
+    /// can expose an entry just before it expires.
     pub fn contains(&self, sub_account_id: &str) -> bool {
-        self.cache.contains_key(sub_account_id)
+        self.cache.iter().any(|(key, _)| key.2 == sub_account_id)
     }
 
     /// Manually invalidate a sub-account's cached allow-list.
     pub async fn invalidate(&self, sub_account_id: &str) {
-        self.cache.invalidate(sub_account_id).await;
+        let keys: Vec<_> = self
+            .cache
+            .iter()
+            .filter(|(key, _)| key.2 == sub_account_id)
+            .map(|(key, _)| key)
+            .collect();
+        for key in keys {
+            self.cache.invalidate(key.as_ref()).await;
+        }
     }
 
     /// Get cache statistics.
@@ -199,7 +209,13 @@ mod tests {
         let tools: HashSet<String> = vec!["tool_a".to_string(), "tool_b".to_string()]
             .into_iter()
             .collect();
-        cache.cache.insert("sub-1".to_string(), tools.clone()).await;
+        cache
+            .cache
+            .insert(
+                ("acme".into(), "master-1".into(), "sub-1".into()),
+                tools.clone(),
+            )
+            .await;
 
         // Should hit
         let result = cache.get_allowed_tools("sub-1", "acme", "master-1").await;
@@ -213,7 +229,10 @@ mod tests {
         let cache = FederationCache::new(300, 1000, cp);
 
         let tools: HashSet<String> = vec!["tool_a".to_string()].into_iter().collect();
-        cache.cache.insert("sub-1".to_string(), tools).await;
+        cache
+            .cache
+            .insert(("acme".into(), "master-1".into(), "sub-1".into()), tools)
+            .await;
         cache.cache.run_pending_tasks().await;
         assert_eq!(cache.entry_count(), 1);
 
@@ -244,7 +263,10 @@ mod tests {
 
         // Seed a cache entry directly
         let tools: HashSet<String> = vec!["tool_x".to_string()].into_iter().collect();
-        cache.cache.insert("sub-hit".to_string(), tools).await;
+        cache
+            .cache
+            .insert(("tenant".into(), "master".into(), "sub-hit".into()), tools)
+            .await;
 
         // One hit
         let _ = cache.get_allowed_tools("sub-hit", "tenant", "master").await;
@@ -267,7 +289,13 @@ mod tests {
 
         for i in 0..5u32 {
             let tools: HashSet<String> = vec![format!("tool_{i}")].into_iter().collect();
-            cache.cache.insert(format!("sub-{i}"), tools).await;
+            cache
+                .cache
+                .insert(
+                    ("tenant".into(), "master".into(), format!("sub-{i}")),
+                    tools,
+                )
+                .await;
         }
         cache.cache.run_pending_tasks().await;
 
@@ -284,5 +312,48 @@ mod tests {
         assert_eq!(stats.hit_rate, 0.0);
         assert_eq!(stats.hits, 0);
         assert_eq!(stats.misses, 0);
+    }
+
+    #[tokio::test]
+    async fn regression_same_sub_id_in_distinct_scopes_never_shares_allowlist() {
+        let cp = Arc::new(ToolProxyClient::new("http://127.0.0.1:1", None));
+        let cache = FederationCache::new(300, 1000, cp);
+        for (tenant, master, tool) in [
+            ("a", "m", "tool-a"),
+            ("b", "m", "tool-b"),
+            ("a", "n", "tool-n"),
+        ] {
+            cache
+                .cache
+                .insert(
+                    (tenant.into(), master.into(), "sub".into()),
+                    HashSet::from([tool.to_string()]),
+                )
+                .await;
+        }
+        for (tenant, master, tool) in [
+            ("a", "m", "tool-a"),
+            ("b", "m", "tool-b"),
+            ("a", "n", "tool-n"),
+        ] {
+            assert_eq!(
+                cache.get_allowed_tools("sub", tenant, master).await,
+                Some(HashSet::from([tool.to_string()]))
+            );
+        }
+        cache.invalidate("sub").await;
+        cache.cache.run_pending_tasks().await;
+        assert!(!cache.contains("sub"));
+    }
+
+    #[tokio::test]
+    async fn regression_fetch_failure_has_an_empty_allowlist() {
+        // An invalid URL fails in the HTTP client before opening a socket.
+        let cp = Arc::new(ToolProxyClient::new("invalid-url", None));
+        let cache = FederationCache::new(300, 1000, cp);
+        assert_eq!(
+            cache.get_allowed_tools("sub", "tenant-a", "master").await,
+            Some(HashSet::new())
+        );
     }
 }

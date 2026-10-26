@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useEffect, useCallback } from 'react';
 import { X, Wrench, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -94,21 +95,29 @@ export function ToolAllowListModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+            <ModalTitle
+              as="h3"
+              className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2"
+            >
               <Wrench className="h-5 w-5" />
               Tool Allow-List
-            </h3>
+            </ModalTitle>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
               {subAccountName}
             </p>
           </div>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -133,16 +142,15 @@ export function ToolAllowListModal({
                   {tool}
                 </span>
               ))}
-              {selectedTools.size === 0 && (
-                <p className="text-sm text-neutral-400 dark:text-neutral-500">No tools allowed</p>
-              )}
+              {selectedTools.size === 0 && <p className="text-sm text-muted">No tools allowed</p>}
             </div>
           </div>
         ) : (
           <>
             <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
               <input
+                aria-label="Search tools..."
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -180,7 +188,7 @@ export function ToolAllowListModal({
                   </label>
                 ))
               ) : (
-                <p className="text-sm text-neutral-400 dark:text-neutral-500 text-center py-4">
+                <p className="text-sm text-muted text-center py-4">
                   {search ? 'No tools match your search' : 'No tools available'}
                 </p>
               )}
@@ -202,6 +210,7 @@ export function ToolAllowListModal({
             </button>
             {isAdmin && !catalogError && catalog && (
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={isSaving}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -212,6 +221,6 @@ export function ToolAllowListModal({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

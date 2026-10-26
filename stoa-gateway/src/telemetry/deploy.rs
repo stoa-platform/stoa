@@ -158,6 +158,14 @@ impl DeployProgressEmitter {
     /// When the `kafka` feature is enabled and a producer is present, events are
     /// serialized and sent to the configured Kafka topic.
     pub fn emit(&self, event: &DeployProgressEvent) {
+        if event
+            .tenant_id
+            .as_deref()
+            .is_none_or(|tenant| tenant.trim().is_empty() || matches!(tenant, "*" | "all"))
+        {
+            tracing::warn!("Deploy event rejected: missing tenant");
+            return;
+        }
         // Log every event at debug level regardless of Kafka availability
         debug!(
             deployment_id = %event.deployment_id,

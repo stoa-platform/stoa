@@ -266,7 +266,11 @@ describe('RegisterServerModal — submit', () => {
     const user = userEvent.setup();
     render(<RegisterServerModal {...defaultProps} />);
 
-    await user.click(screen.getByRole('button', { name: /Close modal/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Register MCP Server' });
+    const backdrop = dialog.querySelector<HTMLElement>(':scope > div[aria-hidden="true"]');
+    expect(backdrop).not.toBeNull();
+
+    await user.click(backdrop!);
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
 

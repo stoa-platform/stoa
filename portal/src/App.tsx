@@ -1,3 +1,4 @@
+import { RouteMetadata } from './components/RouteMetadata';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy, useState } from 'react';
 import { Layout } from './components/layout';
@@ -655,6 +656,7 @@ function App() {
         captureException(error, { componentStack: errorInfo.componentStack });
       }}
     >
+      <RouteMetadata />
       <SkipLink />
       <AuthProvider>
         <PortalEnvironmentProvider>

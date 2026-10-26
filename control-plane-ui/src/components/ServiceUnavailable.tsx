@@ -26,7 +26,7 @@ export function ServiceUnavailable({
     <div className="flex items-center justify-center min-h-[400px]">
       <div className="text-center max-w-md px-6">
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">
-          <Icon className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+          <Icon className="h-8 w-8 text-muted" />
         </div>
         <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
           {serviceName} is not available

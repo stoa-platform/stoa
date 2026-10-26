@@ -20,3 +20,6 @@ pub mod session;
 pub mod sse;
 pub mod tools;
 pub mod ws;
+
+#[cfg(test)]
+mod transport_context_tests;

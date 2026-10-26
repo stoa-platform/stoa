@@ -230,6 +230,13 @@ impl Tool for NativeTool {
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        if (self.tool_name.starts_with("stoa_cache_") || self.tool_name == "stoa_platform_health")
+            && !ctx.roles.iter().any(|role| role == "cpi-admin")
+        {
+            return Err(ToolError::PermissionDenied(
+                "Platform administrator required".to_string(),
+            ));
+        }
         // Route to specific tool handler
         match self.tool_name.as_str() {
             "stoa_platform_info" => self.handle_platform_info().await,
@@ -351,11 +358,7 @@ impl NativeTool {
         ))
     }
 
-    async fn handle_tools(
-        &self,
-        args: &Value,
-        _ctx: &ToolContext,
-    ) -> Result<ToolResult, ToolError> {
+    async fn handle_tools(&self, args: &Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let action = args
             .get("action")
             .and_then(|v| v.as_str())
@@ -373,7 +376,7 @@ impl NativeTool {
         match action {
             "list" => {
                 let tools: Vec<Value> = registry
-                    .list(None)
+                    .list(Some(&ctx.tenant_id))
                     .iter()
                     .map(|t| {
                         json!({
@@ -395,7 +398,7 @@ impl NativeTool {
                 let tool_name = args.get("tool_name").and_then(|v| v.as_str());
                 match tool_name {
                     Some(name) => {
-                        if let Some(tool) = registry.get(name) {
+                        if let Some(tool) = registry.get_for_tenant(name, &ctx.tenant_id) {
                             let def = tool.definition();
                             Ok(ToolResult::text(
                                 serde_json::to_string_pretty(&def).unwrap(),
@@ -417,7 +420,7 @@ impl NativeTool {
                     .to_lowercase();
 
                 let tools: Vec<Value> = registry
-                    .list(None)
+                    .list(Some(&ctx.tenant_id))
                     .iter()
                     .filter(|t| {
                         t.name.to_lowercase().contains(&query)
@@ -2066,6 +2069,71 @@ mod tests {
             assert!(has_native_implementation("stoa_cache_load"));
             assert!(has_native_implementation("stoa_cache_get"));
             assert!(has_native_implementation("stoa_cache_invalidate"));
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_global_cache_methods_require_canonical_platform_role() {
+        let cache = Arc::new(crate::cache::PromptCache::new(
+            crate::cache::PromptCacheConfig::default(),
+        ));
+        cache.put("private".into(), "synthetic-platform-pattern".into());
+        for name in [
+            "stoa_cache_load",
+            "stoa_cache_get",
+            "stoa_cache_invalidate",
+            "stoa_platform_health",
+        ] {
+            let tool = make_tool(name).with_prompt_cache(cache.clone());
+            let args =
+                json!({"key": "private", "entries": [{"key":"overwrite", "value":"synthetic"}]});
+            for role in ["viewer", "tenant-admin", "admin", "cpi_admin"] {
+                let mut ctx = make_ctx();
+                ctx.roles = vec![role.into()];
+                assert!(matches!(
+                    tool.execute(args.clone(), &ctx).await,
+                    Err(ToolError::PermissionDenied(_))
+                ));
+            }
+            assert!(cache.get("private").is_some());
+            assert!(cache.get("overwrite").is_none());
+        }
+        let tool = make_tool("stoa_cache_get").with_prompt_cache(cache);
+        let mut admin = make_ctx();
+        admin.roles = vec!["cpi-admin".into()];
+        assert!(tool.execute(json!({"key":"private"}), &admin).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn regression_native_introspection_hides_other_tenant_tool() {
+        let registry = Arc::new(ToolRegistry::new());
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "invalid-url",
+            None,
+        ));
+        registry.register(Arc::new(
+            crate::mcp::tools::proxy_tool::ProxyTool::new(
+                "private_b",
+                "Private tenant B tool",
+                ToolSchema {
+                    schema_type: "object".into(),
+                    properties: Default::default(),
+                    required: vec![],
+                },
+                Action::Read,
+                cp,
+            )
+            .with_tenant("tenant-b"),
+        ));
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        for args in [
+            json!({"action":"list"}),
+            json!({"action":"search","query":"private"}),
+            json!({"action":"schema","tool_name":"private_b"}),
+        ] {
+            let result = tool.execute(args, &make_ctx()).await.unwrap();
+            let text = serde_json::to_string(&result).unwrap();
+            assert!(!text.contains("Private tenant B tool"));
         }
     }
 }

@@ -286,7 +286,7 @@ export function FederationAccountDetail() {
               Sub-accounts
             </div>
             <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-neutral-900 dark:text-white">
-              <Users className="h-4 w-4 text-neutral-400" />
+              <Users className="h-4 w-4 text-muted" />
               {account.sub_account_count} / {account.max_sub_accounts}
             </div>
           </div>
@@ -295,7 +295,7 @@ export function FederationAccountDetail() {
               Created
             </div>
             <div className="mt-1 flex items-center gap-1 text-sm text-neutral-900 dark:text-white">
-              <Clock className="h-4 w-4 text-neutral-400" />
+              <Clock className="h-4 w-4 text-muted" />
               {formatDate(account.created_at)}
             </div>
           </div>
@@ -312,7 +312,7 @@ export function FederationAccountDetail() {
               Requests ({usageDays}d)
             </div>
             <div className="mt-1 flex items-center gap-1 text-lg font-semibold text-neutral-900 dark:text-white">
-              <BarChart3 className="h-4 w-4 text-neutral-400" />
+              <BarChart3 className="h-4 w-4 text-muted" />
               {usageData ? usageData.total_requests.toLocaleString() : '-'}
             </div>
           </div>

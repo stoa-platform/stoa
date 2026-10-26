@@ -22,13 +22,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white',
+    'bg-primary-600 hover:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-700 text-white',
   secondary:
     'bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700',
-  danger:
-    'bg-error-600 hover:bg-error-700 dark:bg-error-500 dark:hover:bg-error-600 text-white',
-  ghost:
-    'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800',
+  danger: 'bg-error-600 hover:bg-error-700 dark:bg-error-500 dark:hover:bg-error-600 text-white',
+  ghost: 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800',
   link: 'text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 hover:underline',
 };
 
@@ -49,6 +47,7 @@ const sizeStyles: Record<ButtonSize, string> = {
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = 'primary',
+    type = 'button',
     size = 'md',
     loading = false,
     icon,
@@ -74,12 +73,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     .join(' ');
 
   return (
-    <button
-      ref={ref}
-      disabled={disabled || loading}
-      className={classes}
-      {...props}
-    >
+    <button type={type} ref={ref} disabled={disabled || loading} className={classes} {...props}>
       {loading ? (
         <span className="flex items-center justify-center gap-2">
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">

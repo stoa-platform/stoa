@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useCallback } from 'react';
 import { AlertTriangle, Copy, Check } from 'lucide-react';
 
@@ -17,11 +18,14 @@ export function ApiKeyRevealDialog({ apiKey, name, onClose }: ApiKeyRevealDialog
   }, [apiKey]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+        <ModalTitle as="h3" className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
           API Key for {name}
-        </h3>
+        </ModalTitle>
 
         <div className="flex items-start gap-2 p-3 mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
@@ -33,6 +37,7 @@ export function ApiKeyRevealDialog({ apiKey, name, onClose }: ApiKeyRevealDialog
         <div className="flex items-center gap-2 p-3 bg-neutral-100 dark:bg-neutral-700 rounded-lg font-mono text-sm break-all">
           <span className="flex-1 text-neutral-900 dark:text-white">{apiKey}</span>
           <button
+            type="button"
             onClick={handleCopy}
             className="shrink-0 p-1.5 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 rounded"
             title="Copy to clipboard"
@@ -43,6 +48,7 @@ export function ApiKeyRevealDialog({ apiKey, name, onClose }: ApiKeyRevealDialog
 
         <div className="flex justify-end mt-4">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
@@ -50,6 +56,6 @@ export function ApiKeyRevealDialog({ apiKey, name, onClose }: ApiKeyRevealDialog
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

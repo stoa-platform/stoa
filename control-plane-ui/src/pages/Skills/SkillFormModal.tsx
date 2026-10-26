@@ -1,3 +1,11 @@
+import {
+  Field,
+  FieldLabel,
+  FieldInput,
+  FieldSelect,
+  FieldTextarea,
+} from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { SkillEntry, SkillUpsert } from '../../services/skillsApi';
@@ -48,24 +56,32 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
             {isEdit ? 'Edit Skill' : 'Add Skill'}
-          </h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600">
+          </ModalTitle>
+          <button
+            aria-label="Close dialog"
+            type="button"
+            onClick={onClose}
+            className="text-muted hover:text-neutral-600"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           {/* Key */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Key
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={key}
               onChange={(e) => setKey(e.target.value)}
@@ -77,14 +93,14 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               Unique identifier (namespace/name format from K8s CRD)
             </p>
-          </div>
+          </Field>
 
           {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Name
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -92,14 +108,14 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               required
               className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
             />
-          </div>
+          </Field>
 
           {/* Tenant ID */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Tenant ID
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={tenantId}
               onChange={(e) => setTenantId(e.target.value)}
@@ -107,15 +123,15 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
               required
               className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
             />
-          </div>
+          </Field>
 
           {/* Scope + Priority row */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Scope
-              </label>
-              <select
+              </FieldLabel>
+              <FieldSelect
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
                 className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
@@ -125,13 +141,13 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
                     {s.charAt(0).toUpperCase() + s.slice(1)}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              </FieldSelect>
+            </Field>
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Priority (0-100)
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="number"
                 min={0}
                 max={100}
@@ -139,66 +155,66 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
                 onChange={(e) => setPriority(e.target.value)}
                 className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
-            </div>
+            </Field>
           </div>
 
           {/* Conditional refs */}
           {scope === 'tool' && (
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Tool Reference
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={toolRef}
                 onChange={(e) => setToolRef(e.target.value)}
                 placeholder="code-review"
                 className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
-            </div>
+            </Field>
           )}
           {scope === 'user' && (
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 User Reference
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={userRef}
                 onChange={(e) => setUserRef(e.target.value)}
                 placeholder="alice"
                 className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
-            </div>
+            </Field>
           )}
 
           {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
               className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
             />
-          </div>
+          </Field>
 
           {/* Instructions */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Instructions
-            </label>
-            <textarea
+            </FieldLabel>
+            <FieldTextarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               placeholder="System prompt instructions injected into agent context..."
               rows={4}
               className="w-full px-3 py-2 border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white font-mono text-sm"
             />
-          </div>
+          </Field>
 
           {/* Enabled toggle */}
           <label className="flex items-center gap-2 cursor-pointer">
@@ -230,6 +246,6 @@ export function SkillFormModal({ skill, onClose, onSave }: SkillFormModalProps) 
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

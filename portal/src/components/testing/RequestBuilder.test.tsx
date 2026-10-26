@@ -1,10 +1,66 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import i18n from '../../i18n';
+import { config } from '../../config';
 import { RequestBuilder } from './RequestBuilder';
 import { renderWithProviders } from '../../test/helpers';
 
+const frenchTesting = {
+  testing: {
+    httpMethod: 'Méthode HTTP',
+    requestPath: 'Chemin de la requête',
+    enableQueryParameter: 'Activer le paramètre de requête {{index}}',
+    queryParameterKey: 'Clé du paramètre de requête {{index}}',
+    queryParameterValue: 'Valeur du paramètre de requête {{index}}',
+    enableHeader: "Activer l'en-tête {{index}}",
+    headerName: "Nom de l'en-tête {{index}}",
+    headerValue: "Valeur de l'en-tête {{index}}",
+    requestBody: 'Corps de la requête (JSON)',
+  },
+};
+
+afterEach(async () => {
+  config.features.enableI18n = true;
+  await act(() => i18n.changeLanguage('en'));
+});
+
 describe('RequestBuilder', () => {
+  it('names request controls and distinguishes repeated parameter fields', async () => {
+    renderWithProviders(
+      <RequestBuilder baseUrl="https://example.com" onSubmit={vi.fn()} initialMethod="POST" />
+    );
+    expect(screen.getByRole('combobox', { name: 'HTTP method' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Request path' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add Parameter' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add Parameter' }));
+    expect(screen.getByRole('textbox', { name: 'Query parameter key 1' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Query parameter key 2' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Enable query parameter 2' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Body/ }));
+    expect(screen.getByRole('textbox', { name: 'Request body (JSON)' })).toBeInTheDocument();
+  });
+
+  it('translates the new control names in French and keeps English when i18n is disabled', async () => {
+    i18n.addResourceBundle('fr', 'common', frenchTesting, true, true);
+    await act(() => i18n.changeLanguage('fr'));
+    const { unmount } = renderWithProviders(
+      <RequestBuilder baseUrl="https://example.com" onSubmit={vi.fn()} initialMethod="POST" />
+    );
+    expect(screen.getByRole('combobox', { name: 'Méthode HTTP' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add Parameter' }));
+    expect(
+      screen.getByRole('checkbox', { name: 'Activer le paramètre de requête 1' })
+    ).toBeInTheDocument();
+    unmount();
+    config.features.enableI18n = false;
+    renderWithProviders(
+      <RequestBuilder baseUrl="https://example.com" onSubmit={vi.fn()} initialMethod="POST" />
+    );
+    expect(screen.getByRole('combobox', { name: 'HTTP method' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add Parameter' }));
+    expect(screen.getByRole('checkbox', { name: 'Enable query parameter 1' })).toBeInTheDocument();
+  });
   const onSubmit = vi.fn();
 
   const defaultProps = {

@@ -6,7 +6,7 @@ expression: json
 {
   "content": [
     {
-      "text": "Tool 'nonexistent-tool' not found",
+      "text": "JWT authentication is unavailable",
       "type": "text"
     }
   ],

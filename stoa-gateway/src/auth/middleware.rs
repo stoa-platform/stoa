@@ -21,7 +21,7 @@ use tracing::{debug, instrument, warn};
 
 use super::claims::Claims;
 use super::jwt::{JwtError, JwtValidator, ValidatedToken};
-use super::subscription::SubscriptionValidator;
+use super::subscription::{SubscriptionInfo, SubscriptionValidator};
 use crate::state::AppState;
 
 // =============================================================================
@@ -171,7 +171,16 @@ impl IntoResponse for AuthError {
             StatusCode::UNAUTHORIZED
         };
 
-        (status, Json(self)).into_response()
+        let mut response = (status, Json(self)).into_response();
+        if status == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                axum::http::header::WWW_AUTHENTICATE,
+                axum::http::HeaderValue::from_static(
+                    r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+                ),
+            );
+        }
+        response
     }
 }
 
@@ -202,6 +211,9 @@ pub async fn auth_middleware(
                 .map_err(|e| AuthError::unauthorized(&e.to_string()))?;
 
             let claims = auth_state.validator.validate(token).await.map_err(|e| {
+                if matches!(e, JwtError::TenantRequired) {
+                    return super::tenant::tenant_required();
+                }
                 warn!(error = %e, "JWT validation failed");
                 match e {
                     JwtError::Expired => AuthError::unauthorized("Token expired"),
@@ -295,15 +307,27 @@ pub async fn mcp_jwt_required(
         }
     };
 
-    let claims = match validator.validate(token).await {
+    let claims = match validator
+        .validate_mcp(
+            token,
+            state.config.mcp_audience.as_deref().unwrap_or_default(),
+        )
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
+            if matches!(e, JwtError::TenantRequired) {
+                return super::tenant::tenant_required().into_response();
+            }
             warn!(error = %e, "JWT validation failed on /mcp/* route");
             let msg = match e {
                 JwtError::Expired => "Token expired",
                 JwtError::InvalidIssuer { .. } => "Invalid issuer",
                 JwtError::InvalidAudience { .. } => "Invalid audience",
                 JwtError::InvalidSignature => "Invalid signature",
+                JwtError::MissingClaim(ref claim) if claim == "sub" => {
+                    "A subject claim is required"
+                }
                 _ => "Invalid token",
             };
             return mcp_auth_challenge(
@@ -388,6 +412,17 @@ pub struct SubscriptionState {
     pub validator: Arc<SubscriptionValidator>,
 }
 
+fn require_subscription_owner(
+    user: &AuthenticatedUser,
+    info: &SubscriptionInfo,
+) -> Result<(), AuthError> {
+    let tenant = super::tenant::require_tenant(&user.claims)?;
+    if !info.valid || info.tenant_id != tenant {
+        return Err(AuthError::forbidden("Subscription tenant mismatch"));
+    }
+    Ok(())
+}
+
 /// Subscription validation middleware.
 ///
 /// Runs AFTER JWT auth middleware. Extracts `azp` claim from the authenticated
@@ -436,6 +471,7 @@ pub async fn subscription_middleware(
     // Validate subscription
     match sub_state.validator.validate(&azp, &api_id).await {
         Ok(info) => {
+            require_subscription_owner(&user, &info)?;
             debug!(
                 oauth_client_id = %azp,
                 api_id = %api_id,
@@ -533,6 +569,8 @@ mod tests {
 
     fn sample_claims() -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -545,6 +583,7 @@ mod tests {
             name: Some("John Doe".to_string()),
             given_name: Some("John".to_string()),
             family_name: Some("Doe".to_string()),
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string()],
@@ -629,5 +668,27 @@ mod tests {
         };
         let cloned = state.clone();
         assert_eq!(cloned.validator.cache_size(), 0);
+    }
+    #[test]
+    fn regression_cached_subscription_must_match_the_signed_tenant() {
+        let mut user =
+            AuthenticatedUser::from_token(ValidatedToken::new("synthetic".into(), sample_claims()));
+        let mut info = SubscriptionInfo {
+            valid: true,
+            subscription_id: "sub".into(),
+            tenant_id: "acme".into(),
+            api_id: "api".into(),
+            oauth_client_id: "shared-client".into(),
+            rate_limit: None,
+            security_profile: "oauth2_public".into(),
+        };
+        assert!(require_subscription_owner(&user, &info).is_ok());
+        for owner in ["other", "", " acme"] {
+            info.tenant_id = owner.into();
+            assert!(require_subscription_owner(&user, &info).is_err());
+        }
+        info.tenant_id = "acme".into();
+        user.claims.tenant = None;
+        assert!(require_subscription_owner(&user, &info).is_err());
     }
 }

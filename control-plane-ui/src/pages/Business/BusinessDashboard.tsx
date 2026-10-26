@@ -106,9 +106,7 @@ function KPICard({
       </div>
       <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
       <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">{label}</p>
-      {trendLabel && (
-        <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{trendLabel}</p>
-      )}
+      {trendLabel && <p className="text-xs text-muted mt-0.5">{trendLabel}</p>}
     </div>
   );
 }
@@ -142,7 +140,7 @@ function ApdexGauge({ score }: { score: number }) {
         </div>
       </div>
       <p className={`text-sm font-medium ${color} mt-2`}>{getApdexLabel(score)}</p>
-      <p className="text-xs text-neutral-400 dark:text-neutral-500">APDEX Score</p>
+      <p className="text-xs text-muted">APDEX Score</p>
     </div>
   );
 }
@@ -189,7 +187,7 @@ function TopAPIItem({ api, rank, maxCalls }: { api: TopAPI; rank: number; maxCal
 
   return (
     <div className="flex items-center gap-4 py-3">
-      <span className="w-6 text-lg font-bold text-neutral-400 dark:text-neutral-500">#{rank}</span>
+      <span className="w-6 text-lg font-bold text-muted">#{rank}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
@@ -218,9 +216,7 @@ function TopAPIItem({ api, rank, maxCalls }: { api: TopAPI; rank: number; maxCal
               style={{ width: `${barWidth}%` }}
             />
           </div>
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
-            {api.tenants} tenants
-          </span>
+          <span className="text-xs text-muted">{api.tenants} tenants</span>
         </div>
       </div>
     </div>

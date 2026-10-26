@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Application Detail Page
  *
@@ -288,7 +289,7 @@ export function ApplicationDetail() {
                 <ul className="space-y-2">
                   {application.redirect_uris.map((url, index) => (
                     <li key={index} className="flex items-center gap-2 text-sm">
-                      <ExternalLink className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                      <ExternalLink className="h-4 w-4 text-muted" />
                       <a
                         href={url}
                         target="_blank"
@@ -380,7 +381,7 @@ export function ApplicationDetail() {
               <div className="text-center py-12">
                 <CreditCard className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
                 <p className="text-neutral-500 dark:text-neutral-400">No subscriptions yet</p>
-                <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">
+                <p className="text-sm text-muted mt-1">
                   Browse the API catalog to subscribe to APIs
                 </p>
               </div>
@@ -391,14 +392,15 @@ export function ApplicationDetail() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <Modal
+          onClose={() => setShowDeleteConfirm(false)}
+          closeDisabled={deleteMutation.isPending}
+          className="fixed inset-0 z-50 overflow-y-auto"
+        >
           <div
+            aria-hidden="true"
             className="fixed inset-0 bg-black/50"
             onClick={() => setShowDeleteConfirm(false)}
-            onKeyDown={(e) => e.key === 'Escape' && setShowDeleteConfirm(false)}
-            role="button"
-            aria-label="Close modal"
-            tabIndex={0}
           />
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">
@@ -407,9 +409,12 @@ export function ApplicationDetail() {
                   <Trash2 className="h-6 w-6 text-red-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                  <ModalTitle
+                    as="h3"
+                    className="text-lg font-semibold text-neutral-900 dark:text-white"
+                  >
                     Delete Application
-                  </h3>
+                  </ModalTitle>
                   <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-2">
                     Are you sure you want to delete "{application.name}"? This action cannot be
                     undone and will revoke all credentials.
@@ -418,6 +423,7 @@ export function ApplicationDetail() {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button
+                  type="button"
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={deleteMutation.isPending}
                   className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
@@ -425,6 +431,7 @@ export function ApplicationDetail() {
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleDelete}
                   disabled={deleteMutation.isPending}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
@@ -441,7 +448,7 @@ export function ApplicationDetail() {
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

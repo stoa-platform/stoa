@@ -1,3 +1,5 @@
+import { Field, FieldLabel, FieldSelect, Form, FormError } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useEffect, useMemo } from 'react';
 import { X, AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { apiService } from '../../services/api';
@@ -261,28 +263,33 @@ export function DeployAPIDialog({
   const getEnvironmentLabel = (env: string) => getEnvLabel(env);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl mx-4">
         {/* Header */}
         <div className="flex items-center justify-between border-b dark:border-neutral-700 px-6 py-4">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
             Deploy API to Gateways
-          </h2>
+          </ModalTitle>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="rounded-lg p-1 text-muted hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <Form error={error} onSubmit={handleSubmit} className="p-6 space-y-5">
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+            <FormError className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               {error}
-            </div>
+            </FormError>
           )}
 
           {loading ? (
@@ -300,11 +307,11 @@ export function DeployAPIDialog({
             <>
               {/* Tenant Selection */}
               {tenants.length > 1 && (
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <Field>
+                  <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                     Tenant
-                  </label>
-                  <select
+                  </FieldLabel>
+                  <FieldSelect
                     value={selectedTenant}
                     onChange={(e) => {
                       setSelectedTenant(e.target.value);
@@ -322,15 +329,15 @@ export function DeployAPIDialog({
                         {t.name || t.id}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </FieldSelect>
+                </Field>
               )}
 
               {/* API Selection (from Git, same source as /apis page) */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <Field>
+                <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                   API
-                </label>
+                </FieldLabel>
                 {loadingApis ? (
                   <div className="h-10 w-full bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
                 ) : apis.length === 0 && selectedTenant ? (
@@ -341,8 +348,9 @@ export function DeployAPIDialog({
                   <div className="space-y-2">
                     {apis.length > 5 && !preselectedApiKey && (
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
                         <input
+                          aria-label="Search APIs"
                           type="text"
                           placeholder="Search APIs..."
                           value={apiSearchTerm}
@@ -351,7 +359,7 @@ export function DeployAPIDialog({
                         />
                       </div>
                     )}
-                    <select
+                    <FieldSelect
                       value={selectedApi}
                       onChange={(e) => {
                         setSelectedApi(e.target.value);
@@ -371,7 +379,7 @@ export function DeployAPIDialog({
                           {api.name} v{api.version}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                     {apiSearchTerm && filteredApis.length === 0 && (
                       <p className="text-xs text-neutral-500 dark:text-neutral-400">
                         No APIs match &quot;{apiSearchTerm}&quot;
@@ -379,18 +387,18 @@ export function DeployAPIDialog({
                     )}
                   </div>
                 )}
-              </div>
+              </Field>
 
               {/* Environment Selection */}
               {selectedApi && (
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <Field>
+                  <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                     Environment
-                  </label>
+                  </FieldLabel>
                   {loadingEnvs ? (
                     <div className="h-10 w-full bg-neutral-200 dark:bg-neutral-700 rounded animate-pulse" />
                   ) : (
-                    <select
+                    <FieldSelect
                       value={selectedEnv}
                       onChange={(e) => {
                         setSelectedEnv(e.target.value);
@@ -410,17 +418,17 @@ export function DeployAPIDialog({
                           {!env.deployable ? ' (not promoted)' : ''}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                   )}
-                </div>
+                </Field>
               )}
 
               {/* Gateway Multi-Select */}
               {selectedEnv && (
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                <fieldset>
+                  <legend className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                     Target Gateways ({getEnvironmentLabel(selectedEnv)})
-                  </label>
+                  </legend>
                   {filteredGateways.length === 0 ? (
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
                       No gateways registered in {getEnvironmentLabel(selectedEnv)}.
@@ -464,7 +472,7 @@ export function DeployAPIDialog({
                       })}
                     </div>
                   )}
-                </div>
+                </fieldset>
               )}
             </>
           )}
@@ -492,8 +500,8 @@ export function DeployAPIDialog({
                   }`}
             </button>
           </div>
-        </form>
+        </Form>
       </div>
-    </div>
+    </Modal>
   );
 }

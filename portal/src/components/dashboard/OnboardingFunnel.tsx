@@ -76,11 +76,7 @@ export function OnboardingFunnel() {
                 </span>
                 <span className="text-neutral-500 dark:text-neutral-400">
                   {stage.count}
-                  {rate !== null && (
-                    <span className="ml-1 text-xs text-neutral-400 dark:text-neutral-500">
-                      ({rate}%)
-                    </span>
-                  )}
+                  {rate !== null && <span className="ml-1 text-xs text-muted">({rate}%)</span>}
                 </span>
               </div>
               <div className="h-6 bg-neutral-100 dark:bg-neutral-700 rounded-md overflow-hidden">
@@ -98,7 +94,7 @@ export function OnboardingFunnel() {
       <div className="grid grid-cols-3 gap-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
         <div className="text-center">
           <div className="flex items-center justify-center gap-1 mb-1">
-            <Clock className="h-4 w-4 text-neutral-400" />
+            <Clock className="h-4 w-4 text-muted" />
             <span className="text-xs text-neutral-500 dark:text-neutral-400">Avg TTFTC</span>
           </div>
           <span className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">

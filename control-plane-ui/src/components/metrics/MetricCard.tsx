@@ -63,7 +63,7 @@ export function MetricCard({
       {loading ? (
         <div className="animate-pulse h-8 bg-neutral-100 dark:bg-neutral-700 rounded w-20 mt-1" />
       ) : instantError ? (
-        <div className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">Unavailable</div>
+        <div className="text-sm text-muted mt-1">Unavailable</div>
       ) : (
         <div className="text-2xl font-semibold text-neutral-900 dark:text-white mt-1">
           {format(value)}

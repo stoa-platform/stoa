@@ -1,3 +1,4 @@
+import { Field, FieldLabel, FieldSelect } from '@stoa/shared/components/Field';
 /**
  * Admin Platform Settings Page (CAB-1454)
  *
@@ -90,6 +91,7 @@ function SettingRow({
         {editing ? (
           <div className="flex items-center gap-2">
             <input
+              aria-label={`Value for ${setting.key}`}
               type="text"
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
@@ -196,11 +198,11 @@ export function AdminSettings() {
 
         {/* Filters */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          <Field className="flex items-center gap-4">
+            <FieldLabel className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
               Category
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value as SettingCategory | '')}
               className="rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -210,8 +212,8 @@ export function AdminSettings() {
               <option value="security">Security</option>
               <option value="gateway">Gateway</option>
               <option value="notifications">Notifications</option>
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
         </div>
 
         {/* Error state */}

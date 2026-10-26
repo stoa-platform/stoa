@@ -2,6 +2,10 @@
 
 > Dernière MAJ: 2026-10-11. Archive complète (cycles passés, DONE, etc.) → `memory-archive.md`.
 
+## Session Notes — 2026-10-26
+
+- Local gateway CI fixtures: provision the CP Python peer, bind its reader to its signed tenant, retain default-deny permission checks, and run SDK discovery with an ephemeral OIDC peer. Shared signing material lives under test fixtures. Local branch only.
+
 ## Session Notes — 2026-10-10 / 2026-10-11
 
 - **Relance ciblée à l'étude, dans un dépôt privé local (`stoa-next`), hors de ce monorepo.** Objet validé : un **pilote de preuve** de migration d'un ESB propriétaire vers Apache Camel chez un client institutionnel régulé, porté par un intégrateur titulaire ; 5 à 10 flux en mode ombre, trois mesures (conversion, écart de rejeu, charge d'exploitation), aucune bascule en production dans le pilote. Decision Gate #13 : challenger Codex → REFRAME, accepté ; plan `validated` le 2026-10-11, portée limitée au dossier de cadrage ; démarrage conditionné aux réponses de l'intégrateur. Journal : `stoa-docs/HEGEMON/DECISION_GATE.md` (#180 mergée). **Aucun code dans `stoa` avant le Go de phase 1.** Détails client : jamais ici (dépôt public).

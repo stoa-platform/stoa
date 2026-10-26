@@ -120,12 +120,14 @@ pub fn build_router(state: AppState) -> Router {
         None
     };
     let mtls_binding_layer = if mtls_enabled {
+        let jwt_validator_s3 = state.jwt_validator.clone();
         let mtls_config_s3 = state.config.mtls.clone();
         let mtls_stats_s3 = state.mtls_stats.clone();
         Some(axum::middleware::from_fn(move |request, next| {
             let config = mtls_config_s3.clone();
             let stats = mtls_stats_s3.clone();
-            auth::mtls::mtls_binding_middleware(config, stats, request, next)
+            let validator = jwt_validator_s3.clone();
+            auth::mtls::mtls_binding_middleware(validator, config, stats, request, next)
         }))
     } else {
         None
@@ -192,7 +194,7 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/mcp/capabilities", get(mcp_capabilities))
                 .route("/mcp/health", get(mcp_health))
                 // MCP SSE Transport (Streamable HTTP) — auth handled in-handler
-                // via PUBLIC_METHODS allowlist (see mcp/sse.rs)
+                // with stateless anonymous negotiation (see mcp/sse.rs)
                 .route(
                     "/mcp/sse",
                     get(handle_sse_get)
@@ -492,7 +494,7 @@ pub fn build_router(state: AppState) -> Router {
     // Also triggers auto-RCA on 5xx responses (CAB-1542 Phase 3).
     // Applied AFTER all routes are registered so every route (MCP, proxy, admin) gets metrics.
     let with_metrics = mode_router.layer(axum::middleware::from_fn_with_state(
-        metrics_state,
+        metrics_state.clone(),
         http_metrics_middleware,
     ));
 
@@ -512,7 +514,10 @@ pub fn build_router(state: AppState) -> Router {
     // Access log: structured JSON for every request (shipped to OpenSearch via Fluent Bit).
     // Runs after auth so tenant_id/consumer_id are available from extensions.
     let with_access_log = if access_log_enabled {
-        with_trace_ctx.layer(axum::middleware::from_fn(access_log::access_log_middleware))
+        with_trace_ctx.layer(axum::middleware::from_fn_with_state(
+            metrics_state,
+            access_log::access_log_middleware,
+        ))
     } else {
         with_trace_ctx
     };
@@ -579,6 +584,18 @@ async fn http_metrics_middleware(
         .to_string();
     let start = std::time::Instant::now();
 
+    let identity = match request
+        .extensions()
+        .get::<telemetry::VerifiedTelemetryIdentity>()
+    {
+        Some(identity) => Some(identity.clone()),
+        None => telemetry::verified_request_identity(&state, request.headers()).await,
+    };
+    let telemetry_tenant = identity
+        .as_ref()
+        .map(|identity| identity.tenant_id.as_str())
+        .unwrap_or("__platform__");
+
     // CAB-1645: Buffer request body + headers for snapshot capture (only when enabled).
     // When disabled, this block is a no-op boolean check — zero overhead.
     let snapshot_enabled = state.snapshot_store.is_enabled();
@@ -630,6 +647,7 @@ async fn http_metrics_middleware(
         let request_span = tracing::span!(
             tracing::Level::INFO,
             "http.request",
+            "stoa.tenant_id" = %telemetry_tenant,
             otel.kind = "server",
             "stoa.deployment_mode" = %deployment_mode,
             http.method = %method,
@@ -888,6 +906,8 @@ async fn prometheus_metrics() -> String {
     let encoder = prometheus::TextEncoder::new();
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();
+    let mut metric_families = metric_families;
+    metrics::canonicalize_tenant_labels(&mut metric_families);
     encoder.encode(&metric_families, &mut buffer).unwrap();
     String::from_utf8(buffer).unwrap()
 }

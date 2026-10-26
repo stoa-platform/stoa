@@ -203,9 +203,68 @@ pub fn spans_exported_total() -> u64 {
     SPANS_EXPORTED.load(Ordering::Relaxed)
 }
 
+/// Request identity derived from a validated JWT, never client telemetry headers.
+#[derive(Clone, Debug)]
+pub(crate) struct VerifiedTelemetryIdentity {
+    pub tenant_id: String,
+    pub user_id: String,
+    pub consumer_id: String,
+}
+
+pub(crate) fn validated_tenant(tenant: Option<&str>) -> Option<String> {
+    let tenant = tenant?;
+    if tenant.is_empty()
+        || tenant.len() > 128
+        || !tenant.as_bytes()[0].is_ascii_alphanumeric()
+        || !tenant
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"_.:-".contains(&c))
+        || matches!(
+            tenant,
+            "default" | "platform" | "__platform__" | "__unattributed__"
+        )
+    {
+        return None;
+    }
+    Some(tenant.to_string())
+}
+
+pub(crate) async fn verified_request_identity(
+    state: &crate::state::AppState,
+    headers: &axum::http::HeaderMap,
+) -> Option<VerifiedTelemetryIdentity> {
+    let validator = state.jwt_validator.as_ref()?;
+    let header = headers.get("Authorization")?.to_str().ok()?;
+    let token = crate::auth::jwt::JwtValidator::extract_token(header).ok()?;
+    let claims = validator.validate(token).await.ok()?;
+    Some(VerifiedTelemetryIdentity {
+        tenant_id: validated_tenant(claims.tenant.as_deref())?,
+        user_id: claims.sub.clone(),
+        consumer_id: claims.azp.clone().unwrap_or_else(|| "unknown".to_string()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn telemetry_tenant_requires_a_bounded_explicit_claim() {
+        for tenant in [
+            None,
+            Some(""),
+            Some("platform"),
+            Some("default"),
+            Some("a\"}"),
+        ] {
+            assert!(validated_tenant(tenant).is_none());
+        }
+        assert_eq!(
+            validated_tenant(Some("tenant-a")),
+            Some("tenant-a".to_string())
+        );
+        assert!(validated_tenant(Some(&"a".repeat(129))).is_none());
+    }
 
     #[test]
     fn test_telemetry_config_default() {

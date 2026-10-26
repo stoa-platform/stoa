@@ -146,8 +146,9 @@ export function ToolCatalog() {
           {/* Search */}
           <div className="flex-1 min-w-[250px]">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
               <input
+                aria-label="Search tools by name or description..."
                 type="text"
                 placeholder="Search tools by name or description..."
                 value={searchQuery}
@@ -160,6 +161,7 @@ export function ToolCatalog() {
           {/* Tag Filter */}
           <div className="relative">
             <select
+              aria-label="Tag"
               value={selectedTag}
               onChange={(e) => handleTagFilter(e.target.value)}
               className="appearance-none pl-10 pr-8 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -171,7 +173,7 @@ export function ToolCatalog() {
                 </option>
               ))}
             </select>
-            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           </div>
 
           {/* Clear Filters */}

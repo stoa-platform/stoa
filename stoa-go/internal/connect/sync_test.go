@@ -156,7 +156,7 @@ func TestRunSyncAppliesEnabledPolicies(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(GatewayConfigResponse{
 				GatewayID: "gw-test",
 				PendingPolicies: []PendingPolicy{
-					{ID: "pol-1", Name: "rate-limit", PolicyType: "rate_limit", Config: map[string]interface{}{"rpm": float64(100)}, Enabled: true},
+					{ID: "pol-1", Name: "rate-limit", PolicyType: "rate_limit", Config: map[string]interface{}{"maxRequests": float64(100), "intervalSeconds": float64(60)}, Enabled: true},
 					{ID: "pol-2", Name: "cors", PolicyType: "cors", Config: map[string]interface{}{"origins": "*"}, Enabled: false},
 				},
 			})

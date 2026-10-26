@@ -33,7 +33,7 @@ func (w *WebMethodsAdapter) resolveAPIID(ctx context.Context, adminURL string, a
 		}
 	}
 
-	return "", fmt.Errorf("webmethods API not found: %s", apiName)
+	return "", &PolicyError{Code: "not_found"}
 }
 
 // listAPIsIndexedByName returns a map of API name → API ID from a single list call.

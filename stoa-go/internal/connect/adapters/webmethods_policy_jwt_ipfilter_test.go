@@ -94,16 +94,12 @@ func TestMapPolicyConfig_IpFilterPolicy_DenyMode(t *testing.T) {
 	}
 }
 
-// TestMapPolicyConfig_UnknownTypePassthrough — baseline: types that are
-// neither in the mapping nor in the switch fall through unchanged. Proves
-// the jwt/ipFilter cases didn't break the fallback contract used by
-// custom gateway-specific policies.
-func TestMapPolicyConfig_UnknownTypePassthrough(t *testing.T) {
-	in := map[string]interface{}{"custom": "value", "n": 42}
-	result := mapPolicyConfig("someCustomType", in)
-	if result["custom"] != "value" || result["n"] != 42 {
-		t.Errorf("passthrough broken: %v", result)
-	}
+// TestMapPolicyConfig_UnknownTypeRefused: intentional contract change;
+// custom types must fail locally instead of passing arbitrary configuration.
+func TestMapPolicyConfig_UnknownTypeRefused(t *testing.T) {
+	w, calls, _ := contractWM(t, false, 201)
+	err := w.ApplyPolicy(context.Background(), "http://synthetic.invalid", "api", PolicyAction{Type: "someCustomType", Config: map[string]interface{}{"custom": "value", "n": 42}})
+	requireContractRefusal(t, err, *calls, "invalid")
 }
 
 // TestApplyPolicy_JwtEndToEnd — full path: ApplyPolicy(type=jwt) resolves

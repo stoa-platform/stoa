@@ -5,18 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 )
 
 // wmPolicyTypeMapping maps STOA policy types to webMethods policy action types.
 var wmPolicyTypeMapping = map[string]string{
-	"cors":       "corsPolicy",
-	"rate_limit": "throttlingPolicy",
-	"logging":    "logInvocationPolicy",
-	"jwt":        "jwtPolicy",
-	"ip_filter":  "ipFilterPolicy",
+	"cors":           "corsPolicy",
+	"rate_limit":     "throttlingPolicy",
+	"logging":        "logInvocationPolicy",
+	"jwt":            "jwtPolicy", // deprecated removal hint
+	"jwt_validation": "jwtPolicy",
+	"ip_filter":      "ipFilterPolicy",
 }
 
 // mapPolicyConfig converts STOA-format config to webMethods-specific parameters.
@@ -34,46 +34,36 @@ var wmPolicyTypeMapping = map[string]string{
 // instance. MUST VALIDATE in staging before client A demo — see ticket CAB-2161.
 // If field names differ, update the cases below and remove this comment.
 func mapPolicyConfig(wmType string, config map[string]interface{}) map[string]interface{} {
+	var kind string
+	var keys map[string]string
 	switch wmType {
 	case "corsPolicy":
-		return map[string]interface{}{
-			"allowedOrigins":   getOrDefault(config, "allowedOrigins", []interface{}{"*"}),
-			"allowedMethods":   getOrDefault(config, "allowedMethods", []interface{}{"GET"}),
-			"allowedHeaders":   getOrDefault(config, "allowedHeaders", []interface{}{}),
-			"exposeHeaders":    getOrDefault(config, "exposeHeaders", []interface{}{}),
-			"maxAge":           getOrDefault(config, "maxAge", 3600),
-			"allowCredentials": getOrDefault(config, "allowCredentials", false),
-		}
+		kind = "cors"
+		keys = map[string]string{"allowedOrigins": "allowedOrigins", "allowedMethods": "allowedMethods", "allowedHeaders": "allowedHeaders", "exposeHeaders": "exposeHeaders", "maxAge": "maxAge", "allowCredentials": "allowCredentials"}
 	case "throttlingPolicy":
-		return map[string]interface{}{
-			"maxRequestCount":   getOrDefault(config, "maxRequests", 100),
-			"intervalInSeconds": getOrDefault(config, "intervalSeconds", 60),
-		}
+		kind = "rate_limit"
+		keys = map[string]string{"maxRequestCount": "maxRequests", "intervalInSeconds": "intervalSeconds"}
 	case "logInvocationPolicy":
-		return map[string]interface{}{
-			"logRequestPayload":  getOrDefault(config, "logRequest", true),
-			"logResponsePayload": getOrDefault(config, "logResponse", true),
-		}
+		kind = "logging"
+		keys = map[string]string{"logRequestPayload": "logRequest", "logResponsePayload": "logResponse"}
 	case "jwtPolicy":
-		// WM-10.15-HYPOTHESIS (CAB-2161) — validate in staging.
-		return map[string]interface{}{
-			"jwtIssuer":      getOrDefault(config, "issuer", ""),
-			"jwtAudience":    getOrDefault(config, "audience", ""),
-			"jwksURL":        getOrDefault(config, "jwks_url", ""),
-			"requiredClaims": getOrDefault(config, "required_claims", map[string]interface{}{}),
-		}
+		kind = "jwt_validation"
+		keys = map[string]string{"jwtIssuer": "issuer", "jwtAudience": "audience", "jwksURL": "jwks_url", "requiredClaims": "required_claims"}
 	case "ipFilterPolicy":
-		// WM-10.15-HYPOTHESIS (CAB-2161) — validate in staging.
-		// mode uppercased to match the broader fixSecuritySchemeTypes
-		// convention (webMethods enum values are uppercase).
-		mode, _ := getOrDefault(config, "mode", "allow").(string)
-		return map[string]interface{}{
-			"ipFilterMode": upperASCII(mode),
-			"ipList":       getOrDefault(config, "ip_list", []interface{}{}),
-		}
+		kind = "ip_filter"
+		keys = map[string]string{"ipFilterMode": "mode", "ipList": "ip_list"}
 	default:
-		return config
+		return nil
 	}
+	result := make(map[string]interface{}, len(keys))
+	for native, key := range keys {
+		result[native] = policyValue(config, kind, key)
+	}
+	if wmType == "ipFilterPolicy" {
+		mode, _ := result["ipFilterMode"].(string)
+		result["ipFilterMode"] = upperASCII(mode)
+	}
+	return result
 }
 
 // upperASCII uppercases an ASCII string without pulling in strings.ToUpper,
@@ -89,13 +79,6 @@ func upperASCII(s string) string {
 		out[i] = c
 	}
 	return string(out)
-}
-
-func getOrDefault(config map[string]interface{}, key string, defaultVal interface{}) interface{} {
-	if v, ok := config[key]; ok {
-		return v
-	}
-	return defaultVal
 }
 
 // findPolicyByType searches for an existing policy action by type on a given API.
@@ -124,15 +107,19 @@ func (w *WebMethodsAdapter) findPolicyByType(ctx context.Context, adminURL strin
 
 // ApplyPolicy upserts a policy action on a webMethods API.
 // Flow: resolve API ID → list existing policies → PUT if exists, POST if new.
-func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName string, policy PolicyAction) error {
-	apiID, err := w.resolveAPIID(ctx, adminURL, apiName)
+func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName string, policy PolicyAction) (err error) {
+	defer func() { err = SafePolicyError(err) }()
+	policy, err = PreparePolicy(w, policy)
 	if err != nil {
 		return err
 	}
-
 	wmType, ok := wmPolicyTypeMapping[policy.Type]
 	if !ok {
-		wmType = policy.Type
+		return &PolicyError{Code: "unsupported"}
+	}
+	apiID, err := w.resolveAPIID(ctx, adminURL, apiName)
+	if err != nil {
+		return err
 	}
 
 	existingID, err := w.findPolicyByType(ctx, adminURL, apiID, wmType, policy.Type)
@@ -179,8 +166,7 @@ func (w *WebMethodsAdapter) ApplyPolicy(ctx context.Context, adminURL string, ap
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("webmethods policy apply failed (%d): %s", resp.StatusCode, string(respBody))
+		return &PolicyError{HTTPStatus: resp.StatusCode}
 	}
 
 	return nil
@@ -261,8 +247,7 @@ func (w *WebMethodsAdapter) RemovePolicy(ctx context.Context, adminURL string, a
 	}
 
 	if len(matches) > 1 {
-		log.Printf("webmethods: RemovePolicy removed %d/%d duplicate policy actions for API=%s type=%s",
-			succeeded, len(matches), apiName, policyType)
+		log.Printf("webmethods: removed %d/%d duplicate policy actions", succeeded, len(matches))
 	}
 	if lastErr != nil {
 		return fmt.Errorf("webmethods RemovePolicy: removed %d/%d policies for API=%s type=%s; last error: %w",

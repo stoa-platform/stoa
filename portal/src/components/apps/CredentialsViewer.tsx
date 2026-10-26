@@ -64,7 +64,7 @@ export function CredentialsViewer({
             className="flex-1 flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white"
             aria-labelledby="client-id-label"
           >
-            <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500" aria-hidden="true" />
+            <Key className="h-4 w-4 text-muted" aria-hidden="true" />
             <span className="flex-1 truncate">{clientId}</span>
           </div>
           <button
@@ -93,7 +93,7 @@ export function CredentialsViewer({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white">
-                <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                <Key className="h-4 w-4 text-muted" />
                 <span className="flex-1 truncate">{showSecret ? displaySecret : maskedSecret}</span>
               </div>
               <button
@@ -129,7 +129,7 @@ export function CredentialsViewer({
           </div>
         ) : (
           <div className="flex items-center gap-2 px-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm text-neutral-500 dark:text-neutral-400">
-            <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+            <Key className="h-4 w-4 text-muted" />
             <span>Secret is hidden. Regenerate to get a new one.</span>
           </div>
         )}

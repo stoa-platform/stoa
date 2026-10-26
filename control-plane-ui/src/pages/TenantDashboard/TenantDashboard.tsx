@@ -219,9 +219,7 @@ export function TenantDashboard() {
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Usage Trend
                   </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    req/s over {rangeCfg.label}
-                  </p>
+                  <p className="text-xs text-muted">req/s over {rangeCfg.label}</p>
                 </div>
                 {usageTrend.data && usageTrend.data.length > 1 && (
                   <TrendIndicator data={usageTrend.data} />
@@ -237,7 +235,7 @@ export function TenantDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-muted">
                   {usageTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -250,9 +248,7 @@ export function TenantDashboard() {
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Error Trend
                   </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    errors/s over {rangeCfg.label}
-                  </p>
+                  <p className="text-xs text-muted">errors/s over {rangeCfg.label}</p>
                 </div>
                 {errorTrend.data && errorTrend.data.length > 1 && (
                   <TrendIndicator data={errorTrend.data} invertColor />
@@ -268,7 +264,7 @@ export function TenantDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-muted">
                   {errorTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -284,10 +280,8 @@ export function TenantDashboard() {
               <div className="space-y-3">
                 {topToolsList.map((tool, i) => (
                   <div key={tool.name} className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
-                      {i + 1}
-                    </span>
-                    <Cpu className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                    <span className="text-xs font-bold text-muted w-5 text-right">{i + 1}</span>
+                    <Cpu className="h-4 w-4 text-muted flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
@@ -297,7 +291,7 @@ export function TenantDashboard() {
                           <span className="text-xs text-neutral-500 dark:text-neutral-400">
                             {formatNumber(tool.calls)} calls
                           </span>
-                          <span className="text-xs text-neutral-400 dark:text-neutral-500 w-16 text-right">
+                          <span className="text-xs text-muted w-16 text-right">
                             {Math.round(tool.latencyMs)}ms avg
                           </span>
                         </div>

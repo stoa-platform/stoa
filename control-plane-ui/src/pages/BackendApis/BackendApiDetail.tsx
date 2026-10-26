@@ -1,3 +1,10 @@
+import {
+  Field,
+  FieldLabel,
+  FieldInput,
+  FieldTextarea,
+  FieldSelect,
+} from '@stoa/shared/components/Field';
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -185,7 +192,7 @@ export function BackendApiDetail() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/apis?tab=backends')}
-            className="p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded"
+            className="p-1 text-muted hover:text-neutral-600 dark:hover:text-neutral-200 rounded"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -243,66 +250,66 @@ export function BackendApiDetail() {
               </h2>
               <button
                 onClick={cancelEditing}
-                className="p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                className="p-1 text-muted hover:text-neutral-600 dark:hover:text-neutral-200"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Display Name
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={editForm.display_name || ''}
                 onChange={(e) => setEditForm((f) => ({ ...f, display_name: e.target.value }))}
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Description
-              </label>
-              <textarea
+              </FieldLabel>
+              <FieldTextarea
                 value={editForm.description || ''}
                 onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Backend URL
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="url"
                 value={editForm.backend_url || ''}
                 onChange={(e) => setEditForm((f) => ({ ...f, backend_url: e.target.value }))}
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 font-mono"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 OpenAPI Spec URL
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="url"
                 value={editForm.openapi_spec_url || ''}
                 onChange={(e) => setEditForm((f) => ({ ...f, openapi_spec_url: e.target.value }))}
                 placeholder="https://example.com/openapi.json"
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 font-mono"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Auth Type
-              </label>
-              <select
+              </FieldLabel>
+              <FieldSelect
                 value={editForm.auth_type || 'none'}
                 onChange={(e) =>
                   setEditForm((f) => ({
@@ -317,8 +324,8 @@ export function BackendApiDetail() {
                     {label}
                   </option>
                 ))}
-              </select>
-            </div>
+              </FieldSelect>
+            </Field>
 
             <div className="flex justify-end gap-3 pt-2 border-t dark:border-neutral-700">
               <button
@@ -348,7 +355,7 @@ export function BackendApiDetail() {
 
             <div className="px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex items-start gap-3">
-                <Globe className="h-4 w-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+                <Globe className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Backend URL
@@ -360,7 +367,7 @@ export function BackendApiDetail() {
               </div>
 
               <div className="flex items-start gap-3">
-                <Key className="h-4 w-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+                <Key className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     Authentication
@@ -377,7 +384,7 @@ export function BackendApiDetail() {
               </div>
 
               <div className="flex items-start gap-3">
-                <Wrench className="h-4 w-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+                <Wrench className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     MCP Tools
@@ -390,7 +397,7 @@ export function BackendApiDetail() {
 
               {api.openapi_spec_url && (
                 <div className="flex items-start gap-3">
-                  <FileCode className="h-4 w-4 text-neutral-400 mt-0.5 flex-shrink-0" />
+                  <FileCode className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                       OpenAPI Spec
@@ -399,7 +406,7 @@ export function BackendApiDetail() {
                       {api.openapi_spec_url}
                     </p>
                     {api.spec_hash && (
-                      <p className="text-xs text-neutral-400 mt-0.5">
+                      <p className="text-xs text-muted mt-0.5">
                         Hash: {api.spec_hash.slice(0, 12)}...
                       </p>
                     )}

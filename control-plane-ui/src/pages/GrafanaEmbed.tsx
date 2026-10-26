@@ -55,7 +55,7 @@ export function GrafanaEmbed() {
     return (
       <div className="flex min-h-[360px] items-center justify-center">
         <div className="max-w-md rounded-lg border border-neutral-200 bg-white p-6 text-center shadow dark:border-neutral-700 dark:bg-neutral-900">
-          <Shield className="mx-auto mb-3 h-8 w-8 text-neutral-400" />
+          <Shield className="mx-auto mb-3 h-8 w-8 text-muted" />
           <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
             Grafana Expert Mode
           </h1>

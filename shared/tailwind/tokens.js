@@ -16,8 +16,8 @@ const colors = {
     300: '#6ee7b7',
     400: '#34d399',
     500: '#10b981',
-    600: '#059669',
-    700: '#047857',
+    600: '#047857',
+    700: '#065f46',
     800: '#065f46',
     900: '#064e3b',
     950: '#022c22',
@@ -73,6 +73,8 @@ const colors = {
     800: '#991b1b',
     900: '#7f1d1d',
   },
+  // Theme-aware muted text; keep the neutral palette for decorative surfaces.
+  muted: 'var(--stoa-text-muted)',
   // Neutral: Gray scale for text, backgrounds, borders
   neutral: {
     50: '#fafafa',
@@ -129,19 +131,19 @@ const keyframes = {
 };
 
 const boxShadow = {
-  'toast': '0 4px 12px rgba(0, 0, 0, 0.15)',
-  'modal': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+  toast: '0 4px 12px rgba(0, 0, 0, 0.15)',
+  modal: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
   'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
 };
 
 const borderRadius = {
-  'toast': '0.75rem', // 12px
-  'modal': '1rem',    // 16px
-  'card': '0.75rem',  // 12px
+  toast: '0.75rem', // 12px
+  modal: '1rem', // 16px
+  card: '0.75rem', // 12px
 };
 
 const transitionTimingFunction = {
-  'apple': 'cubic-bezier(0.16, 1, 0.3, 1)', // Apple's spring-like easing
+  apple: 'cubic-bezier(0.16, 1, 0.3, 1)', // Apple's spring-like easing
 };
 
 module.exports = {

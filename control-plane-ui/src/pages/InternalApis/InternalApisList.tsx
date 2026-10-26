@@ -156,8 +156,9 @@ export function InternalApisList() {
       {/* Filters */}
       <div className="flex gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
+            aria-label="Search backends..."
             type="text"
             placeholder="Search backends..."
             value={searchTerm}
@@ -169,6 +170,7 @@ export function InternalApisList() {
           />
         </div>
         <select
+          aria-label="Status"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
@@ -254,7 +256,7 @@ export function InternalApisList() {
                           {backend.rate_limit_rpm} rpm
                         </span>
                       ) : (
-                        <span className="text-neutral-400">Unlimited</span>
+                        <span className="text-muted">Unlimited</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm">
@@ -264,7 +266,7 @@ export function InternalApisList() {
                           Enabled
                         </span>
                       ) : (
-                        <span className="text-neutral-400">Off</span>
+                        <span className="text-muted">Off</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

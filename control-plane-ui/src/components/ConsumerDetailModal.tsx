@@ -1,3 +1,5 @@
+import { Field, FieldLabel, FieldInput, FieldTextarea } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
@@ -119,10 +121,15 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <Modal
+        onClose={onClose}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
         <div
           className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
@@ -130,16 +137,20 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
           {/* Header */}
           <div className="flex justify-between items-start p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              <ModalTitle
+                as="h2"
+                className="text-lg font-semibold text-neutral-900 dark:text-white"
+              >
                 {consumer.name}
-              </h2>
+              </ModalTitle>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
                 {consumer.external_id}
               </p>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+              className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -247,6 +258,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                   </p>
                   {canEdit && (
                     <button
+                      type="button"
                       onClick={() => setShowBindForm(true)}
                       className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
                     >
@@ -258,6 +270,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
               {hasCert && canBind && canEdit && !showBindForm && (
                 <div className="mt-2">
                   <button
+                    type="button"
                     onClick={() => setShowBindForm(true)}
                     className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
                   >
@@ -274,16 +287,18 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                   {hasCert ? 'Replace Certificate' : 'Bind Certificate'}
                 </h3>
                 <div>
-                  <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
-                    PEM Certificate
-                  </label>
-                  <textarea
-                    value={pemValue}
-                    onChange={(e) => setPemValue(e.target.value)}
-                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                    rows={5}
-                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
+                  <Field>
+                    <FieldLabel className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
+                      PEM Certificate
+                    </FieldLabel>
+                    <FieldTextarea
+                      value={pemValue}
+                      onChange={(e) => setPemValue(e.target.value)}
+                      placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                      rows={5}
+                      className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </Field>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -292,6 +307,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     className="hidden"
                   />
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="mt-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
                   >
@@ -300,6 +316,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                 </div>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={handleBind}
                     disabled={binding || !pemValue.trim()}
                     className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -307,6 +324,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     {binding ? 'Binding...' : 'Confirm Bind'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setShowBindForm(false);
                       setPemValue('');
@@ -326,16 +344,18 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                   Rotate Certificate
                 </h3>
                 <div>
-                  <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
-                    New PEM Certificate
-                  </label>
-                  <textarea
-                    value={pemValue}
-                    onChange={(e) => setPemValue(e.target.value)}
-                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                    rows={5}
-                    className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
+                  <Field>
+                    <FieldLabel className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
+                      New PEM Certificate
+                    </FieldLabel>
+                    <FieldTextarea
+                      value={pemValue}
+                      onChange={(e) => setPemValue(e.target.value)}
+                      placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                      rows={5}
+                      className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </Field>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -344,17 +364,18 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     className="hidden"
                   />
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="mt-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
                   >
                     Or upload a file (.pem, .crt, .cer)
                   </button>
                 </div>
-                <div>
-                  <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
+                <Field>
+                  <FieldLabel className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">
                     Grace period (hours)
-                  </label>
-                  <input
+                  </FieldLabel>
+                  <FieldInput
                     type="number"
                     value={gracePeriod}
                     onChange={(e) => setGracePeriod(Number(e.target.value))}
@@ -365,9 +386,10 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                   <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
                     Old cert stays valid during this period
                   </span>
-                </div>
+                </Field>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={handleRotate}
                     disabled={rotating || !pemValue.trim()}
                     className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -375,6 +397,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
                     {rotating ? 'Rotating...' : 'Confirm Rotation'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setShowRotateForm(false);
                       setPemValue('');
@@ -392,12 +415,14 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
           {canEdit && hasCert && certStatus !== 'revoked' && !showRotateForm && (
             <div className="p-6 border-t border-neutral-200 dark:border-neutral-700 flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowRotateForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
               >
                 Rotate Certificate
               </button>
               <button
+                type="button"
                 onClick={handleRevoke}
                 className="px-4 py-2 border border-red-300 text-red-600 dark:border-red-700 dark:text-red-400 text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
               >
@@ -406,7 +431,7 @@ export function ConsumerDetailModal({ consumer, tenantId, onClose }: Props) {
             </div>
           )}
         </div>
-      </div>
+      </Modal>
 
       {ConfirmDialog}
     </>

@@ -1,3 +1,4 @@
+import { Field, FieldLabel, FieldInput } from '@stoa/shared/components/Field';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Play } from 'lucide-react';
@@ -56,30 +57,30 @@ export function SkillPreview() {
           </p>
 
           <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <Field className="flex-1">
+              <FieldLabel className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
                 Tool Name
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={toolRef}
                 onChange={(e) => setToolRef(e.target.value)}
                 placeholder="e.g. code-review"
                 className="w-full px-3 py-1.5 text-sm border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            </Field>
+            <Field className="flex-1">
+              <FieldLabel className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
                 User Ref
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={userRef}
                 onChange={(e) => setUserRef(e.target.value)}
                 placeholder="e.g. alice"
                 className="w-full px-3 py-1.5 text-sm border dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white"
               />
-            </div>
+            </Field>
             <button
               onClick={handleResolve}
               disabled={isLoading}

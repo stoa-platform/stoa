@@ -158,7 +158,7 @@ export function EnvironmentChrome({
                         </p>
                       </div>
                       {env.mode === 'read-only' && (
-                        <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
+                        <Lock className="h-3 w-3 text-muted flex-shrink-0" />
                       )}
                       {isCurrent && (
                         <Check className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400 flex-shrink-0" />
@@ -283,7 +283,7 @@ function ConsumerChrome({
                           </p>
                         </div>
                         {env.mode === 'read-only' && (
-                          <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
+                          <Lock className="h-3 w-3 text-muted flex-shrink-0" />
                         )}
                         {isCurrent && (
                           <Check className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400 flex-shrink-0" />

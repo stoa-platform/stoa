@@ -1,4 +1,13 @@
-import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } from 'react';
+import { Modal } from '../Modal';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  createContext,
+  useContext,
+} from 'react';
 import { Search, Command, ArrowRight } from 'lucide-react';
 
 // ============================================================================
@@ -67,12 +76,8 @@ function fuzzyMatch(query: string, text: string): boolean {
 function filterItems(items: CommandItem[], query: string): CommandItem[] {
   if (!query) return items;
 
-  return items.filter(item => {
-    const searchableText = [
-      item.label,
-      item.description || '',
-      ...(item.keywords || []),
-    ].join(' ');
+  return items.filter((item) => {
+    const searchableText = [item.label, item.description || '', ...(item.keywords || [])].join(' ');
     return fuzzyMatch(query, searchableText);
   });
 }
@@ -100,7 +105,11 @@ function ShortcutKey({ shortcut }: { shortcut: string[] }) {
 // Command Palette Component
 // ============================================================================
 
-export function CommandPalette({ items, placeholder = 'Search commands...', onClose }: CommandPaletteProps) {
+export function CommandPalette({
+  items,
+  placeholder = 'Search commands...',
+  onClose,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,7 +120,7 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
   // Group items by section
   const groupedItems = useMemo(() => {
     const groups: Record<string, CommandItem[]> = {};
-    filteredItems.forEach(item => {
+    filteredItems.forEach((item) => {
       const section = item.section || 'Actions';
       if (!groups[section]) groups[section] = [];
       groups[section].push(item);
@@ -135,29 +144,32 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
   }, []);
 
   // Handle keyboard navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(i => Math.min(i + 1, flatItems.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(i => Math.max(i - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (flatItems[selectedIndex]) {
-          flatItems[selectedIndex].onSelect();
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((i) => Math.min(i + 1, flatItems.length - 1));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((i) => Math.max(i - 1, 0));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (flatItems[selectedIndex]) {
+            flatItems[selectedIndex].onSelect();
+            onClose();
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
           onClose();
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        onClose();
-        break;
-    }
-  }, [flatItems, selectedIndex, onClose]);
+          break;
+      }
+    },
+    [flatItems, selectedIndex, onClose]
+  );
 
   // Scroll selected item into view
   useEffect(() => {
@@ -166,29 +178,30 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
   }, [selectedIndex]);
 
   // Handle backdrop click
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  }, [onClose]);
-
-  // Prevent body scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) {
+        onClose();
+      }
+    },
+    [onClose]
+  );
 
   let currentIndex = 0;
 
   return (
-    <div
+    <Modal
+      onClose={onClose}
+      aria-label="Search commands"
       className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
       onClick={handleBackdropClick}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 animate-fade-in" />
+      <div
+        className="absolute inset-0 bg-black/50 animate-fade-in"
+        aria-hidden="true"
+        onClick={onClose}
+      />
 
       {/* Dialog */}
       <div
@@ -197,7 +210,7 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
       >
         {/* Search Input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
-          <Search className="h-5 w-5 text-neutral-400 flex-shrink-0" />
+          <Search className="h-5 w-5 text-muted flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -206,7 +219,7 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
             placeholder={placeholder}
             className="flex-1 text-base text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 outline-none bg-transparent"
           />
-          <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-400 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded">
+          <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs font-medium text-muted bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded">
             esc
           </kbd>
         </div>
@@ -217,7 +230,7 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
             <div className="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
               <Command className="h-8 w-8 mx-auto mb-3 text-neutral-300 dark:text-neutral-600" />
               <p className="text-sm">No results found</p>
-              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">Try a different search term</p>
+              <p className="text-xs text-muted mt-1">Try a different search term</p>
             </div>
           ) : (
             Object.entries(groupedItems).map(([section, sectionItems]) => (
@@ -234,6 +247,7 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
 
                   return (
                     <button
+                      type="button"
                       key={item.id}
                       data-index={itemIndex}
                       onClick={() => {
@@ -242,19 +256,25 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
                       }}
                       onMouseEnter={() => setSelectedIndex(itemIndex)}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                        isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                        isSelected
+                          ? 'bg-primary-50 dark:bg-primary-900/30'
+                          : 'hover:bg-neutral-50 dark:hover:bg-neutral-800'
                       }`}
                     >
                       {/* Icon */}
                       {item.icon && (
-                        <div className={`flex-shrink-0 ${isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-400'}`}>
+                        <div
+                          className={`flex-shrink-0 ${isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-muted'}`}
+                        >
                           {item.icon}
                         </div>
                       )}
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className={`text-sm font-medium ${isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-neutral-900 dark:text-neutral-100'}`}>
+                        <div
+                          className={`text-sm font-medium ${isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-neutral-900 dark:text-neutral-100'}`}
+                        >
                           {item.label}
                         </div>
                         {item.description && (
@@ -282,22 +302,30 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
         <div className="flex items-center justify-between px-4 py-2 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-xs text-neutral-500 dark:text-neutral-400">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">↑</kbd>
-              <kbd className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">↓</kbd>
+              <kbd className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">
+                ↑
+              </kbd>
+              <kbd className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">
+                ↓
+              </kbd>
               <span className="ml-1">navigate</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">↵</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">
+                ↵
+              </kbd>
               <span className="ml-1">select</span>
             </span>
           </div>
           <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">esc</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">
+              esc
+            </kbd>
             <span className="ml-1">close</span>
           </span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -314,7 +342,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setOpen(prev => !prev);
+        setOpen((prev) => !prev);
       }
     };
 
@@ -327,9 +355,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   return (
     <CommandPaletteContext.Provider value={value}>
       {children}
-      {open && items.length > 0 && (
-        <CommandPalette items={items} onClose={() => setOpen(false)} />
-      )}
+      {open && items.length > 0 && <CommandPalette items={items} onClose={() => setOpen(false)} />}
     </CommandPaletteContext.Provider>
   );
 }

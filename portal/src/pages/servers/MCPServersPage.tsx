@@ -193,8 +193,9 @@ export function MCPServersPage() {
       {/* Search and Category Filter */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
           <input
+            aria-label="Search AI tools..."
             type="text"
             placeholder="Search AI tools..."
             value={searchQuery}
@@ -321,11 +322,7 @@ export function MCPServersPage() {
                     <Wrench className="h-4 w-4" />
                     <span>{server.tools.length} tools</span>
                   </div>
-                  {server.version && (
-                    <span className="text-neutral-400 dark:text-neutral-500">
-                      v{server.version}
-                    </span>
-                  )}
+                  {server.version && <span className="text-muted">v{server.version}</span>}
                 </div>
 
                 {/* Tools Preview */}
@@ -339,9 +336,7 @@ export function MCPServersPage() {
                     </span>
                   ))}
                   {server.tools.length > 3 && (
-                    <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                      +{server.tools.length - 3} more
-                    </span>
+                    <span className="text-xs text-muted">+{server.tools.length - 3} more</span>
                   )}
                 </div>
 
@@ -365,7 +360,7 @@ export function MCPServersPage() {
       {!isLoading && !error && filteredServers.length === 0 && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
           <div className="inline-flex p-4 bg-neutral-100 dark:bg-neutral-700 rounded-full mb-4">
-            <Wrench className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+            <Wrench className="h-8 w-8 text-muted" />
           </div>
           <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
             No AI Tools Found

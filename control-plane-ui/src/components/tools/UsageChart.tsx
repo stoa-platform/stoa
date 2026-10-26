@@ -174,9 +174,7 @@ export function UsageStatsCard({
       </div>
       <div className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</div>
       <div className="flex items-center justify-between mt-1">
-        {subtitle && (
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</span>
-        )}
+        {subtitle && <span className="text-xs text-muted">{subtitle}</span>}
         {trend !== undefined && (
           <span
             className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}

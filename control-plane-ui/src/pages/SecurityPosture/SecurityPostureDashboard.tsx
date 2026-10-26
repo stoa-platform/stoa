@@ -537,6 +537,7 @@ export function SecurityPostureDashboard() {
                 </h2>
                 <div className="flex items-center gap-2">
                   <select
+                    aria-label="Severity"
                     value={filterSeverity}
                     onChange={(e) => setFilterSeverity(e.target.value as SeverityLevel | 'all')}
                     className="text-xs border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg px-2 py-1"
@@ -557,17 +558,41 @@ export function SecurityPostureDashboard() {
                         <th className="px-4 py-3">Finding</th>
                         <th
                           className="px-4 py-3 cursor-pointer select-none"
-                          onClick={() => toggleSort('severity')}
+                          aria-sort={
+                            sortField === 'severity'
+                              ? sortDirection === 'asc'
+                                ? 'ascending'
+                                : 'descending'
+                              : 'none'
+                          }
                         >
-                          Severity
-                          <SortIcon field="severity" />
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('severity')}
+                            className="inline-flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700 dark:focus-visible:outline-primary-300"
+                          >
+                            Severity
+                            <SortIcon field="severity" />
+                          </button>
                         </th>
                         <th
                           className="px-4 py-3 cursor-pointer select-none"
-                          onClick={() => toggleSort('category')}
+                          aria-sort={
+                            sortField === 'category'
+                              ? sortDirection === 'asc'
+                                ? 'ascending'
+                                : 'descending'
+                              : 'none'
+                          }
                         >
-                          Category
-                          <SortIcon field="category" />
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('category')}
+                            className="inline-flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700 dark:focus-visible:outline-primary-300"
+                          >
+                            Category
+                            <SortIcon field="category" />
+                          </button>
                         </th>
                         <th className="px-4 py-3 text-right">Occurrences</th>
                       </tr>
@@ -677,7 +702,7 @@ export function SecurityPostureDashboard() {
                           ? 'text-green-500'
                           : item.available
                             ? 'text-yellow-500'
-                            : 'text-neutral-400'
+                            : 'text-muted'
                       }`}
                     />
                     <div>
@@ -739,7 +764,7 @@ export function SecurityPostureDashboard() {
                         {scan.findings_count} findings
                       </span>
                       {scan.duration_seconds != null && (
-                        <span className="text-xs text-neutral-400">{scan.duration_seconds}s</span>
+                        <span className="text-xs text-muted">{scan.duration_seconds}s</span>
                       )}
                     </div>
                   </div>

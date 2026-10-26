@@ -76,7 +76,7 @@ export const ApplicationCard = memo(function ApplicationCard({
             {application.name}
           </h3>
           <div className="flex items-center gap-2 mt-1">
-            <Key className="h-3 w-3 text-neutral-400 dark:text-neutral-500" />
+            <Key className="h-3 w-3 text-muted" />
             <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 truncate">
               {application.client_id}
             </span>

@@ -185,9 +185,7 @@ export function PlatformMetricsDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
-            {lastRefresh.toLocaleTimeString('fr-FR')}
-          </span>
+          <span className="text-xs text-muted">{lastRefresh.toLocaleTimeString('fr-FR')}</span>
           <button
             onClick={handleRefresh}
             className="flex items-center gap-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"

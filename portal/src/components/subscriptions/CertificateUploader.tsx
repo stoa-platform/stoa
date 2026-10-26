@@ -176,9 +176,9 @@ export function CertificateUploader({
   return (
     <div className={`space-y-4 ${className}`}>
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+        <p className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           Client Certificate {required && <span className="text-red-500">*</span>}
-        </label>
+        </p>
         {result && (
           <button
             type="button"
@@ -227,7 +227,7 @@ export function CertificateUploader({
             </div>
           ) : (
             <>
-              <Upload className="h-10 w-10 text-neutral-400 dark:text-neutral-500 mx-auto mb-3" />
+              <Upload className="h-10 w-10 text-muted mx-auto mb-3" />
               <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-1">
                 <span className="text-primary-600 font-medium">Click to upload</span> or drag and
                 drop
@@ -235,9 +235,7 @@ export function CertificateUploader({
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 PEM, CRT, CER files (max 1MB)
               </p>
-              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-2">
-                Or paste PEM content directly
-              </p>
+              <p className="text-xs text-muted mt-2">Or paste PEM content directly</p>
             </>
           )}
         </div>
@@ -254,13 +252,13 @@ export function CertificateUploader({
                     {getStatusText(result.certificate)}
                   </span>
                 </div>
-                <FileCheck className="h-5 w-5 text-neutral-400 dark:text-neutral-500" />
+                <FileCheck className="h-5 w-5 text-muted" />
               </div>
 
               {/* Certificate Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="flex items-start gap-2">
-                  <Building className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Building className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400 text-xs">Subject</p>
                     <p className="text-neutral-900 dark:text-white break-all">
@@ -270,7 +268,7 @@ export function CertificateUploader({
                 </div>
 
                 <div className="flex items-start gap-2">
-                  <Shield className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Shield className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400 text-xs">Issuer</p>
                     <p className="text-neutral-900 dark:text-white break-all">
@@ -280,7 +278,7 @@ export function CertificateUploader({
                 </div>
 
                 <div className="flex items-start gap-2">
-                  <Calendar className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Calendar className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400 text-xs">Valid From</p>
                     <p className="text-neutral-900 dark:text-white">
@@ -290,7 +288,7 @@ export function CertificateUploader({
                 </div>
 
                 <div className="flex items-start gap-2">
-                  <Calendar className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Calendar className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400 text-xs">Valid To</p>
                     <p className="text-neutral-900 dark:text-white">
@@ -300,7 +298,7 @@ export function CertificateUploader({
                 </div>
 
                 <div className="flex items-start gap-2 md:col-span-2">
-                  <Key className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                  <Key className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-neutral-500 dark:text-neutral-400 text-xs">
                       Fingerprint (SHA-256)
@@ -313,7 +311,7 @@ export function CertificateUploader({
 
                 {result.certificate.san.length > 0 && (
                   <div className="flex items-start gap-2 md:col-span-2">
-                    <Shield className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+                    <Shield className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-neutral-500 dark:text-neutral-400 text-xs">
                         Subject Alternative Names

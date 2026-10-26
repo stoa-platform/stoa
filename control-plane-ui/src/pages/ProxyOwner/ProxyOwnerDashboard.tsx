@@ -84,9 +84,7 @@ function KPICard({
         <div>
           <p className="text-sm text-neutral-500 dark:text-neutral-400">{label}</p>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white mt-1">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
-          )}
+          {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
         </div>
         <div className={`p-2 rounded-lg ${iconBg}`}>
           <Icon className={`w-5 h-5 ${iconColor}`} />
@@ -104,7 +102,7 @@ function KPICard({
           >
             {Math.abs(trend.value)}%
           </span>
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">{trend.label}</span>
+          <span className="text-xs text-muted">{trend.label}</span>
         </div>
       )}
     </div>
@@ -215,7 +213,7 @@ export function ProxyOwnerDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
+          <span className="text-xs text-muted">
             Last refresh: {lastRefresh.toLocaleTimeString()}
           </span>
           <button
@@ -258,7 +256,7 @@ export function ProxyOwnerDashboard() {
             subtitle="Metrics not yet available"
             icon={Shield}
             iconBg="bg-neutral-100 dark:bg-neutral-700"
-            iconColor="text-neutral-400"
+            iconColor="text-muted"
           />
           <KPICard
             label="Requests (24h)"
@@ -266,7 +264,7 @@ export function ProxyOwnerDashboard() {
             subtitle="Metrics not yet available"
             icon={Activity}
             iconBg="bg-neutral-100 dark:bg-neutral-700"
-            iconColor="text-neutral-400"
+            iconColor="text-muted"
           />
           <KPICard
             label="Violations (24h)"
@@ -274,7 +272,7 @@ export function ProxyOwnerDashboard() {
             subtitle="Metrics not yet available"
             icon={AlertTriangle}
             iconBg="bg-neutral-100 dark:bg-neutral-700"
-            iconColor="text-neutral-400"
+            iconColor="text-muted"
           />
         </div>
       )}

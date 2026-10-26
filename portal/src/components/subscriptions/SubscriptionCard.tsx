@@ -147,7 +147,7 @@ export const SubscriptionCard = memo(function SubscriptionCard({
             >
               {subscription.api?.name || subscription.apiId}
             </Link>
-            <ExternalLink className="h-4 w-4 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
+            <ExternalLink className="h-4 w-4 text-muted flex-shrink-0" />
           </div>
           {subscription.api?.version && (
             <p className="text-sm text-neutral-500 dark:text-neutral-400">

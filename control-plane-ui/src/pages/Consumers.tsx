@@ -1,3 +1,5 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
+import { Field, FieldLabel, FieldSelect, FieldInput } from '@stoa/shared/components/Field';
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
@@ -279,11 +281,11 @@ export function Consumers() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Tenant Selector */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Tenant
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={activeTenant}
               onChange={(e) => handleTenantChange(e.target.value)}
               className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -293,16 +295,16 @@ export function Consumers() {
                   {tenant.display_name || tenant.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Search */}
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field className="flex-1 min-w-[200px]">
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Search
-            </label>
+            </FieldLabel>
             <div className="relative">
-              <input
+              <FieldInput
                 type="text"
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
@@ -310,7 +312,7 @@ export function Consumers() {
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <svg
-                className="absolute left-3 top-2.5 h-5 w-5 text-neutral-400"
+                className="absolute left-3 top-2.5 h-5 w-5 text-muted"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -325,7 +327,7 @@ export function Consumers() {
               {searchQuery && (
                 <button
                   onClick={() => handleSearchChange('')}
-                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
+                  className="absolute right-3 top-2.5 text-muted hover:text-neutral-600"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -338,14 +340,14 @@ export function Consumers() {
                 </button>
               )}
             </div>
-          </div>
+          </Field>
 
           {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Status
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={statusFilter}
               onChange={(e) => handleStatusChange(e.target.value)}
               className="w-36 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -354,15 +356,15 @@ export function Consumers() {
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
               <option value="blocked">Blocked</option>
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Certificate Filter */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Certificate
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={certFilter}
               onChange={(e) => {
                 setCertFilter(e.target.value);
@@ -373,8 +375,8 @@ export function Consumers() {
               <option value="">All Certs</option>
               <option value="expiring">Expiring Soon</option>
               <option value="no-cert">No Certificate</option>
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Results count */}
           <div className="text-sm text-neutral-500 dark:text-neutral-400 self-end pb-2">
@@ -436,6 +438,7 @@ export function Consumers() {
                 {canEdit && (
                   <th className="px-3 py-3 w-10">
                     <input
+                      aria-label="Select all displayed consumers"
                       type="checkbox"
                       checked={
                         paginatedConsumers.length > 0 &&
@@ -479,6 +482,7 @@ export function Consumers() {
                   {canEdit && (
                     <td className="px-3 py-4 w-10" onClick={(e) => e.stopPropagation()}>
                       <input
+                        aria-label={`Select consumer ${consumer.name}`}
                         type="checkbox"
                         checked={selectedIds.has(consumer.id)}
                         onChange={() => toggleSelection(consumer.id)}
@@ -490,7 +494,9 @@ export function Consumers() {
                     {consumer.external_id}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 dark:text-white">
-                    {consumer.name}
+                    <RowAction onActivate={() => setSelectedConsumer(consumer)}>
+                      {consumer.name}
+                    </RowAction>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 dark:text-neutral-400">
                     {consumer.email}
@@ -512,12 +518,12 @@ export function Consumers() {
                           status={normalizeCertificateStatus(consumer.certificate_status)}
                           notAfter={consumer.certificate_not_after}
                         />
-                        <span className="font-mono text-xs text-neutral-400 dark:text-neutral-500">
+                        <span className="font-mono text-xs text-muted">
                           {consumer.certificate_fingerprint.substring(0, 12)}...
                         </span>
                       </div>
                     ) : (
-                      <span className="text-neutral-400 dark:text-neutral-500">—</span>
+                      <span className="text-muted">—</span>
                     )}
                   </td>
                   <td
@@ -593,7 +599,7 @@ export function Consumers() {
                     status={normalizeCertificateStatus(consumer.certificate_status)}
                     notAfter={consumer.certificate_not_after}
                   />
-                  <span className="text-xs font-mono text-neutral-400 dark:text-neutral-500 truncate">
+                  <span className="text-xs font-mono text-muted truncate">
                     {consumer.certificate_fingerprint.substring(0, 20)}...
                   </span>
                 </div>

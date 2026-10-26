@@ -1,3 +1,5 @@
+import { Form, FormError } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Credential Mappings Page (CAB-1648)
  *
@@ -274,6 +276,7 @@ export function CredentialMappings() {
             Credential Mapping Management
           </h2>
           <select
+            aria-label="Tenant"
             value={selectedTenantId}
             onChange={(e) => setSelectedTenantId(e.target.value)}
             className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm"
@@ -291,8 +294,9 @@ export function CredentialMappings() {
       {/* Search */}
       {tenantId && (
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
+            aria-label="Search by API, consumer, or header..."
             type="text"
             placeholder="Search by API, consumer, or header..."
             value={searchQuery}
@@ -433,7 +437,7 @@ export function CredentialMappings() {
                         <button
                           onClick={() => openEditModal(mapping)}
                           disabled={actionLoading !== null}
-                          className="p-1.5 rounded text-neutral-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+                          className="p-1.5 rounded text-muted hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 transition-colors"
                           title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
@@ -441,7 +445,7 @@ export function CredentialMappings() {
                         <button
                           onClick={() => setDeleteTarget({ id: mapping.id, apiId: mapping.api_id })}
                           disabled={actionLoading === `delete-${mapping.id}`}
-                          className="p-1.5 rounded text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 transition-colors"
+                          className="p-1.5 rounded text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -469,25 +473,33 @@ export function CredentialMappings() {
 
       {/* Create/Edit Modal */}
       {modal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <Modal
+          onClose={closeModal}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        >
           <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              <ModalTitle
+                as="h2"
+                className="text-lg font-semibold text-neutral-900 dark:text-white"
+              >
                 {modal.mode === 'create' ? 'Add Credential Mapping' : 'Edit Credential Mapping'}
-              </h2>
+              </ModalTitle>
               <button
+                aria-label="Close dialog"
+                type="button"
                 onClick={closeModal}
-                className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                className="p-1.5 rounded-lg text-muted hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <Form error={formError} onSubmit={handleSubmit} className="p-6 space-y-4">
               {formError && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
+                <FormError className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-400">
                   {formError}
-                </div>
+                </FormError>
               )}
 
               {modal.mode === 'create' && (
@@ -598,7 +610,7 @@ export function CredentialMappings() {
                   <button
                     type="button"
                     onClick={() => setShowCredential((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
                   >
                     {showCredential ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -645,9 +657,9 @@ export function CredentialMappings() {
                       : 'Save Changes'}
                 </button>
               </div>
-            </form>
+            </Form>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

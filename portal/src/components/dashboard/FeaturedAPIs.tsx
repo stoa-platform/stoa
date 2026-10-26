@@ -60,9 +60,7 @@ export function FeaturedAPIs() {
           <div className="py-8 text-center">
             <BookOpen className="h-8 w-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
             <p className="text-neutral-500 dark:text-neutral-400 text-sm">No APIs available</p>
-            <p className="text-neutral-400 dark:text-neutral-500 text-xs mt-1">
-              APIs will appear here once published
-            </p>
+            <p className="text-muted text-xs mt-1">APIs will appear here once published</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -81,9 +79,9 @@ export function FeaturedAPIs() {
                       {api.displayName || api.name}
                     </h3>
                     {api.visibility === 'internal' ? (
-                      <Lock className="h-3 w-3 text-neutral-400" />
+                      <Lock className="h-3 w-3 text-muted" />
                     ) : (
-                      <Globe className="h-3 w-3 text-neutral-400" />
+                      <Globe className="h-3 w-3 text-muted" />
                     )}
                   </div>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 line-clamp-1 mt-0.5">
@@ -91,10 +89,8 @@ export function FeaturedAPIs() {
                   </p>
                   {api.tags && api.tags.length > 0 && (
                     <div className="flex items-center gap-1 mt-1.5">
-                      <Tag className="h-3 w-3 text-neutral-400" />
-                      <span className="text-xs text-neutral-400">
-                        {api.tags.slice(0, 2).join(', ')}
-                      </span>
+                      <Tag className="h-3 w-3 text-muted" />
+                      <span className="text-xs text-muted">{api.tags.slice(0, 2).join(', ')}</span>
                     </div>
                   )}
                 </div>

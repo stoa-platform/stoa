@@ -62,9 +62,9 @@ type graviteeAPIsResponse struct {
 
 // graviteePlan represents a plan associated with a Gravitee API.
 type graviteePlan struct {
-	Name   string          `json:"name"`
-	Status string          `json:"status"`
-	Flows  []graviteeFlow  `json:"flows"`
+	Name   string         `json:"name"`
+	Status string         `json:"status"`
+	Flows  []graviteeFlow `json:"flows"`
 }
 
 type graviteeFlow struct {
@@ -167,8 +167,8 @@ func (g *GraviteeAdapter) Discover(ctx context.Context, adminURL string) ([]Disc
 
 // ApplyPolicy creates or updates a plan with the given policy on a Gravitee API.
 func (g *GraviteeAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName string, policy PolicyAction) error {
-	// For Gravitee, policies are applied via Plans with flows
-	return fmt.Errorf("gravitee policy sync not yet implemented")
+	_, err := PreparePolicy(g, policy)
+	return err
 }
 
 // RemovePolicy removes a policy from a Gravitee API's plans.

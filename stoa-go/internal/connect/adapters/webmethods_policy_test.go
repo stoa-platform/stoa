@@ -285,7 +285,8 @@ func TestMapPolicyConfig(t *testing.T) {
 
 	input := map[string]interface{}{"custom": "value"}
 	result = mapPolicyConfig("unknownType", input)
-	if result["custom"] != "value" {
-		t.Errorf("expected passthrough for unknown type")
+	// Intentional contract change: unknown mappings no longer pass through.
+	if result != nil {
+		t.Errorf("expected refusal for unknown type")
 	}
 }

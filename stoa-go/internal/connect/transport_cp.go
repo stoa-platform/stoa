@@ -245,7 +245,8 @@ func (c *cpClient) FetchRoutes(ctx context.Context, gatewayName string) ([]adapt
 }
 
 // ReportSyncAck POSTs policy sync results.
-func (c *cpClient) ReportSyncAck(ctx context.Context, gatewayID string, payload SyncAckPayload) error {
+func (c *cpClient) ReportSyncAck(ctx context.Context, gatewayID string, payload SyncAckPayload) (err error) {
+	defer func() { err = adapters.SafePolicyError(err) }()
 	var applied, removed, failed int
 	for _, r := range payload.SyncedPolicies {
 		switch r.Status {
@@ -266,15 +267,15 @@ func (c *cpClient) ReportSyncAck(ctx context.Context, gatewayID string, payload 
 	)
 	defer span.End()
 
-	status, body, err := c.sendJSON(ctx, http.MethodPost,
+	status, _, err := c.sendJSON(ctx, http.MethodPost,
 		fmt.Sprintf("/v1/internal/gateways/%s/sync-ack", gatewayID), payload)
 	if err != nil {
-		return spanFail(span, fmt.Errorf("sync-ack request: %w", err), "sync-ack request failed")
+		return spanFail(span, adapters.SafePolicyError(err), "sync-ack request failed")
 	}
 	span.SetAttributes(attribute.Int("http.status_code", status))
 
 	if status != http.StatusOK && status != http.StatusNoContent {
-		return spanFail(span, fmt.Errorf("sync-ack failed (%d): %s", status, string(body)), "sync-ack rejected")
+		return spanFail(span, &adapters.PolicyError{HTTPStatus: status}, "sync-ack rejected")
 	}
 	span.SetStatus(codes.Ok, "sync-ack sent")
 	return nil

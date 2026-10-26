@@ -133,6 +133,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         prewarm_connections(cp_url).await;
     }
 
+    // Bind before HTTP startup; a failed authorization bind aborts startup.
+    let grpc = if let Some(addr) = config.ext_authz_grpc_addr {
+        let jwt = state
+            .jwt_validator
+            .clone()
+            .ok_or("ext_authz requires an OIDC JWT validator")?;
+        if !addr.ip().is_loopback() {
+            warn!(%addr, "ext_authz has no TLS; use a trusted private network");
+        }
+        if !matches!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(800),
+                jwt.oidc_provider().get_jwks()
+            )
+            .await,
+            Ok(Ok(_))
+        ) {
+            warn!("ext_authz JWKS prewarm failed; requests remain fail-closed");
+        }
+        let mut engine = stoa_gateway::mode::decision::DecisionEngine::new()
+            .with_required_scopes(config.ext_authz_required_scopes.clone());
+        if config.quota_enforcement_enabled {
+            engine = engine.with_rate_limiter(state.consumer_rate_limiter.clone());
+        }
+        let service = stoa_gateway::authz::ext_authz_grpc::ExtAuthzService::new(
+            jwt,
+            config.ext_authz_audience.clone(),
+            config.ext_authz_required_scopes.clone(),
+            engine,
+        );
+        Some((tokio::net::TcpListener::bind(addr).await?, service))
+    } else {
+        None
+    };
+    let (mut health, health_service) = tonic_health::server::health_reporter();
+    let ready = config
+        .ext_authz_audience
+        .as_deref()
+        .is_some_and(|a| !a.trim().is_empty());
+    let status = if ready {
+        tonic_health::ServingStatus::Serving
+    } else {
+        tonic_health::ServingStatus::NotServing
+    };
+    health.set_service_status("", status).await;
+    health
+        .set_service_status("envoy.service.auth.v3.Authorization", status)
+        .await;
+
     // Build router
     let app = stoa_gateway::build_router(state);
 
@@ -147,12 +196,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // into_make_service_with_connect_info: exposes peer SocketAddr to middleware
     // (required by tcp_filter::pre_tls_filter for IP-based filtering after accept)
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await?;
+    use futures::FutureExt;
+    let shutdown = shutdown_signal().shared();
+    let http_shutdown = shutdown.clone();
+    let http = async {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(http_shutdown)
+        .await?;
+        Ok::<(), Box<dyn std::error::Error>>(())
+    };
+    let authorization = async {
+        if let Some((listener, service)) = grpc {
+            use stoa_gateway::authz::proto::envoy::service::auth::v3::authorization_server::AuthorizationServer;
+            tonic::transport::Server::builder()
+                .add_service(health_service)
+                .add_service(AuthorizationServer::new(service).max_decoding_message_size(64 * 1024))
+                .serve_with_incoming_shutdown(
+                    tokio_stream::wrappers::TcpListenerStream::new(listener),
+                    shutdown,
+                )
+                .await?;
+        }
+        Ok::<(), Box<dyn std::error::Error>>(())
+    };
+    // Both servers are supervised: any listener failure terminates the process.
+    tokio::try_join!(http, authorization)?;
 
     // Flush pending OTel spans before exit
     stoa_gateway::telemetry::shutdown_telemetry();

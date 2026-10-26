@@ -180,7 +180,7 @@ expired="$(curl -sS -o /tmp/stoa-jwt-exp -w '%{http_code}' http://127.0.0.1:1808
 echo "GET protected with expired token $expired $(cat /tmp/stoa-jwt-exp)"
 
 # Signed by a different key, iss is not the realm. Fail closed.
-WRONG_ISS='eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im5vdC1vdXIta2V5In0.eyJzdWIiOiJldmlsIiwiaXNzIjoiaHR0cDovL2V2aWwuZXhhbXBsZS9yZWFsbXMvc3RvYSIsImV4cCI6NDA3MDkwODgwMCwiaWF0IjoxNzAwMDAwMDAwfQ.not-a-valid-signature'
+WRONG_ISS='eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im5vdC1vdXIta2V5In0.eyJzdWIiOiJldmlsIiwiaXNzIjoiaHR0cDovL2V2aWwuZXhhbXBsZS9yZWFsbXMvc3RvYSIsImV4cCI6NDA3MDkwODgwMCwiaWF0IjoxNzAwMDAwMDAwfQ.not-a-valid-signature' # gitleaks:allow
 wrong="$(curl -sS -o /tmp/stoa-jwt-wrong -w '%{http_code}' http://127.0.0.1:18080/apis/demo/live-api/ping -H "authorization: Bearer $WRONG_ISS")"
 echo "GET protected with wrong issuer $wrong $(cat /tmp/stoa-jwt-wrong)"
 

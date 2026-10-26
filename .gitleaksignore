@@ -1,3 +1,2 @@
 # Reviewed synthetic fixtures; exact no-git Gitleaks fingerprints only.
 # Negative JWT test: wrong issuer/signing key, expected response is rejection.
-deploy/standalone/jwt-proof.sh:jwt:179

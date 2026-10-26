@@ -54,7 +54,8 @@ GATEWAYS = [
         "display_name": "Kong DB-less (Prod)",
         "gateway_type": "kong",
         "environment": "production",
-        "base_url": "http://51.83.45.13:8001",
+        # RFC 5737 placeholder. Revision id and SQL are unchanged.
+        "base_url": "http://192.0.2.10:8001",
         "auth_config": "{}",
         "status": "online",
         "capabilities": '["rest", "rate_limiting"]',

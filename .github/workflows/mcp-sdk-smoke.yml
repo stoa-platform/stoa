@@ -98,6 +98,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Post-deploy (prod probe)
     runs-on: ubuntu-latest
+    # Non bloquant tant que la prod MCP n'est pas rétablie : l'enregistrement
+    # DNS mcp.gostoa.dev a été retiré le 21/10/2026 et le tunnel n'a plus de
+    # route MCP. Retirer cette ligne quand la cible répond à nouveau.
+    continue-on-error: true
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

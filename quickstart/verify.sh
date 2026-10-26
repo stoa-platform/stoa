@@ -139,7 +139,31 @@ printf '{"secret":"%s"}\n' "$client_secret" | docker compose exec -T keycloak /o
   -s publicClient=false \
   -s standardFlowEnabled=false \
   -s directAccessGrantsEnabled=false \
-  -s protocol=openid-connect >/dev/null
+  -s protocol=openid-connect \
+  -s 'protocolMappers=[
+    {
+      "name":"quickstart-gateway-audience",
+      "protocol":"openid-connect",
+      "protocolMapper":"oidc-audience-mapper",
+      "config":{
+        "included.custom.audience":"stoa-mcp-gateway",
+        "access.token.claim":"true",
+        "id.token.claim":"false"
+      }
+    },
+    {
+      "name":"quickstart-tenant",
+      "protocol":"openid-connect",
+      "protocolMapper":"oidc-hardcoded-claim-mapper",
+      "config":{
+        "claim.name":"tenant_id",
+        "claim.value":"quickstart",
+        "jsonType.label":"String",
+        "access.token.claim":"true",
+        "id.token.claim":"false"
+      }
+    }
+  ]' >/dev/null
 
 contract='{"name":"ping-api","version":"1.0.0","tenant_id":"quickstart","status":"published","classification":"H","inboundAuth":"jwt","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":"http://backend:80"}]}'
 

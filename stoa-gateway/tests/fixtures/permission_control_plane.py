@@ -23,7 +23,6 @@ os.environ.update(
         "STOA_DISABLE_AUTH": "false",
         "KEYCLOAK_CLIENT_ID": "control-plane-api",
         "KEYCLOAK_REALM": "stoa",
-        "TOOL_PERMISSIONS_SERVICE_CLIENT_IDS": "stoa-mcp-gateway",
         "GATEWAY_API_KEYS": "",
         "SENDER_CONSTRAINED_ENABLED": "false",
         "LOG_DEBUG_AUTH_TOKENS": "false",
@@ -48,7 +47,7 @@ from src.models.tenant_tool_permission import TenantToolPermission  # noqa: E402
 from src.routers.tenant_tool_permissions import router  # noqa: E402
 
 # Reuse the existing signing fixture without copying key material into this file.
-source = (root / "stoa-gateway/src/auth/jwt.rs").read_text()
+source = (root / "stoa-gateway/tests/fixtures/signing.rs").read_text()
 literal = source.split('const TEST_PEM: &str = "', 1)[1].split('";', 1)[0]
 pem = "".join(line.strip().removesuffix("\\") for line in literal.splitlines()).replace("\\n", "\n")
 key = serialization.load_pem_private_key(pem.encode(), password=None)
@@ -143,6 +142,8 @@ async def token(request: Request):
     access_token = jwt.encode(
         {
             "sub": "permission-reader",
+            # The production CP authorizes readers by their signed tenant.
+            "tenant_id": "tenant-a",
             "iss": issuer,
             "aud": "control-plane-api",
             "iat": now,

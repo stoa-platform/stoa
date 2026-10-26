@@ -59,7 +59,7 @@ impl TestApp {
         let issuer = format!("{}/realms/stoa", oidc.uri());
         // Reference the original fixture without adding its key material to a patch.
         // Rust string continuations are removed before decoding the escaped newlines.
-        let source = include_str!("../../src/auth/jwt.rs");
+        let source = include_str!("../fixtures/signing.rs");
         let fixture = source
             .split("const TEST_PEM: &str = \"")
             .nth(1)

@@ -19,7 +19,7 @@ func config() Config {
 	return Config{NodeID: "own", ListenerPort: 10000, AuthCluster: "authorization", AuthAddress: "127.0.0.1:9000", AuthTimeout: time.Second, AckTimeout: time.Second}
 }
 func routes() []Route {
-	return []Route{{ID: "a", Path: "/a", Methods: []string{"POST", "GET"}, Backend: "https://example.com"}, {ID: "b", Path: "/b", Backend: "http://127.0.0.1:8080"}}
+	return []Route{{TenantID: "tenant", APIID: "catalog-a", ID: "a", Path: "/a", Methods: []string{"POST", "GET"}, Backend: "https://example.com"}, {TenantID: "tenant", APIID: "catalog-b", ID: "b", Path: "/b", Backend: "http://127.0.0.1:8080"}}
 }
 func TestSnapshot(t *testing.T) {
 	input := routes()
@@ -173,5 +173,32 @@ func TestInvalidSnapshot(t *testing.T) {
 	c.AuthAddress = "bad"
 	if _, err := NewServer(c, nil, nil); err == nil || !strings.Contains(err.Error(), "authorization") {
 		t.Fatal("invalid authorization config")
+	}
+}
+
+func TestRouteAuthorizationContext(t *testing.T) {
+	input := routes()
+	input[0].TenantID = "acme"
+	input[0].APIID = "catalog-a"
+	snapshot, err := BuildSnapshot(config(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc := snapshot.GetResources(resource.RouteType)["routes"].(*route.RouteConfiguration)
+	for _, r := range rc.VirtualHosts[0].Routes {
+		settings := &auth.ExtAuthzPerRoute{}
+		if err := r.TypedPerFilterConfig["envoy.filters.http.ext_authz"].UnmarshalTo(settings); err != nil {
+			t.Fatal(err)
+		}
+		if r.Name == "a" && !reflect.DeepEqual(settings.GetCheckSettings().ContextExtensions, map[string]string{"tenant_id": "acme", "api_id": "catalog-a"}) {
+			t.Fatal("lost route identity")
+		}
+	}
+	for _, tenant := range []string{"", " ", "\t"} {
+		input[1].TenantID = tenant
+		snapshot, err = BuildSnapshot(config(), input)
+		if err == nil || snapshot != nil {
+			t.Fatal("missing tenant must reject the entire snapshot")
+		}
 	}
 }

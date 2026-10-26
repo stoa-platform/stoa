@@ -11,6 +11,7 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	auth "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/stoa-platform/stoa-go/internal/xds"
@@ -61,7 +62,7 @@ func TestEnvoySync(t *testing.T) {
 				t.Fatal(err)
 			}
 			event.DesiredState.DeploymentID = event.DeploymentID
-			routes := []Route{event.DesiredState, {ID: "explicit", APIID: "ignored", PathPrefix: "/custom", BackendURL: "http://127.0.0.1:8001", Activated: true, DeploymentID: "second"}, {ID: "inactive", PathPrefix: "invalid", Activated: false, DeploymentID: "inactive"}}
+			routes := []Route{event.DesiredState, {TenantID: "tenant", APICatalogID: "catalog-explicit", ID: "explicit", APIID: "ignored", PathPrefix: "/custom", BackendURL: "http://127.0.0.1:8001", Activated: true, DeploymentID: "second"}, {ID: "inactive", PathPrefix: "invalid", Activated: false, DeploymentID: "inactive"}}
 			done := make(chan struct {
 				result SyncResult
 				err    error
@@ -90,6 +91,18 @@ func TestEnvoySync(t *testing.T) {
 						paths := map[string]string{}
 						for _, r := range config.VirtualHosts[0].Routes {
 							paths[r.Name] = r.Match.GetPrefix()
+							settings := &auth.ExtAuthzPerRoute{}
+							if err := r.TypedPerFilterConfig["envoy.filters.http.ext_authz"].UnmarshalTo(settings); err != nil {
+								t.Fatal(err)
+							}
+							expectedAPI := "catalog"
+							if r.Name == "explicit" {
+								expectedAPI = "catalog-explicit"
+							}
+							extensions := settings.GetCheckSettings().ContextExtensions
+							if extensions["tenant_id"] != "tenant" || extensions["api_id"] != expectedAPI {
+								t.Fatalf("identity lost: %v", extensions)
+							}
 						}
 						if len(paths) != 2 || paths["catalog"] != "/apis/orders" || paths["explicit"] != "/custom" {
 							t.Fatalf("routes: %v", paths)

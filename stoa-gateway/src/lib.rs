@@ -6,6 +6,7 @@ pub mod a2a;
 pub mod access_log;
 pub mod audit;
 pub mod auth;
+pub mod authz;
 pub mod cache;
 pub mod config;
 pub mod control_plane;
@@ -810,6 +811,19 @@ async fn ready(
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    if state.config.ext_authz_grpc_addr.is_some()
+        && state
+            .config
+            .ext_authz_audience
+            .as_deref()
+            .is_none_or(|a| a.trim().is_empty())
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT READY: ext_authz audience missing",
+        )
+            .into_response();
+    }
     if !state.policy_ready() {
         warn!("Policy engine is not ready");
         return (

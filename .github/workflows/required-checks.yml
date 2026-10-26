@@ -87,56 +87,33 @@ jobs:
             "${COMMITS[@]}"
 
   # ==========================================================================
-  # 2. License Compliance (Trivy SPDX)
+  # 2. License Compliance — offline after checkout
   # ==========================================================================
   license-compliance:
     name: License Compliance
     runs-on: ubuntu-latest
-    continue-on-error: true # Warning only for copyleft
+    env:
+      LICENSES_MODE: ${{ vars.LICENSES_ENFORCE == 'true' && 'enforce' || 'warn' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Cache Trivy DB
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: ~/.cache/trivy
-          key: ${{ runner.os }}-trivy-${{ github.run_id }}
-          restore-keys: ${{ runner.os }}-trivy-
+      - name: Self-test offline license and packaging controls
+        run: python3 -B -m unittest discover -s tests/licences -v
 
-      - name: Scan licenses
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'spdx-json'
-          output: 'licenses.spdx.json'
-          scanners: 'license'
-
-      - name: Self-test copyleft checker
-        run: python3 .github/scripts/check-copyleft.py --self-test
-
-      - name: Check for copyleft licenses
-        run: |
-          echo "## License Compliance" >> $GITHUB_STEP_SUMMARY
-          if [ -f licenses.spdx.json ]; then
-            COPYLEFT=$(python3 .github/scripts/check-copyleft.py licenses.spdx.json 2>/dev/null || echo "")
-            if [ -n "$COPYLEFT" ]; then
-              echo "::warning::Copyleft licenses detected:"
-              echo "$COPYLEFT"
-              echo "$COPYLEFT" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "No copyleft licenses detected :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
+      - name: Check licenses without network
+        run: >-
+          python3 -B scripts/ci/check_licences_offline.py
+          --mode "$LICENSES_MODE" --report license-report.json
 
       - name: Upload license report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: license-report
-          path: licenses.spdx.json
+          path: license-report.json
           retention-days: 30
+          if-no-files-found: error
 
   # ==========================================================================
   # 3. SBOM Generation (Trivy CycloneDX + SPDX)

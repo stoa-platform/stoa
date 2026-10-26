@@ -84,6 +84,11 @@ jobs:
             type=raw,value=${{ inputs.environment }}-latest
             type=raw,value=latest
 
+      - name: Stage project license and notice
+        env:
+          COMPONENT: ${{ inputs.component }}
+        run: python3 -B scripts/ci/release_legal.py --dest "$COMPONENT"
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0

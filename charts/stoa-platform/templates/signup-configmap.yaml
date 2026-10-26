@@ -1,0 +1,12 @@
+{{- if not (has .Values.controlPlaneApi.signupMode (list "invite" "open")) }}
+{{- fail "controlPlaneApi.signupMode must be invite or open" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-signup-settings
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+data:
+  SIGNUP_MODE: {{ .Values.controlPlaneApi.signupMode | quote }}

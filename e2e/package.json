@@ -1,6 +1,7 @@
 {
   "name": "stoa-e2e",
   "version": "1.0.0",
+  "license": "Apache-2.0",
   "description": "STOA Platform E2E Tests with Playwright + Gherkin (BDD)",
   "private": true,
   "type": "module",

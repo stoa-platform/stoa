@@ -8,6 +8,9 @@
 # image rebuild).
 FROM alpine:3.21
 
+# Preserve the project distribution notices in the runtime image.
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
+
 RUN apk add --no-cache openssl curl coreutils
 
 USER 65532

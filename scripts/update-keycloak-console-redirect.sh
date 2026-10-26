@@ -18,7 +18,10 @@
 #   ./update-keycloak-console-redirect.sh gostoa.dev
 # =============================================================================
 
-set -e
+set -euo pipefail
+set +x
+
+: "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
 # Configuration
 BASE_DOMAIN="${1:-gostoa.dev}"
@@ -26,14 +29,14 @@ NAMESPACE="${KEYCLOAK_NAMESPACE:-stoa-system}"
 REALM="${KEYCLOAK_REALM:-stoa}"
 CLIENT_ID="control-plane-ui"
 ADMIN_USER="${KEYCLOAK_ADMIN:-admin}"
-ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-demo}"
+ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
 CONSOLE_URL="https://console.${BASE_DOMAIN}"
 
 echo "=== Updating Keycloak Client: ${CLIENT_ID} ==="
 echo "Namespace: ${NAMESPACE}"
 echo "Realm: ${REALM}"
-echo "New redirect URL: ${CONSOLE_URL}/*"
+echo "New redirect URL: ${CONSOLE_URL}/"
 echo ""
 
 # Get Keycloak pod
@@ -50,12 +53,11 @@ echo "Found Keycloak pod: ${KEYCLOAK_POD}"
 # Authenticate to Keycloak
 echo ""
 echo "=== Authenticating to Keycloak ==="
-kubectl exec -n ${NAMESPACE} ${KEYCLOAK_POD} -- \
+printf '%s\n' "$ADMIN_PASS" | kubectl exec -i -n "${NAMESPACE}" "${KEYCLOAK_POD}" -- \
     /opt/keycloak/bin/kcadm.sh config credentials \
     --server http://localhost:8080 \
     --realm master \
-    --user ${ADMIN_USER} \
-    --password ${ADMIN_PASS}
+    --user "${ADMIN_USER}"
 
 # Get current client configuration
 echo ""
@@ -88,8 +90,11 @@ echo "=== Updating client redirectUris and webOrigins ==="
 kubectl exec -n ${NAMESPACE} ${KEYCLOAK_POD} -- \
     /opt/keycloak/bin/kcadm.sh update clients/${CLIENT_UUID} \
     -r ${REALM} \
-    -s "redirectUris=[\"${CONSOLE_URL}/*\",\"http://localhost:3000/*\",\"http://localhost:5173/*\"]" \
-    -s "webOrigins=[\"${CONSOLE_URL}\",\"http://localhost:3000\",\"http://localhost:5173\"]"
+    -s "redirectUris=[\"${CONSOLE_URL}\",\"${CONSOLE_URL}/\"]" \
+    -s "webOrigins=[\"${CONSOLE_URL}\"]" \
+    -s 'attributes."pkce.code.challenge.method"=S256' \
+    -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false
 
 # Verify update
 echo ""
@@ -103,8 +108,6 @@ kubectl exec -n ${NAMESPACE} ${KEYCLOAK_POD} -- \
 echo ""
 echo "=== SUCCESS ==="
 echo "Client ${CLIENT_ID} updated with new redirectUris:"
-echo "  - ${CONSOLE_URL}/*"
-echo "  - http://localhost:3000/*"
-echo "  - http://localhost:5173/*"
+echo "  - ${CONSOLE_URL}/"
 echo ""
 echo "Note: If you also have an argocd client with SSO, update it similarly."

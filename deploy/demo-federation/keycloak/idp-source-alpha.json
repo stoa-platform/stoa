@@ -6,9 +6,9 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "bruteForceProtected": true,
-  "accessTokenLifespan": 1800,
+  "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
-  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionMaxLifespan": 28800,
   "clients": [
     {
       "clientId": "org-alpha-broker",
@@ -17,25 +17,24 @@
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "REPLACE_FROM_VAULT",
+      "secret": "${FEDERATION_ALPHA_BROKER_SECRET}",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "protocol": "openid-connect",
       "redirectUris": [
-        "http://localhost:8080/realms/demo-org-alpha/broker/alpha-oidc/endpoint/*",
-        "http://keycloak:8080/realms/demo-org-alpha/broker/alpha-oidc/endpoint/*"
+        "http://localhost:8080/realms/demo-org-alpha/broker/alpha-oidc/endpoint",
+        "${FEDERATION_KEYCLOAK_URL}/realms/demo-org-alpha/broker/alpha-oidc/endpoint"
       ],
-      "webOrigins": [
-        "*"
-      ],
+      "webOrigins": [],
       "defaultClientScopes": [
         "web-origins",
         "acr",
         "profile",
         "roles",
         "email"
-      ]
+      ],
+      "implicitFlowEnabled": false
     }
   ],
   "users": [
@@ -57,8 +56,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_ALPHA_ALICE_ALPHA_PASSWORD}",
+          "temporary": true
         }
       ]
     },
@@ -80,11 +79,24 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_ALPHA_BOB_ALPHA_PASSWORD}",
+          "temporary": true
         }
       ]
     }
   ],
-  "sslRequired": "none"
+  "sslRequired": "none",
+  "resetPasswordAllowed": false,
+  "passwordPolicy": "length(12) and notUsername and passwordHistory(5) and maxLength(128)",
+  "clientSessionIdleTimeout": 1800,
+  "clientSessionMaxLifespan": 28800,
+  "offlineSessionIdleTimeout": 86400,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 604800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "actionTokenGeneratedByAdminLifespan": 3600
 }

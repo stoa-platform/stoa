@@ -12,7 +12,7 @@
   "publicClient": false,
   "protocol": "openid-connect",
   "attributes": {
-    "access.token.lifespan": "3600",
+    "access.token.lifespan": "300",
     "client.secret.creation.time": "0"
   },
   "fullScopeAllowed": false,

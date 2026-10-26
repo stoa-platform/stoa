@@ -6,9 +6,9 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "bruteForceProtected": true,
-  "accessTokenLifespan": 1800,
+  "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
-  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionMaxLifespan": 28800,
   "clients": [
     {
       "clientId": "http://localhost:8080/realms/demo-org-beta",
@@ -27,8 +27,8 @@
         "saml.authnstatement": "true"
       },
       "redirectUris": [
-        "http://localhost:8080/realms/demo-org-beta/broker/beta-saml/endpoint/*",
-        "http://keycloak:8080/realms/demo-org-beta/broker/beta-saml/endpoint/*"
+        "http://localhost:8080/realms/demo-org-beta/broker/beta-saml/endpoint",
+        "${FEDERATION_KEYCLOAK_URL}/realms/demo-org-beta/broker/beta-saml/endpoint"
       ]
     }
   ],
@@ -51,8 +51,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_BETA_CAROL_BETA_PASSWORD}",
+          "temporary": true
         }
       ]
     },
@@ -74,11 +74,24 @@
       "credentials": [
         {
           "type": "password",
-          "value": "demo",
-          "temporary": false
+          "value": "${DEMO_IDP_SOURCE_BETA_DAVE_BETA_PASSWORD}",
+          "temporary": true
         }
       ]
     }
   ],
-  "sslRequired": "none"
+  "sslRequired": "none",
+  "resetPasswordAllowed": false,
+  "passwordPolicy": "length(12) and notUsername and passwordHistory(5) and maxLength(128)",
+  "clientSessionIdleTimeout": 1800,
+  "clientSessionMaxLifespan": 28800,
+  "offlineSessionIdleTimeout": 86400,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 604800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "actionTokenGeneratedByAdminLifespan": 3600
 }

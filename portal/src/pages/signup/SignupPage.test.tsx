@@ -59,6 +59,16 @@ describe('SignupPage — rendering', () => {
     expect(screen.getByText('Create Organization')).toBeInTheDocument();
   });
 
+  it('keeps company optional and identifies the invitation field', () => {
+    renderSignup();
+    expect(screen.getByLabelText('Company')).toHaveAttribute('placeholder', 'Optional');
+    expect(screen.getByLabelText('Invite code')).toHaveAttribute(
+      'placeholder',
+      'Enter your invitation code'
+    );
+    expect(screen.getAllByPlaceholderText('Enter your invitation code')).toHaveLength(1);
+  });
+
   it('renders plan selection with trial and standard options', () => {
     renderSignup();
     expect(screen.getByLabelText('Trial plan')).toBeInTheDocument();

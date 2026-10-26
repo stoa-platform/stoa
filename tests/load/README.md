@@ -215,3 +215,7 @@ http_reqs......................: 2000   66.67/s
 - [SLO/SLA Documentation](../../docs/SLO-SLA.md)
 - [Monitoring Setup](../../stoa-infra:docker/observability/README.md)
 - [K6 Official Documentation](https://k6.io/docs/)
+
+Generate `LOAD_GRAFANA_ADMIN_PASSWORD` on site and supply it through a private
+environment file or secret store before starting the load-test Compose stack.
+No Grafana administrator password is supplied by the Compose file.

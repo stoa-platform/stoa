@@ -9,6 +9,7 @@
 # own session and, at the deadline, sends TERM then KILL to that process group.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
+set +x
 
 VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-120}"
 
@@ -92,6 +93,8 @@ if [[ "${VERIFY_BOUND_FIXTURE:-}" == "1" ]]; then
 fi
 
 echo "control plane $(curl -fsS --max-time 10 "$CONTROL_PLANE_URL/health" >/dev/null && echo ok || echo down)"
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../scripts/lib/secret-input.sh"
 cp_code="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CONTROL_PLANE_URL/health" || true)"
 [[ "$cp_code" == "200" ]] || fail "control plane /health returned $cp_code"
 
@@ -100,23 +103,25 @@ echo "gateway /health $gw_code"
 [[ "$gw_code" == "200" ]] || fail "gateway /health returned $gw_code"
 
 kc_user="$(docker compose exec -T keycloak printenv KC_BOOTSTRAP_ADMIN_USERNAME)"
-kc_pass="$(docker compose exec -T keycloak printenv KC_BOOTSTRAP_ADMIN_PASSWORD)"
 admin_token="$(docker compose exec -T gateway printenv STOA_ADMIN_API_TOKEN)"
 kc_user="${kc_user//$'\r'/}"
-kc_pass="${kc_pass//$'\r'/}"
 admin_token="${admin_token//$'\r'/}"
-[[ -n "$kc_user" && -n "$kc_pass" && -n "$admin_token" ]] || fail "missing demo credentials in the running containers"
+[[ -n "$kc_user" && -n "$admin_token" ]] || fail "missing demo credentials in the running containers"
 
 echo "configuring keycloak realm"
-docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://127.0.0.1:8080 \
-  --realm master \
-  --user "$kc_user" \
-  --password "$kc_pass" >/dev/null
+# Keycloak 26.5.3 reads KC_CLI_PASSWORD without a console or a password argument.
+docker compose exec -T keycloak sh -eu -c '
+  set +x
+  export KC_CLI_PASSWORD="${KC_BOOTSTRAP_ADMIN_PASSWORD:?missing bootstrap credential}"
+  exec /opt/keycloak/bin/kcadm.sh config credentials \
+    --server http://127.0.0.1:8080 \
+    --realm master \
+    --user "$KC_BOOTSTRAP_ADMIN_USERNAME"
+' >/dev/null
 
 if ! docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh get "realms/$REALM" >/dev/null 2>&1; then
   docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create realms \
-    -s "realm=$REALM" -s enabled=true >/dev/null
+    -s "realm=$REALM" -s enabled=true -s registrationAllowed=false -s resetPasswordAllowed=false -s 'passwordPolicy=length(12) and notUsername and maxLength(128)' -s accessTokenLifespan=300 -s ssoSessionIdleTimeout=1800 -s ssoSessionMaxLifespan=28800 -s offlineSessionIdleTimeout=86400 -s offlineSessionMaxLifespanEnabled=true -s offlineSessionMaxLifespan=604800 -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 >/dev/null
 fi
 
 existing_id="$(
@@ -128,14 +133,37 @@ if [[ -n "$existing_id" ]]; then
 fi
 
 client_secret="$(openssl rand -hex 24)"
-docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
+printf '{"secret":"%s"}\n' "$client_secret" | docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" -f - \
   -s "clientId=$CLIENT_ID" \
-  -s "secret=$client_secret" \
   -s serviceAccountsEnabled=true \
   -s publicClient=false \
   -s standardFlowEnabled=false \
   -s directAccessGrantsEnabled=false \
-  -s protocol=openid-connect >/dev/null
+  -s protocol=openid-connect \
+  -s 'protocolMappers=[
+    {
+      "name":"quickstart-gateway-audience",
+      "protocol":"openid-connect",
+      "protocolMapper":"oidc-audience-mapper",
+      "config":{
+        "included.custom.audience":"stoa-mcp-gateway",
+        "access.token.claim":"true",
+        "id.token.claim":"false"
+      }
+    },
+    {
+      "name":"quickstart-tenant",
+      "protocol":"openid-connect",
+      "protocolMapper":"oidc-hardcoded-claim-mapper",
+      "config":{
+        "claim.name":"tenant_id",
+        "claim.value":"quickstart",
+        "jsonType.label":"String",
+        "access.token.claim":"true",
+        "id.token.claim":"false"
+      }
+    }
+  ]' >/dev/null
 
 contract='{"name":"ping-api","version":"1.0.0","tenant_id":"quickstart","status":"published","classification":"H","inboundAuth":"jwt","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":"http://backend:80"}]}'
 

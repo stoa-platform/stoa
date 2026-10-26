@@ -95,6 +95,9 @@ RUN npm run build
 # Production stage - Use nginx-unprivileged for security (non-root)
 FROM nginxinc/nginx-unprivileged:alpine
 
+# Preserve the project distribution notices in the runtime image.
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
+
 # Upgrade Alpine packages to fix CVEs (zlib CVE-2026-22184, CVE-2026-27171)
 USER root
 RUN apk upgrade --no-cache

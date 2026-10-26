@@ -57,7 +57,11 @@ jobs:
       - name: Package chart
         if: steps.check_tag.outputs.exists == 'false'
         run: |
+          python3 -B scripts/ci/release_legal.py --dest charts/stoa-platform
           helm package charts/stoa-platform --destination /tmp/helm-release/
+          for archive in /tmp/helm-release/stoa-platform-*.tgz; do
+            python3 -B scripts/ci/release_legal.py --archive "$archive"
+          done
           echo "Package contents:"
           ls -la /tmp/helm-release/
 

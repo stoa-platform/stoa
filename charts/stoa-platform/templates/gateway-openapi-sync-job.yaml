@@ -35,6 +35,7 @@ spec:
             - -c
             - |
               set -e
+              {{- .Files.Get "files/curl-config.sh" | nindent 14 }}
 
               echo "==> Starting OpenAPI sync to webMethods Gateway"
 
@@ -42,7 +43,7 @@ spec:
               BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80" }}"
               GATEWAY_URL="{{ .Values.gatewaySync.gatewayUrl | default "http://apigateway.stoa-system.svc.cluster.local:5555" }}"
               GATEWAY_USER="${GATEWAY_USER:-Administrator}"
-              GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+              GATEWAY_PASSWORD="${GATEWAY_PASSWORD:?An existing gateway password is required}"
               API_NAME="{{ .Values.gatewaySync.apiName | default "Control-Plane-API" }}"
               API_VERSION="{{ .Values.gatewaySync.apiVersion | default "2.0" }}"
 
@@ -165,6 +166,7 @@ spec:
         - -c
         - |
           set -e
+          {{- .Files.Get "files/curl-config.sh" | nindent 10 }}
 
           echo "==> Post-deploy OpenAPI sync to webMethods Gateway"
 
@@ -183,7 +185,7 @@ spec:
           # Run sync (same script as CronJob)
           GATEWAY_URL="{{ .Values.gatewaySync.gatewayUrl | default "http://apigateway.stoa-system.svc.cluster.local:5555" }}"
           GATEWAY_USER="${GATEWAY_USER:-Administrator}"
-          GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+          GATEWAY_PASSWORD="${GATEWAY_PASSWORD:?An existing gateway password is required}"
           API_NAME="{{ .Values.gatewaySync.apiName | default "Control-Plane-API" }}"
           API_VERSION="{{ .Values.gatewaySync.apiVersion | default "2.0" }}"
 

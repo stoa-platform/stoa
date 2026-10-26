@@ -18,7 +18,18 @@ stoa:
     # Keycloak admin credentials (required when enabled)
     keycloak:
       adminUser: 'admin'
-      adminPassword: ''
+      existingSecret: ''
+      passwordKey: 'admin-password'
+    # Create the privileged CLI service account only after the first human admin.
+    adminServiceAccount:
+      enabled: false
+    # One-time first administrator request, created on site as bootstrap.json.
+    firstAdmin:
+      enabled: false
+      existingSecret: ''
+      image: 'python:3.11.10-alpine'
+      # Empty: the in-namespace Keycloak service over HTTP. Set an https:// URL to verify TLS.
+      keycloakUrl: ''
     # Default tenant created during bootstrap
     defaultTenant:
       name: 'default'
@@ -416,6 +427,7 @@ prometheus:
 # This ServiceMonitor enables Prometheus autodiscovery (kube-prometheus-stack).
 # Deployed as a standalone k8s manifest — Service: stoa-control-plane-api
 controlPlaneApi:
+  signupMode: invite
   serviceMonitor:
     enabled: true
     interval: 15s

@@ -342,6 +342,12 @@ jobs:
           key: ${{ runner.os }}-trivy-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-trivy-
 
+      - name: Stage project license and notice
+        if: steps.check.outputs.exists == 'true'
+        env:
+          COMPONENT: ${{ matrix.image.path }}
+        run: python3 -B scripts/ci/release_legal.py --dest "$COMPONENT"
+
       - name: Build image for scanning
         if: steps.check.outputs.exists == 'true'
         run: |

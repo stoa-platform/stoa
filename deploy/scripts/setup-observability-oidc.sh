@@ -18,10 +18,13 @@
 # =============================================================================
 
 set -euo pipefail
+set +x
+
+: "${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost/auth}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
-KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 REALM="${KEYCLOAK_REALM:-stoa}"
 CLIENT_ID="stoa-observability"
 
@@ -36,18 +39,20 @@ echo ""
 
 # Step 1: Obtain admin access token
 echo "[1/4] Obtaining admin access token..."
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -s -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=${KEYCLOAK_ADMIN}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  --data-urlencode "username=${KEYCLOAK_ADMIN}" \
+  --data-urlencode "password=${KEYCLOAK_ADMIN_PASSWORD}" \
   -d "grant_type=password" \
   -d "client_id=admin-cli")
 
 ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.access_token')
 if [ "${ACCESS_TOKEN}" = "null" ] || [ -z "${ACCESS_TOKEN}" ]; then
   echo "ERROR: Failed to obtain access token. Response:"
-  echo "${TOKEN_RESPONSE}" | jq .
+  echo "Authentication failed; response details are withheld."
   exit 1
 fi
 echo "  Access token obtained."
@@ -89,7 +94,6 @@ CLIENT_PAYLOAD=$(cat <<ENDJSON
     "${PROMETHEUS_REDIRECT_URI}"
   ],
   "webOrigins": [
-    "http://localhost",
     "https://grafana.gostoa.dev",
     "https://prometheus.gostoa.dev"
   ],
@@ -126,28 +130,11 @@ else
   exit 1
 fi
 
-# Step 4: Retrieve and display the client secret
-echo "[4/4] Retrieving client secret..."
-
-CLIENT_INFO=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_UUID=$(echo "${CLIENT_INFO}" | jq -r '.[0].id')
-
-SECRET_RESPONSE=$(curl -s \
-  "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")
-CLIENT_SECRET=$(echo "${SECRET_RESPONSE}" | jq -r '.value')
-
-echo ""
-echo "=== Setup Complete ==="
-echo ""
-echo "Add the following to your .env file:"
-echo ""
-echo "  GRAFANA_OIDC_CLIENT_SECRET=${CLIENT_SECRET}"
-echo "  OAUTH2_PROXY_CLIENT_SECRET=${CLIENT_SECRET}"
-echo "  OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n')"
-echo ""
-echo "Then restart the stack:"
-echo "  docker compose down && docker compose up -d"
-echo ""
+# Store both values without printing credentials or placing them in arguments.
+CLIENT_UUID=$(curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" | jq -er '.[0].id')
+curl -sf "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${CLIENT_UUID}/client-secret" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" |
+  python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/security/store_oidc_secret.py" \
+    --client-id "$CLIENT_ID" --cookie --namespace "${OAUTH2_PROXY_NAMESPACE:-stoa-monitoring}"
+echo "See docs/runbooks/first-admin-bootstrap.md for secret verification and rotation."

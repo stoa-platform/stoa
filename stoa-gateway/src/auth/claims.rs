@@ -12,6 +12,25 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Providers emit `scp` as either a space-separated string or a scope array.
+fn deserialize_scope_list<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Scopes {
+        Text(String),
+        List(Vec<String>),
+    }
+    Ok(
+        Option::<Scopes>::deserialize(deserializer)?.map(|scopes| match scopes {
+            Scopes::Text(value) => value.split_whitespace().map(str::to_owned).collect(),
+            Scopes::List(values) => values,
+        }),
+    )
+}
+
 /// Reject ambiguous, empty, padded or non-string tenant claims at decoding.
 fn deserialize_tenant<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
@@ -126,7 +145,11 @@ pub struct Claims {
     pub scope: Option<String>,
 
     /// Validated OAuth scope array used by providers that emit `scp`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_scope_list",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub scp: Option<Vec<String>>,
 
     /// RFC 8705 Confirmation claim (certificate-bound tokens)

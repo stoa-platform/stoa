@@ -214,6 +214,8 @@ async fn scopes_only_come_from_validated_claims() {
     c["scope"] = Value::Null;
     c["scp"] = json!(["stoa:invoke", "read"]);
     assert_eq!(service.authorize(request(&c)).await.status.unwrap().code, 0);
+    c["scp"] = json!("stoa:invoke read");
+    assert_eq!(service.authorize(request(&c)).await.status.unwrap().code, 0);
     c["scp"] = json!(["stoa:invoke"]);
     let mut req = request(&c);
     http_mut(&mut req)

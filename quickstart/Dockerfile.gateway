@@ -18,6 +18,7 @@ WORKDIR /app
 # rust-toolchain.toml stays out of the image: channel "stable" would change the compiler.
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY policies ./policies
 COPY benches ./benches
 
 ENV CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \

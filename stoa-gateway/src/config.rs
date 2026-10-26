@@ -100,6 +100,12 @@ pub struct Config {
     /// refuses to start with `environment: prod`. Env: STOA_MCP_AUDIENCE.
     #[serde(default)]
     pub mcp_audience: Option<String>,
+    /// Optional Envoy authorization listener; no implicit audience.
+    pub ext_authz_grpc_addr: Option<std::net::SocketAddr>,
+    pub ext_authz_audience: Option<String>,
+    /// All scopes are required. Environment accepts a JSON array or CSV.
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub ext_authz_required_scopes: Vec<String>,
 
     /// Path to the PEM private key (RSA) used for `private_key_jwt`
     /// authentication of the gateway service client. Mount it from a

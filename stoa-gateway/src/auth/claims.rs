@@ -125,6 +125,10 @@ pub struct Claims {
     #[serde(default)]
     pub scope: Option<String>,
 
+    /// Validated OAuth scope array used by providers that emit `scp`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scp: Option<Vec<String>>,
+
     /// RFC 8705 Confirmation claim (certificate-bound tokens)
     /// Contains x5t#S256 (base64url-encoded SHA-256 thumbprint)
     #[serde(default)]
@@ -297,9 +301,10 @@ impl Claims {
     /// Get scopes as a vector.
     pub fn scopes(&self) -> Vec<&str> {
         self.scope
-            .as_ref()
-            .map(|s| s.split_whitespace().collect())
-            .unwrap_or_default()
+            .iter()
+            .flat_map(|s| s.split_whitespace())
+            .chain(self.scp.iter().flatten().map(String::as_str))
+            .collect()
     }
 
     /// Check if the token has a specific scope.
@@ -435,6 +440,7 @@ mod tests {
             sid: Some("session-456".to_string()),
             typ: Some("Bearer".to_string()),
             scope: Some("openid profile email stoa:write".to_string()),
+            scp: None,
             cnf: None,
             sub_account_id: None,
             master_account_id: None,

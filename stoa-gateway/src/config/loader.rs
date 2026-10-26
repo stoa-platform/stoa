@@ -73,6 +73,9 @@ pub enum ConfigError {
     )]
     McpAudienceRequired,
 
+    #[error("ext_authz in prod requires STOA_EXT_AUTHZ_AUDIENCE and non-empty STOA_EXT_AUTHZ_REQUIRED_SCOPES")]
+    ExtAuthzProfileRequired,
+
     /// The `private_key_jwt` key file must exist when its path is configured.
     #[error("keycloak_client_key_path does not point to a readable file: {0}")]
     ClientKeyUnreadable(String),
@@ -188,6 +191,27 @@ impl Config {
             .is_none_or(|audience| audience.trim().is_empty());
         if mcp_audience_missing && self.environment == super::Environment::Prod {
             return Err(ConfigError::McpAudienceRequired);
+        }
+
+        if self.ext_authz_grpc_addr.is_some() {
+            let missing = self
+                .ext_authz_audience
+                .as_deref()
+                .is_none_or(|a| a.trim().is_empty());
+            let empty_scopes = self.ext_authz_required_scopes.is_empty()
+                || self
+                    .ext_authz_required_scopes
+                    .iter()
+                    .any(|s| s.trim().is_empty());
+            if self.environment == super::Environment::Prod && (missing || empty_scopes) {
+                return Err(ConfigError::ExtAuthzProfileRequired);
+            }
+            if missing {
+                tracing::warn!("ext_authz audience missing: listener will deny all requests and remain not ready");
+            }
+            if empty_scopes {
+                tracing::warn!("ext_authz required scopes are empty or invalid");
+            }
         }
 
         if let Some(ref key_path) = self.keycloak_client_key_path {

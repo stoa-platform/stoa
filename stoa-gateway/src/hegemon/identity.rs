@@ -106,6 +106,7 @@ mod tests {
             sid: None,
             typ: Some("Bearer".to_string()),
             scope: Some("openid profile".to_string()),
+            scp: None,
             cnf: None,
             sub_account_id: None,
             master_account_id: None,

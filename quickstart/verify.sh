@@ -103,18 +103,21 @@ echo "gateway /health $gw_code"
 [[ "$gw_code" == "200" ]] || fail "gateway /health returned $gw_code"
 
 kc_user="$(docker compose exec -T keycloak printenv KC_BOOTSTRAP_ADMIN_USERNAME)"
-kc_pass="$(docker compose exec -T keycloak printenv KC_BOOTSTRAP_ADMIN_PASSWORD)"
 admin_token="$(docker compose exec -T gateway printenv STOA_ADMIN_API_TOKEN)"
 kc_user="${kc_user//$'\r'/}"
-kc_pass="${kc_pass//$'\r'/}"
 admin_token="${admin_token//$'\r'/}"
-[[ -n "$kc_user" && -n "$kc_pass" && -n "$admin_token" ]] || fail "missing demo credentials in the running containers"
+[[ -n "$kc_user" && -n "$admin_token" ]] || fail "missing demo credentials in the running containers"
 
 echo "configuring keycloak realm"
-printf '%s\n' "$kc_pass" | docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://127.0.0.1:8080 \
-  --realm master \
-  --user "$kc_user" >/dev/null
+# Keycloak 26.5.3 reads KC_CLI_PASSWORD without a console or a password argument.
+docker compose exec -T keycloak sh -eu -c '
+  set +x
+  export KC_CLI_PASSWORD="${KC_BOOTSTRAP_ADMIN_PASSWORD:?missing bootstrap credential}"
+  exec /opt/keycloak/bin/kcadm.sh config credentials \
+    --server http://127.0.0.1:8080 \
+    --realm master \
+    --user "$KC_BOOTSTRAP_ADMIN_USERNAME"
+' >/dev/null
 
 if ! docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh get "realms/$REALM" >/dev/null 2>&1; then
   docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create realms \

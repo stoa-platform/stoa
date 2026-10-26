@@ -22,6 +22,9 @@ RUN /opt/keycloak/bin/kc.sh build
 # Production image
 FROM quay.io/keycloak/keycloak:26.5.3
 
+# Preserve the project distribution notices in the runtime image.
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
+
 # Copy built providers and themes
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 

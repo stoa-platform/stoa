@@ -62,21 +62,22 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# RFC 5737 documentation addresses. Set GATEWAYS to point at a real deployment.
 DEFAULT_GATEWAYS = json.dumps([
     {
         "name": "stoa",
-        "health": "http://51.83.45.13:8080/health",
-        "proxy": "http://51.83.45.13:8080/echo/get",
+        "health": "http://192.0.2.10:8080/health",
+        "proxy": "http://192.0.2.10:8080/echo/get",
     },
     {
         "name": "kong",
-        "health": "http://51.83.45.13:8001/status",
-        "proxy": "http://51.83.45.13:8000/echo/get",
+        "health": "http://192.0.2.10:8001/status",
+        "proxy": "http://192.0.2.10:8000/echo/get",
     },
     {
         "name": "gravitee",
-        "health": "http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT",
-        "proxy": "http://54.36.209.237:8082/echo/get",
+        "health": "http://198.51.100.10:8083/management/organizations/DEFAULT/environments/DEFAULT",
+        "proxy": "http://198.51.100.10:8082/echo/get",
     },
 ])
 

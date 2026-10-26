@@ -203,3 +203,30 @@ CIR-*.md
 *-benchmark-*.md
 !docs/benchmarks/README.md
 memory-archive.md
+
+# ============================================
+# Public-tree cleanup — internal notes (do not re-add)
+# ============================================
+/memory.md
+/plan.md
+/BACKLOG.md
+/SQUAD-STRATEGY.md
+/BUG-REPORT-GO-1.md
+/FIX-PLAN-CI1-PHASE-2D.md
+/SECURITY-AUDIT-REPORT.md
+/audit-report-20260126-075638.md
+/docs/audits/2026-04-04-*/
+/test-results/
+/.github/CI-1-*.md
+/.github/CI-SURFACE.md
+/.github/COUNCIL-TRIAGE-2B.md
+/legal/
+/.sdlc/
+/hegemon-mcp/
+/.github/workflows/claude-autopilot-scan.yml
+/.github/workflows/claude-interactive.yml
+/.github/workflows/claude-linear-dispatch.yml
+/.github/workflows/claude-multi-agent.yml
+/.github/workflows/claude-review.yml
+/.github/workflows/claude-scheduled.yml
+/.github/workflows/claude-self-improve.yml

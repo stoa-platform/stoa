@@ -9,4 +9,7 @@ pub mod tool_proxy;
 
 pub use registration::GatewayRegistrar;
 pub use tool_permissions::ToolPermissionService;
-pub use tool_proxy::{GeneratedToolDef, OidcConfig, RemoteToolDef, ToolProxyClient};
+pub use tool_proxy::{
+    ClientCredential, GeneratedToolDef, OidcConfig, RemoteToolDef, ToolProxyClient,
+    DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS,
+};

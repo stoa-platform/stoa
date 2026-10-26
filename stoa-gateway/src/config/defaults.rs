@@ -16,6 +16,14 @@ pub(super) fn default_true() -> bool {
     true
 }
 
+pub(super) fn default_admin_required_acr() -> String {
+    "2".to_string()
+}
+
+pub(super) fn default_admin_accepted_amr() -> Vec<String> {
+    vec!["otp".to_string(), "hwk".to_string(), "swk".to_string()]
+}
+
 pub(super) fn default_port() -> u16 {
     8080
 }
@@ -307,11 +315,20 @@ pub(super) fn default_log_format() -> Option<LogFormat> {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            admin_require_strong_auth: None,
+            admin_required_acr: default_admin_required_acr(),
+            admin_accepted_amr: default_admin_accepted_amr(),
             port: default_port(),
             host: default_host(),
+            allow_legacy_tenant_claim: false,
             jwt_secret: None,
             jwt_issuer: None,
             keycloak_url: None,
+            mcp_forward_user_token: false,
+            mcp_audience: None,
+            keycloak_client_key_path: None,
+            keycloak_client_key_id: None,
+            service_token_max_ttl_secs: default_service_token_max_ttl_secs(),
             keycloak_realm: None,
             keycloak_client_id: None,
             keycloak_client_secret: None,
@@ -470,4 +487,8 @@ impl Default for Config {
             snapshot_extra_pii_patterns: vec![],
         }
     }
+}
+
+pub(super) fn default_service_token_max_ttl_secs() -> u64 {
+    crate::control_plane::DEFAULT_SERVICE_TOKEN_MAX_TTL_SECS
 }

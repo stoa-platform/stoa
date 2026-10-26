@@ -23,6 +23,7 @@ RUN cargo install cargo-chef --locked
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
+COPY policies ./policies
 COPY benches ./benches
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -66,6 +67,7 @@ RUN echo "Build revision: ${CACHEBUST}"
 # Build the actual application (only this layer rebuilds on src changes)
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
+COPY policies ./policies
 COPY benches ./benches
 RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-gateway
 

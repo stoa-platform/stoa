@@ -14,7 +14,7 @@ use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::auth::subscription::SubscriptionValidator;
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::{Config, Environment};
-use crate::control_plane::{OidcConfig, ToolPermissionService, ToolProxyClient};
+use crate::control_plane::{ClientCredential, OidcConfig, ToolPermissionService, ToolProxyClient};
 use crate::diagnostics::DiagnosticEngine;
 use crate::events::polling::EventBuffer;
 use crate::federation::FederationCache;
@@ -176,14 +176,28 @@ impl AppState {
             .as_deref()
             .unwrap_or("http://localhost:8000");
 
-        // Build OIDC config if Keycloak credentials are provided
-        // Use internal URL for token endpoint (service-to-service), fall back to external URL
-        let oidc = match (
-            &config.keycloak_url,
-            &config.keycloak_client_id,
+        // Build OIDC config if Keycloak credentials are provided.
+        // Use internal URL for token endpoint (service-to-service), fall back to external URL.
+        // A signing key (private_key_jwt) takes precedence over a client secret.
+        let credential = match (
+            &config.keycloak_client_key_path,
             &config.keycloak_client_secret,
         ) {
-            (Some(url), Some(client_id), Some(client_secret)) => {
+            (Some(key_path), _) => Some(ClientCredential::PrivateKeyJwt {
+                key_path: key_path.into(),
+                key_id: config.keycloak_client_key_id.clone(),
+            }),
+            (None, Some(client_secret)) => {
+                tracing::warn!(
+                    "Service client uses a client secret; set STOA_KEYCLOAK_CLIENT_KEY_PATH \
+                     for private_key_jwt (required to read tenant tool permissions)"
+                );
+                Some(ClientCredential::Secret(client_secret.clone()))
+            }
+            (None, None) => None,
+        };
+        let oidc = match (&config.keycloak_url, &config.keycloak_client_id, credential) {
+            (Some(url), Some(client_id), Some(credential)) => {
                 let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
                 let token_base = config
                     .keycloak_internal_url
@@ -194,11 +208,10 @@ impl AppState {
                     token_base.trim_end_matches('/'),
                     realm
                 );
-                Some(OidcConfig {
-                    token_url,
-                    client_id: client_id.clone(),
-                    client_secret: client_secret.clone(),
-                })
+                let mut oidc = OidcConfig::new(token_url, client_id.clone(), credential);
+                oidc.max_token_ttl =
+                    std::time::Duration::from_secs(config.service_token_max_ttl_secs);
+                Some(oidc)
             }
             _ => None,
         };
@@ -238,12 +251,10 @@ impl AppState {
                 ..OidcProviderConfig::default()
             };
             let oidc_provider = Arc::new(OidcProvider::new(oidc_config));
-            // Disable audience validation: user tokens come from various clients
-            // (control-plane-ui, Claude.ai DCR, etc.) and won't have the gateway
-            // client_id in their aud claim unless a Keycloak audience mapper is added.
-            // Issuer + RS256 signature validation is sufficient.
+            // A signature and issuer do not identify the intended resource.
+            // Configure the Keycloak audience mapper before deploying this gate.
             let jwt_config = JwtValidatorConfig {
-                validate_audience: false,
+                allow_legacy_tenant_claim: config.allow_legacy_tenant_claim,
                 ..JwtValidatorConfig::default()
             };
             let validator = JwtValidator::with_config(oidc_provider, jwt_config);
@@ -570,11 +581,10 @@ impl AppState {
         // Initialize tenant tool permission service
         let tool_permissions = config.control_plane_url.as_ref().map(|cp_url| {
             tracing::info!("Tenant tool permission cache enabled (60s TTL)");
-            Arc::new(ToolPermissionService::new(
-                http_client.clone(),
-                cp_url,
-                Duration::from_secs(60),
-            ))
+            Arc::new(
+                ToolPermissionService::new(http_client.clone(), cp_url, Duration::from_secs(60))
+                    .with_auth(control_plane.clone()),
+            )
         });
 
         // Initialize A2A agent registry (CAB-1754)
@@ -828,6 +838,8 @@ pub struct UacEnforcer {
 /// Caller identity context for UAC policy evaluation.
 #[derive(Debug, Clone)]
 pub struct PolicyCallerCtx {
+    /// Trusted registry ownership; None is an explicitly global tool.
+    pub resource_tenant_id: Option<String>,
     pub user_id: Option<String>,
     pub user_email: Option<String>,
     pub scopes: Vec<String>,
@@ -851,6 +863,7 @@ impl UacEnforcer {
         // New code should use check_with_context() for proper policy evaluation
         self.check_with_context(
             PolicyCallerCtx {
+                resource_tenant_id: None,
                 user_id: None,
                 user_email: None,
                 scopes: vec!["stoa:read".to_string()],
@@ -873,7 +886,7 @@ impl UacEnforcer {
         tool_name: &str,
         action: Action,
     ) -> Result<(), String> {
-        let input = PolicyInput::new(
+        let mut input = PolicyInput::new(
             caller.user_id,
             caller.user_email,
             tenant_id.to_string(),
@@ -882,6 +895,8 @@ impl UacEnforcer {
             caller.scopes,
             caller.roles,
         );
+
+        input.resource_tenant_id = caller.resource_tenant_id;
 
         match self.policy_engine.evaluate(&input) {
             PolicyDecision::Allow => Ok(()),
@@ -973,10 +988,31 @@ mod tests {
     }
 
     #[test]
+    fn enabled_enforcer_uses_registry_owner() {
+        let enforcer = make_enabled_enforcer();
+        for (owner, allowed) in [(Some("acme"), true), (Some("beta"), false), (None, true)] {
+            let result = enforcer.check_with_context(
+                PolicyCallerCtx {
+                    resource_tenant_id: owner.map(str::to_string),
+                    user_id: Some("user-1".into()),
+                    user_email: None,
+                    scopes: vec!["stoa:read".into()],
+                    roles: vec![],
+                },
+                "acme",
+                "example_tool",
+                Action::Read,
+            );
+            assert_eq!(result.is_ok(), allowed);
+        }
+    }
+
+    #[test]
     fn disabled_engine_allows_read() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
             PolicyCallerCtx {
+                resource_tenant_id: None,
                 user_id: Some("user-1".into()),
                 user_email: None,
                 scopes: vec!["stoa:read".into()],
@@ -994,6 +1030,7 @@ mod tests {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
             PolicyCallerCtx {
+                resource_tenant_id: None,
                 user_id: Some("admin".into()),
                 user_email: Some("admin@test.com".into()),
                 scopes: vec!["stoa:admin".into()],
@@ -1011,6 +1048,7 @@ mod tests {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
             PolicyCallerCtx {
+                resource_tenant_id: None,
                 user_id: None,
                 user_email: None,
                 scopes: vec![],

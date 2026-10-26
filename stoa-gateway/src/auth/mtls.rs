@@ -628,27 +628,13 @@ pub fn verify_binding(
 // Stage 3 Middleware: Certificate-Token Binding Verification (RFC 8705)
 // =============================================================================
 
-/// Extract cnf.x5t#S256 from a raw JWT token (base64 decode only, no signature check).
-fn extract_cnf_from_jwt(token: &str) -> Option<String> {
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    let bytes = URL_SAFE_NO_PAD.decode(parts[1]).ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    value
-        .get("cnf")?
-        .get("x5t#S256")?
-        .as_str()
-        .map(|s| s.to_string())
-}
-
 /// Middleware: verify RFC 8705 certificate-token binding.
 ///
 /// Runs after Stage 1 (extraction). Compares cert fingerprint from X-SSL-* headers
 /// with cnf.x5t#S256 from the JWT. Returns 403 on mismatch (stolen token detection).
 #[instrument(name = "auth.mtls.binding", skip_all, fields(otel.kind = "internal"))]
 pub async fn mtls_binding_middleware(
+    validator: Option<std::sync::Arc<super::jwt::JwtValidator>>,
     config: MtlsConfig,
     stats: std::sync::Arc<MtlsStats>,
     request: Request<Body>,
@@ -671,13 +657,19 @@ pub async fn mtls_binding_middleware(
         return next.run(request).await;
     };
 
-    // Extract cnf from JWT Authorization header
-    let cnf_thumbprint = request
+    // Verify the token before trusting its certificate confirmation claim.
+    let token = request
         .headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
-        .and_then(|auth| auth.strip_prefix("Bearer "))
-        .and_then(extract_cnf_from_jwt);
+        .and_then(|auth| auth.strip_prefix("Bearer "));
+    let cnf_thumbprint = match (validator.as_ref(), token) {
+        (Some(validator), Some(token)) => match validator.validate(token).await {
+            Ok(claims) => claims.cnf.and_then(|cnf| cnf.x5t_s256),
+            Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+        },
+        _ => return StatusCode::UNAUTHORIZED.into_response(),
+    };
 
     if let Err(err) = verify_binding(
         &cert,
@@ -1120,5 +1112,46 @@ mod tests {
         assert!(!is_mtls_bypass_path("/admin/apis"));
         assert!(!is_mtls_bypass_path("/admin/health"));
         assert!(!is_mtls_bypass_path("/"));
+    }
+
+    #[tokio::test]
+    async fn regression_binding_without_verifier_validates_supplied_cnf() {
+        use axum::{middleware, routing::get, Router};
+        use std::sync::Arc;
+        use tower::ServiceExt;
+
+        let config = MtlsConfig {
+            enabled: true,
+            require_binding: true,
+            ..MtlsConfig::default()
+        };
+        let stats = Arc::new(MtlsStats::default());
+        let app = Router::new()
+            .route("/api/protected", get(|| async { StatusCode::OK }))
+            .layer(middleware::from_fn(move |request, next| {
+                mtls_binding_middleware(None, config.clone(), stats.clone(), request, next)
+            }));
+        let payload = URL_SAFE_NO_PAD.encode(
+            serde_json::to_vec(&serde_json::json!({
+                "cnf": {"x5t#S256": URL_SAFE_NO_PAD.encode([0_u8; 32])}
+            }))
+            .unwrap(),
+        );
+        let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"none","typ":"JWT"}"#);
+        let mut request = Request::builder()
+            .uri("/api/protected")
+            .header("Authorization", format!("Bearer {header}.{payload}."))
+            .body(Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(ClientCertInfo {
+            fingerprint: "00".repeat(32),
+            subject_dn: String::new(),
+            issuer_dn: String::new(),
+            serial: String::new(),
+            not_before: None,
+            not_after: None,
+        });
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

@@ -13,7 +13,7 @@
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
         State,
     },
     http::{header, HeaderMap, StatusCode},
@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
+use crate::mcp::handlers::extract_auth_context;
 use crate::mcp::pending_requests::{PendingRequestTracker, ServerRequestResult};
 use crate::mcp::session::Session;
 use crate::mcp::sse::{
@@ -46,20 +47,18 @@ pub async fn handle_ws_upgrade(
         return (StatusCode::NOT_FOUND, "WebSocket transport is not enabled").into_response();
     }
 
-    // Extract token from Authorization header or subprotocol
-    let token = extract_ws_token(&headers);
-    if token.is_none() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            "Missing Bearer token (Authorization header or mcp-auth subprotocol)",
-        )
-            .into_response();
-    }
+    let (synthetic_headers, tenant_id) = match websocket_identity(&state, &headers).await {
+        Ok(identity) => identity,
+        Err(error) => return error.into_response(),
+    };
 
-    let token = token.expect("checked above");
-
-    // Build headers for process_single_request (it expects Authorization header)
-    let synthetic_headers = build_headers_from_token(&token);
+    // Keep the push connection bounded by the verified token's lifetime.
+    let (claims, _) = match crate::auth::tenant::request_identity(&state, &synthetic_headers).await
+    {
+        Ok(identity) => identity,
+        Err(error) => return error.into_response(),
+    };
+    let authorization_deadline = crate::auth::tenant::authorization_deadline(claims.exp);
 
     // Check if browser is using subprotocol auth — we need to echo back the subprotocol
     let selected_protocol = extract_subprotocol(&headers);
@@ -70,7 +69,28 @@ pub async fn handle_ws_upgrade(
         ws
     };
 
-    upgrade.on_upgrade(move |socket| handle_ws_connection(socket, state, synthetic_headers))
+    upgrade.on_upgrade(move |socket| {
+        handle_ws_connection(
+            socket,
+            state,
+            synthetic_headers,
+            tenant_id,
+            authorization_deadline,
+        )
+    })
+}
+
+/// Verify browser and non-browser credentials before creating a connection.
+pub(crate) async fn websocket_identity(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(HeaderMap, String), crate::auth::middleware::AuthError> {
+    let token = extract_ws_token(headers)
+        .ok_or_else(|| crate::auth::middleware::AuthError::unauthorized("Missing Bearer token"))?;
+    let synthetic_headers = build_headers_from_token(headers, &token);
+    let (claims, _) = crate::auth::tenant::request_identity(state, &synthetic_headers).await?;
+    let tenant_id = crate::auth::tenant::require_tenant(&claims)?.to_string();
+    Ok((synthetic_headers, tenant_id))
 }
 
 /// Main WebSocket connection loop.
@@ -79,13 +99,14 @@ pub async fn handle_ws_upgrade(
 /// 1. Inbound client messages → parse JSON-RPC → dispatch via `process_single_request`
 /// 2. Outbound server notifications → forward as Text
 /// 3. Periodic ping → keepalive
-async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: HeaderMap) {
+async fn handle_ws_connection(
+    mut socket: WebSocket,
+    state: AppState,
+    headers: HeaderMap,
+    tenant_id: String,
+    authorization_deadline: tokio::time::Instant,
+) {
     let session_id = uuid::Uuid::new_v4().to_string();
-    let tenant_id = headers
-        .get("X-Tenant-ID")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string();
 
     // Create MCP session
     let session = Session::new(session_id.clone(), tenant_id.clone());
@@ -107,20 +128,35 @@ async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: H
 
     loop {
         tokio::select! {
+            _ = tokio::time::sleep_until(authorization_deadline) => {
+                close_authorization(&mut socket, "Token expired").await;
+                break;
+            },
             // Branch 1: inbound client message
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        let response = handle_ws_text_message(
+                        match handle_ws_text_message(
                             &text, &state, &headers, &session_id
-                        ).await;
-                        if let Some(resp_text) = response {
-                            if socket.send(Message::Text(resp_text)).await.is_err() {
+                        ).await {
+                            Ok(Some(resp_text)) => {
+                                if socket.send(Message::Text(resp_text)).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Ok(None) => {},
+                            Err(resp_text) => {
+                                let _ = socket.send(Message::Text(resp_text)).await;
+                                close_authorization(&mut socket, "Authorization failed").await;
                                 break;
                             }
                         }
                     }
                     Some(Ok(Message::Ping(data))) => {
+                        if extract_auth_context(&state, &headers).await.is_err() {
+                            close_authorization(&mut socket, "Authorization failed").await;
+                            break;
+                        }
                         if socket.send(Message::Pong(data)).await.is_err() {
                             break;
                         }
@@ -146,6 +182,10 @@ async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: H
             notification = notify_rx.recv() => {
                 match notification {
                     Some(text) => {
+                        if extract_auth_context(&state, &headers).await.is_err() {
+                            close_authorization(&mut socket, "Authorization failed").await;
+                            break;
+                        }
                         if socket.send(Message::Text(text)).await.is_err() {
                             break;
                         }
@@ -158,6 +198,10 @@ async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: H
             }
             // Branch 3: periodic ping
             _ = ping_interval.tick() => {
+                if extract_auth_context(&state, &headers).await.is_err() {
+                    close_authorization(&mut socket, "Authorization failed").await;
+                    break;
+                }
                 if socket.send(Message::Ping(vec![])).await.is_err() {
                     break;
                 }
@@ -246,44 +290,68 @@ fn resolve_with_id(
     tracker.resolve(session_id, request_id, result)
 }
 
+async fn close_authorization(socket: &mut WebSocket, reason: &'static str) {
+    let _ = socket
+        .send(Message::Close(Some(CloseFrame {
+            code: 1008,
+            reason: reason.into(),
+        })))
+        .await;
+}
+
 /// Handle a single inbound text message (JSON-RPC request, response, or batch).
 async fn handle_ws_text_message(
     text: &str,
     state: &AppState,
     headers: &HeaderMap,
     session_id: &str,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
+    let parsed: Result<Value, _> = serde_json::from_str(text);
+    if let Err((_, message)) = extract_auth_context(state, headers).await {
+        let response = match &parsed {
+            Ok(Value::Array(items)) => serde_json::to_string(
+                &items
+                    .iter()
+                    .map(|item| JsonRpcResponse::error(item.get("id").cloned(), -32001, message))
+                    .collect::<Vec<_>>(),
+            ),
+            _ => serde_json::to_string(&JsonRpcResponse::error(
+                parsed
+                    .as_ref()
+                    .ok()
+                    .and_then(|value| value.get("id").cloned()),
+                -32001,
+                message,
+            )),
+        };
+        return Err(response.unwrap_or_default());
+    }
     metrics::track_ws_message("inbound", "request");
 
     let params = SseQueryParams {
         session_id: Some(session_id.to_string()),
     };
 
-    // Try parsing as a single request first, then as batch
-    let parsed: Result<Value, _> = serde_json::from_str(text);
     match parsed {
         Ok(Value::Array(arr)) => {
-            // JSON-RPC batch
             let response = handle_ws_batch(arr, state, headers, &params).await;
             metrics::track_ws_message("outbound", "batch_response");
-            Some(serde_json::to_string(&response).unwrap_or_default())
+            Ok(Some(serde_json::to_string(&response).unwrap_or_default()))
         }
         Ok(value) => {
-            // Check if this is a response to a server-initiated request
             if is_server_request_response(&value)
                 && try_resolve_response(&value, &state.pending_requests, session_id)
             {
                 metrics::track_ws_message("inbound", "server_request_response");
-                return None; // Response handled, no reply needed
+                return Ok(None);
             }
 
-            // Single request
             match serde_json::from_value::<JsonRpcRequest>(value) {
                 Ok(req) => {
                     let method = req.method.clone();
                     let resp = process_single_request(state, headers, &params, req).await;
                     metrics::track_ws_message("outbound", &method);
-                    Some(serde_json::to_string(&resp).unwrap_or_default())
+                    Ok(Some(serde_json::to_string(&resp).unwrap_or_default()))
                 }
                 Err(e) => {
                     let err = JsonRpcResponse::error(
@@ -291,7 +359,7 @@ async fn handle_ws_text_message(
                         crate::mcp::sse::PARSE_ERROR,
                         format!("Invalid JSON-RPC request: {e}"),
                     );
-                    Some(serde_json::to_string(&err).unwrap_or_default())
+                    Ok(Some(serde_json::to_string(&err).unwrap_or_default()))
                 }
             }
         }
@@ -301,7 +369,7 @@ async fn handle_ws_text_message(
                 crate::mcp::sse::PARSE_ERROR,
                 format!("Invalid JSON: {e}"),
             );
-            Some(serde_json::to_string(&err).unwrap_or_default())
+            Ok(Some(serde_json::to_string(&err).unwrap_or_default()))
         }
     }
 }
@@ -379,10 +447,10 @@ fn extract_subprotocol(headers: &HeaderMap) -> Option<String> {
         })
 }
 
-/// Build a synthetic HeaderMap with Authorization header from an extracted token.
+/// Preserve request headers and normalize the extracted token for JWT validation.
 /// This lets `process_single_request` reuse its existing JWT validation path.
-fn build_headers_from_token(token: &str) -> HeaderMap {
-    let mut headers = HeaderMap::new();
+fn build_headers_from_token(original: &HeaderMap, token: &str) -> HeaderMap {
+    let mut headers = original.clone();
     if let Ok(val) = format!("Bearer {token}").parse() {
         headers.insert(header::AUTHORIZATION, val);
     }
@@ -590,7 +658,14 @@ mod tests {
 
     #[test]
     fn test_build_headers_from_token() {
-        let headers = build_headers_from_token("test-token");
+        let mut original = HeaderMap::new();
+        original.append("X-Tenant-ID", "tenant-a".parse().unwrap());
+        original.append("X-Tenant-ID", "tenant-b".parse().unwrap());
+        original.insert("X-Request-ID", "request-1".parse().unwrap());
+        let headers = build_headers_from_token(&original, "test-token");
+        assert_eq!(headers.get_all("X-Tenant-ID").iter().count(), 2);
+        assert_eq!(headers["X-Request-ID"], "request-1");
+        assert!(!original.contains_key(header::AUTHORIZATION));
         assert_eq!(
             headers
                 .get(header::AUTHORIZATION)
@@ -769,5 +844,127 @@ mod tests {
 
         assert!(notification["params"].get("total").is_none());
         assert_eq!(notification["params"]["progress"], 3.0);
+    }
+}
+
+#[cfg(test)]
+mod message_context_tests {
+    use super::*;
+    use futures::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message as ClientMessage;
+
+    #[tokio::test]
+    async fn denied_messages_preserve_request_ids() {
+        let state = AppState::new(crate::config::Config::default());
+        let headers = HeaderMap::new();
+        for id in [serde_json::json!(7), serde_json::json!("request")] {
+            let request = serde_json::json!({"jsonrpc": "2.0", "id": id, "method": "tools/list"});
+            for batch in [false, true] {
+                let text = if batch {
+                    serde_json::json!([request.clone()])
+                } else {
+                    request.clone()
+                }
+                .to_string();
+                let error = handle_ws_text_message(&text, &state, &headers, "session")
+                    .await
+                    .expect_err("invalid context");
+                let response: Value = serde_json::from_str(&error).unwrap();
+                let response = if batch { &response[0] } else { &response };
+                assert_eq!(response["id"], id);
+                assert_eq!(response["error"]["code"], -32001);
+                assert!(response.get("result").is_none());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn connection_close_code_is_consistent() {
+        for signal in ["deadline", "notification", "ping", "idle", "request"] {
+            let state = AppState::new(crate::config::Config::default());
+            let route_state = state.clone();
+            let app = axum::Router::new().route(
+                "/stream",
+                axum::routing::get(move |upgrade: WebSocketUpgrade| {
+                    let state = route_state.clone();
+                    async move {
+                        let deadline = tokio::time::Instant::now()
+                            + Duration::from_secs(if signal == "deadline" { 0 } else { 60 });
+                        upgrade.on_upgrade(move |socket| {
+                            handle_ws_connection(
+                                socket,
+                                state,
+                                HeaderMap::new(),
+                                "tenant-a".into(),
+                                deadline,
+                            )
+                        })
+                    }
+                }),
+            );
+            let address = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0));
+            let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                axum::serve(listener, app).await.unwrap();
+            });
+            let (mut client, _) =
+                tokio_tungstenite::connect_async(format!("ws://{address}/stream"))
+                    .await
+                    .unwrap();
+            match signal {
+                "notification" => {
+                    tokio::time::timeout(Duration::from_secs(2), async {
+                        while state
+                            .session_manager
+                            .broadcast_to_tenant_ws("tenant-a", "update")
+                            == 0
+                        {
+                            tokio::task::yield_now().await;
+                        }
+                    })
+                    .await
+                    .unwrap();
+                }
+                "ping" => client
+                    .send(ClientMessage::Ping(Vec::new().into()))
+                    .await
+                    .unwrap(),
+                "request" => {
+                    client
+                        .send(ClientMessage::Text(
+                            serde_json::json!({"jsonrpc": "2.0", "id": 11, "method": "tools/list"})
+                                .to_string()
+                                .into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                _ => {}
+            }
+            let mut received_error = false;
+            tokio::time::timeout(Duration::from_secs(35), async {
+                loop {
+                    match client.next().await.unwrap().unwrap() {
+                        ClientMessage::Close(Some(frame)) => {
+                            assert_eq!(u16::from(frame.code), 1008);
+                            break;
+                        }
+                        ClientMessage::Text(text) if signal == "request" => {
+                            let response: Value = serde_json::from_str(&text).unwrap();
+                            assert_eq!(response["id"], 11);
+                            assert_eq!(response["error"]["code"], -32001);
+                            received_error = true;
+                        }
+                        ClientMessage::Ping(_) | ClientMessage::Pong(_) => {}
+                        _ => panic!("unexpected message"),
+                    }
+                }
+            })
+            .await
+            .expect("connection closure");
+            assert_eq!(received_error, signal == "request");
+            server.abort();
+        }
     }
 }

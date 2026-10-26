@@ -363,6 +363,12 @@ impl ToolRegistry {
         None
     }
 
+    /// Resolve aliases first, then apply the same ownership rule as tools/list.
+    pub fn get_for_tenant(&self, name: &str, tenant_id: &str) -> Option<Arc<dyn Tool>> {
+        self.get(name)
+            .filter(|tool| tool.tenant_id().is_none_or(|owner| owner == tenant_id))
+    }
+
     /// List all tools, optionally filtered by tenant.
     ///
     /// When `tenant_id` is Some, returns:

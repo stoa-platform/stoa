@@ -54,6 +54,10 @@ pub struct Config {
     pub host: String,
 
     // === Authentication ===
+    /// Temporary compatibility with signed legacy `tenant` claims only.
+    #[serde(default)]
+    pub allow_legacy_tenant_claim: bool,
+
     #[serde(default)]
     pub jwt_secret: Option<String>,
 
@@ -84,6 +88,36 @@ pub struct Config {
     /// Example: http://keycloak.stoa-system.svc.cluster.local
     #[serde(default)]
     pub keycloak_internal_url: Option<String>,
+
+    /// Forward the validated user JWT to MCP tool backends. Default: false.
+    /// Enable only for trusted backends that explicitly accept this audience.
+    /// Env: STOA_MCP_FORWARD_USER_TOKEN
+    #[serde(default)]
+    pub mcp_forward_user_token: bool,
+
+    /// Resource audience that MCP access tokens must carry. No default: when
+    /// unset, MCP entrypoints reject authenticated requests, and the gateway
+    /// refuses to start with `environment: prod`. Env: STOA_MCP_AUDIENCE.
+    #[serde(default)]
+    pub mcp_audience: Option<String>,
+
+    /// Path to the PEM private key (RSA) used for `private_key_jwt`
+    /// authentication of the gateway service client. Mount it from a
+    /// Kubernetes Secret; the content is never logged.
+    /// Env: STOA_KEYCLOAK_CLIENT_KEY_PATH
+    #[serde(default)]
+    pub keycloak_client_key_path: Option<String>,
+
+    /// Optional `kid` header of the client assertion, matching the key
+    /// registered for the service client. Env: STOA_KEYCLOAK_CLIENT_KEY_ID
+    #[serde(default)]
+    pub keycloak_client_key_id: Option<String>,
+
+    /// Upper bound, in seconds, for caching service access tokens, whatever
+    /// `expires_in` the token endpoint returns. Default: 300.
+    /// Env: STOA_SERVICE_TOKEN_MAX_TTL_SECS
+    #[serde(default = "default_service_token_max_ttl_secs")]
+    pub service_token_max_ttl_secs: u64,
 
     // === Gateway ===
     /// Public-facing URL of this gateway (for OAuth discovery endpoints).
@@ -120,6 +154,17 @@ pub struct Config {
     pub audit_spool_high_water_pct: u8,
 
     // === Admin API ===
+    /// None enforces strong administrative JWTs in prod; false is an explicit override.
+    /// Env: STOA_ADMIN_REQUIRE_STRONG_AUTH
+    #[serde(default)]
+    pub admin_require_strong_auth: Option<bool>,
+    /// Exact issuer-assigned ACR (opaque identifier, not a numeric threshold).
+    #[serde(default = "default_admin_required_acr")]
+    pub admin_required_acr: String,
+    /// Accepted second-factor AMR methods, when the issuer supplies AMR.
+    #[serde(default = "default_admin_accepted_amr")]
+    pub admin_accepted_amr: Vec<String>,
+
     /// Bearer token for the admin API (Control Plane → gateway calls).
     /// Env: STOA_ADMIN_API_TOKEN. If not set, admin API returns 403.
     #[serde(default)]
@@ -921,6 +966,14 @@ impl fmt::Debug for Config {
             .field("jwt_secret", &r(&self.jwt_secret))
             .field("jwt_issuer", &self.jwt_issuer)
             .field("keycloak_url", &self.keycloak_url)
+            .field("mcp_audience", &self.mcp_audience)
+            .field("keycloak_client_key_path", &self.keycloak_client_key_path)
+            .field("keycloak_client_key_id", &self.keycloak_client_key_id)
+            .field(
+                "service_token_max_ttl_secs",
+                &self.service_token_max_ttl_secs,
+            )
+            .field("mcp_forward_user_token", &self.mcp_forward_user_token)
             .field("keycloak_realm", &self.keycloak_realm)
             .field("keycloak_client_id", &self.keycloak_client_id)
             .field("keycloak_client_secret", &r(&self.keycloak_client_secret))

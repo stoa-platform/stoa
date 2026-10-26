@@ -62,22 +62,18 @@ async fn test_mcp_health_endpoint() {
 // ========================================================================
 // MCP Tools — direct JSON (not JSON-RPC envelope)
 //
-// These tests run against TestApp::new(), which uses Config::default() — i.e.
-// `keycloak_url = None` so `jwt_validator` is `None`. In that mode the
-// `mcp_jwt_required` middleware (CAB-2121) is a passthrough, so anonymous
-// requests still reach the handlers. The validator-configured behaviour
-// (anon → 401) is covered in `tests/security/auth.rs`.
+// A missing validator refuses protected requests. Successful tool listings
+// use the signed local fixture; negotiation remains public.
 // ========================================================================
 
 #[tokio::test]
-async fn test_mcp_tools_list_no_validator_returns_tools() {
+async fn test_mcp_tools_list_no_validator_denies_access() {
     let app = TestApp::new();
-    // ToolsListRequest expects {"cursor": null} or just {}
     let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
-    // Response is ToolsListResponse: {"tools": [...]}
-    assert!(json["tools"].is_array());
+    assert_eq!(json["isError"], true);
+    assert!(json.get("tools").is_none());
 }
 
 #[tokio::test]
@@ -107,7 +103,7 @@ async fn test_mcp_tools_call_no_validator_unknown_tool() {
 
 // regression for CAB-2227
 #[tokio::test]
-async fn test_tool_permissions_cp_unreachable_denies_tools_call() {
+async fn test_unauthenticated_tools_call_is_rejected_before_cp_lookup() {
     let app = TestApp::with_config(Config {
         control_plane_url: Some("http://127.0.0.1:1".to_string()),
         quota_enforcement_enabled: false,
@@ -133,20 +129,18 @@ async fn test_tool_permissions_cp_unreachable_denies_tools_call() {
         .post_json("/mcp/tools/call", r#"{"name":"any_tool","arguments":{}}"#)
         .await;
 
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    // Authentication fails before a tenant permission lookup can be attempted.
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
-async fn test_mcp_tools_list_no_validator_response_structure() {
-    // Verify tools/list returns proper ToolsListResponse shape
+async fn test_mcp_tools_list_no_validator_denial_shape() {
     let app = TestApp::new();
     let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
-    // ToolsListResponse has "tools" array (empty without register_tools from main)
-    assert!(json["tools"].is_array());
-    // Optional next_cursor field
-    assert!(json.get("next_cursor").is_none() || json["next_cursor"].is_null());
+    assert_eq!(json["isError"], true);
+    assert!(json.get("tools").is_none());
 }
 
 // ========================================================================
@@ -157,10 +151,10 @@ async fn test_mcp_tools_list_no_validator_response_structure() {
 async fn test_mcp_rest_tools_list_no_validator() {
     let app = TestApp::new();
     let (status, body) = app.get("/mcp/v1/tools").await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
-    // REST API returns Vec<ToolDefinition> directly as a JSON array
-    assert!(json.is_array(), "Expected array, got: {}", body);
+    assert_eq!(json["isError"], true);
+    assert!(json.get("tools").is_none());
 }
 
 #[tokio::test]
@@ -169,14 +163,8 @@ async fn test_mcp_rest_tools_invoke_no_validator_unknown() {
     // RestToolInvokeRequest: {"tool": "name", "arguments": {}}
     let invoke = r#"{"tool":"nonexistent","arguments":{}}"#;
     let (status, body) = app.post_json("/mcp/v1/tools/invoke", invoke).await;
-    // Should respond with some indication of failure
     assert!(!body.is_empty());
-    // Status varies — could be 200 with error content, 404, or 500
-    assert!(
-        status == StatusCode::OK
-            || status == StatusCode::NOT_FOUND
-            || status == StatusCode::INTERNAL_SERVER_ERROR
-    );
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
 
 // ========================================================================
@@ -209,4 +197,15 @@ async fn test_openid_configuration_requires_keycloak() {
     let app = TestApp::new();
     let (status, _body) = app.get("/.well-known/openid-configuration").await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn test_authenticated_mcp_tools_list() {
+    let app = TestApp::with_mcp_auth().await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let response: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(response["tools"].is_array());
 }

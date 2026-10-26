@@ -13,10 +13,6 @@ use std::collections::HashMap;
 use super::classifications::Classification;
 use super::llm::LlmConfig;
 
-fn default_tenant_id() -> String {
-    "default".to_string()
-}
-
 // =============================================================================
 // Endpoint LLM Metadata
 // =============================================================================
@@ -154,7 +150,6 @@ pub struct UacContractSpec {
     /// Semantic version (e.g. "1.0.0")
     pub version: String,
     /// Owning tenant identifier
-    #[serde(default = "default_tenant_id")]
     pub tenant_id: String,
     /// Human-readable display name
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -769,5 +764,12 @@ mod tests {
         let llm = deserialized.llm_config.as_ref().expect("llm_config");
         assert_eq!(llm.capabilities.len(), 1);
         assert_eq!(llm.capabilities[0].capability, LlmCapabilityType::Embed);
+    }
+    #[test]
+    fn regression_contract_has_no_implicit_default_tenant() {
+        assert!(serde_json::from_value::<UacContractSpec>(
+            serde_json::json!({"name":"test","version":"1.0.0"})
+        )
+        .is_err());
     }
 }

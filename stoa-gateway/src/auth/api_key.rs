@@ -107,11 +107,7 @@ impl ApiKeyValidator {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
                     .to_string(),
-                tenant_id: cp_resp
-                    .get("tenant_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
+                tenant_id: response_tenant(&cp_resp)?.to_string(),
                 subscription_id: cp_resp
                     .get("subscription_id")
                     .and_then(|v| v.as_str())
@@ -170,6 +166,15 @@ pub enum ApiKeyError {
 
     #[error("Configuration error: {0}")]
     ConfigError(String),
+}
+
+/// A successful validation response must carry concrete tenant ownership.
+fn response_tenant(response: &serde_json::Value) -> Result<&str, ApiKeyError> {
+    response
+        .get("tenant_id")
+        .and_then(|value| value.as_str())
+        .filter(|tenant| !tenant.is_empty() && *tenant == tenant.trim())
+        .ok_or_else(|| ApiKeyError::ParseError("tenant_required".to_string()))
 }
 
 /// Combined auth middleware: JWT first, fallback to API Key
@@ -257,5 +262,21 @@ mod tests {
         );
         // Ensure the old (wrong) path is not hardcoded anywhere
         assert!(!validator.control_plane_url.contains("/api/v1/keys"));
+    }
+    #[test]
+    fn regression_api_key_response_cannot_be_unscoped() {
+        for value in [
+            serde_json::json!({}),
+            serde_json::json!({"tenant_id":null}),
+            serde_json::json!({"tenant_id":""}),
+            serde_json::json!({"tenant_id":" "}),
+            serde_json::json!({"tenant_id":42}),
+        ] {
+            assert!(response_tenant(&value).is_err());
+        }
+        assert_eq!(
+            response_tenant(&serde_json::json!({"tenant_id":"tenant-a"})).unwrap(),
+            "tenant-a"
+        );
     }
 }

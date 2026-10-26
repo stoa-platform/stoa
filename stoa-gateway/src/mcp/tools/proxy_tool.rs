@@ -17,6 +17,7 @@ pub struct ProxyTool {
     schema: ToolSchema,
     required_action: Action,
     cp: Arc<ToolProxyClient>,
+    tenant_id: Option<String>,
 }
 
 impl ProxyTool {
@@ -33,7 +34,13 @@ impl ProxyTool {
             schema,
             required_action,
             cp,
+            tenant_id: None,
         }
+    }
+
+    pub fn with_tenant(mut self, tenant_id: &str) -> Self {
+        self.tenant_id = Some(tenant_id.to_string());
+        self
     }
 }
 
@@ -55,7 +62,14 @@ impl Tool for ProxyTool {
         self.required_action
     }
 
+    fn tenant_id(&self) -> Option<&str> {
+        self.tenant_id.as_deref()
+    }
+
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        if self.tenant_id().is_some_and(|owner| owner != ctx.tenant_id) {
+            return Err(ToolError::PermissionDenied("Tool not found".to_string()));
+        }
         // Prevent circular proxy: CP-API → gateway → ProxyTool → CP-API → gateway → ...
         // When the request comes from CP-API (X-Stoa-Source: control-plane), the ProxyTool
         // must NOT call CP-API again. This tool has no direct backend, so return an error

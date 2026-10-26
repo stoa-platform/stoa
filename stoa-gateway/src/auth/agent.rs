@@ -166,6 +166,8 @@ mod tests {
 
     fn base_claims() -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "sa-hegemon-worker-1".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -178,6 +180,7 @@ mod tests {
             name: None,
             given_name: None,
             family_name: None,
+            legacy_tenant: None,
             tenant: None,
             realm_access: Some(RealmAccess {
                 roles: vec!["hegemon-agent".to_string()],
@@ -197,6 +200,8 @@ mod tests {
 
     fn user_claims() -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -209,6 +214,7 @@ mod tests {
             name: Some("John Doe".to_string()),
             given_name: Some("John".to_string()),
             family_name: Some("Doe".to_string()),
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string()],

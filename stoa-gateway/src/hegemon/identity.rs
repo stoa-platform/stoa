@@ -85,6 +85,8 @@ mod tests {
         supervision_tier: Option<&str>,
     ) -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "service-account-worker-1".to_string(),
             exp: 9999999999,
             iat: 1700000000,
@@ -97,6 +99,7 @@ mod tests {
             name: None,
             given_name: None,
             family_name: None,
+            legacy_tenant: None,
             tenant: None,
             realm_access: None,
             resource_access: None,

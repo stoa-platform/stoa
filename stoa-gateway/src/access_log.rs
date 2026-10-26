@@ -7,7 +7,11 @@
 //! Output target: `access_log` — can be filtered by Fluent Bit for shipping
 //! to OpenSearch's `stoa-logs-*` index.
 
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+    response::Response,
+};
 use std::time::Instant;
 
 use crate::diagnostics::latency::{new_shared_tracker, to_server_timing, Stage};
@@ -70,7 +74,11 @@ fn resolve_span_id(response: &Response) -> String {
 ///
 /// Extracts tenant_id and consumer_id from request extensions (set by auth
 /// middleware) when available.
-pub async fn access_log_middleware(mut request: Request, next: Next) -> Response {
+pub async fn access_log_middleware(
+    State(state): State<crate::state::AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
     let path = request.uri().path().to_string();
 
     // Skip noisy endpoints
@@ -86,18 +94,16 @@ pub async fn access_log_middleware(mut request: Request, next: Next) -> Response
         .unwrap_or("-")
         .to_string();
 
-    // Extract tenant_id and consumer_id from extensions (set by auth middleware)
-    let tenant_id = request
-        .extensions()
-        .get::<TenantId>()
-        .map(|t| t.0.clone())
-        .unwrap_or_default();
-
-    let consumer_id = request
-        .extensions()
-        .get::<ConsumerId>()
-        .map(|c| c.0.clone())
-        .unwrap_or_default();
+    // Validate independently of middleware order. A client cannot inject an
+    // extension or select the tenant through X-Tenant-ID or a log message.
+    let identity = crate::telemetry::verified_request_identity(&state, request.headers()).await;
+    let (tenant_id, user_id, consumer_id) = match identity {
+        Some(identity) => {
+            request.extensions_mut().insert(identity.clone());
+            (identity.tenant_id, identity.user_id, identity.consumer_id)
+        }
+        None => ("__platform__".to_string(), String::new(), String::new()),
+    };
 
     // Inject a shared LatencyTracker for downstream middlewares to record per-layer timings.
     // Each middleware calls begin_stage()/end_stage() on this tracker via request extensions.
@@ -138,6 +144,8 @@ pub async fn access_log_middleware(mut request: Request, next: Next) -> Response
         status = status,
         duration_ms = format!("{:.2}", duration_ms),
         tenant_id = %tenant_id,
+        verified_tenant_id = %tenant_id,
+        user_id = %user_id,
         consumer_id = %consumer_id,
         user_agent = %user_agent,
         trace_id = %trace_id,
@@ -236,7 +244,10 @@ mod tests {
     async fn test_access_log_skips_health() {
         let app = Router::new()
             .route("/health", get(|| async { "OK" }))
-            .layer(axum::middleware::from_fn(access_log_middleware));
+            .layer(axum::middleware::from_fn_with_state(
+                crate::state::AppState::new(crate::config::Config::default()),
+                access_log_middleware,
+            ));
 
         let req = Request::builder()
             .uri("/health")
@@ -250,7 +261,10 @@ mod tests {
     async fn test_access_log_passes_through() {
         let app = Router::new()
             .route("/mcp/tools/list", get(|| async { "tools" }))
-            .layer(axum::middleware::from_fn(access_log_middleware));
+            .layer(axum::middleware::from_fn_with_state(
+                crate::state::AppState::new(crate::config::Config::default()),
+                access_log_middleware,
+            ));
 
         let req = Request::builder()
             .uri("/mcp/tools/list")
@@ -283,7 +297,10 @@ mod tests {
 
         let app = Router::new()
             .route("/api/v1/tools", get(|| async { "ok" }))
-            .layer(middleware::from_fn(access_log_middleware))
+            .layer(middleware::from_fn_with_state(
+                crate::state::AppState::new(crate::config::Config::default()),
+                access_log_middleware,
+            ))
             .layer(middleware::from_fn(inner_with_trace_id));
 
         let req = Request::builder()
@@ -312,7 +329,10 @@ mod tests {
 
         let app = Router::new()
             .route("/api/v1/tools", get(|| async { "ok" }))
-            .layer(middleware::from_fn(access_log_middleware))
+            .layer(middleware::from_fn_with_state(
+                crate::state::AppState::new(crate::config::Config::default()),
+                access_log_middleware,
+            ))
             .layer(middleware::from_fn(inner_with_x_trace));
 
         let req = Request::builder()
@@ -327,7 +347,10 @@ mod tests {
     async fn test_access_log_skips_metrics() {
         let app = Router::new()
             .route("/metrics", get(|| async { "prom" }))
-            .layer(axum::middleware::from_fn(access_log_middleware));
+            .layer(axum::middleware::from_fn_with_state(
+                crate::state::AppState::new(crate::config::Config::default()),
+                access_log_middleware,
+            ));
 
         let req = Request::builder()
             .uri("/metrics")

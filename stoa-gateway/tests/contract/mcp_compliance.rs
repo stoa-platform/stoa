@@ -15,10 +15,6 @@ use serde_json::{json, Value};
 
 use crate::common::TestApp;
 
-// JWT validation is disabled in TestApp (no jwt_validator configured).
-// Any Bearer token passes the auth check with anonymous context.
-const TEST_TOKEN: &str = "test-bearer-token";
-
 /// Helper: POST a JSON-RPC 2.0 request to /mcp/sse and return parsed response.
 async fn jsonrpc(
     app: &TestApp,
@@ -35,7 +31,7 @@ async fn jsonrpc(
     }
     let body = req.to_string();
     let (status, text) = app
-        .post_json_with_bearer("/mcp/sse", &body, TEST_TOKEN)
+        .post_json_with_bearer("/mcp/sse", &body, app.mcp_token())
         .await;
     let value: Value = serde_json::from_str(&text).expect("response must be valid JSON");
     (status, value)
@@ -44,7 +40,7 @@ async fn jsonrpc(
 /// Helper: POST a JSON-RPC 2.0 batch request to /mcp/sse.
 async fn jsonrpc_batch(app: &TestApp, requests: Value) -> (axum::http::StatusCode, Value) {
     let (status, text) = app
-        .post_json_with_bearer("/mcp/sse", &requests.to_string(), TEST_TOKEN)
+        .post_json_with_bearer("/mcp/sse", &requests.to_string(), app.mcp_token())
         .await;
     let value: Value = serde_json::from_str(&text).expect("batch response must be valid JSON");
     (status, value)
@@ -56,7 +52,7 @@ async fn jsonrpc_batch(app: &TestApp, requests: Value) -> (axum::http::StatusCod
 
 #[tokio::test]
 async fn test_prompts_list_returns_empty_array() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "prompts/list", None).await;
 
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -80,7 +76,7 @@ async fn test_prompts_list_returns_empty_array() {
 #[tokio::test]
 async fn test_prompts_list_with_cursor_param() {
     // cursor param should be accepted and ignored (no prompts to paginate)
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(
         &app,
         "prompts/list",
@@ -99,7 +95,7 @@ async fn test_prompts_list_with_cursor_param() {
 
 #[tokio::test]
 async fn test_prompts_get_unknown_returns_not_found() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(
         &app,
         "prompts/get",
@@ -125,7 +121,7 @@ async fn test_prompts_get_unknown_returns_not_found() {
 #[tokio::test]
 async fn test_prompts_get_missing_name_param() {
     // When name is absent, handler uses "<unknown>" placeholder
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "prompts/get", Some(json!({}))).await;
 
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -141,7 +137,7 @@ async fn test_prompts_get_missing_name_param() {
 
 #[tokio::test]
 async fn test_logging_set_level_valid_levels() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let valid_levels = [
         "debug",
         "info",
@@ -175,7 +171,7 @@ async fn test_logging_set_level_valid_levels() {
 
 #[tokio::test]
 async fn test_logging_set_level_invalid_returns_invalid_params() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(
         &app,
         "logging/setLevel",
@@ -195,7 +191,7 @@ async fn test_logging_set_level_invalid_returns_invalid_params() {
 
 #[tokio::test]
 async fn test_logging_set_level_missing_param() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "logging/setLevel", Some(json!({}))).await;
 
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -205,7 +201,7 @@ async fn test_logging_set_level_missing_param() {
 
 #[tokio::test]
 async fn test_logging_set_level_without_params() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "logging/setLevel", None).await;
 
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -219,7 +215,7 @@ async fn test_logging_set_level_without_params() {
 
 #[tokio::test]
 async fn test_resources_read_unknown_tool_returns_not_found() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(
         &app,
         "resources/read",
@@ -238,7 +234,7 @@ async fn test_resources_read_unknown_tool_returns_not_found() {
 
 #[tokio::test]
 async fn test_resources_read_unsupported_uri_scheme() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(
         &app,
         "resources/read",
@@ -255,7 +251,7 @@ async fn test_resources_read_unsupported_uri_scheme() {
 
 #[tokio::test]
 async fn test_resources_read_missing_uri_param() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "resources/read", Some(json!({}))).await;
 
     assert_eq!(status, axum::http::StatusCode::OK);
@@ -270,7 +266,7 @@ async fn test_resources_read_response_shape_when_found() {
     // Future: use a TestApp variant with pre-loaded tools.
 
     // Verify resources/list returns URIs that match the resources/read scheme
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (_, list_resp) = jsonrpc(&app, "resources/list", None).await;
     let resources = list_resp["result"]["resources"]
         .as_array()
@@ -292,7 +288,7 @@ async fn test_resources_read_response_shape_when_found() {
 
 #[tokio::test]
 async fn test_capability_parity_all_advertised_capabilities_have_handlers() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
 
     // Fetch advertised capabilities via initialize
     let (status, resp) = jsonrpc(
@@ -354,7 +350,7 @@ async fn test_capability_parity_all_advertised_capabilities_have_handlers() {
 
 #[tokio::test]
 async fn test_batch_with_new_methods() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let batch = json!([
         { "jsonrpc": "2.0", "method": "prompts/list", "id": 1 },
         { "jsonrpc": "2.0", "method": "prompts/get", "params": { "name": "x" }, "id": 2 },
@@ -399,7 +395,7 @@ async fn test_batch_with_new_methods() {
 
 #[tokio::test]
 async fn test_unregistered_method_returns_not_found() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "sampling/createMessage", None).await;
 
     // sampling/createMessage is intentionally not implemented — deferred
@@ -413,7 +409,7 @@ async fn test_unregistered_method_returns_not_found() {
 
 #[tokio::test]
 async fn test_roots_list_returns_empty_array() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let (status, resp) = jsonrpc(&app, "roots/list", None).await;
 
     // roots/list implemented (CAB-1472) — returns empty roots (gateway has no filesystem roots)

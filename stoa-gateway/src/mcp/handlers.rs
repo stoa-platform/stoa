@@ -20,10 +20,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, instrument, warn, Instrument};
 
-use crate::auth::jwt::JwtValidator;
+use crate::auth::strong_auth::{filter_admin_scope, validate_privileged_claims};
 use crate::control_plane::ToolProxyClient;
 use crate::guardrails::{GuardrailMetricDecision, GuardrailMetricEvent};
-use crate::mcp::tools::{ToolContext, ToolDefinition, ToolRegistry};
+use crate::mcp::tools::{Tool, ToolContext, ToolDefinition, ToolRegistry};
 use crate::metering::{
     cost::compute_cost, ErrorSnapshot, EventStatus, GatewaySnapshot, MeteringProducerTrait,
     ToolCallEvent,
@@ -32,6 +32,7 @@ use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
 use crate::resilience::CircuitBreaker;
 use crate::state::{AppState, PolicyCallerCtx};
+use crate::uac::Action;
 
 const MCP_GUARDRAIL_SURFACE: &str = "mcp";
 
@@ -70,101 +71,198 @@ pub enum ToolContent {
 
 // === Authentication Context (Phase 1) ===
 
-/// Extracted authentication context from request headers
-struct AuthContext {
-    user_id: Option<String>,
-    user_email: Option<String>,
-    tenant_id: String,
-    roles: Vec<String>,
-    scopes: Vec<String>,
-    raw_token: Option<String>,
-    /// Federation: sub-account ID (CAB-1362)
+/// Identity used by every MCP transport. Only validated claims can populate it.
+#[derive(Clone)]
+pub(super) struct AuthContext {
+    pub(super) user_id: Option<String>,
+    pub(super) user_email: Option<String>,
+    pub(super) tenant_id: String,
+    pub(super) roles: Vec<String>,
+    pub(super) scopes: Vec<String>,
+    pub(super) raw_token: Option<String>,
+    admin_authorization: Result<(), &'static str>,
     sub_account_id: Option<String>,
-    /// Federation: master account ID (CAB-1362)
     master_account_id: Option<String>,
-    /// OAuth client ID (azp claim) — used as consumer_id for metrics (CAB-1782)
-    consumer_id: String,
+    pub(super) consumer_id: String,
 }
 
-/// Extract and validate JWT from Authorization header (Phase 1: CAB-1105)
-///
-/// Flow:
-/// 1. Extract Bearer token from Authorization header
-/// 2. Validate JWT via Keycloak JWKS (RS256)
-/// 3. Extract claims (user_id, email, roles, scopes)
-/// 4. Expand role-based scopes (ADR-012)
-/// 5. Fallback to unauthenticated context if no JWT or validation fails
-async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthContext {
-    let tenant_from_header = extract_tenant(headers);
-    let user_from_header = extract_user(headers);
+pub(crate) type AuthError = (StatusCode, &'static str);
 
-    // Try to extract and validate JWT
-    if let Some(auth_header) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
-        if let Some(validator) = &state.jwt_validator {
-            if let Ok(token_str) = JwtValidator::extract_token(auth_header) {
-                match validator.validate(token_str).await {
-                    Ok(claims) => {
-                        let roles: Vec<String> =
-                            claims.realm_roles().iter().map(|s| s.to_string()).collect();
-                        let mut scopes: Vec<String> =
-                            claims.scopes().iter().map(|s| s.to_string()).collect();
-
-                        // Expand role-based scopes (ADR-012 12-Scope Model)
-                        expand_role_scopes(&roles, &mut scopes);
-
-                        return AuthContext {
-                            user_id: Some(claims.sub.clone()),
-                            user_email: claims.email.clone(),
-                            tenant_id: claims
-                                .tenant_id()
-                                .map(|s| s.to_string())
-                                .or(tenant_from_header)
-                                .unwrap_or_else(|| "default".to_string()),
-                            roles,
-                            scopes,
-                            raw_token: Some(token_str.to_string()),
-                            sub_account_id: claims.sub_account_id.clone(),
-                            master_account_id: claims.master_account_id.clone(),
-                            consumer_id: claims
-                                .azp
-                                .clone()
-                                .unwrap_or_else(|| "unknown".to_string()),
-                        };
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "JWT validation failed, using default context");
-                    }
-                }
-            }
+impl AuthContext {
+    fn tool_context(&self, headers: &HeaderMap, request_id: String) -> ToolContext {
+        ToolContext {
+            tenant_id: self.tenant_id.clone(),
+            user_id: self.user_id.clone(),
+            user_email: self.user_email.clone(),
+            request_id,
+            roles: self.roles.clone(),
+            scopes: self.scopes.clone(),
+            raw_token: self.raw_token.clone(),
+            consumer_id: self.consumer_id.clone(),
+            from_control_plane: headers
+                .get("x-stoa-source")
+                .and_then(|value| value.to_str().ok())
+                == Some("control-plane"),
+            progress_token: None,
+            skill_instructions: None,
         }
     }
+}
 
-    // Fallback: unauthenticated with default read scope
-    AuthContext {
-        user_id: user_from_header,
-        user_email: None,
-        tenant_id: tenant_from_header.unwrap_or_else(|| "default".to_string()),
-        roles: vec![],
-        scopes: vec!["stoa:read".to_string()],
-        consumer_id: "unknown".to_string(),
-        raw_token: None,
-        sub_account_id: None,
-        master_account_id: None,
+/// Authorize A2A using the same identity, CP permissions and OPA policy as MCP.
+pub(crate) async fn request_tool_context(
+    state: &AppState,
+    headers: &HeaderMap,
+    tool_name: &str,
+) -> Result<(ToolContext, Arc<dyn Tool>), AuthError> {
+    let auth = extract_auth_context(state, headers).await?;
+    check_tool_permission(state, &auth.tenant_id, tool_name)
+        .await
+        .map_err(|status| (status, "Tool call rejected"))?;
+    let tool = state
+        .tool_registry
+        .get(tool_name)
+        .ok_or((StatusCode::NOT_FOUND, "Tool not found"))?;
+    let mut ctx = auth.tool_context(headers, request_id(headers));
+    // A2A is a client surface; its source header cannot assert a trusted origin.
+    ctx.from_control_plane = false;
+    require_admin_action(&auth, tool.required_action())
+        .map_err(|reason| (StatusCode::UNAUTHORIZED, reason))?;
+    check_tool_policy(state, tool.as_ref(), &ctx)
+        .map_err(|_| (StatusCode::FORBIDDEN, "Tool call rejected"))?;
+    Ok((ctx, tool))
+}
+
+/// Shared OPA input: action and ownership come from the registered tool.
+fn check_tool_policy(state: &AppState, tool: &dyn Tool, ctx: &ToolContext) -> Result<(), String> {
+    state.uac_enforcer.check_with_context(
+        PolicyCallerCtx {
+            resource_tenant_id: tool.tenant_id().map(str::to_string),
+            user_id: ctx.user_id.clone(),
+            user_email: ctx.user_email.clone(),
+            scopes: ctx.scopes.clone(),
+            roles: ctx.roles.clone(),
+        },
+        &ctx.tenant_id,
+        tool.name(),
+        tool.required_action(),
+    )
+}
+
+/// Every transport uses the same fail-closed CP permission decision.
+pub(crate) async fn check_tool_permission(
+    state: &AppState,
+    tenant_id: &str,
+    tool_name: &str,
+) -> Result<(), StatusCode> {
+    let permissions = state
+        .tool_permissions
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    if permissions.is_tool_allowed(tenant_id, tool_name).await {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
     }
+}
+
+fn require_admin_action(auth: &AuthContext, action: Action) -> Result<(), &'static str> {
+    match action {
+        Action::ManageTenants | Action::ManageUsers | Action::ManageContracts => {
+            auth.admin_authorization
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Validate the JWT before accepting any client identity or tenant.
+/// A client tenant header cannot override or disagree with the validated identity.
+pub(super) async fn extract_auth_context(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<AuthContext, AuthError> {
+    let (claims, token) = crate::auth::tenant::request_identity(state, headers)
+        .await
+        .map_err(|error| {
+            let status = if error.error == "forbidden" {
+                StatusCode::FORBIDDEN
+            } else {
+                StatusCode::UNAUTHORIZED
+            };
+            let message = match error.message.as_str() {
+                "tenant_required" | "A tenant claim is required" => "A tenant claim is required",
+                "A subject claim is required" => "A subject claim is required",
+                "JWT validation unavailable" => "JWT authentication is unavailable",
+                "Authentication required" => "Authentication required",
+                _ if error.error == "forbidden" => "Tenant validation failed",
+                _ => "Invalid token",
+            };
+            (status, message)
+        })?;
+    let tenant = crate::auth::tenant::require_tenant(&claims)
+        .map_err(|_| (StatusCode::FORBIDDEN, "A tenant claim is required"))?;
+    let roles = claims
+        .realm_roles()
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+    let mut scopes = claims
+        .scopes()
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+    expand_role_scopes(&roles, &mut scopes);
+    Ok(AuthContext {
+        user_id: Some(claims.sub.clone()),
+        user_email: claims.email.clone(),
+        tenant_id: tenant.to_string(),
+        roles,
+        scopes,
+        raw_token: state
+            .config
+            .mcp_forward_user_token
+            .then(|| token.to_string()),
+        admin_authorization: validate_privileged_claims(&state.config, &claims),
+        sub_account_id: claims.sub_account_id.clone(),
+        master_account_id: claims.master_account_id.clone(),
+        consumer_id: claims.azp.clone().unwrap_or_else(|| "unknown".to_string()),
+    })
+}
+
+fn auth_failure((status, message): AuthError) -> Response {
+    let mut response = (
+        status,
+        Json(ToolsCallResponse {
+            content: vec![ToolContent::Text {
+                text: message.to_string(),
+            }],
+            is_error: Some(true),
+        }),
+    )
+        .into_response();
+    if status == StatusCode::UNAUTHORIZED {
+        response.headers_mut().insert(
+            "WWW-Authenticate",
+            HeaderValue::from_static(
+                r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+            ),
+        );
+    }
+    response
 }
 
 /// Expand STOA roles to OAuth scopes (ADR-012 12-Scope Model)
 ///
 /// Maps Keycloak realm roles to granular STOA scopes:
-/// - cpi-admin → all 6 scopes (admin, read, write, execute, deploy, audit)
+/// - cpi-admin → non-admin scopes; stoa:admin must be explicitly issued
 /// - tenant-admin → read, write, execute
 /// - devops → read, write, deploy
 /// - viewer → read only
 fn expand_role_scopes(roles: &[String], scopes: &mut Vec<String>) {
+    filter_admin_scope(roles, scopes);
     for role in roles {
         let extra = match role.as_str() {
-            "cpi-admin" | "cpi_admin" | "admin" => vec![
-                "stoa:admin",
+            "cpi-admin" => vec![
                 "stoa:read",
                 "stoa:write",
                 "stoa:execute",
@@ -217,14 +315,19 @@ pub struct RestToolInvokeRequest {
     fields(
         otel.kind = "server",
         tenant_id = tracing::field::Empty,
+        stoa.tenant_id = tracing::field::Empty,
     )
 )]
 pub async fn mcp_rest_tools_list(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let auth = extract_auth_context(&state, &headers).await;
+    let auth = match extract_auth_context(&state, &headers).await {
+        Ok(auth) => auth,
+        Err(error) => return auth_failure(error),
+    };
     tracing::Span::current().record("tenant_id", auth.tenant_id.as_str());
+    tracing::Span::current().record("stoa.tenant_id", auth.tenant_id.as_str());
     debug!(tenant_id = %auth.tenant_id, "REST v1: listing MCP tools");
 
     // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
@@ -247,7 +350,7 @@ pub async fn mcp_rest_tools_list(
     }
 
     let tools = state.tool_registry.list(Some(&auth.tenant_id));
-    Json(tools)
+    Json(tools).into_response()
 }
 
 /// POST /mcp/v1/tools/invoke — REST-style tool invocation
@@ -260,6 +363,7 @@ pub async fn mcp_rest_tools_list(
     fields(
         otel.kind = "server",
         tenant_id = tracing::field::Empty,
+        stoa.tenant_id = tracing::field::Empty,
         tool_name = tracing::field::Empty,
     )
 )]
@@ -283,6 +387,7 @@ pub async fn mcp_rest_tools_invoke(
     fields(
         otel.kind = "server",
         tenant_id = tracing::field::Empty,
+        stoa.tenant_id = tracing::field::Empty,
     )
 )]
 pub async fn mcp_tools_list(
@@ -290,8 +395,12 @@ pub async fn mcp_tools_list(
     headers: HeaderMap,
     Json(_request): Json<ToolsListRequest>,
 ) -> impl IntoResponse {
-    let auth = extract_auth_context(&state, &headers).await;
+    let auth = match extract_auth_context(&state, &headers).await {
+        Ok(auth) => auth,
+        Err(error) => return auth_failure(error),
+    };
     tracing::Span::current().record("tenant_id", auth.tenant_id.as_str());
+    tracing::Span::current().record("stoa.tenant_id", auth.tenant_id.as_str());
 
     debug!(tenant_id = %auth.tenant_id, "Listing MCP tools");
 
@@ -320,6 +429,7 @@ pub async fn mcp_tools_list(
         tools,
         next_cursor: None,
     })
+    .into_response()
 }
 
 /// Record HTTP status on the current OTel span (CAB-1997).
@@ -363,12 +473,30 @@ fn with_rate_limit_headers(
 /// 4. Tool execution
 /// 5. Metering emission (Phase 3)
 /// 6. Token optimization (Phase 4)
+pub async fn mcp_tools_call(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ToolsCallRequest>,
+) -> Response {
+    mcp_tools_call_with_auth(state, headers, request, None).await
+}
+
+pub(super) fn request_id(headers: &HeaderMap) -> String {
+    headers
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+}
+
 #[instrument(
     name = "mcp.tools.call",
-    skip(state, headers, request),
+    skip(state, headers, request, auth),
     fields(
         otel.kind = "server",
         tenant_id = tracing::field::Empty,
+        stoa.tenant_id = tracing::field::Empty,
         tool_name = tracing::field::Empty,
         user_id = tracing::field::Empty,
         http.status_code = tracing::field::Empty,
@@ -380,12 +508,18 @@ fn with_rate_limit_headers(
         upstream.cb_state = tracing::field::Empty,
     )
 )]
-pub async fn mcp_tools_call(
-    State(state): State<AppState>,
+pub(super) async fn mcp_tools_call_with_auth(
+    state: AppState,
     headers: HeaderMap,
-    Json(request): Json<ToolsCallRequest>,
+    request: ToolsCallRequest,
+    auth: Option<AuthContext>,
 ) -> Response {
-    let response = mcp_tools_call_inner(state, headers, request).await;
+    let request_id = request_id(&headers);
+    let mut response =
+        mcp_tools_call_inner(state, headers, request, auth, request_id.clone()).await;
+    if let Ok(value) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert("x-request-id", value);
+    }
     record_span_status(response.status().as_u16());
     response
 }
@@ -394,21 +528,29 @@ async fn mcp_tools_call_inner(
     state: AppState,
     headers: HeaderMap,
     request: ToolsCallRequest,
+    auth: Option<AuthContext>,
+    request_id: String,
 ) -> Response {
     let start = Instant::now();
-    let request_id = uuid::Uuid::new_v4().to_string();
     let request_size = serde_json::to_string(&request.arguments)
         .map(|s| s.len() as u64)
         .unwrap_or(0);
 
     // Phase 1: Extract JWT auth context
-    let auth = extract_auth_context(&state, &headers).await;
+    let auth = match auth {
+        Some(auth) => auth,
+        None => match extract_auth_context(&state, &headers).await {
+            Ok(auth) => auth,
+            Err(error) => return auth_failure(error),
+        },
+    };
     let t_auth = start.elapsed();
     let deployment_mode = state.config.gateway_mode.to_string();
 
     // Enrich span with UAC attributes for OTel export (CAB-1374)
     let current_span = tracing::Span::current();
     current_span.record("tenant_id", auth.tenant_id.as_str());
+    current_span.record("stoa.tenant_id", auth.tenant_id.as_str());
     current_span.record("tool_name", request.name.as_str());
     if let Some(ref uid) = auth.user_id {
         current_span.record("user_id", uid.as_str());
@@ -428,7 +570,10 @@ async fn mcp_tools_call_inner(
     );
 
     // Get tool from registry (CAB-1558: skip sync refresh if cache was ever loaded)
-    let tool = match state.tool_registry.get(&request.name) {
+    let tool = match state
+        .tool_registry
+        .get_for_tenant(&request.name, &auth.tenant_id)
+    {
         Some(t) => t,
         None => {
             // CAB-1558: Only do sync refresh if tenant was NEVER loaded.
@@ -453,7 +598,10 @@ async fn mcp_tools_call_inner(
                 )
                 .await;
                 // Retry lookup after refresh
-                if let Some(t) = state.tool_registry.get(&request.name) {
+                if let Some(t) = state
+                    .tool_registry
+                    .get_for_tenant(&request.name, &auth.tenant_id)
+                {
                     t
                 } else {
                     warn!(tool = %request.name, "Tool not found (after sync refresh)");
@@ -579,7 +727,7 @@ async fn mcp_tools_call_inner(
                     .into_response();
             }
         }
-        // None = cache miss/error -> permissive (logged in FederationCache)
+        // Provider failures return an empty allow-list and are denied above.
     }
 
     // Check rate limit (CAB-1371: per-sub-account isolation for federation requests)
@@ -665,34 +813,51 @@ async fn mcp_tools_call_inner(
     // Tenant tool permission check (replaces circular CP-API proxy)
     // Fetches permissions from CP-API and caches locally (60s TTL).
     // Fail-closed: only fresh explicit allow entries can execute.
-    if let Some(ref perm_svc) = state.tool_permissions {
-        if !perm_svc
-            .is_tool_allowed(&auth.tenant_id, &request.name)
-            .await
-        {
-            warn!(
-                tenant = %auth.tenant_id,
-                tool = %request.name,
-                "Tool execution denied by tenant tool permissions"
-            );
-            metrics::record_tool_call(
-                &request.name,
-                &auth.tenant_id,
-                "permission_denied",
-                start.elapsed().as_secs_f64(),
-                &auth.consumer_id,
-            );
-            return (
-                StatusCode::FORBIDDEN,
-                Json(ToolsCallResponse {
-                    content: vec![ToolContent::Text {
-                        text: format!("Tool '{}' is not allowed for this tenant", request.name),
-                    }],
-                    is_error: Some(true),
-                }),
-            )
-                .into_response();
-        }
+    let permission = check_tool_permission(&state, &auth.tenant_id, &request.name).await;
+    if permission == Err(StatusCode::FORBIDDEN) {
+        warn!(
+            tenant = %auth.tenant_id,
+            tool = %request.name,
+            "Tool execution denied by tenant tool permissions"
+        );
+        metrics::record_tool_call(
+            &request.name,
+            &auth.tenant_id,
+            "permission_denied",
+            start.elapsed().as_secs_f64(),
+            &auth.consumer_id,
+        );
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ToolsCallResponse {
+                content: vec![ToolContent::Text {
+                    text: format!("Tool '{}' is not allowed for this tenant", request.name),
+                }],
+                is_error: Some(true),
+            }),
+        )
+            .into_response();
+    }
+
+    if permission == Err(StatusCode::SERVICE_UNAVAILABLE) {
+        record_tool_denial(
+            &auth,
+            &request.name,
+            &request_id,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "unavailable",
+            "Tenant tool permissions unavailable",
+        );
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ToolsCallResponse {
+                content: vec![ToolContent::Text {
+                    text: "Tenant tool permissions unavailable".to_string(),
+                }],
+                is_error: Some(true),
+            }),
+        )
+            .into_response();
     }
 
     // CAB-707: Guardrails check (PII + prompt injection)
@@ -761,7 +926,14 @@ async fn mcp_tools_call_inner(
             }
             tracing::Span::current().record("guardrails.action", "blocked");
             tracing::Span::current().record("guardrails.reason", reason.as_str());
-            warn!(tool = %request.name, reason = %reason, "Guardrails blocked request");
+            record_tool_denial(
+                &auth,
+                &request.name,
+                &request_id,
+                StatusCode::BAD_REQUEST,
+                "guardrail",
+                &reason,
+            );
             let mut resp = (
                 StatusCode::BAD_REQUEST,
                 Json(ToolsCallResponse {
@@ -889,44 +1061,27 @@ async fn mcp_tools_call_inner(
         None
     };
 
-    // Detect re-entry from CP-API to prevent circular proxy loops.
-    // CP-API sets X-Stoa-Source: control-plane when proxying tool calls to gateway.
-    let from_control_plane = headers
-        .get("x-stoa-source")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v == "control-plane")
-        .unwrap_or(false);
-
     // Build tool context with real JWT claims (Phase 1)
-    let ctx = ToolContext {
-        tenant_id: auth.tenant_id.clone(),
-        user_id: auth.user_id.clone(),
-        user_email: auth.user_email.clone(),
-        request_id,
-        roles: auth.roles.clone(),
-        scopes: auth.scopes.clone(),
-        raw_token: auth.raw_token.clone(),
-        skill_instructions,
-        progress_token: None,
-        consumer_id: auth.consumer_id.clone(),
-        from_control_plane,
-    };
+    let mut ctx = auth.tool_context(&headers, request_id.clone());
+    ctx.skill_instructions = skill_instructions;
 
     // Phase 2: OPA policy evaluation with real scopes/roles
-    let _opa_span = tracing::info_span!("policy.opa", otel.kind = "internal").entered();
     let required_action = tool.required_action();
+    if let Err(reason) = require_admin_action(&auth, required_action) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [(
+                "WWW-Authenticate",
+                "Bearer error=\"insufficient_user_authentication\"",
+            )],
+            Json(serde_json::json!({"error": reason})),
+        )
+            .into_response();
+    }
+
+    let _opa_span = tracing::info_span!("policy.opa", otel.kind = "internal").entered();
     let t_policy_start = Instant::now();
-    if let Err(e) = state.uac_enforcer.check_with_context(
-        PolicyCallerCtx {
-            user_id: ctx.user_id.clone(),
-            user_email: ctx.user_email.clone(),
-            scopes: ctx.scopes.clone(),
-            roles: ctx.roles.clone(),
-        },
-        &ctx.tenant_id,
-        &request.name,
-        required_action,
-    ) {
+    if let Err(e) = check_tool_policy(&state, tool.as_ref(), &ctx) {
         let t_gateway = start.elapsed().as_millis() as u64;
         warn!(
             tool = %request.name,
@@ -1030,7 +1185,17 @@ async fn mcp_tools_call_inner(
         tool_cb.allow_request()
     };
     if !cb_allowed {
-        warn!(tool = %request.name, "Tool circuit breaker open — fast-failing");
+        record_tool_denial(
+            &auth,
+            &request.name,
+            &request_id,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "unavailable",
+            &format!(
+                "Tool '{}' is temporarily unavailable (circuit breaker open)",
+                request.name
+            ),
+        );
         metrics::record_tool_call(
             &request.name,
             &auth.tenant_id,
@@ -1383,6 +1548,36 @@ fn emit_error_snapshot(
 
 // === Helpers ===
 
+fn record_tool_denial(
+    auth: &AuthContext,
+    tool: &str,
+    request_id: &str,
+    status: StatusCode,
+    category: &str,
+    reason: &str,
+) {
+    warn!(
+        tool,
+        request_id,
+        status = status.as_u16(),
+        category,
+        reason,
+        "Tool call rejected"
+    );
+    warn!(
+        audit = true,
+        action = "tool_call",
+        outcome = "failure",
+        tenant_id = %auth.tenant_id,
+        tool,
+        request_id,
+        status = status.as_u16(),
+        category,
+        reason,
+        "Request denied"
+    );
+}
+
 fn record_mcp_guardrail_metric_event(deployment_mode: &str, event: GuardrailMetricEvent) {
     metrics::record_guardrail_evaluation(deployment_mode, MCP_GUARDRAIL_SURFACE, event.guardrail);
     metrics::record_guardrail_decision(
@@ -1397,20 +1592,6 @@ fn record_mcp_guardrail_metric_events(deployment_mode: &str, events: &[Guardrail
     for event in events {
         record_mcp_guardrail_metric_event(deployment_mode, *event);
     }
-}
-
-fn extract_tenant(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("X-Tenant-ID")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-}
-
-fn extract_user(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("X-User-ID")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
 }
 
 /// Refresh tools for a tenant via CP discovery (CAB-1317 Phase 2).
@@ -1431,15 +1612,19 @@ mod tests {
     use super::*;
     use axum::http::HeaderValue;
 
+    fn verified_tenant(tenant: Option<&str>) -> Result<String, StatusCode> {
+        crate::telemetry::validated_tenant(tenant).ok_or(StatusCode::FORBIDDEN)
+    }
+
     // === expand_role_scopes ===
 
     #[test]
-    fn test_expand_cpi_admin_all_scopes() {
+    fn test_expand_cpi_admin_does_not_mint_admin_scope() {
         let roles = vec!["cpi-admin".to_string()];
         let mut scopes = vec![];
         expand_role_scopes(&roles, &mut scopes);
-        assert_eq!(scopes.len(), 6);
-        assert!(scopes.contains(&"stoa:admin".to_string()));
+        assert_eq!(scopes.len(), 5);
+        assert!(!scopes.contains(&"stoa:admin".to_string()));
         assert!(scopes.contains(&"stoa:read".to_string()));
         assert!(scopes.contains(&"stoa:write".to_string()));
         assert!(scopes.contains(&"stoa:execute".to_string()));
@@ -1452,7 +1637,7 @@ mod tests {
         let roles = vec!["cpi_admin".to_string()];
         let mut scopes = vec![];
         expand_role_scopes(&roles, &mut scopes);
-        assert_eq!(scopes.len(), 6);
+        assert!(scopes.is_empty());
     }
 
     #[test]
@@ -1460,7 +1645,7 @@ mod tests {
         let roles = vec!["admin".to_string()];
         let mut scopes = vec![];
         expand_role_scopes(&roles, &mut scopes);
-        assert_eq!(scopes.len(), 6);
+        assert!(scopes.is_empty());
     }
 
     #[test]
@@ -1559,34 +1744,27 @@ mod tests {
         assert!(scopes.is_empty());
     }
 
-    // === extract_tenant ===
-
-    #[test]
-    fn test_extract_tenant_present() {
+    #[tokio::test]
+    async fn test_unverified_tenant_header_does_not_assign_tenant() {
+        let state = AppState::new(crate::config::Config::default());
         let mut headers = HeaderMap::new();
-        headers.insert("X-Tenant-ID", HeaderValue::from_static("acme-corp"));
-        assert_eq!(extract_tenant(&headers), Some("acme-corp".to_string()));
+        headers.insert("X-Tenant-ID", "acme".parse().unwrap());
+        assert!(extract_auth_context(&state, &headers).await.is_err());
     }
 
     #[test]
-    fn test_extract_tenant_missing() {
-        let headers = HeaderMap::new();
-        assert_eq!(extract_tenant(&headers), None);
-    }
-
-    // === extract_user ===
-
-    #[test]
-    fn test_extract_user_present() {
-        let mut headers = HeaderMap::new();
-        headers.insert("X-User-ID", HeaderValue::from_static("user-42"));
-        assert_eq!(extract_user(&headers), Some("user-42".to_string()));
-    }
-
-    #[test]
-    fn test_extract_user_missing() {
-        let headers = HeaderMap::new();
-        assert_eq!(extract_user(&headers), None);
+    fn tenant_requires_verified_claim() {
+        assert_eq!(verified_tenant(None), Err(StatusCode::FORBIDDEN));
+        assert_eq!(verified_tenant(Some("")), Err(StatusCode::FORBIDDEN));
+        assert_eq!(
+            verified_tenant(Some("platform")),
+            Err(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(verified_tenant(Some("a\"}")), Err(StatusCode::FORBIDDEN));
+        assert_eq!(
+            verified_tenant(Some("tenant-a")),
+            Ok("tenant-a".to_string())
+        );
     }
 
     // === extract_optimization_level ===
@@ -1631,5 +1809,17 @@ mod tests {
             extract_optimization_level(&headers),
             OptimizationLevel::None
         );
+    }
+
+    #[test]
+    fn regression_generic_admin_alias_does_not_grant_platform_scopes() {
+        for role in ["admin", "cpi_admin", "tenant-other"] {
+            let mut scopes = vec![];
+            expand_role_scopes(&[role.into()], &mut scopes);
+            assert!(!scopes.iter().any(|scope| scope == "stoa:admin"));
+        }
+        let mut scopes = vec![];
+        expand_role_scopes(&["cpi-admin".into()], &mut scopes);
+        assert!(!scopes.iter().any(|scope| scope == "stoa:admin"));
     }
 }

@@ -371,6 +371,8 @@ mod tests {
     fn test_claims() -> crate::auth::claims::Claims {
         use crate::auth::claims::{Audience, Claims, RealmAccess};
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -383,6 +385,7 @@ mod tests {
             name: None,
             given_name: None,
             family_name: None,
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string()],

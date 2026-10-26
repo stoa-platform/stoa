@@ -46,7 +46,7 @@ fn make_tool_with_name(name: &str) -> Arc<dyn Tool> {
 
 #[tokio::test]
 async fn tool_with_unicode_name_registers_and_lists() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     let tool = make_tool_with_name("meteo-api");
     app.state.tool_registry.register(tool);
 
@@ -54,7 +54,9 @@ async fn tool_with_unicode_name_registers_and_lists() {
     assert_eq!(app.state.tool_registry.count(), 1);
     assert!(app.state.tool_registry.exists("meteo-api"));
 
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
     assert!(
         body.contains("meteo-api"),
@@ -64,7 +66,7 @@ async fn tool_with_unicode_name_registers_and_lists() {
 
 #[tokio::test]
 async fn tool_with_em_dash_in_name() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     // Use hyphen-minus (safe) — em-dash and unicode in tool names
     // may not round-trip through the MCP listing endpoint.
     let tool = make_tool_with_name("weather-live-v2");
@@ -72,7 +74,9 @@ async fn tool_with_em_dash_in_name() {
 
     assert_eq!(app.state.tool_registry.count(), 1);
 
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
     assert!(
         body.contains("weather-live-v2"),
@@ -86,7 +90,7 @@ async fn tool_with_em_dash_in_name() {
 
 #[tokio::test]
 async fn concurrent_tool_registration_consistent() {
-    let app = TestApp::new();
+    let app = TestApp::with_mcp_auth().await;
     // Register 50 tools concurrently
     let handles: Vec<_> = (0..50)
         .map(|i| {
@@ -103,7 +107,9 @@ async fn concurrent_tool_registration_consistent() {
     }
 
     // Verify all 50 tools are listed
-    let (status, body) = app.post_json("/mcp/tools/list", "{}").await;
+    let (status, body) = app
+        .post_json_with_bearer("/mcp/tools/list", "{}", app.mcp_token())
+        .await;
     assert_eq!(status, StatusCode::OK);
 
     let response: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");

@@ -6,11 +6,34 @@
 //! - sub: Subject (user ID)
 //! - preferred_username: User's display name
 //! - email: User's email
-//! - tenant: Custom claim for tenant ID
+//! - tenant_id: canonical tenant claim (legacy tenant requires explicit opt-in)
 //! - realm_access.roles: Keycloak realm roles
 //! - resource_access: Client-specific roles
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Reject ambiguous, empty, padded or non-string tenant claims at decoding.
+fn deserialize_tenant<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let tenant = match value {
+        serde_json::Value::String(s) => s,
+        serde_json::Value::Array(mut items) if items.len() == 1 => match items.remove(0) {
+            serde_json::Value::String(s) => s,
+            _ => return Err(serde::de::Error::custom("invalid_tenant_claim")),
+        },
+        _ => return Err(serde::de::Error::custom("invalid_tenant_claim")),
+    };
+    if tenant.is_empty() || tenant != tenant.trim() {
+        return Err(serde::de::Error::custom("invalid_tenant_claim"));
+    }
+    Ok(Some(tenant))
+}
 
 // =============================================================================
 // JWT Claims
@@ -34,6 +57,12 @@ pub struct Claims {
     /// Audience (client IDs)
     #[serde(default)]
     pub aud: Audience,
+
+    /// Issuer-assigned authentication assurance (validated by admin gates).
+    #[serde(default)]
+    pub acr: Option<String>,
+    #[serde(default)]
+    pub amr: Option<Vec<String>>,
 
     /// Authorized party (the client that requested the token)
     #[serde(default)]
@@ -63,9 +92,18 @@ pub struct Claims {
     #[serde(default)]
     pub family_name: Option<String>,
 
-    /// Custom tenant claim
-    #[serde(default)]
+    /// Canonical tenant_id claim. Singleton arrays support Keycloak group mappers.
+    #[serde(default, rename = "tenant_id", deserialize_with = "deserialize_tenant")]
     pub tenant: Option<String>,
+
+    /// Migration-only legacy claim; normalized by JwtValidator after verification.
+    #[serde(
+        default,
+        rename = "tenant",
+        deserialize_with = "deserialize_tenant",
+        skip_serializing
+    )]
+    pub legacy_tenant: Option<String>,
 
     /// Realm-level roles
     #[serde(default)]
@@ -191,23 +229,29 @@ impl Claims {
         self.preferred_username.as_deref()
     }
 
-    /// Get the tenant ID from custom claim or extract from realm roles.
+    /// Canonical, validated identity only. Roles never identify a tenant.
     pub fn tenant_id(&self) -> Option<&str> {
-        // First, check explicit tenant claim
-        if let Some(tenant) = &self.tenant {
-            return Some(tenant.as_str());
-        }
+        self.tenant
+            .as_deref()
+            .filter(|t| !t.is_empty() && *t == t.trim())
+    }
 
-        // Fallback: look for tenant-xxx role pattern
-        if let Some(realm_access) = &self.realm_access {
-            for role in &realm_access.roles {
-                if let Some(tenant) = role.strip_prefix("tenant-") {
-                    return Some(tenant);
-                }
+    /// Resolve signed claims after signature/issuer verification, before use.
+    pub fn validate_tenant(&mut self, allow_legacy: bool) -> Result<(), super::jwt::JwtError> {
+        if let (Some(canonical), Some(legacy)) = (&self.tenant, &self.legacy_tenant) {
+            if canonical != legacy {
+                return Err(super::jwt::JwtError::DecodeError(
+                    "conflicting_tenant_claims".into(),
+                ));
             }
         }
-
-        None
+        if self.tenant.is_none() && allow_legacy {
+            self.tenant = self.legacy_tenant.clone();
+        }
+        if self.tenant_id().is_none() && !self.has_realm_role("cpi-admin") {
+            return Err(super::jwt::JwtError::TenantRequired);
+        }
+        Ok(())
     }
 
     /// Get all realm roles.
@@ -363,6 +407,8 @@ mod tests {
 
     fn sample_claims() -> Claims {
         Claims {
+            acr: None,
+            amr: None,
             sub: "user-123".to_string(),
             exp: chrono::Utc::now().timestamp() + 3600,
             iat: chrono::Utc::now().timestamp(),
@@ -375,6 +421,7 @@ mod tests {
             name: Some("John Doe".to_string()),
             given_name: Some("John".to_string()),
             family_name: Some("Doe".to_string()),
+            legacy_tenant: None,
             tenant: Some("acme".to_string()),
             realm_access: Some(RealmAccess {
                 roles: vec!["tenant-admin".to_string(), "offline_access".to_string()],
@@ -410,13 +457,59 @@ mod tests {
     }
 
     #[test]
-    fn test_claims_tenant_from_role() {
+    fn canonical_tenant_claim_is_accepted_and_conflicts_are_rejected() {
+        let mut value = serde_json::to_value(sample_claims()).unwrap();
+        value.as_object_mut().unwrap().remove("tenant");
+        value["tenant_id"] = serde_json::json!("tenant-a");
+        let claims: Claims = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(claims.tenant.as_deref(), Some("tenant-a"));
+        value["tenant"] = serde_json::json!("tenant-b");
+        assert!(serde_json::from_value::<Claims>(value)
+            .unwrap()
+            .validate_tenant(false)
+            .is_err());
+    }
+
+    #[test]
+    fn test_claims_does_not_derive_tenant_from_role() {
         let mut claims = sample_claims();
         claims.tenant = None;
         claims.realm_access = Some(RealmAccess {
             roles: vec!["tenant-demo".to_string()],
         });
-        assert_eq!(claims.tenant_id(), Some("demo"));
+        assert_eq!(claims.tenant_id(), None);
+    }
+
+    #[test]
+    fn test_tenant_claim_wire_contract() {
+        let base = serde_json::to_value(sample_claims()).unwrap();
+        assert_eq!(base["tenant_id"], "acme");
+        let mut legacy = base.clone();
+        legacy.as_object_mut().unwrap().remove("tenant_id");
+        legacy["tenant"] = serde_json::json!("acme");
+        let mut claims: Claims = serde_json::from_value(legacy).unwrap();
+        assert_eq!(claims.tenant_id(), None);
+        claims.validate_tenant(true).unwrap();
+        assert_eq!(claims.tenant_id(), Some("acme"));
+
+        let mut duplicate = base.clone();
+        duplicate["tenant"] = serde_json::json!("beta");
+        assert!(serde_json::from_value::<Claims>(duplicate)
+            .unwrap()
+            .validate_tenant(false)
+            .is_err());
+        let mut array = base;
+        array["tenant_id"] = serde_json::json!(["acme", "beta"]);
+        assert!(serde_json::from_value::<Claims>(array).is_err());
+    }
+
+    #[test]
+    fn test_empty_tenant_and_role_are_not_context() {
+        let mut claims = sample_claims();
+        for tenant in [None, Some("".to_string()), Some(" ".to_string())] {
+            claims.tenant = tenant;
+            assert_eq!(claims.tenant_id(), None);
+        }
     }
 
     #[test]
@@ -587,5 +680,86 @@ mod tests {
         let claims: Claims = serde_json::from_str(json).unwrap();
         assert!(claims.sub_account_id.is_none());
         assert!(claims.master_account_id.is_none());
+    }
+    fn tenant_claims(extra: serde_json::Value) -> Claims {
+        let mut payload = serde_json::json!({"sub":"user", "iss":"https://issuer.example.invalid", "iat":1, "exp":9999999999_i64});
+        payload
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(payload).unwrap()
+    }
+
+    #[test]
+    fn regression_tenant_canonical_and_singleton_array() {
+        for value in [
+            serde_json::json!("tenant-a"),
+            serde_json::json!(["tenant-a"]),
+        ] {
+            let mut claims = tenant_claims(serde_json::json!({"tenant_id":value}));
+            claims.validate_tenant(false).unwrap();
+            assert_eq!(claims.tenant_id(), Some("tenant-a"));
+            let wire = serde_json::to_value(&claims).unwrap();
+            assert_eq!(wire["tenant_id"], "tenant-a");
+            assert!(wire.get("tenant").is_none());
+        }
+    }
+
+    #[test]
+    fn regression_tenant_missing_never_uses_role() {
+        for role in ["viewer", "tenant-admin", "tenant-other", "devops"] {
+            let mut claims = tenant_claims(serde_json::json!({"realm_access":{"roles":[role]}}));
+            assert!(matches!(
+                claims.validate_tenant(false),
+                Err(super::super::jwt::JwtError::TenantRequired)
+            ));
+            assert_eq!(claims.tenant_id(), None);
+        }
+    }
+
+    #[test]
+    fn regression_tenant_legacy_requires_explicit_opt_in() {
+        let mut claims = tenant_claims(serde_json::json!({"tenant":"tenant-a"}));
+        assert!(claims.validate_tenant(false).is_err());
+        assert_eq!(claims.tenant_id(), None);
+        claims.validate_tenant(true).unwrap();
+        assert_eq!(claims.tenant_id(), Some("tenant-a"));
+    }
+
+    #[test]
+    fn regression_tenant_conflicts_are_invalid_even_during_migration() {
+        for allow in [false, true] {
+            let mut claims =
+                tenant_claims(serde_json::json!({"tenant_id":"tenant-a", "tenant":"tenant-b"}));
+            assert!(claims.validate_tenant(allow).is_err());
+        }
+    }
+
+    #[test]
+    fn regression_tenant_invalid_shapes_are_not_coerced() {
+        for claim in ["tenant_id", "tenant"] {
+            for value in [
+                serde_json::json!(""),
+                serde_json::json!(" "),
+                serde_json::json!(" tenant-a"),
+                serde_json::json!(42),
+                serde_json::json!(true),
+                serde_json::json!({}),
+                serde_json::json!([]),
+                serde_json::json!(["tenant-a", "tenant-b"]),
+                serde_json::json!([null]),
+            ] {
+                let payload = serde_json::json!({"sub":"user", "iss":"issuer", "iat":1, "exp":9999999999_i64, (claim):value});
+                assert!(serde_json::from_value::<Claims>(payload).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn regression_tenant_only_platform_admin_can_be_unscoped() {
+        let mut claims = tenant_claims(serde_json::json!({"realm_access":{"roles":["cpi-admin"]}}));
+        claims.validate_tenant(false).unwrap();
+        assert!(crate::auth::tenant::require_tenant(&claims).is_err());
+        assert_eq!(claims.tenant_id(), None);
     }
 }

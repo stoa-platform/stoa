@@ -27,7 +27,7 @@ use crate::uac::Action;
 
 /// Allowed topics that can be published to via the bridge.
 /// Prevents arbitrary topic access — only whitelisted topics are permitted.
-const ALLOWED_TOPIC_PREFIXES: &[&str] = &["stoa.", "bridge."];
+const ALLOWED_TOPIC_PREFIXES: &[&str] = &["bridge."];
 
 /// Maximum message payload size (1 MB).
 const MAX_PAYLOAD_BYTES: usize = 1_048_576;
@@ -68,7 +68,7 @@ impl Tool for KafkaPublishTool {
     }
 
     fn description(&self) -> &str {
-        "Publish a JSON message to a Kafka topic. Topic must start with 'stoa.' or 'bridge.' prefix."
+        "Publish a JSON message to a Kafka topic. Topic must start with 'bridge.'; control-plane topics are reserved."
     }
 
     fn input_schema(&self) -> ToolSchema {
@@ -77,7 +77,7 @@ impl Tool for KafkaPublishTool {
             "topic".to_string(),
             serde_json::json!({
                 "type": "string",
-                "description": "Kafka topic name (must start with 'stoa.' or 'bridge.')"
+                "description": "Kafka topic name (must start with 'bridge.')"
             }),
         );
         properties.insert(
@@ -115,12 +115,21 @@ impl Tool for KafkaPublishTool {
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        if ctx.raw_token.is_none()
+            || ctx.tenant_id.trim().is_empty()
+            || matches!(ctx.tenant_id.as_str(), "*" | "all")
+        {
+            return Err(ToolError::PermissionDenied(
+                "Verified tenant authentication required".into(),
+            ));
+        }
+
         let topic = args
             .get("topic")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("'topic' is required".to_string()))?;
 
-        let key = args
+        let _requested_key = args
             .get("key")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("'key' is required".to_string()))?;
@@ -128,6 +137,30 @@ impl Tool for KafkaPublishTool {
         let message = args
             .get("message")
             .ok_or_else(|| ToolError::InvalidArguments("'message' is required".to_string()))?;
+
+        let mut message = message
+            .as_object()
+            .cloned()
+            .ok_or_else(|| ToolError::InvalidArguments("message must be an object".into()))?;
+        if message
+            .get("tenant_id")
+            .is_some_and(|v| v.as_str() != Some(ctx.tenant_id.as_str()))
+        {
+            return Err(ToolError::PermissionDenied(
+                "Conflicting tenant label".into(),
+            ));
+        }
+        if message
+            .get("payload")
+            .and_then(|v| v.get("tenant_id"))
+            .is_some_and(|v| v.as_str() != Some(ctx.tenant_id.as_str()))
+        {
+            return Err(ToolError::PermissionDenied(
+                "Conflicting payload tenant".into(),
+            ));
+        }
+        message.insert("tenant_id".into(), Value::String(ctx.tenant_id.clone()));
+        let key = ctx.tenant_id.as_str();
 
         // Validate topic prefix
         if !Self::is_topic_allowed(topic) {
@@ -140,7 +173,7 @@ impl Tool for KafkaPublishTool {
         }
 
         // Serialize and validate size
-        let payload = serde_json::to_string(message).map_err(|e| {
+        let payload = serde_json::to_string(&message).map_err(|e| {
             ToolError::InvalidArguments(format!("Failed to serialize message: {e}"))
         })?;
 
@@ -250,6 +283,15 @@ impl Tool for KafkaSubscribeTool {
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        if ctx.raw_token.is_none()
+            || ctx.tenant_id.trim().is_empty()
+            || matches!(ctx.tenant_id.as_str(), "*" | "all")
+        {
+            return Err(ToolError::PermissionDenied(
+                "Verified tenant authentication required".into(),
+            ));
+        }
+
         let limit = args
             .get("limit")
             .and_then(|v| v.as_u64())
@@ -333,7 +375,7 @@ mod tests {
             request_id: "req-1".to_string(),
             roles: vec!["admin".to_string()],
             scopes: vec!["stoa:write".to_string()],
-            raw_token: None,
+            raw_token: Some("verified-unit-context".to_string()),
             skill_instructions: None,
             progress_token: None,
             consumer_id: "test-client".to_string(),
@@ -374,8 +416,8 @@ mod tests {
 
     #[test]
     fn test_publish_topic_allowed() {
-        assert!(KafkaPublishTool::is_topic_allowed("stoa.events"));
-        assert!(KafkaPublishTool::is_topic_allowed("stoa.metering"));
+        assert!(!KafkaPublishTool::is_topic_allowed("stoa.events"));
+        assert!(!KafkaPublishTool::is_topic_allowed("stoa.metering"));
         assert!(KafkaPublishTool::is_topic_allowed("bridge.custom"));
         assert!(!KafkaPublishTool::is_topic_allowed("internal.secret"));
         assert!(!KafkaPublishTool::is_topic_allowed("other-topic"));
@@ -386,7 +428,7 @@ mod tests {
         let tool = KafkaPublishTool::new(make_producer(), None);
         let ctx = make_context();
         let args = serde_json::json!({
-            "topic": "stoa.test-events",
+            "topic": "bridge.test-events",
             "key": "acme",
             "message": {"event": "test", "data": 42}
         });
@@ -400,7 +442,7 @@ mod tests {
             _ => panic!("expected text content"),
         };
         assert!(text.contains("published"));
-        assert!(text.contains("stoa.test-events"));
+        assert!(text.contains("bridge.test-events"));
     }
 
     #[tokio::test]
@@ -691,5 +733,23 @@ mod tests {
         let tools = create_kafka_bridge_tools(producer, buffer, Some("acme".to_string()));
         assert_eq!(tools[0].tenant_id(), Some("acme"));
         assert_eq!(tools[1].tenant_id(), Some("acme"));
+    }
+    #[tokio::test]
+    async fn test_reject_cross_tenant_message_and_control_topics() {
+        let tool = KafkaPublishTool::new(make_producer(), None);
+        for args in [
+            serde_json::json!({"topic":"bridge.events", "key":"acme", "message":{"tenant_id":"other"}}),
+            serde_json::json!({"topic":"stoa.deploy.requests", "key":"acme", "message":{}}),
+        ] {
+            assert!(tool.execute(args, &make_context()).await.is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_requires_verified_identity() {
+        let tool = KafkaSubscribeTool::new(Arc::new(EventBuffer::new()), None);
+        let mut ctx = make_context();
+        ctx.raw_token = None;
+        assert!(tool.execute(serde_json::json!({}), &ctx).await.is_err());
     }
 }

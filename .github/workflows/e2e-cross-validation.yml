@@ -7,19 +7,10 @@
 
 name: E2E Cross-Validation
 
+# Déclenchement manuel uniquement : aucun runner self-hosted n'existe depuis
+# CAB-2114. Le cron et le push restaient en file sans jamais démarrer.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 7 * * *' # Daily 07:00 UTC
-  push:
-    branches:
-      - main
-    paths:
-      - 'e2e/tests/cross-validation*'
-      - 'e2e/fixtures/cross-validation*'
-      - 'e2e/fixtures/data-seeder*'
-      - 'e2e/fixtures/aria-helpers*'
-      - '.github/workflows/e2e-cross-validation.yml'
 
 concurrency:
   group: ${{ github.workflow }}

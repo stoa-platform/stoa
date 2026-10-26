@@ -2,7 +2,6 @@ package connect
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stoa-platform/stoa-go/internal/connect/adapters"
@@ -74,7 +73,7 @@ func TestPolicySyncerAppliesGeneric(t *testing.T) {
 	m := &policyMock{}
 	s := newPolicySyncer(m)
 	results := s.SyncPolicies(context.Background(), "http://gw", []PendingPolicy{
-		{ID: "p1", Name: "rate-limit", PolicyType: "rate_limit", Enabled: true, Config: map[string]interface{}{"rpm": 100}},
+		{ID: "p1", Name: "rate-limit", PolicyType: "rate_limit", Enabled: true, Config: map[string]interface{}{"maxRequests": 100, "intervalSeconds": 60}},
 	})
 	if len(results) != 1 || results[0].Status != "applied" {
 		t.Errorf("expected 1 applied result, got %+v", results)
@@ -153,22 +152,12 @@ func TestPolicySyncerAppliesOIDCScope(t *testing.T) {
 	}
 }
 
-// TestPolicySyncerOIDCFallsBackWithoutAdapter covers the case where the CP
-// emits an OIDC policy type but the local adapter does not implement
-// OIDCAdapter — the policy must fall through to generic ApplyPolicy rather
-// than crash with a nil dereference.
-func TestPolicySyncerOIDCFallsBackWithoutAdapter(t *testing.T) {
-	m := &policyMock{} // NOT OIDC
-	s := newPolicySyncer(m)
-	s.SyncPolicies(context.Background(), "http://gw", []PendingPolicy{{
-		ID:         "p1",
-		Name:       "strat-a",
-		PolicyType: "oidc_strategy",
-		Enabled:    true,
-		Config:     map[string]interface{}{},
-	}})
-	if len(m.applied) != 1 || m.applied[0] != "strat-a:oidc_strategy" {
-		t.Errorf("expected generic ApplyPolicy fallback, got %v", m.applied)
+// Intentional contract change: missing OIDC capability now fails closed.
+func TestPolicySyncerOIDCRefusesWithoutAdapter(t *testing.T) {
+	m := &policyMock{}
+	results := newPolicySyncer(m).SyncPolicies(context.Background(), "http://gw", []PendingPolicy{{ID: "p1", Name: "strat-a", PolicyType: "oidc_strategy", Enabled: true, Config: map[string]interface{}{}}})
+	if len(m.applied) != 0 || results[0].Status != "failed" || results[0].Error != "unsupported policy" {
+		t.Errorf("expected local unsupported refusal, results=%+v calls=%v", results, m.applied)
 	}
 }
 
@@ -225,23 +214,23 @@ func TestPolicySyncerRemovesOIDCStrategyViaGenericFallback(t *testing.T) {
 // --- Failure handling ---
 
 func TestPolicySyncerFailedApplyProducesFailedResult(t *testing.T) {
-	m := &policyMock{applyErr: errors.New("gateway 500")}
+	m := &policyMock{applyErr: &adapters.PolicyError{HTTPStatus: 500}}
 	s := newPolicySyncer(m)
 	results := s.SyncPolicies(context.Background(), "http://gw", []PendingPolicy{
-		{ID: "p1", Name: "x", PolicyType: "generic", Enabled: true},
+		{ID: "p1", Name: "x", PolicyType: "cors", Enabled: true},
 	})
-	if results[0].Status != "failed" || results[0].Error != "gateway 500" {
-		t.Errorf("expected failed/gateway 500, got %+v", results[0])
+	if results[0].Status != "failed" || results[0].Error != "policy request failed (HTTP 500)" {
+		t.Errorf("expected failed/HTTP 500, got %+v", results[0])
 	}
 }
 
 func TestPolicySyncerFailedRemoveProducesFailedResult(t *testing.T) {
-	m := &policyMock{removeErr: errors.New("not found")}
+	m := &policyMock{removeErr: &adapters.PolicyError{Code: "not_found"}}
 	s := newPolicySyncer(m)
 	results := s.SyncPolicies(context.Background(), "http://gw", []PendingPolicy{
 		{ID: "p1", Name: "x", PolicyType: "generic", Enabled: false},
 	})
-	if results[0].Status != "failed" || results[0].Error != "not found" {
+	if results[0].Status != "failed" || results[0].Error != "policy target not found" {
 		t.Errorf("expected failed/not found, got %+v", results[0])
 	}
 }

@@ -56,24 +56,29 @@ func (s *policySyncer) syncOne(ctx context.Context, adminURL string, p PendingPo
 
 	if err != nil {
 		result.Status = "failed"
-		result.Error = err.Error()
+		result.Error = adapters.SafePolicyError(err).Error()
 		// Log reads naturally whether we attempted apply or remove.
 		verb := "apply"
 		if !p.Enabled {
 			verb = "remove"
 		}
-		log.Printf("sync: %s policy %s failed: %v", verb, p.Name, err)
+		log.Printf("sync: %s policy failed: %s", verb, result.Error)
 		return result
 	}
 
 	result.Status = successStatus
-	log.Printf("sync: %s policy %s (%s)", successStatus, p.Name, p.PolicyType)
+	log.Printf("sync: %s policy", successStatus)
 	return result
 }
 
 // apply routes an enabled PendingPolicy through the typed OIDC handlers
 // (if the adapter supports OIDC) or the generic ApplyPolicy entry.
 func (s *policySyncer) apply(ctx context.Context, adminURL string, p PendingPolicy) error {
+	policy, err := adapters.PreparePolicy(s.adapter, adapters.PolicyAction{Type: p.PolicyType, Config: p.Config})
+	if err != nil {
+		return err
+	}
+	p.PolicyType, p.Config = policy.Type, policy.Config
 	switch {
 	case p.PolicyType == "oidc_auth_server" && s.hasOIDC():
 		return s.applyAuthServer(ctx, adminURL, p)
@@ -154,7 +159,7 @@ func getStringSliceConfig(config map[string]interface{}, key string) []string {
 	case []string:
 		return val
 	case []interface{}:
-		var result []string
+		result := make([]string, 0, len(val))
 		for _, item := range val {
 			if s, ok := item.(string); ok {
 				result = append(result, s)

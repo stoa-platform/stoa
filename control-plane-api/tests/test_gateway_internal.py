@@ -631,7 +631,7 @@ class TestGatewayConfig:
         policy.id = uuid4()
         policy.name = "rate-limit-default"
         policy.policy_type = MagicMock(value="rate_limit")
-        policy.config = {"requests_per_minute": 100}
+        policy.config = {"maxRequests": 100, "intervalSeconds": 60}
         policy.priority = 10
         policy.enabled = True
 

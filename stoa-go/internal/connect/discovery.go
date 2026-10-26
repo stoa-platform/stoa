@@ -17,6 +17,8 @@ type DiscoveryConfig struct {
 	GatewayAdminURL string
 	// GatewayType is the gateway type (kong, gravitee, webmethods, auto).
 	GatewayType string
+	// EnvoyServer is supplied by the explicit Envoy runtime only.
+	EnvoyServer adapters.EnvoyControlPlane
 	// Interval between discovery runs.
 	Interval time.Duration
 	// Adapter-level auth config.
@@ -52,6 +54,11 @@ func ResolveAdapter(ctx context.Context, cfg DiscoveryConfig) (adapters.GatewayA
 	acfg := cfg.AdapterConfig
 
 	switch strings.ToLower(cfg.GatewayType) {
+	case "envoy":
+		if cfg.EnvoyServer == nil {
+			return nil, "", fmt.Errorf("envoy ADS server is required")
+		}
+		return adapters.NewEnvoyAdapter(cfg.EnvoyServer), "envoy", nil
 	case "kong":
 		return adapters.NewKongAdapter(acfg), "kong", nil
 	case "gravitee":

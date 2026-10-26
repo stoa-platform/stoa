@@ -226,7 +226,6 @@ memory-archive.md
 /.github/workflows/claude-autopilot-scan.yml
 /.github/workflows/claude-interactive.yml
 /.github/workflows/claude-linear-dispatch.yml
-/.github/workflows/claude-md-budget.yml
 /.github/workflows/claude-multi-agent.yml
 /.github/workflows/claude-review.yml
 /.github/workflows/claude-scheduled.yml

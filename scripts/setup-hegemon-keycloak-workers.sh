@@ -18,6 +18,9 @@
 # CAB-1712: HEGEMON Keycloak service accounts
 
 set -euo pipefail
+set +x
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib/secret-input.sh"
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -49,11 +52,10 @@ fi
 KCADM="kubectl exec -n stoa-system $KEYCLOAK_POD -- /opt/keycloak/bin/kcadm.sh"
 
 echo "Logging into Keycloak..."
-$KCADM config credentials \
+printf '%s\n' "$KEYCLOAK_ADMIN_PASSWORD" | kubectl exec -i -n stoa-system "$KEYCLOAK_POD" -- /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://localhost:8080 \
   --realm master \
-  --user admin \
-  --password "$KEYCLOAK_ADMIN_PASSWORD"
+  --user admin
 
 echo ""
 echo "=== Creating HEGEMON Worker Service Accounts ==="
@@ -131,7 +133,7 @@ for ROLE in "${WORKERS[@]}"; do
     continue
   fi
 
-  echo "  Client secret retrieved (${#CLIENT_SECRET} chars)"
+  echo "  Client secret retrieved for direct storage."
 
   # Store in Infisical if token is available.
   if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
@@ -148,7 +150,7 @@ for ROLE in "${WORKERS[@]}"; do
       }" > /dev/null 2>&1 && echo "    Stored successfully" || echo "    WARN: Infisical storage failed (store manually)"
   else
     echo "  WARN: INFISICAL_TOKEN not set — secret not stored automatically"
-    echo "  Store manually: infisical secrets set KC_CLIENT_SECRET=$CLIENT_SECRET --env=prod --path=/hegemon/worker-${ROLE}"
+    echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage."
   fi
 
   echo ""
@@ -177,14 +179,14 @@ for ROLE in "${WORKERS[@]}"; do
 
   TOKEN_RESPONSE=$(curl -s -X POST "$TOKEN_URL" \
     -d "client_id=$CLIENT_ID" \
-    -d "client_secret=$CLIENT_SECRET" \
+    --data-urlencode "client_secret=$CLIENT_SECRET" \
     -d "grant_type=client_credentials" 2>/dev/null)
 
   ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
 
   if [[ -z "$ACCESS_TOKEN" ]]; then
     echo "  FAIL: $CLIENT_ID — could not get token"
-    echo "    Response: $(echo "$TOKEN_RESPONSE" | head -c 200)"
+    echo "    Request failed; response details are withheld."
     continue
   fi
 

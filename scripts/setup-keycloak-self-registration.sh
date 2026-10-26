@@ -1,52 +1,34 @@
 #!/bin/bash
-# Enable Keycloak Self-Registration for STOA Developer Portal (CAB-1170)
-#
-# Usage: ./setup-keycloak-self-registration.sh <KC_ADMIN_PWD> <SMTP_HOST> <SMTP_PORT> <SMTP_USER> <SMTP_PWD> <SMTP_FROM>
-#
-# ORDERING IS CRITICAL:
-#   1. Configure SMTP (so email verification works)
-#   2. Enable email verification
-#   3. Enable VERIFY_EMAIL required action
-#   4. Enable registration (LAST — so users never register without email verification)
-#
-# Security: Store SMTP credentials in Infisical, not shell history.
-#   Run with: set +o history  (or use env vars)
-
-set -e
+# Configure the realm using credentials supplied through the environment.
+# Usage: script [--dry-run]. Positional credentials are refused.
+# Keep credentials in the on-site secret store and disable shell tracing.
+set -euo pipefail
+set +x
 
 DRY_RUN=false
-if [ "$1" = "--dry-run" ]; then
+if [ "${1:-}" = "--dry-run" ]; then
   DRY_RUN=true
   shift
   echo "[DRY RUN] No changes will be made."
 fi
 
-if [ $# -lt 6 ]; then
-  echo "Usage: $0 [--dry-run] <KC_ADMIN_PWD> <SMTP_HOST> <SMTP_PORT> <SMTP_USER> <SMTP_PWD> <SMTP_FROM>"
-  echo ""
-  echo "Example:"
-  echo "  $0 MyAdminPwd smtp.sendgrid.net 587 apikey SG.xxx noreply@gostoa.dev"
-  echo ""
-  echo "Get KC admin password:"
-  echo "  kubectl get secret keycloak -n stoa-system -o jsonpath='{.data.admin-password}' | base64 -d"
-  echo ""
-  echo "IMPORTANT: Use 'set +o history' before running to avoid leaking creds in shell history."
-  echo "           Store SMTP credentials in Infisical after setup."
-  exit 1
+if [ $# -ne 0 ]; then
+  echo "Positional credentials are unsupported; use environment inputs." >&2
+  exit 2
 fi
-
-KC_ADMIN_PWD="$1"
-SMTP_HOST="$2"
-SMTP_PORT="$3"
-SMTP_USER="$4"
-SMTP_PWD="$5"
-SMTP_FROM="$6"
+KC_ADMIN_PWD="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
+: "${TERMS_URL:?TERMS_URL is required: set the on-site Terms of Service URL}"
+: "${SMTP_HOST:?SMTP_HOST is required}"
+: "${SMTP_PORT:?SMTP_PORT is required}"
+: "${SMTP_USER:?SMTP_USER is required}"
+: "${SMTP_PWD:?SMTP_PWD is required}"
+: "${SMTP_FROM:?SMTP_FROM is required}"
 REALM="stoa"
 
 # Find Keycloak pod
-KC_POD=$(kubectl get pods -n stoa-system -l app=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+KC_POD=$(kubectl get pods -n stoa-system -l app=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 if [ -z "$KC_POD" ]; then
-  KC_POD=$(kubectl get pods -n stoa-system -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  KC_POD=$(kubectl get pods -n stoa-system -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 fi
 
 if [ -z "$KC_POD" ]; then
@@ -64,20 +46,27 @@ echo ""
 # Step 1: Login
 echo "[1/6] Logging into Keycloak..."
 if [ "$DRY_RUN" = false ]; then
-  $KCADM config credentials \
+  printf '%s\n' "$KC_ADMIN_PWD" | kubectl exec -i -n stoa-system "$KC_POD" -- /opt/keycloak/bin/kcadm.sh config credentials \
     --server http://localhost:8080 \
     --realm master \
-    --user admin \
-    --password "$KC_ADMIN_PWD"
+    --user admin
 fi
 
 # Step 2: Configure SMTP
 echo "[2/6] Configuring SMTP server..."
-SMTP_JSON="{\"host\":\"$SMTP_HOST\",\"port\":\"$SMTP_PORT\",\"from\":\"$SMTP_FROM\",\"fromDisplayName\":\"STOA Platform\",\"auth\":\"true\",\"user\":\"$SMTP_USER\",\"password\":\"$SMTP_PWD\",\"starttls\":\"true\",\"ssl\":\"false\"}"
-echo "  Host: $SMTP_HOST:$SMTP_PORT"
-echo "  From: $SMTP_FROM"
 if [ "$DRY_RUN" = false ]; then
-  $KCADM update "realms/$REALM" -s "smtpServer=$SMTP_JSON"
+  export SMTP_HOST SMTP_PORT SMTP_USER SMTP_PWD SMTP_FROM
+  if ! python3 -c '
+import json, os
+smtp = {"host": os.environ["SMTP_HOST"], "port": os.environ["SMTP_PORT"],
+        "from": os.environ["SMTP_FROM"], "user": os.environ["SMTP_USER"],
+        "password": os.environ["SMTP_PWD"], "auth": "true", "starttls": "true", "ssl": "false"}
+print(json.dumps({"smtpServer": smtp}))' |
+    kubectl exec -i -n stoa-system "$KC_POD" -- /opt/keycloak/bin/kcadm.sh \
+      update "realms/$REALM" -f - >/dev/null 2>&1; then
+    echo "SMTP configuration failed; response details are withheld." >&2
+    exit 1
+  fi
 fi
 
 # Step 3: Enable email verification
@@ -89,22 +78,21 @@ fi
 # Step 4: Enable VERIFY_EMAIL required action
 echo "[4/6] Enabling VERIFY_EMAIL required action..."
 if [ "$DRY_RUN" = false ]; then
-  $KCADM update "realms/$REALM" \
-    -s 'requiredActions=[{"alias":"VERIFY_EMAIL","name":"Verify Email","providerId":"VERIFY_EMAIL","enabled":true,"defaultAction":true,"priority":50}]' 2>/dev/null || \
-  echo "  (VERIFY_EMAIL may already be configured — checking...)"
+  $KCADM update authentication/required-actions/VERIFY_EMAIL -r "$REALM" \
+    -s enabled=true -s defaultAction=true
 fi
 
-# Step 5: Enable registration
-echo "[5/6] Enabling self-registration..."
+# Step 5: Keep registration closed
+echo "[5/6] Closing self-registration..."
 if [ "$DRY_RUN" = false ]; then
-  $KCADM update "realms/$REALM" -s registrationAllowed=true
+  $KCADM update "realms/$REALM" -s registrationAllowed=false -s resetPasswordAllowed=false
 fi
 
 # Step 6: Add Terms of Service URL
 echo "[6/6] Setting Terms of Service URL..."
 if [ "$DRY_RUN" = false ]; then
   $KCADM update "realms/$REALM" \
-    -s 'attributes={"termsUrl":"https://docs.gostoa.dev/legal/terms"}'
+    -s "attributes.termsUrl=${TERMS_URL}"
 fi
 
 # Verify
@@ -112,23 +100,13 @@ echo ""
 echo "=== Verification ==="
 if [ "$DRY_RUN" = false ]; then
   echo "Current realm settings:"
-  $KCADM get "realms/$REALM" --fields registrationAllowed,verifyEmail,smtpServer 2>/dev/null | head -20
+  $KCADM get "realms/$REALM" --fields registrationAllowed,verifyEmail,resetPasswordAllowed 2>/dev/null | sed -n '1,20p'
 fi
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "Self-registration flow:"
-echo "  1. Developer visits portal.gostoa.dev"
-echo "  2. Clicks 'Create Free Account'"
-echo "  3. Redirected to Keycloak registration form"
-echo "  4. Receives email verification"
-echo "  5. Verifies email -> lands in Portal"
-echo "  6. Auto-provisioned: personal tenant + viewer role"
+echo "Registration is closed. Onboarding requires an approved invitation."
 echo ""
-echo "REMINDER: Store SMTP credentials in Infisical (vault.gostoa.dev)"
-echo "  infisical secrets set SMTP_HOST=$SMTP_HOST --env=prod --path=/keycloak"
-echo "  infisical secrets set SMTP_USER=$SMTP_USER --env=prod --path=/keycloak"
-echo "  infisical secrets set SMTP_PASSWORD=<value> --env=prod --path=/keycloak"
-echo ""
-echo "Clear shell history: history -c"
+echo "Store SMTP credentials through stdin using your on-site secret store."
+echo "See docs/runbooks/first-admin-bootstrap.md."

@@ -51,7 +51,7 @@ datasources:
       logMessageField: error_message
       logLevelField: severity
     secureJsonData:
-      basicAuthPassword: "${OPENSEARCH_PASSWORD:-admin}"
+      basicAuthPassword: "${OPENSEARCH_PASSWORD}"
     basicAuth: true
     basicAuthUser: "${OPENSEARCH_USER:-admin}"
 
@@ -74,7 +74,7 @@ datasources:
       logMessageField: name
       logLevelField: status.code
     secureJsonData:
-      basicAuthPassword: "${OPENSEARCH_PASSWORD:-admin}"
+      basicAuthPassword: "${OPENSEARCH_PASSWORD}"
     basicAuth: true
     basicAuthUser: "${OPENSEARCH_USER:-admin}"
 

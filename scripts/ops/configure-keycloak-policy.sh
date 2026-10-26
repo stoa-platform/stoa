@@ -21,6 +21,7 @@
 #   - curl + jq installed
 # =============================================================================
 set -euo pipefail
+set +x
 
 # --- Configuration ---
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
@@ -36,7 +37,7 @@ REALMS=("stoa" "master")
 # passwordHistory(5): DORA "credential rotation"
 # maxLength(128): support passphrases
 # No forceExpiredPasswordChange — NIST 800-63B discourages forced expiration
-PASSWORD_POLICY="length(12) and lowerCase(1) and upperCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5) and maxLength(128)"
+PASSWORD_POLICY="length(16) and lowerCase(1) and upperCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5) and maxLength(128)"
 
 # Brute-force protection settings
 BRUTE_FORCE_MAX_FAILURES=5
@@ -90,17 +91,19 @@ echo ""
 
 # --- Get admin token ---
 echo -e "${CYAN}[1/3] Getting admin token...${NC}"
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/secret-input.sh"
 TOKEN_RESPONSE=$(curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "client_id=admin-cli" \
-  -d "username=${ADMIN_USER}" \
-  -d "password=${ADMIN_PASSWORD}" \
+  --data-urlencode "username=${ADMIN_USER}" \
+  --data-urlencode "password=${ADMIN_PASSWORD}" \
   -d "grant_type=password" 2>/dev/null || echo '{"error":"failed"}')
 
 TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 if [ -z "$TOKEN" ]; then
   echo -e "${RED}Failed to get admin token. Check credentials.${NC}"
-  echo "Response: $(echo "$TOKEN_RESPONSE" | jq -r 'del(.access_token) | .error_description // .error // "unknown"')"
+  echo "Authentication failed; response details are withheld."
   exit 1
 fi
 echo -e "  ${GREEN}OK${NC} — admin token obtained"

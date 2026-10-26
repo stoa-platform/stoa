@@ -11,6 +11,7 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=dev -X main.Commit=$(
     -o /stoa-connect ./cmd/stoa-connect
 
 FROM alpine:3.19
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
 RUN apk add --no-cache ca-certificates curl
 COPY --from=builder /stoa-connect /usr/local/bin/stoa-connect
 ENTRYPOINT ["/usr/local/bin/stoa-connect"]

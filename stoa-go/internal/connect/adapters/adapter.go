@@ -26,17 +26,19 @@ type PolicyAction struct {
 
 // Route represents an API route fetched from the Control Plane for sync.
 type Route struct {
-	ID           string   `json:"id"`
-	DeploymentID string   `json:"deployment_id,omitempty"`
-	Name         string   `json:"name"`
-	TenantID     string   `json:"tenant_id"`
-	PathPrefix   string   `json:"path_prefix"`
-	BackendURL   string   `json:"backend_url"`
-	Methods      []string `json:"methods,omitempty"`
-	SpecHash     string   `json:"spec_hash,omitempty"`
+	APIID        string          `json:"api_id,omitempty"`
+	APICatalogID string          `json:"api_catalog_id,omitempty"`
+	ID           string          `json:"id"`
+	DeploymentID string          `json:"deployment_id,omitempty"`
+	Name         string          `json:"name"`
+	TenantID     string          `json:"tenant_id"`
+	PathPrefix   string          `json:"path_prefix"`
+	BackendURL   string          `json:"backend_url"`
+	Methods      []string        `json:"methods,omitempty"`
+	SpecHash     string          `json:"spec_hash,omitempty"`
 	OpenAPISpec  json.RawMessage `json:"openapi_spec,omitempty"`
-	Activated    bool     `json:"activated"`
-	Generation   int      `json:"generation,omitempty"` // CAB-1950: desired_generation from CP
+	Activated    bool            `json:"activated"`
+	Generation   int             `json:"generation,omitempty"` // CAB-1950: desired_generation from CP
 }
 
 // Credential represents a consumer credential fetched from Vault for injection.
@@ -113,7 +115,7 @@ type AuthServerSpec struct {
 type StrategySpec struct {
 	Name            string `json:"name"`
 	Description     string `json:"description,omitempty"`
-	Type            string `json:"type,omitempty"`   // default: OAUTH2
+	Type            string `json:"type,omitempty"` // default: OAUTH2
 	AuthServerAlias string `json:"auth_server_alias"`
 	ClientID        string `json:"client_id,omitempty"`
 	Audience        string `json:"audience"` // CRITICAL: empty string, not omitted
@@ -121,9 +123,9 @@ type StrategySpec struct {
 
 // ScopeSpec describes a scope mapping for an OIDC-enabled gateway.
 type ScopeSpec struct {
-	ScopeName       string   `json:"scope_name"`       // format: {Alias}:{Scope}
+	ScopeName       string   `json:"scope_name"` // format: {Alias}:{Scope}
 	Description     string   `json:"description,omitempty"`
-	Audience        string   `json:"audience"`          // CRITICAL: empty string, not omitted
+	Audience        string   `json:"audience"` // CRITICAL: empty string, not omitted
 	APIIDs          []string `json:"api_ids,omitempty"`
 	AuthServerAlias string   `json:"auth_server_alias"`
 	KeycloakScope   string   `json:"keycloak_scope,omitempty"` // default: openid

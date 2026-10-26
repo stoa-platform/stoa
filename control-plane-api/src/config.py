@@ -543,7 +543,8 @@ class Settings(BaseSettings):
 
     # Self-service signup (CAB-1541)
     SIGNUP_BLOCKED_EMAIL_DOMAINS: str = ""  # Comma-separated override (empty = use built-in blocklist)
-    SIGNUP_INVITE_CODES: str = ""  # Comma-separated valid invite codes (empty = no codes required for trial)
+    SIGNUP_MODE: Literal["invite", "open"] = "invite"
+    SIGNUP_INVITE_CODES: str = ""  # Comma-separated valid invite codes; empty disables invited signup
 
     @property
     def signup_invite_codes_list(self) -> list[str]:

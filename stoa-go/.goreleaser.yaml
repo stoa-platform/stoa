@@ -53,6 +53,7 @@ archives:
           - zip
     files:
       - LICENSE*
+      - NOTICE*
       - README*
 
   - id: stoa-connect
@@ -63,6 +64,7 @@ archives:
     name_template: "stoa-connect_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
+      - NOTICE*
       - README*
 
 checksum:
@@ -103,6 +105,9 @@ dockers:
       - "ghcr.io/stoa-platform/stoactl:v{{ .Major }}"
       - "ghcr.io/stoa-platform/stoactl:v{{ .Major }}.{{ .Minor }}"
       - "ghcr.io/stoa-platform/stoactl:latest"
+    extra_files:
+      - LICENSE
+      - NOTICE
     dockerfile: Dockerfile
     build_flag_templates:
       - "--label=org.opencontainers.image.created={{.Date}}"

@@ -88,15 +88,22 @@ def collect(root):
 
     def inspect_images(content, source, prefix=''):
         found = False
+        image_found = False
+        image_key = re.compile(r"(?:^|[\s{,])['\"]?image['\"]?\s*:", re.M)
         for i, line in enumerate(content.splitlines(), 1):
-            m = re.match(r'^\s*(?:-\s*)?(image|repository):\s*(.+?)\s*$', line)
-            if not m: continue
-            value = m[2].split(' #', 1)[0].strip("\"'")
-            if value.startswith('#') or (m[1] == 'repository' and re.match(r'(?:https?|file|oci)://', value)):
-                continue
-            found = True
-            add('oci', value, value if m[1] == 'image' else '', source, locator=prefix + str(i),
-                notes='référence YAML lexicale; repository/tag/templates à confirmer')
+            # Block and flow mappings; complex values remain explicitly unknown.
+            for m in re.finditer(r"(?:^\s*(?:-\s*)?|[{,]\s*)['\"]?(image|repository)['\"]?\s*:\s*([^,}\n]+)", line):
+                value = m[2].split(' #', 1)[0].strip().strip("\"'")
+                if (not value or value in {'null', '~', '|', '>'} or value.startswith(('#', '{', '['))
+                        or (m[1] == 'repository' and re.match(r'(?:https?|file|oci)://', value))):
+                    continue
+                found = True
+                image_found |= m[1] == 'image'
+                add('oci', value, value if m[1] == 'image' else '', source, locator=prefix + str(i),
+                    notes='référence YAML lexicale; repository/tag/templates à confirmer')
+        if not image_found and image_key.search(content):
+            gap('oci', source, 'clé image sans référence extraite; YAML non interprété')
+            rows[-1]['coverage_unknown'] = True
         return found
 
     def inspect_chart_dependencies(content, source):
@@ -247,6 +254,9 @@ def collect(root):
                         add('cargo-tool', token, '', f, locator=str(i),
                             notes='outil de build; version, graphe et licence non résolus')
             gap('oci', f, 'couches, outils de build et paquets système non inventoriés exhaustivement')
+        elif name == 'pnpm-lock.yaml':
+            gap('npm', f, 'format de lock pnpm non interprété; graphe à confirmer')
+            rows[-1]['coverage_unknown'] = True
         elif name.endswith(('.yaml', '.yml')) or name == 'Chart.lock':
             content = p.read_text()
             if inspect_images(content, f): gap('oci', f, 'YAML non rendu; images et tags effectifs non résolus')

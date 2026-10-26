@@ -151,7 +151,7 @@ def evaluate(rows, sources, policy):
         row['original_status'] = classify(row['license'], policy)
         row['status'] = row['original_status']
         # Premier temps du blocage: seules les licences de la liste phase 1.
-        row['phase1_denied'] = classify(row['license'], phase1) == 'incompatible'
+        row['phase1_denied'] = bool(row.get('coverage_unknown')) or classify(row['license'], phase1) == 'incompatible'
     for entry in policy.get('exceptions', []):
         identity = tuple(entry[k] for k in keys)
         matches = [r for r in rows if tuple(r[k] for k in keys) == identity]
@@ -183,20 +183,27 @@ def summary(line):
             pass
 
 
-def requested_mode(args):
-    """Mode demandé, lisible même si la politique est invalide (repli: warn)."""
+def resolve_mode(args, policy):
     if args.enforce:
         return 'enforce'
     if args.mode:
         return args.mode
+    if policy.get('enabled') is False and policy.get('mode') == 'enforce':
+        raise ValueError('enabled=false incompatible avec mode=enforce sans option CLI')
+    if 'enabled' in policy:
+        if type(policy['enabled']) is not bool:
+            raise ValueError('enabled incorrect')
+        return 'enforce' if policy['enabled'] else 'warn'
+    mode = policy.get('mode', 'warn')
+    if mode not in MODES:
+        raise ValueError('mode incorrect')
+    return mode
+
+
+def requested_mode(args):
+    """Même priorité que le chemin normal; configuration invalide: contrôle fermé."""
     try:
-        policy = json.loads(args.config.read_text(encoding='utf8'))
-        if 'enabled' in policy:
-            if type(policy['enabled']) is not bool:
-                return 'enforce'
-            return 'enforce' if policy['enabled'] else 'warn'
-        mode = policy.get('mode', 'warn')
-        return mode if mode in MODES else 'enforce'
+        return resolve_mode(args, json.loads(args.config.read_text(encoding='utf8')))
     except Exception:
         return 'enforce'
 
@@ -214,7 +221,7 @@ def main():
     try:
         policy = json.loads(args.config.read_text(encoding='utf8'))
         validate_policy(policy)
-        mode = 'enforce' if args.enforce else (args.mode or ('enforce' if policy.get('enabled') else policy.get('mode', 'warn')))
+        mode = resolve_mode(args, policy)
         if bool(args.inventory) != bool(args.snapshot):
             raise ValueError('CSV et snapshot obligatoires ensemble')
         if args.inventory:
@@ -254,6 +261,8 @@ def main():
                 args.report.write_text(json.dumps(dict(schema=2, result='invalid-input')) + '\n')
             except OSError:
                 pass
+        if not args.enforce and not args.mode and isinstance(locals().get('policy'), dict) and policy.get('enabled') is False and policy.get('mode') == 'enforce':
+            print('Configuration invalide: enabled=false incompatible avec mode=enforce sans option CLI.', file=sys.stderr)
         print('Entrées invalides ou périmées: contrôle fermé, régénération requise.', file=sys.stderr)
         if requested_mode(args) == 'warn':
             # Mode avertissement: ne jamais faire échouer la CI, mais rester visible.

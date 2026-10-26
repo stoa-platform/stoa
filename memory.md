@@ -4,6 +4,8 @@
 
 ## Session Notes — 2026-10-26
 
+- Offline licence checks: collect lexical YAML flow images, block unextracted image and pnpm lock coverage gaps in deny/enforce, and reject contradictory legacy mode settings without a CLI override. Regression suite: 44 tests pass.
+
 - Local gateway CI fixtures: provision the CP Python peer, bind its reader to its signed tenant, retain default-deny permission checks, and run SDK discovery with an ephemeral OIDC peer. Shared signing material lives under test fixtures. Local branch only.
 
 ## Session Notes — 2026-10-10 / 2026-10-11

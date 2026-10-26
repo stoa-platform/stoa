@@ -35,6 +35,41 @@ class LocalCI(unittest.TestCase):
             '--report', str(self.output), *extra], capture_output=True, text=True)
         return result.returncode
 
+    def test_r1_flow_images_and_unextracted_image_sentinel(self):
+        self.write('deploy/pod.yaml', 'spec:\n  containers:\n    - {name: app, image: example.test/app:1}\n')
+        rows, sources = collector.collect(self.root)
+        self.assertIn('deploy/pod.yaml', sources)
+        self.assertTrue(any(r['name'] == 'example.test/app:1' for r in rows))
+        for content in ('image: {}\n', '{"image": null}\n', 'image: {}\nrepository: example.test/repo\n'):
+            with self.subTest(content=content):
+                self.write('deploy/pod.yaml', content)
+                rows, _ = collector.collect(self.root)
+                self.assertTrue(any(r.get('coverage_unknown') for r in rows if r['source'] == 'deploy/pod.yaml'))
+                for mode in ('deny', 'enforce'):
+                    self.assertEqual(self.run_cli('--mode', mode), 1)
+
+    def test_r2_standalone_pnpm_lock_is_unknown(self):
+        self.write('sub/pnpm-lock.yaml', "lockfileVersion: '9.0'\npackages:\n  other@1.0.0: {}\n")
+        rows, sources = collector.collect(self.root)
+        self.assertIn('sub/pnpm-lock.yaml', sources)
+        self.assertTrue(any(r['source'] == 'sub/pnpm-lock.yaml' and r['license'] == collector.MARK for r in rows))
+        for mode in ('deny', 'enforce'):
+            self.assertEqual(self.run_cli('--mode', mode), 1)
+
+    def test_r3_contradictory_legacy_mode_is_invalid(self):
+        policy = json.loads(SCRIPT.with_name('licences-policy.json').read_text())
+        policy.update({'enabled': False, 'mode': 'enforce'})
+        path = self.write('policy.json', json.dumps(policy))
+        for content in ('[package]\nname="fixture"\n', '[broken'):
+            with self.subTest(content=content):
+                self.write('Cargo.toml', content)
+                result = subprocess.run(['python3', '-B', str(SCRIPT), '--root', str(self.root),
+                    '--config', str(path), '--report', str(self.output)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn('enabled=false', result.stderr)
+                self.assertEqual(json.loads(self.output.read_text())['result'], 'invalid-input')
+        self.assertEqual(self.run_cli('--config', str(path), '--mode', 'enforce'), 2)
+
     def test_warning_and_enforce_keep_unknown_visible(self):
         self.assertEqual(self.run_cli(), 0)
         data = json.loads(self.output.read_text())

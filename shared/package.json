@@ -1,6 +1,7 @@
 {
   "name": "@stoa/shared",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "description": "STOA Design System - Shared components and utilities",
   "main": "index.ts",

@@ -210,6 +210,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let authorization = async {
         if let Some((listener, service)) = grpc {
+            let shutdown_observer = shutdown.clone();
             use stoa_gateway::authz::proto::envoy::service::auth::v3::authorization_server::AuthorizationServer;
             tonic::transport::Server::builder()
                 .add_service(health_service)
@@ -219,6 +220,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     shutdown,
                 )
                 .await?;
+            if shutdown_observer.now_or_never().is_none() {
+                return Err("ext_authz listener stopped before shutdown".into());
+            }
         }
         Ok::<(), Box<dyn std::error::Error>>(())
     };

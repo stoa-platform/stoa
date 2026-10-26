@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -37,11 +36,9 @@ func (w *WebMethodsAdapter) listStrategies(ctx context.Context, adminURL string)
 }
 
 // UpsertAuthServer creates or updates an OIDC auth server alias on webMethods.
-func (w *WebMethodsAdapter) UpsertAuthServer(ctx context.Context, adminURL string, spec AuthServerSpec) error {
+func (w *WebMethodsAdapter) UpsertAuthServer(ctx context.Context, adminURL string, spec AuthServerSpec) (err error) {
+	defer func() { err = SafePolicyError(err) }()
 	scopes := spec.Scopes
-	if len(scopes) == 0 {
-		scopes = []string{"openid"}
-	}
 	payload := map[string]interface{}{
 		"name": spec.Name, "description": spec.Description, "type": "authServerAlias",
 		"discoveryURL": spec.DiscoveryURL, "introspectionURL": spec.IntrospectionURL,
@@ -62,7 +59,8 @@ func (w *WebMethodsAdapter) UpsertAuthServer(ctx context.Context, adminURL strin
 }
 
 // DeleteAuthServer removes an auth server alias by name.
-func (w *WebMethodsAdapter) DeleteAuthServer(ctx context.Context, adminURL string, name string) error {
+func (w *WebMethodsAdapter) DeleteAuthServer(ctx context.Context, adminURL string, name string) (err error) {
+	defer func() { err = SafePolicyError(err) }()
 	existing, err := w.listAliases(ctx, adminURL)
 	if err != nil {
 		return err
@@ -76,7 +74,8 @@ func (w *WebMethodsAdapter) DeleteAuthServer(ctx context.Context, adminURL strin
 }
 
 // UpsertStrategy creates or updates an OAuth2 strategy on webMethods.
-func (w *WebMethodsAdapter) UpsertStrategy(ctx context.Context, adminURL string, spec StrategySpec) error {
+func (w *WebMethodsAdapter) UpsertStrategy(ctx context.Context, adminURL string, spec StrategySpec) (err error) {
+	defer func() { err = SafePolicyError(err) }()
 	strategyType := spec.Type
 	if strategyType == "" {
 		strategyType = "OAUTH2"
@@ -101,11 +100,9 @@ func (w *WebMethodsAdapter) UpsertStrategy(ctx context.Context, adminURL string,
 }
 
 // UpsertScope creates a scope mapping on webMethods.
-func (w *WebMethodsAdapter) UpsertScope(ctx context.Context, adminURL string, spec ScopeSpec) error {
+func (w *WebMethodsAdapter) UpsertScope(ctx context.Context, adminURL string, spec ScopeSpec) (err error) {
+	defer func() { err = SafePolicyError(err) }()
 	keycloakScope := spec.KeycloakScope
-	if keycloakScope == "" {
-		keycloakScope = "openid"
-	}
 	payload := map[string]interface{}{
 		"scopeName": spec.ScopeName, "description": spec.Description,
 		"audience": spec.Audience, "apiIds": spec.APIIDs,
@@ -128,8 +125,7 @@ func (w *WebMethodsAdapter) UpsertScope(ctx context.Context, adminURL string, sp
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("scope create failed (%d): %s", resp.StatusCode, string(respBody))
+		return &PolicyError{HTTPStatus: resp.StatusCode}
 	}
 	return nil
 }

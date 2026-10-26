@@ -1,0 +1,239 @@
+{
+  "files": [
+    {
+      "path": "envoy/annotations/deprecation.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/annotations/deprecation.proto",
+      "sha256": "bc72a2deefc60cacdb0f49380e1c92028078e219b02993d6772e2854a8929b36",
+      "size": 1445
+    },
+    {
+      "path": "envoy/config/core/v3/address.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/config/core/v3/address.proto",
+      "sha256": "33ec035d4e2a4b0fb20ab4a1b7790661404f7330ff322a74868fc0d7848fe79b",
+      "size": 9861
+    },
+    {
+      "path": "envoy/config/core/v3/backoff.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/config/core/v3/backoff.proto",
+      "sha256": "f347a6a36616ea6735ff031b546d10cc79aaae17da3a60e8174479c7f75ac53e",
+      "size": 1537
+    },
+    {
+      "path": "envoy/config/core/v3/base.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/config/core/v3/base.proto",
+      "sha256": "5a6a07551e0db451d6984d905aa45269f3134e00b2160ca19dc8875245edab7c",
+      "size": 28035
+    },
+    {
+      "path": "envoy/config/core/v3/extension.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/config/core/v3/extension.proto",
+      "sha256": "860106c686cab11106159f462243ce4009cbc405f197df7df8ab423af71a82a7",
+      "size": 1365
+    },
+    {
+      "path": "envoy/config/core/v3/http_uri.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/config/core/v3/http_uri.proto",
+      "sha256": "ef5c59234f0be07a23327d695afc65435ef5052941a63184795b0d300fccf1e6",
+      "size": 1802
+    },
+    {
+      "path": "envoy/config/core/v3/socket_option.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/config/core/v3/socket_option.proto",
+      "sha256": "78937443cba81f3a60a18b71debc9962b27b484ec55ea79892cfb1deabda9058",
+      "size": 4347
+    },
+    {
+      "path": "envoy/service/auth/v3/attribute_context.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/service/auth/v3/attribute_context.proto",
+      "sha256": "4d7e49959ed507b3274baea1ce5fbdf6b7afb3d762cec982c0f08a2d8898ea5c",
+      "size": 9686
+    },
+    {
+      "path": "envoy/service/auth/v3/external_auth.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/service/auth/v3/external_auth.proto",
+      "sha256": "651f198016f628db10aba4ffd0cced85a3c7b06292afb557d0b09b96038c718a",
+      "size": 7982
+    },
+    {
+      "path": "envoy/type/v3/http_status.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/type/v3/http_status.proto",
+      "sha256": "d46c670810e539fabf6c8204d9a33dd135f092ef5896d6c37193999e38a3952c",
+      "size": 4849
+    },
+    {
+      "path": "envoy/type/v3/percent.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/type/v3/percent.proto",
+      "sha256": "b5b5ea7f6264f465ce4b398601e855b62395e3c83e4bb7e0d9d4ebae788210ca",
+      "size": 1827
+    },
+    {
+      "path": "envoy/type/v3/semantic_version.proto",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "url": "https://raw.githubusercontent.com/envoyproxy/envoy/8eea3285d6bdb89f8ea34632cfe7ce1608a8f374/api/envoy/type/v3/semantic_version.proto",
+      "sha256": "71cc18d6cbbccd0e3a027d3499bbdbe0a7e74cdf125565f36843736027cc8cc5",
+      "size": 859
+    },
+    {
+      "path": "google/protobuf/any.proto",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/4a2aef570deb2bfb8927426558701e8bfc26f2a4/src/google/protobuf/any.proto",
+      "sha256": "bcf5de6ce463b1a38ff76b77955aa7e580b4ec12af34a927b1d45c9efb0faf66",
+      "size": 6154
+    },
+    {
+      "path": "google/protobuf/descriptor.proto",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/4a2aef570deb2bfb8927426558701e8bfc26f2a4/src/google/protobuf/descriptor.proto",
+      "sha256": "a39cb2a57423cf1e83a00dc7bcca4b1b74bcbebc28e95586977dbc2af636fabc",
+      "size": 49985
+    },
+    {
+      "path": "google/protobuf/duration.proto",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/4a2aef570deb2bfb8927426558701e8bfc26f2a4/src/google/protobuf/duration.proto",
+      "sha256": "a3f7301ff2956ec2e30c2241ece07197e4a86c752348d5607224819d4921c9fe",
+      "size": 4892
+    },
+    {
+      "path": "google/protobuf/struct.proto",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/4a2aef570deb2bfb8927426558701e8bfc26f2a4/src/google/protobuf/struct.proto",
+      "sha256": "1bf07ba8b9a24e3a0390dddac3ad0db41c63287d252788b02398220b9abc900f",
+      "size": 3778
+    },
+    {
+      "path": "google/protobuf/timestamp.proto",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/4a2aef570deb2bfb8927426558701e8bfc26f2a4/src/google/protobuf/timestamp.proto",
+      "sha256": "14052c6042c1dd2d0b50245f2812eaab6eaf82db0b6e8ce483eae527f73b6ee8",
+      "size": 6449
+    },
+    {
+      "path": "google/protobuf/wrappers.proto",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/4a2aef570deb2bfb8927426558701e8bfc26f2a4/src/google/protobuf/wrappers.proto",
+      "sha256": "a26c1d6ec73a592ac31796289a61ceffe2db2453ff427dfdd7697aac50844280",
+      "size": 4044
+    },
+    {
+      "path": "google/rpc/status.proto",
+      "repository": "https://github.com/googleapis/googleapis",
+      "commit": "fd52b5754b2b268bc3a22a10f29844f206abb327",
+      "url": "https://raw.githubusercontent.com/googleapis/googleapis/fd52b5754b2b268bc3a22a10f29844f206abb327/google/rpc/status.proto",
+      "sha256": "b35706fa0e4b2354f67f8d7b8e6b55584d0c4dae920d5f6d2bc2e7ba22f9d6c1",
+      "size": 1934
+    },
+    {
+      "path": "licenses/envoy.txt",
+      "repository": "https://github.com/envoyproxy/envoy",
+      "commit": "8eea3285d6bdb89f8ea34632cfe7ce1608a8f374",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "size": 11358
+    },
+    {
+      "path": "licenses/googleapis.txt",
+      "repository": "https://github.com/googleapis/googleapis",
+      "commit": "fd52b5754b2b268bc3a22a10f29844f206abb327",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "size": 11357
+    },
+    {
+      "path": "licenses/protobuf.txt",
+      "repository": "https://github.com/protocolbuffers/protobuf",
+      "commit": "4a2aef570deb2bfb8927426558701e8bfc26f2a4",
+      "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+      "size": 1732
+    },
+    {
+      "path": "licenses/validate.txt",
+      "repository": "https://github.com/bufbuild/protoc-gen-validate",
+      "commit": "92b9a7df69ca9f71bfc492f7a90adf4d36eab569",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "size": 11358
+    },
+    {
+      "path": "licenses/xds.txt",
+      "repository": "https://github.com/cncf/xds",
+      "commit": "8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "size": 11357
+    },
+    {
+      "path": "udpa/annotations/migrate.proto",
+      "repository": "https://github.com/cncf/xds",
+      "commit": "8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0",
+      "url": "https://raw.githubusercontent.com/cncf/xds/8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0/udpa/annotations/migrate.proto",
+      "sha256": "4fb5c329d0ac560e0c127b2f2d3368fb2038d093961202dba8700fd4f1308a86",
+      "size": 1446
+    },
+    {
+      "path": "udpa/annotations/status.proto",
+      "repository": "https://github.com/cncf/xds",
+      "commit": "8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0",
+      "url": "https://raw.githubusercontent.com/cncf/xds/8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0/udpa/annotations/status.proto",
+      "sha256": "038771f31b67fc4d5be4b41eb08e5846bd4e972d3aa73674097706a8aac9e697",
+      "size": 1141
+    },
+    {
+      "path": "udpa/annotations/versioning.proto",
+      "repository": "https://github.com/cncf/xds",
+      "commit": "8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0",
+      "url": "https://raw.githubusercontent.com/cncf/xds/8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0/udpa/annotations/versioning.proto",
+      "sha256": "d53f268b4a2b69a6067ff06a43486fb2a2a0d65a3405d3cf43e82192818e2d27",
+      "size": 709
+    },
+    {
+      "path": "validate/validate.proto",
+      "repository": "https://github.com/bufbuild/protoc-gen-validate",
+      "commit": "92b9a7df69ca9f71bfc492f7a90adf4d36eab569",
+      "url": "https://raw.githubusercontent.com/bufbuild/protoc-gen-validate/92b9a7df69ca9f71bfc492f7a90adf4d36eab569/validate/validate.proto",
+      "sha256": "68c9625ebe0668605a37670db1759ceb03864bc07c52eee919b049347cbc018c",
+      "size": 31254
+    },
+    {
+      "path": "xds/annotations/v3/status.proto",
+      "repository": "https://github.com/cncf/xds",
+      "commit": "8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0",
+      "url": "https://raw.githubusercontent.com/cncf/xds/8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0/xds/annotations/v3/status.proto",
+      "sha256": "0145b2d9437ace6c1201453cd57d44c96e2e89894e502c2d869e8ee2b59b8c19",
+      "size": 1602
+    },
+    {
+      "path": "xds/core/v3/context_params.proto",
+      "repository": "https://github.com/cncf/xds",
+      "commit": "8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0",
+      "url": "https://raw.githubusercontent.com/cncf/xds/8bfbf64dc13ee1a570be4fbdcfccbdd8532463f0/xds/core/v3/context_params.proto",
+      "sha256": "912801a580c04553d75a0099d16206a668dd609277c860b6d05d86f8cbddc11c",
+      "size": 901
+    }
+  ]
+}

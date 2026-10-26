@@ -37,7 +37,7 @@ Three ways, pick one:
 |---|---|
 | Label `skip-guardian` | You disagree with the Guardian on this PR, but keep it enabled elsewhere. |
 | Label `wip` | PR is work-in-progress, feedback not useful yet. |
-| Convert PR to draft | You want CI to skip reviews entirely, including `claude-review.yml`. |
+| Convert PR to draft | You want CI to skip the Guardian on this PR. |
 
 Add a label:
 
@@ -197,7 +197,6 @@ If token cost trends concerning:
 
 | Workflow | Relationship |
 |---|---|
-| `claude-review.yml` | Complementary. Generic vibe check. No plan to retire. |
 | `council-gate.yml` | Upstream of the Guardian — runs Stage 3 diff review at push time (pre-PR). Guardian runs at PR time (post-push). Different surfaces, different latencies. |
 | `context-compiler-learn.yml` | Independent. Runs on post-merge, not PR-time. |
 

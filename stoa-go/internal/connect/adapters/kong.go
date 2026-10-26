@@ -151,41 +151,10 @@ func (k *KongAdapter) Discover(ctx context.Context, adminURL string) ([]Discover
 	return apis, nil
 }
 
-// ApplyPolicy pushes a plugin configuration to Kong via declarative config reload.
+// ApplyPolicy refuses locally: no STOA-to-Kong policy mapping is implemented.
 func (k *KongAdapter) ApplyPolicy(ctx context.Context, adminURL string, apiName string, policy PolicyAction) error {
-	// Kong DB-less: GET full state → merge plugin → POST /config
-	// For simplicity, we use the per-service plugin endpoint when available
-	pluginURL := fmt.Sprintf("%s/services/%s/plugins", adminURL, apiName)
-
-	pluginPayload := map[string]interface{}{
-		"name":   policy.Type,
-		"config": policy.Config,
-		"tags":   []string{"stoa-managed"},
-	}
-	data, err := json.Marshal(pluginPayload)
-	if err != nil {
-		return fmt.Errorf("marshal kong plugin: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, pluginURL, strings.NewReader(string(data)))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	k.setAuth(req)
-
-	resp, err := k.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("apply kong plugin: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("kong plugin apply failed (%d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	_, err := PreparePolicy(k, policy)
+	return err
 }
 
 // RemovePolicy removes every plugin of the given type from a Kong service.
@@ -322,10 +291,10 @@ func (k *KongAdapter) SyncRoutes(ctx context.Context, adminURL string, routes []
 		}
 		svcName := "stoa-" + route.Name
 		services = append(services, map[string]interface{}{
-			"name":     svcName,
-			"url":      route.BackendURL,
-			"tags":     []string{"stoa-managed", "stoa-route-" + route.ID},
-			"enabled":  true,
+			"name":    svcName,
+			"url":     route.BackendURL,
+			"tags":    []string{"stoa-managed", "stoa-route-" + route.ID},
+			"enabled": true,
 		})
 
 		methods := route.Methods

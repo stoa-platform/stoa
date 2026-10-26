@@ -3,8 +3,6 @@
 #
 # Kill-switch: repo variable DISABLE_PR_GUARDIAN=true disables all runs.
 # Per-PR skip:  label `skip-guardian` or `wip`, or convert PR to draft.
-#
-# Complementary to claude-review.yml (generic Ship/Show/Ask). Not a replacement.
 
 name: STOA PR Guardian
 

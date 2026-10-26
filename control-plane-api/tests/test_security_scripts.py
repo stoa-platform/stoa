@@ -30,3 +30,12 @@ def test_offline_security_contract(case):
     case.run(result)
     assert not result.skipped, "Security contracts must run without skips"
     assert result.wasSuccessful(), result.errors + result.failures
+
+
+def test_security_suites_keep_conftest_mocks():
+    import src.main as main
+    from src.services.keycloak_service import keycloak_service
+    from tests.conftest import _mock_kafka_service, _mock_keycloak_service
+
+    assert main.kafka_service is _mock_kafka_service
+    assert keycloak_service is _mock_keycloak_service

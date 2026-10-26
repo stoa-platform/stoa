@@ -26,13 +26,16 @@ class MigrationTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.fake = FakeKeycloak()
         self.output = io.StringIO()
-        self.addCleanup(patch.stopall)
-        patch("socket.socket", side_effect=AssertionError("network forbidden")).start()
-        patch.object(
+        socket_patch = patch("socket.socket", side_effect=AssertionError("network forbidden"))
+        socket_patch.start()
+        self.addCleanup(socket_patch.stop)
+        https_patch = patch.object(
             m.http.client,
             "HTTPSConnection",
             lambda *args, **kwargs: self.fake.connection(*args, **kwargs),
-        ).start()
+        )
+        https_patch.start()
+        self.addCleanup(https_patch.stop)
         self.api = m.Admin("https://auth.example.invalid", "example", SECRET)
         self.p = policy()
 

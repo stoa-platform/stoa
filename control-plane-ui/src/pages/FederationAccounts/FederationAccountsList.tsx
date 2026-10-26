@@ -1,3 +1,4 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
 import { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -172,7 +173,11 @@ export function FederationAccountsList() {
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium text-neutral-900 dark:text-white text-sm">
-                        {account.name}
+                        <RowAction
+                          onActivate={() => navigate(`/federation/accounts/${account.id}`)}
+                        >
+                          {account.name}
+                        </RowAction>
                       </div>
                       {account.description && (
                         <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-xs">

@@ -146,7 +146,7 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
             <span className="text-xs text-neutral-500 dark:text-neutral-500">v{item.version}</span>
           )}
         </div>
-        <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-emerald-600 transition-colors dark:group-hover:text-emerald-400" />
+        <ArrowRight className="h-4 w-4 text-muted group-hover:text-emerald-600 transition-colors dark:group-hover:text-emerald-400" />
       </div>
 
       {item.tags.length > 0 && (
@@ -160,7 +160,7 @@ export function MarketplaceCard({ item }: MarketplaceCardProps) {
             </span>
           ))}
           {item.tags.length > 3 && (
-            <span className="text-xs text-neutral-400">+{item.tags.length - 3}</span>
+            <span className="text-xs text-muted">+{item.tags.length - 3}</span>
           )}
         </div>
       )}

@@ -43,7 +43,7 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                       ? 'bg-primary-600 border-primary-600 text-white'
                       : isCurrent
                         ? 'border-primary-600 text-primary-600 bg-primary-50 dark:bg-primary-900/30'
-                        : 'border-neutral-300 dark:border-neutral-600 text-neutral-400 dark:text-neutral-500'
+                        : 'border-neutral-300 dark:border-neutral-600 text-muted'
                   }`}
                 >
                   {isCompleted ? (
@@ -62,9 +62,7 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                   >
                     {t(step.labelKey)}
                   </p>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 hidden sm:block">
-                    {t(step.descKey)}
-                  </p>
+                  <p className="text-xs text-muted hidden sm:block">{t(step.descKey)}</p>
                 </div>
               </div>
               {index < STEPS.length - 1 && (

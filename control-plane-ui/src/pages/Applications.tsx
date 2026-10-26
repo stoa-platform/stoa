@@ -1,3 +1,11 @@
+import {
+  Field,
+  FieldLabel,
+  FieldSelect,
+  FieldInput,
+  FieldTextarea,
+} from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -335,11 +343,11 @@ export function Applications() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Tenant Selector */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Tenant
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={selectedTenant}
               onChange={(e) => setSelectedTenant(e.target.value)}
               className="w-48 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -349,16 +357,16 @@ export function Applications() {
                   {tenant.display_name || tenant.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Search Input */}
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field className="flex-1 min-w-[200px]">
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Search
-            </label>
+            </FieldLabel>
             <div className="relative">
-              <input
+              <FieldInput
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -366,7 +374,7 @@ export function Applications() {
                 className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 pl-10 bg-white dark:bg-neutral-700 dark:text-white dark:placeholder-neutral-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <svg
-                className="absolute left-3 top-2.5 h-5 w-5 text-neutral-400"
+                className="absolute left-3 top-2.5 h-5 w-5 text-muted"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -381,7 +389,7 @@ export function Applications() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-600"
+                  className="absolute right-3 top-2.5 text-muted hover:text-neutral-600"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -394,14 +402,14 @@ export function Applications() {
                 </button>
               )}
             </div>
-          </div>
+          </Field>
 
           {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Status
-            </label>
-            <select
+            </FieldLabel>
+            <FieldSelect
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-36 border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -411,8 +419,8 @@ export function Applications() {
               <option value="approved">Approved</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
-            </select>
-          </div>
+            </FieldSelect>
+          </Field>
 
           {/* Results count */}
           <div className="text-sm text-neutral-500 dark:text-neutral-400 self-end pb-2">
@@ -702,13 +710,19 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <Modal
+      onClose={onClose}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center px-6 py-4 border-b dark:border-neutral-700">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">{title}</h2>
+          <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
+            {title}
+          </ModalTitle>
           <button
+            type="button"
             onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -722,11 +736,11 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
         </div>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Name (slug)
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={formData.name}
                 onChange={(e) =>
@@ -739,12 +753,12 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                 placeholder="my-mobile-app"
                 required
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            </Field>
+            <Field>
+              <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 Display Name
-              </label>
-              <input
+              </FieldLabel>
+              <FieldInput
                 type="text"
                 value={formData.display_name}
                 onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
@@ -752,28 +766,28 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                 placeholder="My Mobile App"
                 required
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
-            </label>
-            <textarea
+            </FieldLabel>
+            <FieldTextarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={2}
               placeholder="Application description..."
             />
-          </div>
+          </Field>
 
           {/* Security Profile */}
           {!app && (
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+            <fieldset>
+              <legend className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                 Security Profile
-              </label>
+              </legend>
               <div className="grid grid-cols-1 gap-2">
                 {SECURITY_PROFILES.map((profile) => (
                   <label
@@ -810,7 +824,7 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                   </label>
                 ))}
               </div>
-            </div>
+            </fieldset>
           )}
 
           {/* FAPI Key Management */}
@@ -850,11 +864,11 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                 </button>
               </div>
               {fapiKeyMode === 'upload' ? (
-                <div>
-                  <label className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
+                <Field>
+                  <FieldLabel className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
                     Paste your PEM public key or JWK JSON
-                  </label>
-                  <textarea
+                  </FieldLabel>
+                  <FieldTextarea
                     value={formData.jwks || ''}
                     onChange={(e) => setFormData({ ...formData, jwks: e.target.value })}
                     className="w-full border border-amber-300 dark:border-amber-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white font-mono text-xs focus:ring-2 focus:ring-amber-500"
@@ -865,13 +879,13 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                     Accepts PEM public key (RSA or EC P-256), single JWK, or JWKS JSON
                   </p>
-                </div>
+                </Field>
               ) : (
-                <div>
-                  <label className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
+                <Field>
+                  <FieldLabel className="block text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
                     JWKS Endpoint URL
-                  </label>
-                  <input
+                  </FieldLabel>
+                  <FieldInput
                     type="url"
                     value={formData.jwks_uri || ''}
                     onChange={(e) => setFormData({ ...formData, jwks_uri: e.target.value })}
@@ -879,18 +893,18 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                     placeholder="https://your-app.example.com/.well-known/jwks.json"
                     required
                   />
-                </div>
+                </Field>
               )}
             </div>
           )}
 
           {/* Redirect URIs */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Redirect URIs
-            </label>
+            </FieldLabel>
             <div className="flex gap-2 mb-2">
-              <input
+              <FieldInput
                 type="url"
                 value={redirectUri}
                 onChange={(e) => setRedirectUri(e.target.value)}
@@ -920,13 +934,13 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                 ))}
               </div>
             )}
-          </div>
+          </Field>
 
           {/* API Subscriptions */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+          <fieldset>
+            <legend className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               API Subscriptions
-            </label>
+            </legend>
             {apis.length === 0 ? (
               <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">
                 No APIs available for subscription
@@ -965,7 +979,7 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
                 ))}
               </div>
             )}
-          </div>
+          </fieldset>
 
           <div className="flex justify-end gap-3 pt-4 border-t dark:border-neutral-700 mt-6">
             <Button variant="secondary" type="button" onClick={onClose}>
@@ -975,6 +989,6 @@ function ApplicationFormModal({ app, apis, onClose, onSubmit, title }: Applicati
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

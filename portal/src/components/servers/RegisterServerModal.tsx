@@ -1,3 +1,5 @@
+import { Form, FormError } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Register Server Modal (CAB-1319)
  *
@@ -112,15 +114,16 @@ export function RegisterServerModal({
   const labelClass = 'block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <Modal
+      onClose={handleClose}
+      closeDisabled={isLoading}
+      className="fixed inset-0 z-50 overflow-y-auto"
+    >
       {/* Backdrop */}
       <div
+        aria-hidden="true"
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={handleClose}
-        onKeyDown={(e) => e.key === 'Escape' && handleClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
       />
 
       {/* Modal */}
@@ -128,27 +131,29 @@ export function RegisterServerModal({
         <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700 sticky top-0 bg-white dark:bg-neutral-800 z-10">
-            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
+            <ModalTitle as="h2" className="text-xl font-semibold text-neutral-900 dark:text-white">
               Register MCP Server
-            </h2>
+            </ModalTitle>
             <button
+              aria-label="Close dialog"
+              type="button"
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-muted hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit}>
+          <Form error={error} onSubmit={handleSubmit}>
             <div className="p-6 space-y-4">
               {/* Error */}
               {error && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <FormError className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
                   <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                </div>
+                </FormError>
               )}
 
               {/* Display Name */}
@@ -387,10 +392,10 @@ export function RegisterServerModal({
                 )}
               </button>
             </div>
-          </form>
+          </Form>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Field, FieldLabel, FieldSelect } from '@stoa/shared/components/Field';
 /**
  * Admin Users Page (CAB-1454)
  *
@@ -116,8 +117,9 @@ export function AdminUsers() {
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
               <input
+                aria-label="Search by name or email..."
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -125,11 +127,11 @@ export function AdminUsers() {
                 className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            <Field className="flex items-center gap-4">
+              <FieldLabel className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 Status
-              </label>
-              <select
+              </FieldLabel>
+              <FieldSelect
                 value={statusFilter}
                 onChange={(e) => handleStatusChange(e.target.value as AdminUserStatus | '')}
                 className="rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -138,13 +140,13 @@ export function AdminUsers() {
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
                 <option value="pending">Pending</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              </FieldSelect>
+            </Field>
+            <Field className="flex items-center gap-4">
+              <FieldLabel className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 Role
-              </label>
-              <select
+              </FieldLabel>
+              <FieldSelect
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -154,8 +156,8 @@ export function AdminUsers() {
                 <option value="tenant-admin">Tenant Admin</option>
                 <option value="devops">DevOps</option>
                 <option value="viewer">Viewer</option>
-              </select>
-            </div>
+              </FieldSelect>
+            </Field>
           </div>
         </div>
 

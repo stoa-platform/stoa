@@ -1,3 +1,4 @@
+import { RouteMetadata } from './components/RouteMetadata';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -444,7 +445,7 @@ function Login() {
         <div
           className="px-8 py-10 text-center"
           style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+            background: 'linear-gradient(135deg, #047857 0%, #065f46 50%, #064e3b 100%)',
           }}
         >
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-white/20 backdrop-blur-sm">
@@ -471,7 +472,7 @@ function Login() {
             disabled={isLoading}
             className="w-full text-white py-3.5 rounded-xl font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5"
             style={{
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+              background: 'linear-gradient(135deg, #047857 0%, #065f46 50%, #064e3b 100%)',
               boxShadow: isLoading ? 'none' : '0 10px 30px -10px rgba(5,150,105,0.5)',
             }}
           >
@@ -503,6 +504,7 @@ function Login() {
 function App() {
   return (
     <ErrorBoundary>
+      <RouteMetadata />
       <ThemeProvider>
         <ToastProvider>
           <CelebrationProvider>

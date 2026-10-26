@@ -18,11 +18,7 @@ export interface ThemeToggleProps {
 // Simple Toggle Button (Light/Dark only)
 // ============================================================================
 
-export function ThemeToggle({
-  showLabel = false,
-  size = 'md',
-  className = '',
-}: ThemeToggleProps) {
+export function ThemeToggle({ showLabel = false, size = 'md', className = '' }: ThemeToggleProps) {
   const { resolvedTheme, toggleTheme } = useTheme();
 
   const sizeClasses = {
@@ -155,7 +151,7 @@ export function ThemeDropdown({ className = '' }: ThemeDropdownProps) {
         <option value="dark">Dark</option>
         <option value="system">System</option>
       </select>
-      <CurrentIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+      <CurrentIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
     </div>
   );
 }

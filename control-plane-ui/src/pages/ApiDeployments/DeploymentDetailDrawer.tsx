@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState } from 'react';
 import {
   X,
@@ -140,12 +141,10 @@ function SyncStepsView({ steps }: { steps: SyncStep[] }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className={`text-sm font-medium ${style.text}`}>{step.name}</p>
-                  <span className="text-[10px] uppercase font-semibold text-neutral-400">
+                  <span className="text-[10px] uppercase font-semibold text-muted">
                     {step.status}
                   </span>
-                  {duration !== null && (
-                    <span className="text-[10px] text-neutral-400">{duration}s</span>
-                  )}
+                  {duration !== null && <span className="text-[10px] text-muted">{duration}s</span>}
                 </div>
                 {step.detail && (
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
@@ -235,212 +234,214 @@ export function DeploymentDetailDrawer({
   return (
     <>
       {ConfirmDialog}
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <Modal onClose={onClose} className="fixed inset-0 z-50">
+        {/* Backdrop */}
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
 
-      {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white dark:bg-neutral-800 shadow-xl overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-neutral-800 border-b dark:border-neutral-700 px-6 py-4 flex items-center justify-between z-10">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
-              {apiName}
-            </h2>
-            <div className="flex items-center gap-2 mt-1">
-              <Server className="h-3.5 w-3.5 text-neutral-400" />
-              <span className="text-sm text-neutral-500 dark:text-neutral-400">{gatewayLabel}</span>
-              {d.gateway_environment && (
-                <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400">
-                  {d.gateway_environment}
+        {/* Drawer */}
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white dark:bg-neutral-800 shadow-xl overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 bg-white dark:bg-neutral-800 border-b dark:border-neutral-700 px-6 py-4 flex items-center justify-between z-10">
+            <div className="min-w-0">
+              <ModalTitle className="text-lg font-semibold text-neutral-900 dark:text-white truncate">
+                {apiName}
+              </ModalTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <Server className="h-3.5 w-3.5 text-muted" />
+                <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                  {gatewayLabel}
                 </span>
-              )}
-              {d.gateway_type && (
-                <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                  {d.gateway_type}
-                </span>
-              )}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-300"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="px-6 py-5 space-y-6">
-          {/* Status card */}
-          <div className="flex items-center justify-between">
-            <SyncStatusBadge status={d.sync_status} className="text-sm px-3 py-1" />
-            <div className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
-              <Clock className="h-3.5 w-3.5" />
-              Attempt {d.sync_attempts} / 3
-            </div>
-          </div>
-
-          {/* Error banner */}
-          {d.sync_error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-red-800 dark:text-red-300">Sync Error</p>
-                  <p className="text-sm text-red-700 dark:text-red-400 mt-1 break-all font-mono">
-                    {d.sync_error}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Success banner */}
-          {d.sync_status === 'synced' && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <p className="text-sm text-green-800 dark:text-green-300">
-                  Successfully synced to gateway
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Sync Steps (from REST API — written by sync engine) */}
-          {d.sync_steps && d.sync_steps.length > 0 && <SyncStepsView steps={d.sync_steps} />}
-
-          {/* Connectivity Test */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
-                Gateway Connectivity
-              </h3>
-              <button
-                onClick={handleTest}
-                disabled={testing}
-                className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
-              >
-                <Zap className={`h-3.5 w-3.5 ${testing ? 'animate-pulse' : ''}`} />
-                {testing ? 'Testing...' : 'Test Now'}
-              </button>
-            </div>
-            {testResult && (
-              <div
-                className={`rounded-lg p-3 text-sm ${
-                  testResult.reachable
-                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                    : testResult.status_code && testResult.status_code < 500
-                      ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
-                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  {testResult.reachable ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : testResult.status_code && testResult.status_code < 500 ? (
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
-                  )}
-                  <span
-                    className={`font-medium ${
-                      testResult.reachable
-                        ? 'text-green-800 dark:text-green-300'
-                        : testResult.status_code && testResult.status_code < 500
-                          ? 'text-amber-800 dark:text-amber-300'
-                          : 'text-red-800 dark:text-red-300'
-                    }`}
-                  >
-                    {testResult.reachable
-                      ? `Reachable — HTTP ${testResult.status_code} (${testResult.latency_ms}ms)`
-                      : testResult.status_code
-                        ? `Gateway responded HTTP ${testResult.status_code} — API not serving (${testResult.latency_ms}ms)`
-                        : 'Unreachable'}
+                {d.gateway_environment && (
+                  <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400">
+                    {d.gateway_environment}
                   </span>
+                )}
+                {d.gateway_type && <span className="text-xs text-muted">{d.gateway_type}</span>}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 text-muted hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-300"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="px-6 py-5 space-y-6">
+            {/* Status card */}
+            <div className="flex items-center justify-between">
+              <SyncStatusBadge status={d.sync_status} className="text-sm px-3 py-1" />
+              <div className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                <Clock className="h-3.5 w-3.5" />
+                Attempt {d.sync_attempts} / 3
+              </div>
+            </div>
+
+            {/* Error banner */}
+            {d.sync_error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300">Sync Error</p>
+                    <p className="text-sm text-red-700 dark:text-red-400 mt-1 break-all font-mono">
+                      {d.sync_error}
+                    </p>
+                  </div>
                 </div>
-                {testResult.path && (
-                  <p className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
-                    GET {testResult.path}
-                  </p>
-                )}
-                {testResult.error && (
-                  <p className="text-xs font-mono text-red-600 dark:text-red-400 mt-1">
-                    {testResult.error}
-                  </p>
-                )}
               </div>
             )}
-          </div>
 
-          {/* Timeline */}
-          <div>
-            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">
-              Sync Timeline
-            </h3>
-            <SyncTimeline deployment={d} />
-          </div>
-
-          {/* Desired state */}
-          <StateViewer title="Desired State" state={d.desired_state} />
-
-          {/* Actual state */}
-          {d.actual_state && Object.keys(d.actual_state).length > 0 && (
-            <StateViewer title="Actual State (on gateway)" state={d.actual_state} />
-          )}
-
-          {/* Metadata */}
-          <div>
-            <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
-              Identifiers
-            </h4>
-            <dl className="text-xs space-y-1">
-              <div className="flex gap-2">
-                <dt className="text-neutral-500 dark:text-neutral-400 shrink-0">Deployment ID:</dt>
-                <dd className="text-neutral-900 dark:text-white font-mono break-all">{d.id}</dd>
+            {/* Success banner */}
+            {d.sync_status === 'synced' && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <p className="text-sm text-green-800 dark:text-green-300">
+                    Successfully synced to gateway
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <dt className="text-neutral-500 dark:text-neutral-400 shrink-0">Catalog ID:</dt>
-                <dd className="text-neutral-900 dark:text-white font-mono break-all">
-                  {d.api_catalog_id}
-                </dd>
+            )}
+
+            {/* Sync Steps (from REST API — written by sync engine) */}
+            {d.sync_steps && d.sync_steps.length > 0 && <SyncStepsView steps={d.sync_steps} />}
+
+            {/* Connectivity Test */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                  Gateway Connectivity
+                </h3>
+                <button
+                  onClick={handleTest}
+                  disabled={testing}
+                  className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+                >
+                  <Zap className={`h-3.5 w-3.5 ${testing ? 'animate-pulse' : ''}`} />
+                  {testing ? 'Testing...' : 'Test Now'}
+                </button>
               </div>
-              {d.gateway_resource_id && (
-                <div className="flex gap-2">
-                  <dt className="text-neutral-500 dark:text-neutral-400 shrink-0">
-                    Gateway Resource:
-                  </dt>
-                  <dd className="text-neutral-900 dark:text-white font-mono break-all">
-                    {d.gateway_resource_id}
-                  </dd>
+              {testResult && (
+                <div
+                  className={`rounded-lg p-3 text-sm ${
+                    testResult.reachable
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : testResult.status_code && testResult.status_code < 500
+                        ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
+                        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {testResult.reachable ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : testResult.status_code && testResult.status_code < 500 ? (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span
+                      className={`font-medium ${
+                        testResult.reachable
+                          ? 'text-green-800 dark:text-green-300'
+                          : testResult.status_code && testResult.status_code < 500
+                            ? 'text-amber-800 dark:text-amber-300'
+                            : 'text-red-800 dark:text-red-300'
+                      }`}
+                    >
+                      {testResult.reachable
+                        ? `Reachable — HTTP ${testResult.status_code} (${testResult.latency_ms}ms)`
+                        : testResult.status_code
+                          ? `Gateway responded HTTP ${testResult.status_code} — API not serving (${testResult.latency_ms}ms)`
+                          : 'Unreachable'}
+                    </span>
+                  </div>
+                  {testResult.path && (
+                    <p className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
+                      GET {testResult.path}
+                    </p>
+                  )}
+                  {testResult.error && (
+                    <p className="text-xs font-mono text-red-600 dark:text-red-400 mt-1">
+                      {testResult.error}
+                    </p>
+                  )}
                 </div>
               )}
-            </dl>
+            </div>
+
+            {/* Timeline */}
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">
+                Sync Timeline
+              </h3>
+              <SyncTimeline deployment={d} />
+            </div>
+
+            {/* Desired state */}
+            <StateViewer title="Desired State" state={d.desired_state} />
+
+            {/* Actual state */}
+            {d.actual_state && Object.keys(d.actual_state).length > 0 && (
+              <StateViewer title="Actual State (on gateway)" state={d.actual_state} />
+            )}
+
+            {/* Metadata */}
+            <div>
+              <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
+                Identifiers
+              </h4>
+              <dl className="text-xs space-y-1">
+                <div className="flex gap-2">
+                  <dt className="text-neutral-500 dark:text-neutral-400 shrink-0">
+                    Deployment ID:
+                  </dt>
+                  <dd className="text-neutral-900 dark:text-white font-mono break-all">{d.id}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-neutral-500 dark:text-neutral-400 shrink-0">Catalog ID:</dt>
+                  <dd className="text-neutral-900 dark:text-white font-mono break-all">
+                    {d.api_catalog_id}
+                  </dd>
+                </div>
+                {d.gateway_resource_id && (
+                  <div className="flex gap-2">
+                    <dt className="text-neutral-500 dark:text-neutral-400 shrink-0">
+                      Gateway Resource:
+                    </dt>
+                    <dd className="text-neutral-900 dark:text-white font-mono break-all">
+                      {d.gateway_resource_id}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="sticky bottom-0 bg-white dark:bg-neutral-800 border-t dark:border-neutral-700 px-6 py-4 flex gap-3">
+            {isRetryable && (
+              <button
+                onClick={handleForceSync}
+                disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Force Sync
+              </button>
+            )}
+            <button
+              onClick={handleUndeploy}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              Undeploy
+            </button>
           </div>
         </div>
-
-        {/* Actions */}
-        <div className="sticky bottom-0 bg-white dark:bg-neutral-800 border-t dark:border-neutral-700 px-6 py-4 flex gap-3">
-          {isRetryable && (
-            <button
-              onClick={handleForceSync}
-              disabled={loading}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Force Sync
-            </button>
-          )}
-          <button
-            onClick={handleUndeploy}
-            disabled={loading}
-            className="flex items-center justify-center gap-2 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" />
-            Undeploy
-          </button>
-        </div>
-      </div>
+      </Modal>
     </>
   );
 }

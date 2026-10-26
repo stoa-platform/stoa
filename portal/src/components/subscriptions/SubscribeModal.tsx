@@ -1,3 +1,5 @@
+import { Form, FormError } from '@stoa/shared/components/Field';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Subscribe Modal Component
  *
@@ -186,15 +188,16 @@ export function SubscribeModal({
     applications?.items.filter((app: Application) => app.status === 'active') || [];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <Modal
+      onClose={handleClose}
+      closeDisabled={isLoading}
+      className="fixed inset-0 z-50 overflow-y-auto"
+    >
       {/* Backdrop */}
       <div
+        aria-hidden="true"
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={handleClose}
-        onKeyDown={(e) => e.key === 'Escape' && handleClose()}
-        role="button"
-        aria-label="Close modal"
-        tabIndex={0}
       />
 
       {/* Modal */}
@@ -203,31 +206,36 @@ export function SubscribeModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-xl font-semibold text-neutral-900 dark:text-white">
+              <ModalTitle
+                as="h2"
+                className="text-xl font-semibold text-neutral-900 dark:text-white"
+              >
                 Subscribe to API
-              </h2>
+              </ModalTitle>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                 {api.name} v{api.version}
               </p>
             </div>
             <button
+              aria-label="Close dialog"
+              type="button"
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-muted hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit}>
+          <Form error={error} onSubmit={handleSubmit}>
             <div className="p-6 space-y-6">
               {/* Error message */}
               {error && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <FormError className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
                   <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                </div>
+                </FormError>
               )}
 
               {/* Select Application */}
@@ -514,10 +522,10 @@ export function SubscribeModal({
                 {isLoading ? 'Subscribing...' : 'Subscribe'}
               </Button>
             </div>
-          </form>
+          </Form>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

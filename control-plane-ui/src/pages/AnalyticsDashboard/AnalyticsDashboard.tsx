@@ -371,9 +371,7 @@ export function AnalyticsDashboard() {
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Call Volume
                   </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    calls/s over {rangeCfg.label}
-                  </p>
+                  <p className="text-xs text-muted">calls/s over {rangeCfg.label}</p>
                 </div>
                 {callsTrend.data && callsTrend.data.length > 1 && (
                   <TrendIndicator data={callsTrend.data} />
@@ -389,7 +387,7 @@ export function AnalyticsDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-muted">
                   {callsTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -402,9 +400,7 @@ export function AnalyticsDashboard() {
                   <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                     Latency Trend
                   </h2>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                    avg response time over {rangeCfg.label}
-                  </p>
+                  <p className="text-xs text-muted">avg response time over {rangeCfg.label}</p>
                 </div>
                 {latencyTrend.data && latencyTrend.data.length > 1 && (
                   <TrendIndicator data={latencyTrend.data} invertColor />
@@ -420,7 +416,7 @@ export function AnalyticsDashboard() {
                   className="w-full"
                 />
               ) : (
-                <div className="h-[120px] flex items-center justify-center text-sm text-neutral-400 dark:text-neutral-500">
+                <div className="h-[120px] flex items-center justify-center text-sm text-muted">
                   {latencyTrend.error ? 'Metrics unavailable' : 'Loading...'}
                 </div>
               )}
@@ -465,13 +461,11 @@ export function AnalyticsDashboard() {
                         aria-expanded={expandedTool === tool.name}
                         aria-label={`Tool ${tool.name}`}
                       >
-                        <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
-                          {i + 1}
-                        </span>
+                        <span className="text-xs font-bold text-muted w-5 text-right">{i + 1}</span>
                         {expandedTool === tool.name ? (
                           <ChevronUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
                         ) : (
-                          <ChevronDown className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                          <ChevronDown className="h-4 w-4 text-muted flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
@@ -515,7 +509,7 @@ export function AnalyticsDashboard() {
                           </h4>
                           <div className="grid grid-cols-3 gap-2">
                             <div className="text-center">
-                              <p className="text-xs text-neutral-400 dark:text-neutral-500">p50</p>
+                              <p className="text-xs text-muted">p50</p>
                               <p className="text-sm font-semibold text-neutral-900 dark:text-white">
                                 {scalarValue(expandedToolP50.data) !== null
                                   ? `${Math.round(scalarValue(expandedToolP50.data)! * 1000)}ms`
@@ -523,7 +517,7 @@ export function AnalyticsDashboard() {
                               </p>
                             </div>
                             <div className="text-center">
-                              <p className="text-xs text-neutral-400 dark:text-neutral-500">p95</p>
+                              <p className="text-xs text-muted">p95</p>
                               <p className="text-sm font-semibold text-neutral-900 dark:text-white">
                                 {scalarValue(expandedToolP95.data) !== null
                                   ? `${Math.round(scalarValue(expandedToolP95.data)! * 1000)}ms`
@@ -531,7 +525,7 @@ export function AnalyticsDashboard() {
                               </p>
                             </div>
                             <div className="text-center">
-                              <p className="text-xs text-neutral-400 dark:text-neutral-500">p99</p>
+                              <p className="text-xs text-muted">p99</p>
                               <p className="text-sm font-semibold text-neutral-900 dark:text-white">
                                 {scalarValue(expandedToolP99.data) !== null
                                   ? `${Math.round(scalarValue(expandedToolP99.data)! * 1000)}ms`
@@ -550,10 +544,8 @@ export function AnalyticsDashboard() {
                     const maxCalls = topApis[0]?.calls || 1;
                     return (
                       <div key={api.tool_name} className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-neutral-400 dark:text-neutral-500 w-5 text-right">
-                          {i + 1}
-                        </span>
-                        <Cpu className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                        <span className="text-xs font-bold text-muted w-5 text-right">{i + 1}</span>
+                        <Cpu className="h-4 w-4 text-muted flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-neutral-900 dark:text-white truncate">
@@ -647,11 +639,9 @@ export function AnalyticsDashboard() {
                 <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase">
                   Consumer Activity
                 </h2>
-                <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                  Per-consumer analytics
-                </p>
+                <p className="text-xs text-muted">Per-consumer analytics</p>
               </div>
-              <Users className="h-5 w-5 text-neutral-400" />
+              <Users className="h-5 w-5 text-muted" />
             </div>
             {topConsumers.data &&
             (

@@ -472,10 +472,10 @@ export function GuardrailsDashboard() {
               </span>
             )}
           </h2>
-          <span className="text-xs text-neutral-400">{filteredEvents.length} events</span>
+          <span className="text-xs text-muted">{filteredEvents.length} events</span>
         </div>
         {filteredEvents.length === 0 ? (
-          <div className="p-8 text-center text-neutral-400 text-sm">{emptyEventsText}</div>
+          <div className="p-8 text-center text-muted text-sm">{emptyEventsText}</div>
         ) : (
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {filteredEvents.map((event) => {
@@ -490,7 +490,7 @@ export function GuardrailsDashboard() {
                   onClick={() => navigate(`/observability/live-calls/trace/${event.trace_id}`)}
                   className="flex items-center gap-4 w-full px-4 py-3 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
                 >
-                  <span className="text-neutral-400 font-mono text-xs w-20 shrink-0">
+                  <span className="text-muted font-mono text-xs w-20 shrink-0">
                     {formatTimestamp(event.timestamp)}
                   </span>
                   <span
@@ -502,7 +502,7 @@ export function GuardrailsDashboard() {
                     {event.tool}
                   </span>
                   {event.reason && (
-                    <span className="text-neutral-400 text-xs truncate hidden sm:inline">
+                    <span className="text-muted text-xs truncate hidden sm:inline">
                       {event.reason}
                     </span>
                   )}

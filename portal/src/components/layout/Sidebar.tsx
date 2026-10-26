@@ -131,7 +131,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               >
                 <item.icon className="h-5 w-5" aria-hidden="true" />
                 {item.name}
-                <ExternalLink className="h-3 w-3 ml-auto text-neutral-400" aria-hidden="true" />
+                <ExternalLink className="h-3 w-3 ml-auto text-muted" aria-hidden="true" />
               </a>
             ) : (
               <NavLink
@@ -178,9 +178,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Debug: show user roles in development */}
           {import.meta.env.DEV && user && (
             <div className="mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
-              <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                Roles: {user.roles.join(', ') || 'none'}
-              </p>
+              <p className="text-xs text-muted">Roles: {user.roles.join(', ') || 'none'}</p>
             </div>
           )}
         </div>

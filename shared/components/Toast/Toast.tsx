@@ -1,5 +1,14 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { activeToastHost, subscribeToastHost } from '../Modal/Modal';
 
 // ============================================================================
 // Types
@@ -106,7 +115,14 @@ interface ToastContainerProps {
 }
 
 function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
-  return (
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const sync = () => setHost(activeToastHost());
+    sync();
+    return subscribeToastHost(sync);
+  }, []);
+
+  const region = (
     <div
       aria-live="polite"
       aria-label="Notifications"
@@ -117,6 +133,9 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
       ))}
     </div>
   );
+  // A modal dialog makes the rest of the document inert. Mount notifications
+  // inside the open dialog so the live region and its buttons stay reachable.
+  return host ? createPortal(region, host) : region;
 }
 
 // ============================================================================
@@ -197,9 +216,13 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       <div className="flex gap-3">
         <Icon className={`h-5 w-5 flex-shrink-0 ${styles.icon}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{toast.title}</p>
+          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+            {toast.title}
+          </p>
           {toast.description && (
-            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{toast.description}</p>
+            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+              {toast.description}
+            </p>
           )}
           {toast.action && (
             <button
@@ -213,7 +236,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       </div>
       <button
         onClick={handleDismiss}
-        className="absolute top-3 right-3 p-1 rounded-full text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+        className="absolute top-3 right-3 p-1 rounded-full text-muted hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
         aria-label="Dismiss notification"
       >
         <X className="h-4 w-4" />

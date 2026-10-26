@@ -90,7 +90,7 @@ export const APICard = memo(function APICard({ api, onMouseEnter }: APICardProps
                 className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
                   deployed
                     ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                    : 'bg-neutral-50 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500'
+                    : 'bg-neutral-50 dark:bg-neutral-700 text-muted'
                 }`}
               >
                 {deployed ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}

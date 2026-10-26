@@ -1,3 +1,4 @@
+import { Field, FieldLabel, FieldInput, FieldTextarea } from '@stoa/shared/components/Field';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -156,6 +157,7 @@ export function Contracts() {
         <div className="flex items-center gap-3">
           {isAdmin && tenants.length > 0 && (
             <select
+              aria-label="Tenant"
               value={selectedTenantId}
               onChange={(e) => setSelectedTenantId(e.target.value)}
               className="border rounded-lg px-3 py-2 text-sm dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
@@ -240,7 +242,7 @@ export function Contracts() {
                       className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                         binding?.enabled
                           ? `${cfg.bg} ${cfg.color}`
-                          : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-700 dark:text-neutral-500'
+                          : 'bg-neutral-100 text-muted dark:bg-neutral-700 dark:text-neutral-500'
                       }`}
                     >
                       {cfg.label}
@@ -395,69 +397,69 @@ function CreateContractView({
       </h2>
 
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6 space-y-4 max-w-2xl">
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+        <Field>
+          <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Name (slug)
-          </label>
-          <input
+          </FieldLabel>
+          <FieldInput
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder="my-api-contract"
             className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+        <Field>
+          <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Display Name
-          </label>
-          <input
+          </FieldLabel>
+          <FieldInput
             type="text"
             value={form.display_name}
             onChange={(e) => setForm({ ...form, display_name: e.target.value })}
             placeholder="My API Contract"
             className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+        <Field>
+          <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Description
-          </label>
-          <textarea
+          </FieldLabel>
+          <FieldTextarea
             value={form.description || ''}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}
             className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
           />
-        </div>
+        </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Version
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={form.version}
               onChange={(e) => setForm({ ...form, version: e.target.value })}
               placeholder="1.0.0"
               className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          </Field>
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               OpenAPI Spec URL
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={form.openapi_spec_url || ''}
               onChange={(e) => setForm({ ...form, openapi_spec_url: e.target.value })}
               placeholder="https://..."
               className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
             />
-          </div>
+          </Field>
         </div>
 
         <div className="flex gap-3 pt-4">
@@ -596,39 +598,39 @@ function ContractDetailView({
       {/* Edit form */}
       {editing && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-blue-200 dark:border-blue-800 p-4 space-y-3 max-w-2xl">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Display Name
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={editForm.display_name}
               onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
               className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          </Field>
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Description
-            </label>
-            <textarea
+            </FieldLabel>
+            <FieldTextarea
               value={editForm.description}
               onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
               rows={2}
               className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          </Field>
+          <Field>
+            <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Version
-            </label>
-            <input
+            </FieldLabel>
+            <FieldInput
               type="text"
               value={editForm.version}
               onChange={(e) => setEditForm({ ...editForm, version: e.target.value })}
               className="w-full border rounded-lg px-3 py-2 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white"
             />
-          </div>
+          </Field>
           <div className="flex gap-2">
             <button
               onClick={handleSaveEdit}
@@ -712,14 +714,14 @@ function ContractDetailView({
                       <p className="text-xs text-neutral-500 font-mono">{binding.endpoint}</p>
                     )}
                     {binding?.tool_name && (
-                      <p className="text-xs text-neutral-400">tool: {binding.tool_name}</p>
+                      <p className="text-xs text-muted">tool: {binding.tool_name}</p>
                     )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   {binding?.traffic_24h != null && (
-                    <span className="text-xs text-neutral-400">
+                    <span className="text-xs text-muted">
                       {binding.traffic_24h.toLocaleString()} req/24h
                     </span>
                   )}
@@ -729,7 +731,7 @@ function ContractDetailView({
                       className={`p-1 rounded transition-colors ${
                         enabled
                           ? 'text-green-600 hover:text-green-700'
-                          : 'text-neutral-400 hover:text-neutral-500'
+                          : 'text-muted hover:text-neutral-500'
                       }`}
                       title={enabled ? 'Disable' : 'Enable'}
                     >
@@ -741,7 +743,7 @@ function ContractDetailView({
                     </button>
                   ) : (
                     <span
-                      className={`text-xs font-medium ${enabled ? 'text-green-600' : 'text-neutral-400'}`}
+                      className={`text-xs font-medium ${enabled ? 'text-green-600' : 'text-muted'}`}
                     >
                       {enabled ? 'Active' : 'Inactive'}
                     </span>

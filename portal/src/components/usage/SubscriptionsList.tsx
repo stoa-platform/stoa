@@ -141,7 +141,7 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
                   </span>
                   <StatusBadge status={sub.status} />
                 </div>
-                <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500 mb-1">
+                <div className="flex items-center gap-3 text-xs text-muted mb-1">
                   <span>{sub.call_count_total.toLocaleString()} calls</span>
                   <span>•</span>
                   <span>Last used {formatLastUsed(sub.last_used_at)}</span>
@@ -156,7 +156,7 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
                 to={`/servers/${sub.tool_id}`}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded"
               >
-                <ExternalLink className="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
+                <ExternalLink className="w-4 h-4 text-muted" />
               </Link>
             </div>
           ))}

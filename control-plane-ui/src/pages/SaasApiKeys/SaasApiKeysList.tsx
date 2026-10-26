@@ -1,3 +1,4 @@
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Copy, Check } from 'lucide-react';
@@ -269,11 +270,14 @@ export function SaasApiKeysList() {
 
       {/* Key reveal dialog */}
       {revealedKey && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <Modal
+          onClose={() => setRevealedKey(null)}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        >
           <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
               API Key Created
-            </h2>
+            </ModalTitle>
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded-lg text-sm">
               Copy this key now. It will not be shown again.
             </div>
@@ -282,6 +286,7 @@ export function SaasApiKeysList() {
                 {revealedKey.key}
               </code>
               <button
+                type="button"
                 onClick={handleCopyKey}
                 className="flex-shrink-0 p-2 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700"
                 title="Copy to clipboard"
@@ -300,6 +305,7 @@ export function SaasApiKeysList() {
             </div>
             <div className="flex justify-end">
               <button
+                type="button"
                 onClick={() => setRevealedKey(null)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
@@ -307,7 +313,7 @@ export function SaasApiKeysList() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modals */}

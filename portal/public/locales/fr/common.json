@@ -28,6 +28,20 @@
     "noResults": "Aucun resultat",
     "viewAll": "Voir tout"
   },
+  "a11y": {
+    "skipToMain": "Passer au contenu principal"
+  },
+  "testing": {
+    "httpMethod": "Méthode HTTP",
+    "requestPath": "Chemin de la requête",
+    "enableQueryParameter": "Activer le paramètre de requête {{index}}",
+    "queryParameterKey": "Clé du paramètre de requête {{index}}",
+    "queryParameterValue": "Valeur du paramètre de requête {{index}}",
+    "enableHeader": "Activer l'en-tête {{index}}",
+    "headerName": "Nom de l'en-tête {{index}}",
+    "headerValue": "Valeur de l'en-tête {{index}}",
+    "requestBody": "Corps de la requête (JSON)"
+  },
   "footer": {
     "documentation": "Documentation",
     "support": "Support",

@@ -76,7 +76,7 @@ jobs:
     # ne peut pas s'exécuter n'alerte sur rien.
     # Vérifié avant bascule : les cibles E2E sont publiques (portal 200,
     # console 200, auth 302) et les 12 secrets de repli GitHub existent tous.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     # PR and scheduled runs are non-blocking — E2E requires live infra
     continue-on-error: ${{ github.event_name == 'pull_request' || github.event_name == 'schedule' }}

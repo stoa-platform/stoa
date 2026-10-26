@@ -79,9 +79,7 @@ function KPICard({
         <div>
           <p className="text-sm text-neutral-500 dark:text-neutral-400">{label}</p>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white mt-1">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>
-          )}
+          {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
         </div>
         <div className={`p-2 rounded-lg ${iconBg}`}>
           <Icon className={`w-5 h-5 ${iconColor}`} />
@@ -111,7 +109,7 @@ function BackendRow({ row }: { row: BackendTrafficRow }) {
             <span className="text-sm font-medium text-neutral-900 dark:text-white">
               {backend.display_name || backend.name}
             </span>
-            <p className="text-xs text-neutral-400 dark:text-neutral-500">{backend.base_url}</p>
+            <p className="text-xs text-muted">{backend.base_url}</p>
           </div>
         </div>
       </td>
@@ -139,7 +137,7 @@ function BackendRow({ row }: { row: BackendTrafficRow }) {
             On
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500">
+          <span className="inline-flex items-center gap-1 text-xs text-muted">
             <ShieldOff className="w-3.5 h-3.5" />
             Off
           </span>
@@ -228,7 +226,7 @@ export function ApiTrafficDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
+          <span className="text-xs text-muted">
             Last refresh: {lastRefresh.toLocaleTimeString()}
           </span>
           <button

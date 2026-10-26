@@ -1,3 +1,5 @@
+import { RowAction } from '@stoa/shared/components/RowAction';
+import { Modal, ModalTitle } from '@stoa/shared/components/Modal';
 /**
  * Admin Prospects Dashboard (CAB-911)
  *
@@ -196,6 +198,7 @@ export function AdminProspects() {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-[200px]">
               <input
+                aria-label="Search by company..."
                 type="text"
                 placeholder="Search by company..."
                 value={companySearch}
@@ -204,6 +207,7 @@ export function AdminProspects() {
               />
             </div>
             <select
+              aria-label="Status"
               value={filters.status || ''}
               onChange={(e) => handleStatusFilter(e.target.value as ProspectStatus | '')}
               className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -234,7 +238,7 @@ export function AdminProspects() {
             </div>
           ) : !prospectsData?.data.length ? (
             <div className="p-8 text-center">
-              <Users className="h-8 w-8 text-neutral-400 dark:text-neutral-500 mx-auto" />
+              <Users className="h-8 w-8 text-muted mx-auto" />
               <p className="mt-2 text-neutral-500 dark:text-neutral-400">No prospects found</p>
             </div>
           ) : (
@@ -397,7 +401,7 @@ function MetricCard({
         <div>
           <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{title}</p>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white">{value}</p>
-          <p className="text-xs text-neutral-400 dark:text-neutral-500">{subtitle}</p>
+          <p className="text-xs text-muted">{subtitle}</p>
         </div>
       </div>
     </div>
@@ -414,9 +418,11 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
     >
       <td className="px-6 py-4">
         <div className="font-medium text-neutral-900 dark:text-white">
-          {prospect.first_name || prospect.last_name
-            ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
-            : prospect.company || prospect.email}
+          <RowAction onActivate={onClick}>
+            {prospect.first_name || prospect.last_name
+              ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
+              : prospect.company || prospect.email}
+          </RowAction>
         </div>
         <div className="text-sm text-neutral-500 dark:text-neutral-400">
           {prospect.email}
@@ -446,7 +452,7 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
             {prospect.nps_score}/10
           </span>
         ) : (
-          <span className="text-neutral-400 dark:text-neutral-500">—</span>
+          <span className="text-muted">—</span>
         )}
       </td>
       <td className="px-6 py-4 text-sm text-neutral-900 dark:text-white">
@@ -459,7 +465,7 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
   );
 }
 
-function ProspectDetailModal({
+export function ProspectDetailModal({
   prospect,
   isLoading,
   onClose,
@@ -469,7 +475,8 @@ function ProspectDetailModal({
   onClose: () => void;
 }) {
   return (
-    <div
+    <Modal
+      onClose={onClose}
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
@@ -477,23 +484,27 @@ function ProspectDetailModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-neutral-700">
           <div>
+            <ModalTitle as="h2" className="text-lg font-semibold text-neutral-900 dark:text-white">
+              {isLoading || !prospect
+                ? 'Prospect'
+                : prospect.first_name || prospect.last_name
+                  ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
+                  : prospect.company || prospect.email}
+            </ModalTitle>
             {isLoading ? (
-              <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-40 animate-pulse" />
-            ) : prospect ? (
-              <>
-                <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
-                  {prospect.first_name || prospect.last_name
-                    ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
-                    : prospect.company || prospect.email}
-                </h2>
+              <div className="mt-2 h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-40 animate-pulse" />
+            ) : (
+              prospect && (
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   {prospect.email}
                   {prospect.company && ` · ${prospect.company}`}
                 </p>
-              </>
-            ) : null}
+              )
+            )}
           </div>
           <button
+            aria-label="Close dialog"
+            type="button"
             onClick={onClose}
             className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           >
@@ -601,7 +612,7 @@ function ProspectDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -630,7 +641,7 @@ function StatBox({
       className={`rounded-lg p-3 text-center ${highlight ? 'bg-red-50 dark:bg-red-900/20' : 'bg-neutral-50 dark:bg-neutral-700'}`}
     >
       <Icon
-        className={`h-5 w-5 mx-auto ${highlight ? 'text-red-500' : 'text-neutral-400 dark:text-neutral-400'}`}
+        className={`h-5 w-5 mx-auto ${highlight ? 'text-red-500' : 'text-muted dark:text-neutral-400'}`}
       />
       <p className="text-lg font-semibold text-neutral-900 dark:text-white mt-1">{value}</p>
       <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
@@ -650,13 +661,13 @@ function TimelineEvent({ event }: { event: ProspectDetail['timeline'][0] }) {
 
   return (
     <div className="flex items-start gap-3 text-sm">
-      <span className="text-xs text-neutral-400 dark:text-neutral-500 w-20 flex-shrink-0">
+      <span className="text-xs text-muted w-20 flex-shrink-0">
         {new Date(event.timestamp).toLocaleTimeString('fr-FR', {
           hour: '2-digit',
           minute: '2-digit',
         })}
       </span>
-      <Icon className="h-4 w-4 text-neutral-400 dark:text-neutral-500 mt-0.5 flex-shrink-0" />
+      <Icon className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
       <div className="flex-1">
         <span className="font-medium text-neutral-700 dark:text-neutral-300">
           {event.event_type}

@@ -1572,7 +1572,8 @@ async fn service_account_reads_cp_permissions_end_to_end() {
             "CP permission page {page}"
         );
         let response = response.json::<Value>().await.unwrap();
-        assert_eq!(response["default_allowed"], false);
+        // The current CP omits default_allowed; the gateway defaults it to deny.
+        assert!(response.get("default_allowed").is_none());
         assert_eq!(response["total"], 101);
         assert_eq!(response["page"], page);
         assert_eq!(response["items"].as_array().unwrap().len(), expected_len);
@@ -1581,6 +1582,13 @@ async fn service_account_reads_cp_permissions_end_to_end() {
             assert_eq!(response["items"][0]["allowed"], false);
         }
     }
+    let other_tenant = client
+        .get(format!("{cp}/v1/tenants/tenant-b/tool-permissions"))
+        .bearer_auth(service)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(other_tenant.status(), reqwest::StatusCode::FORBIDDEN);
     let fixture = Fixture::new(|config| {
         config.keycloak_url = Some(cp.to_string());
         config.control_plane_url = Some(cp.to_string());

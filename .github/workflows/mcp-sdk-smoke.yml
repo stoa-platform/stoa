@@ -83,53 +83,13 @@ jobs:
         working-directory: .
         run: |
           python3 -m venv .venv-mcp
-          .venv-mcp/bin/pip install --quiet "mcp==${PY_MCP_VERSION}"
+          .venv-mcp/bin/pip install --quiet "mcp==${PY_MCP_VERSION}" "cryptography>=47.0.0"
 
       - name: Build gateway binary
         run: cargo build --release
 
-      - name: Boot gateway and wait for /health
-        run: |
-          STOA_PORT=8080 \
-          STOA_JWT_VALIDATION_DISABLED=true \
-          STOA_OTEL_ENDPOINT='' \
-          ./target/release/stoa-gateway >"${RUNNER_TEMP}/gateway.log" 2>&1 &
-          echo $! > "${RUNNER_TEMP}/gateway.pid"
-          for i in $(seq 1 30); do
-            if curl -fs http://127.0.0.1:8080/health >/dev/null 2>&1; then
-              echo "gateway ready on :8080 (after ${i}s)"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::gateway never became healthy"
-          tail -80 "${RUNNER_TEMP}/gateway.log" || true
-          exit 1
-
-      - name: Run MCP SDK smoke
-        env:
-          STOA_GATEWAY_URL: http://127.0.0.1:8080/mcp/sse
-          # Local gateway boots without jwt_validator (no KC) → accepts any
-          # Bearer unchallenged (stoa-gateway/src/mcp/sse.rs:280). This lets
-          # us exercise the CAB-2121-gated discovery surface without a real
-          # token. Post-deploy prod probe omits this → runs public stages only.
-          STOA_GATEWAY_BEARER: dummy
-          # tools/call requires a real scope (UAC layer in handle_tools_call).
-          # A dummy bearer gets through the has_auth gate but has no scope —
-          # leave tool-invocation to the post-deploy probe with a real token.
-          STOA_SMOKE_CALL_TOOL: '0'
-        run: ../.venv-mcp/bin/python tests/e2e/mcp_sdk_smoke.py
-
-      - name: Dump gateway log on failure
-        if: failure()
-        run: tail -200 "${RUNNER_TEMP}/gateway.log" || true
-
-      - name: Stop gateway
-        if: always()
-        run: |
-          PID=$(cat "${RUNNER_TEMP}/gateway.pid" 2>/dev/null || echo)
-          [ -n "$PID" ] && kill "$PID" 2>/dev/null || true
-          wait 2>/dev/null || true
+      - name: Run authenticated MCP SDK smoke
+        run: ../.venv-mcp/bin/python tests/e2e/local_mcp_sdk_smoke.py
 
   post-deploy:
     # Daily cron + manual dispatch: probe prod `mcp.gostoa.dev`. Catches

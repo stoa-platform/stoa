@@ -32,13 +32,21 @@ func TestEnvoySync(t *testing.T) {
 			}
 			defer s.Close()
 			l := bufconn.Listen(1024 * 1024)
-			defer l.Close()
+			defer func() {
+				if err := l.Close(); err != nil {
+					t.Errorf("close l: %v", err)
+				}
+			}()
 			go func() { _ = s.GRPCServer().Serve(l) }()
 			conn, err := grpc.NewClient("passthrough:///memory", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return l.DialContext(ctx) }))
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer conn.Close()
+			defer func() {
+				if err := conn.Close(); err != nil {
+					t.Errorf("close conn: %v", err)
+				}
+			}()
 			stream, err := discovery.NewAggregatedDiscoveryServiceClient(conn).StreamAggregatedResources(ctx)
 			if err != nil {
 				t.Fatal(err)

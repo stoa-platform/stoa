@@ -82,7 +82,11 @@ func TestEnvoyModeVerifiedIdentityAndShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close conn: %v", err)
+		}
+	}()
 	rpcCtx, rpcCancel := context.WithTimeout(ctx, 3*time.Second)
 	defer rpcCancel()
 	stream, err := discovery.NewAggregatedDiscoveryServiceClient(conn).StreamAggregatedResources(rpcCtx)

@@ -26,13 +26,22 @@ func harness(t *testing.T, identity Identity) (*Server, discovery.AggregatedDisc
 		t.Fatal(err)
 	}
 	l := bufconn.Listen(1024 * 1024)
-	t.Cleanup(func() { s.Close(); l.Close() })
+	t.Cleanup(func() {
+		s.Close()
+		if err := l.Close(); err != nil {
+			t.Errorf("close listener: %v", err)
+		}
+	})
 	go func() { _ = s.GRPCServer().Serve(l) }()
 	conn, err := grpc.NewClient("passthrough:///memory", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return l.DialContext(ctx) }))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close connection: %v", err)
+		}
+	})
 	return s, discovery.NewAggregatedDiscoveryServiceClient(conn)
 }
 func own(context.Context) (string, error) { return "own", nil }

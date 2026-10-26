@@ -11,6 +11,7 @@ import (
 	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	auth "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
 	hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	upstreamhttp "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 )
 
@@ -68,7 +69,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	rc := s.GetResources(resource.RouteType)["routes"].(*route.RouteConfiguration)
 	rr := rc.VirtualHosts[0].Routes
-	if len(rr) != 3 || rr[0].Match.GetPrefix() != "/a" || rr[0].Match.Headers[0].GetExactMatch() != "GET" || rr[1].Match.Headers[0].GetExactMatch() != "POST" || len(rr[2].Match.Headers) != 0 {
+	if len(rr) != 3 || rr[0].Match.GetPrefix() != "/a" || rr[0].Match.Headers[0].GetStringMatch().GetExact() != "GET" || rr[1].Match.Headers[0].GetStringMatch().GetExact() != "POST" || len(rr[2].Match.Headers) != 0 {
 		t.Fatal("routes or methods")
 	}
 	cc := s.GetResources(resource.ClusterType)
@@ -78,8 +79,19 @@ func TestSnapshot(t *testing.T) {
 	https := cc["backend/a"].(*cluster.Cluster)
 	static := cc["backend/b"].(*cluster.Cluster)
 	ac := cc["authorization"].(*cluster.Cluster)
-	if https.GetType() != cluster.Cluster_STRICT_DNS || https.TransportSocket == nil || https.LoadAssignment.Endpoints[0].LbEndpoints[0].GetEndpoint().Address.GetSocketAddress().GetPortValue() != 443 || static.GetType() != cluster.Cluster_STATIC || ac.Http2ProtocolOptions == nil {
+	if https.GetType() != cluster.Cluster_STRICT_DNS || https.TransportSocket == nil || https.LoadAssignment.Endpoints[0].LbEndpoints[0].GetEndpoint().Address.GetSocketAddress().GetPortValue() != 443 || static.GetType() != cluster.Cluster_STATIC {
 		t.Fatal("upstream configuration")
+	}
+	protocolOptions := &upstreamhttp.HttpProtocolOptions{}
+	httpOptions := ac.TypedExtensionProtocolOptions["envoy.extensions.upstreams.http.v3.HttpProtocolOptions"]
+	if httpOptions == nil {
+		t.Fatal("missing authorization HTTP protocol options")
+	}
+	if err := httpOptions.UnmarshalTo(protocolOptions); err != nil {
+		t.Fatal(err)
+	}
+	if protocolOptions.GetExplicitHttpConfig().GetHttp2ProtocolOptions() == nil {
+		t.Fatal("authorization upstream must use HTTP/2")
 	}
 	empty, err := BuildSnapshot(config(), nil)
 	if err != nil {

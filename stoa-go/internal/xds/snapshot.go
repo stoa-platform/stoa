@@ -22,6 +22,8 @@ import (
 	router "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	tls "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	upstreamhttp "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
+	matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	cachetypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
@@ -89,7 +91,15 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 		return nil, fmt.Errorf("invalid authorization port")
 	}
 	ac := upstream(c.AuthCluster, host, uint32(port))
-	ac.Http2ProtocolOptions = &core.Http2ProtocolOptions{}
+	ac.TypedExtensionProtocolOptions = map[string]*anypb.Any{
+		"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": typed(&upstreamhttp.HttpProtocolOptions{
+			UpstreamProtocolOptions: &upstreamhttp.HttpProtocolOptions_ExplicitHttpConfig_{
+				ExplicitHttpConfig: &upstreamhttp.HttpProtocolOptions_ExplicitHttpConfig{
+					ProtocolConfig: &upstreamhttp.HttpProtocolOptions_ExplicitHttpConfig_Http2ProtocolOptions{Http2ProtocolOptions: &core.Http2ProtocolOptions{}},
+				},
+			},
+		}),
+	}
 	clusters := []cachetypes.Resource{ac}
 	canonical := make([]Route, len(routes))
 	for i, r := range routes {
@@ -136,7 +146,7 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 		for _, m := range methods {
 			match := &route.RouteMatch{PathSpecifier: &route.RouteMatch_Prefix{Prefix: r.Path}}
 			if m != "" {
-				match.Headers = []*route.HeaderMatcher{{Name: ":method", HeaderMatchSpecifier: &route.HeaderMatcher_ExactMatch{ExactMatch: m}}}
+				match.Headers = []*route.HeaderMatcher{{Name: ":method", HeaderMatchSpecifier: &route.HeaderMatcher_StringMatch{StringMatch: &matcher.StringMatcher{MatchPattern: &matcher.StringMatcher_Exact{Exact: m}}}}}
 			}
 			rc.VirtualHosts[0].Routes = append(rc.VirtualHosts[0].Routes, &route.Route{Name: r.ID, Match: match, Action: &route.Route_Route{Route: &route.RouteAction{ClusterSpecifier: &route.RouteAction_Cluster{Cluster: name}}}})
 		}

@@ -22,8 +22,10 @@ jobs:
     steps:
       - name: Extract ticket ID from PR title
         id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
+          TITLE="$PR_TITLE"
           TICKET_ID=$(echo "$TITLE" | grep -oP 'CAB-\d{2,4}' | head -1)
           if [ -z "$TICKET_ID" ]; then
             echo "No CAB-XXXX found in PR title: $TITLE"

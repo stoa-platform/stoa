@@ -21,6 +21,7 @@ on:
       - 'scripts/ci/**'
       - '.github/actions/**'
       - '.github/workflows/claude-issue-to-pr.yml'
+      - '.github/workflows/linear-reopen-on-close.yml'
       - '.github/workflows/ai-factory-scripts-tests.yml'
       - '.yamllint'
 
@@ -81,7 +82,8 @@ jobs:
           fail=0
           for f in \
             .github/workflows/claude-issue-to-pr.yml \
-            .github/workflows/ai-factory-scripts-tests.yml; do
+            .github/workflows/ai-factory-scripts-tests.yml \
+            .github/workflows/linear-reopen-on-close.yml; do
             if [ ! -f "${f}" ]; then
               echo "::warning::Skipping missing file ${f}"
               continue
@@ -108,6 +110,7 @@ jobs:
             .github/actions/
             .github/workflows/claude-issue-to-pr.yml
             .github/workflows/ai-factory-scripts-tests.yml
+            .github/workflows/linear-reopen-on-close.yml
             .yamllint
           config_file: .yamllint
           strict: false

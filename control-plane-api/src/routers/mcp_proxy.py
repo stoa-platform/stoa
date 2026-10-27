@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import resolve_effective_tenant
 from ..config import settings
 from ..database import get_db
 
@@ -215,10 +216,14 @@ async def list_tools(
 
     Proxies to stoa-gateway and wraps the flat array into ListToolsResponse.
     """
+    effective_tenant = resolve_effective_tenant(user, tenant_id)
     all_tools = await _fetch_tools(user, credentials.credentials)
 
-    # Client-side filtering (stoa-gateway returns all tools)
-    filtered = all_tools
+    # Match ToolRegistry.list(Some(tenant)): global tools plus the effective tenant, before pagination.
+    filtered = (
+        [tool for tool in all_tools if tool.get("tenant_id") in (None, effective_tenant)]
+        if effective_tenant else all_tools
+    )
     if search:
         q = search.lower()
         filtered = [t for t in filtered if q in t.get("name", "").lower() or q in (t.get("description") or "").lower()]
@@ -227,8 +232,6 @@ async def list_tools(
     if tags:
         tag_list = [t.strip() for t in tags.split(",")]
         filtered = [t for t in filtered if any(tg in (t.get("tags") or []) for tg in tag_list)]
-    if tenant_id:
-        filtered = [t for t in filtered if t.get("tenant_id") == tenant_id]
 
     return ListToolsResponse(tools=filtered[:limit], totalCount=len(filtered))
 
@@ -238,14 +241,18 @@ async def get_tool_tags(
     request: Request,
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    tenant_id: str | None = Query(None, description="Filter by tenant"),
 ):
     """
     Get all available tool tags with counts.
 
     Extracts tags from tools since stoa-gateway has no dedicated tags endpoint.
     """
+    effective_tenant = resolve_effective_tenant(user, tenant_id)
     try:
         all_tools = await _fetch_tools(user, credentials.credentials)
+        if effective_tenant:
+            all_tools = [tool for tool in all_tools if tool.get("tenant_id") in (None, effective_tenant)]
         tag_counts: dict[str, int] = {}
         for tool in all_tools:
             for t in tool.get("tags") or []:
@@ -262,12 +269,14 @@ async def get_tool_categories(
     request: Request,
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    tenant_id: str | None = Query(None, description="Filter by tenant"),
 ):
     """
     Get all available tool categories.
 
     stoa-gateway does not have categories — returns empty list.
     """
+    resolve_effective_tenant(user, tenant_id)
     return ListCategoriesResponse(categories=[])
 
 

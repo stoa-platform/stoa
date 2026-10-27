@@ -126,7 +126,11 @@ impl ExtAuthzService {
         {
             return denied(403);
         }
-        let scopes: Vec<String> = claims.scopes().into_iter().map(str::to_owned).collect();
+        let scopes: Vec<String> = claims
+            .scopes_ext_authz()
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
         // DecisionEngine currently uses OR. SA-1 requires AND: enforce the
         // complete profile here before delegating policy/quota/enrichment.
         if self

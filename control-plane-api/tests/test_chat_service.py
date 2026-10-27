@@ -7,13 +7,32 @@ usage statistics, message history building, streaming, and metering.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
+
 from src.services.chat_service import ChatService
 
 # ── Fixtures ──
+
+
+@pytest.fixture
+def mock_session_binding_provider() -> Iterator[None]:
+    """Isolate the external LLM while exercising real session binding checks."""
+    async def mock_stream(**_kwargs: object) -> AsyncIterator[dict[str, object]]:
+        yield {"event": "content_delta", "data": {"delta": "Hi"}}
+        yield {
+            "event": "message_end",
+            "data": {"input_tokens": 10, "output_tokens": 5, "stop_reason": "end_turn"},
+        }
+
+    mock_provider = MagicMock()
+    mock_provider.stream_response = mock_stream
+    with patch("src.services.chat_service._PROVIDERS", {"anthropic": mock_provider}):
+        yield
 
 
 def _make_session():
@@ -710,6 +729,7 @@ class TestSessionBinding:
         assert events[0]["event"] == "error"
         assert "expired" in events[0]["data"]["error"].lower()
 
+    @pytest.mark.usefixtures("mock_session_binding_provider")
     @patch("src.services.chat_service.settings")
     async def test_not_expired_proceeds(self, mock_settings):
         """Conversation active within 24h should not yield a timeout error."""
@@ -740,6 +760,7 @@ class TestSessionBinding:
         # First event should NOT be a timeout error
         assert not (events[0]["event"] == "error" and "expired" in events[0]["data"].get("error", ""))
 
+    @pytest.mark.usefixtures("mock_session_binding_provider")
     async def test_no_last_active_skips_timeout(self):
         """Conversation with last_active_at=None should not trigger timeout."""
         session = _make_session()
@@ -761,6 +782,7 @@ class TestSessionBinding:
         if events and events[0]["event"] == "error":
             assert "expired" not in events[0]["data"].get("error", "").lower()
 
+    @pytest.mark.usefixtures("mock_session_binding_provider")
     @patch("src.services.chat_service.logger")
     async def test_fingerprint_mismatch_logs_warning(self, mock_logger):
         """Mismatched fingerprint should log a warning but not block."""

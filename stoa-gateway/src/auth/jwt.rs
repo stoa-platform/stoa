@@ -114,8 +114,19 @@ impl JwtValidator {
     /// Validate a token for MCP entrypoints: signature, issuer, lifetime and
     /// the configured MCP audience.
     pub async fn validate_mcp(&self, token: &str, audience: &str) -> Result<Claims, JwtError> {
+        self.validate_with_audience(token, audience).await
+    }
+
+    /// Validate signature, issuer, lifetime and an explicit resource audience.
+    pub async fn validate_with_audience(
+        &self,
+        token: &str,
+        audience: &str,
+    ) -> Result<Claims, JwtError> {
         if audience.trim().is_empty() {
-            return Err(JwtError::MissingClaim("configured MCP audience".into()));
+            return Err(JwtError::MissingClaim(
+                "configured resource audience".into(),
+            ));
         }
         self.validate_inner(token, Some(audience)).await
     }

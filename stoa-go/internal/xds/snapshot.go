@@ -34,10 +34,12 @@ import (
 
 // Route describes a prefix route and its upstream URL.
 type Route struct {
-	ID      string
-	Path    string
-	Methods []string
-	Backend string
+	TenantID string
+	APIID    string
+	ID       string
+	Path     string
+	Methods  []string
+	Backend  string
 }
 
 // Config contains the single-node listener and authorization configuration.
@@ -116,6 +118,9 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 			return nil, fmt.Errorf("empty or duplicate route ID: %q", r.ID)
 		}
 		seen[r.ID] = true
+		if strings.TrimSpace(r.TenantID) == "" {
+			return nil, fmt.Errorf("missing tenant for route %q", r.ID)
+		}
 		if r.Path == "" || !strings.HasPrefix(r.Path, "/") {
 			return nil, fmt.Errorf("invalid route path: %q", r.Path)
 		}
@@ -148,7 +153,7 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 			if m != "" {
 				match.Headers = []*route.HeaderMatcher{{Name: ":method", HeaderMatchSpecifier: &route.HeaderMatcher_StringMatch{StringMatch: &matcher.StringMatcher{MatchPattern: &matcher.StringMatcher_Exact{Exact: m}}}}}
 			}
-			rc.VirtualHosts[0].Routes = append(rc.VirtualHosts[0].Routes, &route.Route{Name: r.ID, Match: match, Action: &route.Route_Route{Route: &route.RouteAction{ClusterSpecifier: &route.RouteAction_Cluster{Cluster: name}}}})
+			rc.VirtualHosts[0].Routes = append(rc.VirtualHosts[0].Routes, &route.Route{Name: r.ID, Match: match, TypedPerFilterConfig: map[string]*anypb.Any{"envoy.filters.http.ext_authz": typed(&auth.ExtAuthzPerRoute{Override: &auth.ExtAuthzPerRoute_CheckSettings{CheckSettings: &auth.CheckSettings{ContextExtensions: map[string]string{"tenant_id": r.TenantID, "api_id": r.APIID}}}})}, Action: &route.Route_Route{Route: &route.RouteAction{ClusterSpecifier: &route.RouteAction_Cluster{Cluster: name}}}})
 		}
 	}
 	source := &core.ConfigSource{ResourceApiVersion: core.ApiVersion_V3, ConfigSourceSpecifier: &core.ConfigSource_Ads{Ads: &core.AggregatedConfigSource{}}}

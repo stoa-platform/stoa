@@ -12,6 +12,25 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Providers emit `scp` as either a space-separated string or a scope array.
+fn deserialize_scope_list<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Scopes {
+        Text(String),
+        List(Vec<String>),
+    }
+    Ok(
+        Option::<Scopes>::deserialize(deserializer)?.map(|scopes| match scopes {
+            Scopes::Text(value) => value.split_whitespace().map(str::to_owned).collect(),
+            Scopes::List(values) => values,
+        }),
+    )
+}
+
 /// Reject ambiguous, empty, padded or non-string tenant claims at decoding.
 fn deserialize_tenant<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
@@ -124,6 +143,14 @@ pub struct Claims {
     /// Scope
     #[serde(default)]
     pub scope: Option<String>,
+
+    /// Validated OAuth scope array used by providers that emit `scp`.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_scope_list",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scp: Option<Vec<String>>,
 
     /// RFC 8705 Confirmation claim (certificate-bound tokens)
     /// Contains x5t#S256 (base64url-encoded SHA-256 thumbprint)
@@ -294,12 +321,24 @@ impl Claims {
         self.exp < now
     }
 
-    /// Get scopes as a vector.
+    /// Get scopes as a vector (the `scope` claim only).
+    ///
+    /// `scp` is deliberately ignored here: it is read only by the ext_authz
+    /// profile (see [`Claims::scopes_ext_authz`]), so a provider that starts
+    /// emitting `scp` cannot widen RBAC, MCP or quota decisions.
     pub fn scopes(&self) -> Vec<&str> {
         self.scope
             .as_ref()
             .map(|s| s.split_whitespace().collect())
             .unwrap_or_default()
+    }
+
+    /// Scopes for the ext_authz profile: `scope` plus `scp`.
+    pub fn scopes_ext_authz(&self) -> Vec<&str> {
+        self.scopes()
+            .into_iter()
+            .chain(self.scp.iter().flatten().map(String::as_str))
+            .collect()
     }
 
     /// Check if the token has a specific scope.
@@ -435,6 +474,7 @@ mod tests {
             sid: Some("session-456".to_string()),
             typ: Some("Bearer".to_string()),
             scope: Some("openid profile email stoa:write".to_string()),
+            scp: None,
             cnf: None,
             sub_account_id: None,
             master_account_id: None,
@@ -761,5 +801,17 @@ mod tests {
         claims.validate_tenant(false).unwrap();
         assert!(crate::auth::tenant::require_tenant(&claims).is_err());
         assert_eq!(claims.tenant_id(), None);
+    }
+
+    #[test]
+    fn regression_scp_claim_is_read_only_by_ext_authz_profile() {
+        let claims: Claims = serde_json::from_value(serde_json::json!({
+            "sub": "u", "exp": 4_102_444_800i64, "iat": 0, "iss": "i",
+            "scope": "openid", "scp": ["stoa:admin"]
+        }))
+        .expect("claims");
+        assert_eq!(claims.scopes(), vec!["openid"]);
+        assert!(!claims.has_scope("stoa:admin"));
+        assert_eq!(claims.scopes_ext_authz(), vec!["openid", "stoa:admin"]);
     }
 }

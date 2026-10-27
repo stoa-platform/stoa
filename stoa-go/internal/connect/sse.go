@@ -137,6 +137,7 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 		return
 	}
 	route.DeploymentID = event.DeploymentID
+	route.APICatalogID = event.APICatalogID
 
 	syncer := newRouteSyncer(adapter)
 	results, syncErr := syncer.Sync(ctx, adminURL, []adapters.Route{route})

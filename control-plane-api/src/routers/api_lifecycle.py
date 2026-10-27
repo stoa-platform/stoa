@@ -58,9 +58,11 @@ router = APIRouter(prefix="/v1/tenants/{tenant_id}/apis", tags=["API Lifecycle"]
 
 
 def _build_service(db: AsyncSession) -> ApiLifecycleService:
+    repository = SqlAlchemyApiLifecycleRepository(db)
     return ApiLifecycleService(
-        repository=SqlAlchemyApiLifecycleRepository(db),
+        repository=repository,
         audit_sink=SqlAlchemyLifecycleAuditSink(db),
+        deployment_notifier=repository.queue_gateway_deployment,
     )
 
 

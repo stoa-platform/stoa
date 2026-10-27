@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ type Route struct {
 	Path     string
 	Methods  []string
 	Backend  string
+	Policies []Policy
 }
 
 // Config contains the single-node listener and authorization configuration.
@@ -109,6 +111,8 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 		canonical[i].Methods = append([]string{}, r.Methods...)
 		sort.Strings(canonical[i].Methods)
 		canonical[i].Methods = unique(canonical[i].Methods)
+		canonical[i].Policies = append([]Policy(nil), r.Policies...)
+		sort.Slice(canonical[i].Policies, func(a, b int) bool { return canonical[i].Policies[a].ID < canonical[i].Policies[b].ID })
 	}
 	sort.Slice(canonical, func(i, j int) bool { return canonical[i].ID < canonical[j].ID })
 	seen := map[string]bool{}
@@ -120,6 +124,9 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 		seen[r.ID] = true
 		if strings.TrimSpace(r.TenantID) == "" {
 			return nil, fmt.Errorf("missing tenant for route %q", r.ID)
+		}
+		if strings.TrimSpace(r.APIID) == "" {
+			return nil, fmt.Errorf("missing api_id for route %q", r.ID)
 		}
 		if r.Path == "" || !strings.HasPrefix(r.Path, "/") {
 			return nil, fmt.Errorf("invalid route path: %q", r.Path)
@@ -145,6 +152,18 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 		}
 		clusters = append(clusters, cl)
 		methods := r.Methods
+		policies, err := PolicyConfigs(r.Policies)
+		if err != nil {
+			return nil, err
+		}
+		policies["envoy.filters.http.ext_authz"] = typed(&auth.ExtAuthzPerRoute{Override: &auth.ExtAuthzPerRoute_CheckSettings{CheckSettings: &auth.CheckSettings{ContextExtensions: map[string]string{"tenant_id": r.TenantID, "api_id": r.APIID}}}})
+		implicitPreflight := false
+		if _, cors := policies[corsFilter]; cors && len(methods) > 0 {
+			implicitPreflight = !slices.Contains(methods, "OPTIONS")
+			methods = append(append([]string(nil), methods...), "OPTIONS")
+			sort.Strings(methods)
+			methods = unique(methods)
+		}
 		if len(methods) == 0 {
 			methods = []string{""}
 		}
@@ -153,7 +172,12 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 			if m != "" {
 				match.Headers = []*route.HeaderMatcher{{Name: ":method", HeaderMatchSpecifier: &route.HeaderMatcher_StringMatch{StringMatch: &matcher.StringMatcher{MatchPattern: &matcher.StringMatcher_Exact{Exact: m}}}}}
 			}
-			rc.VirtualHosts[0].Routes = append(rc.VirtualHosts[0].Routes, &route.Route{Name: r.ID, Match: match, TypedPerFilterConfig: map[string]*anypb.Any{"envoy.filters.http.ext_authz": typed(&auth.ExtAuthzPerRoute{Override: &auth.ExtAuthzPerRoute_CheckSettings{CheckSettings: &auth.CheckSettings{ContextExtensions: map[string]string{"tenant_id": r.TenantID, "api_id": r.APIID}}}})}, Action: &route.Route_Route{Route: &route.RouteAction{ClusterSpecifier: &route.RouteAction_Cluster{Cluster: name}}}})
+			if m == "OPTIONS" && implicitPreflight {
+				for _, name := range []string{"origin", "access-control-request-method"} {
+					match.Headers = append(match.Headers, &route.HeaderMatcher{Name: name, HeaderMatchSpecifier: &route.HeaderMatcher_PresentMatch{PresentMatch: true}})
+				}
+			}
+			rc.VirtualHosts[0].Routes = append(rc.VirtualHosts[0].Routes, &route.Route{Name: r.ID, Match: match, TypedPerFilterConfig: policies, Action: &route.Route_Route{Route: &route.RouteAction{ClusterSpecifier: &route.RouteAction_Cluster{Cluster: name}}}})
 		}
 	}
 	source := &core.ConfigSource{ResourceApiVersion: core.ApiVersion_V3, ConfigSourceSpecifier: &core.ConfigSource_Ads{Ads: &core.AggregatedConfigSource{}}}
@@ -161,6 +185,12 @@ func BuildSnapshot(config Config, routes []Route) (*cache.Snapshot, error) {
 		{Name: "envoy.filters.http.ext_authz", ConfigType: &hcm.HttpFilter_TypedConfig{TypedConfig: typed(&auth.ExtAuthz{TransportApiVersion: core.ApiVersion_V3, FailureModeAllow: false, Services: &auth.ExtAuthz_GrpcService{GrpcService: &core.GrpcService{TargetSpecifier: &core.GrpcService_EnvoyGrpc_{EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: c.AuthCluster}}, Timeout: durationpb.New(c.AuthTimeout)}}})}},
 		{Name: "envoy.filters.http.router", ConfigType: &hcm.HttpFilter_TypedConfig{TypedConfig: typed(&router.Router{})}},
 	}}
+	for _, r := range canonical {
+		if len(r.Policies) > 0 {
+			manager.HttpFilters = append(manager.HttpFilters[:1], append(policyHTTPFilters(), manager.HttpFilters[1:]...)...)
+			break
+		}
+	}
 	l := &listener.Listener{Name: "listener", Address: address(c.ListenerAddress, c.ListenerPort), FilterChains: []*listener.FilterChain{{Filters: []*listener.Filter{{Name: "envoy.filters.network.http_connection_manager", ConfigType: &listener.Filter_TypedConfig{TypedConfig: typed(manager)}}}}}}
 	data, _ := json.Marshal(struct {
 		Config Config

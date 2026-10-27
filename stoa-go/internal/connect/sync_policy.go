@@ -35,9 +35,41 @@ func (s *policySyncer) hasOIDC() bool { return s.oidcAdapter != nil }
 // is responsible for updating Prometheus counters and sending the ack —
 // policySyncer is pure dispatch + per-policy logging.
 func (s *policySyncer) SyncPolicies(ctx context.Context, adminURL string, policies []PendingPolicy) []SyncedPolicyResult {
+	if envoy, ok := s.adapter.(*adapters.EnvoyAdapter); ok {
+		return syncEnvoyPolicies(ctx, envoy, policies)
+	}
 	results := make([]SyncedPolicyResult, 0, len(policies))
 	for _, p := range policies {
 		results = append(results, s.syncOne(ctx, adminURL, p))
+	}
+	return results
+}
+
+func syncEnvoyPolicies(ctx context.Context, envoy *adapters.EnvoyAdapter, policies []PendingPolicy) []SyncedPolicyResult {
+	active := []adapters.PolicyAction{}
+	var err error
+	for _, p := range policies {
+		if p.Applicable == nil {
+			err = &adapters.PolicyError{Code: "invalid"}
+			break
+		}
+		if p.Enabled && *p.Applicable {
+			active = append(active, adapters.PolicyAction{ID: p.ID, Type: p.PolicyType, Config: p.Config, Scope: p.Scope, Targets: p.APICatalogIDs, TenantID: p.TenantID})
+		}
+	}
+	if err == nil {
+		err = envoy.ReconcilePolicies(ctx, active)
+	}
+	results := make([]SyncedPolicyResult, 0, len(policies))
+	for _, p := range policies {
+		result := SyncedPolicyResult{PolicyID: p.ID, Status: "removed"}
+		if err != nil {
+			result.Status = "failed"
+			result.Error = adapters.SafePolicyError(err).Error()
+		} else if p.Enabled && *p.Applicable {
+			result.Status = "applied"
+		}
+		results = append(results, result)
 	}
 	return results
 }

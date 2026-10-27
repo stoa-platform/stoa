@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import delete, select
 
-from src.database import Base
 from src.models.catalog import APICatalog
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.models.gateway_instance import GatewayInstance, GatewayType
-from src.models.promotion import Promotion  # noqa: F401 - registers FK target for create_all
 from src.services.api_lifecycle.ports import LifecycleActor, PublishApiCommand
 from src.services.api_lifecycle.repository import SqlAlchemyApiLifecycleRepository
 from src.services.api_lifecycle.service import ApiLifecycleService
+from tests.o1_support import local_session, postgres_test_url
 
 OPENAPI_SPEC: dict[str, Any] = {
     "openapi": "3.0.3",
@@ -65,21 +65,16 @@ class InMemoryAuditSink:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_publication_metadata_persists_after_commit_and_reload() -> None:
-    database_url = os.environ.get("DATABASE_URL")
+    database_url = os.environ.get("STOA_O1_PG_TEST_URL", os.environ.get("DATABASE_URL"))
     if not database_url:
         pytest.skip("DATABASE_URL not set")
 
-    engine = create_async_engine(database_url, echo=False)
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS stoa"))
-        await conn.run_sync(Base.metadata.create_all)
+    database_url = postgres_test_url(database_url)
 
     tenant_id = f"slice45-{uuid4().hex}"
     api_id = "payments-api"
     gateway_name = f"slice45-dev-{uuid4().hex}"
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with session_factory() as session:
+    async for session in local_session(database_url):
         api: APICatalog | None = None
         try:
             api = APICatalog(
@@ -114,7 +109,16 @@ async def test_publication_metadata_persists_after_commit_and_reload() -> None:
             deployment = GatewayDeployment(
                 api_catalog_id=api.id,
                 gateway_instance_id=gateway.id,
-                desired_state={"api_id": api.api_id},
+                desired_state={
+                    "api_catalog_id": str(api.id),
+                    "api_id": api.api_id,
+                    "tenant_id": api.tenant_id,
+                    "version": api.version,
+                    "backend_url": (api.api_metadata or {}).get("backend_url", ""),
+                    "spec_hash": sha256(
+                        json.dumps(api.openapi_spec or api.api_metadata or {}, sort_keys=True, default=str).encode()
+                    ).hexdigest(),
+                },
                 desired_at=datetime.now(UTC),
                 desired_generation=1,
                 synced_generation=1,
@@ -161,4 +165,3 @@ async def test_publication_metadata_persists_after_commit_and_reload() -> None:
             await session.execute(delete(APICatalog).where(APICatalog.tenant_id == tenant_id))
             await session.commit()
 
-    await engine.dispose()

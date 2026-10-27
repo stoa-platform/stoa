@@ -296,13 +296,78 @@ fn response_from(decision: Decision) -> CheckResponse {
     }
 }
 
+// Correlation only: this value may be chosen by the client and never authorizes.
+fn trace_uuid(value: &str) -> Option<uuid::Uuid> {
+    if value.len() != 36 || [8, 13, 18, 23].iter().any(|&i| value.as_bytes()[i] != b'-') {
+        return None;
+    }
+    let id = uuid::Uuid::parse_str(value).ok()?;
+    (id.as_u128() != 0 && id.as_u128() != u128::MAX).then_some(id)
+}
+
+fn client_request_id(request: &CheckRequest) -> Option<uuid::Uuid> {
+    request
+        .attributes
+        .as_ref()
+        .and_then(|a| a.request.as_ref())
+        .and_then(|r| r.http.as_ref())
+        .and_then(|h| h.headers.get("x-request-id"))
+        .and_then(|id| trace_uuid(id))
+}
+
+fn check_trace_ids(request: &CheckRequest) -> (Option<uuid::Uuid>, uuid::Uuid) {
+    (client_request_id(request), uuid::Uuid::new_v4())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct DecisionTrace {
+    client_request_id: Option<uuid::Uuid>,
+    server_check_id: uuid::Uuid,
+    decision_id: Option<uuid::Uuid>,
+    rpc_code: i32,
+}
+
+fn decision_trace(
+    client_request_id: Option<uuid::Uuid>,
+    server_check_id: uuid::Uuid,
+    response: &CheckResponse,
+) -> DecisionTrace {
+    let decision_id = response.http_response.as_ref().and_then(|r| match r {
+        HttpResponse::OkResponse(ok) => ok
+            .headers
+            .iter()
+            .filter_map(|h| h.header.as_ref())
+            .find(|h| h.key.eq_ignore_ascii_case("x-request-id"))
+            .and_then(|h| trace_uuid(&h.value)),
+        _ => None,
+    });
+    DecisionTrace {
+        client_request_id,
+        server_check_id,
+        decision_id,
+        rpc_code: response.status.as_ref().map(|s| s.code).unwrap_or(7),
+    }
+}
+
 #[tonic::async_trait]
 impl Authorization for ExtAuthzService {
     async fn check(
         &self,
         request: Request<CheckRequest>,
     ) -> Result<Response<CheckResponse>, Status> {
-        Ok(Response::new(self.authorize(request.into_inner()).await))
+        let request = request.into_inner();
+        let (client_request_id, server_check_id) = check_trace_ids(&request);
+        let started = std::time::Instant::now();
+        let response = self.authorize(request).await;
+        let trace = decision_trace(client_request_id, server_check_id, &response);
+        tracing::info!(event = "ext_authz_decision",
+            client_request_id = %trace.client_request_id.map(|id| id.to_string()).unwrap_or_default(),
+            client_request_id_trusted = false,
+            server_check_id = %trace.server_check_id,
+            decision_id = %trace.decision_id.map(|id| id.to_string()).unwrap_or_default(),
+            rpc_code = trace.rpc_code,
+            duration_us = started.elapsed().as_micros() as u64);
+        Ok(Response::new(response))
     }
 }
 

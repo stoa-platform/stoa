@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.catalog import APICatalog
@@ -419,6 +419,29 @@ class GatewayDeploymentRepository:
             result = await self.session.execute(count_query)
             counts[status.value] = result.scalar_one()
         return counts
+
+    async def acknowledge(
+        self, deployment: GatewayDeployment, values: dict[str, object], *, removed: bool = False
+    ) -> bool:
+        """Accept an ACK only while its observed desired state is still current."""
+        predicate = (
+            GatewayDeployment.id == deployment.id,
+            GatewayDeployment.desired_generation == deployment.desired_generation,
+            GatewayDeployment.sync_status == deployment.sync_status,
+        )
+        statement = (
+            delete(GatewayDeployment).where(*predicate)
+            if removed
+            else update(GatewayDeployment).where(*predicate).values(**values)
+        )
+        # Never flush stale ORM state ahead of the compare-and-set. Detaching the
+        # read witness also prevents a later flush from overwriting the winner.
+        with self.session.no_autoflush:
+            result = await self.session.execute(
+                statement.returning(GatewayDeployment.id).execution_options(synchronize_session=False)
+            )
+        self.session.expunge(deployment)
+        return result.scalar_one_or_none() is not None
 
     async def update(self, deployment: GatewayDeployment) -> GatewayDeployment:
         """Update a deployment (caller modifies fields before calling)."""

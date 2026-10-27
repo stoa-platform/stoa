@@ -62,24 +62,36 @@ type DiscoveredAPIPayload struct {
 // --- Gateway config fetch (GET /v1/internal/gateways/{id}/config) ---
 
 // GatewayConfigResponse is the response from the config endpoint.
-// PendingDeployments is currently unused by the agent (see docs/connect-known-issues.md F.9).
+// Envoy reconciles PendingDeployments, including explicit deletion tombstones.
 type GatewayConfigResponse struct {
-	GatewayID          string          `json:"gateway_id"`
-	Name               string          `json:"name"`
-	Environment        string          `json:"environment"`
-	TenantID           string          `json:"tenant_id"`
-	PendingDeployments []interface{}   `json:"pending_deployments"`
-	PendingPolicies    []PendingPolicy `json:"pending_policies"`
+	GatewayID          string              `json:"gateway_id"`
+	Name               string              `json:"name"`
+	Environment        string              `json:"environment"`
+	TenantID           string              `json:"tenant_id"`
+	PendingDeployments []PendingDeployment `json:"pending_deployments"`
+	PendingPolicies    []PendingPolicy     `json:"pending_policies"`
+}
+
+type PendingDeployment struct {
+	ID           string          `json:"id"`
+	APICatalogID string          `json:"api_catalog_id"`
+	SyncStatus   string          `json:"sync_status"`
+	DesiredState json.RawMessage `json:"desired_state"`
+	Generation   int             `json:"desired_generation"`
 }
 
 // PendingPolicy represents a policy returned by the CP config endpoint.
 type PendingPolicy struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name"`
-	PolicyType string                 `json:"policy_type"`
-	Config     map[string]interface{} `json:"config"`
-	Priority   int                    `json:"priority"`
-	Enabled    bool                   `json:"enabled"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	PolicyType    string                 `json:"policy_type"`
+	Config        map[string]interface{} `json:"config"`
+	Priority      int                    `json:"priority"`
+	Enabled       bool                   `json:"enabled"`
+	Scope         string                 `json:"scope"`
+	APICatalogIDs []string               `json:"api_catalog_ids"`
+	TenantID      string                 `json:"tenant_id"`
+	Applicable    *bool                  `json:"applicable"`
 }
 
 // --- Policy sync ack (POST /v1/internal/gateways/{id}/sync-ack) ---
@@ -108,7 +120,7 @@ type RouteSyncAckPayload struct {
 // SyncedRouteResult reports the sync result for one route deployment.
 type SyncedRouteResult struct {
 	DeploymentID string     `json:"deployment_id"`
-	Status       string     `json:"status"` // "applied", "failed"
+	Status       string     `json:"status"` // "applied", "removed", "failed"
 	Error        string     `json:"error,omitempty"`
 	Steps        []SyncStep `json:"steps,omitempty"`
 	Generation   int        `json:"generation,omitempty"` // CAB-1950: generation that was synced
@@ -129,4 +141,5 @@ type DeploymentEvent struct {
 	GatewayInstanceID string          `json:"gateway_instance_id"`
 	SyncStatus        string          `json:"sync_status"`
 	DesiredState      json.RawMessage `json:"desired_state"`
+	Generation        int             `json:"desired_generation"`
 }

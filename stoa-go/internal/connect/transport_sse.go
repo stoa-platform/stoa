@@ -91,6 +91,10 @@ func (s *sseStream) startSpan(ctx context.Context, name string, attrs ...attribu
 // Run is a blocking, single-connection call. Callers implement reconnect
 // outside (see runSSEStream in S9).
 func (s *sseStream) Run(ctx context.Context, gatewayID string, sink func(context.Context, rawEvent) error) error {
+	return s.run(ctx, gatewayID, nil, sink)
+}
+
+func (s *sseStream) run(ctx context.Context, gatewayID string, ready func(context.Context), sink func(context.Context, rawEvent) error) error {
 	ctx, span := s.startSpan(ctx, "stoa-connect.sse.stream",
 		attribute.String("stoa.gateway_id", gatewayID),
 	)
@@ -133,6 +137,10 @@ func (s *sseStream) Run(ctx context.Context, gatewayID string, sink func(context
 		if line == "" {
 			// Empty line terminates an event.
 			if eventType != "" && len(dataLines) > 0 {
+				if ready != nil {
+					ready(ctx)
+					ready = nil
+				}
 				data := strings.Join(dataLines, "\n")
 				if err := sink(ctx, rawEvent{Type: eventType, Data: []byte(data)}); err != nil {
 					return spanFail(span, fmt.Errorf("sink: %w", err), "sink returned error")

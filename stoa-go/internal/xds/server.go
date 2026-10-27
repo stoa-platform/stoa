@@ -149,7 +149,9 @@ func (s *Server) Update(ctx context.Context, routes []Route) (string, error) {
 	if err = ctx.Err(); err != nil {
 		return "", err
 	}
-	if s.results[version] == nil {
+	if s.results[version] == nil || s.results[version].err != nil {
+		// A rejected version may be retried after a reconnect or recovery.
+		// The next attempt must collect fresh receipts, not inherit its NACK.
 		s.results[version] = &acknowledgement{types: map[string]bool{}}
 	}
 	if err = s.cache.SetSnapshot(ctx, s.config.NodeID, snapshot); err != nil {

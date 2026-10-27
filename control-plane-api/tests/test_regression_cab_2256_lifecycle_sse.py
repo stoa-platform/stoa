@@ -93,21 +93,31 @@ def command(api, gateway, *, force=False):
 
 
 async def ack(db, deployment, gateway):
-    await route_sync_ack(
+    deployment_id = deployment.id
+    api_catalog_id = deployment.api_catalog_id
+    gateway_instance_id = deployment.gateway_instance_id
+    receipt = await route_sync_ack(
         gateway.id,
         RouteSyncAckPayload(
             sync_timestamp=datetime.now(UTC).isoformat(),
             synced_routes=[
                 SyncedRouteResult(
-                    deployment_id=str(deployment.id), status="applied", generation=deployment.desired_generation
+                    deployment_id=str(deployment_id), status="applied", generation=deployment.desired_generation
                 )
             ],
         ),
         x_gateway_key="regression-local-key",
         db=db,
     )
+    assert receipt["processed"] == 1
+    assert receipt["not_found"] == 0
     await db.commit()
-    await db.refresh(deployment)
+    reloaded = await db.get(GatewayDeployment, deployment_id)
+    assert reloaded is not None
+    assert reloaded.id == deployment_id
+    assert reloaded.api_catalog_id == api_catalog_id
+    assert reloaded.gateway_instance_id == gateway_instance_id
+    return reloaded
 
 
 @pytest.mark.asyncio
@@ -218,7 +228,7 @@ async def test_regression_real_ack_allows_publication_without_another_sse(monkey
         await db.commit()
         sub.queue.get_nowait()
         deployment = await db.get(GatewayDeployment, outcome.deployment_id)
-        await ack(db, deployment, gateway)
+        deployment = await ack(db, deployment, gateway)
         result = await service.publish_to_portal(PublishApiCommand("tenant-a", "orders", "dev", gateway.id), ACTOR)
         await db.commit()
         assert result.portal_published is True
@@ -247,7 +257,7 @@ async def test_regression_stale_ack_cannot_publish_current_catalog(monkeypatch, 
         if not sub.queue.empty():
             sub.queue.get_nowait()
         deployment = await db.get(GatewayDeployment, outcome.deployment_id)
-        await ack(db, deployment, gateway)
+        deployment = await ack(db, deployment, gateway)
         if stale == "generation":
             deployment.desired_generation += 1
         elif stale == "future-generation":

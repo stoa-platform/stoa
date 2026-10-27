@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useLayoutEffect,
   useId,
   useState,
   forwardRef,
@@ -11,7 +12,11 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 
-const FieldContext = createContext<{ id: string; errorId?: string }>({ id: '' });
+const FieldContext = createContext<{
+  id: string;
+  errorId?: string;
+  setControlId?: (id: string | undefined) => void;
+}>({ id: '' });
 
 /** Each instance (including repeated rows) owns a unique, stable label/control association. */
 export function Field({
@@ -23,12 +28,13 @@ export function Field({
   ...props
 }: HTMLAttributes<HTMLDivElement> & { error?: string }) {
   const generatedId = useId();
+  const [controlId, setControlId] = useState<string>();
   const [validationError, setValidationError] = useState<string>();
   const message = error || validationError;
-  const fieldId = id ?? generatedId;
+  const fieldId = controlId ?? id ?? generatedId;
   const errorId = message ? `${fieldId}-error` : undefined;
   return (
-    <FieldContext.Provider value={{ id: fieldId, errorId }}>
+    <FieldContext.Provider value={{ id: fieldId, errorId, setControlId }}>
       <div
         {...props}
         data-testid="accessible-field"
@@ -76,6 +82,12 @@ function useFieldProps(props: {
   'aria-invalid'?: InputHTMLAttributes<HTMLInputElement>['aria-invalid'];
 }) {
   const field = useContext(FieldContext);
+  const setControlId = field.setControlId;
+  // One control per Field: synchronize an explicit control id before the browser paints.
+  useLayoutEffect(() => {
+    setControlId?.(props.id);
+    return () => setControlId?.(undefined);
+  }, [props.id, setControlId]);
   return {
     id: props.id ?? field.id,
     'aria-describedby':

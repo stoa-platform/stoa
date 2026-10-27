@@ -10,11 +10,11 @@ import { CertificateGenerationWizard } from '../CertificateGenerationWizard';
 // Mock the crypto module — forge keygen is too slow for unit tests
 vi.mock('../../lib/crypto', () => ({
   generateKeyPair: vi.fn(() => ({
-    privateKeyPem: 'MOCK_PRIVATE_KEY_PEM_DATA',
-    publicKeyPem: 'MOCK_PUBLIC_KEY_PEM_DATA',
+    privateKeyPem: 'fixture-private',
+    publicKeyPem: 'fixture-public',
     fingerprint: 'a'.repeat(64),
   })),
-  createCSR: vi.fn(() => 'MOCK_CSR_PEM_DATA'),
+  createCSR: vi.fn(() => 'fixture-request'),
   createPKCS12: vi.fn(() => new Blob(['mock'], { type: 'application/x-pkcs12' })),
   downloadOnce: vi.fn(),
   downloadPem: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../../services/api', () => ({
     generateTenantCA: vi.fn(() => Promise.resolve({ tenant_id: 'test-tenant', status: 'active' })),
     signCSR: vi.fn(() =>
       Promise.resolve({
-        signed_certificate_pem: '-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----',
+        signed_certificate_pem: 'fixture-certificate',
         subject_dn: 'CN=test-client,OU=Test Tenant,O=STOA Platform',
         issuer_dn: 'CN=test-tenant-ca,OU=Test Tenant,O=STOA Platform',
         validity_days: 365,

@@ -2,8 +2,9 @@
 
 Bounded to this single workflow: triggers, permissions, secrets, the way
 pull request metadata reaches shell steps (no `${{ }}` expression in any
-run block), how Linear requests are built (constant query text, values only
-as jq --arg data, body sent on stdin) and the fail-closed `gh` lookup.
+run block), how Linear requests are built (`query:` is one constant string
+literal, values only as declared jq --arg variables, body sent on stdin only)
+and the fail-closed `gh` lookup, including its integer guard.
 No network, no PR code executed.
 """
 
@@ -21,17 +22,31 @@ WORKFLOW = ROOT / ".github" / "workflows" / "linear-reopen-on-close.yml"
 ALLOWED_SECRETS = {"LINEAR_API_KEY"}
 ALLOWED_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 EXPR = re.compile(r"\$\{\{(.*?)\}\}", re.S)
-EXPECTED_IF = (
-    "github.event.pull_request.merged == false"
-    " && vars.DISABLE_LINEAR_REOPEN != 'true'"
-)
+EXPECTED_IF = "github.event.pull_request.merged == false && vars.DISABLE_LINEAR_REOPEN != 'true'"
 # A Linear request body: `jq -n`, zero or more `--arg name "$VAR"`, then one
 # single-quoted program (no quote break-out possible), piped to `linear`.
-JQ_FEED = re.compile(r"""jq -n(?: --arg \w+ "\$\w+")* '\{[^']*\}'\s*\|\s*linear\b""")
-LINEAR_PIPE = re.compile(r"\|\s*linear\b")
-GH_FAIL_CLOSED = re.compile(
-    r"if ! MERGED_PRS=\$\(gh pr list [^\n]*\); then\n[^\n]*\n\s*exit 1\b"
+JQ_FEED = re.compile(r"""jq -n((?: --arg \w+ "\$\w+")*) '(\{[^']*\})'\s*\|\s*linear\b""")
+JQ_ARG = re.compile(r'--arg (\w+) "\$\w+"')
+# The jq program itself: `query:` is ONE string literal whose only escape is
+# \" (so no `\(...)` interpolation), followed directly by `variables:` made of
+# `name: $name` pairs. No `+`, no other jq expression can fit this shape.
+JQ_PROGRAM = re.compile(
+    r'\{\s*query:\s*"((?:[^"\\]|\\")*)",\s*'
+    r"variables:\s*\{\s*(\w+:\s*\$\w+(?:,\s*\w+:\s*\$\w+)*)\s*\}\s*\}"
 )
+GRAPHQL_VAR = re.compile(r"\$(\w+)")
+# Any curl option that can carry a request body, in `-d x`, `-dX`, `-d"x"` or
+# `--opt=x` form. The only one allowed is the exact `--data-binary @-`.
+BODY_OPTION = re.compile(
+    r"""(?:^|\s)(-d|--data(?:-raw|-urlencode|-binary|-ascii)?|--json|-F|--form)(?=[\s="'$@]|$)(\s*=?\s*\S*)"""
+)
+# One curl command, backslash continuations included.
+CURL_COMMAND = re.compile(r"(?:^|[\s$(])curl\b(?:[^\n]*\\\n)*[^\n]*")
+GH_CASE_GUARD = re.compile(
+    r"""case "\$MERGED_PRS" in\n\s*''\|\*\[!0-9\]\*\)[^\n]*\bexit 1\b[^\n]*\n\s*esac"""
+)
+LINEAR_PIPE = re.compile(r"\|\s*linear\b")
+GH_FAIL_CLOSED = re.compile(r"if ! MERGED_PRS=\$\(gh pr list [^\n]*\); then\n[^\n]*\n\s*exit 1\b")
 GH_CALL = re.compile(r"(?:^|[\s$(])gh\s")
 SECRET_REF = re.compile(r"\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)|\bsecrets\[")
 
@@ -53,7 +68,7 @@ def events(doc: dict) -> dict:
     if isinstance(on, str):
         return {on: None}
     if isinstance(on, list):
-        return {name: None for name in on}
+        return dict.fromkeys(on)
     if isinstance(on, dict):
         return on
     raise ValueError(f"unreadable `on`: {on!r}")
@@ -79,22 +94,47 @@ def expressions_in_run(doc: dict) -> list[str]:
     return found
 
 
+def jq_program_ok(args: str, program: str) -> bool:
+    """`query:` is a single constant literal; every value is a declared variable."""
+    match = JQ_PROGRAM.fullmatch(program.strip())
+    if match is None:
+        return False
+    query, pairs = match.groups()
+    variables = {}
+    for pair in pairs.split(","):
+        key, value = (part.strip() for part in pair.split(":"))
+        if value != "$" + key:
+            return False
+        variables[key] = value
+    declared = set(JQ_ARG.findall(args))
+    return set(GRAPHQL_VAR.findall(query)) == set(variables) == declared
+
+
 def unsafe_linear_feeds(script: str) -> int:
     """Number of `| linear` pipes not fed by a constant jq -n program."""
-    return len(LINEAR_PIPE.findall(script)) - len(JQ_FEED.findall(script))
+    safe = sum(1 for args, program in JQ_FEED.findall(script) if jq_program_ok(args, program))
+    return len(LINEAR_PIPE.findall(script)) - safe
 
 
 def linear_transport_ok(script: str) -> bool:
     """Exactly one call site to api.linear.app, body on stdin only."""
     if script.count("api.linear.app") != 1:
         return False
-    if "--data-binary @-" not in script:
+    commands = CURL_COMMAND.findall(script)
+    if len(commands) != 1 or "api.linear.app" not in commands[0]:
         return False
-    return re.search(r"(?:^|\s)(?:-d|--data|--data-raw|--data-urlencode)\s", script) is None
+    options = [(opt, rest.strip()) for opt, rest in BODY_OPTION.findall(commands[0])]
+    return options == [("--data-binary", "@-")]
 
 
 def gh_fail_closed(script: str) -> bool:
-    if not GH_FAIL_CLOSED.search(script):
+    lookup = GH_FAIL_CLOSED.search(script)
+    if not lookup:
+        return False
+    # A successful lookup must still return an integer before it is compared.
+    guard = GH_CASE_GUARD.search(script, lookup.end())
+    compare = script.find('[ "$MERGED_PRS" -gt 0 ]', lookup.end())
+    if guard is None or compare == -1 or guard.start() > compare:
         return False
     for line in script.splitlines():
         if GH_CALL.search(line) and "||" in line:
@@ -248,14 +288,61 @@ def test_oracle_interpolated_linear_body_is_rejected(feed):
     assert unsafe_linear_feeds(feed) > 0
 
 
-def test_oracle_inline_curl_body_is_rejected():
-    script = 'curl -s https://api.linear.app/graphql -d "$BODY" --data-binary @-'
+@pytest.mark.parametrize(
+    "program",
+    [
+        # value glued into the query text by concatenation
+        """'{query: ("query { a(id: \\"" + $identifier + "\\") }"), variables: { identifier: $identifier }}'""",
+        # value glued into the query text by jq string interpolation
+        """'{query: "query { a(id: \\($identifier)) }", variables: { identifier: $identifier }}'""",
+        # variable used in the query but never declared as data
+        """'{query: "query($other: String!) { a }", variables: { identifier: $identifier }}'""",
+        # variables value that is not the declared argument
+        """'{query: "query($identifier: String!) { a }", variables: { identifier: ($identifier + "x") }}'""",
+    ],
+)
+def test_oracle_non_literal_query_is_rejected(program):
+    feed = f'X=$(jq -n --arg identifier "$TICKET_ID" {program} | linear)'
+    assert unsafe_linear_feeds(feed) > 0
+
+
+def test_oracle_escaped_quote_in_literal_is_accepted():
+    feed = (
+        """X=$(jq -n --arg identifier "$TICKET_ID" '{query: "query($identifier: String!) """
+        """{ s(name: \\"Todo\\", id: $identifier) }", variables: { identifier: $identifier }}' | linear)"""
+    )
+    assert unsafe_linear_feeds(feed) == 0
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        'curl -s https://api.linear.app/graphql -d "$BODY" --data-binary @-',
+        'curl -s https://api.linear.app/graphql --data-binary @- --data-urlencode="t=$PR_TITLE"',
+        'curl -s https://api.linear.app/graphql --data-binary @- -d"$X"',
+        'curl -s https://api.linear.app/graphql --data-binary @- --json "$X"',
+        "curl -s https://api.linear.app/graphql --data-binary=@-",
+    ],
+)
+def test_oracle_inline_curl_body_is_rejected(script):
     assert not linear_transport_ok(script)
+
+
+def test_oracle_stdin_only_curl_is_accepted():
+    assert linear_transport_ok(
+        "curl -s -X POST https://api.linear.app/graphql \\\n  --data-binary @-"
+    )
 
 
 GOOD_GH = """if ! MERGED_PRS=$(gh pr list --repo "$GH_REPO" --json number --jq 'length'); then
   echo "::error::lookup failed"
   exit 1
+fi
+case "$MERGED_PRS" in
+  ''|*[!0-9]*) echo "::error::unexpected gh output"; exit 1 ;;
+esac
+if [ "$MERGED_PRS" -gt 0 ]; then
+  exit 0
 fi"""
 
 
@@ -268,7 +355,11 @@ def test_oracle_fail_closed_gh_is_accepted():
     [
         'MERGED_PRS=$(gh pr list --repo "$GH_REPO" --json number --jq length || echo 0)',
         GOOD_GH.replace("--jq 'length')", "--jq 'length' || echo 0)"),
-        GOOD_GH.replace("exit 1", "exit 0"),
+        GOOD_GH.replace("exit 1\nfi", "exit 0\nfi"),
+        # integer guard removed
+        re.sub(r"case .*?esac\n", "", GOOD_GH, flags=re.S),
+        # integer guard that does not fail
+        GOOD_GH.replace("exit 1 ;;", "exit 0 ;;"),
     ],
 )
 def test_oracle_fail_open_gh_is_rejected(script):

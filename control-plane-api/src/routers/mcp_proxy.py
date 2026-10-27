@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
-from ..auth.rbac import resolve_effective_tenant
+from ..auth.rbac import Role, resolve_effective_tenant
 from ..config import settings
 from ..database import get_db
 
@@ -338,7 +338,8 @@ async def invoke_tool(
     # Defense-in-depth: check permissions here too (gateway is the primary enforcer)
     from .tenant_tool_permissions import check_tool_allowed
 
-    tenant_id = user.tenant_id or "default"
+    # Non-admin callers must carry a tenant; only cpi-admin keeps the "default" fallback.
+    tenant_id = (user.tenant_id or "default") if Role.CPI_ADMIN in user.roles else resolve_effective_tenant(user)
     if not await check_tool_allowed(tenant_id, tool_name, db):
         logger.warning(
             "Tool invocation denied: tenant=%s tool=%s user=%s",

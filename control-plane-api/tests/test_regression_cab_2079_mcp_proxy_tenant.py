@@ -117,3 +117,24 @@ def test_regression_cab_2079_global_tools_follow_gateway_contract(tenant_proxy: 
     assert tags.status_code == 200
     assert tags.json()["tagCounts"]["global"] == 2
     assert ("a-only" if role == "cpi-admin" else "b-only") not in tags.json()["tags"]
+
+
+@pytest.mark.parametrize("role", ["viewer", "tenant-admin", "devops"])
+@pytest.mark.parametrize("tenant", [None, "", "   "])
+def test_regression_cab_2079_invoke_without_tenant_refuses_before_gateway(
+    tenant_proxy: Harness, monkeypatch: pytest.MonkeyPatch, role: str, tenant: str | None,
+) -> None:
+    client, users, requests = tenant_proxy
+    users[0] = persona(role=role, tenant=tenant)
+    checked: list[str] = []
+
+    async def allowed(tenant_id: str, tool_name: str, db: object) -> bool:
+        checked.append(tenant_id)
+        return True
+
+    monkeypatch.setattr("src.routers.tenant_tool_permissions.check_tool_allowed", allowed)
+    client.app.dependency_overrides[mcp_proxy.get_db] = lambda: None
+    response = client.post("/v1/mcp/tools/a-first/invoke", json={"arguments": {}}, headers=AUTH)
+    assert response.status_code == 403
+    assert checked == []
+    assert requests == []

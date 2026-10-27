@@ -778,9 +778,11 @@ class TestSessionBinding:
             events.append(evt)
             break
 
-        # Should proceed past timeout check (may hit budget or other check, but not timeout)
-        if events and events[0]["event"] == "error":
-            assert "expired" not in events[0]["data"].get("error", "").lower()
+        # With the provider stubbed, a missing last_active_at must reach the stream:
+        # the first event is the stub's content, never an error (expired or otherwise).
+        assert events, "send_message yielded no event"
+        assert events[0]["event"] != "error", events[0]
+        assert events[0] == {"event": "content_delta", "data": {"delta": "Hi"}}
 
     @pytest.mark.usefixtures("mock_session_binding_provider")
     @patch("src.services.chat_service.logger")

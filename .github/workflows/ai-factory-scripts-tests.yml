@@ -21,6 +21,7 @@ on:
       - 'scripts/ci/**'
       - '.github/actions/**'
       - '.github/workflows/claude-issue-to-pr.yml'
+      - '.github/workflows/linear-reopen-on-close.yml'
       - '.github/workflows/ai-factory-scripts-tests.yml'
       - '.yamllint'
 

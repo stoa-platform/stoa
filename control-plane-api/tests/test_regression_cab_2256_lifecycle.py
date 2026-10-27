@@ -52,7 +52,12 @@ async def test_regression_cab_2256_sse_deletion_tombstone(monkeypatch) -> None:
             desired_at=datetime.now(UTC),
             sync_status=DeploymentSyncStatus.SYNCED,
         )
-        db.add_all([catalog, gateway, dep])
+        # Flush the parents first: GatewayDeployment only carries FK columns (no relationship),
+        # so SQLAlchemy does not order the INSERTs and PostgreSQL rejects the orphan FK.
+        # Same pattern as gateway_import_service (flush the parent before the deployment).
+        db.add_all([catalog, gateway])
+        await db.flush()
+        db.add(dep)
         await db.commit()
         sub = event_bus.subscribe(gateway_id=str(gateway.id), event_types=["undeploy"])
         try:

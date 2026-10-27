@@ -91,11 +91,11 @@ jobs:
         env:
           POSTGRES_USER: stoa_test
           POSTGRES_PASSWORD: stoa_test
-          POSTGRES_DB: stoa_test
+          POSTGRES_DB: stoa_o1_test_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U stoa_test -d stoa_o1_test_ci"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -116,7 +116,8 @@ jobs:
       - name: Run DB integration tests
         working-directory: control-plane-api
         env:
-          DATABASE_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_test
+          DATABASE_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_o1_test_ci
+          STOA_O1_PG_TEST_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_o1_test_ci
           STOA_ENABLE_KAFKA_CONSUMERS: 'false'  # CAB-2085
           ENABLE_DEPLOYMENT_WORKER: 'false'
           ENABLE_SNAPSHOT_CONSUMER: 'false'

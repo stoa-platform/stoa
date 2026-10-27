@@ -1,7 +1,10 @@
 """Static contract for .github/workflows/linear-reopen-on-close.yml (CAB-2301).
 
-Bounded to this single workflow: triggers, permissions, secrets and the way
-pull request metadata reaches shell steps. No network, no PR code executed.
+Bounded to this single workflow: triggers, permissions, secrets, the way
+pull request metadata reaches shell steps (no `${{ }}` expression in any
+run block), how Linear requests are built (constant query text, values only
+as jq --arg data, body sent on stdin) and the fail-closed `gh` lookup.
+No network, no PR code executed.
 """
 
 from __future__ import annotations
@@ -18,7 +21,18 @@ WORKFLOW = ROOT / ".github" / "workflows" / "linear-reopen-on-close.yml"
 ALLOWED_SECRETS = {"LINEAR_API_KEY"}
 ALLOWED_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 EXPR = re.compile(r"\$\{\{(.*?)\}\}", re.S)
-UNTRUSTED = re.compile(r"\bgithub\.(event|head_ref)\b")
+EXPECTED_IF = (
+    "github.event.pull_request.merged == false"
+    " && vars.DISABLE_LINEAR_REOPEN != 'true'"
+)
+# A Linear request body: `jq -n`, zero or more `--arg name "$VAR"`, then one
+# single-quoted program (no quote break-out possible), piped to `linear`.
+JQ_FEED = re.compile(r"""jq -n(?: --arg \w+ "\$\w+")* '\{[^']*\}'\s*\|\s*linear\b""")
+LINEAR_PIPE = re.compile(r"\|\s*linear\b")
+GH_FAIL_CLOSED = re.compile(
+    r"if ! MERGED_PRS=\$\(gh pr list [^\n]*\); then\n[^\n]*\n\s*exit 1\b"
+)
+GH_CALL = re.compile(r"(?:^|[\s$(])gh\s")
 SECRET_REF = re.compile(r"\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)|\bsecrets\[")
 
 
@@ -52,14 +66,47 @@ def run_blocks(doc: dict):
                 yield job_id, step.get("name", index), step["run"]
 
 
-def untrusted_in_run(doc: dict) -> list[str]:
-    """Steps whose shell text interpolates untrusted event data directly."""
+def expressions_in_run(doc: dict) -> list[str]:
+    """Any `${{ }}` expression inside shell text (event, env, steps, inputs...).
+
+    Values must reach the shell through `env:` only, so no expression of any
+    kind is allowed in a run block.
+    """
     found = []
     for job_id, name, script in run_blocks(doc):
         for expr in EXPR.findall(script):
-            if UNTRUSTED.search(expr):
-                found.append(f"{job_id}/{name}: ${{{{{expr.strip()}}}}}")
+            found.append(f"{job_id}/{name}: ${{{{{expr.strip()}}}}}")
     return found
+
+
+def unsafe_linear_feeds(script: str) -> int:
+    """Number of `| linear` pipes not fed by a constant jq -n program."""
+    return len(LINEAR_PIPE.findall(script)) - len(JQ_FEED.findall(script))
+
+
+def linear_transport_ok(script: str) -> bool:
+    """Exactly one call site to api.linear.app, body on stdin only."""
+    if script.count("api.linear.app") != 1:
+        return False
+    if "--data-binary @-" not in script:
+        return False
+    return re.search(r"(?:^|\s)(?:-d|--data|--data-raw|--data-urlencode)\s", script) is None
+
+
+def gh_fail_closed(script: str) -> bool:
+    if not GH_FAIL_CLOSED.search(script):
+        return False
+    for line in script.splitlines():
+        if GH_CALL.search(line) and "||" in line:
+            return False
+    return True
+
+
+def reopen_step(doc: dict) -> dict:
+    (job,) = doc["jobs"].values()
+    steps = [st for st in job.get("steps") or [] if "api.linear.app" in st.get("run", "")]
+    assert len(steps) == 1, "exactly one step talks to Linear"
+    return steps[0]
 
 
 def secret_names(text: str) -> set[str]:
@@ -99,9 +146,8 @@ def test_permissions_are_read_only_and_exact(doc):
 
 def test_job_runs_only_for_unmerged_close(doc):
     (job,) = doc["jobs"].values()
-    condition = re.sub(r"\s+", " ", str(job.get("if", "")))
-    assert "github.event.pull_request.merged == false" in condition
-    assert "||" not in condition
+    condition = re.sub(r"\s+", " ", str(job.get("if", ""))).strip()
+    assert condition == EXPECTED_IF
 
 
 def test_no_checkout_and_no_third_party_actions(doc):
@@ -117,8 +163,24 @@ def test_only_contracted_secrets(source, doc):
         assert job.get("secrets") != "inherit"
 
 
-def test_event_data_reaches_shell_only_through_env(doc):
-    assert untrusted_in_run(doc) == []
+def test_no_expression_in_any_run_block(doc):
+    assert expressions_in_run(doc) == []
+
+
+def test_linear_requests_are_constant_jq_programs(doc):
+    script = reopen_step(doc)["run"]
+    assert LINEAR_PIPE.findall(script), "no Linear request found"
+    assert unsafe_linear_feeds(script) == 0
+
+
+def test_linear_body_travels_on_stdin_only(doc):
+    assert linear_transport_ok(reopen_step(doc)["run"])
+
+
+def test_gh_lookup_uses_workflow_token_and_fails_closed(doc):
+    step = reopen_step(doc)
+    assert (step.get("env") or {}).get("GH_TOKEN") == "${{ github.token }}"
+    assert gh_fail_closed(step["run"])
 
 
 # --- Oracles on synthetic fixtures (no real values) -------------------------
@@ -151,11 +213,66 @@ jobs:
 
 
 def test_oracle_direct_interpolation_is_rejected():
-    assert untrusted_in_run(load(M1_BEFORE))
+    assert expressions_in_run(load(M1_BEFORE))
 
 
 def test_oracle_env_form_is_accepted():
-    assert untrusted_in_run(load(M1_AFTER)) == []
+    assert expressions_in_run(load(M1_AFTER)) == []
+
+
+@pytest.mark.parametrize("expr", ["env.PR_TITLE", "steps.extract.outputs.ticket_id", "inputs.x"])
+def test_oracle_any_expression_in_run_is_rejected(expr):
+    text = M1_AFTER.replace('TITLE="$PR_TITLE"', 'TITLE="${{ ' + expr + ' }}"')
+    assert expressions_in_run(load(text))
+
+
+GOOD_FEED = """X=$(jq -n --arg identifier "$TICKET_ID" '{
+    query: "query($identifier: String!) { a }",
+    variables: { identifier: $identifier }
+  }' | linear)"""
+
+
+def test_oracle_constant_jq_feed_is_accepted():
+    assert unsafe_linear_feeds(GOOD_FEED) == 0
+
+
+@pytest.mark.parametrize(
+    "feed",
+    [
+        'X=$(echo "{\\"query\\": \\"a $PR_TITLE\\"}" | linear)',
+        """X=$(jq -n '{query: "a '"$PR_TITLE"'"}' | linear)""",
+        'Q="{\\"query\\": \\"$PR_TITLE\\"}"; printf %s "$Q" | linear',
+    ],
+)
+def test_oracle_interpolated_linear_body_is_rejected(feed):
+    assert unsafe_linear_feeds(feed) > 0
+
+
+def test_oracle_inline_curl_body_is_rejected():
+    script = 'curl -s https://api.linear.app/graphql -d "$BODY" --data-binary @-'
+    assert not linear_transport_ok(script)
+
+
+GOOD_GH = """if ! MERGED_PRS=$(gh pr list --repo "$GH_REPO" --json number --jq 'length'); then
+  echo "::error::lookup failed"
+  exit 1
+fi"""
+
+
+def test_oracle_fail_closed_gh_is_accepted():
+    assert gh_fail_closed(GOOD_GH)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        'MERGED_PRS=$(gh pr list --repo "$GH_REPO" --json number --jq length || echo 0)',
+        GOOD_GH.replace("--jq 'length')", "--jq 'length' || echo 0)"),
+        GOOD_GH.replace("exit 1", "exit 0"),
+    ],
+)
+def test_oracle_fail_open_gh_is_rejected(script):
+    assert not gh_fail_closed(script)
 
 
 @pytest.mark.parametrize(

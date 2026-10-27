@@ -1347,7 +1347,7 @@ pub fn canonicalize_tenant_labels(families: &mut [prometheus::proto::MetricFamil
             label.set_value(tenant);
             let mut labels = metric.get_label().to_vec();
             labels.push(label);
-            metric.set_label(labels);
+            metric.set_label(labels.into());
         }
     }
 }
@@ -1974,9 +1974,9 @@ mod tests {
         let mut tenant = prometheus::proto::LabelPair::default();
         tenant.set_name("tenant".to_string());
         tenant.set_value("tenant-a".to_string());
-        legacy.set_label(vec![tenant]);
+        legacy.set_label(vec![tenant].into());
         let mut family = prometheus::proto::MetricFamily::default();
-        family.set_metric(vec![legacy, prometheus::proto::Metric::default()]);
+        family.set_metric(vec![legacy, prometheus::proto::Metric::default()].into());
         let mut families = vec![family];
         canonicalize_tenant_labels(&mut families);
         canonicalize_tenant_labels(&mut families);

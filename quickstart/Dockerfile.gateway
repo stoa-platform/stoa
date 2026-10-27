@@ -20,6 +20,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY policies ./policies
 COPY benches ./benches
+COPY build.rs ./
+COPY proto ./proto
 
 ENV CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
     CARGO_PROFILE_RELEASE_LTO=off \

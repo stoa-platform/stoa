@@ -60,7 +60,7 @@ func (a *EnvoyAdapter) SyncRoutes(ctx context.Context, _ string, routes []Route)
 		if id == "" {
 			id = r.APICatalogID
 		}
-		converted = append(converted, xds.Route{ID: id, Path: path, Backend: r.BackendURL, Methods: append([]string(nil), r.Methods...)})
+		converted = append(converted, xds.Route{TenantID: r.TenantID, APIID: r.APICatalogID, ID: id, Path: path, Backend: r.BackendURL, Methods: append([]string(nil), r.Methods...)})
 	}
 	if err == nil {
 		if a.Server == nil {

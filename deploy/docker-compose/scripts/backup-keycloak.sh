@@ -15,6 +15,7 @@
 #   docker compose up -d keycloak --force-recreate
 
 set -euo pipefail
+set +x
 
 # ---------------------------------------------------------------------------
 # Config
@@ -22,7 +23,7 @@ set -euo pipefail
 REALM="${KC_REALM:-stoa}"
 KC_URL="${KC_INTERNAL_URL:-http://localhost:8080}"
 KC_ADMIN="${KEYCLOAK_ADMIN:-admin}"
-KC_ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+KC_ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 CONTAINER="${KC_CONTAINER:-stoa-keycloak}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -52,9 +53,9 @@ fi
 # ---------------------------------------------------------------------------
 # Authenticate
 # ---------------------------------------------------------------------------
-docker exec "$CONTAINER" /opt/keycloak/bin/kcadm.sh config credentials \
+printf '%s\n' "$KC_ADMIN_PASS" | docker exec -i "$CONTAINER" /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://localhost:8080 --realm master \
-  --user "$KC_ADMIN" --password "$KC_ADMIN_PASS" 2>/dev/null
+  --user "$KC_ADMIN" 2>/dev/null
 
 # ---------------------------------------------------------------------------
 # Export realm via KC container

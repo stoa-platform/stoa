@@ -13,6 +13,7 @@
 #   1 = missing scopes or scope assignments detected
 
 set -euo pipefail
+set +x
 
 # ---------------------------------------------------------------------------
 # Config
@@ -21,7 +22,7 @@ REALM="${KC_REALM:-stoa}"
 KC_URL="${KC_INTERNAL_URL:-http://localhost:8080}"
 KC_HEALTH_URL="${KC_HEALTH_URL:-http://localhost:9000}"
 KC_ADMIN="${KEYCLOAK_ADMIN:-admin}"
-KC_ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
+KC_ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:?An explicit admin password is required}"
 
 # Expected scopes that MUST exist in the realm
 REQUIRED_SCOPES=(
@@ -54,11 +55,11 @@ ERRORS=0
 # Detect execution context (inside container vs host)
 # ---------------------------------------------------------------------------
 if [ -x /opt/keycloak/bin/kcadm.sh ]; then
-  KCADM="/opt/keycloak/bin/kcadm.sh"
+  KCADM=(/opt/keycloak/bin/kcadm.sh)
 else
   # Running from host — use docker exec
   CONTAINER="${KC_CONTAINER:-stoa-keycloak}"
-  KCADM="docker exec ${CONTAINER} /opt/keycloak/bin/kcadm.sh"
+  KCADM=(docker exec -i "$CONTAINER" /opt/keycloak/bin/kcadm.sh)
 fi
 
 # ---------------------------------------------------------------------------
@@ -84,15 +85,15 @@ echo ""
 # ---------------------------------------------------------------------------
 # Authenticate
 # ---------------------------------------------------------------------------
-$KCADM config credentials --server "$KC_URL" --realm master \
-  --user "$KC_ADMIN" --password "$KC_ADMIN_PASS" 2>/dev/null
+printf '%s\n' "$KC_ADMIN_PASS" | "${KCADM[@]}" config credentials --server "$KC_URL" --realm master \
+  --user "$KC_ADMIN" 2>/dev/null
 
 # ---------------------------------------------------------------------------
 # Check 1: Required scopes exist
 # ---------------------------------------------------------------------------
 echo "=== Check 1: Required client scopes exist in realm '${REALM}' ==="
 
-EXISTING_SCOPES=$($KCADM get client-scopes -r "$REALM" --fields name 2>/dev/null \
+EXISTING_SCOPES=$("${KCADM[@]}" get client-scopes -r "$REALM" --fields name 2>/dev/null \
   | python3 -c "import sys,json; print('\n'.join(s['name'] for s in json.load(sys.stdin)))" 2>/dev/null)
 
 for scope in "${REQUIRED_SCOPES[@]}"; do
@@ -113,7 +114,7 @@ for client_id in "${CLIENTS[@]}"; do
   echo "  Client: $client_id"
 
   # Get client UUID
-  CLIENT_UUID=$($KCADM get clients -r "$REALM" -q "clientId=$client_id" --fields id 2>/dev/null \
+  CLIENT_UUID=$("${KCADM[@]}" get clients -r "$REALM" -q "clientId=$client_id" --fields id 2>/dev/null \
     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null)
 
   if [ -z "$CLIENT_UUID" ]; then
@@ -122,7 +123,7 @@ for client_id in "${CLIENTS[@]}"; do
   fi
 
   # Get assigned default scopes
-  ASSIGNED=$($KCADM get "clients/${CLIENT_UUID}/default-client-scopes" -r "$REALM" --fields name 2>/dev/null \
+  ASSIGNED=$("${KCADM[@]}" get "clients/${CLIENT_UUID}/default-client-scopes" -r "$REALM" --fields name 2>/dev/null \
     | python3 -c "import sys,json; print('\n'.join(s['name'] for s in json.load(sys.stdin)))" 2>/dev/null)
 
   for scope in "${DEFAULT_SCOPES[@]}"; do
@@ -146,7 +147,7 @@ AUDIENCE_CLIENTS=(control-plane-ui stoa-portal stoa-identity-governance)
 FIXES_APPLIED=0
 
 for client_id in "${AUDIENCE_CLIENTS[@]}"; do
-  CLIENT_UUID=$($KCADM get clients -r "$REALM" -q "clientId=$client_id" --fields id 2>/dev/null \
+  CLIENT_UUID=$("${KCADM[@]}" get clients -r "$REALM" -q "clientId=$client_id" --fields id 2>/dev/null \
     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null)
 
   if [ -z "$CLIENT_UUID" ]; then
@@ -155,7 +156,7 @@ for client_id in "${AUDIENCE_CLIENTS[@]}"; do
   fi
 
   # Check if audience mapper exists with correct config
-  MAPPER_STATUS=$($KCADM get "clients/${CLIENT_UUID}/protocol-mappers/models" -r "$REALM" 2>/dev/null \
+  MAPPER_STATUS=$("${KCADM[@]}" get "clients/${CLIENT_UUID}/protocol-mappers/models" -r "$REALM" 2>/dev/null \
     | python3 -c "
 import sys,json
 found = False
@@ -180,15 +181,15 @@ if not found:
       MAPPER_ID="${MAPPER_STATUS#EMPTY:}"
       warn "$client_id — audience mapper has empty config, auto-fixing..."
       # Delete and recreate (update doesn't work reliably with dotted keys)
-      $KCADM delete "clients/${CLIENT_UUID}/protocol-mappers/models/${MAPPER_ID}" -r "$REALM" 2>/dev/null
-      $KCADM create "clients/${CLIENT_UUID}/protocol-mappers/models" -r "$REALM" \
+      "${KCADM[@]}" delete "clients/${CLIENT_UUID}/protocol-mappers/models/${MAPPER_ID}" -r "$REALM" 2>/dev/null
+      "${KCADM[@]}" create "clients/${CLIENT_UUID}/protocol-mappers/models" -r "$REALM" \
         -b '{"name":"control-plane-api-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":false,"config":{"included.client.audience":"control-plane-api","id.token.claim":"false","access.token.claim":"true"}}' 2>/dev/null
       FIXES_APPLIED=$((FIXES_APPLIED + 1))
       pass "$client_id — audience mapper auto-fixed"
       ;;
     MISSING)
       warn "$client_id — audience mapper missing, creating..."
-      $KCADM create "clients/${CLIENT_UUID}/protocol-mappers/models" -r "$REALM" \
+      "${KCADM[@]}" create "clients/${CLIENT_UUID}/protocol-mappers/models" -r "$REALM" \
         -b '{"name":"control-plane-api-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":false,"config":{"included.client.audience":"control-plane-api","id.token.claim":"false","access.token.claim":"true"}}' 2>/dev/null
       FIXES_APPLIED=$((FIXES_APPLIED + 1))
       pass "$client_id — audience mapper created"
@@ -215,7 +216,7 @@ if [ -f "$ENV_KC" ]; then
     [[ "$user" =~ ^#.*$ ]] && continue
     [[ -z "$user" ]] && continue
 
-    USER_UUID=$($KCADM get users -r "$REALM" -q "username=$user" --fields id 2>/dev/null \
+    USER_UUID=$("${KCADM[@]}" get users -r "$REALM" -q "username=$user" --fields id 2>/dev/null \
       | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null)
 
     if [ -z "$USER_UUID" ]; then
@@ -224,10 +225,10 @@ if [ -f "$ENV_KC" ]; then
     fi
 
     # Clear brute force locks first
-    $KCADM delete "attack-detection/brute-force/users/${USER_UUID}" -r "$REALM" 2>/dev/null
+    "${KCADM[@]}" delete "attack-detection/brute-force/users/${USER_UUID}" -r "$REALM" 2>/dev/null
 
     # Set password (may fail if same as history — that's OK, means it's already set)
-    if $KCADM set-password -r "$REALM" --userid "$USER_UUID" --new-password "$pwd" --temporary=false 2>/dev/null; then
+    if "${KCADM[@]}" set-password -r "$REALM" --userid "$USER_UUID" --new-password "$pwd" --temporary=false 2>/dev/null; then
       pass "$user — password set"
     else
       warn "$user — password unchanged (already in history or same)"

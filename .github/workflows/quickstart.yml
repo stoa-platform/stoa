@@ -42,6 +42,23 @@ jobs:
           fi
           echo "no GHCR credentials"
 
+      - name: Generate isolated Compose credentials
+        id: compose-ci-inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            KC_BOOTSTRAP_ADMIN_PASSWORD \
+            KEYCLOAK_ADMIN_CLIENT_SECRET \
+            KEYCLOAK_CLIENT_SECRET \
+            POSTGRES_PASSWORD \
+            STOA_ADMIN_API_TOKEN
+          do
+            value="Ci-$(openssl rand -hex 24)Aa1!"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done
+
       - name: Start the stack
         working-directory: quickstart
         run: |

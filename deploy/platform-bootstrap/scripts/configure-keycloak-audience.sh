@@ -24,6 +24,7 @@
 # =============================================================================
 
 set -euo pipefail
+set +x
 
 # Colors for output
 RED='\033[0;31m'
@@ -90,11 +91,13 @@ log_step "Authenticating with Keycloak Admin API"
 
 get_admin_token() {
     local response
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
     response=$(curl -s -X POST \
         "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=${KEYCLOAK_ADMIN_USER}" \
-        -d "password=${KEYCLOAK_ADMIN_PASS}" \
+        --data-urlencode "username=${KEYCLOAK_ADMIN_USER}" \
+        --data-urlencode "password=${KEYCLOAK_ADMIN_PASS}" \
         -d "grant_type=password" \
         -d "client_id=admin-cli")
 
@@ -224,7 +227,7 @@ for CLIENT_ID in $CLIENTS_TO_CONFIGURE; do
 
     if [[ -z "$CLIENT_UUID" ]]; then
         log_warn "Client '${CLIENT_ID}' not found in realm '${KEYCLOAK_REALM}' - skipping"
-        ((SKIPPED_COUNT++))
+        SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
         continue
     fi
 
@@ -239,7 +242,7 @@ for CLIENT_ID in $CLIENTS_TO_CONFIGURE; do
         # Check if mapper already exists
         if mapper_exists_in_scope "$SCOPE_ID" "$MAPPER_NAME"; then
             log_success "Mapper '${MAPPER_NAME}' already exists in scope - skipping"
-            ((SKIPPED_COUNT++))
+            SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
             continue
         fi
 
@@ -254,10 +257,10 @@ for CLIENT_ID in $CLIENTS_TO_CONFIGURE; do
 
         if [[ -z "$RESULT" || "$RESULT" == "null" ]]; then
             log_success "Mapper created successfully in scope"
-            ((CONFIGURED_COUNT++))
+            CONFIGURED_COUNT=$(( CONFIGURED_COUNT + 1 ))
         else
             log_error "Failed to create mapper: $RESULT"
-            ((FAILED_COUNT++))
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
         fi
     else
         log_warn "No dedicated scope found for '${CLIENT_ID}' - using client-level mapper"
@@ -265,7 +268,7 @@ for CLIENT_ID in $CLIENTS_TO_CONFIGURE; do
         # Check if mapper already exists on client
         if mapper_exists_in_client "$CLIENT_UUID" "$MAPPER_NAME"; then
             log_success "Mapper '${MAPPER_NAME}' already exists on client - skipping"
-            ((SKIPPED_COUNT++))
+            SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
             continue
         fi
 
@@ -280,10 +283,10 @@ for CLIENT_ID in $CLIENTS_TO_CONFIGURE; do
 
         if [[ -z "$RESULT" || "$RESULT" == "null" ]]; then
             log_success "Mapper created successfully on client"
-            ((CONFIGURED_COUNT++))
+            CONFIGURED_COUNT=$(( CONFIGURED_COUNT + 1 ))
         else
             log_error "Failed to create mapper: $RESULT"
-            ((FAILED_COUNT++))
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
         fi
     fi
 done

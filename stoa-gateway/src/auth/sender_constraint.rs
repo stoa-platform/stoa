@@ -351,6 +351,7 @@ mod tests {
             sid: None,
             typ: None,
             scope: Some("openid stoa:write".to_string()),
+            scp: None,
             cnf,
             sub_account_id: None,
             master_account_id: None,

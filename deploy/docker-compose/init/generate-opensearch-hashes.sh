@@ -8,6 +8,7 @@
 # =============================================================================
 
 set -e
+set +x
 
 HASH_TOOL="/usr/share/opensearch/plugins/opensearch-security/tools/hash.sh"
 OUTPUT_DIR="/output/security"
@@ -31,8 +32,8 @@ fi
 chmod +x "$HASH_TOOL"
 
 ADMIN_PW="${OPENSEARCH_ADMIN_PASSWORD:?OPENSEARCH_ADMIN_PASSWORD required}"
-DASHBOARDS_PW="${OPENSEARCH_DASHBOARDS_PASSWORD:-kibanaserver}"
-LOGWRITER_PW="${OPENSEARCH_LOGWRITER_PASSWORD:-logwriter}"
+DASHBOARDS_PW="${OPENSEARCH_DASHBOARDS_PASSWORD:?OPENSEARCH_DASHBOARDS_PASSWORD is required}"
+LOGWRITER_PW="${OPENSEARCH_LOGWRITER_PASSWORD:?OPENSEARCH_LOGWRITER_PASSWORD is required}"
 
 log "Generating admin hash..."
 ADMIN_HASH=$("$HASH_TOOL" -p "$ADMIN_PW" 2>/dev/null | tail -1)

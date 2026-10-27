@@ -9,6 +9,11 @@
 #   SKIP_BUILD=1 ./tests/e2e/run-e2e.sh   # skip docker build (use existing image)
 #   SKIP_TEARDOWN=1 ./tests/e2e/run-e2e.sh # keep containers running after tests
 set -euo pipefail
+set +x
+
+# Share fresh credentials between Compose and its child test suites.
+export ADMIN_TOKEN="${ADMIN_TOKEN:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')}"
+export E2E_KEYCLOAK_ADMIN_PASSWORD="${E2E_KEYCLOAK_ADMIN_PASSWORD:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose-test.yml"

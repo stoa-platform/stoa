@@ -90,7 +90,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: keycloak
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+        - podSelector:
+            matchLabels:
+              app: keycloak
       ports:
+        - protocol: TCP
+          port: 80
         - protocol: TCP
           port: 8080
 
@@ -181,7 +189,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: keycloak
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+        - podSelector:
+            matchLabels:
+              app: keycloak
       ports:
+        - protocol: TCP
+          port: 80
         - protocol: TCP
           port: 8080
 

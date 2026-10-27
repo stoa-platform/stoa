@@ -2,9 +2,12 @@
 # E2E: Auth endpoint tests
 # Scenarios 4-6: admin auth with missing/invalid/valid tokens
 set -euo pipefail
+set +x
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
 
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:18080}"
-ADMIN_TOKEN="${ADMIN_TOKEN:-test-admin-token}"
+ADMIN_TOKEN="${ADMIN_TOKEN:?ADMIN_TOKEN must be supplied by run-e2e.sh}"
 PASS=0
 FAIL=0
 

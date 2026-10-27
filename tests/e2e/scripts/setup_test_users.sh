@@ -11,7 +11,19 @@
 #   ./setup_test_users.sh [--keycloak-url URL] [--realm REALM] [--aws-region REGION]
 #
 
-set -eo pipefail
+set -euo pipefail
+set +x
+
+# Demo accounts must never target a shared production realm by default.
+if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then
+  echo "This account seeder requires KEYCLOAK_BOOTSTRAP_ENV=dev." >&2
+  exit 1
+fi
+: "${KEYCLOAK_URL:?Set an explicit development Keycloak URL}"
+: "${KEYCLOAK_REALM:?Set a dedicated development realm}"
+case "$KEYCLOAK_REALM" in
+  stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
+esac
 
 # Default configuration
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
@@ -39,9 +51,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "$KEYCLOAK_REALM" in
+  stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
+esac
+
 # Generate secure random passwords
 generate_password() {
-    openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20
+    openssl rand -hex 20
 }
 
 log_info "Setting up E2E test users for STOA Platform"
@@ -80,11 +96,13 @@ if [[ -z "${KEYCLOAK_ADMIN_USER:-}" ]] || [[ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]
 fi
 
 # Get admin token
+# shellcheck source=scripts/lib/secret-input.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../../../scripts/lib/secret-input.sh"
 ADMIN_TOKEN=$(curl -s -X POST \
     "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "username=${KEYCLOAK_ADMIN_USER}" \
-    -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+    --data-urlencode "username=${KEYCLOAK_ADMIN_USER}" \
+    --data-urlencode "password=${KEYCLOAK_ADMIN_PASSWORD}" \
     -d "grant_type=password" \
     -d "client_id=admin-cli" | jq -r '.access_token')
 
@@ -222,16 +240,16 @@ EOF
 # Check if secret exists
 if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
     log_info "Updating existing secret: $SECRET_NAME"
-    aws secretsmanager update-secret \
+    printf '%s' "$SECRET_VALUE" | aws secretsmanager update-secret \
         --secret-id "$SECRET_NAME" \
-        --secret-string "$SECRET_VALUE" \
+        --secret-string file:///dev/stdin \
         --region "$AWS_REGION"
 else
     log_info "Creating new secret: $SECRET_NAME"
-    aws secretsmanager create-secret \
+    printf '%s' "$SECRET_VALUE" | aws secretsmanager create-secret \
         --name "$SECRET_NAME" \
         --description "E2E test user credentials for STOA Platform (CAB-238)" \
-        --secret-string "$SECRET_VALUE" \
+        --secret-string file:///dev/stdin \
         --region "$AWS_REGION" \
         --tags Key=Project,Value=STOA Key=Environment,Value=test Key=Purpose,Value=e2e-testing
 fi

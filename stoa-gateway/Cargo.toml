@@ -33,7 +33,7 @@ parking_lot = "0.12"                    # Non-poisoning RwLock
 hostname = "0.4"                         # Get local hostname for auto-registration (ADR-028)
 
 # === NEW - Phase 2: MCP SSE Transport ===
-tokio-stream = "0.1"                    # SSE event streams
+tokio-stream = { version = "0.1", features = ["net"] }                    # SSE event streams
 futures = "0.3"                          # Stream combinators
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }  # CAB-1758: WS proxy backend connections
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
@@ -121,6 +121,15 @@ opentelemetry = { version = "0.27", features = ["trace"] }
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"] }
 tracing-opentelemetry = "0.28"
+
+tonic = { version = "=0.12.3", features = ["transport", "codegen", "prost"] }
+prost = "=0.13.5"
+prost-types = "=0.13.5"
+tonic-health = "=0.12.3"
+
+[build-dependencies]
+protox = "=0.10.0"
+tonic-build = "=0.12.3"
 
 [features]
 default = []

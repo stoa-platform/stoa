@@ -25,6 +25,8 @@ COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 COPY policies ./policies
 COPY benches ./benches
+COPY build.rs ./
+COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Stage 2: Build -----------------------------------------------------------
@@ -69,6 +71,8 @@ COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 COPY policies ./policies
 COPY benches ./benches
+COPY build.rs ./
+COPY proto ./proto
 RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------

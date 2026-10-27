@@ -179,24 +179,25 @@ describe('App', () => {
       renderApp('/');
 
       expect(screen.getByText('Discover AI-powered APIs')).toBeInTheDocument();
-      expect(screen.getByText('Create your free developer account')).toBeInTheDocument();
+      expect(screen.getByText('Access your developer account')).toBeInTheDocument();
     });
 
-    it('should show Create Free Account button by default', () => {
+    it('should show account access by default', () => {
       mockAuth.isAuthenticated = false;
 
       renderApp('/');
 
-      expect(screen.getByText('Create Free Account')).toBeInTheDocument();
+      expect(screen.getByText('Continue to sign in')).toBeInTheDocument();
     });
 
-    it('should call register when Create Free Account is clicked', () => {
+    it('should sign in from the primary account access button', () => {
       mockAuth.isAuthenticated = false;
 
       renderApp('/');
 
-      fireEvent.click(screen.getByText('Create Free Account'));
-      expect(mockAuth.register).toHaveBeenCalledOnce();
+      fireEvent.click(screen.getByText('Continue to sign in'));
+      expect(mockAuth.login).toHaveBeenCalledOnce();
+      expect(mockAuth.register).not.toHaveBeenCalled();
     });
 
     it('should show Sign in link', () => {

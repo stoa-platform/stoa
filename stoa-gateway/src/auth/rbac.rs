@@ -406,6 +406,7 @@ mod tests {
             sid: None,
             typ: None,
             scope: Some(scopes.to_string()),
+            scp: None,
             cnf: None,
             sub_account_id: None,
             master_account_id: None,

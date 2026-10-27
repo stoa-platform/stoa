@@ -2,6 +2,11 @@
 # This prevents tickets from staying "Done" when their PR was abandoned.
 # Complements linear-close-on-merge.yml (which fires on merged PRs).
 # Kill-switch: set DISABLE_LINEAR_REOPEN=true in repo variables.
+#
+# CAB-2301: every Linear request is built with `jq -n --arg` and GraphQL
+# variables; PR metadata only ever enters as data, never as query text.
+# The `gh` lookup uses the workflow token and fails the step on error
+# instead of pretending there is no merged PR.
 
 name: Linear Reopen on PR Close
 
@@ -11,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   reopen-linear:
@@ -22,8 +28,10 @@ jobs:
     steps:
       - name: Extract ticket ID from PR title
         id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
+          TITLE="$PR_TITLE"
           TICKET_ID=$(echo "$TITLE" | grep -oP 'CAB-\d{2,4}' | head -1)
           if [ -z "$TICKET_ID" ]; then
             echo "No CAB-XXXX found in PR title: $TITLE"
@@ -38,6 +46,8 @@ jobs:
         if: steps.extract.outputs.skip != 'true'
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
           PR_NUM: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -49,11 +59,20 @@ jobs:
             exit 0
           fi
 
+          # Every request body is produced by jq: the query text is constant,
+          # all values travel in GraphQL variables.
+          linear() {
+            curl -s -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data-binary @-
+          }
+
           # Find the issue
-          ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ issues(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id state { name type } } } }\"}")
+          ISSUE_DATA=$(jq -n --arg identifier "$TICKET_ID" '{
+              query: "query($identifier: String!) { issues(filter: { identifier: { eq: $identifier } }) { nodes { id state { name type } } } }",
+              variables: { identifier: $identifier }
+            }' | linear)
 
           ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].id // empty')
           CURRENT_TYPE=$(echo "$ISSUE_DATA" | jq -r '.data.issues.nodes[0].state.type // empty')
@@ -73,18 +92,26 @@ jobs:
           fi
 
           # Check if another merged PR already completed this ticket
-          # (ticket might have multiple PRs, one merged and one closed)
-          MERGED_PRS=$(gh pr list --repo "${{ github.repository }}" --state merged --search "$TICKET_ID" --json number --jq 'length' 2>/dev/null || echo "0")
+          # (ticket might have multiple PRs, one merged and one closed).
+          # A failing lookup must fail the step: silently assuming "0 merged PRs"
+          # would reopen a ticket that is legitimately Done.
+          if ! MERGED_PRS=$(gh pr list --repo "$GH_REPO" --state merged --search "$TICKET_ID" --json number --jq 'length'); then
+            echo "::error::gh pr list failed for $TICKET_ID — not reopening"
+            exit 1
+          fi
+          case "$MERGED_PRS" in
+            ''|*[!0-9]*) echo "::error::unexpected gh output for $TICKET_ID: $MERGED_PRS"; exit 1 ;;
+          esac
           if [ "$MERGED_PRS" -gt 0 ]; then
             echo "$TICKET_ID has $MERGED_PRS merged PR(s) — keeping Done status"
             exit 0
           fi
 
           # Get the "Todo" state ID
-          TODO_DATA=$(curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"{ workflowStates(filter: { name: { eq: \\\"Todo\\\" }, team: { issues: { identifier: { eq: \\\"$TICKET_ID\\\" } } } }) { nodes { id } } }\"}")
+          TODO_DATA=$(jq -n --arg identifier "$TICKET_ID" '{
+              query: "query($identifier: String!) { workflowStates(filter: { name: { eq: \"Todo\" }, team: { issues: { identifier: { eq: $identifier } } } }) { nodes { id } } }",
+              variables: { identifier: $identifier }
+            }' | linear)
 
           TODO_STATE_ID=$(echo "$TODO_DATA" | jq -r '.data.workflowStates.nodes[0].id // empty')
 
@@ -94,11 +121,10 @@ jobs:
           fi
 
           # Move to Todo
-          MUTATION='mutation { issueUpdate(id: "'"$ISSUE_ID"'", input: { stateId: "'"$TODO_STATE_ID"'" }) { success } }'
-          RESULT=$(curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"$MUTATION\"}")
+          RESULT=$(jq -n --arg id "$ISSUE_ID" --arg stateId "$TODO_STATE_ID" '{
+              query: "mutation($id: String!, $stateId: String!) { issueUpdate(id: $id, input: { stateId: $stateId }) { success } }",
+              variables: { id: $id, stateId: $stateId }
+            }' | linear)
 
           SUCCESS=$(echo "$RESULT" | jq -r '.data.issueUpdate.success // false')
 
@@ -110,13 +136,15 @@ jobs:
             exit 0
           fi
 
-          # Add comment
-          COMMENT="Reopened: PR #${PR_NUM} ([${PR_TITLE}](${PR_URL})) was closed without merging by @${CLOSED_BY}.\n\nTicket was marked Done but the work was never merged to main. Moving back to Todo.\n\n*Auto-reopened by linear-reopen-on-close workflow*"
-          COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT"'" }) { success } }'
-          curl -s -X POST https://api.linear.app/graphql \
-            -H "Authorization: $LINEAR_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
+          # Add comment — PR title, URL and author are passed as data.
+          COMMENT=$(printf '%s\n\n%s\n\n%s' \
+            "Reopened: PR #${PR_NUM} ([${PR_TITLE}](${PR_URL})) was closed without merging by @${CLOSED_BY}." \
+            "Ticket was marked Done but the work was never merged to main. Moving back to Todo." \
+            "*Auto-reopened by linear-reopen-on-close workflow*")
+          jq -n --arg id "$ISSUE_ID" --arg body "$COMMENT" '{
+              query: "mutation($id: String!, $body: String!) { commentCreate(input: { issueId: $id, body: $body }) { success } }",
+              variables: { id: $id, body: $body }
+            }' | linear > /dev/null
 
           echo "Comment added to $TICKET_ID"
 

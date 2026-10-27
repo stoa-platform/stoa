@@ -141,6 +141,14 @@ func TestStreamEventsParsesSyncDeployment(t *testing.T) {
 	if adapter.syncedCount() != 1 {
 		t.Errorf("expected 1 sync call, got %d", adapter.syncedCount())
 	}
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	if len(adapter.synced) == 1 {
+		got := adapter.synced[0][0]
+		if got.TenantID != "acme" || got.APICatalogID != "cat-456" {
+			t.Fatalf("deployment identity lost: tenant=%q api=%q", got.TenantID, got.APICatalogID)
+		}
+	}
 }
 
 func TestStreamEventsIgnoresHeartbeat(t *testing.T) {

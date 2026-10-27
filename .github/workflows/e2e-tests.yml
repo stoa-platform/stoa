@@ -14,18 +14,6 @@ on:
       - '!portal/**/*.md'
       - '!control-plane-ui/**/*.md'
 
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'e2e/**'
-      - 'portal/**'
-      - 'control-plane-ui/**'
-      - '!e2e/**/*.md'
-      - '!portal/**/*.md'
-      - '!control-plane-ui/**/*.md'
-
   # Run daily at 6 AM UTC
   schedule:
     - cron: '0 6 * * *'
@@ -61,13 +49,15 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write  # Required for Vault OIDC authentication
 
 env:
   NODE_VERSION: '20'
 
 jobs:
   e2e-tests:
+    permissions:
+      contents: read
+      id-token: write  # Required for Vault OIDC authentication
     name: E2E Tests (shard ${{ matrix.shard }}/3)
     # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré
     # (0 au 2026-07-30), donc ces jobs restaient en file indéfiniment — la
@@ -102,7 +92,7 @@ jobs:
         # Si des runners auto-hébergés sont réenregistrés, repasser
         # `runs-on` ci-dessus suffit à redonner Vault comme source primaire.
         continue-on-error: true
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
         with:
           # vault.gostoa.dev = Infisical (different product) — E2E secrets live on
           # the HashiCorp Vault instance at hcvault.gostoa.dev. Changing this URL

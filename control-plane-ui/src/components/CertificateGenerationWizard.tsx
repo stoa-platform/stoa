@@ -51,6 +51,9 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
   const [keyPair, setKeyPair] = useState<GeneratedKeyPair | null>(null);
   const [signedCert, setSignedCert] = useState<Schemas['CSRSignResponse'] | null>(null);
   const [commonName, setCommonName] = useState('');
+  const [commonNameTouched, setCommonNameTouched] = useState(false);
+  const [error, setError] = useState<string>();
+  const busyRef = useRef(false);
   const [validityDays, setValidityDays] = useState(365);
   const [downloaded, setDownloaded] = useState(false);
   const [p12Password, setP12Password] = useState('');
@@ -69,29 +72,37 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
 
   // Step 1: Generate keypair
   const handleGenerate = useCallback(async () => {
+    if (busyRef.current) return;
     if (!commonName.trim()) {
+      setCommonNameTouched(true);
       toast.error('Common Name required', 'Enter a CN for the certificate subject');
       return;
     }
+    busyRef.current = true;
+    setError(undefined);
     setGenerating(true);
     try {
-      // Run in setTimeout to avoid blocking the UI during RSA generation
-      const kp = await new Promise<GeneratedKeyPair>((resolve) => {
-        setTimeout(() => resolve(generateKeyPair()), 50);
-      });
+      // Render the busy state before synchronous RSA generation
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      const kp = generateKeyPair();
       setKeyPair(kp);
       hasUnsavedKeyRef.current = true;
       setStep('sign');
     } catch (err) {
-      toast.error('Key generation failed', err instanceof Error ? err.message : 'Unknown error');
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(message);
+      toast.error('Key generation failed', message);
     } finally {
+      busyRef.current = false;
       setGenerating(false);
     }
   }, [commonName, toast]);
 
   // Step 2: Ensure tenant CA exists, then create CSR and sign
   const handleSign = useCallback(async () => {
-    if (!keyPair) return;
+    if (!keyPair || busyRef.current) return;
+    busyRef.current = true;
+    setError(undefined);
     setSigning(true);
     try {
       // Auto-generate tenant CA if none exists
@@ -112,8 +123,11 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
       setSignedCert(result);
       setStep('download');
     } catch (err) {
-      toast.error('Signing failed', err instanceof Error ? err.message : 'Failed to sign CSR');
+      const message = err instanceof Error ? err.message : 'Failed to sign CSR';
+      setError(message);
+      toast.error('Signing failed', message);
     } finally {
+      busyRef.current = false;
       setSigning(false);
     }
   }, [keyPair, commonName, tenantId, tenantName, validityDays, toast]);
@@ -149,6 +163,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
       toast.error('Password required', 'Enter a password to protect the PKCS12 bundle');
       return;
     }
+    setError(undefined);
     try {
       const blob = createPKCS12(
         keyPair.privateKeyPem,
@@ -159,14 +174,14 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
       setDownloaded(true);
       hasUnsavedKeyRef.current = false;
     } catch (err) {
-      toast.error(
-        'PKCS12 export failed',
-        err instanceof Error ? err.message : 'Failed to create PKCS12'
-      );
+      const message = err instanceof Error ? err.message : 'Failed to create PKCS12';
+      setError(message);
+      toast.error('PKCS12 export failed', message);
     }
   }, [keyPair, signedCert, p12Password, commonName, toast]);
 
   const handleClose = useCallback(() => {
+    if (busyRef.current) return;
     if (hasUnsavedKeyRef.current && !downloaded) {
       const confirmed = window.confirm(
         'Your private key has not been downloaded yet. If you close this wizard, the key will be lost forever. Continue?'
@@ -189,6 +204,8 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
   return (
     <Modal
       onClose={handleClose}
+      closeDisabled={generating || signing}
+      aria-busy={generating || signing}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
     >
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
@@ -204,6 +221,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
             aria-label="Close dialog"
             type="button"
             onClick={handleClose}
+            disabled={generating || signing}
             className="text-muted hover:text-neutral-600 dark:hover:text-neutral-300"
           >
             <X className="h-5 w-5" />
@@ -248,6 +266,11 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
 
         {/* Content */}
         <div className="px-6 py-6 space-y-4 min-h-[280px]">
+          {error && (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+              {error}
+            </p>
+          )}
           {step === 'generate' && (
             <>
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex gap-2">
@@ -258,12 +281,21 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                 </p>
               </div>
 
-              <Field>
+              <Field
+                error={
+                  commonNameTouched && !commonName.trim()
+                    ? 'Enter a Common Name for the certificate subject'
+                    : undefined
+                }
+              >
                 <FieldLabel className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
                   Common Name (CN) <span className="text-red-500">*</span>
                 </FieldLabel>
                 <FieldInput
                   type="text"
+                  required
+                  disabled={generating}
+                  onBlur={() => setCommonNameTouched(true)}
                   value={commonName}
                   onChange={(e) => setCommonName(e.target.value)}
                   placeholder="e.g. my-api-client"
@@ -279,6 +311,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                   Validity (days)
                 </FieldLabel>
                 <FieldSelect
+                  disabled={generating}
                   value={validityDays}
                   onChange={(e) => setValidityDays(Number(e.target.value))}
                   className="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -413,6 +446,7 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
                   <input
                     aria-label="Bundle password"
                     type="password"
+                    required
                     value={p12Password}
                     onChange={(e) => setP12Password(e.target.value)}
                     placeholder="Bundle password"
@@ -441,7 +475,20 @@ export function CertificateGenerationWizard({ tenantId, tenantName, onClose, onC
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-neutral-200 dark:border-neutral-700 flex justify-end">
-          <Button variant="ghost" onClick={handleClose}>
+          {step === 'sign' && (
+            <Button
+              variant="ghost"
+              disabled={signing}
+              onClick={() => {
+                if (busyRef.current) return;
+                setError(undefined);
+                setStep('generate');
+              }}
+            >
+              Back
+            </Button>
+          )}
+          <Button variant="ghost" onClick={handleClose} disabled={generating || signing}>
             {downloaded ? 'Done' : 'Cancel'}
           </Button>
         </div>

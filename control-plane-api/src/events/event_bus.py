@@ -30,7 +30,7 @@ class Subscriber:
     def accepts(self, tenant_id: str, event_type: str, gateway_id: str | None = None) -> bool:
         if self.tenant_id != "*" and self.tenant_id != tenant_id:
             return False
-        if self.gateway_id and gateway_id and self.gateway_id != gateway_id:
+        if self.gateway_id is not None and self.gateway_id != gateway_id:
             return False
         return not (self.event_types and event_type not in self.event_types)
 
@@ -57,6 +57,9 @@ class EventBus:
         logger.debug("SSE subscriber %s removed", sub.id)
 
     async def publish(self, tenant_id: str, event_type: str, data: dict, gateway_id: str | None = None) -> int:
+        return self.publish_nowait(tenant_id, event_type, data, gateway_id)
+
+    def publish_nowait(self, tenant_id: str, event_type: str, data: dict, gateway_id: str | None = None) -> int:
         """Fan-out an event to all matching subscribers. Returns delivery count."""
         delivered = 0
         for sub in list(self._subscribers.values()):

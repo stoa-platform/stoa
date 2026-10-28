@@ -76,7 +76,7 @@ export const config = {
   },
 
   // Portal Mode (production vs non-production)
-  portalMode: (import.meta.env.VITE_PORTAL_MODE as 'production' | 'non-production') || 'production',
+  portalMode: env('VITE_PORTAL_MODE', 'production') as 'production' | 'non-production',
 
   // Feature Flags
   features: {
@@ -98,6 +98,7 @@ export const config = {
 
   // API Testing Configuration
   testing: {
+    gatewayBaseUrl: env('VITE_TEST_GATEWAY_URL', ''),
     // Available environments for this portal instance
     availableEnvironments: (import.meta.env.VITE_AVAILABLE_ENVIRONMENTS || 'prod').split(','),
     // Require confirmation before testing (for production portal)

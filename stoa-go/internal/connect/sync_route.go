@@ -53,13 +53,16 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 		return nil, nil
 	}
 
+	syncOutcome, syncErr := s.adapter.SyncRoutes(ctx, adminURL, routes)
+	return routeSyncResults(routes, syncOutcome, syncErr), syncErr
+}
+
+func routeSyncResults(routes []adapters.Route, syncOutcome adapters.SyncResult, syncErr error) []SyncedRouteResult {
 	// Step trace: agent_received and adapter_connected are success by the
 	// time we call the adapter. api_synced reflects the adapter's actual
 	// outcome. All routes in a single call share the same step timeline.
 	agentStep := newSyncStep("agent_received", "success", "")
 	adapterStep := newSyncStep("adapter_connected", "success", "")
-
-	syncOutcome, syncErr := s.adapter.SyncRoutes(ctx, adminURL, routes)
 
 	failedMap := syncOutcome.FailedRoutes
 
@@ -84,10 +87,13 @@ func (s *routeSyncer) Sync(ctx context.Context, adminURL string, routes []adapte
 			apiStep = newSyncStep("api_synced", "failed", syncErr.Error())
 		} else {
 			result.Status = "applied"
+			if r.Removing {
+				result.Status = "removed"
+			}
 		}
 		result.Steps = []SyncStep{agentStep, adapterStep, apiStep}
 		results = append(results, result)
 	}
 
-	return results, syncErr
+	return results
 }

@@ -300,3 +300,176 @@ fn production_requires_explicit_authorization_profile() {
     config.ext_authz_required_scopes.clear();
     assert!(config.validate().is_ok());
 }
+
+#[test]
+fn trace_uuid_requires_hyphenated_non_nil_non_max_uuid() {
+    let valid = "3d974e76-83c4-488d-b65c-28ef11d08c36";
+    assert_eq!(trace_uuid(valid).unwrap().to_string(), valid);
+    assert_eq!(
+        trace_uuid(&valid.to_uppercase()).unwrap().to_string(),
+        valid
+    );
+    for invalid in [
+        "",
+        "not-a-uuid",
+        "00000000-0000-0000-0000-000000000000",
+        "ffffffff-ffff-ffff-ffff-ffffffffffff",
+        "3d974e7683c4488db65c28ef11d08c36",
+        "{3d974e76-83c4-488d-b65c-28ef11d08c36}",
+        "urn:uuid:3d974e76-83c4-488d-b65c-28ef11d08c36",
+        "3d974e76-83c4-488d-b65c-28ef11d08c36,3d974e76-83c4-488d-b65c-28ef11d08c36",
+        "3d974e76-83c4-488d-b65c-28ef11d08c36\r\n",
+        "3d974e76x83c4-488d-b65c-28ef11d08c36",
+    ] {
+        assert!(trace_uuid(invalid).is_none());
+    }
+}
+
+fn trace_request(value: Option<&str>) -> CheckRequest {
+    let mut headers = HashMap::new();
+    if let Some(value) = value {
+        headers.insert("x-request-id".into(), value.into());
+    }
+    CheckRequest {
+        attributes: Some(AttributeContext {
+            request: Some(attribute_context::Request {
+                http: Some(attribute_context::HttpRequest {
+                    id: "174aa929-7faa-48c4-aadb-1066ff024788".into(),
+                    headers,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+    }
+}
+
+#[test]
+fn client_request_id_ignores_proto_id_and_rejects_noncanonical_input() {
+    let valid = "3d974e76-83c4-488d-b65c-28ef11d08c36";
+    assert_eq!(
+        client_request_id(&trace_request(Some(valid)))
+            .unwrap()
+            .to_string(),
+        valid
+    );
+    assert_eq!(
+        client_request_id(&trace_request(Some(&valid.to_uppercase())))
+            .unwrap()
+            .to_string(),
+        valid
+    );
+    for value in [
+        None,
+        Some("not-a-uuid"),
+        Some("00000000-0000-0000-0000-000000000000"),
+        Some("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+        Some("3d974e7683c4488db65c28ef11d08c36"),
+        Some("3d974e76-83c4-488d-b65c-28ef11d08c36,3d974e76-83c4-488d-b65c-28ef11d08c36"),
+    ] {
+        assert!(client_request_id(&trace_request(value)).is_none());
+    }
+    assert!(client_request_id(&CheckRequest::default()).is_none());
+    let mut raw = trace_request(None);
+    http_mut(&mut raw).header_map = Some(Default::default());
+    assert!(client_request_id(&raw).is_none());
+}
+
+#[test]
+fn every_check_gets_fresh_server_id_even_without_client_context() {
+    let valid = "3d974e76-83c4-488d-b65c-28ef11d08c36";
+    let mut server_ids = std::collections::HashSet::new();
+    for _ in 0..20 {
+        for request in [trace_request(Some(valid)), CheckRequest::default()] {
+            let (client, server) = check_trace_ids(&request);
+            assert_eq!(server.get_version_num(), 4);
+            assert_ne!(server.as_u128(), 0);
+            assert_ne!(server.as_u128(), u128::MAX);
+            assert_ne!(client, Some(server));
+            assert!(server_ids.insert(server));
+            assert_eq!(client.is_some(), request.attributes.is_some());
+        }
+    }
+    assert_eq!(server_ids.len(), 40);
+}
+
+#[test]
+fn decision_trace_exposes_only_correlation_fields() {
+    let client = trace_uuid("3d974e76-83c4-488d-b65c-28ef11d08c36").unwrap();
+    let server = uuid::Uuid::new_v4();
+    let decision = uuid::Uuid::new_v4();
+    let canary = "private-response-header-never-log";
+    let response = CheckResponse {
+        status: Some(google::rpc::Status {
+            code: 0,
+            ..Default::default()
+        }),
+        http_response: Some(HttpResponse::OkResponse(OkHttpResponse {
+            headers: vec![
+                header("x-request-id", &decision.to_string()).unwrap(),
+                header("authorization", canary).unwrap(),
+            ],
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    let trace = decision_trace(Some(client), server, &response);
+    assert_eq!(
+        trace,
+        DecisionTrace {
+            client_request_id: Some(client),
+            server_check_id: server,
+            decision_id: Some(decision),
+            rpc_code: 0,
+        }
+    );
+    assert!(!format!("{trace:?}").contains(canary));
+    for status in [401, 403] {
+        let trace = decision_trace(Some(client), server, &denied(status));
+        assert_eq!(trace.client_request_id, Some(client));
+        assert_eq!(trace.server_check_id, server);
+        assert_eq!(trace.decision_id, None);
+        assert_eq!(trace.rpc_code, if status == 401 { 16 } else { 7 });
+    }
+}
+
+#[tokio::test]
+async fn client_request_id_never_becomes_backend_request_id() {
+    let (service, _server, issuer) = fixture().await;
+    let client = "3d974e76-83c4-488d-b65c-28ef11d08c36";
+    let mut request = request(&claims(&issuer));
+    http_mut(&mut request)
+        .headers
+        .insert("x-request-id".into(), client.into());
+    let response = service
+        .check(Request::new(request))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.status.as_ref().unwrap().code, 0);
+    let Some(HttpResponse::OkResponse(ok)) = response.http_response.as_ref() else {
+        panic!("expected allow");
+    };
+    let request_headers: Vec<_> = ok
+        .headers
+        .iter()
+        .filter(|h| {
+            h.header
+                .as_ref()
+                .is_some_and(|v| v.key.eq_ignore_ascii_case("x-request-id"))
+        })
+        .collect();
+    assert_eq!(request_headers.len(), 1);
+    assert_eq!(
+        request_headers[0].append_action,
+        HeaderAppendAction::OverwriteIfExistsOrAdd as i32
+    );
+    let backend = &request_headers[0].header.as_ref().unwrap().value;
+    let decision = trace_uuid(backend).unwrap();
+    assert_eq!(decision.get_version_num(), 4);
+    assert_ne!(backend, client);
+    let trace = decision_trace(trace_uuid(client), uuid::Uuid::new_v4(), &response);
+    assert_eq!(trace.decision_id, Some(decision));
+    assert_eq!(trace.client_request_id.unwrap().to_string(), client);
+}

@@ -73,7 +73,11 @@ func (a *Agent) StartDeploymentStream(ctx context.Context, adapter adapters.Gate
 func (a *Agent) streamEvents(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) error {
 	dispatcher := a.newSSEDispatcher(adapter, adminURL)
 	gatewayID := a.state.GatewayID()
-	return a.sse.Run(ctx, gatewayID, func(evCtx context.Context, ev rawEvent) error {
+	var ready func(context.Context)
+	if _, ok := adapter.(*adapters.EnvoyAdapter); ok {
+		ready = func(ctx context.Context) { a.RunRouteSync(ctx, adapter, adminURL) }
+	}
+	return a.sse.run(ctx, gatewayID, ready, func(evCtx context.Context, ev rawEvent) error {
 		dispatcher.Dispatch(evCtx, ev)
 		return nil
 	})
@@ -88,6 +92,10 @@ func (a *Agent) newSSEDispatcher(adapter adapters.GatewayAdapter, adminURL strin
 	d.Register("sync-deployment", func(ctx context.Context, data []byte) {
 		a.handleSyncDeployment(ctx, adapter, adminURL, data)
 	})
+	if _, ok := adapter.(*adapters.EnvoyAdapter); ok {
+		d.Register("sync-policy", func(ctx context.Context, _ []byte) { a.RunSync(ctx, adapter, adminURL) })
+		d.Register("undeploy", func(ctx context.Context, data []byte) { a.handleSyncDeployment(ctx, adapter, adminURL, data) })
+	}
 	d.Register("heartbeat", func(ctx context.Context, data []byte) {
 		// keepalive — deliberately empty
 	})
@@ -113,9 +121,15 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 	}
 
 	span.SetAttributes(attribute.String("stoa.deployment_id", event.DeploymentID))
+	if event.GatewayInstanceID != "" && event.GatewayInstanceID != a.state.GatewayID() {
+		return
+	}
 	log.Printf("sse-stream: received deployment %s (status=%s)", event.DeploymentID, event.SyncStatus)
 
 	var route adapters.Route
+	if event.SyncStatus == "deleting" && len(event.DesiredState) == 0 {
+		event.DesiredState = json.RawMessage(`{}`)
+	}
 	if err := json.Unmarshal(event.DesiredState, &route); err != nil {
 		// Synthesize a failed ack with the same 3-step shape the polling
 		// path produces, so CP UI renders a consistent step trace. Note:
@@ -137,10 +151,25 @@ func (a *Agent) handleSyncDeployment(ctx context.Context, adapter adapters.Gatew
 		return
 	}
 	route.DeploymentID = event.DeploymentID
-	route.APICatalogID = event.APICatalogID
+	route.Generation = event.Generation
+	if route.APICatalogID == "" {
+		route.APICatalogID = event.APICatalogID
+	}
+	if event.SyncStatus == "deleting" {
+		route.Activated = false
+		route.Removing = true
+	}
 
 	syncer := newRouteSyncer(adapter)
-	results, syncErr := syncer.Sync(ctx, adminURL, []adapters.Route{route})
+	var results []SyncedRouteResult
+	var syncErr error
+	if envoy, ok := adapter.(*adapters.EnvoyAdapter); ok {
+		outcome, err := envoy.SyncRouteEvent(ctx, route)
+		syncErr = err
+		results = routeSyncResults([]adapters.Route{route}, outcome, err)
+	} else {
+		results, syncErr = syncer.Sync(ctx, adminURL, []adapters.Route{route})
+	}
 
 	if syncErr != nil {
 		span.RecordError(syncErr)

@@ -902,12 +902,23 @@ def _make_deployment(**overrides):
         "sync_steps": None,
         "sync_attempts": 0,
         "promotion_id": None,
+        "desired_generation": 1,
+        "synced_generation": 0,
+        "attempted_generation": 0,
     }
     defaults.update(overrides)
     mock = MagicMock()
     for k, v in defaults.items():
         setattr(mock, k, v)
     return mock
+
+
+def _ack_values(repo, deployment):
+    """Inspect the requested CAS writes without mutating the read witness."""
+    calls = [call for call in repo.acknowledge.await_args_list if call.args[0] is deployment]
+    assert len(calls) == 1
+    assert calls[0].kwargs == {}
+    return calls[0].args[1]
 
 
 class TestRouteSyncAck:
@@ -935,7 +946,7 @@ class TestRouteSyncAck:
                 return None
 
             mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             resp = client.post(
                 f"/v1/internal/gateways/{gw_id}/route-sync-ack",
@@ -953,10 +964,10 @@ class TestRouteSyncAck:
             data = resp.json()
             assert data["processed"] == 2
             assert data["not_found"] == 0
-            assert dep1.sync_status == DeploymentSyncStatus.SYNCED
-            assert dep1.last_sync_success is not None
-            assert dep1.sync_error is None
-            assert dep2.sync_status == DeploymentSyncStatus.SYNCED
+            assert _ack_values(mock_deploy_repo, dep1)["sync_status"] == DeploymentSyncStatus.SYNCED
+            assert _ack_values(mock_deploy_repo, dep1)["last_sync_success"] is not None
+            assert _ack_values(mock_deploy_repo, dep1)["sync_error"] is None
+            assert _ack_values(mock_deploy_repo, dep2)["sync_status"] == DeploymentSyncStatus.SYNCED
 
     def test_route_sync_ack_failed(self, client):
         """One deployment failed → sync_status=ERROR + sync_error set."""
@@ -971,7 +982,7 @@ class TestRouteSyncAck:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             resp = client.post(
                 f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
@@ -987,8 +998,8 @@ class TestRouteSyncAck:
             assert resp.status_code == 200
             data = resp.json()
             assert data["processed"] == 1
-            assert dep.sync_status == DeploymentSyncStatus.ERROR
-            assert dep.sync_error == "connection refused"
+            assert _ack_values(mock_deploy_repo, dep)["sync_status"] == DeploymentSyncStatus.ERROR
+            assert _ack_values(mock_deploy_repo, dep)["sync_error"] == "connection refused"
 
     def test_route_sync_ack_mixed(self, client):
         """One applied + one failed → each updated independently."""
@@ -1012,7 +1023,7 @@ class TestRouteSyncAck:
                 return None
 
             mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             resp = client.post(
                 f"/v1/internal/gateways/{gw_id}/route-sync-ack",
@@ -1030,10 +1041,10 @@ class TestRouteSyncAck:
             data = resp.json()
             assert data["processed"] == 2
             assert data["not_found"] == 0
-            assert dep_ok.sync_status == DeploymentSyncStatus.SYNCED
-            assert dep_ok.sync_error is None
-            assert dep_fail.sync_status == DeploymentSyncStatus.ERROR
-            assert dep_fail.sync_error == "timeout"
+            assert _ack_values(mock_deploy_repo, dep_ok)["sync_status"] == DeploymentSyncStatus.SYNCED
+            assert _ack_values(mock_deploy_repo, dep_ok)["sync_error"] is None
+            assert _ack_values(mock_deploy_repo, dep_fail)["sync_status"] == DeploymentSyncStatus.ERROR
+            assert _ack_values(mock_deploy_repo, dep_fail)["sync_error"] == "timeout"
 
     def test_route_sync_ack_deployment_not_found(self, client):
         """Non-existent deployment_id → 200 with not_found=1 (no crash)."""
@@ -1072,7 +1083,7 @@ class TestRouteSyncAck:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             agent_steps = [
                 {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
@@ -1092,13 +1103,13 @@ class TestRouteSyncAck:
             )
 
             assert resp.status_code == 200
-            assert dep.sync_steps is not None
-            assert len(dep.sync_steps) == 4  # event_emitted + 3 agent steps
-            assert dep.sync_steps[0]["name"] == "event_emitted"
-            assert dep.sync_steps[0]["status"] == "success"
-            assert dep.sync_steps[1]["name"] == "agent_received"
-            assert dep.sync_steps[2]["name"] == "adapter_connected"
-            assert dep.sync_steps[3]["name"] == "api_synced"
+            assert _ack_values(mock_deploy_repo, dep)["sync_steps"] is not None
+            assert len(_ack_values(mock_deploy_repo, dep)["sync_steps"]) == 4  # event_emitted + 3 agent steps
+            assert _ack_values(mock_deploy_repo, dep)["sync_steps"][0]["name"] == "event_emitted"
+            assert _ack_values(mock_deploy_repo, dep)["sync_steps"][0]["status"] == "success"
+            assert _ack_values(mock_deploy_repo, dep)["sync_steps"][1]["name"] == "agent_received"
+            assert _ack_values(mock_deploy_repo, dep)["sync_steps"][2]["name"] == "adapter_connected"
+            assert _ack_values(mock_deploy_repo, dep)["sync_steps"][3]["name"] == "api_synced"
 
     def test_route_sync_ack_without_steps_backward_compat(self, client):
         """Ack without steps field → sync_steps stays None (old agent compat)."""
@@ -1111,10 +1122,10 @@ class TestRouteSyncAck:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             resp = client.post(
-                f"/v1/internal/gateways/{uuid4()}/route-sync-ack",
+                f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
                 json={
                     "synced_routes": [
                         {"deployment_id": str(dep.id), "status": "applied"},
@@ -1126,6 +1137,7 @@ class TestRouteSyncAck:
 
             assert resp.status_code == 200
             assert dep.sync_steps is None
+            assert "sync_steps" not in _ack_values(mock_deploy_repo, dep)
 
     def test_route_sync_ack_failed_with_steps_derives_error(self, client):
         """Ack with failed step → sync_error derived from step trace."""
@@ -1140,7 +1152,7 @@ class TestRouteSyncAck:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             agent_steps = [
                 {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
@@ -1165,8 +1177,8 @@ class TestRouteSyncAck:
             )
 
             assert resp.status_code == 200
-            assert dep.sync_status == DeploymentSyncStatus.ERROR
-            assert dep.sync_error == "connection refused"
+            assert _ack_values(mock_deploy_repo, dep)["sync_status"] == DeploymentSyncStatus.ERROR
+            assert _ack_values(mock_deploy_repo, dep)["sync_error"] == "connection refused"
 
     def test_route_sync_ack_applied_with_failed_step_fails_closed(self, client):
         """Contradictory applied ack with failed steps must not mark deployment synced."""
@@ -1181,7 +1193,7 @@ class TestRouteSyncAck:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             agent_steps = [
                 {"name": "agent_received", "status": "success", "started_at": "2026-04-02T12:00:01Z"},
@@ -1206,9 +1218,10 @@ class TestRouteSyncAck:
             )
 
             assert resp.status_code == 200
-            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert _ack_values(mock_deploy_repo, dep)["sync_status"] == DeploymentSyncStatus.ERROR
             assert dep.last_sync_success is None
-            assert dep.sync_error == "webmethods activation failed"
+            assert "last_sync_success" not in _ack_values(mock_deploy_repo, dep)
+            assert _ack_values(mock_deploy_repo, dep)["sync_error"] == "webmethods activation failed"
 
 
 class TestHelperFunctions:
@@ -1285,7 +1298,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             mock_promo_svc = MockPromoSvc.return_value
             mock_promo_svc.check_promotion_completion = AsyncMock()
@@ -1302,7 +1315,7 @@ class TestRouteSyncAckPromotionCompletion:
             )
 
             assert resp.status_code == 200
-            assert dep.sync_status == DeploymentSyncStatus.SYNCED
+            assert _ack_values(mock_deploy_repo, dep)["sync_status"] == DeploymentSyncStatus.SYNCED
             mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
 
     def test_route_ack_partial_does_not_complete(self, client):
@@ -1326,7 +1339,7 @@ class TestRouteSyncAckPromotionCompletion:
                 return None
 
             mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             mock_promo_svc = MockPromoSvc.return_value
             mock_promo_svc.check_promotion_completion = AsyncMock()
@@ -1371,7 +1384,7 @@ class TestRouteSyncAckPromotionCompletion:
                 return None
 
             mock_deploy_repo.get_by_id = AsyncMock(side_effect=get_by_id_side_effect)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             mock_promo_svc = MockPromoSvc.return_value
             mock_promo_svc.check_promotion_completion = AsyncMock()
@@ -1389,8 +1402,8 @@ class TestRouteSyncAckPromotionCompletion:
             )
 
             assert resp.status_code == 200
-            assert dep1.sync_status == DeploymentSyncStatus.SYNCED
-            assert dep2.sync_status == DeploymentSyncStatus.SYNCED
+            assert _ack_values(mock_deploy_repo, dep1)["sync_status"] == DeploymentSyncStatus.SYNCED
+            assert _ack_values(mock_deploy_repo, dep2)["sync_status"] == DeploymentSyncStatus.SYNCED
             # Called once — promo_id is deduplicated via set
             mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
 
@@ -1409,7 +1422,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             mock_promo_svc = MockPromoSvc.return_value
             mock_promo_svc.check_promotion_completion = AsyncMock()
@@ -1426,7 +1439,7 @@ class TestRouteSyncAckPromotionCompletion:
             )
 
             assert resp.status_code == 200
-            assert dep.sync_status == DeploymentSyncStatus.ERROR
+            assert _ack_values(mock_deploy_repo, dep)["sync_status"] == DeploymentSyncStatus.ERROR
             mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)
 
     def test_route_ack_mixed_error_and_pending(self, client):
@@ -1444,7 +1457,7 @@ class TestRouteSyncAckPromotionCompletion:
             mock_settings.gateway_api_keys_list = [VALID_KEY]
             mock_deploy_repo = MockDeployRepo.return_value
             mock_deploy_repo.get_by_id = AsyncMock(return_value=dep_err)
-            mock_deploy_repo.update = AsyncMock()
+            mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
             mock_promo_svc = MockPromoSvc.return_value
             mock_promo_svc.check_promotion_completion = AsyncMock()
@@ -1461,7 +1474,7 @@ class TestRouteSyncAckPromotionCompletion:
             )
 
             assert resp.status_code == 200
-            assert dep_err.sync_status == DeploymentSyncStatus.ERROR
+            assert _ack_values(mock_deploy_repo, dep_err)["sync_status"] == DeploymentSyncStatus.ERROR
             # check is called — the service will see 1 ERROR + 1 PENDING still remaining
             # and will NOT complete/fail yet
             mock_promo_svc.check_promotion_completion.assert_awaited_once_with(promo_id)

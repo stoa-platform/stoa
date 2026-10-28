@@ -69,6 +69,13 @@ func (a *Agent) RunSync(ctx context.Context, adapter adapters.GatewayAdapter, ad
 	}
 
 	if len(config.PendingPolicies) == 0 {
+		if envoy, ok := adapter.(*adapters.EnvoyAdapter); ok {
+			if err := envoy.ReconcilePolicies(ctx, nil); err != nil {
+				SyncStatus.Set(0)
+				span.SetStatus(codes.Error, "empty policy reconciliation failed")
+				return
+			}
+		}
 		span.SetAttributes(attribute.Int("stoa.pending_policies", 0))
 		log.Println("sync: no pending policies")
 		return

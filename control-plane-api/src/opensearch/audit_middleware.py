@@ -45,6 +45,11 @@ correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="")
 # user agent is only kept when the call did not succeed.
 IPV4_TRUNCATION_PREFIX = 24
 IPV6_TRUNCATION_PREFIX = 48
+# Longest user agent kept on a failed call: the width of audit_events.user_agent
+# (String(512)). The cut counts code points, like the PostgreSQL column: it is
+# safe for UTF-8 (a multi-byte character is kept whole or dropped whole) but it
+# may separate a grapheme (a combining mark, an emoji ZWJ sequence).
+USER_AGENT_MAX_LENGTH = 512
 
 
 # IPv6 prefixes that embed an IPv4 address (RFC 4291 s2.5.5, RFC 6052, RFC 8215,
@@ -121,11 +126,20 @@ def minimise_actor(actor: dict, outcome: str) -> dict:
 
     The source address is truncated with :func:`truncate_ip`; the user agent is
     dropped when ``outcome`` is ``"success"`` and kept otherwise (failure,
-    denied, error), where it is useful to investigate the call.
+    denied, error), where it is useful to investigate the call, cut to
+    :data:`USER_AGENT_MAX_LENGTH` code points. A kept user agent that is not a
+    string is refused (``None``), like a source address that is not a string in
+    :func:`truncate_ip`; ``None`` and ``""`` are returned unchanged.
     """
     actor["ip_address"] = truncate_ip(actor.get("ip_address"))
     if outcome == "success":
         actor["user_agent"] = None
+    else:
+        user_agent = actor.get("user_agent")
+        if user_agent is not None and not isinstance(user_agent, str):
+            actor["user_agent"] = None
+        elif isinstance(user_agent, str) and len(user_agent) > USER_AGENT_MAX_LENGTH:
+            actor["user_agent"] = user_agent[:USER_AGENT_MAX_LENGTH]
     return actor
 
 
@@ -433,7 +447,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 try:
                     resource = self._extract_resource(request)
                     await self._write_pg_audit(
-                        tenant_id=actor.get("tenant_id", "unknown"),
+                        tenant_id=actor.get("tenant_id") or "platform",
                         actor_id=actor.get("id"),
                         actor_email=actor.get("email"),
                         actor_type=actor.get("type", "user"),

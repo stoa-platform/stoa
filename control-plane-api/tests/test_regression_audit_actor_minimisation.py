@@ -18,7 +18,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI, HTTPException
 
+from src.models.audit_event import AuditEvent
 from src.opensearch.audit_middleware import (
+    USER_AGENT_MAX_LENGTH,
     AuditMiddleware,
     minimise_actor,
     truncate_ip,
@@ -196,9 +198,54 @@ def test_minimise_actor_tolerates_missing_fields():
     assert "user_agent" not in actor
 
 
-def test_minimise_actor_very_long_user_agent_is_kept_verbatim_on_failure():
-    ua = "x" * 4096
+@pytest.mark.parametrize("length", [511, 512])
+def test_minimise_actor_user_agent_up_to_the_limit_is_kept_verbatim(length):
+    ua = "x" * length
     assert minimise_actor(_actor(ua), "failure")["user_agent"] == ua
+
+
+@pytest.mark.parametrize("length", [513, 4096])
+def test_minimise_actor_user_agent_beyond_the_limit_is_cut_on_failure(length):
+    ua = "x" * length
+    out = minimise_actor(_actor(ua), "failure")["user_agent"]
+    assert out == "x" * USER_AGENT_MAX_LENGTH
+    assert len(out) == 512
+
+
+@pytest.mark.parametrize("outcome", ["failure", "denied", "error"])
+def test_minimise_actor_cuts_the_user_agent_for_every_non_success_outcome(outcome):
+    assert len(minimise_actor(_actor("x" * 1000), outcome)["user_agent"]) == 512
+
+
+def test_minimise_actor_cut_never_splits_a_multibyte_character():
+    # 510 ASCII characters then multi-byte characters (2, 3 and 4 bytes in
+    # UTF-8) across the limit: the cut is counted in characters, so the output
+    # is 512 characters long, ends on a whole character and re-encodes cleanly.
+    ua = "x" * 510 + "é€𝄞" + "y" * 10
+    out = minimise_actor(_actor(ua), "failure")["user_agent"]
+    assert len(out) == 512
+    assert out == "x" * 510 + "é€"
+    assert out.encode("utf-8").decode("utf-8") == out
+
+
+def test_minimise_actor_limit_matches_the_pg_column():
+    # The limit is the real width of audit_events.user_agent (String(512) in
+    # src/models/audit_event.py): a migration of the column must move the limit
+    # with it, or this test fails.
+    assert AuditEvent.__table__.c.user_agent.type.length == USER_AGENT_MAX_LENGTH
+
+
+@pytest.mark.parametrize("user_agent", [b"Mozilla/5.0 pytest", 42, ["Mozilla/5.0 pytest"], 1.5, object()])
+def test_minimise_actor_refuses_a_user_agent_that_is_not_a_string_on_failure(user_agent):
+    # Same rule as the source address (commit "refuse non-string source
+    # addresses"): a value that is not a string is never written. Starlette
+    # always hands over a string, so this is a defence in depth.
+    assert minimise_actor(_actor(user_agent), "failure")["user_agent"] is None
+
+
+def test_minimise_actor_user_agent_none_or_empty_on_failure_is_unchanged():
+    assert minimise_actor(_actor(None), "failure")["user_agent"] is None
+    assert minimise_actor(_actor(""), "failure")["user_agent"] == ""
 
 
 # --- end to end through the middleware (both stores) -------------------------

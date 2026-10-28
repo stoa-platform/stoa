@@ -8,21 +8,21 @@
 
 - A client/admin asks "who connected to prod on date X?"
 - P1 incident investigation requiring root cause analysis
-- DORA Article 11 compliance audit
+- Internal security investigation and preparation of an audit (applicable legal requirements are assessed separately)
 - GDPR data access request (who accessed what)
 
 ## Architecture
 
 ```
 FastAPI Middleware (AuditMiddleware) → dual-write:
-  ├── PostgreSQL: audit_events table (compliance-grade, append-only)
+  ├── PostgreSQL: audit_events table (append-only mutation audit)
   └── OpenSearch: audit-* index (search/analytics)
 ```
 
-- **PostgreSQL** = source of truth for compliance (immutable, indexed)
+- **PostgreSQL** = retained mutation-audit records (append-only, indexed)
 - **OpenSearch** = analytics, full-text search, dashboards
-- **Retention**: `audit_events` is append-only (CAB-2226, ADR-068): `AuditService.purge_before()` deliberately raises `NotImplementedError`. Bulk retention is an archive/partition break-glass procedure that requires security sign-off per execution; it is not configurable from the application. The retention period itself is documented in the processing register (see "Legal basis and retention" below).
-- **Erasure (GDPR Art. 17)**: `AuditService.erase_user_pii()` never mutates `audit_events`; it records a DPO-approved pseudonymization entry, and the redacted view returns `actor_email`, `client_ip` and `user_agent` as NULL for the covered events.
+- **Retention**: `audit_events` is append-only (CAB-2226, ADR-068): `AuditService.purge_before()` deliberately raises `NotImplementedError`. Bulk retention is an archive/partition break-glass procedure that requires security sign-off per execution; it is not configurable from the application. The retention period and authority for archival or redaction must be defined for the deployment; this repository does not establish those decisions.
+- **PII redaction mechanism**: `AuditService.erase_user_pii()` never mutates `audit_events`; it records a DPO-approved pseudonymization entry, and the redacted view returns `actor_email`, `client_ip` and `user_agent` as NULL for the covered events.
 
 ## Common Queries
 
@@ -118,7 +118,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 | Export CSV/JSON | cpi-admin, tenant-admin | Bulk PII |
 | Security events | cpi-admin, tenant-admin | IPs, user agents |
 | Global summary | cpi-admin only | Aggregated stats |
-| GDPR erasure | cpi-admin only | Pseudonymizes PII in the redacted view (rows are never deleted) |
+| PII redaction | cpi-admin only | Pseudonymizes PII in the redacted view (rows are never deleted) |
 
 ## What is Captured
 
@@ -142,14 +142,13 @@ Each audit event records:
 | `duration_ms` | Request latency | `42` |
 | `created_at` | UTC timestamp (immutable) | `2026-04-04T10:30:00Z` |
 
-## Legal basis and retention
+## Deployment decisions for audit data
 
-| Field group | Purpose | Legal basis | Retention |
-|---|---|---|---|
-| `actor_id`, `actor_email`, `tenant_id`, `action`, `resource_*`, `outcome` | Accountability and security investigation (who did what) | Legitimate interest: security and traceability of the service | As long as the audit archive is kept (append-only table; archive/partition procedure above) |
-| `client_ip` (truncated), `user_agent` (failures only) | Attribution of an access to a client network; investigation of authentication and authorization failures | Legitimate interest, with data minimisation: the address is truncated before write and the user agent is kept only for non-successful outcomes | Same as above; events written before the minimisation was deployed keep the values they were written with |
+The table above describes current code behavior. Network-address truncation loses the exact host, and removing user agents on successful calls also removes evidence of which client performed a successful mutation. Those trade-offs require an explicit audit-data policy before live use. No deployment or legal approval is evidenced by this runbook.
 
-Data-subject requests use the Art. 17 pseudonymization path above; the processing register entry is maintained outside this repository.
+`audit_events` remains append-only. The archive/partition process and the separate PII-redaction view are technical mechanisms; the retention period, applicable legal basis, request handling and any external processing-register entry must be established by the responsible organization. This document does not assert that such an entry already exists or that these mechanisms establish regulatory compliance.
+
+The minimisation described here applies to the audit-store writer only. Other application logging, including `http_logging.py` and operator-authentication logs, can retain complete source addresses. HTTP logging currently accepts forwarding headers without a trusted-proxy allowlist; those values are untrusted claims. This runbook does not establish address minimisation or trustworthy client attribution across those separate logs.
 
 ## Known Limitations
 
@@ -158,6 +157,7 @@ Data-subject requests use the Art. 17 pseudonymization path above; the processin
 | Keycloak login/logout events not forwarded | "Who logged in" only shows API calls, not KC sessions | Check Keycloak admin events directly: KC Admin Console > Events > Login Events |
 | Gateway (data plane) access logs separate | MCP tool calls not in control plane audit | Check stoa-gateway logs: `kubectl logs -n stoa-system deploy/stoa-gateway` |
 | Audit of GET requests only in OpenSearch | PostgreSQL dual-write is mutations only (POST/PUT/PATCH/DELETE) | Query OpenSearch `audit-*` index for read-access audit |
+| Actions without a tenant (operator key, platform users without a tenant claim, service callers) | Attributed to the technical tenant `platform` in both stores; visible in the global summary (cpi-admin), not in tenant-scoped views | Filter on `tenant_id = 'platform'` |
 | Export operations not audited in PG | Admin exporting 50K rows leaves no PG trace | OpenSearch captures the GET request |
 
 ## Escalation

@@ -72,6 +72,11 @@ client certificate identity, while the agent is invoked from its Go package
 rather than the CLI registration launcher. The normal CLI mTLS tests remain
 part of `go test -race ./...`. No production-active policy list is inferred.
 
+On Docker Engine (Linux), `host.docker.internal:host-gateway` resolves to the
+bridge gateway, not to the host loopback: set `O1_CP_BIND` to that gateway address
+(`docker network inspect bridge`) so the CP fixture listens where the container
+can reach it. The default, `localhost`, suits Docker Desktop.
+
 For a future manual Linux CI recipe, provision the same pinned image and cached
 dependencies before this offline command, then archive the evidence directory
 and candidate SHA. Use `workflow_dispatch`, never a pull-request E2E trigger.

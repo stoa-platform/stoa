@@ -176,7 +176,9 @@ async def test_o1_offline_envoy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         return {"ok": True}
 
     listener = socket.socket()
-    listener.bind(("localhost", 0))
+    # Docker Desktop relays host.docker.internal to the host loopback; Docker Engine on Linux
+    # routes it to the bridge gateway, so a Linux CI host sets O1_CP_BIND to that address.
+    listener.bind((os.getenv("O1_CP_BIND", "localhost"), 0))
     port = listener.getsockname()[1]
     server = uvicorn.Server(uvicorn.Config(app, log_config=None, access_log=False, lifespan="off"))
     serving = asyncio.create_task(server.serve(sockets=[listener]))

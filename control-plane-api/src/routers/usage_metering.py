@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import User
+from src.auth.gateway_key import gateway_key_is_valid
 from src.auth.rbac import require_role
 from src.config import settings
 from src.database import get_db
@@ -93,7 +94,7 @@ async def record_usage(
     Called by gateways after proxying LLM API requests.
     """
     valid_keys = settings.gateway_api_keys_list
-    if not valid_keys or x_api_key not in valid_keys:
+    if not valid_keys or not gateway_key_is_valid(x_api_key, valid_keys):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     service = UsageMeteringService(db)

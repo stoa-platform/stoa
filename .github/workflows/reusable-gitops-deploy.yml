@@ -10,6 +10,9 @@
 # Kill-switch: the deploy job runs only when the repository variable
 # GITOPS_DEPLOY_ENABLED is exactly 'true'. Unset or any other value = OFF
 # (default): no image-updated dispatch, the job is skipped (not failed).
+# Any repository admin/maintainer can set the variable and lift the switch.
+# Scope: this stops GitOps writes only, NOT image publication to GHCR
+# (latest / <env>-latest tags are still pushed by reusable-docker-ghcr.yml).
 #
 # Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
 # =============================================================================

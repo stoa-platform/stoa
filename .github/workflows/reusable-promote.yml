@@ -40,6 +40,8 @@ env:
 
 jobs:
   promote:
+    # Kill-switch: see reusable-gitops-deploy.yml (GITOPS_DEPLOY_ENABLED, default off)
+    if: vars.GITOPS_DEPLOY_ENABLED == 'true'
     name: Promote ${{ inputs.component }} to prod
     runs-on: ubuntu-latest
     timeout-minutes: 10

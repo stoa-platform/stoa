@@ -198,7 +198,6 @@ If token cost trends concerning:
 | Workflow | Relationship |
 |---|---|
 | `council-gate.yml` | Upstream of the Guardian — runs Stage 3 diff review at push time (pre-PR). Guardian runs at PR time (post-push). Different surfaces, different latencies. |
-| `context-compiler-learn.yml` | Independent. Runs on post-merge, not PR-time. |
 
 The Guardian is **one layer** of the review stack. It is not the last line
 of defence and it is not the first — it catches a narrow set of failure

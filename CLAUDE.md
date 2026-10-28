@@ -143,13 +143,9 @@ zh   # hotfix worktree (ephemeral, from main)
 > Manual execution is still available but no longer required for tickets going through the L3 pipeline.
 > See `docs/CONTEXT-COMPILER.md` for full integration documentation.
 
-### CI Integration (automatic)
+### CI Integration
 
-| Hook | Workflow | Trigger | What |
-|------|----------|---------|------|
-| Post-merge | `context-compiler-learn.yml` | Push to main | Compares predicted vs actual, enriches DB |
-
-Pre-coding and weekly hooks are not published in this repository. The scripts under `docs/scripts/` remain for manual use.
+No hook runs automatically in CI any more: the post-merge learning workflow was retired (it opened pull requests with `GITHUB_TOKEN`, which cannot receive the required checks). The scripts under `docs/scripts/` remain for manual use.
 
 Kill-switch: `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable) disables all hooks.
 

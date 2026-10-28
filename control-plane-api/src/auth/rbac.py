@@ -1,9 +1,16 @@
 """RBAC permissions and middleware"""
+import logging
 from functools import wraps
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException
 
 from .dependencies import get_current_user
+
+if TYPE_CHECKING:
+    from .dependencies import User
+
+logger = logging.getLogger(__name__)
 
 
 class Role:
@@ -12,6 +19,20 @@ class Role:
     TENANT_ADMIN = "tenant-admin"
     DEVOPS = "devops"
     VIEWER = "viewer"
+
+
+def resolve_effective_tenant(user: "User", requested: str | None = None) -> str | None:
+    """Resolve a discovery filter without granting cross-tenant access."""
+    requested = (requested or "").strip() or None
+    if Role.CPI_ADMIN in user.roles:
+        return requested
+    tenant = user.tenant_id.strip() if user.tenant_id else ""
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Authenticated tenant is required")
+    if requested is not None and requested != tenant:
+        # Never log the requested value, identity, bearer token or claims.
+        logger.warning("Cross-tenant discovery filter ignored for non-admin")
+    return tenant
 
 
 class Permission:

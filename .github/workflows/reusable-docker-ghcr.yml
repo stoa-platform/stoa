@@ -79,10 +79,11 @@ jobs:
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.IMAGE_NAME }}
+          # Mutable tags follow the same kill-switch as GitOps deploy (absent = off).
           tags: |
             type=raw,value=${{ inputs.environment }}-${{ github.sha }}
-            type=raw,value=${{ inputs.environment }}-latest
-            type=raw,value=latest
+            type=raw,value=${{ inputs.environment }}-latest,enable=${{ vars.GITOPS_DEPLOY_ENABLED == 'true' }}
+            type=raw,value=latest,enable=${{ vars.GITOPS_DEPLOY_ENABLED == 'true' }}
 
       - name: Stage project license and notice
         env:

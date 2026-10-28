@@ -4,6 +4,10 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+// Traces and videos record request headers; keep them off when the Cloudflare
+// Access service token is in use so it never reaches an uploaded artifact.
+const accessTokenInUse = !!process.env.CF_ACCESS_CLIENT_SECRET;
+
 const testDir = defineBddConfig({
   features: 'features/**/*.feature',
   steps: 'steps/**/*.ts',
@@ -31,9 +35,9 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev',
-    trace: 'on-first-retry',
+    trace: accessTokenInUse ? 'off' : 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'on-first-retry',
+    video: accessTokenInUse ? 'off' : 'on-first-retry',
     actionTimeout: 15000,
     navigationTimeout: 30000,
   },

@@ -4,7 +4,10 @@
  * When CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are set, the two
  * CF-Access-Client-* headers are added only to requests whose origin is the
  * portal or the console. Other origins (identity provider, CDNs, third parties)
- * never receive them. Values are never logged.
+ * never receive them, including through redirects. Values are never logged.
+ *
+ * playwright.config.ts turns traces and videos off when the secret is set, so
+ * the headers cannot end up in uploaded reports.
  */
 
 import type { BrowserContext } from '@playwright/test';
@@ -35,13 +38,18 @@ export async function installCloudflareAccessHeaders(context: BrowserContext): P
   await context.route(
     (url) => origins.has(url.origin),
     async (route) => {
-      await route.continue({
+      // Fetch without following redirects so the headers never travel to another
+      // origin: the browser follows any 30x itself, and the new request goes
+      // through this origin check again.
+      const response = await route.fetch({
         headers: {
           ...route.request().headers(),
           'CF-Access-Client-Id': clientId,
           'CF-Access-Client-Secret': clientSecret,
         },
+        maxRedirects: 0,
       });
+      await route.fulfill({ response });
     },
   );
 }

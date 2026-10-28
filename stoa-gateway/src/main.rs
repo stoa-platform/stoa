@@ -393,6 +393,7 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
                         &cp_url,
                         &http_client,
                         gw_id,
+                        state.config.control_plane_api_key.as_deref(),
                     )
                     .await
                 }
@@ -402,6 +403,7 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
                         &cp_url,
                         &http_client,
                         gw_id,
+                        state.config.control_plane_api_key.as_deref(),
                     )
                     .await
                 }
@@ -426,6 +428,7 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
             http_client,
             registrar,
             expansion_mode,
+            state.config.control_plane_api_key.clone(),
         );
     } else {
         info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (sidecar/shadow mode)");

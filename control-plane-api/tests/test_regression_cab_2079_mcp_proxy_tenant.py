@@ -138,3 +138,50 @@ def test_regression_cab_2079_invoke_without_tenant_refuses_before_gateway(
     assert response.status_code == 403
     assert checked == []
     assert requests == []
+
+
+def _record_invoke(monkeypatch: pytest.MonkeyPatch) -> tuple[list[str | None], list[tuple[str, str, str]]]:
+    checked: list[str | None] = []
+    proxied: list[tuple[str, str, str]] = []
+
+    async def allowed(tenant_id: str | None, tool_name: str, db: object) -> bool:
+        checked.append(tenant_id)
+        return True
+
+    async def proxy(method: str, path: str, user: User, auth_token: str, **kwargs: object) -> dict:
+        body = kwargs.get("json_body") or {}
+        proxied.append((method, path, str(body.get("name"))))  # type: ignore[union-attr]
+        return {"content": [{"type": "text", "text": "ok"}], "isError": False}
+
+    monkeypatch.setattr("src.routers.tenant_tool_permissions.check_tool_allowed", allowed)
+    monkeypatch.setattr(mcp_proxy, "proxy_to_mcp", proxy)
+    return checked, proxied
+
+
+@pytest.mark.parametrize("role", ["viewer", "tenant-admin", "devops"])
+def test_regression_cab_2079_invoke_with_tenant_still_reaches_gateway(
+    tenant_proxy: Harness, monkeypatch: pytest.MonkeyPatch, role: str,
+) -> None:
+    client, users, _ = tenant_proxy
+    users[0] = persona(role=role, tenant="tenant-a")
+    checked, proxied = _record_invoke(monkeypatch)
+    client.app.dependency_overrides[mcp_proxy.get_db] = lambda: None
+    response = client.post("/v1/mcp/tools/a-first/invoke", json={"arguments": {}}, headers=AUTH)
+    assert response.status_code == 200
+    assert response.json() == {"content": [{"type": "text", "text": "ok"}], "isError": False}
+    assert checked == ["tenant-a"]
+    assert proxied == [("POST", "/mcp/tools/call", "a-first")]
+
+
+@pytest.mark.parametrize(("tenant", "effective"), [(None, "default"), ("", "default"), ("tenant-b", "tenant-b")])
+def test_regression_cab_2079_invoke_cpi_admin_keeps_default_fallback(
+    tenant_proxy: Harness, monkeypatch: pytest.MonkeyPatch, tenant: str | None, effective: str,
+) -> None:
+    client, users, _ = tenant_proxy
+    users[0] = persona(role="cpi-admin", tenant=tenant)
+    checked, proxied = _record_invoke(monkeypatch)
+    client.app.dependency_overrides[mcp_proxy.get_db] = lambda: None
+    response = client.post("/v1/mcp/tools/a-first/invoke", json={"arguments": {}}, headers=AUTH)
+    assert response.status_code == 200
+    assert checked == [effective]
+    assert proxied == [("POST", "/mcp/tools/call", "a-first")]

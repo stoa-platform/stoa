@@ -21,7 +21,8 @@ FastAPI Middleware (AuditMiddleware) → dual-write:
 
 - **PostgreSQL** = source of truth for compliance (immutable, indexed)
 - **OpenSearch** = analytics, full-text search, dashboards
-- **Retention**: configurable per-tenant via `AuditService.purge_before()`
+- **Retention**: `audit_events` is append-only (CAB-2226, ADR-068): `AuditService.purge_before()` deliberately raises `NotImplementedError`. Bulk retention is an archive/partition break-glass procedure that requires security sign-off per execution; it is not configurable from the application. The retention period itself is documented in the processing register (see "Legal basis and retention" below).
+- **Erasure (GDPR Art. 17)**: `AuditService.erase_user_pii()` never mutates `audit_events`; it records a DPO-approved pseudonymization entry, and the redacted view returns `actor_email`, `client_ip` and `user_agent` as NULL for the covered events.
 
 ## Common Queries
 
@@ -117,7 +118,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 | Export CSV/JSON | cpi-admin, tenant-admin | Bulk PII |
 | Security events | cpi-admin, tenant-admin | IPs, user agents |
 | Global summary | cpi-admin only | Aggregated stats |
-| GDPR erasure | cpi-admin only | Deletes PII |
+| GDPR erasure | cpi-admin only | Pseudonymizes PII in the redacted view (rows are never deleted) |
 
 ## What is Captured
 
@@ -135,11 +136,20 @@ Each audit event records:
 | `resource_id` | Target resource UUID | `uuid-...` |
 | `outcome` | Result | `success`, `failure`, `denied`, `error` |
 | `status_code` | HTTP status | `200`, `403`, `500` |
-| `client_ip` | Source IP | `192.168.1.100` |
-| `user_agent` | Browser/client | `Mozilla/5.0...` |
+| `client_ip` | Source address as seen by the API process (`request.client.host`; behind a proxy this may be the proxy address), truncated before write: IPv4 to its /24 network, IPv6 to its /48 network | `203.0.113.0` |
+| `user_agent` | Browser/client, recorded only when `outcome` is not `success` (NULL on successful calls) | `Mozilla/5.0...` |
 | `correlation_id` | Request trace ID | `uuid-...` |
 | `duration_ms` | Request latency | `42` |
 | `created_at` | UTC timestamp (immutable) | `2026-04-04T10:30:00Z` |
+
+## Legal basis and retention
+
+| Field group | Purpose | Legal basis | Retention |
+|---|---|---|---|
+| `actor_id`, `actor_email`, `tenant_id`, `action`, `resource_*`, `outcome` | Accountability and security investigation (who did what) | Legitimate interest: security and traceability of the service | As long as the audit archive is kept (append-only table; archive/partition procedure above) |
+| `client_ip` (truncated), `user_agent` (failures only) | Attribution of an access to a client network; investigation of authentication and authorization failures | Legitimate interest, with data minimisation: the address is truncated before write and the user agent is kept only for non-successful outcomes | Same as above; events written before the minimisation was deployed keep the values they were written with |
+
+Data-subject requests use the Art. 17 pseudonymization path above; the processing register entry is maintained outside this repository.
 
 ## Known Limitations
 

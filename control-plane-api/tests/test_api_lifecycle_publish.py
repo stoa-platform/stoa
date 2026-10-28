@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -307,7 +309,16 @@ def _deployment(
         id=uuid4(),
         api_catalog_id=api.id,
         gateway_instance_id=gateway.id,
-        desired_state={"api_id": api.api_id, "spec_hash": "abc123"},
+        desired_state={
+            "api_catalog_id": str(api.id),
+            "api_id": api.api_id,
+            "tenant_id": api.tenant_id,
+            "version": api.version,
+            "backend_url": (api.api_metadata or {}).get("backend_url", ""),
+            "spec_hash": sha256(
+                json.dumps(api.openapi_spec or api.api_metadata or {}, sort_keys=True, default=str).encode()
+            ).hexdigest(),
+        },
         desired_at=datetime.now(UTC),
         desired_generation=1,
         synced_generation=1 if status == DeploymentSyncStatus.SYNCED else 0,

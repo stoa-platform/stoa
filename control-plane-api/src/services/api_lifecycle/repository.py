@@ -7,11 +7,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.models.catalog import APICatalog
 from src.models.gateway_deployment import GatewayDeployment
 from src.models.gateway_instance import GatewayInstance
 from src.models.promotion import Promotion, PromotionStatus
 from src.services.catalog_api_definition import environment_matches
+from src.services.gateway_deployment_service import GatewayDeploymentService
 
 from .ports import GatewayDeploymentSnapshot, GatewayDeploymentSyncStep, GatewayTarget, PromotionSnapshot
 
@@ -21,6 +23,11 @@ class SqlAlchemyApiLifecycleRepository:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    def queue_gateway_deployment(self, deployment: GatewayDeployment, tenant_id: str) -> None:
+        """The lifecycle producer must fail/rollback if a notification cannot be queued."""
+        if settings.is_sse_enabled:
+            GatewayDeploymentService.queue_sse_event(self.session, deployment, tenant_id)
 
     async def get_api_by_id(self, tenant_id: str, api_id: str) -> APICatalog | None:
         stmt = select(APICatalog).where(

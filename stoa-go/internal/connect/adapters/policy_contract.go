@@ -87,6 +87,10 @@ func PreparePolicy(adapter GatewayAdapter, p PolicyAction) (PolicyAction, error)
 	switch adapter.(type) {
 	case *KongAdapter, *GraviteeAdapter:
 		return p, &PolicyError{Code: "unsupported"}
+	case *EnvoyAdapter:
+		if p.Type != "cors" && p.Type != "rate_limit" && p.Type != "ip_filter" {
+			return p, &PolicyError{Code: "unsupported"}
+		}
 	}
 	if p.Type == "caching" || p.Type == "transform" {
 		return p, &PolicyError{Code: "unsupported"}

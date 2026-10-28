@@ -30,6 +30,7 @@ async def test_regression_cab_2256_sse_cleanup_preserves_other_consumer(
     monkeypatch: pytest.MonkeyPatch, kind: str, json_error: bool
 ) -> None:
     assert event_bus.subscriber_count == 0
+
     assert events.event_bus is event_bus
     listeners: list[tuple[Subscriber, AsyncGenerator[dict, None]]] = []
     original_listen = event_bus.listen
@@ -51,6 +52,9 @@ async def test_regression_cab_2256_sse_cleanup_preserves_other_consumer(
 
     victim = consumer(["sync-deployment", "sync-policy"])
     survivor = consumer(["sync-deployment"])
+    if kind == "link":
+        for stream in (victim, survivor):
+            assert (await anext(stream))["event"] == "heartbeat"
     first = [asyncio.create_task(anext(stream)) for stream in (victim, survivor)]
     try:
         await until(lambda: event_bus.subscriber_count == 2 and len(listeners) == 2)
@@ -91,3 +95,14 @@ async def test_regression_cab_2256_sse_cleanup_preserves_other_consumer(
         for _, listener in listeners:
             await listener.aclose()
     assert event_bus.subscriber_count == 0
+
+
+@pytest.mark.asyncio
+async def test_regression_cab_2256_link_close_after_ready() -> None:
+    stream = gateway_internal._link_event_generator(ConnectedRequest(), "ready-only")
+    try:
+        assert (await anext(stream))["event"] == "heartbeat"
+        assert any(sub.gateway_id == "ready-only" for sub in event_bus._subscribers.values())
+    finally:
+        await stream.aclose()
+    assert all(sub.gateway_id != "ready-only" for sub in event_bus._subscribers.values())

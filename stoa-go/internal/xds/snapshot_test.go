@@ -107,10 +107,10 @@ func TestInvalidSnapshot(t *testing.T) {
 		c    Config
 		r    []Route
 	}{
-		{"empty path", config(), []Route{{ID: "a", Backend: "http://example.com"}}},
-		{"relative path", config(), []Route{{ID: "a", Path: "a", Backend: "http://example.com"}}},
+		{"empty path", config(), []Route{{TenantID: "tenant", APIID: "catalog-a", ID: "a", Backend: "http://example.com"}}},
+		{"relative path", config(), []Route{{TenantID: "tenant", APIID: "catalog-a", ID: "a", Path: "a", Backend: "http://example.com"}}},
 		{"duplicate", config(), []Route{routes()[0], routes()[0]}},
-		{"empty ID", config(), []Route{{Path: "/a", Backend: "http://example.com"}}},
+		{"empty ID", config(), []Route{{TenantID: "tenant", APIID: "catalog-a", Path: "/a", Backend: "http://example.com"}}},
 	}
 	for _, backend := range []string{"", "://", "ftp://example.com", "http://", "http://example.com:0", "http://example.com:99999", "http://user@example.com", "https://example.com/path", "https://example.com?q=1"} {
 		r := routes()
@@ -199,6 +199,17 @@ func TestRouteAuthorizationContext(t *testing.T) {
 		snapshot, err = BuildSnapshot(config(), input)
 		if err == nil || snapshot != nil {
 			t.Fatal("missing tenant must reject the entire snapshot")
+		}
+	}
+}
+
+func TestRegressionCAB2256SnapshotRejectsMissingAPIIdentity(t *testing.T) {
+	for _, api := range []string{"", " ", "\t"} {
+		input := routes()
+		input[1].APIID = api
+		snapshot, err := BuildSnapshot(config(), input)
+		if err == nil || snapshot != nil || !strings.Contains(err.Error(), "api_id") {
+			t.Fatal("missing api_id must reject the entire snapshot")
 		}
 	}
 }

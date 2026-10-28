@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -60,10 +61,12 @@ class ApiLifecycleService:
         repository: ApiLifecycleRepository,
         audit_sink: LifecycleAuditSink,
         portal_publisher: PortalPublisherPort | None = None,
+        deployment_notifier: Callable[[GatewayDeployment, str], None] | None = None,
     ):
         self.repository = repository
         self.audit_sink = audit_sink
         self.portal_publisher = portal_publisher or CatalogPortalPublisher()
+        self.deployment_notifier = deployment_notifier
 
     async def create_draft(self, command: CreateApiDraftCommand, actor: LifecycleActor) -> ApiLifecycleState:
         """Create a catalog draft without deploying or publishing it."""
@@ -421,6 +424,25 @@ class ApiLifecycleService:
             raise ApiLifecycleTransitionError(
                 f"Deployment '{deployment.id}' is '{_wire_value(deployment.sync_status)}', not 'synced'"
             )
+
+        current = GatewayDeploymentService.build_desired_state(api)
+        identity_keys = ("api_catalog_id", "api_id", "tenant_id", "version", "backend_url", "spec_hash")
+        if (
+            not _deployment_synced_to_desired_generation(deployment)
+            or deployment.synced_generation != deployment.desired_generation
+            or any((deployment.desired_state or {}).get(key) != current[key] for key in identity_keys)
+        ):
+            await self._audit_publish_failure(
+                api,
+                actor,
+                environment=environment,
+                code="deployment_stale",
+                message="The current catalog desired state has not been acknowledged",
+                status_code=409,
+                gateway_instance_id=gateway.id,
+                deployment_id=deployment.id,
+            )
+            raise ApiLifecycleTransitionError("The current catalog desired state has not been acknowledged")
 
         validation_result = await self._validate_publishable_spec(api, actor, environment, gateway.id, deployment.id)
         spec_hash = _spec_fingerprint(api.openapi_spec)
@@ -847,6 +869,10 @@ class ApiLifecycleService:
         force: bool,
         promotion_id: UUID | None = None,
     ) -> tuple[GatewayDeployment, str]:
+        try:
+            GatewayDeploymentService.require_git_backed_desired_state(api, gateway)
+        except PermissionError as exc:
+            raise ApiLifecycleTransitionError(str(exc)) from exc
         now = datetime.now(UTC)
         existing = await self.repository.get_gateway_deployment(api.id, gateway.id)
         if existing:
@@ -866,6 +892,8 @@ class ApiLifecycleService:
             existing.sync_attempts = 0
             existing.desired_generation = (existing.desired_generation or 0) + 1
             saved = await self.repository.save_gateway_deployment(existing)
+            if self.deployment_notifier:
+                self.deployment_notifier(saved, api.tenant_id)
             return saved, "updated"
 
         deployment = GatewayDeployment(
@@ -882,6 +910,8 @@ class ApiLifecycleService:
             promotion_id=promotion_id,
         )
         created = await self.repository.create_gateway_deployment(deployment)
+        if self.deployment_notifier:
+            self.deployment_notifier(created, api.tenant_id)
         return created, "created"
 
     async def _resolve_promotion_gateway(

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAPI } from '../../hooks/useAPIs';
 import { config } from '../../config';
+import { usePortalEnvironment } from '../../contexts/EnvironmentContext';
 import {
   EnvironmentSelector,
   RequestBuilder,
@@ -29,7 +30,22 @@ import type { RequestConfig } from '../../components/testing';
 import type { ResponseData } from '../../components/testing';
 
 // Define available environments based on portal mode
-const getAvailableEnvironments = (): Environment[] => {
+const getAvailableEnvironments = (
+  source?: Pick<ReturnType<typeof usePortalEnvironment>, 'environments' | 'loading' | 'error'>
+): Environment[] => {
+  if (config.testing.gatewayBaseUrl) {
+    return !source || source.loading || source.error
+      ? []
+      : source.environments
+          .filter((environment) => environment.is_current)
+          .map((environment) => ({
+            id: environment.name,
+            name: environment.name,
+            displayName: environment.label,
+            baseUrl: config.testing.gatewayBaseUrl,
+            isProduction: environment.name === 'prod',
+          }));
+  }
   const isProductionPortal = config.portalMode === 'production';
 
   if (isProductionPortal) {
@@ -70,10 +86,19 @@ export function APITestingSandbox() {
 
   const { data: api, isLoading: apiLoading, isError, error } = useAPI(id);
 
-  const environments = getAvailableEnvironments();
-  const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(
+  const environmentSource = usePortalEnvironment();
+  const environments = getAvailableEnvironments(environmentSource);
+  const [storedEnvironment, setSelectedEnvironment] = useState<Environment | null>(
     environments[0] || null
   );
+  const selectedEnvironment = config.testing.gatewayBaseUrl
+    ? (environments[0] ?? null)
+    : storedEnvironment;
+  const requestBaseUrl = selectedEnvironment
+    ? `${selectedEnvironment.baseUrl}${
+        config.testing.gatewayBaseUrl && api ? `/apis/${encodeURIComponent(api.id)}` : ''
+      }`
+    : '';
 
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [isRequestLoading, setIsRequestLoading] = useState(false);
@@ -115,7 +140,7 @@ export function APITestingSandbox() {
 
     try {
       // Build the full URL with query params
-      let url = `${selectedEnvironment.baseUrl}${requestConfig.path}`;
+      let url = `${requestBaseUrl}${requestConfig.path}`;
       const enabledParams = requestConfig.queryParams.filter((p) => p.enabled && p.key);
       if (enabledParams.length > 0) {
         const params = new URLSearchParams();
@@ -327,7 +352,7 @@ export function APITestingSandbox() {
           <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Request</h2>
             <RequestBuilder
-              baseUrl={selectedEnvironment?.baseUrl || ''}
+              baseUrl={requestBaseUrl}
               initialPath={defaultPath}
               onSubmit={executeRequest}
               isLoading={isRequestLoading}

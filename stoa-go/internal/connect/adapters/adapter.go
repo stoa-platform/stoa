@@ -20,8 +20,12 @@ type DiscoveredAPI struct {
 
 // PolicyAction represents a policy to apply or remove on a gateway.
 type PolicyAction struct {
-	Type   string                 `json:"type"`
-	Config map[string]interface{} `json:"config"`
+	Type     string                 `json:"type"`
+	Config   map[string]interface{} `json:"config"`
+	ID       string                 `json:"-"`
+	Scope    string                 `json:"-"`
+	Targets  []string               `json:"-"`
+	TenantID string                 `json:"-"`
 }
 
 // Route represents an API route fetched from the Control Plane for sync.
@@ -38,6 +42,7 @@ type Route struct {
 	SpecHash     string          `json:"spec_hash,omitempty"`
 	OpenAPISpec  json.RawMessage `json:"openapi_spec,omitempty"`
 	Activated    bool            `json:"activated"`
+	Removing     bool            `json:"-"`                    // explicit CP deletion tombstone, distinct from an inactive route
 	Generation   int             `json:"generation,omitempty"` // CAB-1950: desired_generation from CP
 }
 

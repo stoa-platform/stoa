@@ -2,6 +2,7 @@ package connect
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 	"time"
@@ -46,6 +47,10 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 		attribute.String("stoa.gateway_id", a.state.GatewayID()),
 	)
 	defer span.End()
+	if _, ok := adapter.(*adapters.EnvoyAdapter); ok {
+		a.reconcileEnvoyRoutes(ctx, adapter, adminURL)
+		return
+	}
 
 	routes, err := a.FetchRoutes(ctx)
 	if err != nil {
@@ -84,6 +89,47 @@ func (a *Agent) RunRouteSync(ctx context.Context, adapter adapters.GatewayAdapte
 
 	span.SetStatus(codes.Ok, "routes synced")
 	log.Printf("route-sync: pushed %d routes to gateway", len(routes))
+}
+
+// The config response contains deletion tombstones as well as live routes.
+// A reconnect can therefore remove a last route without interpreting a
+// transient empty legacy route response as an instruction to erase Envoy.
+func (a *Agent) reconcileEnvoyRoutes(ctx context.Context, adapter adapters.GatewayAdapter, adminURL string) {
+	cfg, err := a.cp.FetchConfig(ctx, a.state.GatewayID())
+	if err != nil {
+		log.Println("route-sync: config fetch failed")
+		return
+	}
+	routes := make([]adapters.Route, 0, len(cfg.PendingDeployments))
+	for _, dep := range cfg.PendingDeployments {
+		var r adapters.Route
+		if json.Unmarshal(dep.DesiredState, &r) != nil {
+			log.Println("route-sync: invalid desired state")
+			return
+		}
+		r.DeploymentID = dep.ID
+		r.Generation = dep.Generation
+		if r.APICatalogID == "" {
+			r.APICatalogID = dep.APICatalogID
+		}
+		if dep.SyncStatus == "deleting" {
+			r.Activated = false
+			r.Removing = true
+		}
+		routes = append(routes, r)
+	}
+	// Call the adapter even for an initial empty table. It protects a known
+	// nonempty table from unexplained loss; explicit tombstones may clear it.
+	outcome, err := adapter.SyncRoutes(ctx, adminURL, routes)
+	results := routeSyncResults(routes, outcome, err)
+	if len(results) > 0 {
+		if ackErr := a.ReportRouteSyncAck(ctx, results); ackErr != nil {
+			log.Println("route-sync: acknowledgement failed")
+		}
+	}
+	if err != nil {
+		log.Println("route-sync: Envoy reconciliation failed")
+	}
 }
 
 // StartRouteSync starts a background goroutine that polls CP routes and

@@ -146,10 +146,16 @@ func TestEnvoyUnsupported(t *testing.T) {
 	ctx := context.Background()
 	_, detect := a.Detect(ctx, "")
 	_, discover := a.Discover(ctx, "")
-	for _, err := range []error{detect, discover, a.ApplyPolicy(ctx, "", "api", PolicyAction{Type: "unknown"}), a.RemovePolicy(ctx, "", "api", "unknown"), a.InjectCredentials(ctx, "", nil)} {
+	for _, err := range []error{detect, discover, a.InjectCredentials(ctx, "", nil)} {
 		var unsupported *UnsupportedError
 		if !errors.As(err, &unsupported) || !strings.Contains(err.Error(), "unsupported") {
 			t.Fatalf("expected typed unsupported: %v", err)
+		}
+	}
+	for _, err := range []error{a.ApplyPolicy(ctx, "", "api", PolicyAction{Type: "unknown"}), a.RemovePolicy(ctx, "", "api", "unknown")} {
+		var contract *PolicyError
+		if !errors.As(err, &contract) || contract.Code != "invalid" {
+			t.Fatal("unknown policy did not fail contract validation")
 		}
 	}
 	r, e := a.SyncRoutes(ctx, "", []Route{{Activated: true, DeploymentID: "d"}})

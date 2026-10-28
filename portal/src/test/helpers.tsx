@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { type ReactElement, type ReactNode } from 'react';
 import { vi } from 'vitest';
 import type { User } from '../types';
+import type { PortalEnvironmentConfig } from '../contexts/EnvironmentContext';
 
 // ============ Role-based Permissions & Scopes ============
 
@@ -447,3 +448,20 @@ export const mockServerSubscription = (overrides: Record<string, unknown> = {}) 
   created_at: '2026-01-20T00:00:00Z',
   ...overrides,
 });
+
+export function createPortalEnvironmentMock(
+  overrides: Partial<{
+    environments: PortalEnvironmentConfig[];
+    loading: boolean;
+    error: string | null;
+  }> = {}
+): { environments: PortalEnvironmentConfig[]; loading: boolean; error: string | null } {
+  return {
+    environments: [
+      { name: 'dev', label: 'CP Development', mode: 'full', color: 'green', is_current: true },
+    ],
+    loading: false,
+    error: null,
+    ...overrides,
+  };
+}

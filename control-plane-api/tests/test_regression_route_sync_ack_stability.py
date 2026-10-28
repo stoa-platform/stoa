@@ -43,7 +43,7 @@ def test_regression_route_sync_ack_failed_does_not_downgrade_stable_synced_deplo
         mock_settings.gateway_api_keys_list = [VALID_KEY]
         mock_deploy_repo = MockDeployRepo.return_value
         mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-        mock_deploy_repo.update = AsyncMock()
+        mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
         resp = client.post(
             f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
@@ -70,7 +70,13 @@ def test_regression_route_sync_ack_failed_does_not_downgrade_stable_synced_deplo
         assert dep.sync_error is None
         assert dep.sync_steps == successful_steps
         assert dep.sync_attempts == 0
-        mock_deploy_repo.update.assert_awaited_once()
+        mock_deploy_repo.acknowledge.assert_awaited_once()
+        witness, values = mock_deploy_repo.acknowledge.await_args.args
+        assert witness is dep
+        assert mock_deploy_repo.acknowledge.await_args.kwargs == {}
+        assert set(values) == {"last_sync_attempt", "attempted_generation"}
+        assert values["last_sync_attempt"] is not None
+        assert values["attempted_generation"] == dep.desired_generation
 
 
 def test_regression_route_sync_ack_connectivity_failure_preserves_forced_resync(client):
@@ -109,7 +115,7 @@ def test_regression_route_sync_ack_connectivity_failure_preserves_forced_resync(
         mock_settings.gateway_api_keys_list = [VALID_KEY]
         mock_deploy_repo = MockDeployRepo.return_value
         mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-        mock_deploy_repo.update = AsyncMock()
+        mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
         resp = client.post(
             f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
@@ -134,8 +140,14 @@ def test_regression_route_sync_ack_connectivity_failure_preserves_forced_resync(
         assert dep.sync_error is None
         assert dep.sync_steps == successful_steps
         assert dep.synced_generation == 2
-        assert dep.attempted_generation == 9
-        mock_deploy_repo.update.assert_awaited_once()
+        assert dep.attempted_generation == 8  # The read witness remains unchanged.
+        mock_deploy_repo.acknowledge.assert_awaited_once()
+        witness, values = mock_deploy_repo.acknowledge.await_args.args
+        assert witness is dep
+        assert mock_deploy_repo.acknowledge.await_args.kwargs == {}
+        assert set(values) == {"last_sync_attempt", "attempted_generation"}
+        assert values["last_sync_attempt"] is not None
+        assert values["attempted_generation"] == dep.desired_generation
 
 
 def test_regression_route_sync_ack_contradictory_applied_reack_preserves_stable_synced_deployment(client):
@@ -174,7 +186,7 @@ def test_regression_route_sync_ack_contradictory_applied_reack_preserves_stable_
         mock_settings.gateway_api_keys_list = [VALID_KEY]
         mock_deploy_repo = MockDeployRepo.return_value
         mock_deploy_repo.get_by_id = AsyncMock(return_value=dep)
-        mock_deploy_repo.update = AsyncMock()
+        mock_deploy_repo.acknowledge = AsyncMock(return_value=True)
 
         resp = client.post(
             f"/v1/internal/gateways/{dep.gateway_instance_id}/route-sync-ack",
@@ -197,4 +209,10 @@ def test_regression_route_sync_ack_contradictory_applied_reack_preserves_stable_
         assert dep.last_sync_success == last_success
         assert dep.sync_error is None
         assert dep.sync_steps == successful_steps
-        mock_deploy_repo.update.assert_awaited_once()
+        mock_deploy_repo.acknowledge.assert_awaited_once()
+        witness, values = mock_deploy_repo.acknowledge.await_args.args
+        assert witness is dep
+        assert mock_deploy_repo.acknowledge.await_args.kwargs == {}
+        assert set(values) == {"last_sync_attempt", "attempted_generation"}
+        assert values["last_sync_attempt"] is not None
+        assert values["attempted_generation"] == dep.desired_generation

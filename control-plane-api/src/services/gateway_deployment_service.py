@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -106,6 +107,15 @@ class GatewayDeploymentService:
         return environment in {"prod", "production"}
 
     @classmethod
+    def require_git_backed_desired_state(cls, api_catalog: APICatalog, gateway: Any) -> None:
+        """Apply the same production provenance gate to every deployment path."""
+        if cls._requires_git_backed_desired_state(gateway) and not getattr(api_catalog, "git_commit_sha", None):
+            raise PermissionError(
+                "Production deployment requires a Git-backed UAC/catalog desired state "
+                f"before targeting gateway '{gateway.name}'."
+            )
+
+    @classmethod
     def build_desired_state_for_gateway(cls, api_catalog, gateway, *, target_source: str) -> dict:
         """Build desired state and stamp the concrete gateway target."""
         return {
@@ -147,11 +157,7 @@ class GatewayDeploymentService:
                 raise ValueError(f"Gateway instance {gw_id} not found")
             if not gateway.enabled:
                 raise PermissionError(f"Gateway '{gateway.name}' is disabled. Enable it before deploying.")
-            if self._requires_git_backed_desired_state(gateway) and not getattr(api_catalog, "git_commit_sha", None):
-                raise PermissionError(
-                    "Production deployment requires a Git-backed UAC/catalog desired state "
-                    f"before targeting gateway '{gateway.name}'."
-                )
+            self.require_git_backed_desired_state(api_catalog, gateway)
 
             existing = await self.deploy_repo.get_by_api_and_gateway(api_catalog_id, gw_id)
             desired_state = self.build_desired_state_for_gateway(api_catalog, gateway, target_source="direct")
@@ -165,6 +171,7 @@ class GatewayDeploymentService:
                 existing.sync_status = DeploymentSyncStatus.PENDING
                 existing.sync_error = None
                 existing.sync_attempts = 0
+                existing.desired_generation = (existing.desired_generation or 0) + 1
                 await self.deploy_repo.update(existing)
                 deployments.append(existing)
             else:
@@ -215,10 +222,14 @@ class GatewayDeploymentService:
             raise ValueError("Deployment not found")
         await self._raise_if_lifecycle_managed_deployment(deployment)
 
-        if deployment.gateway_resource_id:
+        if deployment.gateway_resource_id or settings.is_sse_enabled:
             deployment.sync_status = DeploymentSyncStatus.DELETING
+            deployment.desired_generation = (deployment.desired_generation or 0) + 1
             await self.deploy_repo.update(deployment)
-            await self._emit_sync_request(deployment)
+            if settings.is_sync_engine_enabled:
+                await self._emit_sync_request(deployment)
+            if settings.is_sse_enabled:
+                await self._emit_sse_events([deployment], (deployment.desired_state or {}).get("tenant_id", ""))
         else:
             await self.deploy_repo.delete(deployment)
 
@@ -235,7 +246,10 @@ class GatewayDeploymentService:
         deployment.desired_generation = (deployment.desired_generation or 0) + 1
         await self.deploy_repo.update(deployment)
 
-        await self._emit_sync_request(deployment)
+        if settings.is_sync_engine_enabled:
+            await self._emit_sync_request(deployment)
+        if settings.is_sse_enabled:
+            await self._emit_sse_events([deployment], (deployment.desired_state or {}).get("tenant_id", ""))
         return deployment
 
     async def _emit_sync_requests(self, deployments: list[GatewayDeployment], tenant_id: str) -> None:
@@ -264,24 +278,31 @@ class GatewayDeploymentService:
         except Exception as e:
             logger.warning("Failed to emit sync request for %s: %s", deployment.id, e)
 
-    async def _emit_sse_events(self, deployments: list[GatewayDeployment], tenant_id: str) -> None:
-        """Emit SSE events to notify connected Links of pending deployments (ADR-059)."""
-        from src.events.event_bus import event_bus
+    @staticmethod
+    def queue_sse_event(db: AsyncSession, dep: GatewayDeployment, tenant_id: str) -> None:
+        """Queue one O1 payload in its transaction; delivery happens after commit."""
+        from src.events.transactional import queue_link_event
 
+        queue_link_event(
+            db,
+            tenant_id=tenant_id,
+            event_type="undeploy" if dep.sync_status == DeploymentSyncStatus.DELETING else "sync-deployment",
+            data={
+                "deployment_id": str(dep.id),
+                "api_catalog_id": str(dep.api_catalog_id),
+                "gateway_instance_id": str(dep.gateway_instance_id),
+                "sync_status": dep.sync_status.value,
+                "desired_state": dep.desired_state,
+                "desired_generation": dep.desired_generation,
+            },
+            gateway_id=str(dep.gateway_instance_id),
+        )
+
+    async def _emit_sse_events(self, deployments: list[GatewayDeployment], tenant_id: str) -> None:
+        """Preserve the existing producer's best-effort notification behavior."""
         for dep in deployments:
             try:
-                await event_bus.publish(
-                    tenant_id=tenant_id,
-                    event_type="sync-deployment",
-                    data={
-                        "deployment_id": str(dep.id),
-                        "api_catalog_id": str(dep.api_catalog_id),
-                        "gateway_instance_id": str(dep.gateway_instance_id),
-                        "sync_status": dep.sync_status.value,
-                        "desired_state": dep.desired_state,
-                    },
-                    gateway_id=str(dep.gateway_instance_id),
-                )
+                self.queue_sse_event(self.db, dep, tenant_id)
             except Exception as e:
                 logger.warning("Failed to emit SSE event for deployment %s: %s", dep.id, e)
 

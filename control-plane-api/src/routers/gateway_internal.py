@@ -32,6 +32,7 @@ from src.repositories.gateway_instance import GatewayInstanceRepository
 from src.repositories.gateway_policy import GatewayPolicyRepository
 from src.schemas.contract import McpToolDefinition, TenantToolsResponse
 from src.schemas.gateway import GatewayInstanceResponse
+from src.services.envoy_policy_inventory import policy_inventory_item
 from src.services.gateway_topology import GatewayTopology, normalize_gateway_topology
 from src.services.promotion_service import PromotionService
 from src.services.uac_tool_generator import UacToolGenerator
@@ -832,7 +833,7 @@ class SyncedRouteResult(BaseModel):
     """Result of syncing a single route deployment on the gateway."""
 
     deployment_id: str = Field(..., description="GatewayDeployment UUID")
-    status: str = Field(..., description="Sync result: applied or failed")
+    status: str = Field(..., description="Sync result: applied, removed, or failed")
     error: str | None = Field(default=None, description="Error message if failed")
     steps: list[dict] | None = Field(default=None, description="Ordered sync step trace (optional)")
     generation: int | None = Field(default=None, description="Generation that was synced (CAB-1950)")
@@ -942,7 +943,7 @@ async def route_sync_ack(
             step_error = SyncStepTracker.from_list(merged_steps).first_error()
         effective_status = result.status
         effective_error = result.error
-        if result.status == "applied" and step_error:
+        if result.status in {"applied", "removed"} and step_error:
             logger.warning(
                 "route-sync-ack: applied result contains failed step for deployment=%s, treating as failed",
                 result.deployment_id,
@@ -963,6 +964,7 @@ async def route_sync_ack(
         desired_generation = deployment.desired_generation if isinstance(deployment.desired_generation, int) else 1
         synced_generation = deployment.synced_generation if isinstance(deployment.synced_generation, int) else 0
 
+        values: dict[str, object]
         is_failed_connectivity_observation = effective_status == "failed" and _is_gateway_connectivity_error(
             step_error or effective_error
         )
@@ -977,37 +979,44 @@ async def route_sync_ack(
                 result.deployment_id,
                 result.generation,
             )
+            values = {"last_sync_attempt": now}
             if result.generation is not None:
-                deployment.attempted_generation = max(deployment.attempted_generation, result.generation)
-            deployment.last_sync_attempt = now
-            await deploy_repo.update(deployment)
-            processed += 1
+                values["attempted_generation"] = max(deployment.attempted_generation, result.generation)
+            if await deploy_repo.acknowledge(deployment, values):
+                processed += 1
             continue
 
+        values = {"last_sync_attempt": now}
         if effective_status == "applied":
-            deployment.sync_status = DeploymentSyncStatus.SYNCED
-            deployment.last_sync_success = now
-            deployment.sync_error = None
+            if deployment.sync_status == DeploymentSyncStatus.DELETING:
+                continue
+            values.update(sync_status=DeploymentSyncStatus.SYNCED, last_sync_success=now, sync_error=None)
             if merged_steps is not None:
-                deployment.sync_steps = merged_steps
+                values["sync_steps"] = merged_steps
             if result.generation is not None:
-                deployment.synced_generation = result.generation
-                deployment.attempted_generation = result.generation
+                values.update(synced_generation=result.generation, attempted_generation=result.generation)
+        elif effective_status == "removed" and deployment.sync_status == DeploymentSyncStatus.DELETING:
+            # Removing a tombstone requires proof of the exact deletion generation.
+            if result.generation != desired_generation:
+                continue
+            if await deploy_repo.acknowledge(deployment, {}, removed=True):
+                processed += 1
+            continue
         elif effective_status == "failed":
-            deployment.sync_status = DeploymentSyncStatus.ERROR
+            if deployment.sync_status != DeploymentSyncStatus.DELETING:
+                values["sync_status"] = DeploymentSyncStatus.ERROR
             if result.generation is not None:
-                deployment.attempted_generation = result.generation
+                values["attempted_generation"] = result.generation
             if merged_steps is not None:
-                deployment.sync_steps = merged_steps
+                values["sync_steps"] = merged_steps
             # Derive sync_error from step trace if available, else use scalar error
-            deployment.sync_error = step_error or effective_error
+            values["sync_error"] = step_error or effective_error
         else:
             logger.warning("route-sync-ack: unknown status=%s for deployment=%s", result.status, result.deployment_id)
             continue
 
-        deployment.last_sync_attempt = now
-        await deploy_repo.update(deployment)
-        processed += 1
+        if await deploy_repo.acknowledge(deployment, values):
+            processed += 1
 
     await db.commit()
 
@@ -1179,20 +1188,11 @@ async def get_gateway_config(
                 "sync_status": d.sync_status.value,
                 "desired_state": d.desired_state,
                 "sync_attempts": d.sync_attempts,
+                "desired_generation": d.desired_generation,
             }
             for d in pending_deployments
         ],
-        "pending_policies": [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "policy_type": p.policy_type.value,
-                "config": p.config,
-                "priority": p.priority,
-                "enabled": p.enabled,
-            }
-            for p in policies
-        ],
+        "pending_policies": [policy_inventory_item(p, instance) for p in policies],
     }
 
 
@@ -1214,6 +1214,9 @@ async def _link_event_generator(
     )
     listener = event_bus.listen(sub)
     try:
+        # The first frame certifies that the targeted subscription exists.
+        # Links can now reconcile without a gap between catch-up and subscribe.
+        yield {"event": "heartbeat", "data": json.dumps({"status": "connected"})}
         async for event in listener:
             if await request.is_disconnected():
                 break
@@ -1226,6 +1229,7 @@ async def _link_event_generator(
         pass
     finally:
         await listener.aclose()
+        event_bus.unsubscribe(sub)
 
 
 @router.get("/{gateway_id}/events")

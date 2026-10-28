@@ -1,0 +1,121 @@
+# Manual real-Envoy acceptance run of the O1 offline harness (docs/testing/o1-offline-envoy.md).
+# workflow_dispatch only, never on pull requests. No secret, read-only token, no published port.
+name: O1 real-Envoy proof (manual)
+
+on:
+  # Prove the commit selected by GitHub's dispatch event, not an arbitrary input.
+  workflow_dispatch: {}
+
+concurrency:
+  group: o1-envoy-real-proof
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Same digest as ENVOY in control-plane-api/tests/test_o1_offline_envoy.py (multi-arch index).
+  ENVOY_IMAGE: envoyproxy/envoy@sha256:29d778ba078e0404d18fa45ffb834c062071b0f81dc0a6a41501ce8e23a0059f
+
+jobs:
+  o1-envoy:
+    name: O1 offline Envoy harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        # Same service as the integration job of control-plane-api-ci.yml.
+        image: postgres:16
+        env:
+          POSTGRES_USER: stoa_test
+          POSTGRES_PASSWORD: stoa_test
+          POSTGRES_DB: stoa_o1_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stoa_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - name: Checkout the candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record what is being proved
+        id: head
+        env:
+          REF: ${{ github.sha }}
+        run: |
+          head=$(git rev-parse HEAD)
+          test "$head" = "$REF"
+          echo "ref=$REF head=$head"
+          echo "sha=$head" >> "$GITHUB_OUTPUT"
+          docker version --format 'docker {{.Server.Version}}'
+
+      - name: Pull the pinned Envoy image (the harness runs with --pull=never)
+        run: |
+          docker pull "$ENVOY_IMAGE"
+          docker image inspect "$ENVOY_IMAGE" --format 'arch={{.Architecture}}'
+
+      - name: Set up Go from stoa-go/go.mod
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: stoa-go/go.mod
+          cache-dependency-path: stoa-go/go.sum
+
+      - name: Pre-download Go modules (the harness compiles with GOPROXY=off)
+        working-directory: stoa-go
+        run: go mod download
+
+      - name: Set up Python 3.11 and CP dependencies
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.11"
+          working-directory: control-plane-api
+          install-command: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run the O1 harness against a real Envoy
+        working-directory: control-plane-api
+        env:
+          O1_RUN_ENVOY: "1"
+          O1_EVIDENCE_DIR: ${{ runner.temp }}/o1-evidence
+        run: |
+          set -euo pipefail
+          mkdir -p "$O1_EVIDENCE_DIR"
+          # Docker Engine routes host.docker.internal to the bridge gateway, not to loopback.
+          O1_CP_BIND=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+          export O1_CP_BIND
+          python3 -m pytest tests/test_o1_offline_envoy.py -q --no-cov -p no:cacheprovider \
+            -rA --junit-xml="$O1_EVIDENCE_DIR/junit-o1.xml"
+
+      - name: Run the FK-ordering regression tests on PostgreSQL
+        working-directory: control-plane-api
+        env:
+          STOA_O1_PG_TEST_URL: postgresql+asyncpg://stoa_test:stoa_test@localhost:5432/stoa_o1_test_ci
+          O1_EVIDENCE_DIR: ${{ runner.temp }}/o1-evidence
+        run: |
+          python3 -m pytest tests/test_regression_cab_2256_lifecycle.py tests/test_regression_cab_2280_scope.py \
+            -q --no-cov -p no:cacheprovider -rA --junit-xml="$O1_EVIDENCE_DIR/junit-pg.xml"
+
+      - name: Show the verdict
+        if: always()
+        env:
+          EVIDENCE: ${{ runner.temp }}/o1-evidence
+        run: |
+          ls -la "$EVIDENCE" || true
+          if [ -f "$EVIDENCE/o1-result.json" ]; then
+            python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print({k: r.get(k) for k in ("verdict","candidate_sha","platform","median_ms","max_ms","reconnect_ms","undeploy_ms","authz_calls")})' "$EVIDENCE/o1-result.json"
+          else
+            echo "no o1-result.json (see o1-last-failure.log)"
+          fi
+
+      - name: Archive the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: o1-envoy-evidence-${{ steps.head.outputs.sha }}
+          path: ${{ runner.temp }}/o1-evidence
+          retention-days: 30
+          if-no-files-found: warn

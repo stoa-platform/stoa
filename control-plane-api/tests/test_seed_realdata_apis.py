@@ -130,7 +130,7 @@ class TestInternalCatalogRealdataAPIs:
         entry.tags = api_data["tags"]
         return entry
 
-    def test_internal_endpoint_returns_all_six(self, app, mock_db_session):
+    def test_internal_endpoint_returns_all_six(self, app, mock_db_session, gateway_key_headers):
         from src.database import get_db
 
         async def override_get_db():
@@ -143,7 +143,7 @@ class TestInternalCatalogRealdataAPIs:
         mock_repo.get_portal_apis = AsyncMock(return_value=(entries, len(entries)))
 
         with patch(CATALOG_REPO, return_value=mock_repo), TestClient(app) as client:
-            resp = client.get("/v1/internal/catalog/apis")
+            resp = client.get("/v1/internal/catalog/apis", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -155,7 +155,7 @@ class TestInternalCatalogRealdataAPIs:
 
         app.dependency_overrides.clear()
 
-    def test_internal_endpoint_includes_backend_url(self, app, mock_db_session):
+    def test_internal_endpoint_includes_backend_url(self, app, mock_db_session, gateway_key_headers):
         from src.database import get_db
 
         async def override_get_db():
@@ -168,7 +168,7 @@ class TestInternalCatalogRealdataAPIs:
         mock_repo.get_portal_apis = AsyncMock(return_value=(entries, 1))
 
         with patch(CATALOG_REPO, return_value=mock_repo), TestClient(app) as client:
-            resp = client.get("/v1/internal/catalog/apis")
+            resp = client.get("/v1/internal/catalog/apis", headers=gateway_key_headers)
 
         data = resp.json()
         api = data["apis"][0]

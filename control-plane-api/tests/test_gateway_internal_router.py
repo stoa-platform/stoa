@@ -668,7 +668,7 @@ def _make_deployment(desired_state: dict):
 class TestListGatewayRoutes:
     """GET /v1/internal/gateways/routes — outbound-only route delivery (CAB-1929)."""
 
-    def test_routes_returns_basic_fields(self, client):
+    def test_routes_returns_basic_fields(self, client, gateway_key_headers):
         """Route with no openapi_spec returns standard fields."""
         dep = _make_deployment(
             {
@@ -689,7 +689,7 @@ class TestListGatewayRoutes:
             mock_settings.GATEWAY_ADMIN_KEY = None
             MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
 
-            resp = client.get("/v1/internal/gateways/routes")
+            resp = client.get("/v1/internal/gateways/routes", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         routes = resp.json()
@@ -702,7 +702,7 @@ class TestListGatewayRoutes:
         assert routes[0]["spec_hash"] == "abc123"
         assert routes[0]["openapi_spec"] is None
 
-    def test_regression_openapi_spec_dict_delivered_to_connect(self, client):
+    def test_regression_openapi_spec_dict_delivered_to_connect(self, client, gateway_key_headers):
         """openapi_spec dict in desired_state is delivered as JSON object to stoa-connect.
 
         CAB-1929: outbound-only model — CP delivers spec as a dict so stoa-connect
@@ -730,7 +730,7 @@ class TestListGatewayRoutes:
             mock_settings.GATEWAY_ADMIN_KEY = None
             MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
 
-            resp = client.get("/v1/internal/gateways/routes")
+            resp = client.get("/v1/internal/gateways/routes", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         routes = resp.json()
@@ -743,7 +743,7 @@ class TestListGatewayRoutes:
         assert spec["openapi"] == "3.1.0"
         assert spec["info"]["title"] == "Petstore"
 
-    def test_routes_skips_deployment_without_backend_url(self, client):
+    def test_routes_skips_deployment_without_backend_url(self, client, gateway_key_headers):
         """Deployments with no backend_url are excluded from the route list."""
         dep = _make_deployment(
             {
@@ -761,12 +761,12 @@ class TestListGatewayRoutes:
             mock_settings.GATEWAY_ADMIN_KEY = None
             MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
 
-            resp = client.get("/v1/internal/gateways/routes")
+            resp = client.get("/v1/internal/gateways/routes", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_routes_filter_falls_back_to_self_registered_hostname(self, client):
+    def test_routes_filter_falls_back_to_self_registered_hostname(self, client, gateway_key_headers):
         """stoa-connect route polling accepts the agent hostname as gateway_name.
 
         The CP stores self-registered gateways under the canonical name
@@ -800,7 +800,7 @@ class TestListGatewayRoutes:
             deploy_repo = MockDeploymentRepo.return_value
             deploy_repo.list_by_statuses_and_gateway = AsyncMock(return_value=[dep])
 
-            resp = client.get("/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev")
+            resp = client.get("/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         routes = resp.json()

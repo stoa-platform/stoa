@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 
-def test_regression_agent_route_polling_uses_registration_hostname(client):
+def test_regression_agent_route_polling_uses_registration_hostname(client, gateway_key_headers):
     """Existing stoa-connect agents poll routes with their registration hostname."""
     gateway = MagicMock()
     gateway.id = uuid4()
@@ -34,7 +34,7 @@ def test_regression_agent_route_polling_uses_registration_hostname(client):
         deploy_repo = MockDeploymentRepo.return_value
         deploy_repo.list_by_statuses_and_gateway = AsyncMock(return_value=[deployment])
 
-        resp = client.get("/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev")
+        resp = client.get("/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev", headers=gateway_key_headers)
 
     assert resp.status_code == 200
     routes = resp.json()

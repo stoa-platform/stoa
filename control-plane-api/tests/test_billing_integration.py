@@ -258,7 +258,7 @@ class TestDeleteBudget:
 class TestBudgetCheck:
     """GET /v1/internal/budgets/{department_id}/check"""
 
-    def test_no_budget_fail_open(self, client):
+    def test_no_budget_fail_open(self, client, gateway_key_headers):
         """No budget configured → over_budget=false (fail-open design)."""
         from src.schemas.billing import BudgetCheckResponse
 
@@ -267,13 +267,13 @@ class TestBudgetCheck:
             mock_svc = AsyncMock()
             mock_cls.return_value = mock_svc
             mock_svc.check_budget.return_value = resp_data
-            resp = client.get("/v1/internal/budgets/eng-dept/check")
+            resp = client.get("/v1/internal/budgets/eng-dept/check", headers=gateway_key_headers)
         assert resp.status_code == 200
         body = resp.json()
         assert body["over_budget"] is False
         assert body["enforcement"] == "disabled"
 
-    def test_under_budget(self, client):
+    def test_under_budget(self, client, gateway_key_headers):
         """Budget exists, under limit → over_budget=false."""
         from src.schemas.billing import BudgetCheckResponse
 
@@ -288,13 +288,13 @@ class TestBudgetCheck:
             mock_svc = AsyncMock()
             mock_cls.return_value = mock_svc
             mock_svc.check_budget.return_value = resp_data
-            resp = client.get("/v1/internal/budgets/eng-dept/check")
+            resp = client.get("/v1/internal/budgets/eng-dept/check", headers=gateway_key_headers)
         assert resp.status_code == 200
         body = resp.json()
         assert body["over_budget"] is False
         assert body["usage_pct"] == 45.0
 
-    def test_over_budget_enforcement_enabled(self, client):
+    def test_over_budget_enforcement_enabled(self, client, gateway_key_headers):
         """Budget exists, over limit, enforcement=enabled → over_budget=true."""
         from src.schemas.billing import BudgetCheckResponse
 
@@ -309,13 +309,13 @@ class TestBudgetCheck:
             mock_svc = AsyncMock()
             mock_cls.return_value = mock_svc
             mock_svc.check_budget.return_value = resp_data
-            resp = client.get("/v1/internal/budgets/eng-dept/check")
+            resp = client.get("/v1/internal/budgets/eng-dept/check", headers=gateway_key_headers)
         assert resp.status_code == 200
         body = resp.json()
         assert body["over_budget"] is True
         assert body["enforcement"] == "enabled"
 
-    def test_over_budget_enforcement_disabled(self, client):
+    def test_over_budget_enforcement_disabled(self, client, gateway_key_headers):
         """Budget over limit but enforcement=disabled → over_budget=false."""
         from src.schemas.billing import BudgetCheckResponse
 
@@ -330,12 +330,12 @@ class TestBudgetCheck:
             mock_svc = AsyncMock()
             mock_cls.return_value = mock_svc
             mock_svc.check_budget.return_value = resp_data
-            resp = client.get("/v1/internal/budgets/eng-dept/check")
+            resp = client.get("/v1/internal/budgets/eng-dept/check", headers=gateway_key_headers)
         assert resp.status_code == 200
         body = resp.json()
         assert body["over_budget"] is False
 
-    def test_no_auth_required(self, client):
+    def test_no_auth_required(self, client, gateway_key_headers):
         """Internal endpoint requires no auth (gateway-facing)."""
         from src.schemas.billing import BudgetCheckResponse
 
@@ -345,7 +345,7 @@ class TestBudgetCheck:
             mock_cls.return_value = mock_svc
             mock_svc.check_budget.return_value = resp_data
             # Using base client (no auth overrides) — should still work
-            resp = client.get("/v1/internal/budgets/test-dept/check")
+            resp = client.get("/v1/internal/budgets/test-dept/check", headers=gateway_key_headers)
         assert resp.status_code == 200
 
 

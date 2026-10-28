@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import ARRAY as PgARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
+from ..auth.gateway_key import require_gateway_key
 from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerCategory, MCPServerStatus, MCPServerTool
 from ..models.plan import PlanStatus
@@ -120,12 +121,13 @@ class PortalAPIsResponse(BaseModel):
 
 
 # ============================================================================
-# Internal Router (for Rust Gateway API Bridge — no JWT auth required)
+# Internal Router (for Rust Gateway API Bridge — X-Gateway-Key, no JWT)
 # ============================================================================
 
 internal_router = APIRouter(
     prefix="/v1/internal/catalog",
     tags=["Internal - Gateway API Bridge"],
+    dependencies=[Depends(require_gateway_key)],
 )
 
 

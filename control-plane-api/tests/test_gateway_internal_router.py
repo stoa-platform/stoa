@@ -683,10 +683,8 @@ class TestListGatewayRoutes:
         )
 
         with (
-            patch("src.routers.gateway_internal.settings") as mock_settings,
             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockRepo,
         ):
-            mock_settings.GATEWAY_ADMIN_KEY = None
             MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
 
             resp = client.get("/v1/internal/gateways/routes", headers=gateway_key_headers)
@@ -724,10 +722,8 @@ class TestListGatewayRoutes:
         )
 
         with (
-            patch("src.routers.gateway_internal.settings") as mock_settings,
             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockRepo,
         ):
-            mock_settings.GATEWAY_ADMIN_KEY = None
             MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
 
             resp = client.get("/v1/internal/gateways/routes", headers=gateway_key_headers)
@@ -755,10 +751,8 @@ class TestListGatewayRoutes:
         )
 
         with (
-            patch("src.routers.gateway_internal.settings") as mock_settings,
             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockRepo,
         ):
-            mock_settings.GATEWAY_ADMIN_KEY = None
             MockRepo.return_value.list_by_statuses = AsyncMock(return_value=[dep])
 
             resp = client.get("/v1/internal/gateways/routes", headers=gateway_key_headers)
@@ -789,18 +783,18 @@ class TestListGatewayRoutes:
         )
 
         with (
-            patch("src.routers.gateway_internal.settings") as mock_settings,
             patch("src.routers.gateway_internal.GatewayInstanceRepository") as MockGatewayRepo,
             patch("src.routers.gateway_internal.GatewayDeploymentRepository") as MockDeploymentRepo,
         ):
-            mock_settings.GATEWAY_ADMIN_KEY = None
             gw_repo = MockGatewayRepo.return_value
             gw_repo.get_by_name = AsyncMock(return_value=None)
             gw_repo.get_self_registered_by_hostname = AsyncMock(return_value=gateway)
             deploy_repo = MockDeploymentRepo.return_value
             deploy_repo.list_by_statuses_and_gateway = AsyncMock(return_value=[dep])
 
-            resp = client.get("/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev", headers=gateway_key_headers)
+            resp = client.get(
+                "/v1/internal/gateways/routes?gateway_name=connect-webmethods-dev", headers=gateway_key_headers
+            )
 
         assert resp.status_code == 200
         routes = resp.json()

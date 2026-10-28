@@ -9,6 +9,7 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.auth.gateway_key import require_gateway_key
 from src.database import get_db
 from src.schemas.billing import BudgetCheckResponse
 from src.services.billing_service import BillingService
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/v1/internal/budgets",
     tags=["Internal - Billing"],
+    dependencies=[Depends(require_gateway_key)],
 )
 
 

@@ -904,10 +904,10 @@ async fn catalog_bridge_classifies_coarse_and_expanded_tools() {
         .await;
     let registry = ToolRegistry::new();
     let client = reqwest::Client::new();
-    discover_api_tools(&registry, &server.uri(), &client, None)
+    discover_api_tools(&registry, &server.uri(), &client, None, None)
         .await
         .unwrap();
-    discover_expanded_api_tools(&registry, &server.uri(), &client, None)
+    discover_expanded_api_tools(&registry, &server.uri(), &client, None, None)
         .await
         .unwrap();
     for (name, action) in [
@@ -1246,6 +1246,7 @@ async fn jsonrpc_uses_department_budget_and_pii_redaction() {
         .await;
     let cache = Arc::new(BudgetCache::new(BudgetCacheConfig {
         billing_api_url: fixture.server.uri(),
+        gateway_key: None,
         cache_ttl_secs: 60,
     }));
     cache.track_department("tenant-a");

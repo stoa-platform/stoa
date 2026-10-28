@@ -86,8 +86,9 @@ pub async fn discover_api_tools(
     cp_base_url: &str,
     client: &Client,
     gateway_id: Option<Uuid>,
+    gateway_key: Option<&str>,
 ) -> Result<usize, String> {
-    let catalog = fetch_catalog(cp_base_url, client, gateway_id).await?;
+    let catalog = fetch_catalog(cp_base_url, client, gateway_id, gateway_key).await?;
 
     let mut count = 0;
     for api in &catalog.apis {
@@ -179,8 +180,9 @@ pub async fn discover_expanded_api_tools(
     cp_base_url: &str,
     client: &Client,
     gateway_id: Option<Uuid>,
+    gateway_key: Option<&str>,
 ) -> Result<usize, String> {
-    let catalog = fetch_expanded_catalog(cp_base_url, client, gateway_id).await?;
+    let catalog = fetch_expanded_catalog(cp_base_url, client, gateway_id, gateway_key).await?;
 
     let mut count = 0;
     for tool in catalog.tools {
@@ -236,6 +238,7 @@ async fn fetch_expanded_catalog(
     cp_base_url: &str,
     client: &Client,
     gateway_id: Option<Uuid>,
+    gateway_key: Option<&str>,
 ) -> Result<ExpandedToolsResponse, String> {
     let mut url = format!(
         "{}/v1/internal/catalog/apis/expanded",
@@ -247,9 +250,11 @@ async fn fetch_expanded_catalog(
 
     debug!(url = %url, "Discovering expanded tools from CP");
 
-    let resp = client
-        .get(&url)
-        .timeout(Duration::from_secs(10))
+    let mut request = client.get(&url).timeout(Duration::from_secs(10));
+    if let Some(key) = gateway_key {
+        request = request.header("X-Gateway-Key", key);
+    }
+    let resp = request
         .send()
         .await
         .map_err(|e| format!("CP expanded catalog request failed: {e}"))?;
@@ -273,6 +278,7 @@ async fn fetch_catalog(
     cp_base_url: &str,
     client: &Client,
     gateway_id: Option<Uuid>,
+    gateway_key: Option<&str>,
 ) -> Result<CatalogApisResponse, String> {
     let mut url = format!(
         "{}/v1/internal/catalog/apis",
@@ -284,9 +290,11 @@ async fn fetch_catalog(
 
     debug!(url = %url, "Discovering API tools from CP internal catalog");
 
-    let resp = client
-        .get(&url)
-        .timeout(Duration::from_secs(10))
+    let mut request = client.get(&url).timeout(Duration::from_secs(10));
+    if let Some(key) = gateway_key {
+        request = request.header("X-Gateway-Key", key);
+    }
+    let resp = request
         .send()
         .await
         .map_err(|e| format!("CP catalog request failed: {e}"))?;
@@ -315,6 +323,7 @@ pub fn start_api_tool_refresh_task(
     client: Client,
     registrar: Option<Arc<crate::control_plane::registration::GatewayRegistrar>>,
     mode: ExpansionMode,
+    gateway_key: Option<String>,
 ) {
     tokio::spawn(async move {
         loop {
@@ -333,10 +342,24 @@ pub fn start_api_tool_refresh_task(
 
             let result = match mode {
                 ExpansionMode::Coarse => {
-                    discover_api_tools(&registry, &cp_base_url, &client, gw_id).await
+                    discover_api_tools(
+                        &registry,
+                        &cp_base_url,
+                        &client,
+                        gw_id,
+                        gateway_key.as_deref(),
+                    )
+                    .await
                 }
                 ExpansionMode::PerOp => {
-                    discover_expanded_api_tools(&registry, &cp_base_url, &client, gw_id).await
+                    discover_expanded_api_tools(
+                        &registry,
+                        &cp_base_url,
+                        &client,
+                        gw_id,
+                        gateway_key.as_deref(),
+                    )
+                    .await
                 }
             };
 
@@ -415,7 +438,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
 
@@ -438,7 +461,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -471,7 +494,7 @@ mod tests {
         registry.register(Arc::new(pre));
 
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -492,7 +515,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -510,7 +533,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        discover_api_tools(&registry, &mock.uri(), &client, None)
+        discover_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
 
@@ -530,7 +553,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let result = discover_api_tools(&registry, &mock.uri(), &client, None).await;
+        let result = discover_api_tools(&registry, &mock.uri(), &client, None, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("500"));
     }
@@ -546,7 +569,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let result = discover_api_tools(&registry, &mock.uri(), &client, None).await;
+        let result = discover_api_tools(&registry, &mock.uri(), &client, None, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("parse"));
     }
@@ -580,7 +603,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, Some(gw_id))
+        let count = discover_api_tools(&registry, &mock.uri(), &client, Some(gw_id), None)
             .await
             .unwrap();
 
@@ -607,7 +630,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, Some(gw_id))
+        let count = discover_api_tools(&registry, &mock.uri(), &client, Some(gw_id), None)
             .await
             .unwrap();
 
@@ -628,7 +651,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -672,7 +695,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
 
@@ -694,10 +717,10 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let first = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+        let first = discover_expanded_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
-        let second = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+        let second = discover_expanded_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
 
@@ -718,7 +741,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
         assert_eq!(count, 0);
@@ -742,7 +765,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, Some(gw_id))
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, Some(gw_id), None)
             .await
             .unwrap();
 
@@ -776,7 +799,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+        let count = discover_expanded_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap();
         assert_eq!(count, 50);
@@ -795,7 +818,7 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let err = discover_expanded_api_tools(&registry, &mock.uri(), &client, None)
+        let err = discover_expanded_api_tools(&registry, &mock.uri(), &client, None, None)
             .await
             .unwrap_err();
         assert!(err.contains("500"), "got: {err}");
@@ -821,5 +844,63 @@ mod tests {
             classify_refresh_error("CP expanded catalog request failed: connection refused"),
             "transport"
         );
+    }
+
+    #[tokio::test]
+    async fn catalog_fetch_sends_gateway_key() {
+        use wiremock::matchers::header;
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis"))
+            .and(header("X-Gateway-Key", "gw-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "apis": [{
+                    "id": "payments",
+                    "name": "Payments API",
+                    "description": "Handle payments",
+                    "backend_url": "http://backend:8080",
+                    "version": "1.2"
+                }]
+            })))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count = discover_api_tools(&registry, &mock.uri(), &client, None, Some("gw-key"))
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn expanded_catalog_fetch_sends_gateway_key() {
+        use wiremock::matchers::header;
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .and(header("X-Gateway-Key", "gw-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [expanded_tool_json(
+                    "demo:bank:list-accounts",
+                    "http://bank:8080",
+                    "GET",
+                    Some("/accounts"),
+                )]
+            })))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let registry = ToolRegistry::new();
+        let client = Client::new();
+        let count =
+            discover_expanded_api_tools(&registry, &mock.uri(), &client, None, Some("gw-key"))
+                .await
+                .unwrap();
+        assert_eq!(count, 1);
     }
 }

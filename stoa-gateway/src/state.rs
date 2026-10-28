@@ -457,6 +457,7 @@ impl AppState {
             let cache = Arc::new(BudgetCache::new(BudgetCacheConfig {
                 billing_api_url: billing_url.clone(),
                 cache_ttl_secs: config.budget_cache_ttl_secs,
+                gateway_key: config.control_plane_api_key.clone(),
             }));
             tracing::info!(
                 billing_api_url = %billing_url,

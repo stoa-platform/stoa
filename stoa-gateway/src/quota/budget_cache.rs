@@ -12,12 +12,27 @@ use tokio::time::{interval, Duration};
 use tracing::{debug, info, warn};
 
 /// Configuration for the budget cache.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BudgetCacheConfig {
     /// URL of the billing API (e.g. "http://control-plane-api:8000")
     pub billing_api_url: String,
     /// Cache TTL in seconds (how often to refresh from CP API)
     pub cache_ttl_secs: u64,
+    /// Gateway key sent as `X-Gateway-Key` on internal CP calls
+    pub gateway_key: Option<String>,
+}
+
+impl std::fmt::Debug for BudgetCacheConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BudgetCacheConfig")
+            .field("billing_api_url", &self.billing_api_url)
+            .field("cache_ttl_secs", &self.cache_ttl_secs)
+            .field(
+                "gateway_key",
+                &self.gateway_key.as_ref().map(|_| "[REDACTED]"),
+            )
+            .finish()
+    }
 }
 
 /// Per-department budget state.
@@ -157,7 +172,12 @@ impl BudgetCache {
                 dept_id,
             );
 
-            match self.http_client.get(&url).send().await {
+            let mut request = self.http_client.get(&url);
+            if let Some(ref key) = self.config.gateway_key {
+                request = request.header("X-Gateway-Key", key.as_str());
+            }
+
+            match request.send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         match resp.json::<BudgetCheckResponse>().await {
@@ -213,6 +233,7 @@ mod tests {
         BudgetCacheConfig {
             billing_api_url: "http://localhost:8000".to_string(),
             cache_ttl_secs: 60,
+            gateway_key: None,
         }
     }
 
@@ -322,11 +343,51 @@ mod tests {
         let config = BudgetCacheConfig {
             billing_api_url: "http://localhost:8000/".to_string(),
             cache_ttl_secs: 60,
+            gateway_key: None,
         };
         let cache = BudgetCache::new(config);
         cache.track_department("dept-1");
         // The URL construction in refresh_all() uses trim_end_matches('/').
         // Verify trailing slash config doesn't break construction.
         assert_eq!(cache.config.billing_api_url, "http://localhost:8000/");
+    }
+
+    #[tokio::test]
+    async fn refresh_sends_gateway_key() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/internal/budgets/dept-1/check"))
+            .and(header("X-Gateway-Key", "gw-key"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"over_budget": true})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let cache = BudgetCache::new(BudgetCacheConfig {
+            billing_api_url: server.uri(),
+            cache_ttl_secs: 60,
+            gateway_key: Some("gw-key".to_string()),
+        });
+        cache.track_department("dept-1");
+        cache.refresh_all().await;
+
+        assert!(cache.is_over_budget("dept-1"));
+    }
+
+    #[test]
+    fn debug_output_redacts_gateway_key() {
+        let config = BudgetCacheConfig {
+            billing_api_url: "http://localhost:8000".to_string(),
+            cache_ttl_secs: 60,
+            gateway_key: Some("gw-key-value".to_string()),
+        };
+        let rendered = format!("{config:?}");
+        assert!(!rendered.contains("gw-key-value"));
+        assert!(rendered.contains("[REDACTED]"));
     }
 }

@@ -3,12 +3,8 @@
 name: O1 real-Envoy proof (manual)
 
 on:
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "Commit SHA to prove (written into o1-result.json)"
-        required: true
-        type: string
+  # Prove the commit selected by GitHub's dispatch event, not an arbitrary input.
+  workflow_dispatch: {}
 
 concurrency:
   group: o1-envoy-real-proof
@@ -43,16 +39,17 @@ jobs:
       - name: Checkout the candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Record what is being proved
         id: head
         env:
-          REF: ${{ inputs.ref }}
+          REF: ${{ github.sha }}
         run: |
           head=$(git rev-parse HEAD)
+          test "$head" = "$REF"
           echo "ref=$REF head=$head"
           echo "sha=$head" >> "$GITHUB_OUTPUT"
           docker version --format 'docker {{.Server.Version}}'

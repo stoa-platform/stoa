@@ -134,6 +134,10 @@ async def get_current_user(
             "email": "",
             "name": "stoa-operator",
             "tenant_id": None,
+            # CAB-2079 P3-03: let the audit trail tell operators apart by key
+            # fingerprint (the raw key is never stored).
+            "type": "operator",
+            "operator_fingerprint": fingerprint,
         }
         return User(
             id="stoa-operator",

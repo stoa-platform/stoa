@@ -431,10 +431,13 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     "id": user.get("sub"),
                     "email": user.get("email"),
                     "name": user.get("name"),
-                    "type": "user",
+                    # "operator" for X-Operator-Key callers (CAB-2079 P3-03), "user" otherwise
+                    "type": user.get("type", "user"),
                     "tenant_id": user.get("tenant_id"),
                 }
             )
+            if user.get("operator_fingerprint"):
+                actor["operator_fingerprint"] = user["operator_fingerprint"]
         elif hasattr(request.state, "api_key"):
             api_key = request.state.api_key
             actor.update(

@@ -127,7 +127,7 @@ Each audit event records:
 |-------|-------------|---------|
 | `actor_id` | Keycloak user UUID (JWT `sub`) | `a1b2c3d4-...` |
 | `actor_email` | User email | `alice@acme.com` |
-| `actor_type` | user / system / api_key / service | `user` |
+| `actor_type` | user / operator / system / api_key / service (`operator` = caller authenticated with `X-Operator-Key`; the event also carries `operator_fingerprint`, a truncated hash of the key, never the key) | `user` |
 | `action` | Operation category | `create`, `update`, `delete`, `deploy` |
 | `method` | HTTP method | `POST`, `PUT`, `DELETE` |
 | `path` | Request path | `/v1/tenants/acme/apis` |

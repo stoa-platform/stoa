@@ -61,7 +61,7 @@ class AuditEvent(Base):
     actor_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     actor_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="user"
-    )  # user, system, api_key, service
+    )  # user, operator, system, api_key, service
 
     # Action
     action: Mapped[str] = mapped_column(String(100), nullable=False)

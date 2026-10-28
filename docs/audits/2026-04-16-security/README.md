@@ -14,6 +14,7 @@ does not establish that tests passed or that a particular deployment runs them.
 | CORS policy | `control-plane-api/src/main.py`; `control-plane-api/tests/test_regression_cab_2142_cors.py` | [#2450](https://github.com/stoa-platform/stoa/pull/2450) |
 | Environment checks for debug configuration | `control-plane-api/src/config.py`; `control-plane-api/tests/test_regression_cab_2145_debug_flag_env_gating.py` | [#2452](https://github.com/stoa-platform/stoa/pull/2452) |
 | Operator rate-limit keying | `control-plane-api/src/auth/dependencies.py`; `control-plane-api/src/middleware/rate_limit.py`; `control-plane-api/tests/test_regression_cab_2146_rate_limit_keying.py` | [#2449](https://github.com/stoa-platform/stoa/pull/2449) |
+| Portal OIDC token storage (`sessionStorage`, not `localStorage`) | `portal/src/main.tsx` (`userStore: new WebStorageStateStore({ store: window.sessionStorage })`) | none: already the case at this snapshot, no code change was needed |
 
 ## Historical rollout evidence
 

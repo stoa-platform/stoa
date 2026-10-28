@@ -22,6 +22,7 @@ Usage:
 
 import contextlib
 import hashlib
+import ipaddress
 import logging
 import time
 import uuid
@@ -38,6 +39,46 @@ logger = logging.getLogger("stoa.audit")
 
 # Context variable for correlation ID
 correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="")
+
+# Data minimisation of the actor's network identifiers (applied before either
+# audit store is written): the source address is reduced to its network and the
+# user agent is only kept when the call did not succeed.
+IPV4_TRUNCATION_PREFIX = 24
+IPV6_TRUNCATION_PREFIX = 48
+
+
+def truncate_ip(host: str | None) -> str | None:
+    """Return the network address of ``host`` (IPv4 /24, IPv6 /48).
+
+    ``None`` and values that are not IP addresses (e.g. a unix socket path or a
+    test client name) are returned unchanged. An IPv4-mapped IPv6 address is
+    truncated as the IPv4 address it carries. A zone index (``%eth0``) is
+    dropped.
+    """
+    if not host:
+        return host
+    try:
+        address = ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        return host
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    prefix = IPV4_TRUNCATION_PREFIX if address.version == 4 else IPV6_TRUNCATION_PREFIX
+    network = ipaddress.ip_network((address, prefix), strict=False)
+    return str(network.network_address)
+
+
+def minimise_actor(actor: dict, outcome: str) -> dict:
+    """Apply the data-minimisation rules to an extracted actor, in place.
+
+    The source address is truncated with :func:`truncate_ip`; the user agent is
+    dropped when ``outcome`` is ``"success"`` and kept otherwise (failure,
+    denied, error), where it is useful to investigate the call.
+    """
+    actor["ip_address"] = truncate_ip(actor.get("ip_address"))
+    if outcome == "success":
+        actor["user_agent"] = None
+    return actor
 
 
 class EventCategory(StrEnum):
@@ -297,7 +338,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         finally:
             # Extract actor AFTER call_next so that endpoint-level
             # Depends(get_current_user) has populated request.state.user
-            actor = await self._extract_actor(request)
+            actor = minimise_actor(await self._extract_actor(request), outcome)
 
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000

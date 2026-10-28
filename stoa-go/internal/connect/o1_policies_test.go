@@ -3,7 +3,11 @@
 package connect
 
 import (
+	"encoding/json"
 	"net/http"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -104,6 +108,69 @@ func runO1Policies(f o1PolicyFixture) (map[string]interface{}, func()) {
 	// Non-empty lists: the caller reaches Envoy over loopback (both families listed, since
 	// "localhost" may resolve to either). Each update replaces the same policy ID.
 	loopback := []string{"127.0.0.1", "::1"}
+	// readState retries until the admin read succeeds, so a failed read is never taken for a version.
+	readState := func(description string) o1State {
+		t.Helper()
+		var current o1State
+		eventually(5*time.Second, description, func() bool { current = state(); return current.version != "" })
+		return current
+	}
+	// rbacProjection reads the RBAC action and addresses Envoy holds for the target route.
+	rbacProjection := func(current o1State) (string, []string, bool) {
+		raw, exists := current.routes[f.targetCatalog].Typed[rbacName]
+		if !exists {
+			return "", nil, false
+		}
+		var projected struct {
+			Rbac struct {
+				Rules struct {
+					Action   string `json:"action"`
+					Policies map[string]struct {
+						Principals []struct {
+							Remote *struct {
+								Prefix string `json:"address_prefix"`
+							} `json:"direct_remote_ip"`
+						} `json:"principals"`
+					} `json:"policies"`
+				} `json:"rules"`
+			} `json:"rbac"`
+		}
+		if json.Unmarshal(raw, &projected) != nil {
+			return "", nil, false
+		}
+		action := projected.Rbac.Rules.Action
+		if action == "" {
+			action = "ALLOW" // proto JSON omits the default enum value
+		}
+		addresses := []string{}
+		for _, rule := range projected.Rbac.Rules.Policies {
+			for _, principal := range rule.Principals {
+				if principal.Remote != nil {
+					addresses = append(addresses, principal.Remote.Prefix)
+				}
+			}
+		}
+		sort.Strings(addresses)
+		return action, addresses, true
+	}
+	// updateAddress replaces the address policy, then waits for a new readable snapshot whose
+	// RBAC projection is exactly this update, and only then for the HTTP answer.
+	updateAddress := func(mode string, list []string, want int, description string) {
+		t.Helper()
+		before := readState("snapshot readable before " + description)
+		policy("ip_filter", map[string]interface{}{"mode": mode, "ip_list": list}, addressID)
+		expected := append([]string(nil), list...)
+		sort.Strings(expected)
+		eventually(5*time.Second, description+" projected by Envoy", func() bool {
+			current := state()
+			if current.version == "" || current.version == before.version {
+				return false
+			}
+			action, addresses, ok := rbacProjection(current)
+			return ok && action == strings.ToUpper(mode) && slices.Equal(addresses, expected)
+		})
+		eventually(5*time.Second, description, func() bool { code, _ := get(f.targetPath, nil); return code == want })
+	}
 	addressCases := []struct {
 		mode, description string
 		list              []string
@@ -115,15 +182,14 @@ func runO1Policies(f o1PolicyFixture) (map[string]interface{}, func()) {
 		{"deny", "caller address outside deny set", []string{"192.0.2.1"}, 200},
 	}
 	for _, c := range addressCases {
-		policy("ip_filter", map[string]interface{}{"mode": c.mode, "ip_list": c.list}, addressID)
-		eventually(5*time.Second, c.description, func() bool { code, _ := get(f.targetPath, nil); return code == c.want })
+		updateAddress(c.mode, c.list, c.want, c.description)
 		if code, _ = get(f.otherPath, nil); code != 200 {
 			t.Fatal("address policy affected another route")
 		}
 	}
-	policy("ip_filter", map[string]interface{}{"mode": "deny", "ip_list": []string{}}, addressID)
-	eventually(5*time.Second, "updated deny set", func() bool { code, _ := get(f.targetPath, nil); return code == 200 })
-	unsupportedBefore := state().version
+	// Same HTTP answer as the previous case: only the snapshot barrier proves this update landed.
+	updateAddress("deny", []string{}, 200, "updated deny set")
+	unsupportedBefore := readState("snapshot readable before unsupported policy")
 	unsupportedID := policy("jwt_validation", map[string]interface{}{"issuer": "https://issuer.example.test", "audience": "o1", "jwks_url": "https://issuer.example.test/jwks"}, "")
 	eventually(5*time.Second, "unsupported policy failed locally", func() bool {
 		var acks []SyncedPolicyResult
@@ -135,8 +201,12 @@ func runO1Policies(f o1PolicyFixture) (map[string]interface{}, func()) {
 		}
 		return false
 	})
-	if state().version != unsupportedBefore {
-		t.Fatal("unsupported inventory changed snapshot")
+	unsupportedAfter := state()
+	if unsupportedAfter.version == "" {
+		t.Fatal("snapshot unreadable after unsupported policy")
+	}
+	if unsupportedAfter.version != unsupportedBefore.version {
+		t.Fatalf("unsupported inventory changed snapshot: version %s became %s", unsupportedBefore.version, unsupportedAfter.version)
 	}
 	request("DELETE", "/o1/policy/"+unsupportedID, nil, nil)
 	return map[string]interface{}{

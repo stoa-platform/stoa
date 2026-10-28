@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from src.auth.gateway_key import require_gateway_key
+from src.auth.gateway_key import gateway_key_is_valid, require_gateway_key
 from src.config import settings
 from src.database import get_db
 from src.models.gateway_instance import (
@@ -275,7 +275,7 @@ def _validate_gateway_key(x_gateway_key: str) -> None:
             status_code=503,
             detail="Gateway registration disabled (no GATEWAY_API_KEYS configured)",
         )
-    if x_gateway_key not in valid_keys:
+    if not gateway_key_is_valid(x_gateway_key, valid_keys):
         logger.warning("Invalid gateway key attempted registration")
         raise HTTPException(status_code=401, detail="Invalid gateway key")
 

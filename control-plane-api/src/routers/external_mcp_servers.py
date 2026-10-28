@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.gateway_key import gateway_key_is_valid
 from ..config import settings
 from ..database import get_db
 from ..models.external_mcp_server import (
@@ -638,7 +639,7 @@ async def list_servers_for_gateway(
     valid_keys = settings.gateway_api_keys_list
     if not valid_keys:
         raise HTTPException(status_code=503, detail="Internal API not configured")
-    if x_gateway_key not in valid_keys:
+    if not gateway_key_is_valid(x_gateway_key, valid_keys):
         raise HTTPException(status_code=401, detail="Invalid gateway key")
     """
     List all enabled external MCP servers with credentials for MCP Gateway.

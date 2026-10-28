@@ -14,6 +14,12 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
+def gateway_key_is_valid(presented_key: str | None, valid_keys: list[str]) -> bool:
+    """Return True if presented_key matches one of valid_keys (constant-time per key)."""
+    presented = (presented_key or "").encode()
+    return bool(presented) and any(hmac.compare_digest(presented, key.encode()) for key in valid_keys)
+
+
 def require_gateway_key(
     x_gateway_key: str | None = Header(None, alias="X-Gateway-Key"),
 ) -> None:
@@ -24,7 +30,6 @@ def require_gateway_key(
             status_code=503,
             detail="Internal gateway endpoint disabled (no GATEWAY_API_KEYS configured)",
         )
-    presented = (x_gateway_key or "").encode()
-    if not presented or not any(hmac.compare_digest(presented, key.encode()) for key in valid_keys):
+    if not gateway_key_is_valid(x_gateway_key, valid_keys):
         logger.warning("Rejected internal gateway call with missing or invalid key")
         raise HTTPException(status_code=401, detail="Invalid gateway key")

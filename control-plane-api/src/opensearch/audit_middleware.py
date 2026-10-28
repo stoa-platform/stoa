@@ -47,22 +47,70 @@ IPV4_TRUNCATION_PREFIX = 24
 IPV6_TRUNCATION_PREFIX = 48
 
 
+# IPv6 prefixes that embed an IPv4 address (RFC 4291 s2.5.5, RFC 6052, RFC 8215,
+# RFC 4380 and RFC 3056, the last two via ``ipaddress``). The embedded IPv4 address is extracted and minimised with
+# the IPv4 policy, so that none of these forms can carry a full IPv4 address past
+# the /48 truncation (6to4 and the /48 NAT64 layout keep it in the top 48 bits).
+_IPV4_COMPATIBLE = ipaddress.IPv6Network("::/96")  # deprecated ::a.b.c.d
+_NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")  # RFC 6052 s2.1
+_NAT64_LOCAL_USE = ipaddress.IPv6Network("64:ff9b:1::/48")  # RFC 8215
+_LOW_32_BITS = (1 << 32) - 1
+
+
+def _embedded_ipv4(address: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """Return the IPv4 address embedded in ``address``, or ``None``.
+
+    Forms handled: IPv4-mapped (``::ffff:a.b.c.d``), IPv4-compatible
+    (``::a.b.c.d``, deprecated; ``::`` and ``::1`` are not IPv4-compatible
+    addresses and are left to the IPv6 rule), NAT64 well-known prefix
+    (``64:ff9b::/96``), NAT64 local-use prefix (``64:ff9b:1::/48``, only in its
+    /96 layout: the other RFC 6052 layouts cannot be told apart without the
+    operator's prefix length, and the /48 truncation then drops every bit of the
+    IPv4 address anyway), Teredo (``2001::/32``: the client address, XOR-decoded;
+    the Teredo server address is not the caller and is dropped) and 6to4
+    (``2002::/16``).
+    """
+    if address.ipv4_mapped is not None:
+        return address.ipv4_mapped
+    if address.sixtofour is not None:
+        return address.sixtofour
+    if address.teredo is not None:
+        _server, client = address.teredo
+        return client
+    if address in _NAT64_WELL_KNOWN:
+        return ipaddress.IPv4Address(int(address) & _LOW_32_BITS)
+    if address in _NAT64_LOCAL_USE:
+        middle_bits = (int(address) >> 32) & ((1 << 48) - 1)  # bits 48-95
+        if middle_bits == 0:
+            return ipaddress.IPv4Address(int(address) & _LOW_32_BITS)
+        return None
+    if address in _IPV4_COMPATIBLE and int(address) > 1:
+        return ipaddress.IPv4Address(int(address) & _LOW_32_BITS)
+    return None
+
+
 def truncate_ip(host: str | None) -> str | None:
     """Return the network address of ``host`` (IPv4 /24, IPv6 /48).
 
-    ``None`` and values that are not IP addresses (e.g. a unix socket path or a
-    test client name) are returned unchanged. An IPv4-mapped IPv6 address is
-    truncated as the IPv4 address it carries. A zone index (``%eth0``) is
-    dropped.
+    ``None`` and ``""`` are returned unchanged. A value that is not a string, or
+    that does not parse as an IP address (e.g. a unix socket path or a test
+    client name), is refused: the function returns ``None`` so that an
+    unminimised value is never written and the audit event is never lost. An
+    IPv6 address that embeds an IPv4 address (see :func:`_embedded_ipv4`) is
+    truncated as that IPv4 address. A zone index (``%eth0``) is dropped.
     """
+    if host is not None and not isinstance(host, str):
+        return None
     if not host:
         return host
     try:
         address = ipaddress.ip_address(host.split("%", 1)[0])
     except ValueError:
-        return host
-    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
-        address = address.ipv4_mapped
+        return None
+    if isinstance(address, ipaddress.IPv6Address):
+        embedded = _embedded_ipv4(address)
+        if embedded is not None:
+            address = embedded
     prefix = IPV4_TRUNCATION_PREFIX if address.version == 4 else IPV6_TRUNCATION_PREFIX
     network = ipaddress.ip_network((address, prefix), strict=False)
     return str(network.network_address)

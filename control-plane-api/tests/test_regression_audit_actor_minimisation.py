@@ -40,12 +40,126 @@ from src.opensearch.audit_middleware import (
         ("fe80::1%eth0", "fe80::"),  # zone index dropped
         (None, None),
         ("", ""),
-        ("testclient", "testclient"),  # not an address: returned unchanged
-        ("/run/uvicorn.sock", "/run/uvicorn.sock"),
     ],
 )
 def test_truncate_ip(host, expected):
     assert truncate_ip(host) == expected
+
+
+# --- refusal: a value that does not parse is never written --------------------
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "testclient",  # Starlette TestClient name
+        "/run/uvicorn.sock",  # unix socket path
+        " 203.0.113.77",  # leading space
+        "203.0.113.77:443",  # host:port
+        "[2001:db8::1]",  # bracketed literal
+        "0x7f000001",  # hexadecimal integer
+        "2130706433",  # decimal integer
+        "203.0.113",  # short form
+        "0300.0.113.77",  # octal octet (rejected by ipaddress)
+        "2001:db8::1::2",  # double "::"
+    ],
+)
+def test_truncate_ip_refuses_values_that_do_not_parse(host):
+    assert truncate_ip(host) is None
+
+
+@pytest.mark.parametrize("host", [3405803853, b"203.0.113.77", ["203.0.113.77"], 1.5, object()])
+def test_truncate_ip_refuses_values_that_are_not_strings(host):
+    # A non-string value must not raise inside the ``finally`` of ``dispatch``
+    # (which would lose the audit event): it is refused like any other value.
+    assert truncate_ip(host) is None
+
+
+# --- IPv6 forms that embed an IPv4 address: minimised as that IPv4 (/24) ------
+# Documentation addresses only (RFC 5737 192.0.2.0/24, 198.51.100.0/24,
+# 203.0.113.0/24; RFC 3849 2001:db8::/32).
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        # IPv4-mapped ::ffff:0:0/96 (RFC 4291 s2.5.5.2), both notations
+        ("::ffff:203.0.113.77", "203.0.113.0"),
+        ("::ffff:cb00:714d", "203.0.113.0"),
+        ("::FFFF:203.0.113.77", "203.0.113.0"),
+        # IPv4-compatible ::/96 (RFC 4291 s2.5.5.1, deprecated), both notations
+        ("::203.0.113.77", "203.0.113.0"),
+        ("::cb00:714d", "203.0.113.0"),
+        # NAT64 well-known prefix 64:ff9b::/96 (RFC 6052 s2.1)
+        ("64:ff9b::203.0.113.77", "203.0.113.0"),
+        ("64:ff9b::cb00:714d", "203.0.113.0"),
+        # NAT64 local-use prefix 64:ff9b:1::/48 (RFC 8215), /96 layout
+        ("64:ff9b:1::203.0.113.77", "203.0.113.0"),
+        # Teredo 2001::/32 (RFC 4380): server 198.51.100.1, client 203.0.113.77
+        # (client bits XORed with 0xffffffff: 203.0.113.77 -> 34ff:8eb2)
+        ("2001:0:c633:6401:0:0:34ff:8eb2", "203.0.113.0"),
+        ("2001:0:c633:6401:8000:ffff:34ff:8eb2", "203.0.113.0"),  # flags/port set
+        # 6to4 2002::/16 (RFC 3056): 2002:cb00:714d::/48 embeds 203.0.113.77
+        ("2002:cb00:714d::1", "203.0.113.0"),
+        ("2002:cb00:714d:abcd:1234:5678:9abc:def0", "203.0.113.0"),
+    ],
+)
+def test_truncate_ip_minimises_the_embedded_ipv4(host, expected):
+    assert truncate_ip(host) == expected
+
+
+def test_teredo_server_address_is_not_kept():
+    # The Teredo server (198.51.100.1 here) is not the caller: nothing of it
+    # survives, only the client's /24.
+    out = truncate_ip("2001:0:c633:6401:0:0:34ff:8eb2")
+    assert out == "203.0.113.0"
+    assert "198.51.100" not in out
+    assert "c633" not in out
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "::ffff:203.0.113.77",  # IPv4-mapped
+        "::ffff:cb00:714d",
+        "::203.0.113.77",  # IPv4-compatible
+        "::cb00:714d",
+        "64:ff9b::203.0.113.77",  # NAT64 well-known prefix
+        "64:ff9b::cb00:714d",
+    ],
+)
+def test_mapped_compatible_and_nat64_never_keep_the_full_ipv4(host):
+    # Symmetric with the 6to4 and Teredo non-leak tests: the full embedded
+    # address (203.0.113.77, cb00:714d) never survives, in any notation.
+    out = truncate_ip(host)
+    assert out == "203.0.113.0"
+    assert "113.77" not in out
+    assert "714d" not in out
+    assert "ffff" not in out and "ff9b" not in out
+
+
+def test_six_to_four_never_keeps_the_full_ipv4():
+    # Without the 6to4 rule, the /48 truncation would keep the whole IPv4
+    # address in the top 48 bits (2002:cb00:714d::).
+    assert truncate_ip("2002:cb00:714d::1") != "2002:cb00:714d::"
+
+
+def test_nat64_local_use_with_an_ambiguous_layout_keeps_no_ipv4_bits():
+    # 64:ff9b:1::/48 with a non-/96 RFC 6052 layout: the IPv4 position depends
+    # on the operator's prefix length, so the generic /48 rule applies and the
+    # result carries no bit of the embedded address.
+    assert truncate_ip("64:ff9b:1:cb00:714d::") == "64:ff9b:1::"
+    assert truncate_ip("64:ff9b:1:cb00:0:714d::") == "64:ff9b:1::"
+
+
+@pytest.mark.parametrize("host", ["::", "::1"])
+def test_unspecified_and_loopback_are_not_ipv4_compatible(host):
+    assert truncate_ip(host) == "::"
+
+
+def test_embedded_ipv4_output_fits_the_pg_column():
+    for host in ("2002:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "64:ff9b::ffff:ffff"):
+        assert len(truncate_ip(host)) <= 45
 
 
 def test_truncated_value_fits_the_pg_column():

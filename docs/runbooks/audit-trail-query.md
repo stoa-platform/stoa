@@ -136,7 +136,7 @@ Each audit event records:
 | `resource_id` | Target resource UUID | `uuid-...` |
 | `outcome` | Result | `success`, `failure`, `denied`, `error` |
 | `status_code` | HTTP status | `200`, `403`, `500` |
-| `client_ip` | Source address as seen by the API process (`request.client.host`; behind a proxy this may be the proxy address), truncated before write: IPv4 to its /24 network, IPv6 to its /48 network | `203.0.113.0` |
+| `client_ip` | Source address as seen by the API process (`request.client.host`; behind a proxy this may be the proxy address), truncated before write: IPv4 to its /24 network, IPv6 to its /48 network; an IPv6 address that embeds an IPv4 address (IPv4-mapped, IPv4-compatible, NAT64, Teredo client, 6to4) is truncated as that IPv4 address; a value that is not an IP address is not written | `203.0.113.0` |
 | `user_agent` | Browser/client, recorded only when `outcome` is not `success` (NULL on successful calls) | `Mozilla/5.0...` |
 | `correlation_id` | Request trace ID | `uuid-...` |
 | `duration_ms` | Request latency | `42` |

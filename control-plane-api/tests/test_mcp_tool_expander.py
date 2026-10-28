@@ -166,12 +166,12 @@ class TestInternalCatalogExpandedRouter:
             cls.return_value = repo
             yield repo
 
-    def test_empty_catalog_returns_empty_tool_list(self, client, mock_repo) -> None:
-        resp = client.get("/v1/internal/catalog/apis/expanded")
+    def test_empty_catalog_returns_empty_tool_list(self, client, mock_repo, gateway_key_headers) -> None:
+        resp = client.get("/v1/internal/catalog/apis/expanded", headers=gateway_key_headers)
         assert resp.status_code == 200
         assert resp.json() == {"tools": []}
 
-    def test_catalog_with_spec_expands_to_per_operation_tools(self, client, mock_repo) -> None:
+    def test_catalog_with_spec_expands_to_per_operation_tools(self, client, mock_repo, gateway_key_headers) -> None:
         api = MagicMock()
         api.api_id = "banking"
         api.api_name = "Banking API"
@@ -181,7 +181,7 @@ class TestInternalCatalogExpandedRouter:
         api.openapi_spec = BANKING_OPENAPI
         mock_repo.get_portal_apis = AsyncMock(return_value=([api], 1))
 
-        resp = client.get("/v1/internal/catalog/apis/expanded")
+        resp = client.get("/v1/internal/catalog/apis/expanded", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         names = [t["name"] for t in resp.json()["tools"]]
@@ -189,7 +189,7 @@ class TestInternalCatalogExpandedRouter:
         assert "oasis:banking:createcustomer" in names
         assert "oasis:banking:getcustomerbynumber" in names
 
-    def test_catalog_without_spec_falls_back_to_coarse_tool(self, client, mock_repo) -> None:
+    def test_catalog_without_spec_falls_back_to_coarse_tool(self, client, mock_repo, gateway_key_headers) -> None:
         api = MagicMock()
         api.api_id = "petstore"
         api.api_name = "Petstore"
@@ -199,18 +199,18 @@ class TestInternalCatalogExpandedRouter:
         api.openapi_spec = None
         mock_repo.get_portal_apis = AsyncMock(return_value=([api], 1))
 
-        resp = client.get("/v1/internal/catalog/apis/expanded")
+        resp = client.get("/v1/internal/catalog/apis/expanded", headers=gateway_key_headers)
 
         assert resp.status_code == 200
         tools = resp.json()["tools"]
         assert len(tools) == 1
         assert tools[0]["name"] == "petstore"
 
-    def test_gateway_id_filter_passed_through(self, client, mock_repo) -> None:
+    def test_gateway_id_filter_passed_through(self, client, mock_repo, gateway_key_headers) -> None:
         import uuid as _uuid
 
         gw = _uuid.uuid4()
-        client.get(f"/v1/internal/catalog/apis/expanded?gateway_id={gw}")
+        client.get(f"/v1/internal/catalog/apis/expanded?gateway_id={gw}", headers=gateway_key_headers)
         kwargs = mock_repo.get_portal_apis.await_args.kwargs
         assert kwargs.get("gateway_id") == gw
 

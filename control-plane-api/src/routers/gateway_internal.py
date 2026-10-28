@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from src.auth.gateway_key import require_gateway_key
 from src.config import settings
 from src.database import get_db
 from src.models.gateway_instance import (
@@ -137,16 +138,13 @@ class GatewayRouteItem(BaseModel):
 async def list_gateway_routes(
     gateway_name: str | None = Query(None, description="Filter by gateway instance name"),
     db: AsyncSession = Depends(get_db),
-    x_gateway_key: str | None = Header(None),
+    _gateway_key: None = Depends(require_gateway_key),
 ):
     """Return all synced deployment routes in stoa-gateway ApiRoute format.
 
     Used by the gateway route hot-reload loop (CAB-1828) to pull the full
-    route table from the control plane. No JWT auth — uses X-Gateway-Key.
+    route table from the control plane. No JWT auth — requires X-Gateway-Key.
     """
-    expected_key = getattr(settings, "GATEWAY_ADMIN_KEY", None)
-    if expected_key and x_gateway_key != expected_key:
-        raise HTTPException(status_code=401, detail="Invalid gateway key")
 
     from src.adapters.stoa.mappers import map_api_spec_to_stoa
     from src.models.gateway_deployment import DeploymentSyncStatus

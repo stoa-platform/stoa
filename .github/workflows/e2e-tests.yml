@@ -186,6 +186,11 @@ jobs:
           # Test API Key
           TEST_API_KEY: ${{ env.TEST_API_KEY || secrets.TEST_API_KEY }}
 
+          # Cloudflare Access service token for the portal and console origins
+          # (headers added by e2e/fixtures/cloudflare-access.ts, values never logged)
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_E2E_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
+
         run: |
           TEST_SUITE="${{ github.event.inputs.test_suite || 'smoke' }}"
 

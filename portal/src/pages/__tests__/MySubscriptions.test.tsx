@@ -5,6 +5,9 @@
  */
 
 import { screen, waitFor } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll } from 'vitest';
 import {
   renderWithProviders,
   createAuthMock,
@@ -12,6 +15,12 @@ import {
   type PersonaRole,
 } from '../../test/helpers';
 import { MySubscriptions } from '../subscriptions/MySubscriptions';
+
+const server = setupServer(
+  http.get('*/v1/subscriptions/my', () =>
+    HttpResponse.json({ items: [], total: 0, page: 1, page_size: 20, total_pages: 0 })
+  )
+);
 
 // Mock AuthContext at module level
 const mockAuth = vi.fn();
@@ -77,6 +86,10 @@ vi.mock('../../components/skeletons', () => ({
 }));
 
 describe('MySubscriptions', () => {
+  beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockReturnValue(createAuthMock('tenant-admin'));

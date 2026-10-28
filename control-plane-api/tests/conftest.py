@@ -590,6 +590,15 @@ def client(app) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture
+def gateway_key_headers(monkeypatch) -> dict[str, str]:
+    """Configure one gateway key and return the header that carries it."""
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "GATEWAY_API_KEYS", "test-gateway-key")
+    return {"X-Gateway-Key": "test-gateway-key"}
+
+
+@pytest.fixture
 async def async_client(app) -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:

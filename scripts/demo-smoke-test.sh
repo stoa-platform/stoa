@@ -22,6 +22,7 @@
 #   TENANT_ID            demo
 #   GATEWAY_ID           gateway-demo
 #   DEMO_ADMIN_TOKEN     (empty → bypass via ?demo-admin header if cp-api allows)
+#   DEMO_GATEWAY_KEY     ${GATEWAY_API_KEY} (key listed in cp-api GATEWAY_API_KEYS; empty → internal endpoints answer 401/503)
 #   DEMO_MODE_HEADER     true (sends X-Demo-Mode: true to bounded demo endpoints)
 #   ROUTE_SYNC_GRACE_SECS 30
 #   DEMO_DEPLOY_ENV      dev
@@ -58,6 +59,7 @@ DEMO_UAC_CONTRACT="${DEMO_UAC_CONTRACT:-}"
 TENANT_ID="${TENANT_ID:-demo}"
 GATEWAY_ID="${GATEWAY_ID:-gateway-demo}"
 DEMO_ADMIN_TOKEN="${DEMO_ADMIN_TOKEN:-}"
+DEMO_GATEWAY_KEY="${DEMO_GATEWAY_KEY:-${GATEWAY_API_KEY:-}}"
 DEMO_MODE_HEADER="${DEMO_MODE_HEADER:-true}"
 ROUTE_SYNC_GRACE_SECS="${ROUTE_SYNC_GRACE_SECS:-30}"
 DEMO_DEPLOY_ENV="${DEMO_DEPLOY_ENV:-dev}"
@@ -173,6 +175,9 @@ http_call() {
     fi
     if [[ "$DEMO_MODE_HEADER" == "true" ]]; then
         curl_args+=(-H "X-Demo-Mode: true")
+    fi
+    if [[ -n "$DEMO_GATEWAY_KEY" && "$url" == *"/v1/internal/"* ]]; then
+        curl_args+=(-H "X-Gateway-Key: $DEMO_GATEWAY_KEY")
     fi
     if [[ -n "$body" ]]; then
         curl_args+=(-H "Content-Type: application/json" --data "$body")

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import resolve_effective_tenant
 from ..database import get_db
 from ..models.mcp_subscription import (
     MCPServer,
@@ -93,7 +94,7 @@ async def list_pending_approvals(
     # Tenant admins can only see their own tenant
     effective_tenant_id = tenant_id
     if "cpi-admin" not in user.roles:
-        effective_tenant_id = user.tenant_id
+        effective_tenant_id = resolve_effective_tenant(user)
 
     repo = MCPSubscriptionRepository(db)
     subscriptions, total = await repo.list_pending(
@@ -371,7 +372,7 @@ async def get_subscription_stats(
     # Tenant admins can only see their own tenant
     effective_tenant_id = tenant_id
     if "cpi-admin" not in user.roles:
-        effective_tenant_id = user.tenant_id
+        effective_tenant_id = resolve_effective_tenant(user)
 
     sub_repo = MCPSubscriptionRepository(db)
     server_repo = MCPServerRepository(db)

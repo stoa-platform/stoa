@@ -7,6 +7,15 @@
 #
 # Flow: CI builds image → push to GHCR → dispatch to stoa-infra → ArgoCD syncs
 #
+# Kill-switch: the deploy job runs only when the repository variable
+# GITOPS_DEPLOY_ENABLED is exactly 'true'. Unset or any other value = OFF
+# (default): no image-updated dispatch, the job is skipped (not failed).
+# Any repository admin/maintainer can set the variable and lift the switch.
+# Scope: this stops GitOps writes, prod promotion and smoke-tests. The same
+# variable also gates the mutable latest / <env>-latest tags in
+# reusable-docker-ghcr.yml; immutable <env>-<sha> images and attestations are
+# still published.
+#
 # Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
 # =============================================================================
 
@@ -46,6 +55,7 @@ on:
 
 jobs:
   gitops-deploy:
+    if: vars.GITOPS_DEPLOY_ENABLED == 'true'
     name: GitOps Deploy ${{ inputs.component }} to ${{ inputs.environment }}
     runs-on: ubuntu-latest
     permissions:

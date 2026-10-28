@@ -102,6 +102,9 @@ jobs:
       - name: Run demo smoke in observation mode
         id: smoke
         shell: bash
+        env:
+          # Keep the Compose instance name unchanged; target its registered CP name.
+          GATEWAY_ID: gateway-demo-edge-mcp-dev
         run: |
           set -uo pipefail
 

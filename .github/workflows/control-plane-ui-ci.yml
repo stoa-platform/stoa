@@ -111,7 +111,7 @@ jobs:
   # === Smoke Test: health checks after deploy (Tier 1) ===
   smoke-test:
     needs: deploy
-    if: needs.deploy.result == 'success'
+    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: control-plane-ui

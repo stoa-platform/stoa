@@ -81,8 +81,9 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ inputs.environment }}-${{ github.sha }}
-            type=raw,value=${{ inputs.environment }}-latest
-            type=raw,value=latest
+            # Mutable tags follow the same kill-switch as GitOps deploy (absent = off).
+            type=raw,value=${{ inputs.environment }}-latest,enable=${{ vars.GITOPS_DEPLOY_ENABLED == 'true' }}
+            type=raw,value=latest,enable=${{ vars.GITOPS_DEPLOY_ENABLED == 'true' }}
 
       - name: Stage project license and notice
         env:

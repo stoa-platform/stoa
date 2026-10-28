@@ -7,8 +7,10 @@ The Context Compiler is a feedback loop that predicts impact before coding and l
 ## Automated Flow
 
 Hooks 1 and 3 ran from agent workflows that are not in this public tree.
-The scripts they called remain under `docs/scripts/` for manual use.
-Hook 2 stays in `.github/workflows/context-compiler-learn.yml`.
+Hook 2 (post-merge learning) ran from a workflow that has been retired: it
+opened pull requests with `GITHUB_TOKEN`, which cannot receive the checks
+required on `main`. The scripts all three hooks called remain under
+`docs/scripts/` for manual use.
 
 ```
 Ticket ready
@@ -22,8 +24,8 @@ PR opened
     |
 Merge to main
     |
-[Hook 2] context-compiler-learn.yml
-    |     -> post-change-learn.sh compares predicted vs actual
+[Hook 2] post-change-learn.sh (manual, no CI workflow)
+    |     -> compares predicted vs actual
     |     -> DB enriched with precision/recall metrics
     |     -> Results committed with [skip ci]
     |
@@ -58,9 +60,9 @@ Weekly, manual
 
 ### Hook 2: Post-Merge Learning
 
-**Workflow**: `.github/workflows/context-compiler-learn.yml`
+**Workflow**: none (retired). Run `docs/scripts/post-change-learn.sh` manually after a merge.
 
-**Trigger**: Push to `main` (excluding docs, learning data, and `.claude/` paths)
+**Trigger**: manual
 
 **What it does**:
 1. Extracts `CAB-XXXX` ticket reference from commit message
@@ -69,7 +71,7 @@ Weekly, manual
 4. Calculates precision, recall, F1-score
 5. Stores results in `change_log` table in `stoa-impact.db`
 6. Generates report in `docs/learning/`
-7. Commits DB + report with `[skip ci]` to avoid infinite loops
+7. Leaves the DB + report as a local change: commit them and open a normal pull request (no bot commit, no `[skip ci]`)
 
 **Metrics tracked**: True Positives, False Positives, False Negatives per change.
 

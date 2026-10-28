@@ -101,6 +101,26 @@ func runO1Policies(f o1PolicyFixture) (map[string]interface{}, func()) {
 	if code != 200 {
 		t.Fatal("API policy affected another route")
 	}
+	// Non-empty lists: the caller reaches Envoy over loopback (both families listed, since
+	// "localhost" may resolve to either). Each update replaces the same policy ID.
+	loopback := []string{"127.0.0.1", "::1"}
+	addressCases := []struct {
+		mode, description string
+		list              []string
+		want              int
+	}{
+		{"allow", "caller address in allow set", loopback, 200},
+		{"allow", "caller address outside allow set", []string{"192.0.2.1"}, 403},
+		{"deny", "caller address in deny set", loopback, 403},
+		{"deny", "caller address outside deny set", []string{"192.0.2.1"}, 200},
+	}
+	for _, c := range addressCases {
+		policy("ip_filter", map[string]interface{}{"mode": c.mode, "ip_list": c.list}, addressID)
+		eventually(5*time.Second, c.description, func() bool { code, _ := get(f.targetPath, nil); return code == c.want })
+		if code, _ = get(f.otherPath, nil); code != 200 {
+			t.Fatal("address policy affected another route")
+		}
+	}
 	policy("ip_filter", map[string]interface{}{"mode": "deny", "ip_list": []string{}}, addressID)
 	eventually(5*time.Second, "updated deny set", func() bool { code, _ := get(f.targetPath, nil); return code == 200 })
 	unsupportedBefore := state().version
@@ -123,6 +143,7 @@ func runO1Policies(f o1PolicyFixture) (map[string]interface{}, func()) {
 			"policies":                               []string{"cors", "rate_limit", "ip_filter"},
 			"cp_enabled_applicable_policy_inventory": policyInventory,
 			"cors_preflight_denial_authorized_without_upstream": true,
+			"ip_filter_address_cases":                           len(addressCases),
 			"unsupported_failed_without_publication":            true,
 		}, func() {
 			request("DELETE", "/o1/policy/"+addressID, nil, nil)

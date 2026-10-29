@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.rbac import require_role
+from src.auth.rbac import require_role, resolve_effective_tenant
 from src.database import get_db
 from src.models.gateway_policy import GatewayPolicy, GatewayPolicyBinding, PolicyScope, PolicyType
 from src.repositories.gateway_policy import GatewayPolicyBindingRepository, GatewayPolicyRepository
@@ -33,6 +33,9 @@ async def create_policy(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Create a new gateway policy."""
+    tenant = resolve_effective_tenant(user)
+    if tenant is not None and data.tenant_id != tenant:
+        raise HTTPException(status_code=403, detail="Policy tenant must match authenticated tenant")
     repo = GatewayPolicyRepository(db)
     policy = GatewayPolicy(
         name=data.name,
@@ -74,10 +77,13 @@ async def list_policies(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """List gateway policies."""
+    tenant = resolve_effective_tenant(user)
+    if tenant is not None:
+        tenant_id = tenant
     repo = GatewayPolicyRepository(db)
     pt = PolicyType(policy_type) if policy_type else None
     policies = await repo.list_all(tenant_id=tenant_id, policy_type=pt, environment=environment)
-    return [_to_response(p) for p in policies]
+    return [_to_response(p) for p in policies if tenant is None or p.tenant_id == tenant]
 
 
 @router.get("/{policy_id}", response_model=GatewayPolicyResponse)
@@ -87,9 +93,10 @@ async def get_policy(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Get policy details."""
+    tenant = resolve_effective_tenant(user)
     repo = GatewayPolicyRepository(db)
     policy = await repo.get_by_id(policy_id)
-    if not policy:
+    if not policy or (tenant is not None and policy.tenant_id != tenant):
         raise HTTPException(status_code=404, detail="Policy not found")
     return _to_response(policy)
 
@@ -102,9 +109,10 @@ async def update_policy(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Update a gateway policy."""
+    tenant = resolve_effective_tenant(user)
     repo = GatewayPolicyRepository(db)
     policy = await repo.get_by_id(policy_id)
-    if not policy:
+    if not policy or (tenant is not None and policy.tenant_id != tenant):
         raise HTTPException(status_code=404, detail="Policy not found")
 
     if data.name is not None:
@@ -173,10 +181,13 @@ async def create_binding(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Create a policy binding."""
+    tenant = resolve_effective_tenant(user)
+    if tenant is not None and data.tenant_id != tenant:
+        raise HTTPException(status_code=403, detail="Binding tenant must match authenticated tenant")
     # Verify policy exists
     policy_repo = GatewayPolicyRepository(db)
     policy = await policy_repo.get_by_id(data.policy_id)
-    if not policy:
+    if not policy or (tenant is not None and policy.tenant_id != tenant):
         raise HTTPException(status_code=404, detail="Policy not found")
 
     binding_repo = GatewayPolicyBindingRepository(db)
@@ -215,10 +226,15 @@ async def delete_binding(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """Remove a policy binding."""
+    tenant = resolve_effective_tenant(user)
     binding_repo = GatewayPolicyBindingRepository(db)
     binding = await binding_repo.get_by_id(binding_id)
-    if not binding:
+    if not binding or (tenant is not None and binding.tenant_id != tenant):
         raise HTTPException(status_code=404, detail="Binding not found")
+    if tenant is not None:
+        policy = await GatewayPolicyRepository(db).get_by_id(binding.policy_id)
+        if not policy or policy.tenant_id != tenant:
+            raise HTTPException(status_code=404, detail="Binding not found")
     tenant_id = binding.tenant_id
     binding_id_str = str(binding.id)
     policy_id_str = str(binding.policy_id)
@@ -245,15 +261,16 @@ async def list_bindings(
     user=Depends(require_role(["cpi-admin", "tenant-admin"])),
 ):
     """List bindings for a policy."""
+    tenant = resolve_effective_tenant(user)
     # Verify policy exists
     policy_repo = GatewayPolicyRepository(db)
     policy = await policy_repo.get_by_id(policy_id)
-    if not policy:
+    if not policy or (tenant is not None and policy.tenant_id != tenant):
         raise HTTPException(status_code=404, detail="Policy not found")
 
     binding_repo = GatewayPolicyBindingRepository(db)
     bindings = await binding_repo.list_by_policy(policy_id)
-    return bindings
+    return [b for b in bindings if tenant is None or b.tenant_id == tenant]
 
 
 def _to_response(policy: GatewayPolicy) -> GatewayPolicyResponse:

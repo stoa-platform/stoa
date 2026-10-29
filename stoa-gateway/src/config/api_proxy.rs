@@ -85,7 +85,7 @@ pub struct ProxyBackendConfig {
     #[serde(default)]
     pub public: bool,
 
-    /// Segment prefixes of the validated path; trailing slashes are ignored.
+    /// Non-empty segment prefixes must start with `/`; trailing slashes are ignored.
     /// Empty list, empty prefix, or root prefix impose no prefix restriction.
     /// Security: prevents proxy abuse by restricting accessible paths.
     #[serde(default)]

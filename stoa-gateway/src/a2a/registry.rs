@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use super::types::{AgentCard, Task, TaskState, TaskStatus};
+use super::types::{AgentCard, Task, TaskOwner, TaskState, TaskStatus};
 
 /// Registry of known A2A agents and their tasks.
 pub struct AgentRegistry {
@@ -89,12 +89,19 @@ impl AgentRegistry {
 
     // ─── Task Operations ───
 
-    /// Store a new task.
+    /// Store a task. An id held by a different owner is never overwritten.
     pub fn store_task(&self, task: Task) -> Result<(), RegistryError> {
         let mut tasks = self
             .tasks
             .write()
             .map_err(|_| RegistryError::LockPoisoned)?;
+
+        if tasks
+            .get(&task.id)
+            .is_some_and(|existing| existing.owner != task.owner)
+        {
+            return Err(RegistryError::TaskIdUnavailable);
+        }
 
         // Evict oldest completed tasks if at capacity
         if tasks.len() >= self.max_tasks {
@@ -128,6 +135,17 @@ impl AgentRegistry {
     pub fn get_task(&self, id: &str) -> Result<Option<Task>, RegistryError> {
         let tasks = self.tasks.read().map_err(|_| RegistryError::LockPoisoned)?;
         Ok(tasks.get(id).cloned())
+    }
+
+    /// Get a task by ID only if `owner` owns it; other owners see no task.
+    pub fn get_owned_task(
+        &self,
+        id: &str,
+        owner: &TaskOwner,
+    ) -> Result<Option<Task>, RegistryError> {
+        Ok(self
+            .get_task(id)?
+            .filter(|task| task.owner.as_ref() == Some(owner)))
     }
 
     /// Update task status.
@@ -177,6 +195,8 @@ pub enum RegistryError {
     LockPoisoned,
     #[error("capacity exceeded: max {max}")]
     CapacityExceeded { max: usize },
+    #[error("task id is not available")]
+    TaskIdUnavailable,
 }
 
 #[cfg(test)]
@@ -213,6 +233,7 @@ mod tests {
             history: vec![],
             artifacts: vec![],
             metadata: Default::default(),
+            owner: None,
         }
     }
 
@@ -358,5 +379,29 @@ mod tests {
         .unwrap();
         // Now adding a new task should succeed (evicts completed ones)
         assert!(reg.store_task(test_task("t4")).is_ok());
+    }
+
+    #[test]
+    fn regression_store_task_keeps_owner_of_existing_id() {
+        let reg = AgentRegistry::new(10, 100);
+        let owner = |subject: &str| TaskOwner {
+            tenant_id: "tenant-a".to_string(),
+            subject: subject.to_string(),
+        };
+        let mut first = test_task("t1");
+        first.owner = Some(owner("user-a"));
+        reg.store_task(first.clone()).unwrap();
+
+        let mut intruder = test_task("t1");
+        intruder.owner = Some(owner("user-b"));
+        assert!(matches!(
+            reg.store_task(intruder),
+            Err(RegistryError::TaskIdUnavailable)
+        ));
+        assert!(reg.store_task(first).is_ok());
+        assert!(reg
+            .get_owned_task("t1", &owner("user-b"))
+            .unwrap()
+            .is_none());
     }
 }

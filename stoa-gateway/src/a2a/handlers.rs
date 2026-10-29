@@ -6,7 +6,7 @@
 //! - tasks/cancel — Cancel a running task
 
 use axum::{
-    extract::State,
+    extract::{Extension, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
@@ -15,14 +15,16 @@ use serde_json::json;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use crate::auth::middleware::AuthenticatedUser;
 use crate::mcp::handlers::request_tool_context;
 use crate::mcp::tools::ToolContent;
 use crate::state::AppState;
 
+use super::registry::RegistryError;
 use super::types::{
     Artifact, JsonRpcRequest, JsonRpcResponse, Message, MessageRole, Part, Task, TaskCancelParams,
-    TaskGetParams, TaskSendParams, TaskState, TaskStatus, ToolInvocation, AGENT_UNAVAILABLE,
-    INVALID_PARAMS, METHOD_NOT_FOUND, TASK_NOT_CANCELABLE, TASK_NOT_FOUND,
+    TaskGetParams, TaskOwner, TaskSendParams, TaskState, TaskStatus, ToolInvocation,
+    AGENT_UNAVAILABLE, INVALID_PARAMS, METHOD_NOT_FOUND, TASK_NOT_CANCELABLE, TASK_NOT_FOUND,
 };
 
 /// POST /a2a — JSON-RPC 2.0 dispatcher
@@ -32,6 +34,7 @@ use super::types::{
 pub async fn a2a_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
+    user: Option<Extension<AuthenticatedUser>>,
     Json(request): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
     let Some(ref registry) = state.a2a_registry else {
@@ -48,12 +51,39 @@ pub async fn a2a_handler(
 
     info!(method = %request.method, id = %request.id, "A2A JSON-RPC request");
 
+    // Tasks belong to the validated identity, never to a request field.
+    // The owner is the identity validated by the route's JWT layer (tenant
+    // claim and subject), never the raw bearer: a renewed token for the same
+    // identity keeps its tasks.
+    let identity = match user {
+        Some(Extension(user)) => task_owner(&user.claims, &headers),
+        None => Err(crate::auth::middleware::AuthError::unauthorized(
+            "Authentication required",
+        )),
+    };
+    let owner = match identity {
+        Ok(owner) => owner,
+        Err(e) => {
+            let status = match e.error.as_str() {
+                "forbidden" => StatusCode::FORBIDDEN,
+                _ => StatusCode::UNAUTHORIZED,
+            };
+            let error = JsonRpcResponse::error(request.id, -32001, e.message);
+            return (status, Json(error)).into_response();
+        }
+    };
+
     let (status, response) = match request.method.as_str() {
-        "tasks/send" => handle_tasks_send_with_headers(&state, registry, &request, &headers).await,
-        "tasks/get" => (StatusCode::OK, handle_tasks_get(registry, &request).await),
+        "tasks/send" => {
+            handle_tasks_send_with_headers(&state, registry, &request, &headers, &owner).await
+        }
+        "tasks/get" => (
+            StatusCode::OK,
+            handle_tasks_get(registry, &request, &owner).await,
+        ),
         "tasks/cancel" => (
             StatusCode::OK,
-            handle_tasks_cancel(registry, &request).await,
+            handle_tasks_cancel(registry, &request, &owner).await,
         ),
         other => {
             warn!(method = other, "Unknown A2A method");
@@ -69,6 +99,31 @@ pub async fn a2a_handler(
     };
 
     (status, Json(response)).into_response()
+}
+
+/// Task owner from validated claims; an `X-Tenant-ID` header must match.
+fn task_owner(
+    claims: &crate::auth::claims::Claims,
+    headers: &HeaderMap,
+) -> Result<TaskOwner, crate::auth::middleware::AuthError> {
+    use crate::auth::middleware::AuthError;
+    if claims.sub.trim().is_empty() {
+        return Err(AuthError::unauthorized("A subject claim is required"));
+    }
+    let tenant = crate::auth::tenant::require_tenant(claims)?;
+    if headers
+        .get_all("X-Tenant-ID")
+        .iter()
+        .any(|h| h.to_str().ok() != Some(tenant))
+    {
+        return Err(AuthError::forbidden(
+            "Tenant header does not match authenticated tenant",
+        ));
+    }
+    Ok(TaskOwner {
+        tenant_id: tenant.to_string(),
+        subject: claims.sub.clone(),
+    })
 }
 
 /// Extract a ToolInvocation from a message's Data parts, if present.
@@ -92,9 +147,33 @@ async fn handle_tasks_send(
     registry: &super::registry::AgentRegistry,
     request: &JsonRpcRequest,
 ) -> JsonRpcResponse {
-    handle_tasks_send_with_headers(state, registry, request, &HeaderMap::new())
+    handle_tasks_send_with_headers(state, registry, request, &HeaderMap::new(), &test_owner())
         .await
         .1
+}
+
+#[cfg(test)]
+fn test_owner() -> TaskOwner {
+    TaskOwner {
+        tenant_id: "tenant-a".to_string(),
+        subject: "user-a".to_string(),
+    }
+}
+
+/// JSON-RPC error for a failed task write; a taken id is a caller error.
+fn store_error(request: &JsonRpcRequest, e: RegistryError) -> JsonRpcResponse {
+    match e {
+        RegistryError::TaskIdUnavailable => JsonRpcResponse::error(
+            request.id.clone(),
+            INVALID_PARAMS,
+            "Task id is not available",
+        ),
+        e => JsonRpcResponse::error(
+            request.id.clone(),
+            AGENT_UNAVAILABLE,
+            format!("Failed to store task: {e}"),
+        ),
+    }
 }
 
 async fn handle_tasks_send_with_headers(
@@ -102,6 +181,7 @@ async fn handle_tasks_send_with_headers(
     registry: &super::registry::AgentRegistry,
     request: &JsonRpcRequest,
     headers: &HeaderMap,
+    owner: &TaskOwner,
 ) -> (StatusCode, JsonRpcResponse) {
     let params: TaskSendParams = match serde_json::from_value(request.params.clone()) {
         Ok(p) => p,
@@ -119,21 +199,30 @@ async fn handle_tasks_send_with_headers(
 
     // Check for MCP tool invocation in message data parts
     if let Some(invocation) = extract_tool_invocation(&params.message) {
-        return handle_tool_bridge(state, registry, &params, &invocation, request, headers).await;
+        return handle_tool_bridge(
+            state,
+            registry,
+            &params,
+            &invocation,
+            request,
+            headers,
+            owner,
+        )
+        .await;
     }
 
-    // Check if this is a continuation of an existing task
-    if let Ok(Some(_)) = registry.get_task(&params.id) {
+    // Check if this is a continuation of a task owned by the caller
+    if let Ok(Some(existing)) = registry.get_owned_task(&params.id, owner) {
         return (
             StatusCode::OK,
-            handle_continuation(registry, &params, request).await,
+            handle_continuation(registry, existing, &params, request).await,
         );
     }
 
     // Create a new task
     (
         StatusCode::OK,
-        handle_new_task(registry, &params, request).await,
+        handle_new_task(registry, &params, request, owner).await,
     )
 }
 
@@ -145,6 +234,7 @@ async fn handle_tool_bridge(
     invocation: &ToolInvocation,
     request: &JsonRpcRequest,
     headers: &HeaderMap,
+    owner: &TaskOwner,
 ) -> (StatusCode, JsonRpcResponse) {
     let (ctx, tool) = match request_tool_context(state, headers, &invocation.tool).await {
         Ok(authorized) => authorized,
@@ -160,6 +250,16 @@ async fn handle_tool_bridge(
     } else {
         params.id.clone()
     };
+    // Refuse before execution an id held by another owner.
+    let taken = registry
+        .get_task(&task_id)
+        .map(|t| t.is_some_and(|t| t.owner.as_ref() != Some(owner)));
+    if !matches!(taken, Ok(false)) {
+        return (
+            StatusCode::OK,
+            store_error(request, RegistryError::TaskIdUnavailable),
+        );
+    }
 
     let response = match tool.execute(invocation.arguments.clone(), &ctx).await {
         Ok(result) => {
@@ -201,17 +301,11 @@ async fn handle_tool_bridge(
                     metadata: Default::default(),
                 }],
                 metadata: params.metadata.clone(),
+                owner: Some(owner.clone()),
             };
 
             if let Err(e) = registry.store_task(task.clone()) {
-                return (
-                    StatusCode::OK,
-                    JsonRpcResponse::error(
-                        request.id.clone(),
-                        AGENT_UNAVAILABLE,
-                        format!("Failed to store task: {e}"),
-                    ),
-                );
+                return (StatusCode::OK, store_error(request, e));
             }
 
             info!(task_id = %task_id, tool = %invocation.tool, "A2A→MCP tool bridge completed");
@@ -225,6 +319,7 @@ async fn handle_tool_bridge(
             &task_id,
             params,
             request,
+            owner,
             &format!("Tool execution failed: {e}"),
         ),
     };
@@ -234,20 +329,10 @@ async fn handle_tool_bridge(
 /// Handle continuation of an existing task
 async fn handle_continuation(
     registry: &super::registry::AgentRegistry,
+    mut existing: Task,
     params: &TaskSendParams,
     request: &JsonRpcRequest,
 ) -> JsonRpcResponse {
-    let mut existing = match registry.get_task(&params.id) {
-        Ok(Some(t)) => t,
-        _ => {
-            return JsonRpcResponse::error(
-                request.id.clone(),
-                TASK_NOT_FOUND,
-                format!("Task not found: {}", params.id),
-            );
-        }
-    };
-
     existing.history.push(params.message.clone());
     existing.status = TaskStatus {
         state: TaskState::Working,
@@ -278,11 +363,7 @@ async fn handle_continuation(
     };
 
     if let Err(e) = registry.store_task(existing.clone()) {
-        return JsonRpcResponse::error(
-            request.id.clone(),
-            AGENT_UNAVAILABLE,
-            format!("Failed to update task: {e}"),
-        );
+        return store_error(request, e);
     }
 
     info!(task_id = %existing.id, "A2A task continued");
@@ -297,6 +378,7 @@ async fn handle_new_task(
     registry: &super::registry::AgentRegistry,
     params: &TaskSendParams,
     request: &JsonRpcRequest,
+    owner: &TaskOwner,
 ) -> JsonRpcResponse {
     let task_id = if params.id.is_empty() {
         Uuid::new_v4().to_string()
@@ -334,14 +416,11 @@ async fn handle_new_task(
             metadata: Default::default(),
         }],
         metadata: params.metadata.clone(),
+        owner: Some(owner.clone()),
     };
 
     if let Err(e) = registry.store_task(task.clone()) {
-        return JsonRpcResponse::error(
-            request.id.clone(),
-            AGENT_UNAVAILABLE,
-            format!("Failed to store task: {e}"),
-        );
+        return store_error(request, e);
     }
 
     info!(task_id = %task_id, "A2A task created and completed");
@@ -357,6 +436,7 @@ fn create_failed_task_response(
     task_id: &str,
     params: &TaskSendParams,
     request: &JsonRpcRequest,
+    owner: &TaskOwner,
     error_message: &str,
 ) -> JsonRpcResponse {
     let error_msg = Message {
@@ -378,9 +458,12 @@ fn create_failed_task_response(
         history: vec![params.message.clone(), error_msg],
         artifacts: vec![],
         metadata: params.metadata.clone(),
+        owner: Some(owner.clone()),
     };
 
-    let _ = registry.store_task(task.clone());
+    if let Err(e @ RegistryError::TaskIdUnavailable) = registry.store_task(task.clone()) {
+        return store_error(request, e);
+    }
 
     JsonRpcResponse::success(
         request.id.clone(),
@@ -392,6 +475,7 @@ fn create_failed_task_response(
 async fn handle_tasks_get(
     registry: &super::registry::AgentRegistry,
     request: &JsonRpcRequest,
+    owner: &TaskOwner,
 ) -> JsonRpcResponse {
     let params: TaskGetParams = match serde_json::from_value(request.params.clone()) {
         Ok(p) => p,
@@ -404,7 +488,7 @@ async fn handle_tasks_get(
         }
     };
 
-    match registry.get_task(&params.id) {
+    match registry.get_owned_task(&params.id, owner) {
         Ok(Some(mut task)) => {
             // Optionally truncate history
             if let Some(max_len) = params.history_length {
@@ -435,6 +519,7 @@ async fn handle_tasks_get(
 async fn handle_tasks_cancel(
     registry: &super::registry::AgentRegistry,
     request: &JsonRpcRequest,
+    owner: &TaskOwner,
 ) -> JsonRpcResponse {
     let params: TaskCancelParams = match serde_json::from_value(request.params.clone()) {
         Ok(p) => p,
@@ -447,7 +532,7 @@ async fn handle_tasks_cancel(
         }
     };
 
-    match registry.get_task(&params.id) {
+    match registry.get_owned_task(&params.id, owner) {
         Ok(None) => {
             return JsonRpcResponse::error(
                 request.id.clone(),
@@ -468,7 +553,7 @@ async fn handle_tasks_cancel(
     match registry.cancel_task(&params.id) {
         Ok(true) => {
             info!(task_id = %params.id, "A2A task canceled");
-            let task = registry.get_task(&params.id).ok().flatten();
+            let task = registry.get_owned_task(&params.id, owner).ok().flatten();
             JsonRpcResponse::success(
                 request.id.clone(),
                 serde_json::to_value(&task)
@@ -627,7 +712,7 @@ mod tests {
         handle_tasks_send(&state, registry, &send_req).await;
 
         let get_req = get_request("task-1");
-        let resp = handle_tasks_get(registry, &get_req).await;
+        let resp = handle_tasks_get(registry, &get_req, &test_owner()).await;
         assert!(resp.error.is_none());
         assert_eq!(resp.result.unwrap()["id"], "task-1");
     }
@@ -636,7 +721,7 @@ mod tests {
     async fn test_tasks_get_not_found() {
         let registry = make_registry();
         let req = get_request("nonexistent");
-        let resp = handle_tasks_get(&registry, &req).await;
+        let resp = handle_tasks_get(&registry, &req, &test_owner()).await;
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, TASK_NOT_FOUND);
     }
@@ -655,7 +740,7 @@ mod tests {
             params: json!({"id": "task-1", "historyLength": 1}),
             id: json!(2),
         };
-        let resp = handle_tasks_get(registry, &req).await;
+        let resp = handle_tasks_get(registry, &req, &test_owner()).await;
         let result = resp.result.unwrap();
         assert!(result["history"].as_array().unwrap().len() <= 1);
     }
@@ -675,11 +760,12 @@ mod tests {
             history: vec![],
             artifacts: vec![],
             metadata: HashMap::new(),
+            owner: Some(test_owner()),
         };
         registry.store_task(task).unwrap();
 
         let req = cancel_request("task-1");
-        let resp = handle_tasks_cancel(&registry, &req).await;
+        let resp = handle_tasks_cancel(&registry, &req, &test_owner()).await;
         assert!(resp.error.is_none());
 
         let result = resp.result.unwrap();
@@ -695,7 +781,7 @@ mod tests {
         handle_tasks_send(&state, registry, &send_req).await;
 
         let req = cancel_request("task-1");
-        let resp = handle_tasks_cancel(registry, &req).await;
+        let resp = handle_tasks_cancel(registry, &req, &test_owner()).await;
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, TASK_NOT_CANCELABLE);
     }
@@ -704,7 +790,7 @@ mod tests {
     async fn test_tasks_cancel_not_found() {
         let registry = make_registry();
         let req = cancel_request("nonexistent");
-        let resp = handle_tasks_cancel(&registry, &req).await;
+        let resp = handle_tasks_cancel(&registry, &req, &test_owner()).await;
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, TASK_NOT_FOUND);
     }
@@ -760,6 +846,7 @@ mod tests {
             }],
             artifacts: vec![],
             metadata: Default::default(),
+            owner: None,
         };
 
         let response = create_gateway_response(&task);
@@ -856,5 +943,52 @@ mod tests {
         assert_eq!(auth_required, "authrequired");
         let rejected: serde_json::Value = serde_json::to_value(TaskState::Rejected).unwrap();
         assert_eq!(rejected, "rejected");
+    }
+
+    fn other_owner() -> TaskOwner {
+        TaskOwner {
+            tenant_id: "tenant-a".to_string(),
+            subject: "user-b".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_tasks_get_hides_other_owner_task() {
+        let state = make_state();
+        let registry = state.a2a_registry.as_ref().unwrap();
+        handle_tasks_send(&state, registry, &send_request("task-1", "secret")).await;
+
+        let foreign = handle_tasks_get(registry, &get_request("task-1"), &other_owner()).await;
+        let absent = handle_tasks_get(registry, &get_request("task-x"), &other_owner()).await;
+        assert!(foreign.result.is_none());
+        assert_eq!(foreign.error.as_ref().unwrap().code, TASK_NOT_FOUND);
+        assert_eq!(absent.error.as_ref().unwrap().code, TASK_NOT_FOUND);
+        assert_eq!(
+            foreign.error.unwrap().message,
+            absent.error.unwrap().message.replace("task-x", "task-1")
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_tasks_send_does_not_continue_or_overwrite_other_owner_task() {
+        let state = make_state();
+        let registry = state.a2a_registry.as_ref().unwrap();
+        handle_tasks_send(&state, registry, &send_request("task-1", "first")).await;
+        let before = registry.get_task("task-1").unwrap().unwrap();
+
+        let req = send_request("task-1", "intrusion");
+        let (_, resp) = handle_tasks_send_with_headers(
+            &state,
+            registry,
+            &req,
+            &HeaderMap::new(),
+            &other_owner(),
+        )
+        .await;
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.unwrap().code, INVALID_PARAMS);
+        let after = registry.get_task("task-1").unwrap().unwrap();
+        assert_eq!(after.owner, Some(test_owner()));
+        assert_eq!(after.history.len(), before.history.len());
     }
 }

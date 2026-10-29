@@ -90,6 +90,39 @@ fn test_env_var_nested_api_proxy_double_underscore() {
     clear_stoa_env();
 }
 
+#[test]
+fn test_env_var_api_proxy_backend_requirements() {
+    let _g = env_lock();
+    clear_stoa_env();
+    // Single-underscore form (as in k8s/deployment.yaml): not bound.
+    std::env::set_var("STOA_API_PROXY_ENABLED", "true");
+    std::env::set_var("STOA_API_PROXY_BACKENDS_N8N_BASE_URL", "http://n8n.invalid");
+    let config = Config::load().expect("load with single-underscore api_proxy vars");
+    assert!(!config.api_proxy.enabled);
+    assert!(config.api_proxy.backends.is_empty());
+    clear_stoa_env();
+
+    std::env::set_var(
+        "STOA_API_PROXY__BACKENDS__N8N__BASE_URL",
+        "http://n8n.invalid",
+    );
+    std::env::set_var(
+        "STOA_API_PROXY__BACKENDS__N8N__REQUIRED_ROLES",
+        "cpi-admin,devops",
+    );
+    std::env::set_var(
+        "STOA_API_PROXY__BACKENDS__N8N__REQUIRED_SCOPES",
+        "proxy:n8n",
+    );
+    let config = Config::load().expect("load with nested backend requirements");
+    let n8n = &config.api_proxy.backends["n8n"];
+    assert_eq!(n8n.required_roles, vec!["cpi-admin", "devops"]);
+    assert_eq!(n8n.required_scopes, vec!["proxy:n8n"]);
+    assert!(!n8n.public);
+
+    clear_stoa_env();
+}
+
 // ----- P0-2: CSV / JSON array string list deserializer ---------------------
 
 #[test]

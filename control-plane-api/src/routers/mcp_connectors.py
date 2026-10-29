@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import resolve_effective_tenant
 from ..config import settings
 from ..database import get_db
 from ..repositories.external_mcp_server import ExternalMCPServerRepository
@@ -53,7 +54,7 @@ def _get_tenant_id(user: User, explicit_tenant_id: str | None = None) -> str | N
     """Resolve the effective tenant_id for the request."""
     if "cpi-admin" in user.roles:
         return explicit_tenant_id
-    return user.tenant_id
+    return resolve_effective_tenant(user)
 
 
 def _build_oauth_service(db: AsyncSession) -> ConnectorOAuthService:

@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role, resolve_effective_tenant
 from src.database import get_db
+from src.models.catalog import APICatalog
+from src.models.gateway_instance import GatewayInstance
 from src.models.gateway_policy import GatewayPolicy, GatewayPolicyBinding, PolicyScope, PolicyType
 from src.repositories.gateway_policy import GatewayPolicyBindingRepository, GatewayPolicyRepository
 from src.schemas.policy import (
@@ -189,6 +191,14 @@ async def create_binding(
     policy = await policy_repo.get_by_id(data.policy_id)
     if not policy or (tenant is not None and policy.tenant_id != tenant):
         raise HTTPException(status_code=404, detail="Policy not found")
+
+    if tenant is not None:
+        for model, target_id in [(APICatalog, data.api_catalog_id), (GatewayInstance, data.gateway_instance_id)]:
+            if target_id is None:
+                continue
+            target = await db.get(model, target_id)
+            if target is None or target.tenant_id != tenant or target.deleted_at is not None:
+                raise HTTPException(status_code=404, detail="Binding target not found")
 
     binding_repo = GatewayPolicyBindingRepository(db)
     binding = GatewayPolicyBinding(

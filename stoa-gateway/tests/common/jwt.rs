@@ -81,16 +81,27 @@ fn sign_scoped(
     cnf: Option<serde_json::Value>,
     scope: &'static str,
 ) -> String {
+    sign_for(key, exp, cnf, "tenant-a", 1, scope)
+}
+
+fn sign_for(
+    key: &TestKey,
+    exp: i64,
+    cnf: Option<serde_json::Value>,
+    tenant_id: &'static str,
+    iat: i64,
+    scope: &'static str,
+) -> String {
     let mut header = Header::new(jsonwebtoken::Algorithm::RS256);
     header.kid = Some(KEY_ID.to_string());
     encode(
         &header,
         &FixtureClaims {
             sub: "auth-regression-user",
-            tenant_id: "tenant-a",
+            tenant_id,
             iss: ISSUER,
             aud: AUDIENCE,
-            iat: 1,
+            iat,
             exp,
             typ: "Bearer",
             scope,
@@ -104,6 +115,42 @@ fn sign_scoped(
 pub fn valid_token() -> &'static str {
     static TOKEN: OnceLock<String> = OnceLock::new();
     TOKEN.get_or_init(|| sign(4_102_444_800)).as_str()
+}
+
+/// Same subject and tenant as [`valid_token`], issued later: a renewed token.
+#[allow(dead_code)]
+pub fn renewed_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN
+        .get_or_init(|| {
+            sign_for(
+                test_key(),
+                4_102_444_800,
+                None,
+                "tenant-a",
+                2,
+                "openid proxy:read",
+            )
+        })
+        .as_str()
+}
+
+/// Same subject as [`valid_token`], another tenant.
+#[allow(dead_code)]
+pub fn other_tenant_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN
+        .get_or_init(|| {
+            sign_for(
+                test_key(),
+                4_102_444_800,
+                None,
+                "tenant-b",
+                1,
+                "openid proxy:read",
+            )
+        })
+        .as_str()
 }
 
 /// Valid signature and `typ`, but without the `proxy:read` scope.

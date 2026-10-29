@@ -9,7 +9,10 @@ use tower::ServiceExt;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::jwt::{self, bad_signature_token, expired_token, unscoped_token, valid_token};
+use crate::jwt::{
+    self, bad_signature_token, expired_token, other_tenant_token, renewed_token, unscoped_token,
+    valid_token,
+};
 use stoa_gateway::config::Config;
 use stoa_gateway::state::AppState;
 
@@ -487,6 +490,61 @@ async fn regression_router_public_proxy_anonymous_passes_policies() {
     );
     assert_eq!(policy_count(&state), 0);
     assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}
+
+async fn a2a_call(
+    router: &Router,
+    token: &str,
+    method: &str,
+    text: Option<&str>,
+) -> serde_json::Value {
+    let mut params = json!({"id": "owner-task"});
+    if let Some(text) = text {
+        params["message"] = json!({"role": "user", "parts": [{"type": "text", "text": text}]});
+    }
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+    let response = request(router, "/a2a", Some(token), &body.to_string()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{method}");
+    serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap()
+}
+
+fn error_message(value: &serde_json::Value) -> &str {
+    value["error"]["message"].as_str().unwrap_or("")
+}
+
+#[tokio::test]
+async fn regression_a2a_task_owner_survives_token_renewal() {
+    let oidc = jwt::oidc_server().await;
+    let router = stoa_gateway::build_router(AppState::new(jwt::config(&oidc)));
+    assert_ne!(valid_token(), renewed_token());
+    let created = a2a_call(&router, valid_token(), "tasks/send", Some("hello")).await;
+    assert!(created["error"].is_null(), "{created}");
+    let read = a2a_call(&router, renewed_token(), "tasks/get", None).await;
+    assert_eq!(read["result"]["id"], "owner-task", "{read}");
+    let next = a2a_call(&router, renewed_token(), "tasks/send", Some("again")).await;
+    assert!(next["error"].is_null(), "{next}");
+    let cancel = a2a_call(&router, renewed_token(), "tasks/cancel", None).await;
+    assert!(!error_message(&cancel).contains("not found"), "{cancel}");
+}
+
+#[tokio::test]
+async fn regression_a2a_task_refused_to_same_subject_in_other_tenant() {
+    let oidc = jwt::oidc_server().await;
+    let router = stoa_gateway::build_router(AppState::new(jwt::config(&oidc)));
+    let created = a2a_call(&router, valid_token(), "tasks/send", Some("hello")).await;
+    assert!(created["error"].is_null(), "{created}");
+    for method in ["tasks/get", "tasks/cancel"] {
+        let other = a2a_call(&router, other_tenant_token(), method, None).await;
+        assert_eq!(
+            error_message(&other),
+            "Task not found: owner-task",
+            "{method}"
+        );
+    }
+    let other = a2a_call(&router, other_tenant_token(), "tasks/send", Some("x")).await;
+    assert!(other["result"].is_null(), "{other}");
+    let read = a2a_call(&router, valid_token(), "tasks/get", None).await;
+    assert_eq!(read["result"]["id"], "owner-task", "{read}");
 }
 
 #[tokio::test]

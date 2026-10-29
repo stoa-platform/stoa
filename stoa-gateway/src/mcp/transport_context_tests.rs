@@ -2305,3 +2305,41 @@ async fn a2a_admin_assurance_precedes_execution() {
         }
     }
 }
+
+#[tokio::test]
+async fn regression_a2a_tasks_are_scoped_to_the_token_identity() {
+    let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+    let alice = fixture.token(json!({"sub": "alice"}));
+    let bob = fixture.token(json!({"sub": "bob"}));
+    let send = json!({"jsonrpc": "2.0", "id": 1, "method": "tasks/send",
+    "params": {"id": "shared-task", "message": {"role": "user", "parts": [
+        {"type": "text", "text": "alice data"}
+    ]}}});
+    let (status, _) = fixture.post("/a2a", Some(&alice), send.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let tool = json!({"jsonrpc": "2.0", "id": 2, "method": "tasks/send",
+    "params": {"id": "shared-task", "message": {"role": "user", "parts": [
+        {"type": "data", "data": {"tool": "echo_tool", "arguments": {}}}
+    ]}}});
+    let carol = fixture.token(json!({"sub": "alice", "tenant_id": "tenant-b"}));
+    for (caller, body) in [(&bob, tool), (&carol, send)] {
+        let (_, response) = fixture.post("/a2a", Some(caller), body).await;
+        assert_eq!(response["error"]["code"], -32602);
+    }
+    for caller in [&bob, &carol] {
+        for method in ["tasks/get", "tasks/cancel"] {
+            let body = json!({"jsonrpc": "2.0", "id": 3, "method": method,
+                "params": {"id": "shared-task"}});
+            let (_, response) = fixture.post("/a2a", Some(caller), body).await;
+            assert_eq!(response["error"]["message"], "Task not found: shared-task");
+        }
+    }
+    let get = json!({"jsonrpc": "2.0", "id": 4, "method": "tasks/get",
+        "params": {"id": "shared-task"}});
+    let (_, response) = fixture.post("/a2a", Some(&alice), get).await;
+    assert_eq!(
+        response["result"]["history"][0]["parts"][0]["text"],
+        "alice data"
+    );
+}

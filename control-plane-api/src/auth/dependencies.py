@@ -10,6 +10,7 @@ Mapper rollout so MCP tokens authenticate even before the mapper lands.
 """
 
 import hashlib
+import hmac
 import time
 
 import httpx
@@ -103,6 +104,12 @@ async def get_keycloak_public_key() -> str:
     return pem
 
 
+def _operator_key_is_configured(operator_key: str) -> bool:
+    """Compare the presented operator key with every configured key in constant time."""
+    presented = operator_key.encode("utf-8")
+    return any(hmac.compare_digest(presented, key.encode("utf-8")) for key in settings.gateway_api_keys_list)
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
@@ -116,7 +123,7 @@ async def get_current_user(
 
     # Service-to-service auth for internal operators (ADR-042)
     operator_key = request.headers.get("X-Operator-Key")
-    if operator_key and operator_key in settings.gateway_api_keys_list:
+    if operator_key and _operator_key_is_configured(operator_key):
         # CAB-2146: fingerprint the key so the rate-limit bucket is per-operator.
         # Never log or store the raw key — only the sha256[:16] fingerprint.
         fingerprint = hashlib.sha256(operator_key.encode("utf-8")).hexdigest()[:16]

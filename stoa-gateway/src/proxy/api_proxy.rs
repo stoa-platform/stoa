@@ -113,6 +113,9 @@ mod tests {
                     timeout_secs: 30,
                     circuit_breaker_enabled: true,
                     fallback_direct: false,
+                    required_scopes: vec![],
+                    required_roles: vec![],
+                    public: false,
                     allowed_paths: vec![],
                 },
             );

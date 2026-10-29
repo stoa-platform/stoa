@@ -315,3 +315,161 @@ async fn proxy_path_variants_without_token() {
     }
     assert!(upstream.received_requests().await.unwrap().is_empty());
 }
+
+const POLICY_BODY: &str = r#"{"jsonrpc":"2.0","id":1,"method":"tasks/send",
+"params":{"id":"policy-task","message":{"role":"user","parts":[{"type":"text","text":"hello"}]}}}"#;
+async fn policy_fixture() -> (MockServer, MockServer, Config) {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(path("/echo"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let mut config = jwt::config(&oidc);
+    enable_proxy(&mut config, &upstream);
+    config.quota_enforcement_enabled = true;
+    config.quota_default_rate_per_minute = 0;
+    (oidc, upstream, config)
+}
+fn policy_count(state: &AppState) -> u64 {
+    state
+        .quota_manager
+        .get_stats("auth-regression-user")
+        .map_or(0, |stats| stats.daily_count)
+}
+fn assert_unspent_policy(state: &AppState) {
+    assert_eq!(policy_count(state), 0);
+    assert!(state
+        .a2a_registry
+        .as_ref()
+        .unwrap()
+        .get_task("policy-task")
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
+async fn regression_router_auth_precedes_quota_once() {
+    for uri in ["/a2a", "/proxy/test/echo"] {
+        let (_oidc, upstream, mut config) = policy_fixture().await;
+        config.quota_default_daily_limit = 1;
+        let state = AppState::new(config);
+        let router = stoa_gateway::build_router(state.clone());
+        let first = request(&router, uri, Some(valid_token()), POLICY_BODY).await;
+        assert_eq!(first.status(), StatusCode::OK, "{uri}");
+        assert_eq!(
+            policy_count(&state),
+            1,
+            "one successful request, one charge"
+        );
+        let second = request(&router, uri, Some(valid_token()), POLICY_BODY).await;
+        assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS, "{uri}");
+        let body = to_bytes(second.into_body(), 4096).await.unwrap();
+        let error: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(error["message"].as_str().unwrap().contains("Daily quota"));
+        assert_eq!(policy_count(&state), 1, "quota refusal is not charged");
+        assert_eq!(
+            upstream.received_requests().await.unwrap().len(),
+            usize::from(uri.starts_with("/proxy/"))
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_router_sender_refuses_before_quota_and_handler() {
+    for uri in ["/a2a", "/proxy/test/echo"] {
+        let (_oidc, upstream, mut config) = policy_fixture().await;
+        config.sender_constraint.enabled = true;
+        config.sender_constraint.dpop_required = true;
+        let state = AppState::new(config);
+        let router = stoa_gateway::build_router(state.clone());
+        let response = request(&router, uri, Some(valid_token()), POLICY_BODY).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        let error: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(error["error"], "SENDER_CONSTRAINT_DPOP_REQUIRED");
+        assert_unspent_policy(&state);
+        assert!(upstream.received_requests().await.unwrap().is_empty());
+        for public in ["/health", "/mcp/capabilities"] {
+            assert_eq!(
+                send(&router, "GET", public, &[]).await.status(),
+                StatusCode::OK
+            );
+        }
+        assert_eq!(policy_count(&state), 0);
+    }
+}
+
+#[tokio::test]
+async fn regression_router_auth_precedes_command_supervision() {
+    for uri in ["/a2a", "/proxy/test/echo"] {
+        let (_oidc, upstream, mut config) = policy_fixture().await;
+        config.supervision_enabled = true;
+        config.supervision_default_tier = stoa_gateway::config::SupervisionDefaultTier::Command;
+        let state = AppState::new(config);
+        let router = stoa_gateway::build_router(state.clone());
+        for token in ["invalid", bad_signature_token(), expired_token()] {
+            assert_unauthorized(request(&router, uri, Some(token), POLICY_BODY).await);
+        }
+        let response = request(&router, uri, Some(valid_token()), POLICY_BODY).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{uri}");
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        let error: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(error["error"], "supervision_blocked");
+        assert_unspent_policy(&state);
+        assert!(upstream.received_requests().await.unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn regression_router_mtls_extracts_before_sender_constraint() {
+    let (_oidc, upstream, mut config) = policy_fixture().await;
+    config.mtls.enabled = true;
+    config.mtls.trusted_proxies = vec!["127.0.0.1/32".to_string()];
+    config.sender_constraint.enabled = true;
+    config.sender_constraint.mtls_required = true;
+    let state = AppState::new(config);
+    let router = stoa_gateway::build_router(state.clone());
+    for (uri, peer, expected) in [
+        ("/a2a", "127.0.0.1:443", StatusCode::OK),
+        ("/proxy/test/echo", "127.0.0.1:443", StatusCode::OK),
+        ("/proxy/test/echo", "192.0.2.1:443", StatusCode::FORBIDDEN),
+    ] {
+        let mut req = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", jwt::mtls_token()))
+            .header("X-SSL-Client-Verify", "SUCCESS")
+            .header("X-SSL-Client-Fingerprint", "11".repeat(32))
+            .body(Body::from(POLICY_BODY))
+            .unwrap();
+        req.extensions_mut().insert(axum::extract::ConnectInfo(
+            peer.parse::<std::net::SocketAddr>().unwrap(),
+        ));
+        assert_eq!(
+            router.clone().oneshot(req).await.unwrap().status(),
+            expected
+        );
+    }
+    assert_eq!(policy_count(&state), 2);
+    assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn regression_router_public_proxy_keeps_legacy_policy_order() {
+    let (_oidc, upstream, mut config) = policy_fixture().await;
+    config.api_proxy.require_auth = false;
+    config.sender_constraint.enabled = true;
+    config.sender_constraint.dpop_required = true;
+    let state = AppState::new(config);
+    let router = stoa_gateway::build_router(state.clone());
+    assert_eq!(
+        request(&router, "/proxy/test/echo", None, "{}")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(policy_count(&state), 0);
+    assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}

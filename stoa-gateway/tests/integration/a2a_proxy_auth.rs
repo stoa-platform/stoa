@@ -32,9 +32,19 @@ fn enable_proxy(config: &mut Config, upstream: &MockServer) {
     // Omit require_auth deliberately: deserialization must default to true.
     config.api_proxy = serde_json::from_value(json!({
         "enabled": true,
-        "backends": {"test": {"enabled": true, "base_url": upstream.uri()}}
+        "backends": {"test": {"enabled": true, "base_url": upstream.uri(),
+            "required_scopes": ["proxy:read"]}}
     }))
     .unwrap();
+}
+
+fn enable_public_proxy(config: &mut Config, upstream: &MockServer) {
+    enable_proxy(config, upstream);
+    config.api_proxy.require_auth = false;
+    let backend = config.api_proxy.backends.get_mut("test").unwrap();
+    backend.public = true;
+    backend.auth_type = "none".into();
+    backend.required_scopes.clear();
 }
 
 fn assert_unauthorized(response: Response) {
@@ -129,21 +139,25 @@ async fn regression_proxy_public_when_require_auth_false() {
     Mock::given(method("POST"))
         .and(path("/echo"))
         .respond_with(ResponseTemplate::new(200))
-        .expect(8)
+        .expect(3)
         .mount(&upstream)
         .await;
-    for mut config in [Config::default(), jwt::config(&oidc)] {
-        enable_proxy(&mut config, &upstream);
-        config.api_proxy.require_auth = false;
+    // Public backend (auth_type none): anonymous calls pass; a presented
+    // token is validated even with require_auth=false.
+    for (mut config, valid) in [
+        (Config::default(), StatusCode::UNAUTHORIZED),
+        (jwt::config(&oidc), StatusCode::OK),
+    ] {
+        enable_public_proxy(&mut config, &upstream);
         let router = stoa_gateway::build_router(AppState::new(config));
-        for token in [
-            None,
-            Some("invalid"),
-            Some(expired_token()),
-            Some(valid_token()),
+        for (token, expected) in [
+            (None, StatusCode::OK),
+            (Some("invalid"), StatusCode::UNAUTHORIZED),
+            (Some(expired_token()), StatusCode::UNAUTHORIZED),
+            (Some(valid_token()), valid),
         ] {
             let response = request(&router, "/proxy/test/echo", token, "{}").await;
-            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.status(), expected);
         }
     }
 }
@@ -176,7 +190,8 @@ async fn proxy_upstream_request_headers() {
         "backends": {"test": {
             "enabled": true,
             "base_url": upstream.uri(),
-            "auth_header": "X-API-Key"
+            "auth_header": "X-API-Key",
+            "required_scopes": ["proxy:read"]
         }}
     }))
     .unwrap();
@@ -457,9 +472,9 @@ async fn regression_router_mtls_extracts_before_sender_constraint() {
 }
 
 #[tokio::test]
-async fn regression_router_public_proxy_keeps_legacy_policy_order() {
+async fn regression_router_public_proxy_anonymous_passes_policies() {
     let (_oidc, upstream, mut config) = policy_fixture().await;
-    config.api_proxy.require_auth = false;
+    enable_public_proxy(&mut config, &upstream);
     config.sender_constraint.enabled = true;
     config.sender_constraint.dpop_required = true;
     let state = AppState::new(config);
@@ -471,5 +486,27 @@ async fn regression_router_public_proxy_keeps_legacy_policy_order() {
         StatusCode::OK
     );
     assert_eq!(policy_count(&state), 0);
+    assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn proxy_identity_precedes_quota_when_require_auth_false() {
+    let (_oidc, upstream, mut config) = policy_fixture().await;
+    config.api_proxy.require_auth = false;
+    config.quota_default_daily_limit = 1;
+    let state = AppState::new(config);
+    let router = stoa_gateway::build_router(state.clone());
+    let uri = "/proxy/test/echo";
+    let first = request(&router, uri, Some(valid_token()), "{}").await;
+    assert_eq!(first.status(), StatusCode::OK);
+    assert_eq!(
+        policy_count(&state),
+        1,
+        "quota keyed by the validated identity"
+    );
+    let second = request(&router, uri, Some(valid_token()), "{}").await;
+    assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_unauthorized(request(&router, uri, Some(expired_token()), "{}").await);
+    assert_eq!(policy_count(&state), 1);
     assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
 }

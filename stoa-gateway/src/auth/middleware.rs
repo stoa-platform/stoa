@@ -369,7 +369,13 @@ pub async fn api_proxy_jwt_required(
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    if state.config.api_proxy.require_auth {
+    // With require_auth=false, a request carrying Authorization still gets its
+    // identity validated here, upstream of the edge policies; only a request
+    // without Authorization continues anonymously (public backends only).
+    let has_authorization = request
+        .headers()
+        .contains_key(axum::http::header::AUTHORIZATION);
+    if state.config.api_proxy.require_auth || has_authorization {
         jwt_required(State(state), request, next).await
     } else {
         next.run(request).await

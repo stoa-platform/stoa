@@ -74,11 +74,11 @@ pub struct ProxyBackendConfig {
 
     /// Access requirement: any one of these exact `scope` values is enough.
     /// Empty lists on a non-public backend mean the request is refused.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::deserializers::string_list")]
     pub required_scopes: Vec<String>,
 
     /// Access requirement: any one of these exact realm roles is enough.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::deserializers::string_list")]
     pub required_roles: Vec<String>,
 
     /// Explicitly public backend: the only case served without an identity.

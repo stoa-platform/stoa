@@ -322,11 +322,9 @@ pub fn build_router(state: AppState) -> Router {
                 state.clone(),
                 auth::middleware::api_proxy_jwt_required,
             );
-            let protected_proxy = if state.config.api_proxy.require_auth {
-                edge_policies(proxy_routes, true).layer(proxy_auth)
-            } else {
-                edge_policies(proxy_routes.layer(proxy_auth), false)
-            };
+            // Identity bootstrap precedes the edge policies whatever
+            // api_proxy.require_auth says; see api_proxy_jwt_required.
+            let protected_proxy = edge_policies(proxy_routes, true).layer(proxy_auth);
             edge_policies(edge_base, false)
                 .merge(protected_mcp)
                 .merge(protected_a2a)

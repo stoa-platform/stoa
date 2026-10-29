@@ -20,6 +20,8 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
+use crate::auth::access_requirement::{authorize, Identity, TypClaimPolicy};
+use crate::auth::middleware::AuthenticatedUser;
 use crate::metrics;
 use crate::state::AppState;
 
@@ -157,6 +159,24 @@ pub async fn api_proxy_handler(
         }
     };
 
+    // Access requirement: before allowed paths, quota, credential and upstream.
+    // The reason stays in the log only; no token, claim or identity is logged.
+    let decision = authorize(
+        proxy_identity(&request),
+        (&backend.config).into(),
+        TypClaimPolicy::default(),
+    );
+    if let Err(reason) = decision {
+        warn!(backend = %backend_name, reason = ?reason, "API proxy: access refused");
+        metrics::record_api_proxy_request(
+            &backend_name,
+            &method_str,
+            403,
+            start.elapsed().as_secs_f64(),
+        );
+        return (StatusCode::FORBIDDEN, "Access denied").into_response();
+    }
+
     // 3. Check allowed paths (if configured)
     if !backend.config.allowed_paths.is_empty() {
         let path_with_slash = format!("/{rest}");
@@ -250,6 +270,16 @@ pub async fn api_proxy_handler(
     // 7. Fetch credential from store (keyed by "api-proxy:{backend}")
     let credential_key = format!("api-proxy:{backend_name}");
     let credential = state.credential_store.get(&credential_key);
+    if backend.config.public && credential.is_some() {
+        error!(backend = %backend_name, "API proxy: public backend has a service credential");
+        metrics::record_api_proxy_request(
+            &backend_name,
+            &method_str,
+            403,
+            start.elapsed().as_secs_f64(),
+        );
+        return (StatusCode::FORBIDDEN, "Access denied").into_response();
+    }
 
     // 8. Build upstream request
     let method = request.method().clone();
@@ -443,6 +473,22 @@ pub async fn api_proxy_handler(
     }
 }
 
+/// Identity seen by the proxy. A validated user comes from the auth layer.
+/// Any Authorization header without a validated user (malformed, another
+/// scheme, or a Bearer not validated upstream) counts as rejected, never absent.
+fn proxy_identity(request: &Request<Body>) -> Identity<'_> {
+    if let Some(user) = request.extensions().get::<AuthenticatedUser>() {
+        Identity::Present(user)
+    } else if request
+        .headers()
+        .contains_key(axum::http::header::AUTHORIZATION)
+    {
+        Identity::Rejected
+    } else {
+        Identity::Absent
+    }
+}
+
 /// Handler for listing registered API proxy backends (admin endpoint).
 /// Returns JSON array of backend names + status.
 pub async fn list_api_proxy_backends(State(state): State<AppState>) -> Response {
@@ -517,6 +563,105 @@ fn is_forwarded_request_header(name: &str, backend_auth_header: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proxy::credentials::{AuthType, BackendCredential};
+    use axum::http::header::AUTHORIZATION;
+    use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+
+    fn user(scope: &str) -> AuthenticatedUser {
+        let claims = serde_json::from_value(serde_json::json!({
+            "sub": "u", "exp": 4_102_444_800i64, "iat": 0, "iss": "https://issuer.example",
+            "aud": "stoa", "typ": "Bearer", "scope": scope
+        }))
+        .unwrap();
+        AuthenticatedUser {
+            user_id: "u".into(),
+            username: None,
+            email: None,
+            tenant_id: None,
+            claims,
+            raw_token: String::new(),
+        }
+    }
+
+    async fn call(
+        backend: serde_json::Value,
+        who: Option<&str>,
+        authz: Option<&str>,
+    ) -> (StatusCode, usize) {
+        let upstream = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&upstream)
+            .await;
+        let mut b = serde_json::json!({ "enabled": true, "base_url": upstream.uri() });
+        b.as_object_mut()
+            .unwrap()
+            .extend(backend.as_object().unwrap().clone());
+        let api = serde_json::json!({ "enabled": true, "backends": { "t": b } });
+        let config = crate::config::Config {
+            api_proxy: serde_json::from_value(api).unwrap(),
+            ..Default::default()
+        };
+        let state = AppState::new(config);
+        state.credential_store.upsert(BackendCredential {
+            route_id: "api-proxy:t".into(),
+            auth_type: AuthType::ApiKey,
+            header_name: "X-Service-Key".into(),
+            header_value: "fixture-service-value".into(),
+            oauth2: None,
+        });
+        let mut req = Request::builder().uri("/proxy/t/echo");
+        if let Some(a) = authz {
+            req = req.header(AUTHORIZATION, a);
+        }
+        let mut req = req.body(Body::empty()).unwrap();
+        if let Some(scope) = who {
+            req.extensions_mut().insert(user(scope));
+        }
+        let res = api_proxy_handler(State(state), Path("t/echo".into()), req).await;
+        (
+            res.status(),
+            upstream.received_requests().await.unwrap().len(),
+        )
+    }
+
+    #[tokio::test]
+    async fn regression_proxy_token_without_required_scope_is_403_without_upstream_call() {
+        let guarded = serde_json::json!({ "required_scopes": ["proxy:read"], "rate_limit_rpm": 1 });
+        assert_eq!(
+            call(guarded.clone(), Some("openid"), None).await,
+            (StatusCode::FORBIDDEN, 0)
+        );
+        // The refusal did not consume the single RPM token of a fresh backend.
+        assert_eq!(
+            call(guarded, Some("proxy:read"), None).await,
+            (StatusCode::OK, 1)
+        );
+    }
+
+    #[tokio::test]
+    async fn proxy_backend_without_requirement_is_403() {
+        let r = call(serde_json::json!({}), Some("proxy:read"), None).await;
+        assert_eq!(r, (StatusCode::FORBIDDEN, 0));
+    }
+
+    #[tokio::test]
+    async fn regression_proxy_unvalidated_authorization_is_rejected_not_absent() {
+        let public = serde_json::json!({ "public": true, "auth_type": "none" });
+        for header in ["Basic dTpw", "Bearer", "Bearer not-validated", ""] {
+            assert_eq!(
+                call(public.clone(), None, Some(header)).await,
+                (StatusCode::FORBIDDEN, 0),
+                "{header:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_proxy_public_backend_never_injects_service_credential() {
+        let public = serde_json::json!({ "public": true, "auth_type": "none" });
+        assert_eq!(call(public, None, None).await, (StatusCode::FORBIDDEN, 0));
+    }
 
     #[test]
     fn test_forwarded_request_headers() {

@@ -60,6 +60,13 @@ pub enum ConfigError {
     )]
     SenderConstraintWithoutBacking,
 
+    /// An API proxy backend declares an inconsistent access setting.
+    #[error("api_proxy backend `{backend}`: {reason}")]
+    ApiProxyBackendAccess {
+        backend: String,
+        reason: &'static str,
+    },
+
     /// `tcp_rate_limit_per_ip` must be a finite positive float when set.
     /// NaN / -inf / +inf would silently disable or fully-open the limiter.
     #[error("tcp_rate_limit_per_ip must be a finite positive f64 when set (got {0})")]
@@ -179,6 +186,15 @@ impl Config {
             return Err(ConfigError::SenderConstraintWithoutBacking);
         }
 
+        for (backend, b) in &self.api_proxy.backends {
+            if let Some(reason) = b.access_conflict() {
+                return Err(ConfigError::ApiProxyBackendAccess {
+                    backend: backend.clone(),
+                    reason,
+                });
+            }
+        }
+
         if let Some(rate) = self.tcp_rate_limit_per_ip {
             if !rate.is_finite() || rate <= 0.0 {
                 return Err(ConfigError::TcpRateLimitNotFinite(rate));
@@ -267,6 +283,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::{Config, ConfigError};
+    use serde_json::json;
 
     /// Regression test for PR #1814: OAuth proxy endpoints must use
     /// keycloak_internal_url when available, to bypass hairpin NAT on OVH MKS.
@@ -316,6 +333,41 @@ mod tests {
             assert_eq!(config.port, 8080);
             Ok(())
         });
+    }
+
+    #[test]
+    fn test_validate_rejects_inconsistent_public_proxy_backend() {
+        for (extra, ok) in [
+            (json!({ "public": true, "auth_type": "none" }), true),
+            (json!({ "public": true }), false),
+            (json!({ "public": true, "auth_type": "api_key" }), false),
+            (
+                json!({ "public": true, "auth_type": "none", "required_scopes": ["s"] }),
+                false,
+            ),
+            (
+                json!({ "public": true, "auth_type": "none", "required_roles": ["r"] }),
+                false,
+            ),
+            (json!({ "required_scopes": ["s"] }), true),
+        ] {
+            let mut b = json!({ "base_url": "http://upstream.invalid" });
+            b.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            let config = Config {
+                api_proxy: serde_json::from_value(json!({ "backends": { "t": b } })).unwrap(),
+                ..Config::default()
+            };
+            let r = config.validate();
+            assert_eq!(r.is_ok(), ok, "{extra}");
+            if !ok {
+                assert!(
+                    matches!(r, Err(ConfigError::ApiProxyBackendAccess { .. })),
+                    "{extra}"
+                );
+            }
+        }
     }
 
     #[test]

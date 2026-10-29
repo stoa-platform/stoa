@@ -91,6 +91,23 @@ pub struct ProxyBackendConfig {
     pub allowed_paths: Vec<String>,
 }
 
+impl ProxyBackendConfig {
+    /// Load-time consistency of the access settings. A public backend serves
+    /// callers without identity, so it must not carry a service credential
+    /// (`auth_type: none`) and must not declare required scopes or roles.
+    pub fn access_conflict(&self) -> Option<&'static str> {
+        if !self.public {
+            None
+        } else if !self.auth_type.eq_ignore_ascii_case("none") {
+            Some("public backend requires auth_type none (no service credential)")
+        } else if !self.required_scopes.is_empty() || !self.required_roles.is_empty() {
+            Some("public backend cannot declare required_scopes or required_roles")
+        } else {
+            None
+        }
+    }
+}
+
 fn default_api_proxy_require_auth() -> bool {
     true
 }

@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 
 from src.auth.dependencies import User, get_current_user
 from src.database import get_db
+from src.models.catalog import APICatalog
+from src.models.gateway_instance import GatewayInstance
 from src.models.gateway_policy import GatewayPolicy, GatewayPolicyBinding, PolicyScope, PolicyType
 from src.routers import gateway_policies as routes
 
@@ -59,6 +61,10 @@ class SessionSpy:
         rows = self.state.policies if is_policy else self.state.bindings
         return SimpleNamespace(scalar_one_or_none=lambda: value, scalars=lambda: SimpleNamespace(all=lambda: rows))
 
+    async def get(self, model: type, identity: UUID) -> object | None:
+        self.reads.append(("get", model, identity))
+        return self.state.targets.get((model, identity))
+
     def add(self, value: object) -> None:
         self.writes.append("add")
 
@@ -86,6 +92,7 @@ def access(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     state = SimpleNamespace(user=persona(), policy=policy("tenant-a"), binding=binding("tenant-a"), events=[])
     state.policies = [policy(t) for t in ["tenant-a", "tenant-b", None]]
     state.bindings = [binding(t) for t in ["tenant-a", "tenant-b", None]]
+    state.targets = {}
     state.db = SessionSpy(state)
 
     async def emit(**kwargs: object) -> None:
@@ -188,4 +195,94 @@ def test_regression_non_admin_roles_still_forbidden(access: SimpleNamespace, rol
 
 def test_regression_policy_delete_remains_platform_only(access: SimpleNamespace) -> None:
     assert call(access, "delete").status_code == 403
+    assert access.db.reads == access.db.writes == access.events == []
+
+
+AID = UUID("30000000-0000-4000-8000-000000000001")
+GID = UUID("40000000-0000-4000-8000-000000000001")
+
+
+def bind_targets(state: SimpleNamespace, api: str | None = "omit", gateway: str | None = "omit"):
+    body = {"policy_id": str(PID), "tenant_id": state.user.tenant_id}
+    for model, field, identity, owner in [
+        (APICatalog, "api_catalog_id", AID, api),
+        (GatewayInstance, "gateway_instance_id", GID, gateway),
+    ]:
+        if owner == "omit":
+            continue
+        body[field] = str(identity)
+        if owner != "missing":
+            state.targets[(model, identity)] = model(
+                id=identity, tenant_id="tenant-a" if owner == "deleted" else owner,
+                deleted_at=datetime.now(UTC) if owner == "deleted" else None,
+            )
+    return state.client.post(BASE + "/bindings", json=body)
+
+
+@pytest.mark.parametrize(("api", "gateway", "rejected"), [
+    ("tenant-b", "omit", APICatalog), (None, "omit", APICatalog),
+    ("missing", "omit", APICatalog), ("deleted", "omit", APICatalog),
+    ("omit", "tenant-b", GatewayInstance), ("omit", None, GatewayInstance),
+    ("omit", "missing", GatewayInstance), ("omit", "deleted", GatewayInstance),
+    ("tenant-a", "tenant-b", GatewayInstance), ("tenant-b", "tenant-a", APICatalog),
+])
+def test_regression_binding_target_requires_own_active_tenant(
+    access: SimpleNamespace, api: str | None, gateway: str | None, rejected: type,
+) -> None:
+    response = bind_targets(access, api, gateway)
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Binding target not found"
+    assert ("get", rejected, AID if rejected is APICatalog else GID) in access.db.reads
+    assert access.db.writes == access.events == []
+
+
+@pytest.mark.parametrize(("api", "gateway"), [
+    ("tenant-a", "omit"), ("omit", "tenant-a"), ("tenant-a", "tenant-a"), ("omit", "omit"),
+])
+def test_regression_binding_own_targets_and_no_target_remain_allowed(
+    access: SimpleNamespace, api: str, gateway: str,
+) -> None:
+    response = bind_targets(access, api, gateway)
+    assert response.status_code == 201
+    assert response.json()["tenant_id"] == "tenant-a"
+    assert response.json()["api_catalog_id"] == (str(AID) if api != "omit" else None)
+    assert response.json()["gateway_instance_id"] == (str(GID) if gateway != "omit" else None)
+    assert "commit" in access.db.writes
+    assert len(access.events) == 1
+
+
+@pytest.mark.parametrize(("api", "gateway"), [
+    ("tenant-b", "omit"), ("omit", "tenant-b"), ("omit", None), ("tenant-b", None),
+])
+def test_regression_platform_admin_target_contract_is_unchanged(
+    access: SimpleNamespace, api: str, gateway: str | None,
+) -> None:
+    access.user = persona("cpi-admin", None)
+    response = bind_targets(access, api, gateway)
+    assert response.status_code == 201
+    assert response.json()["tenant_id"] is None
+    assert not any(isinstance(row, tuple) and row[0] == "get" for row in access.db.reads)
+    assert "commit" in access.db.writes
+    assert len(access.events) == 1
+
+
+@pytest.mark.parametrize("owner", [None, "tenant-b"])
+def test_regression_policy_is_checked_before_binding_targets(access: SimpleNamespace, owner: str | None) -> None:
+    access.policy.tenant_id = owner
+    assert bind_targets(access, "tenant-a", "tenant-a").status_code == 404
+    assert not any(isinstance(row, tuple) and row[0] == "get" for row in access.db.reads)
+    assert access.db.writes == access.events == []
+
+
+@pytest.mark.parametrize("tenant", [None, "", "   "])
+def test_regression_binding_targets_do_not_bypass_missing_tenant(access: SimpleNamespace, tenant: str | None) -> None:
+    access.user = persona(tenant=tenant)
+    assert bind_targets(access, "tenant-a", "tenant-a").status_code == 403
+    assert access.db.reads == access.db.writes == access.events == []
+
+
+@pytest.mark.parametrize("role", ["viewer", "devops"])
+def test_regression_binding_targets_do_not_expand_roles(access: SimpleNamespace, role: str) -> None:
+    access.user = persona(role)
+    assert bind_targets(access, "tenant-a", "tenant-a").status_code == 403
     assert access.db.reads == access.db.writes == access.events == []

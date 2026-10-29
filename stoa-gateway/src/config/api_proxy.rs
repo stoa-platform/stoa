@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiProxyConfig {
-    /// Master switch: enable the `/apis/{backend}/*` proxy router.
+    /// Master switch: enable the `/proxy/{backend}/*` proxy router.
     /// Env: STOA_API_PROXY__ENABLED
     #[serde(default)]
     pub enabled: bool,
@@ -85,7 +85,8 @@ pub struct ProxyBackendConfig {
     #[serde(default)]
     pub public: bool,
 
-    /// Allowed path prefixes (empty = allow all paths).
+    /// Segment prefixes of the validated path; trailing slashes are ignored.
+    /// Empty list, empty prefix, or root prefix impose no prefix restriction.
     /// Security: prevents proxy abuse by restricting accessible paths.
     #[serde(default)]
     pub allowed_paths: Vec<String>,

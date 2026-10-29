@@ -1,4 +1,4 @@
-//! API Proxy handler — routes `/apis/{backend}/*` to upstream (CAB-1724).
+//! API Proxy handler — routes `/proxy/{backend}/*` to upstream (CAB-1724).
 //!
 //! Credential injection: reads the backend API key from CredentialStore
 //! (keyed by backend name) and injects it into the upstream request.
@@ -33,6 +33,7 @@ static API_PROXY_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceL
 fn get_api_proxy_client() -> &'static reqwest::Client {
     API_PROXY_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(60))
             .connect_timeout(Duration::from_secs(5))
             .pool_max_idle_per_host(64)
@@ -42,6 +43,49 @@ fn get_api_proxy_client() -> &'static reqwest::Client {
             .build()
             .expect("Failed to create API proxy HTTP client")
     })
+}
+
+// Validate Axum's decoded capture before constructing the one URL sent upstream.
+fn proxy_target(
+    base: &str,
+    rest: &str,
+    query: Option<&str>,
+    prefixes: &[String],
+) -> Result<reqwest::Url, StatusCode> {
+    let lower = rest.to_ascii_lowercase();
+    let ambiguous = rest.chars().any(|c| c.is_control() || c == '\\')
+        || rest.starts_with('/')
+        || rest.contains("//")
+        || rest.split('/').any(|segment| matches!(segment, "." | ".."))
+        || ["%2e", "%2f", "%5c", "%25"]
+            .iter()
+            .any(|encoded| lower.contains(*encoded));
+    let path = format!("/{rest}");
+    let allowed = prefixes.is_empty()
+        || prefixes.iter().any(|prefix| {
+            let prefix = prefix.trim_end_matches('/');
+            prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))
+        });
+    if ambiguous || !allowed {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let mut target = reqwest::Url::parse(base).map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !matches!(target.scheme(), "http" | "https")
+        || target.host_str().is_none()
+        || target.query().is_some()
+        || target.fragment().is_some()
+    {
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+    // Segment insertion preserves the base path and encodes reserved characters,
+    // including residual percent signs, rather than interpreting them a second time.
+    target
+        .path_segments_mut()
+        .map_err(|_| StatusCode::BAD_GATEWAY)?
+        .pop_if_empty()
+        .extend(rest.split('/'));
+    target.set_query(query);
+    Ok(target)
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +153,7 @@ fn check_backend_rate_limit(backend_name: &str, rpm: u32) -> bool {
     bucket.try_acquire()
 }
 
-/// Handler for `/apis/{backend}/{path}` — proxy to upstream with credential injection.
+/// Handler for `/proxy/{backend}/{path}` — proxy to upstream with credential injection.
 ///
 /// Flow:
 /// 1. Look up backend in ApiProxyRegistry
@@ -177,23 +221,16 @@ pub async fn api_proxy_handler(
         return (StatusCode::FORBIDDEN, "Access denied").into_response();
     }
 
-    // 3. Check allowed paths (if configured)
-    if !backend.config.allowed_paths.is_empty() {
-        let path_with_slash = format!("/{rest}");
-        let allowed = backend
-            .config
-            .allowed_paths
-            .iter()
-            .any(|prefix| path_with_slash.starts_with(prefix));
-        if !allowed {
-            warn!(
-                backend = %backend_name,
-                path = %rest,
-                "API proxy: path not in allowed list"
-            );
-            return (StatusCode::FORBIDDEN, "Path not allowed for this backend").into_response();
-        }
-    }
+    // Check before quota/credentials; pass this same URL object to reqwest below.
+    let upstream_url = match proxy_target(
+        &backend.config.base_url,
+        &rest,
+        request.uri().query(),
+        &backend.config.allowed_paths,
+    ) {
+        Ok(target) => target,
+        Err(status) => return (status, "Proxy target not permitted").into_response(),
+    };
 
     // 4. Circuit breaker check (CAB-1726)
     if backend.config.circuit_breaker_enabled {
@@ -250,16 +287,6 @@ pub async fn api_proxy_handler(
             });
     }
 
-    // 6. Build upstream URL
-    let upstream_url = format!("{}/{}", backend.config.base_url.trim_end_matches('/'), rest);
-
-    // Preserve query string
-    let upstream_url = if let Some(query) = request.uri().query() {
-        format!("{upstream_url}?{query}")
-    } else {
-        upstream_url
-    };
-
     debug!(
         backend = %backend_name,
         upstream = %upstream_url,
@@ -285,7 +312,7 @@ pub async fn api_proxy_handler(
     let method = request.method().clone();
     let client = get_api_proxy_client();
 
-    let mut upstream_req = client.request(method, &upstream_url);
+    let mut upstream_req = client.request(method, upstream_url.clone());
 
     // Set timeout from backend config
     upstream_req = upstream_req.timeout(Duration::from_secs(backend.config.timeout_secs));

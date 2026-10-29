@@ -53,7 +53,9 @@ fn proxy_target(
     prefixes: &[String],
 ) -> Result<reqwest::Url, StatusCode> {
     let lower = rest.to_ascii_lowercase();
-    let ambiguous = rest.chars().any(|c| c.is_control() || c == '\\' || c == ';')
+    let ambiguous = rest
+        .chars()
+        .any(|c| c.is_control() || c == '\\' || c == ';')
         || rest.starts_with('/')
         || rest.contains("//")
         || rest.split('/').any(|segment| matches!(segment, "." | ".."))

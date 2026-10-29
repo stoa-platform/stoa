@@ -141,7 +141,7 @@ pub fn build_router(state: AppState) -> Router {
             // CAB-2121: MCP REST routes behind JWT gate. Build as a sub-router
             // so the auth layer applies only to protected endpoints; public
             // discovery (/mcp, /mcp/capabilities, /mcp/health) stays anon.
-            let protected_mcp = Router::new()
+            let mcp_routes = Router::new()
                 // MCP Tools (JSON-RPC style)
                 .route("/mcp/tools/list", post(mcp_tools_list))
                 .route("/mcp/tools/call", post(mcp_tools_call))
@@ -159,11 +159,7 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/mcp/v1/tools", get(mcp_rest_tools_list))
                 .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))
                 // MCP Event Polling Fallback (CAB-1179)
-                .route("/mcp/events", get(poll_events))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    auth::middleware::mcp_jwt_required,
-                ));
+                .route("/mcp/events", get(poll_events));
 
             // Full MCP protocol: OAuth discovery, MCP tools, SSE transport
             let edge_base = base
@@ -205,8 +201,6 @@ pub fn build_router(state: AppState) -> Router {
                 )
                 // MCP WebSocket Transport (CAB-1345: bidirectional)
                 .route("/mcp/ws", get(handle_ws_upgrade))
-                // Merge the protected MCP sub-router (JWT-gated — CAB-2121)
-                .merge(protected_mcp)
                 // LLM API Proxy (CAB-1568: STOA Dogfood) — before fallback
                 .route("/v1/messages", post(llm_proxy_handler))
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))
@@ -309,6 +303,11 @@ pub fn build_router(state: AppState) -> Router {
                     sender(edge_with_mtls)
                 }
             };
+            let protected_mcp =
+                edge_policies(mcp_routes, true).layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    auth::middleware::mcp_jwt_required,
+                ));
             let protected_a2a = edge_policies(
                 Router::new().route("/a2a", post(a2a::handlers::a2a_handler)),
                 true,
@@ -329,6 +328,7 @@ pub fn build_router(state: AppState) -> Router {
                 edge_policies(proxy_routes.layer(proxy_auth), false)
             };
             edge_policies(edge_base, false)
+                .merge(protected_mcp)
                 .merge(protected_a2a)
                 .merge(protected_proxy)
                 .with_state(state)

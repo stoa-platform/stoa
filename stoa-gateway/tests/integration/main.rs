@@ -12,6 +12,7 @@ mod guardrails_metrics;
 mod jwt;
 mod llm_proxy;
 mod mcp;
+mod mcp_policy_order;
 mod quota;
 mod sync_boundary;
 mod tool_lifecycle;

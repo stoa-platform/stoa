@@ -72,6 +72,19 @@ pub struct ProxyBackendConfig {
     #[serde(default)]
     pub fallback_direct: bool,
 
+    /// Access requirement: any one of these exact `scope` values is enough.
+    /// Empty lists on a non-public backend mean the request is refused.
+    #[serde(default)]
+    pub required_scopes: Vec<String>,
+
+    /// Access requirement: any one of these exact realm roles is enough.
+    #[serde(default)]
+    pub required_roles: Vec<String>,
+
+    /// Explicitly public backend: the only case served without an identity.
+    #[serde(default)]
+    pub public: bool,
+
     /// Allowed path prefixes (empty = allow all paths).
     /// Security: prevents proxy abuse by restricting accessible paths.
     #[serde(default)]

@@ -106,6 +106,16 @@ pub fn valid_token() -> &'static str {
     TOKEN.get_or_init(|| sign(4_102_444_800)).as_str()
 }
 
+/// Valid signature and `typ`, but without the `proxy:read` scope.
+/// Used by the integration target only; the contract target shares this module.
+#[allow(dead_code)]
+pub fn unscoped_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN
+        .get_or_init(|| sign_scoped(test_key(), 4_102_444_800, None, "openid"))
+        .as_str()
+}
+
 pub fn expired_token() -> &'static str {
     static TOKEN: OnceLock<String> = OnceLock::new();
     TOKEN.get_or_init(|| sign(1)).as_str()

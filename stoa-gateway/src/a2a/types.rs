@@ -189,6 +189,16 @@ pub struct Task {
     /// Task metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, serde_json::Value>,
+    /// Authenticated owner, set by the gateway and never serialized.
+    #[serde(skip)]
+    pub owner: Option<TaskOwner>,
+}
+
+/// Identity that owns a task: the validated tenant and token subject.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskOwner {
+    pub tenant_id: String,
+    pub subject: String,
 }
 
 /// Task status with optional message
@@ -631,6 +641,7 @@ mod tests {
                 metadata: HashMap::new(),
             }],
             metadata: HashMap::new(),
+            owner: None,
         };
 
         let json = serde_json::to_value(&task).expect("serialize");
@@ -657,6 +668,7 @@ mod tests {
             history: vec![],
             artifacts: vec![],
             metadata: HashMap::new(),
+            owner: None,
         };
 
         let json = serde_json::to_value(&task).expect("serialize");

@@ -14,6 +14,7 @@ use crate::jwt::{
     valid_token,
 };
 use stoa_gateway::config::Config;
+use stoa_gateway::proxy::credentials::{AuthType, BackendCredential, OAuth2Config};
 use stoa_gateway::state::AppState;
 
 async fn request(router: &Router, uri: &str, token: Option<&str>, body: &str) -> Response {
@@ -668,4 +669,187 @@ async fn regression_proxy_refusal_is_generic_403_without_upstream_call() {
         // anonymous 403 has no identity key.
         assert_eq!(policy_count(&state), 1, "require_auth={require_auth}");
     }
+}
+
+fn path_policy_state(oidc: &MockServer, upstream: &MockServer, prefixes: &[&str]) -> AppState {
+    let mut config = jwt::config(oidc);
+    enable_proxy(&mut config, upstream);
+    let backend = config.api_proxy.backends.get_mut("test").unwrap();
+    backend.allowed_paths = prefixes.iter().map(|s| (*s).to_string()).collect();
+    backend.base_url = format!("{}/base/v1/", upstream.uri());
+    AppState::new(config)
+}
+
+async fn authenticated_proxy_get(router: &Router, suffix: &str) -> Response {
+    let bearer = format!("Bearer {}", valid_token());
+    send(
+        router,
+        "GET",
+        &format!("/proxy/test{suffix}"),
+        &[("Authorization", bearer.as_str())],
+    )
+    .await
+}
+
+#[tokio::test]
+async fn regression_proxy_path_policy_keeps_permitted_requests() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("permitted"))
+        .mount(&upstream)
+        .await;
+    let router = stoa_gateway::build_router(path_policy_state(&oidc, &upstream, &["/graphql"]));
+    for (index, (suffix, target, query)) in [
+        ("/graphql", "/base/v1/graphql", None),
+        ("/graphql/child", "/base/v1/graphql/child", None),
+        ("/graphql/", "/base/v1/graphql/", None),
+        (
+            "/graphql/name%20one?op=ok",
+            "/base/v1/graphql/name%20one",
+            Some("op=ok"),
+        ),
+        (
+            "/graphql/name%3Fpart%23tag",
+            "/base/v1/graphql/name%3Fpart%23tag",
+            None,
+        ),
+        (
+            "/graphql/value%25plain",
+            "/base/v1/graphql/value%25plain",
+            None,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = authenticated_proxy_get(&router, suffix).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 1024).await.unwrap();
+        assert_eq!(body.as_ref(), b"permitted");
+        let calls = upstream.received_requests().await.unwrap();
+        assert_eq!(calls.len(), index + 1);
+        assert_eq!(calls[index].url.path(), target);
+        assert_eq!(calls[index].url.query(), query);
+    }
+    for (prefixes, suffix, target) in [
+        (&[][..], "/other", "/base/v1/other"),
+        (&["/"][..], "/other", "/base/v1/other"),
+        (&[""][..], "/other", "/base/v1/other"),
+        (&["/graphql/"][..], "/graphql", "/base/v1/graphql"),
+    ] {
+        let count = upstream.received_requests().await.unwrap().len();
+        let router = stoa_gateway::build_router(path_policy_state(&oidc, &upstream, prefixes));
+        let response = authenticated_proxy_get(&router, suffix).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let calls = upstream.received_requests().await.unwrap();
+        assert_eq!(calls.len(), count + 1);
+        assert_eq!(calls.last().unwrap().url.path(), target);
+    }
+}
+
+#[tokio::test]
+async fn regression_proxy_path_policy_refuses_before_upstream() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let router = stoa_gateway::build_router(path_policy_state(&oidc, &upstream, &["/graphql"]));
+    let response = authenticated_proxy_get(&router, "/graphql").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    for suffix in [
+        "/other",
+        "/graphql-v2",
+        "/graphqlx",
+        "/GraphQL",
+        "/graphql//x",
+        "/graphql//",
+        "//graphql",
+        "/graphql/%2Fx",
+        "/graphql%2f/x",
+        "/graphql/../other",
+        "/graphql/%2e%2e/other",
+        "/graphql/.%2E/other",
+        "/graphql/%252e%252e/other",
+        "/graphql%2f..%2fother",
+        "/graphql%5c..%5cother",
+        "/graphql/%252f..%252fother",
+        "/graphql/%255c..%255cother",
+        "/graphql/%00other",
+    ] {
+        let response = authenticated_proxy_get(&router, suffix).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{suffix}");
+        assert_eq!(
+            upstream.received_requests().await.unwrap().len(),
+            1,
+            "{suffix}"
+        );
+    }
+    assert_unauthorized(send(&router, "GET", "/proxy/test/graphql", &[]).await);
+    assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn regression_proxy_path_policy_does_not_follow_redirects() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(path("/base/v1/graphql"))
+        .respond_with(
+            ResponseTemplate::new(302)
+                .insert_header("Location", format!("{}/outside", upstream.uri())),
+        )
+        .mount(&upstream)
+        .await;
+    Mock::given(path("/outside"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let router = stoa_gateway::build_router(path_policy_state(&oidc, &upstream, &["/graphql"]));
+    let response = authenticated_proxy_get(&router, "/graphql").await;
+    assert_eq!(response.status(), StatusCode::FOUND);
+    let calls = upstream.received_requests().await.unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].url.path(), "/base/v1/graphql");
+}
+
+#[tokio::test]
+async fn regression_proxy_path_policy_keeps_direct_oauth_exchange() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": "fixture-access", "expires_in": 3600
+        })))
+        .mount(&upstream)
+        .await;
+    Mock::given(path("/base/v1/graphql"))
+        .and(wiremock::matchers::header(
+            "authorization",
+            "Bearer fixture-access",
+        ))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let state = path_policy_state(&oidc, &upstream, &["/graphql"]);
+    state.credential_store.upsert(BackendCredential {
+        route_id: "api-proxy:test".to_string(),
+        auth_type: AuthType::OAuth2ClientCredentials,
+        header_name: "Authorization".to_string(),
+        header_value: String::new(),
+        oauth2: Some(OAuth2Config {
+            token_url: format!("{}/token", upstream.uri()),
+            client_id: "fixture-client".to_string(),
+            client_secret: "fixture-only".to_string(),
+        }),
+    });
+    let router = stoa_gateway::build_router(state);
+    let response = authenticated_proxy_get(&router, "/graphql").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let calls = upstream.received_requests().await.unwrap();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].url.path(), "/token");
+    assert_eq!(calls[1].url.path(), "/base/v1/graphql");
 }

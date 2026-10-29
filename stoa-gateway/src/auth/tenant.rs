@@ -63,6 +63,28 @@ fn require_unbound_token(claims: &Claims) -> Result<(), AuthError> {
     Ok(())
 }
 
+/// Federation claims are refused when federation is disabled or malformed.
+/// Shared by [`request_identity`] and the A2A task owner.
+pub fn check_federation_claims(state: &AppState, claims: &Claims) -> Result<(), AuthError> {
+    let federation_claims = claims.sub_account_id.is_some() || claims.master_account_id.is_some();
+    if federation_claims
+        && (!state.config.federation_enabled
+            || claims
+                .sub_account_id
+                .as_deref()
+                .is_none_or(|id| id.is_empty() || id != id.trim())
+            || claims
+                .master_account_id
+                .as_deref()
+                .is_none_or(|id| id.is_empty() || id != id.trim()))
+    {
+        return Err(AuthError::forbidden(
+            "Invalid or disabled federation identity",
+        ));
+    }
+    Ok(())
+}
+
 /// Headers select only the Bearer token, never its tenant or user identity.
 pub async fn request_identity(
     state: &AppState,
@@ -96,22 +118,7 @@ pub async fn request_identity(
         }
     }
     require_unbound_token(&claims)?;
-    let federation_claims = claims.sub_account_id.is_some() || claims.master_account_id.is_some();
-    if federation_claims
-        && (!state.config.federation_enabled
-            || claims
-                .sub_account_id
-                .as_deref()
-                .is_none_or(|id| id.is_empty() || id != id.trim())
-            || claims
-                .master_account_id
-                .as_deref()
-                .is_none_or(|id| id.is_empty() || id != id.trim()))
-    {
-        return Err(AuthError::forbidden(
-            "Invalid or disabled federation identity",
-        ));
-    }
+    check_federation_claims(state, &claims)?;
     Ok((claims, token.to_string()))
 }
 

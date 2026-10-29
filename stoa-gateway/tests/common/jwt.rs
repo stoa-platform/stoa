@@ -228,3 +228,32 @@ pub fn mtls_token() -> String {
         Some(json!({"x5t#S256": URL_SAFE_NO_PAD.encode([0x11; 32])})),
     )
 }
+
+/// [`valid_token`] claims plus `extra` (for example `cnf` or federation claims).
+/// Used by the integration target only; the contract target shares this module.
+#[allow(dead_code)]
+pub fn token_with(extra: serde_json::Value) -> String {
+    let mut claims = serde_json::to_value(FixtureClaims {
+        sub: "auth-regression-user",
+        tenant_id: "tenant-a",
+        iss: ISSUER,
+        aud: AUDIENCE,
+        iat: 1,
+        exp: 4_102_444_800,
+        typ: "Bearer",
+        scope: "openid proxy:read",
+        cnf: None,
+    })
+    .expect("fixture claims");
+    for (name, value) in extra.as_object().expect("extra claims object") {
+        claims[name] = value.clone();
+    }
+    let mut header = Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = Some(KEY_ID.to_string());
+    encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(test_key().pem.as_bytes()).expect("jwt encoding key"),
+    )
+    .expect("sign test JWT")
+}

@@ -387,6 +387,8 @@ mod tests {
         let owner = |subject: &str| TaskOwner {
             tenant_id: "tenant-a".to_string(),
             subject: subject.to_string(),
+            sub_account_id: None,
+            master_account_id: None,
         };
         let mut first = test_task("t1");
         first.owner = Some(owner("user-a"));

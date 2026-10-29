@@ -714,7 +714,11 @@ async fn regression_proxy_path_policy_keeps_permitted_requests() {
             "/base/v1/graphql/name%3Fpart%23tag",
             None,
         ),
-        ("/graphql/value%25plain", "/base/v1/graphql/value%25plain", None),
+        (
+            "/graphql/value%25plain",
+            "/base/v1/graphql/value%25plain",
+            None,
+        ),
     ]
     .into_iter()
     .enumerate()
@@ -777,7 +781,11 @@ async fn regression_proxy_path_policy_refuses_before_upstream() {
     ] {
         let response = authenticated_proxy_get(&router, suffix).await;
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{suffix}");
-        assert_eq!(upstream.received_requests().await.unwrap().len(), 1, "{suffix}");
+        assert_eq!(
+            upstream.received_requests().await.unwrap().len(),
+            1,
+            "{suffix}"
+        );
     }
     assert_unauthorized(send(&router, "GET", "/proxy/test/graphql", &[]).await);
     assert_eq!(upstream.received_requests().await.unwrap().len(), 1);

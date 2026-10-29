@@ -21,10 +21,6 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
-  # CAB-2301 F4: bot PRs are opened with GITHUB_TOKEN, which does not trigger
-  # pull_request workflows. The bot workflow dispatches this workflow on its
-  # PR branch so the required checks attach to the PR head SHA.
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -66,9 +62,6 @@ jobs:
               echo "::warning::Could not resolve PR commit range, falling back to last 10 commits"
               mapfile -t COMMITS < <(git log --format='%H' -10)
             fi
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && git rev-parse --verify -q origin/main >/dev/null; then
-            # Dispatched on a PR branch: check only the commits not yet on main.
-            mapfile -t COMMITS < <(git log --format='%H' origin/main..HEAD)
           else
             mapfile -t COMMITS < <(git log --format='%H' -10)
           fi

@@ -14,8 +14,8 @@ These tests pin the decision:
   2. no workflow grants `actions: write` to GITHUB_TOKEN any more (that
      permission only existed for the F4 dispatch job);
   3. the public docs stop pointing at the removed workflows;
-  4. the manual re-run path of the required checks (`workflow_dispatch`,
-     `pr_number`) is kept, because it is useful independently of bots.
+  4. the orphaned manual dispatch triggers are absent while automatic
+     pull_request/push checks remain; GitHub Re-run uses the existing run.
 """
 
 from __future__ import annotations
@@ -76,12 +76,13 @@ def test_docs_do_not_reference_retired_workflows(rel: str) -> None:
     assert stale == [], f"{rel} still references retired workflows: {stale}"
 
 
-def test_manual_rerun_path_of_required_checks_is_kept() -> None:
+def test_required_checks_keep_automatic_triggers_without_orphan_dispatch() -> None:
     required = _load(WORKFLOWS / "required-checks.yml")
     guard = _load(WORKFLOWS / "regression-guard.yml")
     # PyYAML parses the bare `on:` key as boolean True.
     on_required = required.get("on", required.get(True))
     on_guard = guard.get("on", guard.get(True))
-    assert "workflow_dispatch" in on_required
-    assert "workflow_dispatch" in on_guard
-    assert "pr_number" in (on_guard["workflow_dispatch"] or {}).get("inputs", {})
+    assert "workflow_dispatch" not in on_required
+    assert "workflow_dispatch" not in on_guard
+    assert {"push", "pull_request"} <= set(on_required)
+    assert on_guard["pull_request"]["types"] == ["opened", "synchronize"]

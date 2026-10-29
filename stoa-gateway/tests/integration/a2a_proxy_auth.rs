@@ -9,7 +9,7 @@ use tower::ServiceExt;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::jwt::{self, bad_signature_token, expired_token, valid_token};
+use crate::jwt::{self, bad_signature_token, expired_token, unscoped_token, valid_token};
 use stoa_gateway::config::Config;
 use stoa_gateway::state::AppState;
 
@@ -509,4 +509,29 @@ async fn proxy_identity_precedes_quota_when_require_auth_false() {
     assert_unauthorized(request(&router, uri, Some(expired_token()), "{}").await);
     assert_eq!(policy_count(&state), 1);
     assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn regression_proxy_refusal_is_generic_403_without_upstream_call() {
+    for require_auth in [true, false] {
+        let (_oidc, upstream, mut config) = policy_fixture().await;
+        config.api_proxy.require_auth = require_auth;
+        let state = AppState::new(config);
+        let router = stoa_gateway::build_router(state.clone());
+        let mut cases = vec![Some(unscoped_token())];
+        if !require_auth {
+            cases.push(None);
+        }
+        for token in cases {
+            let response = request(&router, "/proxy/test/echo", token, "{}").await;
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            let body = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(body.as_ref(), b"Access denied");
+        }
+        assert!(upstream.received_requests().await.unwrap().is_empty());
+        // Observed, not changed here: the HTTP quota counts after the handler
+        // whatever the status, so the identified 403 is counted once; the
+        // anonymous 403 has no identity key.
+        assert_eq!(policy_count(&state), 1, "require_auth={require_auth}");
+    }
 }

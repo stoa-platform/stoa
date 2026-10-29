@@ -57,6 +57,8 @@ struct FixtureClaims {
     aud: &'static str,
     iat: i64,
     exp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cnf: Option<serde_json::Value>,
 }
 
 fn sign(exp: i64) -> String {
@@ -64,6 +66,10 @@ fn sign(exp: i64) -> String {
 }
 
 fn sign_with(key: &TestKey, exp: i64) -> String {
+    sign_with_cnf(key, exp, None)
+}
+
+fn sign_with_cnf(key: &TestKey, exp: i64, cnf: Option<serde_json::Value>) -> String {
     let mut header = Header::new(jsonwebtoken::Algorithm::RS256);
     header.kid = Some(KEY_ID.to_string());
     encode(
@@ -75,6 +81,7 @@ fn sign_with(key: &TestKey, exp: i64) -> String {
             aud: AUDIENCE,
             iat: 1,
             exp,
+            cnf,
         },
         &EncodingKey::from_rsa_pem(key.pem.as_bytes()).expect("jwt encoding key"),
     )
@@ -141,4 +148,12 @@ pub fn config(server: &MockServer) -> Config {
         mcp_audience: Some(AUDIENCE.to_string()),
         ..Config::default()
     }
+}
+
+pub fn mtls_token() -> String {
+    sign_with_cnf(
+        test_key(),
+        4_102_444_800,
+        Some(json!({"x5t#S256": URL_SAFE_NO_PAD.encode([0x11; 32])})),
+    )
 }

@@ -61,6 +61,7 @@ use axum::{
 };
 use tracing::warn;
 
+use auth::sender_constraint::sender_constraint_middleware;
 use events::polling::poll_events;
 use handlers::admin;
 use mcp::{
@@ -211,22 +212,6 @@ pub fn build_router(state: AppState) -> Router {
                 .route("/v1/messages/count_tokens", post(llm_proxy_handler))
                 // OpenAI-compatible LLM proxy (Mistral, OpenAI, vLLM, etc.)
                 .route("/v1/chat/completions", post(llm_proxy_handler))
-                // API Proxy — internal dogfooding (CAB-1722)
-                // Routes /proxy/<backend>/... to upstream with credential injection.
-                // Separate from /mcp/* and /apis/* (dynamic proxy routes).
-                // Uses catch-all since axum doesn't allow {param}/{*rest}.
-                // `any()` registers a fallback, not a method route. axum 0.7
-                // `route_layer` panics in that case ("no-op"); `layer` covers
-                // the fallback and enforces the JWT guard.
-                .route(
-                    "/proxy/*path",
-                    axum::routing::any(api_proxy_handler).layer(
-                        axum::middleware::from_fn_with_state(
-                            state.clone(),
-                            auth::middleware::api_proxy_jwt_required,
-                        ),
-                    ),
-                )
                 // `/admin/api-proxy/backends` lives inside `admin_router` (see above)
                 // so it inherits the admin_auth middleware — GW-1 P0-2.
                 // CAB-1713/1714: HEGEMON dispatch endpoints
@@ -274,60 +259,79 @@ pub fn build_router(state: AppState) -> Router {
                 )
                 // A2A (Agent-to-Agent) Protocol — Google A2A spec (CAB-1754)
                 .route("/.well-known/agent.json", get(a2a::discovery::agent_card))
-                .route(
-                    "/a2a",
-                    post(a2a::handlers::a2a_handler).layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        auth::middleware::jwt_required,
-                    )),
-                )
                 .route("/a2a/agents", get(a2a::discovery::list_agents))
                 // WebSocket Proxy (CAB-1758): bidirectional relay with governance
                 .route("/ws/:route_id", get(ws::proxy::ws_proxy_upgrade))
                 // SOAP Proxy (CAB-1762): passthrough with auth + fault detection
                 .route("/soap/:route_id", post(soap::proxy::soap_proxy))
                 // Dynamic proxy fallback — must be LAST
-                .fallback(dynamic_proxy)
-                // Security profile enforcement: per-subscription DPoP/mTLS (CAB-1744)
-                .layer(axum::middleware::from_fn(
-                    auth::profile_enforcement::profile_enforcement_middleware,
-                ))
-                // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    quota::quota_middleware,
-                ))
-                // HEGEMON Supervision: runs after quota, before mTLS (CAB-1636)
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    supervision::supervision_middleware,
-                ));
+                .fallback(dynamic_proxy);
 
-            // mTLS layers: only added when enabled (CAB-1359 perf — skip 2 async calls/req when off)
-            let edge_with_mtls = if let (Some(binding), Some(extraction)) =
-                (mtls_binding_layer, mtls_extraction_layer)
-            {
-                edge_base
-                    // mTLS Stage 3: binding verification (RFC 8705 — cert ↔ JWT cnf)
-                    .layer(binding)
-                    // mTLS Stage 1: extraction (cert info from X-SSL-* headers)
-                    .layer(extraction)
-            } else {
-                edge_base
+            let edge_policies = |routes: Router<AppState>, authenticated: bool| {
+                let sender = |routes: Router<AppState>| {
+                    if state.config.sender_constraint.enabled {
+                        let sc_config = state.config.sender_constraint.clone();
+                        routes.layer(axum::middleware::from_fn(move |request, next| {
+                            let config = sc_config.clone();
+                            sender_constraint_middleware(config, request, next)
+                        }))
+                    } else {
+                        routes
+                    }
+                };
+                let edge_base = routes
+                    .layer(axum::middleware::from_fn(
+                        auth::profile_enforcement::profile_enforcement_middleware,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        quota::quota_middleware,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        supervision::supervision_middleware,
+                    ));
+                let edge_base = if authenticated {
+                    sender(edge_base)
+                } else {
+                    edge_base
+                };
+                let edge_with_mtls = if let (Some(binding), Some(extraction)) =
+                    (mtls_binding_layer.clone(), mtls_extraction_layer.clone())
+                {
+                    edge_base.layer(binding).layer(extraction)
+                } else {
+                    edge_base
+                };
+                if authenticated {
+                    edge_with_mtls
+                } else {
+                    sender(edge_with_mtls)
+                }
             };
-
-            // Sender-constraint layer: unified mTLS + DPoP pipeline (CAB-1607)
-            let edge_final = if state.config.sender_constraint.enabled {
-                let sc_config = state.config.sender_constraint.clone();
-                edge_with_mtls.layer(axum::middleware::from_fn(move |request, next| {
-                    let config = sc_config.clone();
-                    auth::sender_constraint::sender_constraint_middleware(config, request, next)
-                }))
+            let protected_a2a = edge_policies(
+                Router::new().route("/a2a", post(a2a::handlers::a2a_handler)),
+                true,
+            )
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                auth::middleware::jwt_required,
+            ));
+            let proxy_routes =
+                Router::new().route("/proxy/*path", axum::routing::any(api_proxy_handler));
+            let proxy_auth = axum::middleware::from_fn_with_state(
+                state.clone(),
+                auth::middleware::api_proxy_jwt_required,
+            );
+            let protected_proxy = if state.config.api_proxy.require_auth {
+                edge_policies(proxy_routes, true).layer(proxy_auth)
             } else {
-                edge_with_mtls
+                edge_policies(proxy_routes.layer(proxy_auth), false)
             };
-
-            edge_final.with_state(state)
+            edge_policies(edge_base, false)
+                .merge(protected_a2a)
+                .merge(protected_proxy)
+                .with_state(state)
         }
         GatewayMode::Sidecar => {
             // Sidecar: policy enforcement, ext_authz style

@@ -150,7 +150,7 @@ pub fn config(server: &MockServer) -> Config {
     }
 }
 
-#[allow(dead_code, reason = "Only integration uses this shared mTLS test fixture")]
+#[allow(dead_code)]
 pub fn mtls_token() -> String {
     sign_with_cnf(
         test_key(),

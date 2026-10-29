@@ -101,7 +101,7 @@ Weekly, manual
 
 ## Kill Switch
 
-Hook 2 respects `DISABLE_CONTEXT_COMPILER=true` (GitHub repo variable). When set, the `learn` job is skipped. Hooks 1 and 3 are manual scripts in this tree.
+There is no kill switch any more: no Context Compiler hook runs in CI, so the former `DISABLE_CONTEXT_COMPILER` repository variable is not read by any workflow and can be deleted. Hooks 1, 2 and 3 are manual scripts in this tree.
 
 ## Database
 

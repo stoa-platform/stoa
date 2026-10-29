@@ -16,7 +16,7 @@ globs: ".github/workflows/**,.claude/docs/**,.claude/hooks/**"
 | L1 | Issue-to-PR | `claude-implement` label | `DISABLE_L1_IMPLEMENT` |
 | L2 | Scheduled | Cron (daily/weekly) | `DISABLE_L2_SCHEDULED` |
 | L3 | Linear Pipeline | Ticket → In Progress | `DISABLE_L3_LINEAR` |
-| L4 | Self-Improving | Weekly Friday 18:00 | `DISABLE_L4_SELF_IMPROVE` |
+| L4 | Self-Improving | retired (workflow removed; no kill-switch variable is read any more) | — |
 | L5 | Multi-Agent | workflow_dispatch | `DISABLE_L5_MULTI_AGENT` |
 
 Kill-switches via GitHub repo variables. No single master switch (intentional).

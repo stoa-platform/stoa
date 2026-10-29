@@ -16,6 +16,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
+use crate::auth::mtls::{fingerprints_match, ClientCertInfo};
 use crate::mcp::handlers::request_tool_context;
 use crate::mcp::tools::ToolContent;
 use crate::state::AppState;
@@ -35,6 +36,7 @@ pub async fn a2a_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     user: Option<Extension<AuthenticatedUser>>,
+    cert: Option<Extension<ClientCertInfo>>,
     Json(request): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
     let Some(ref registry) = state.a2a_registry else {
@@ -56,7 +58,7 @@ pub async fn a2a_handler(
     // claim and subject), never the raw bearer: a renewed token for the same
     // identity keeps its tasks.
     let identity = match user {
-        Some(Extension(user)) => task_owner(&user.claims, &headers),
+        Some(Extension(user)) => task_owner(&state, &user.claims, &headers, cert.as_deref()),
         None => Err(crate::auth::middleware::AuthError::unauthorized(
             "Authentication required",
         )),
@@ -102,9 +104,14 @@ pub async fn a2a_handler(
 }
 
 /// Task owner from validated claims; an `X-Tenant-ID` header must match.
+/// Federation claims follow `request_identity`. No DPoP proof verifier is
+/// wired, so a `cnf.jkt` token is refused; a `cnf.x5t#S256` token needs the
+/// client certificate extracted by the mTLS layer, and must match it.
 fn task_owner(
+    state: &AppState,
     claims: &crate::auth::claims::Claims,
     headers: &HeaderMap,
+    cert: Option<&ClientCertInfo>,
 ) -> Result<TaskOwner, crate::auth::middleware::AuthError> {
     use crate::auth::middleware::AuthError;
     if claims.sub.trim().is_empty() {
@@ -120,9 +127,26 @@ fn task_owner(
             "Tenant header does not match authenticated tenant",
         ));
     }
+    if let Some(cnf) = &claims.cnf {
+        let bound_to_cert = match (&cnf.jkt, &cnf.x5t_s256, cert) {
+            (None, None, _) => true,
+            (None, Some(x5t), Some(cert)) => {
+                fingerprints_match(&cert.fingerprint, x5t).unwrap_or(false)
+            }
+            _ => false,
+        };
+        if !bound_to_cert {
+            return Err(AuthError::unauthorized(
+                "Sender-constrained tokens unsupported on this transport",
+            ));
+        }
+    }
+    crate::auth::tenant::check_federation_claims(state, claims)?;
     Ok(TaskOwner {
         tenant_id: tenant.to_string(),
         subject: claims.sub.clone(),
+        sub_account_id: claims.sub_account_id.clone(),
+        master_account_id: claims.master_account_id.clone(),
     })
 }
 
@@ -157,6 +181,8 @@ fn test_owner() -> TaskOwner {
     TaskOwner {
         tenant_id: "tenant-a".to_string(),
         subject: "user-a".to_string(),
+        sub_account_id: None,
+        master_account_id: None,
     }
 }
 
@@ -945,10 +971,47 @@ mod tests {
         assert_eq!(rejected, "rejected");
     }
 
+    #[test]
+    fn regression_task_owner_separates_federated_sub_accounts() {
+        let state = AppState::new(Config {
+            federation_enabled: true,
+            ..Config::default()
+        });
+        let owner = |sub_account: &str| {
+            let claims: crate::auth::claims::Claims = serde_json::from_value(serde_json::json!({
+                "sub": "user-a", "exp": 9999999999u64, "iat": 1, "iss": "https://issuer.test",
+                "tenant_id": "tenant-a", "sub_account_id": sub_account, "master_account_id": "m-1"
+            }))
+            .unwrap();
+            task_owner(&state, &claims, &HeaderMap::new(), None).unwrap()
+        };
+        assert_ne!(owner("sub-1"), owner("sub-2"));
+        assert_eq!(owner("sub-1").sub_account_id.as_deref(), Some("sub-1"));
+    }
+
+    #[test]
+    fn regression_task_owner_separates_federated_masters() {
+        let state = AppState::new(Config {
+            federation_enabled: true,
+            ..Config::default()
+        });
+        let owner = |master: &str| {
+            let claims: crate::auth::claims::Claims = serde_json::from_value(serde_json::json!({
+                "sub": "user-a", "exp": 9999999999u64, "iat": 1, "iss": "https://issuer.test",
+                "tenant_id": "tenant-a", "sub_account_id": "sub-1", "master_account_id": master
+            }))
+            .unwrap();
+            task_owner(&state, &claims, &HeaderMap::new(), None).unwrap()
+        };
+        assert_ne!(owner("m-1"), owner("m-2"));
+    }
+
     fn other_owner() -> TaskOwner {
         TaskOwner {
             tenant_id: "tenant-a".to_string(),
             subject: "user-b".to_string(),
+            sub_account_id: None,
+            master_account_id: None,
         }
     }
 

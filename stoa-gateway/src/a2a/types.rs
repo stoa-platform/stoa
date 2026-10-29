@@ -199,6 +199,10 @@ pub struct Task {
 pub struct TaskOwner {
     pub tenant_id: String,
     pub subject: String,
+    /// Federated sub-account, so equal subjects in two sub-accounts differ.
+    pub sub_account_id: Option<String>,
+    /// Federated master account; sub-account names are not globally unique.
+    pub master_account_id: Option<String>,
 }
 
 /// Task status with optional message

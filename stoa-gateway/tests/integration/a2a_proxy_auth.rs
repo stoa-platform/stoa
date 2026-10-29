@@ -547,6 +547,82 @@ async fn regression_a2a_task_refused_to_same_subject_in_other_tenant() {
     assert_eq!(read["result"]["id"], "owner-task", "{read}");
 }
 
+async fn a2a_status(router: &Router, token: &str, method: &str, extra: &[(&str, &str)]) -> u16 {
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": {
+        "id": "bound-task", "message": {"role": "user", "parts": [{"type": "text", "text": "x"}]}
+    }});
+    let mut req = Request::builder()
+        .method("POST")
+        .uri("/a2a")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {token}"));
+    for (name, value) in extra {
+        req = req.header(*name, *value);
+    }
+    let mut req = req.body(Body::from(body.to_string())).unwrap();
+    req.extensions_mut().insert(axum::extract::ConnectInfo(
+        "127.0.0.1:443".parse::<std::net::SocketAddr>().unwrap(),
+    ));
+    router.clone().oneshot(req).await.unwrap().status().as_u16()
+}
+
+#[tokio::test]
+async fn regression_a2a_dpop_bound_token_refused_without_verified_proof() {
+    let oidc = jwt::oidc_server().await;
+    let token = jwt::token_with(json!({"cnf": {"jkt": "dGh1bWJwcmludA"}}));
+    for sender in [false, true] {
+        let mut config = jwt::config(&oidc);
+        config.sender_constraint.enabled = sender;
+        let router = stoa_gateway::build_router(AppState::new(config));
+        for method in ["tasks/send", "tasks/get"] {
+            let status = a2a_status(&router, &token, method, &[("DPoP", "not-a-proof")]).await;
+            assert_eq!(status, 401, "{method} sender={sender}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn regression_a2a_x5t_bound_token_needs_verified_certificate() {
+    let oidc = jwt::oidc_server().await;
+    let token = jwt::mtls_token();
+    let plain = stoa_gateway::build_router(AppState::new(jwt::config(&oidc)));
+    assert_eq!(a2a_status(&plain, &token, "tasks/send", &[]).await, 401);
+    let mut config = jwt::config(&oidc);
+    config.mtls.enabled = true;
+    config.mtls.trusted_proxies = vec!["127.0.0.1/32".to_string()];
+    let router = stoa_gateway::build_router(AppState::new(config));
+    assert_eq!(a2a_status(&router, &token, "tasks/send", &[]).await, 401);
+    let cert = |fp: String| {
+        [
+            ("X-SSL-Client-Verify", "SUCCESS".to_string()),
+            ("X-SSL-Client-Fingerprint", fp),
+        ]
+    };
+    let matching = cert("11".repeat(32));
+    let matching: Vec<(&str, &str)> = matching.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    assert_eq!(
+        a2a_status(&router, &token, "tasks/send", &matching).await,
+        200
+    );
+    let other = cert("22".repeat(32));
+    let other: Vec<(&str, &str)> = other.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    assert_ne!(a2a_status(&router, &token, "tasks/send", &other).await, 200);
+}
+
+#[tokio::test]
+async fn regression_a2a_federation_claims_refused_when_disabled() {
+    let oidc = jwt::oidc_server().await;
+    let router = stoa_gateway::build_router(AppState::new(jwt::config(&oidc)));
+    let token = jwt::token_with(json!({"sub_account_id": "sub-1", "master_account_id": "m-1"}));
+    for method in ["tasks/send", "tasks/get"] {
+        assert_eq!(
+            a2a_status(&router, &token, method, &[]).await,
+            403,
+            "{method}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn proxy_identity_precedes_quota_when_require_auth_false() {
     let (_oidc, upstream, mut config) = policy_fixture().await;

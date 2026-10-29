@@ -53,11 +53,11 @@ fn proxy_target(
     prefixes: &[String],
 ) -> Result<reqwest::Url, StatusCode> {
     let lower = rest.to_ascii_lowercase();
-    let ambiguous = rest.chars().any(|c| c.is_control() || c == '\\')
+    let ambiguous = rest.chars().any(|c| c.is_control() || c == '\\' || c == ';')
         || rest.starts_with('/')
         || rest.contains("//")
         || rest.split('/').any(|segment| matches!(segment, "." | ".."))
-        || ["%2e", "%2f", "%5c", "%25"]
+        || ["%2e", "%2f", "%5c", "%25", "%3b"]
             .iter()
             .any(|encoded| lower.contains(*encoded));
     let path = format!("/{rest}");
@@ -229,7 +229,12 @@ pub async fn api_proxy_handler(
         &backend.config.allowed_paths,
     ) {
         Ok(target) => target,
-        Err(status) => return (status, "Proxy target not permitted").into_response(),
+        Err(status) => {
+            if status == StatusCode::FORBIDDEN {
+                warn!(backend = %backend_name, "API proxy: path not permitted");
+            }
+            return (status, "Proxy target not permitted").into_response();
+        }
     };
 
     // 4. Circuit breaker check (CAB-1726)

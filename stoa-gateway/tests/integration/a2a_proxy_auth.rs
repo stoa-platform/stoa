@@ -853,3 +853,27 @@ async fn regression_proxy_path_policy_keeps_direct_oauth_exchange() {
     assert_eq!(calls[0].url.path(), "/token");
     assert_eq!(calls[1].url.path(), "/base/v1/graphql");
 }
+
+#[tokio::test]
+async fn regression_proxy_path_policy_refuses_semicolon_segments() {
+    let oidc = jwt::oidc_server().await;
+    let upstream = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&upstream)
+        .await;
+    let router = stoa_gateway::build_router(path_policy_state(&oidc, &upstream, &["/graphql"]));
+    for suffix in [
+        "/graphql/value%253Bparam",
+        "/graphql/..;/other",
+        "/graphql;x",
+        "/graphql/value%3Bparam",
+    ] {
+        let response = authenticated_proxy_get(&router, suffix).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{suffix}");
+        assert!(
+            upstream.received_requests().await.unwrap().is_empty(),
+            "{suffix}"
+        );
+    }
+}

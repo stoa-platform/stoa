@@ -246,6 +246,27 @@ fn extract_host(url: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// The pool must reach a plain HTTP upstream. tokio 1.54 panics when a
+    /// buffered stream is created with zero capacity, which pingora-core does
+    /// for every new TCP connection: this test fails on such a dependency set.
+    #[tokio::test]
+    async fn regression_pool_reaches_local_upstream() {
+        use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+        let upstream = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200).set_body_string("ok"))
+            .mount(&upstream)
+            .await;
+        let url = format!("{}/ping", upstream.uri());
+        let pool = PingoraPool::new();
+        let response = pool
+            .send_request(url, Method::GET, HeaderMap::new(), None)
+            .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 16).await;
+        assert_eq!(body.unwrap().as_ref(), b"ok");
+    }
+
     #[test]
     fn test_parse_peer_http() {
         let peer = parse_peer("http://127.0.0.1:8080/api/v1");

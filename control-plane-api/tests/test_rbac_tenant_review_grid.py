@@ -150,7 +150,7 @@ async def test_catalog_lookup_by_uuid_is_filtered_by_tenant():
     assert "api_catalog.tenant_id" in first
 
 
-def test_assignment_delete_statement_joins_tenant():
+async def test_assignment_delete_statement_joins_tenant():
     """N6 (delete): the delete is scoped by assignment, API and tenant."""
     from src.repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
 
@@ -162,9 +162,7 @@ def test_assignment_delete_statement_joins_tenant():
         return SimpleNamespace(rowcount=0)
 
     db.execute = execute
-    import asyncio
-
-    asyncio.run(ApiGatewayAssignmentRepository(db).delete_by_id(uuid4(), api_id=uuid4(), tenant_id="acme"))
+    await ApiGatewayAssignmentRepository(db).delete_by_id(uuid4(), api_id=uuid4(), tenant_id="acme")
     sql = str(captured[0].compile(dialect=postgresql.dialect()))
     assert "api_gateway_assignments.api_id =" in sql
     assert "api_catalog.tenant_id" in sql

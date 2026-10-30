@@ -7,10 +7,20 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.api_gateway_assignment import ApiGatewayAssignment
+from ..models.catalog import APICatalog
 from ..models.gateway_instance import GatewayInstance
 from ..services.environment_aliases import deployment_environment_aliases
 
 logger = logging.getLogger(__name__)
+
+
+def gateway_usable_by_tenant(gateway: GatewayInstance, tenant_id: str) -> bool:
+    """A gateway is usable by a tenant if it is the tenant's own or platform-wide and visible to it."""
+    if gateway.tenant_id is not None and gateway.tenant_id != tenant_id:
+        return False
+    visibility = gateway.visibility or {}
+    allowed = visibility.get("tenant_ids") if isinstance(visibility, dict) else None
+    return not allowed or tenant_id in allowed
 
 
 class ApiGatewayAssignmentRepository:
@@ -21,6 +31,28 @@ class ApiGatewayAssignmentRepository:
         self.db.add(assignment)
         await self.db.flush()
         return assignment
+
+    async def api_belongs_to_tenant(self, api_id: UUID, tenant_id: str) -> bool:
+        """True if the catalog entry exists, is not deleted and belongs to the tenant."""
+        result = await self.db.execute(
+            select(APICatalog.id).where(
+                APICatalog.id == api_id,
+                APICatalog.tenant_id == tenant_id,
+                APICatalog.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def gateway_usable_by_tenant(self, gateway_id: UUID, tenant_id: str) -> bool:
+        """True if the gateway exists, is not deleted and may be targeted by the tenant."""
+        result = await self.db.execute(
+            select(GatewayInstance).where(
+                GatewayInstance.id == gateway_id,
+                GatewayInstance.deleted_at.is_(None),
+            )
+        )
+        gateway = result.scalar_one_or_none()
+        return gateway is not None and gateway_usable_by_tenant(gateway, tenant_id)
 
     async def get_by_id(self, assignment_id: UUID) -> ApiGatewayAssignment | None:
         result = await self.db.execute(
@@ -80,10 +112,21 @@ class ApiGatewayAssignmentRepository:
         )
         return list(result.scalars().all())
 
-    async def delete_by_id(self, assignment_id: UUID) -> bool:
-        result = await self.db.execute(
-            delete(ApiGatewayAssignment).where(ApiGatewayAssignment.id == assignment_id)
-        )
+    async def delete_by_id(
+        self,
+        assignment_id: UUID,
+        *,
+        api_id: UUID | None = None,
+        tenant_id: str | None = None,
+    ) -> bool:
+        """Delete an assignment; when given, api_id and tenant_id scope the delete."""
+        query = delete(ApiGatewayAssignment).where(ApiGatewayAssignment.id == assignment_id)
+        if api_id is not None:
+            query = query.where(ApiGatewayAssignment.api_id == api_id)
+        if tenant_id is not None:
+            tenant_apis = select(APICatalog.id).where(APICatalog.tenant_id == tenant_id)
+            query = query.where(ApiGatewayAssignment.api_id.in_(tenant_apis))
+        result = await self.db.execute(query)
         return result.rowcount > 0
 
     async def count_by_gateway(self, gateway_id: UUID) -> int:

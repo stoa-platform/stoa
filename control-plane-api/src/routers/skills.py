@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.rbac import ensure_tenant, require_role
 from ..database import get_db
 from ..models.skill import SkillScope
 from ..repositories.skill import SkillRepository
@@ -16,14 +17,17 @@ from ..schemas.skill import (
     SkillUpdate,
 )
 
-router = APIRouter(prefix="/v1/tenants/{tenant_id}/skills", tags=["Skills"])
+router = APIRouter(prefix="/v1/tenants/{tenant_id}/skills", tags=["Skills"], dependencies=[Depends(ensure_tenant)])
+
+
+_WRITE_ROLES = Depends(require_role(["cpi-admin", "tenant-admin"]))
 
 
 def _repo(db: AsyncSession = Depends(get_db)) -> SkillRepository:
     return SkillRepository(db)
 
 
-@router.post("", response_model=SkillResponse, status_code=201)
+@router.post("", response_model=SkillResponse, status_code=201, dependencies=[_WRITE_ROLES])
 async def create_skill(
     tenant_id: str,
     body: SkillCreate,
@@ -76,7 +80,7 @@ async def get_skill(
     return SkillResponse.model_validate(skill)
 
 
-@router.patch("/{skill_id}", response_model=SkillResponse)
+@router.patch("/{skill_id}", response_model=SkillResponse, dependencies=[_WRITE_ROLES])
 async def update_skill(
     tenant_id: str,
     skill_id: UUID,
@@ -93,7 +97,7 @@ async def update_skill(
     return SkillResponse.model_validate(updated)
 
 
-@router.delete("/{skill_id}", status_code=204)
+@router.delete("/{skill_id}", status_code=204, dependencies=[_WRITE_ROLES])
 async def delete_skill(
     tenant_id: str,
     skill_id: UUID,

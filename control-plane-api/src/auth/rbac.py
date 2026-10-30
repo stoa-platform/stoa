@@ -242,6 +242,20 @@ def require_tenant_access(func):
     return wrapper
 
 
+async def ensure_tenant(tenant_id: str, user=Depends(get_current_user)):
+    """Router-level dependency: the caller must belong to the ``{tenant_id}`` path tenant.
+
+    Anonymous calls are refused by ``get_current_user`` (401). Platform
+    admins (cpi-admin) may act on any tenant; any other caller gets 403 when the
+    path tenant is not their own. Use it with ``APIRouter(dependencies=[...])``.
+    """
+    if Role.CPI_ADMIN in user.roles:
+        return user
+    if not user.tenant_id or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    return user
+
+
 def require_role(allowed_roles: list[str]):
     """
     Dependency factory that checks if the user has one of the allowed roles.

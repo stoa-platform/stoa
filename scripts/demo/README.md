@@ -28,7 +28,7 @@ Invocation sequence for a cold demo rehearsal:
 
 ```bash
 export STOA_API_URL="https://api.gostoa.dev"
-export STOA_GATEWAY_URL="https://mcp.gostoa.dev"
+export STOA_GATEWAY_URL="https://mcp.example.com"
 export STOA_API_TOKEN="..."         # demo-admin bearer
 export STOA_DEMO_MIN_TENANTS=4      # optional, default 4
 

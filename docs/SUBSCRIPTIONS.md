@@ -163,11 +163,11 @@ Users can enable TOTP protection per subscription:
 
 ```bash
 # Enable TOTP requirement
-curl -X PATCH "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/totp?enabled=true" \
+curl -X PATCH "https://mcp.example.com/mcp/v1/subscriptions/{id}/totp?enabled=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Disable TOTP requirement
-curl -X PATCH "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/totp?enabled=false" \
+curl -X PATCH "https://mcp.example.com/mcp/v1/subscriptions/{id}/totp?enabled=false" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -175,7 +175,7 @@ curl -X PATCH "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/totp?enabled=fal
 
 ```bash
 # Reveal API key (no TOTP)
-curl -X POST "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/reveal-key" \
+curl -X POST "https://mcp.example.com/mcp/v1/subscriptions/{id}/reveal-key" \
   -H "Authorization: Bearer $TOKEN"
 
 # Response

@@ -76,7 +76,7 @@ After subscribing, you'll see the **API Key Modal**:
 
 ```bash
 # Direct API call
-curl -X POST https://mcp.gostoa.dev/mcp/v1/invoke \
+curl -X POST https://mcp.example.com/mcp/v1/invoke \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"tool": "tool_name", "args": {}}'
@@ -186,7 +186,7 @@ The portal is configured via environment variables:
 | `VITE_KEYCLOAK_REALM` | Keycloak realm | stoa |
 | `VITE_KEYCLOAK_CLIENT_ID` | OIDC client ID | stoa-portal |
 | `VITE_API_URL` | Control-Plane API URL | https://api.gostoa.dev |
-| `VITE_MCP_GATEWAY_URL` | MCP Gateway URL | https://mcp.gostoa.dev |
+| `VITE_MCP_GATEWAY_URL` | MCP Gateway URL | https://mcp.example.com |
 | `VITE_CONSOLE_URL` | Console UI URL | https://console.gostoa.dev |
 
 ### Feature Flags

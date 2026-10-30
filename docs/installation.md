@@ -118,7 +118,7 @@ Point your domain records to the load balancer:
 | console.gostoa.dev | CNAME | <alb-hostname> |
 | portal.gostoa.dev | CNAME | <alb-hostname> |
 | api.gostoa.dev | CNAME | <alb-hostname> |
-| mcp.gostoa.dev | CNAME | <alb-hostname> |
+| mcp.example.com | CNAME | <alb-hostname> |
 
 ### Configure Keycloak
 

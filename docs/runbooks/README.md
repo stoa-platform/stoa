@@ -95,7 +95,7 @@ curl -s http://localhost:8000/metrics | grep stoa_
 |---------|-----|-------------|
 | Console UI | https://console.gostoa.dev | API Provider interface |
 | Developer Portal | https://portal.gostoa.dev | API Consumer portal |
-| MCP Gateway | https://mcp.gostoa.dev | AI-Native MCP endpoint |
+| MCP Gateway | https://mcp.example.com | AI-Native MCP endpoint |
 | Control Plane API | https://api.gostoa.dev | REST API backend |
 | Keycloak | https://auth.gostoa.dev | Identity Provider |
 | Grafana | https://grafana.gostoa.dev | Monitoring |

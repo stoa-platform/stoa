@@ -119,7 +119,7 @@ Custom Resource Definitions in `crds/` (applied separately, not managed by Helm 
 ArgoCD watches charts/stoa-platform/ on main
   └── Renders templates with values-{env}.yaml
       ├── stoa-gateway Deployment (Rust, 2 replicas)
-      ├── Service + Ingress (mcp.gostoa.dev)
+      ├── Service + Ingress (mcp.example.com)
       ├── ServiceMonitor (Prometheus scrape)
       └── CRDs (applied separately)
 ```

@@ -34,6 +34,10 @@ async def _retry_kc_group(tenant_id: str, display_name: str) -> str:
             return group_id
         except Exception as e:
             last_error = e
+            code = getattr(e, "response_code", None)
+            if isinstance(code, int) and 400 <= code < 500 and code != 409:
+                logger.error(f"KC group creation failed for {tenant_id} (HTTP {code}, not retried): {e}")
+                break
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
                 logger.warning(
@@ -106,23 +110,34 @@ async def provision_tenant(
                 logger.error(f"Provisioning FAILED for {tenant_id}: {e}")
                 return
 
-            # Step 2: Admin user creation (best-effort)
+            # Step 2: Admin user creation (best-effort); reuse existing user on 409
+            admin_username = f"admin-{tenant_id}"
+            admin_user_id = None
             try:
                 user_id = await keycloak_service.create_user(
-                    username=f"admin-{tenant_id}",
+                    username=admin_username,
                     email=owner_email,
                     first_name="Admin",
                     last_name=display_name,
                     tenant_id=tenant_id,
                     roles=["tenant-admin"],
                 )
+                admin_user_id = user_id
                 logger.info(f"Admin user created for {tenant_id}: {user_id}")
             except Exception as e:
+                if getattr(e, "response_code", None) == 409:
+                    try:
+                        admin_user_id = await keycloak_service.get_user_id_by_username(admin_username)
+                    except Exception as lookup_error:
+                        logger.warning(f"Admin user lookup failed for {tenant_id}: {lookup_error}")
                 logger.warning(f"Admin user creation failed for {tenant_id} (best-effort): {e}")
 
             # Step 3: Add user to tenant group (best-effort)
             try:
-                await keycloak_service.add_user_to_tenant(f"admin-{tenant_id}", tenant_id)
+                if admin_user_id:
+                    await keycloak_service.add_user_to_tenant(admin_user_id, tenant_id, group_id=group_id)
+                else:
+                    logger.warning(f"Admin user id unknown for {tenant_id}, group membership skipped")
             except Exception as e:
                 logger.warning(f"Add user to tenant failed for {tenant_id} (best-effort): {e}")
 

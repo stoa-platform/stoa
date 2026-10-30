@@ -19,7 +19,7 @@ from ..config import settings
 from ..models.catalog import APICatalog
 from ..models.gateway_instance import GatewayInstance
 from ..models.promotion import Promotion, PromotionStatus
-from ..repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
+from ..repositories.api_gateway_assignment import ApiGatewayAssignmentRepository, gateway_usable_by_tenant
 from ..services.environment_aliases import (
     deployment_environment_aliases,
     deployment_environment_matches,
@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 LIFECYCLE_DEPLOYMENT_ENDPOINT = "POST /v1/tenants/{tenant_id}/apis/{api_id}/lifecycle/deployments"
+
+
+class ApiNotFoundError(ValueError):
+    """The API identifier does not resolve to a catalog entry of the tenant."""
 
 
 @dataclass(frozen=True)
@@ -124,6 +128,7 @@ class DeploymentOrchestrationService:
             result = await self.db.execute(
                 select(APICatalog).where(
                     APICatalog.id == catalog_uuid,
+                    APICatalog.tenant_id == tenant_id,
                     APICatalog.deleted_at.is_(None),
                 )
             )
@@ -167,7 +172,7 @@ class DeploymentOrchestrationService:
         if entry:
             return entry
 
-        raise ValueError(
+        raise ApiNotFoundError(
             f"API '{api_identifier}' not found for tenant '{tenant_id}'. Ensure the API exists in the Git repository."
         )
 
@@ -359,6 +364,8 @@ class DeploymentOrchestrationService:
 
         for gateway_id in gateway_ids:
             gateway = await self._get_gateway_or_raise(gateway_id)
+            if not gateway_usable_by_tenant(gateway, api_catalog.tenant_id):
+                raise ValueError(f"Gateway {gateway_id} not found")
             gateway_type = self._target_gateway_type_value(gateway)
             errors = self._validate_desired_state_for_gateway(desired_state, gateway_type, gateway)
             results.append(

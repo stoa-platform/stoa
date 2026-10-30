@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.rbac import require_role
+from src.auth.rbac import ensure_tenant, require_role
 from src.database import get_db
 from src.models.api_gateway_assignment import ApiGatewayAssignment
 from src.repositories.api_gateway_assignment import ApiGatewayAssignmentRepository
@@ -16,13 +16,14 @@ from src.schemas.api_gateway_assignment import (
     AssignmentListResponse,
     AssignmentResponse,
 )
-from src.services.deployment_orchestration_service import DeploymentOrchestrationService
+from src.services.deployment_orchestration_service import ApiNotFoundError, DeploymentOrchestrationService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/v1/tenants/{tenant_id}/apis/{api_id}",
     tags=["API Deployments"],
+    dependencies=[Depends(ensure_tenant)],
 )
 
 
@@ -50,6 +51,10 @@ async def create_assignment(
 ):
     """Assign a default gateway target for an API in a specific environment."""
     repo = ApiGatewayAssignmentRepository(db)
+    if not await repo.api_belongs_to_tenant(api_id, tenant_id):
+        raise HTTPException(status_code=404, detail="API not found")
+    if not await repo.gateway_usable_by_tenant(data.gateway_id, tenant_id):
+        raise HTTPException(status_code=404, detail="Gateway not found")
 
     assignment = ApiGatewayAssignment(
         api_id=api_id,
@@ -90,6 +95,8 @@ async def list_assignments(
 ):
     """List gateway assignments for an API, optionally filtered by environment."""
     repo = ApiGatewayAssignmentRepository(db)
+    if not await repo.api_belongs_to_tenant(api_id, tenant_id):
+        raise HTTPException(status_code=404, detail="API not found")
     items = await repo.list_for_api(api_id, environment=environment)
     return AssignmentListResponse(items=items, total=len(items))
 
@@ -104,7 +111,7 @@ async def delete_assignment(
 ):
     """Remove a gateway assignment."""
     repo = ApiGatewayAssignmentRepository(db)
-    deleted = await repo.delete_by_id(assignment_id)
+    deleted = await repo.delete_by_id(assignment_id, api_id=api_id, tenant_id=tenant_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Assignment not found")
     await db.commit()
@@ -153,6 +160,8 @@ async def deploy_to_environment(
             gateway_ids=data.gateway_ids,
             deployed_by=getattr(user, "preferred_username", "system"),
         )
+    except ApiNotFoundError:
+        raise HTTPException(status_code=404, detail="API not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -185,6 +194,8 @@ async def validate_deploy_to_environment(
             environment=data.environment,
             gateway_ids=data.gateway_ids,
         )
+    except ApiNotFoundError:
+        raise HTTPException(status_code=404, detail="API not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

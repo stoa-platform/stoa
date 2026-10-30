@@ -43,6 +43,8 @@ def _webmethods_gateway():
     gateway.health_details = {}
     gateway.endpoints = {}
     gateway.base_url = "http://connect-webmethods-dev:8090"
+    gateway.tenant_id = None  # platform-wide gateway
+    gateway.visibility = None
     gateway.public_url = None
     gateway.ui_url = None
     gateway.target_gateway_url = "https://webmethods.gostoa.dev"

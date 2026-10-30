@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.rbac import require_role
+from src.auth.rbac import require_role, resolve_effective_tenant
 from src.database import get_db
 from src.models.gateway_deployment import DeploymentSyncStatus, GatewayDeployment
 from src.repositories.gateway_deployment import GatewayDeploymentRepository
@@ -164,6 +164,7 @@ async def list_console_deployments(
     separate fields so transient gateway connectivity does not overwrite the
     runtime reconciliation state.
     """
+    tenant_id = resolve_effective_tenant(user, tenant_id)
     deploy_repo = GatewayDeploymentRepository(db)
     items, total = await deploy_repo.list_console_contract(
         environment=environment,

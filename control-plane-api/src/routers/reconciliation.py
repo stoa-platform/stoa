@@ -3,11 +3,16 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.rbac import ensure_tenant, require_role
 from ..database import get_db
 from ..schemas.reconciliation import DriftReport, ReconciliationResult, ReconciliationStatus
 from ..services.scim_gateway_reconciliation import ReconciliationService
 
-router = APIRouter(prefix="/v1/tenants/{tenant_id}/reconciliation", tags=["reconciliation"])
+router = APIRouter(
+    prefix="/v1/tenants/{tenant_id}/reconciliation",
+    tags=["reconciliation"],
+    dependencies=[Depends(ensure_tenant)],
+)
 
 
 def _get_service(db: AsyncSession = Depends(get_db)) -> ReconciliationService:
@@ -23,7 +28,11 @@ async def check_drift(
     return await service.check_drift(tenant_id)
 
 
-@router.post("/sync", response_model=ReconciliationResult)
+@router.post(
+    "/sync",
+    response_model=ReconciliationResult,
+    dependencies=[Depends(require_role(["cpi-admin", "tenant-admin"]))],
+)
 async def trigger_reconciliation(
     tenant_id: str,
     service: ReconciliationService = Depends(_get_service),

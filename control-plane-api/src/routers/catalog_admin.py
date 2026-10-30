@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
+from ..auth.rbac import resolve_effective_tenant
 from ..database import get_db as get_async_db
 from ..models.catalog import APICatalog
 from ..repositories.catalog import CatalogRepository
@@ -108,6 +109,8 @@ async def trigger_mcp_servers_sync(
     Requires: cpi-admin or tenant-admin role
     """
     _require_admin(user)
+    if "cpi-admin" not in user.roles and (not user.tenant_id or tenant_id != user.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
     try:
 
@@ -561,6 +564,7 @@ async def list_all_apis(
     Pass tenant_id to filter by a specific tenant, or omit for cross-tenant view.
     """
     _require_admin(user)
+    tenant_id = resolve_effective_tenant(user, tenant_id)
 
     repo = CatalogRepository(db)
     apis, total = await repo.get_portal_apis(

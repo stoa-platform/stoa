@@ -167,3 +167,31 @@ async def test_new_admin_user_joined_by_returned_id():
     tenant = _tenant()
     await _provision(_svc(admin), tenant)
     admin.group_user_add.assert_called_once_with("user-1", "grp-1")
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_tenant_preserves_profile_and_attributes():
+    admin = MagicMock()
+    admin.get_user.return_value = {
+        "id": "user-1",
+        "username": f"admin-{TENANT}",
+        "email": "a@example.invalid",
+        "firstName": "Admin",
+        "lastName": "A",
+        "enabled": True,
+        "attributes": {"locale": ["fr"], "tenant_id": ["old"]},
+    }
+    svc = _svc(admin)
+
+    assert await svc.add_user_to_tenant("user-1", TENANT, group_id="grp-1") is True
+
+    admin.group_user_add.assert_called_once_with("user-1", "grp-1")
+    admin.update_user.assert_called_once()
+    user_id, payload = admin.update_user.call_args.args
+    assert user_id == "user-1"
+    assert payload["email"] == "a@example.invalid"
+    assert payload["firstName"] == "Admin"
+    assert payload["lastName"] == "A"
+    assert payload["username"] == f"admin-{TENANT}"
+    assert payload["enabled"] is True
+    assert payload["attributes"] == {"locale": ["fr"], "tenant_id": [TENANT]}

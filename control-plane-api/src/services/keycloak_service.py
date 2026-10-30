@@ -1013,8 +1013,12 @@ class KeycloakService:
         if group_id:
             self._admin.group_user_add(user_id, group_id)
 
-        # Update user attribute
-        await self.update_user(user_id, {"attributes": {"tenant_id": [tenant_id]}})
+        # Set tenant_id on the full current representation: a partial PUT would
+        # clear profile fields (email, firstName, lastName) and other attributes.
+        user = self._admin.get_user(user_id)
+        attributes = dict(user.get("attributes") or {})
+        attributes["tenant_id"] = [tenant_id]
+        self._admin.update_user(user_id, {**user, "attributes": attributes})
 
         return True
 

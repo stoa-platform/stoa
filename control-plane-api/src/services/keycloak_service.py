@@ -6,6 +6,7 @@ import logging
 
 import httpx
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
+from keycloak.exceptions import KeycloakError
 
 from ..config import settings
 
@@ -931,35 +932,86 @@ class KeycloakService:
         return realm_name
 
     # Tenant setup
+    def _find_tenant_group(self, tenant_id: str) -> dict | None:
+        """Return the top-level group named exactly tenant_id (path /tenant_id), or None."""
+        path = f"/{tenant_id}"
+        try:
+            group = self._admin.get_group_by_path(path)
+        except KeycloakError as e:
+            if getattr(e, "response_code", None) == 404:
+                return None
+            raise
+        if isinstance(group, dict) and group.get("name") == tenant_id and group.get("path") == path:
+            return group
+        return None
+
+    def _adopt_tenant_group(self, tenant_id: str, group: dict) -> str:
+        """Reuse an existing tenant group: check/add the stoa_tenant_id marker, keep everything else."""
+        group_id = group["id"]
+        attributes = dict(group.get("attributes") or {})
+        marker = attributes.get("stoa_tenant_id")
+        if marker:
+            if list(marker) != [tenant_id]:
+                raise ValueError(
+                    f"Keycloak group {group_id} carries stoa_tenant_id={marker}, "
+                    f"refusing to reuse it for tenant {tenant_id}"
+                )
+        else:
+            attributes["stoa_tenant_id"] = [tenant_id]
+            self._admin.update_group(group_id, {**group, "attributes": attributes})
+        logger.info(f"reusing existing Keycloak group for tenant {tenant_id}: {group_id}")
+        return group_id
+
     @_auto_reconnect
     async def setup_tenant_group(self, tenant_id: str, tenant_name: str) -> str:
-        """Create a Keycloak group for the tenant"""
+        """Create the tenant's Keycloak group, or reuse the existing one (idempotent)."""
         if not self._admin:
             raise RuntimeError("Keycloak not connected")
+
+        existing = self._find_tenant_group(tenant_id)
+        if existing:
+            return self._adopt_tenant_group(tenant_id, existing)
 
         group_data = {
             "name": tenant_id,
             "attributes": {
                 "display_name": [tenant_name],
+                "stoa_tenant_id": [tenant_id],
             },
         }
 
-        group_id = self._admin.create_group(group_data)
+        try:
+            group_id = self._admin.create_group(group_data)
+        except KeycloakError as e:
+            if getattr(e, "response_code", None) != 409:
+                raise
+            existing = self._find_tenant_group(tenant_id)
+            if not existing:
+                raise
+            return self._adopt_tenant_group(tenant_id, existing)
         logger.info(f"Created group for tenant {tenant_id}")
         return group_id
 
     @_auto_reconnect
-    async def add_user_to_tenant(self, user_id: str, tenant_id: str) -> bool:
-        """Add user to tenant group and set tenant_id attribute"""
+    async def get_user_id_by_username(self, username: str) -> str | None:
+        """Return the Keycloak user id for an exact username, or None."""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+        return self._admin.get_user_id(username)
+
+    @_auto_reconnect
+    async def add_user_to_tenant(self, user_id: str, tenant_id: str, group_id: str | None = None) -> bool:
+        """Add user (by Keycloak id) to tenant group and set tenant_id attribute"""
         if not self._admin:
             raise RuntimeError("Keycloak not connected")
 
-        # Get tenant group
-        groups = self._admin.get_groups()
-        tenant_group = next((g for g in groups if g["name"] == tenant_id), None)
+        if group_id is None:
+            groups = self._admin.get_groups()
+            tenant_group = next((g for g in groups if g["name"] == tenant_id), None)
+            group_id = tenant_group["id"] if tenant_group else None
 
-        if tenant_group:
-            self._admin.group_user_add(user_id, tenant_group["id"])
+        if group_id:
+            self._admin.group_user_add(user_id, group_id)
 
         # Update user attribute
         await self.update_user(user_id, {"attributes": {"tenant_id": [tenant_id]}})

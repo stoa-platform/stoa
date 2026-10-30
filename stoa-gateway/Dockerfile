@@ -59,7 +59,7 @@ WORKDIR /app
 
 # Cook dependencies (cached unless Cargo.toml/Cargo.lock change)
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --features "${FEATURES}" --recipe-path recipe.json
+RUN cargo chef cook --locked --release --features "${FEATURES}" --recipe-path recipe.json
 
 # Cache-bust: ensures source changes always trigger recompilation
 # (GHA Docker layer cache can otherwise serve stale compiled artifacts)
@@ -73,7 +73,7 @@ COPY policies ./policies
 COPY benches ./benches
 COPY build.rs ./
 COPY proto ./proto
-RUN cargo build --release --features "${FEATURES}" && strip target/release/stoa-gateway
+RUN cargo build --locked --release --features "${FEATURES}" && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
 FROM debian:bookworm-slim AS runtime

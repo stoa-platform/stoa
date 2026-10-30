@@ -195,7 +195,7 @@ The following monitors cover the MCP and portal endpoints that the realdata APIs
 |-------|-------|
 | **Monitor type** | HTTP(s) |
 | **Name** | MCP Gateway — Tool Discovery |
-| **URL** | `https://mcp.gostoa.dev/mcp/tools/list` |
+| **URL** | `https://mcp.example.com/mcp/tools/list` |
 | **Method** | GET |
 | **Expected status** | 200 |
 | **Check interval** | 60 s |
@@ -209,7 +209,7 @@ The following monitors cover the MCP and portal endpoints that the realdata APIs
 |-------|-------|
 | **Monitor type** | HTTP(s) |
 | **Name** | MCP Gateway — Health |
-| **URL** | `https://mcp.gostoa.dev/health` |
+| **URL** | `https://mcp.example.com/health` |
 | **Method** | GET |
 | **Expected status** | 200 |
 | **Check interval** | 30 s |

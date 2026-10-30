@@ -59,7 +59,7 @@
 │  ┌─────────────────────────────────────┐    ┌─────────────────────┐        │
 │  │        Control-Plane API            │    │    MCP Gateway      │        │
 │  │        (FastAPI Backend)            │◄───┤   (AI-Native API)   │        │
-│  │   apis.gostoa.dev/gateway/...   │    │ mcp.gostoa.dev  │        │
+│  │   apis.gostoa.dev/gateway/...   │    │ mcp.example.com │        │
 │  └──────────────┬──────────────────────┘    └──────────┬──────────┘        │
 │                 │                                      │                    │
 │      ┌──────────┼──────────┬───────────────────────────┤                   │
@@ -93,7 +93,7 @@
 | Developer Portal | `https://portal.gostoa.dev` | API Consumer Interface |
 | API Gateway Runtime | `https://apis.gostoa.dev` | Runtime des APIs (OIDC) |
 | Control-Plane API | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` | Backend API |
-| MCP Gateway | `https://mcp.gostoa.dev` | AI-Native API Gateway |
+| MCP Gateway | `https://mcp.example.com` | AI-Native API Gateway |
 | Keycloak | `https://auth.gostoa.dev` | Identity Provider |
 | Gateway Admin | `https://vps-wm.gostoa.dev` | webMethods Admin |
 | AWX | `https://awx.gostoa.dev` | Automation |

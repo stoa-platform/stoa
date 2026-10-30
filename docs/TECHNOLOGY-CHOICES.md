@@ -299,7 +299,7 @@ This document explains the technology choices for the STOA stack and why each co
 | Developer Portal | https://portal.gostoa.dev |
 | API (direct) | https://api.gostoa.dev |
 | API Gateway Runtime | https://apis.gostoa.dev |
-| MCP Gateway | https://mcp.gostoa.dev |
+| MCP Gateway | https://mcp.example.com |
 | Auth (Keycloak) | https://auth.gostoa.dev |
 | Monitoring (Grafana) | https://grafana.gostoa.dev |
 | ArgoCD | https://argocd.gostoa.dev |

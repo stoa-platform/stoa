@@ -112,7 +112,7 @@ kubectl --kubeconfig ~/.kube/config-stoa-ovh \
 
 # Health checks
 curl -s https://api.gostoa.dev/health | jq .
-curl -s https://mcp.gostoa.dev/health/ready
+curl -s https://mcp.example.com/health/ready
 curl -s -o /dev/null -w "%{http_code}" https://portal.gostoa.dev
 curl -s -o /dev/null -w "%{http_code}" https://console.gostoa.dev
 ```

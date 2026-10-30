@@ -467,7 +467,7 @@ Endpoint: https://api.stoa.example.com/v1
 {
   "mcpServers": {
     "stoa": {
-      "url": "https://mcp.gostoa.dev",
+      "url": "https://mcp.example.com",
       "transport": "rest"
     }
   }
@@ -479,7 +479,7 @@ Endpoint: https://api.stoa.example.com/v1
 {
   "mcpServers": {
     "stoa": {
-      "url": "https://mcp.gostoa.dev/mcp/sse",
+      "url": "https://mcp.example.com/mcp/sse",
       "transport": "sse"
     }
   }
@@ -491,7 +491,7 @@ Endpoint: https://api.stoa.example.com/v1
 {
   "mcpServers": {
     "stoa": {
-      "url": "https://mcp.gostoa.dev/mcp",
+      "url": "https://mcp.example.com/mcp",
       "transport": "streamable-http"
     }
   }

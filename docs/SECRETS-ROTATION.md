@@ -430,7 +430,7 @@ pki_int/   → Intermediate CA (EC P-256, 5y TTL, issues leaf certs)
 ./stoa-infra:deploy/vps/vault/setup-pki-engine.sh
 
 # 2. Issue a test certificate
-./stoa-infra:deploy/vps/vault/setup-pki-engine.sh --issue mcp.gostoa.dev
+./stoa-infra:deploy/vps/vault/setup-pki-engine.sh --issue mcp.example.com
 ```
 
 **Future**: cert-manager + Vault issuer for automatic K8s cert rotation.

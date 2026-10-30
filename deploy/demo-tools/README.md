@@ -137,19 +137,19 @@ TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-con
 
 # List available tools (should see only team-alpha tools)
 curl -H "Authorization: Bearer $TOKEN" \
-  https://mcp.gostoa.dev/mcp/v1/tools
+  https://mcp.example.com/mcp/v1/tools
 
 # Invoke crm-search (should work)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_alpha_crm_search", "arguments": {"query": "ACME"}}' \
-  https://mcp.gostoa.dev/mcp/v1/tools/call
+  https://mcp.example.com/mcp/v1/tools/call
 
 # Try inventory-lookup (should be denied - team-beta only)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_beta_inventory_lookup", "arguments": {"sku": "WIDGET-PRO-500"}}' \
-  https://mcp.gostoa.dev/mcp/v1/tools/call
+  https://mcp.example.com/mcp/v1/tools/call
 # Expected: 403 Forbidden
 ```
 
@@ -167,13 +167,13 @@ TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-con
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_beta_inventory_lookup", "arguments": {"sku": "WIDGET-PRO-500"}}' \
-  https://mcp.gostoa.dev/mcp/v1/tools/call
+  https://mcp.example.com/mcp/v1/tools/call
 
 # Try crm-search (should be denied - team-alpha only)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_alpha_crm_search", "arguments": {"query": "ACME"}}' \
-  https://mcp.gostoa.dev/mcp/v1/tools/call
+  https://mcp.example.com/mcp/v1/tools/call
 # Expected: 403 Forbidden
 ```
 

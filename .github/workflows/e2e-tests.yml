@@ -186,6 +186,11 @@ jobs:
           # Test API Key
           TEST_API_KEY: ${{ env.TEST_API_KEY || secrets.TEST_API_KEY }}
 
+          # Cloudflare Access service token for the portal and console origins
+          # (headers added by e2e/fixtures/cloudflare-access.ts, values never logged)
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_E2E_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
+
         run: |
           TEST_SUITE="${{ github.event.inputs.test_suite || 'smoke' }}"
 
@@ -226,9 +231,33 @@ jobs:
               ;;
           esac
 
+      - name: Check reports for Access headers
+        id: cf-scan
+        if: always()
+        working-directory: e2e
+        env:
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
+        run: |
+          # Fails without printing anything sensitive if the Access header name
+          # or the secret value appears in a report, including inside zip files.
+          found=0
+          for dir in reports test-results; do
+            [ -d "$dir" ] || continue
+            if grep -rqiF 'cf-access-client-secret' "$dir"; then found=1; fi
+            if [ -n "$CF_ACCESS_CLIENT_SECRET" ] && grep -rqF -f <(printf '%s\n' "$CF_ACCESS_CLIENT_SECRET") "$dir"; then found=1; fi
+            while IFS= read -r -d '' archive; do
+              if unzip -p "$archive" 2>/dev/null | grep -qiF 'cf-access-client-secret'; then found=1; fi
+              if [ -n "$CF_ACCESS_CLIENT_SECRET" ] && unzip -p "$archive" 2>/dev/null | grep -qF -f <(printf '%s\n' "$CF_ACCESS_CLIENT_SECRET"); then found=1; fi
+            done < <(find "$dir" -type f -name '*.zip' -print0)
+          done
+          if [ "$found" -ne 0 ]; then
+            echo "::error::Cloudflare Access header found in E2E reports; artifacts are not uploaded."
+            exit 1
+          fi
+
       - name: Upload HTML report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
+        if: ${{ always() && steps.cf-scan.outcome == 'success' }}
         with:
           name: playwright-report-shard-${{ matrix.shard }}-${{ github.run_id }}
           path: e2e/reports/html/
@@ -236,7 +265,7 @@ jobs:
 
       - name: Upload test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ failure() || steps.run-e2e-tests.outcome == 'failure' }}
+        if: ${{ (failure() || steps.run-e2e-tests.outcome == 'failure') && steps.cf-scan.outcome == 'success' }}
         with:
           name: test-results-shard-${{ matrix.shard }}-${{ github.run_id }}
           path: |

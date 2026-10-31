@@ -9,6 +9,7 @@
 import { test as base } from 'playwright-bdd';
 import { expect, Page, BrowserContext, Browser } from '@playwright/test';
 import { PERSONAS, PersonaKey, Persona, getAuthStatePath } from './personas';
+import { installCloudflareAccessHeaders } from './cloudflare-access';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -252,6 +253,7 @@ async function createContextFromStorageState(
   }
 
   const context = await browser.newContext(contextOptions);
+  await installCloudflareAccessHeaders(context);
   let sessionData: Record<string, string> = {};
   if (resolvedStorageStatePath) {
     sessionData = await refreshExpiredOidcTokens(
@@ -396,6 +398,7 @@ export const test = base.extend<TestFixtures>({
     const context = await browser.newContext({
       baseURL: PORTAL_URL,
     });
+    await installCloudflareAccessHeaders(context);
     const page = await context.newPage();
     await use(page);
     await context.close();
@@ -406,6 +409,7 @@ export const test = base.extend<TestFixtures>({
     const context = await browser.newContext({
       baseURL: CONSOLE_URL,
     });
+    await installCloudflareAccessHeaders(context);
     const page = await context.newPage();
     await use(page);
     await context.close();
@@ -421,9 +425,11 @@ export const test = base.extend<TestFixtures>({
       context = await browser.newContext({
         storageState: authStatePath,
       });
+      await installCloudflareAccessHeaders(context);
     } else {
       console.warn(`Auth state not found for ${personaKey}, using fresh context`);
       context = await browser.newContext();
+      await installCloudflareAccessHeaders(context);
     }
 
     await installSessionStorageInitScript(
@@ -459,6 +465,7 @@ export async function loadPersonaContext(
   }
 
   const context = await browser.newContext(options);
+  await installCloudflareAccessHeaders(context);
   await installSessionStorageInitScript(
     context,
     await refreshExpiredOidcTokens(loadSessionStorageFromAuthState(authStatePath)),

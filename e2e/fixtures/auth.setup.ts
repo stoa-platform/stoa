@@ -13,10 +13,15 @@
 
 import { test as setup, expect } from '@playwright/test';
 import { PERSONAS, PersonaKey, getAuthStatePath } from './personas';
+import { installCloudflareAccessHeaders } from './cloudflare-access';
 import * as fs from 'fs';
 
 const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
 const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev';
+
+setup.beforeEach(async ({ context }) => {
+  await installCloudflareAccessHeaders(context);
+});
 
 /**
  * Diagnose what type of Keycloak page is currently shown.

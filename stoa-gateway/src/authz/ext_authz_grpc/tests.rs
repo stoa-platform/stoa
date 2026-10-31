@@ -473,3 +473,80 @@ async fn client_request_id_never_becomes_backend_request_id() {
     assert_eq!(trace.decision_id, Some(decision));
     assert_eq!(trace.client_request_id.unwrap().to_string(), client);
 }
+
+#[tokio::test]
+async fn deny_reason_classifies_jwt_rejections_without_changing_status() {
+    let (service, _server, issuer) = fixture().await;
+    for (key, value, status, expected) in [
+        ("aud", json!("wrong"), 401, DenyReason::Audience),
+        (
+            "iss",
+            json!("https://wrong.invalid"),
+            401,
+            DenyReason::Issuer,
+        ),
+        ("exp", json!(0), 401, DenyReason::Expired),
+        ("scope", json!("stoa:invoke"), 403, DenyReason::Scope),
+        ("tenant_id", json!("other"), 403, DenyReason::Tenant),
+    ] {
+        let mut c = claims(&issuer);
+        c[key] = value;
+        let mut reason = DenyReason::Request;
+        let response = service
+            .authorize_with_reason(request(&c), &mut reason)
+            .await;
+        assert_denied(response, status);
+        assert_eq!(reason, expected, "{key}");
+    }
+    let mut reason = DenyReason::Request;
+    let response = service
+        .authorize_with_reason(request(&claims(&issuer)), &mut reason)
+        .await;
+    let code = response.status.unwrap().code;
+    assert_eq!(code, 0);
+    assert_eq!(final_deny_reason(code, reason), DenyReason::None);
+    let mut req = request(&claims(&issuer));
+    http_mut(&mut req).headers.clear();
+    let mut reason = DenyReason::Request;
+    assert_denied(service.authorize_with_reason(req, &mut reason).await, 401);
+    assert_eq!(reason, DenyReason::MissingToken);
+}
+
+#[test]
+fn deny_reason_values_are_closed_and_carry_no_private_data() {
+    let expected = JwtError::InvalidAudience {
+        expected: "private-audience".into(),
+    };
+    assert_eq!(DenyReason::from_jwt(&expected), DenyReason::Audience);
+    assert_eq!(
+        DenyReason::from_jwt(&JwtError::InvalidSignature),
+        DenyReason::Signature
+    );
+    assert_eq!(
+        DenyReason::from_jwt(&JwtError::DecodeError("raw".into())),
+        DenyReason::Token
+    );
+    for reason in [
+        DenyReason::None,
+        DenyReason::Request,
+        DenyReason::MissingToken,
+        DenyReason::Audience,
+        DenyReason::Signature,
+        DenyReason::Issuer,
+        DenyReason::Expired,
+        DenyReason::Timeout,
+        DenyReason::Token,
+        DenyReason::Tenant,
+        DenyReason::Scope,
+        DenyReason::Policy,
+    ] {
+        let value = reason.as_str();
+        assert!(value.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'));
+        assert!(!value.contains("private"));
+    }
+    assert_eq!(
+        final_deny_reason(16, DenyReason::Audience),
+        DenyReason::Audience
+    );
+    assert_eq!(final_deny_reason(0, DenyReason::Policy), DenyReason::None);
+}

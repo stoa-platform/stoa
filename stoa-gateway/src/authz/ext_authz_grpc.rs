@@ -36,7 +36,18 @@ impl ExtAuthzService {
         }
     }
 
+    #[cfg(test)]
     async fn authorize(&self, request: CheckRequest) -> CheckResponse {
+        self.authorize_with_reason(request, &mut DenyReason::Request)
+            .await
+    }
+
+    /// Same decision as `authorize`; `reason` only classifies a denial for the trace.
+    async fn authorize_with_reason(
+        &self,
+        request: CheckRequest,
+        reason: &mut DenyReason,
+    ) -> CheckResponse {
         // Missing configuration never falls back to the provider/MCP audience.
         let Some(audience) = self.audience.as_deref().filter(|a| !a.trim().is_empty()) else {
             return denied(403);
@@ -92,6 +103,7 @@ impl ExtAuthzService {
             .get("authorization")
             .and_then(|h| JwtValidator::extract_token(h).ok())
         else {
+            *reason = DenyReason::MissingToken;
             return denied(401);
         };
         let claims = match tokio::time::timeout(
@@ -103,9 +115,20 @@ impl ExtAuthzService {
             Ok(Ok(claims)) => claims,
             // TenantRequired is emitted only after the existing validator's trust
             // checks (or strict claim decoding); it never supplies an identity.
-            Ok(Err(JwtError::TenantRequired)) => return denied(403),
-            _ => return denied(401),
+            Ok(Err(JwtError::TenantRequired)) => {
+                *reason = DenyReason::Tenant;
+                return denied(403);
+            }
+            Ok(Err(error)) => {
+                *reason = DenyReason::from_jwt(&error);
+                return denied(401);
+            }
+            Err(_) => {
+                *reason = DenyReason::Timeout;
+                return denied(401);
+            }
         };
+        *reason = DenyReason::Tenant;
         let Some(tenant) = claims.tenant_id() else {
             return denied(403);
         };
@@ -131,6 +154,7 @@ impl ExtAuthzService {
             .into_iter()
             .map(str::to_owned)
             .collect();
+        *reason = DenyReason::Scope;
         // DecisionEngine currently uses OR. SA-1 requires AND: enforce the
         // complete profile here before delegating policy/quota/enrichment.
         if self
@@ -184,6 +208,7 @@ impl ExtAuthzService {
             principal: Some(principal),
             context: serde_json::json!({"tenant_id": tenant, "api_id": attributes.context_extensions.get("api_id")}),
         };
+        *reason = DenyReason::Policy;
         let mut decision = self.engine.decide(input);
         if decision.allowed {
             decision
@@ -319,6 +344,62 @@ fn check_trace_ids(request: &CheckRequest) -> (Option<uuid::Uuid>, uuid::Uuid) {
     (client_request_id(request), uuid::Uuid::new_v4())
 }
 
+/// Closed denial classification for `ext_authz_decision`. It never carries a
+/// token, a claim, the expected audience or a free-form error string.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DenyReason {
+    None,
+    Request,
+    MissingToken,
+    Audience,
+    Signature,
+    Issuer,
+    Expired,
+    Timeout,
+    Token,
+    Tenant,
+    Scope,
+    Policy,
+}
+
+impl DenyReason {
+    fn from_jwt(error: &JwtError) -> Self {
+        match error {
+            JwtError::InvalidAudience { .. } => Self::Audience,
+            JwtError::InvalidSignature => Self::Signature,
+            JwtError::InvalidIssuer { .. } => Self::Issuer,
+            JwtError::Expired => Self::Expired,
+            JwtError::TenantRequired => Self::Tenant,
+            _ => Self::Token,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Request => "request",
+            Self::MissingToken => "missing_token",
+            Self::Audience => "audience",
+            Self::Signature => "signature",
+            Self::Issuer => "issuer",
+            Self::Expired => "expired",
+            Self::Timeout => "timeout",
+            Self::Token => "token",
+            Self::Tenant => "tenant",
+            Self::Scope => "scope",
+            Self::Policy => "policy",
+        }
+    }
+}
+
+fn final_deny_reason(rpc_code: i32, reason: DenyReason) -> DenyReason {
+    if rpc_code == 0 {
+        DenyReason::None
+    } else {
+        reason
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct DecisionTrace {
     client_request_id: Option<uuid::Uuid>,
@@ -358,14 +439,17 @@ impl Authorization for ExtAuthzService {
         let request = request.into_inner();
         let (client_request_id, server_check_id) = check_trace_ids(&request);
         let started = std::time::Instant::now();
-        let response = self.authorize(request).await;
+        let mut reason = DenyReason::Request;
+        let response = self.authorize_with_reason(request, &mut reason).await;
         let trace = decision_trace(client_request_id, server_check_id, &response);
+        let deny_reason = final_deny_reason(trace.rpc_code, reason);
         tracing::info!(event = "ext_authz_decision",
             client_request_id = %trace.client_request_id.map(|id| id.to_string()).unwrap_or_default(),
             client_request_id_trusted = false,
             server_check_id = %trace.server_check_id,
             decision_id = %trace.decision_id.map(|id| id.to_string()).unwrap_or_default(),
             rpc_code = trace.rpc_code,
+            deny_reason = deny_reason.as_str(),
             duration_us = started.elapsed().as_micros() as u64);
         Ok(Response::new(response))
     }

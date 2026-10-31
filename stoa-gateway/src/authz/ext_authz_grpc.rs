@@ -36,6 +36,7 @@ impl ExtAuthzService {
         }
     }
 
+    #[cfg(test)]
     async fn authorize(&self, request: CheckRequest) -> CheckResponse {
         self.authorize_with_reason(request, &mut DenyReason::Request)
             .await

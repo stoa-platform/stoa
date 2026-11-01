@@ -1,0 +1,44 @@
+{
+  "ticket": "CAB-2343",
+  "verified_at_utc": "2026-11-01T20:30:59.283883+00:00",
+  "method": "Anonymous HTTPS GET by immutable digest; SHA-256 of raw manifest bytes equals Docker-Content-Digest and requested digest. No Docker pull or deployment.",
+  "manifests": [
+    {
+      "image": "ghcr.io/stoa-platform/stoa-gateway",
+      "digest": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+      "body_sha256": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+      "docker_content_digest": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "platforms": [
+        "linux/amd64"
+      ]
+    },
+    {
+      "image": "registry-1.docker.io/library/nginx",
+      "digest": "sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+      "body_sha256": "sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+      "docker_content_digest": "sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "image": "docker.elastic.co/elasticsearch/elasticsearch",
+      "digest": "sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f",
+      "body_sha256": "sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f",
+      "docker_content_digest": "sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f",
+      "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    }
+  ]
+}

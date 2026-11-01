@@ -123,11 +123,11 @@ jobs:
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          flavor: latest=false
           tags: |
             type=match,pattern=${{ matrix.service }}-v(.*),group=1
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
       - name: Stage project license and notice

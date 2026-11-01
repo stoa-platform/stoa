@@ -18,7 +18,8 @@ spec:
         - name: ghcr-creds
       containers:
         - name: stoa-gateway
-          image: ghcr.io/stoa-platform/stoa-gateway:dev-d8b67cad540eba4d4337847eeddbc0161c6f32b0
+          image: ghcr.io/stoa-platform/stoa-gateway@sha256:06fd4289ef6ad5d0ff59ceb7e3bbdc7d43c1f64bb299bd36f76f079157791b69
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http

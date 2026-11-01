@@ -10,9 +10,13 @@ on:
       - 'portal/**'
       - 'control-plane-ui/**'
       - '.github/workflows/e2e-tests.yml'
+      - '.github/scripts/e2e-runtime-changes.sh'
       - '!e2e/**/*.md'
       - '!portal/**/*.md'
       - '!control-plane-ui/**/*.md'
+      # Manifest-only changes do not change the running application.
+      - '!control-plane-ui/k8s/**'
+      - '!portal/k8s/**'
 
   # Run daily at 6 AM UTC
   schedule:
@@ -54,7 +58,27 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  changes:
+    name: Detect runtime changes
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.diff.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Classify push diff
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: bash .github/scripts/e2e-runtime-changes.sh "$BASE_SHA" "$HEAD_SHA"
+
   e2e-tests:
+    needs: changes
+    # Keep schedule/manual runs; config-only pushes never reach live services.
+    if: always() && (github.event_name != 'push' || needs.changes.outputs.runtime == 'true')
     permissions:
       contents: read
       id-token: write  # Required for Vault OIDC authentication

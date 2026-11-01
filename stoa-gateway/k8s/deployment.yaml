@@ -33,8 +33,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: stoa-gateway
-          image: ghcr.io/stoa-platform/stoa-gateway:latest
-          imagePullPolicy: Always
+          image: ghcr.io/stoa-platform/stoa-gateway@sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

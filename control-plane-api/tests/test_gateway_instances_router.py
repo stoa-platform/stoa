@@ -14,11 +14,30 @@ Endpoints:
 Auth: require_role — cpi-admin for writes, cpi-admin/tenant-admin for reads.
 """
 
+import logging
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from typing import get_args
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import JSON
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from src.database import get_db
+from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
+from src.schemas.gateway import (
+    GatewayInstanceResponse,
+    GatewayModeLiteral,
+    GatewaySourceLiteral,
+    GatewayStatusLiteral,
+    GatewayTypeLiteral,
+)
 
 
 class TestGatewayInstancesRouter:
@@ -584,78 +603,139 @@ class TestGatewayInstancesRouter:
         assert "gw-other" not in names
 
 
-class TestGatewayLiteralDriftGuard(TestGatewayInstancesRouter):
-    """Regression guards against schema-vs-ORM enum drift.
+def _drift_gateway(**overrides: object) -> GatewayInstance:
+    """Build a real ORM row with explicit defaults, including before persistence."""
+    return GatewayInstance(
+        **{
+            "id": uuid4(),
+            "name": "drift-guard",
+            "display_name": "Drift guard",
+            "gateway_type": GatewayType.KONG,
+            "environment": "test",
+            "tenant_id": None,
+            "base_url": "https://gateway.example.test",
+            "auth_config": {},
+            "status": GatewayInstanceStatus.ONLINE,
+            "last_health_check": None,
+            "health_details": None,
+            "capabilities": [],
+            "version": None,
+            "tags": [],
+            "mode": None,
+            "protected": False,
+            "enabled": True,
+            "source": "self_register",
+            "created_at": datetime(2026, 2, 1, tzinfo=UTC),
+            "updated_at": datetime(2026, 2, 1, tzinfo=UTC),
+            **overrides,
+        }
+    )
 
-    Origin: prod 500 on ``GET /v1/admin/gateways`` when a row's ``gateway_type`` was
-    outside ``GatewayTypeLiteral`` (CAB-2159 narrowed the Literal and missed
-    ``azure_apim`` + ``gravitee``). Response-validation raised, FastAPI returned 500.
-    """
 
-    def test_gateway_type_literal_covers_every_orm_enum_value(self):
-        """Every ORM ``GatewayType`` value must be accepted by ``GatewayTypeLiteral``."""
-        from typing import get_args
+@pytest.fixture
+async def persisted_gateway_client(
+    app_with_cpi_admin: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> AsyncGenerator[tuple[AsyncClient, AsyncSession], None]:
+    """Exercise the real router, service and repository against an isolated database."""
+    table = GatewayInstance.__table__
+    for column in table.columns:
+        if isinstance(column.type, JSONB):
+            monkeypatch.setattr(column, "type", column.type.with_variant(JSON(), "sqlite"))
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    previous_override = app_with_cpi_admin.dependency_overrides[get_db]
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(table.create)
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
 
-        from src.models.gateway_instance import GatewayType
-        from src.schemas.gateway import GatewayTypeLiteral
+            async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+                yield session
 
-        orm_values = {t.value for t in GatewayType}
-        literal_values = set(get_args(GatewayTypeLiteral))
-        missing = orm_values - literal_values
-        assert not missing, (
-            f"GatewayTypeLiteral missing ORM values {missing}. "
-            "Any gateway row with one of these types would 500 the list endpoint."
-        )
+            app_with_cpi_admin.dependency_overrides[get_db] = override_get_db
+            async with AsyncClient(transport=ASGITransport(app=app_with_cpi_admin), base_url="http://test") as client:
+                yield client, session
+    finally:
+        app_with_cpi_admin.dependency_overrides[get_db] = previous_override
+        await engine.dispose()
 
-    def test_gateway_status_literal_covers_every_orm_enum_value(self):
-        """Every ORM ``GatewayInstanceStatus`` value must be accepted by ``GatewayStatusLiteral``."""
-        from typing import get_args
 
-        from src.models.gateway_instance import GatewayInstanceStatus
-        from src.schemas.gateway import GatewayStatusLiteral
+class TestGatewayLiteralDriftGuard:
+    """CAB-2169: ORM enum changes must not break gateway response serialization."""
 
-        orm_values = {s.value for s in GatewayInstanceStatus}
-        literal_values = set(get_args(GatewayStatusLiteral))
-        missing = orm_values - literal_values
-        assert not missing, f"GatewayStatusLiteral missing ORM values {missing}."
+    def test_gateway_type_literal_matches_orm(self) -> None:
+        assert set(get_args(GatewayTypeLiteral)) == {value.value for value in GatewayType}
 
-    def test_list_gateways_succeeds_for_every_orm_gateway_type(self, app_with_cpi_admin, mock_db_session):
-        """GET / must 200 for every ``GatewayType`` — prevents a re-run of the prod 500."""
-        from src.models.gateway_instance import GatewayType
+    def test_gateway_status_literal_matches_orm(self) -> None:
+        assert set(get_args(GatewayStatusLiteral)) == {value.value for value in GatewayInstanceStatus}
 
-        mocks = [self._mock_gateway_instance(name=f"gw-{t.value}", gateway_type=t.value) for t in GatewayType]
+    @pytest.mark.parametrize("gateway_type", list(GatewayType))
+    def test_response_accepts_every_gateway_type(self, gateway_type: GatewayType) -> None:
+        response = GatewayInstanceResponse.model_validate(_drift_gateway(gateway_type=gateway_type))
+        assert response.model_dump(mode="json")["gateway_type"] == gateway_type.value
 
-        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
-            MockSvc.return_value.list = AsyncMock(return_value=(mocks, len(mocks)))
+    @pytest.mark.parametrize("status", list(GatewayInstanceStatus))
+    def test_response_accepts_every_status(self, status: GatewayInstanceStatus) -> None:
+        response = GatewayInstanceResponse.model_validate(_drift_gateway(status=status))
+        assert response.model_dump(mode="json")["status"] == status.value
 
-            with TestClient(app_with_cpi_admin) as client:
-                response = client.get("/v1/admin/gateways")
+    @pytest.mark.parametrize("gateway_type", list(GatewayType))
+    async def test_list_gateways_succeeds_for_every_gateway_type(
+        self, gateway_type: GatewayType, persisted_gateway_client: tuple[AsyncClient, AsyncSession]
+    ) -> None:
+        client, session = persisted_gateway_client
+        session.add(_drift_gateway(gateway_type=gateway_type))
+        await session.commit()
+        response = await client.get("/v1/admin/gateways", params={"gateway_type": gateway_type.value})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["gateway_type"] == gateway_type.value
 
-        assert response.status_code == 200, response.text
-        assert response.json()["total"] == len(mocks)
+    @pytest.mark.parametrize(
+        ("field", "value", "expected"),
+        [("mode", "future-mode", None), ("source", "legacy-source", "manual"), ("source", None, "manual")],
+    )
+    def test_unknown_values_warn_without_logging_input(
+        self, field: str, value: str | None, expected: str | None, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger="src.schemas.gateway"):
+            response = GatewayInstanceResponse.model_validate(_drift_gateway(**{field: value}))
+        assert getattr(response, field) == expected
+        warnings = [record for record in caplog.records if record.name == "src.schemas.gateway"]
+        assert len(warnings) == 1
+        assert warnings[0].levelno == logging.WARNING
+        assert field in warnings[0].getMessage()
+        if value is not None:
+            assert value not in warnings[0].getMessage()
+        assert not warnings[0].args
 
-    def test_list_gateways_coerces_unknown_mode_to_none(self, app_with_cpi_admin, mock_db_session):
-        """An unknown ``mode`` value must not 500 — coerced to ``None`` with a warning."""
-        gw = self._mock_gateway_instance(mode="some-future-mode")
+    @pytest.mark.parametrize("mode", [None, *get_args(GatewayModeLiteral)])
+    def test_valid_mode_is_unchanged(self, mode: str | None, caplog: pytest.LogCaptureFixture) -> None:
+        response = GatewayInstanceResponse.model_validate(_drift_gateway(mode=mode))
+        assert response.mode == mode
+        assert not caplog.records
 
-        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
-            MockSvc.return_value.list = AsyncMock(return_value=([gw], 1))
+    @pytest.mark.parametrize("source", get_args(GatewaySourceLiteral))
+    def test_valid_source_is_unchanged(self, source: str, caplog: pytest.LogCaptureFixture) -> None:
+        response = GatewayInstanceResponse.model_validate(_drift_gateway(source=source))
+        assert response.source == source
+        assert not caplog.records
 
-            with TestClient(app_with_cpi_admin) as client:
-                response = client.get("/v1/admin/gateways")
-
-        assert response.status_code == 200, response.text
-        assert response.json()["items"][0]["mode"] is None
-
-    def test_list_gateways_coerces_unknown_source_to_manual(self, app_with_cpi_admin, mock_db_session):
-        """An unknown ``source`` value must not 500 — coerced to ``"manual"`` with a warning."""
-        gw = self._mock_gateway_instance(source="legacy_importer")
-
-        with patch("src.routers.gateway_instances.GatewayInstanceService") as MockSvc:
-            MockSvc.return_value.list = AsyncMock(return_value=([gw], 1))
-
-            with TestClient(app_with_cpi_admin) as client:
-                response = client.get("/v1/admin/gateways")
-
-        assert response.status_code == 200, response.text
-        assert response.json()["items"][0]["source"] == "manual"
+    @pytest.mark.parametrize(
+        ("field", "value", "expected"),
+        [("mode", "future-mode", None), ("source", "legacy-source", "manual")],
+    )
+    async def test_list_gateways_coerces_unknown_values(
+        self, field: str, value: str, expected: str | None, persisted_gateway_client: tuple[AsyncClient, AsyncSession]
+    ) -> None:
+        client, session = persisted_gateway_client
+        session.add_all([_drift_gateway(**{field: value}), _drift_gateway(name="valid-gateway")])
+        await session.commit()
+        response = await client.get("/v1/admin/gateways")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        items = {item["name"]: item for item in data["items"]}
+        assert items["drift-guard"][field] == expected
+        assert items["valid-gateway"][field] == (None if field == "mode" else "self_register")

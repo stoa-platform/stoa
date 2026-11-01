@@ -225,7 +225,7 @@ class GatewayInstanceResponse(BaseModel):
             return None
         if v in get_args(GatewayModeLiteral):
             return v  # type: ignore[return-value]
-        logger.warning("Unknown gateway mode %r — coerced to None. Update GatewayModeLiteral if this is valid.", v)
+        logger.warning("Unknown gateway mode — coerced to None. Update GatewayModeLiteral if this is valid.")
         return None
 
     @field_validator("source", mode="before")
@@ -238,9 +238,7 @@ class GatewayInstanceResponse(BaseModel):
         """
         if v in get_args(GatewaySourceLiteral):
             return v  # type: ignore[return-value]
-        logger.warning(
-            "Unknown gateway source %r — coerced to 'manual'. Update GatewaySourceLiteral if this is valid.", v
-        )
+        logger.warning("Unknown gateway source — coerced to 'manual'. Update GatewaySourceLiteral if this is valid.")
         return "manual"
 
 

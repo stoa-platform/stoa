@@ -38,7 +38,8 @@ spec:
           initContainers:
             # pg_dump phase using kubectl image
             - name: dump
-              image: bitnami/kubectl:latest
+              image: bitnami/kubectl@sha256:bedd34c910e2a5ce9836813d16444af449d7fe07a29136d59f34e861e8e660c5
+              imagePullPolicy: IfNotPresent
               command:
                 - /bin/bash
                 - -c
@@ -117,7 +118,8 @@ spec:
           containers:
             # S3 upload phase using AWS CLI image
             - name: upload
-              image: amazon/aws-cli:2.15.0
+              image: amazon/aws-cli@sha256:e2a778146a45cb7cdcc55e3051c0de38ea9f180ed88383447f7ead6b0ba5e9a4
+              imagePullPolicy: IfNotPresent
               command:
                 - /bin/bash
                 - -c

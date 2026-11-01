@@ -25,7 +25,8 @@ spec:
     spec:
       containers:
         - name: oauth2-proxy
-          image: quay.io/oauth2-proxy/oauth2-proxy:v7.5.1
+          image: quay.io/oauth2-proxy/oauth2-proxy@sha256:3c6012940d3cd71ecc67fd7783916df6d27972b520209af36e9567b9bdbc0c79
+          imagePullPolicy: IfNotPresent
           args:
             - --provider=keycloak-oidc
             - --client-id=observability

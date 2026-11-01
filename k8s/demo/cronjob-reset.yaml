@@ -41,7 +41,8 @@ spec:
               type: RuntimeDefault
           containers:
             - name: seed
-              image: ghcr.io/stoa-platform/control-plane-api:latest
+              image: ghcr.io/stoa-platform/control-plane-api@sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0
+              imagePullPolicy: IfNotPresent
               command:
                 - python
                 - -m

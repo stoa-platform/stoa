@@ -28,7 +28,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: securityadmin
-          image: opensearchproject/opensearch:3.5.0
+          image: opensearchproject/opensearch@sha256:dbb01641baadae5104e18acd888bf05e8fdd9af3567fd30624a76ba3e5a31dec
+          imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
             - |

@@ -31,7 +31,8 @@ spec:
               type: RuntimeDefault
           containers:
             - name: traffic-gen
-              image: python:3.11-slim
+              image: python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60
+              imagePullPolicy: IfNotPresent
               command:
                 - python
                 - /app/heartbeat.py
@@ -68,7 +69,8 @@ spec:
                   readOnly: true
           initContainers:
             - name: install-deps
-              image: python:3.11-slim
+              image: python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60
+              imagePullPolicy: IfNotPresent
               command:
                 - sh
                 - -c

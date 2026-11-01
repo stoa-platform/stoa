@@ -4,7 +4,7 @@
 
 services:
   stoa-gateway:
-    image: ghcr.io/stoa-platform/stoa-gateway:latest
+    image: ghcr.io/stoa-platform/stoa-gateway@sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e
     container_name: staging-stoa-gateway
     restart: unless-stopped
     network_mode: host

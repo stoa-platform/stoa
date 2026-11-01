@@ -18,11 +18,25 @@ KEY = re.compile(r"^(\s*)(?:-\s*)?([\w-]+):\s*(.*?)\s*$")
 GUARD = "scripts/ci/check_image_pinning.py"
 
 
+def dockerfile_path(path):
+    name = PurePosixPath(path).name.lower()
+    return (name.startswith("dockerfile") or name.endswith(".dockerfile") or
+            re.search(r"\.dockerfile\.(?:j2|tpl|template)$", name) is not None)
+
+
+def markdown_image(value):
+    registry = re.match(r"(?:localhost|registry|[\w-]+(?:\.[\w-]+)+)(?::\d+)?/", value)
+    citation = re.fullmatch(r"(?:.+\.[\w-]+|(?:.*/)?Dockerfile):\d+(?:[-:]\d+)?", value, re.I)
+    if citation and not registry:
+        return False
+    return bool(registry or re.match(r"[a-z0-9_.-]+(?:/[a-z0-9_.-]+)*:(?:latest|[\w.-]+-latest|\d[\w.-]*|alpine)$", value))
+
+
 def allowed(path):
     p = PurePosixPath(path)
     return (not set(p.parts) & {"private", "prive"} and p.name != "ACCES.md" and
             (p.suffix in {".yml", ".yaml", ".json", ".toml", ".sh", ".go", ".py", ".md", ".mdx", ".tpl", ".j2"}
-             or p.name.lower().startswith("dockerfile")))
+             or dockerfile_path(path)))
 
 
 def clean(value):
@@ -31,6 +45,7 @@ def clean(value):
 
 def findings(path, source):
     lines, found, stages, stack = source.splitlines(), [], set(), []
+    markdown, fence = path.endswith((".md", ".mdx")), None
 
     def add(index, kind):
         found.append((index + 1, kind))
@@ -55,6 +70,14 @@ def findings(path, source):
         return [(m[2], clean(m[3])) for _, text in block(index, indent) if (m := KEY.match(text))]
 
     for index, line in enumerate(lines):
+        if markdown and (marker := re.match(r"^\s*(`{3,}|~{3,})\s*([\w+-]*)", line)):
+            token, language = marker.groups()
+            if fence is None:
+                fence = (token[0], len(token), language.lower())
+            elif token[0] == fence[0] and len(token) >= fence[1]:
+                fence = None
+            stages.clear()
+        docker_context = dockerfile_path(path) or bool(fence and fence[2] in {"dockerfile", "docker"})
         match = KEY.match(line)
         if match:
             indent, key, value = match.groups()
@@ -81,8 +104,7 @@ def findings(path, source):
                 image(index, value)
             elif key in {"imagePullPolicy", "pullPolicy"} and clean(value) == "Always":
                 add(index, "pull-policy-always")
-        flags = re.I if "dockerfile" in PurePosixPath(path).name.lower() else 0
-        match = re.match(r"\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\w+))?", line, flags)
+        match = re.match(r"\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\w+))?", line, re.I) if docker_context else None
         if match:
             if match[1] != "scratch" and match[1].lower() not in stages:
                 image(index, match[1])
@@ -105,8 +127,7 @@ def findings(path, source):
         if path.endswith((".md", ".mdx")):
             for value in re.findall(r"`([^`\s]+)`", line):
                 if "://" not in value and re.fullmatch(r"[\w./:@${}-]+", value):
-                    registry = re.match(r"[\w.-]+\.[\w.-]+/", value)
-                    if registry or re.match(r"[a-z0-9_.-]+(?:/[a-z0-9_.-]+)*:(?:latest|[\w.-]+-latest|\d[\w.-]*|alpine)$", value):
+                    if markdown_image(value):
                         image(index, value)
         publication = line + " " + re.sub(r"\$\{\{[^}\n]*\}\}|\$\{[^}\n]*\}", "IMAGE_VAR", line)
         if re.search(r"(?:[\w.-]+(?:/[\w${}./-]+)+|IMAGE_VAR):(?:latest|[\w${}.-]+-latest)(?![\w.@-])", publication):

@@ -19,8 +19,8 @@ class PinningTests(unittest.TestCase):
         for prefix in ("image: ", "FROM ", "docker" + " run --rm -p example:80 ", "kubectl run app --" + "image="):
             for value in ("nginx", "nginx:latest", "nginx:alpine", "nginx:8.13.4", "ghcr.io/team/app:" + "dev-latest", "${IMAGE}", "${IMAGE:-nginx:latest}", "nginx@sha256:${DIGEST}"):
                 with self.subTest(prefix=prefix, value=value):
-                    self.assertTrue(guard.findings("guide.md", prefix + value))
-            self.assertFalse(guard.findings("guide.md", prefix + "nginx@" + D))
+                    self.assertTrue(guard.findings("Dockerfile" if prefix == "FROM " else "guide.md", prefix + value))
+            self.assertFalse(guard.findings("Dockerfile" if prefix == "FROM " else "guide.md", prefix + "nginx@" + D))
         self.assertFalse(guard.findings("Dockerfile", "from nginx@" + D + " as builder\nFROM builder AS final"))
         self.assertTrue(guard.findings("config.json", '{' + '"image": "nginx:1.2.3"}'))
         self.assertTrue(guard.findings("config.json", '{\n  ' + '"image": "nginx:latest"\n}'))
@@ -56,6 +56,28 @@ class PinningTests(unittest.TestCase):
             self.assertFalse(guard.findings("build.yml", source + "@" + D))
         source = "- uses: 'docker/metadata-action@" + "a" * 40 + "'\n  with:\n    tags: |\n      type=semver,pattern={{version}}"
         self.assertEqual(guard.findings("build.yml", source), [(4, "metadata-implicit-latest")])
+
+    def test_file_citations_and_sql(self):
+        for value in ("module.py:123", "src/module.rs:42-50", "path/file.ext:123", "Dockerfile:12"):
+            self.assertFalse(guard.findings("docs/guide.md", "See `" + value + "`."))
+        for value in ("nginx:1", "alpine:3.20", "nginx:alpine", "ghcr.io/team/app.py:1", "registry/app.py:1"):
+            self.assertTrue(guard.findings("docs/guide.md", "Use `" + value + "`."))
+        for path in ("module.py", "module.go", "docs/guide.md"):
+            self.assertFalse(guard.findings(path, 'query = """SELECT name\nFROM entries\nWHERE active = true"""'))
+        self.assertFalse(guard.findings("docs/guide.md", "```sql\nSELECT name\nFROM entries\n```"))
+
+    def test_explicit_dockerfile_contexts(self):
+        for path in ("Dockerfile", "service/Dockerfile.dev", "templates/Dockerfile.j2", "service/build.Dockerfile", "templates/build.Dockerfile.tpl"):
+            self.assertTrue(guard.allowed(path))
+            for image in ("nginx", "nginx:1", "alpine:3.20", "${IMAGE}"):
+                self.assertTrue(guard.findings(path, "FROM " + image))
+            self.assertFalse(guard.findings(path, "FROM nginx@" + D + " AS base\nFROM base"))
+        for fence in ("```dockerfile", "~~~Dockerfile", "```docker"):
+            close = fence[:3]
+            self.assertTrue(guard.findings("docs/guide.md", fence + "\nFROM nginx:1\n" + close))
+            self.assertFalse(guard.findings("docs/guide.md", fence + "\nFROM nginx@" + D + "\n" + close))
+        source = "```dockerfile\nFROM nginx@" + D + " AS builder\n```\n```dockerfile\nFROM builder\n```"
+        self.assertEqual(guard.findings("docs/guide.md", source), [(5, "image-unpinned")])
 
     def test_paths(self):
         for path in ("private/x.yml", "a/prive/x", "codex-9.log", "a/codex.log", "claude.log", "ACCES.md", "candidate.env", "notes.txt"):

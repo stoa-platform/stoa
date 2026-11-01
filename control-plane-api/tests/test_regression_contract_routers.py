@@ -13,6 +13,18 @@ contract (routing + serialization), NOT business logic.
 
 from fastapi.testclient import TestClient
 
+
+def test_regression_cab_2169_gateway_response_literals_match_orm() -> None:
+    """Every stored gateway type/status must remain serializable in list responses."""
+    from typing import get_args
+
+    from src.models.gateway_instance import GatewayInstanceStatus, GatewayType
+    from src.schemas.gateway import GatewayStatusLiteral, GatewayTypeLiteral
+
+    assert set(get_args(GatewayTypeLiteral)) == {value.value for value in GatewayType}
+    assert set(get_args(GatewayStatusLiteral)) == {value.value for value in GatewayInstanceStatus}
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

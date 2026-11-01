@@ -24,7 +24,7 @@ services:
   # OpenLDAP - Identity source for Org Gamma
   # ==========================================================================
   openldap:
-    image: osixia/openldap:1.5.0
+    image: osixia/openldap@sha256:18742e9c449c9c1afe129d3f2f3ee15fb34cc43e5f940a20f3399728f41d7c28
     container_name: stoa-federation-ldap
     ports:
       - "${PORT_LDAP:-1389}:389"
@@ -58,7 +58,7 @@ services:
   #   demo-org-gamma    - Tenant realm, federated via LDAP
   # ==========================================================================
   keycloak:
-    image: quay.io/keycloak/keycloak:26.5.3
+    image: quay.io/keycloak/keycloak@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a
     container_name: stoa-federation-keycloak
     command: start-dev --import-realm
     ports:
@@ -109,7 +109,7 @@ services:
   # Mock Gateway - JWT issuer/audience isolation validator
   # ==========================================================================
   mock-gateway:
-    image: python:3.11-slim
+    image: python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60
     container_name: stoa-federation-gateway
     ports:
       - "${PORT_GATEWAY:-9000}:9000"
@@ -133,7 +133,7 @@ services:
   # OPA - Federation isolation policy engine
   # ==========================================================================
   opa:
-    image: openpolicyagent/opa:0.60.0
+    image: openpolicyagent/opa@sha256:c30d4c0f8200380399d0423127e58f6aa0ba1b9408734a6931f20e0fdcc60b29
     platform: linux/amd64
     container_name: stoa-federation-opa
     ports:

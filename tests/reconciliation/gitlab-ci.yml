@@ -23,7 +23,7 @@ variables:
 
 validate-scripts:
   stage: validate
-  image: alpine:3.19
+  image: alpine@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
   before_script:
     - apk add --no-cache bash shellcheck
   script:
@@ -36,7 +36,7 @@ validate-scripts:
 
 validate-connectivity:
   stage: validate
-  image: curlimages/curl:8.5.0
+  image: curlimages/curl@sha256:08e466006f0860e54fc299378de998935333e0e130a15f6f98482e9f8dab3058
   script:
     - |
       echo "Checking webMethods Gateway..."
@@ -59,7 +59,7 @@ validate-connectivity:
 
 .test-template: &test-template
   stage: test
-  image: alpine:3.19
+  image: alpine@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
   before_script:
     - apk add --no-cache bash curl jq
     - chmod +x scripts/*.sh
@@ -158,7 +158,7 @@ test-full-suite:
 
 validate-state:
   stage: test
-  image: alpine:3.19
+  image: alpine@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
   before_script:
     - apk add --no-cache bash curl jq
     - chmod +x scripts/*.sh
@@ -178,7 +178,7 @@ validate-state:
 
 generate-report:
   stage: report
-  image: alpine:3.19
+  image: alpine@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
   dependencies:
     - test-crash-recovery
     - test-drift-detection
@@ -221,7 +221,7 @@ generate-report:
 
 notify-results:
   stage: report
-  image: curlimages/curl:8.5.0
+  image: curlimages/curl@sha256:08e466006f0860e54fc299378de998935333e0e130a15f6f98482e9f8dab3058
   dependencies:
     - generate-report
   script:

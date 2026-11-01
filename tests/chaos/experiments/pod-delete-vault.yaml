@@ -92,7 +92,7 @@ spec:
                 VAULT_ADDR=http://vault.vault.svc:8200
                 vault status -format=json | jq -e '.sealed == false'
               source:
-                image: "hashicorp/vault:1.15"
+                image: hashicorp/vault@sha256:0450896c43b13879b19442b204ce29dd19b5a10fce43d5cf38af17da20f56f4d
               comparator:
                 type: "string"
                 criteria: "contains"
@@ -164,7 +164,7 @@ spec:
                 VAULT_ADDR=http://vault.vault.svc:8200
                 vault operator raft list-peers -format=json | jq '.data.config.servers | length >= 2'
               source:
-                image: "hashicorp/vault:1.15"
+                image: hashicorp/vault@sha256:0450896c43b13879b19442b204ce29dd19b5a10fce43d5cf38af17da20f56f4d
               comparator:
                 type: "string"
                 criteria: "contains"

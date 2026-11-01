@@ -12,7 +12,7 @@ services:
   # InfluxDB - Time series database for K6 metrics
   # ---------------------------------------------------------------------------
   influxdb:
-    image: influxdb:1.8
+    image: influxdb@sha256:299ebda2c7e308dbef42e26ac9b8fd1d9b3bcb8a0aee80c6509aa0219c1d0290
     container_name: stoa-influxdb
     ports:
       - "8086:8086"
@@ -33,7 +33,7 @@ services:
   # Grafana - Visualization dashboards
   # ---------------------------------------------------------------------------
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana@sha256:1ee0c54286b8ca09a3dd1419ff8653e7780a148a006ac088544203bb0affe550
     container_name: stoa-grafana-k6
     ports:
       - "3001:3000"
@@ -60,7 +60,7 @@ services:
   # K6 - Load testing tool
   # ---------------------------------------------------------------------------
   k6:
-    image: grafana/k6:0.47.0
+    image: grafana/k6@sha256:f7650fff23d183b96a51be366aaadd90a29548585a24407f4ec9712cbd66ec73
     container_name: stoa-k6
     volumes:
       - ./k6:/scripts

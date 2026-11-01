@@ -22,7 +22,8 @@ spec:
     spec:
       containers:
         - name: mongo
-          image: mongo:7.0
+          image: mongo@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 27017
           volumeMounts:
@@ -76,7 +77,8 @@ spec:
     spec:
       containers:
         - name: mgmt-api
-          image: graviteeio/apim-management-api:4.10
+          image: graviteeio/apim-management-api@sha256:69e97fa612662c19ce885d4d92b16c3f674d31de4b7fa1721f8ac0e78ccfd01b
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8083
           env:
@@ -143,7 +145,8 @@ spec:
     spec:
       containers:
         - name: gateway
-          image: graviteeio/apim-gateway:4.10
+          image: graviteeio/apim-gateway@sha256:3d2bae33854a7574e98ef4a12daf791c98d3411ca094af251d6d59e80404bcc9
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8082
               name: proxy
@@ -218,7 +221,8 @@ spec:
       restartPolicy: Never
       initContainers:
         - name: wait-mgmt
-          image: curlimages/curl:8.11.1
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
           command:
             - sh
             - -c
@@ -244,7 +248,8 @@ spec:
               drop:
                 - ALL
         - name: wait-gateway
-          image: curlimages/curl:8.11.1
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
           command:
             - sh
             - -c
@@ -271,7 +276,8 @@ spec:
                 - ALL
       containers:
         - name: register-echo
-          image: curlimages/curl:8.11.1
+          image: curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+          imagePullPolicy: IfNotPresent
           command:
             - sh
             - -c

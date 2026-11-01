@@ -40,7 +40,8 @@ spec:
     spec:
       containers:
         - name: kong
-          image: kong:3.9.1-ubuntu
+          image: kong@sha256:76c14b93e989f7f4418039f7f9789ca32564016211c86ac1a18022f4788e7b9c
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
               name: proxy

@@ -30,7 +30,8 @@ spec:
                       - worker-3
       containers:
         - name: vault
-          image: hashicorp/vault:1.18
+          image: hashicorp/vault@sha256:750bb37c1638fa194ab37053a81618c61bb0491ddec6fccac87c07a8e6cd8166
+          imagePullPolicy: IfNotPresent
           args: ["server"]
           env:
             - name: VAULT_ADDR

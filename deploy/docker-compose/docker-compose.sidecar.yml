@@ -51,7 +51,7 @@ services:
   # Fake webMethods — Mock backend with 3 JSON endpoints
   # ==========================================================================
   fake-webmethods:
-    image: nginx:1.25-alpine
+    image: nginx@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-sidecar-webmethods
     volumes:
       - ./sidecar/webmethods-mock/nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -68,7 +68,7 @@ services:
   # NGINX Reverse Proxy — auth_request to STOA Gateway
   # ==========================================================================
   nginx-proxy:
-    image: nginx:1.25-alpine
+    image: nginx@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-sidecar-proxy
     ports:
       - "${PORT_PROXY:-8080}:8080"

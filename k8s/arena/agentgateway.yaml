@@ -75,7 +75,8 @@ spec:
     spec:
       containers:
         - name: agentgateway
-          image: ghcr.io/agentgateway/agentgateway:v1.0.1
+          image: ghcr.io/agentgateway/agentgateway@sha256:2e85a5b61d0a4eac493c1f76b3369538820f9a4485923d4b26a9403e8ae5bd86
+          imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway/config.yaml"]
           ports:
             - containerPort: 3000

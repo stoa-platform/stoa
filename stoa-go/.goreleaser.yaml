@@ -102,9 +102,7 @@ dockers:
       - stoactl
     image_templates:
       - "ghcr.io/stoa-platform/stoactl:{{ .Tag }}"
-      - "ghcr.io/stoa-platform/stoactl:v{{ .Major }}"
-      - "ghcr.io/stoa-platform/stoactl:v{{ .Major }}.{{ .Minor }}"
-      - "ghcr.io/stoa-platform/stoactl:latest"
+      - "ghcr.io/stoa-platform/stoactl:sha-{{ .FullCommit }}"
     extra_files:
       - LICENSE
       - NOTICE
@@ -139,6 +137,4 @@ release:
     Download from the assets below or use Homebrew.
 
     **Docker:**
-    ```bash
-    docker run ghcr.io/stoa-platform/stoactl:{{.Tag}} version
-    ```
+    Use the immutable SHA-256 digest shown for this release in GHCR.

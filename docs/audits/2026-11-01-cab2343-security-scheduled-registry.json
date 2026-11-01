@@ -1,0 +1,10 @@
+{
+  "ticket": "CAB-2343",
+  "method": "Anonymous HTTPS tag GET then digest GET with TLS verification; SHA-256 raw bytes equals Docker-Content-Digest. Unproven entry remains explicit and cannot scan.",
+  "manifests": [
+    {"body_sha256": "sha256:5ad502335c09dfd75b9a1711fd2e51a4fedbed25de7c451c361b930f822f87b8", "digest": "sha256:5ad502335c09dfd75b9a1711fd2e51a4fedbed25de7c451c361b930f822f87b8", "digest_get_verified": true, "header_digest": "sha256:5ad502335c09dfd75b9a1711fd2e51a4fedbed25de7c451c361b930f822f87b8", "http_status": 200, "media_type": "application/vnd.oci.image.index.v1+json", "platforms": ["linux/amd64"], "registry": "ghcr.io", "repository": "stoa-platform/control-plane-ui", "source_reference": "latest", "verified_at_utc": "2026-11-01T22:15:23.946120+00:00"},
+    {"body_sha256": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e", "digest": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e", "digest_get_verified": true, "header_digest": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e", "http_status": 200, "media_type": "application/vnd.oci.image.index.v1+json", "platforms": ["linux/amd64"], "registry": "ghcr.io", "repository": "stoa-platform/stoa-gateway", "source_reference": "latest", "verified_at_utc": "2026-11-01T22:15:23.946464+00:00"},
+    {"body_sha256": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0", "digest": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0", "digest_get_verified": true, "header_digest": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0", "http_status": 200, "media_type": "application/vnd.oci.image.index.v1+json", "platforms": ["linux/amd64"], "registry": "ghcr.io", "repository": "stoa-platform/control-plane-api", "source_reference": "latest", "verified_at_utc": "2026-11-01T22:15:23.946962+00:00"},
+    {"error": "anonymous token denied", "http_status": 401, "registry": "ghcr.io", "repository": "stoa-platform/stoa-portal", "source_reference": "latest", "verified_at_utc": "2026-11-01T22:15:27.730346+00:00"}
+  ]
+}

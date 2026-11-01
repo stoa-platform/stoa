@@ -29,8 +29,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: control-plane-ui
-          image: ghcr.io/stoa-platform/control-plane-ui:latest
-          imagePullPolicy: Always
+          image: ghcr.io/stoa-platform/control-plane-ui@sha256:5ad502335c09dfd75b9a1711fd2e51a4fedbed25de7c451c361b930f822f87b8
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

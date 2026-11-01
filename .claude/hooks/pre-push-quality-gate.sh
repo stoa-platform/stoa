@@ -53,6 +53,8 @@ ONLY_DOCS=true
 
 while IFS= read -r f; do
   case "$f" in
+    # Deployment manifests do not change application code.
+    control-plane-ui/k8s/*|portal/k8s/*|stoa-gateway/k8s/*) ONLY_DOCS=false ;;
     control-plane-api/*) HAS_PYTHON_API=true; ONLY_DOCS=false ;;
     control-plane-ui/*) HAS_CONSOLE=true; ONLY_DOCS=false ;;
     portal/*) HAS_PORTAL=true; ONLY_DOCS=false ;;

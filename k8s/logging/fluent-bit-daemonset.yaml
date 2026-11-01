@@ -22,13 +22,15 @@ spec:
       serviceAccountName: fluent-bit
       initContainers:
         - name: increase-inotify
-          image: busybox:1.37
+          image: busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+          imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "sysctl -w fs.inotify.max_user_watches=524288 && sysctl -w fs.inotify.max_user_instances=1024"]
           securityContext:
             privileged: true
       containers:
         - name: fluent-bit
-          image: fluent/fluent-bit:3.2
+          image: fluent/fluent-bit@sha256:d6dec000c4929a439562525728c708f6e99800d7ddc82efd6aa4f45f3a20b562
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 2020
               name: http-metrics

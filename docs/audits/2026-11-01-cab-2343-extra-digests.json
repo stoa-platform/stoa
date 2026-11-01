@@ -1,0 +1,97 @@
+{
+  "ticket": "CAB-2343",
+  "verification_window_utc": [
+    "2026-11-01T20:55:02.662843+00:00",
+    "2026-11-01T21:07:56.755957+00:00"
+  ],
+  "method": "Anonymous HTTPS GET with TLS verification; Docker-Content-Digest equals SHA-256 of response bytes.",
+  "existing_proof": "docs/audits/2026-11-01-cab-2343-digests.json",
+  "manifests": [
+    {
+      "registry": "registry-1.docker.io",
+      "repository": "curlimages/curl",
+      "source_tag": "8.7.1",
+      "digest": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+      "header_digest": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+      "body_sha256": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+      "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm64",
+        "linux/ppc64le"
+      ]
+    },
+    {
+      "registry": "registry-1.docker.io",
+      "repository": "curlimages/curl",
+      "source_tag": "latest",
+      "digest": "sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93",
+      "header_digest": "sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93",
+      "body_sha256": "sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93",
+      "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm/v7",
+        "linux/arm64/v8",
+        "linux/ppc64le"
+      ]
+    },
+    {
+      "registry": "registry-1.docker.io",
+      "repository": "library/busybox",
+      "source_tag": "1.37",
+      "digest": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+      "header_digest": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+      "body_sha256": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm/v5",
+        "linux/arm/v6",
+        "linux/arm/v7",
+        "linux/arm64/v8",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x",
+        "unknown/unknown"
+      ]
+    },
+    {
+      "registry": "registry-1.docker.io",
+      "repository": "fluent/fluent-bit",
+      "source_tag": "3.2",
+      "digest": "sha256:d6dec000c4929a439562525728c708f6e99800d7ddc82efd6aa4f45f3a20b562",
+      "header_digest": "sha256:d6dec000c4929a439562525728c708f6e99800d7ddc82efd6aa4f45f3a20b562",
+      "body_sha256": "sha256:d6dec000c4929a439562525728c708f6e99800d7ddc82efd6aa4f45f3a20b562",
+      "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm/v7",
+        "linux/arm64",
+        "linux/s390x"
+      ]
+    },
+    {
+      "registry": "ghcr.io",
+      "repository": "stoa-platform/control-plane-api",
+      "source_tag": "dev-latest",
+      "digest": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0",
+      "header_digest": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0",
+      "body_sha256": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0",
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "platforms": [
+        "linux/amd64",
+        "unknown/unknown"
+      ],
+      "verified_at_utc": "2026-11-01T21:06:20.624212+00:00",
+      "verification": "Tag and digest revalidated: anonymous HTTPS GET by source tag and recorded digest; response headers and body SHA-256 equal pinned digest.",
+      "tag_verified_at_utc": "2026-11-01T21:07:56.755957+00:00",
+      "tag_digest": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0",
+      "tag_header_digest": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0",
+      "tag_body_sha256": "sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0"
+    }
+  ]
+}

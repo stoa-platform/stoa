@@ -7,7 +7,7 @@
 
 services:
   echo:
-    image: nginx:alpine
+    image: nginx@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606
     container_name: echo-local
     restart: unless-stopped
     ports:

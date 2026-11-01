@@ -98,15 +98,27 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Post-deploy (prod probe)
     runs-on: ubuntu-latest
-    # Non bloquant tant que la prod MCP n'est pas rétablie : l'enregistrement
-    # DNS mcp.gostoa.dev a été retiré le 21/10/2026 et le tunnel n'a plus de
-    # route MCP. Retirer cette ligne quand la cible répond à nouveau.
+    # Non bloquant pendant le rétablissement de la prod MCP. Sans DNS
+    # (retiré le 21/10/2026), les étapes sont sautées proprement ; la sonde
+    # reprend dès son retour. Retirer cette ligne quand la cible répond à nouveau.
     continue-on-error: true
     timeout-minutes: 10
     steps:
+      - name: Check prod MCP DNS
+        id: dns
+        run: |
+          if getent hosts mcp.gostoa.dev >/dev/null 2>&1; then
+            echo "resolves=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "resolves=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::prod MCP non publiée (DNS retiré le 21/10)"
+          fi
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: steps.dns.outputs.resolves == 'true'
 
       - name: Install python3 + MCP Python SDK
+        if: steps.dns.outputs.resolves == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-venv python3-pip
@@ -114,6 +126,7 @@ jobs:
           .venv-mcp/bin/pip install --quiet "mcp==${PY_MCP_VERSION}"
 
       - name: Run MCP SDK smoke against prod
+        if: steps.dns.outputs.resolves == 'true'
         env:
           STOA_GATEWAY_URL: https://mcp.gostoa.dev/mcp/sse
           STOA_SMOKE_CALL_TOOL: '0'

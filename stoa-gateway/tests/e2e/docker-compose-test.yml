@@ -38,7 +38,8 @@ services:
       retries: 5
 
   wiremock:
-    image: wiremock/wiremock:3.12.1
+    image: wiremock/wiremock@sha256:c3cf12f602139e3ffb4e042b246887ff6cadf3bcbb32625392d45f12e8f634d4
+    pull_policy: missing
     ports:
       - "18081:8080"
     volumes:
@@ -52,7 +53,8 @@ services:
       retries: 3
 
   httpbin:
-    image: kennethreitz/httpbin:latest
+    image: kennethreitz/httpbin@sha256:599fe5e5073102dbb0ee3dbb65f049dab44fa9fc251f6835c9990f8fb196a72b
+    pull_policy: missing
     ports:
       - "18082:80"
     healthcheck:
@@ -63,7 +65,8 @@ services:
       retries: 3
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.5.3
+    image: quay.io/keycloak/keycloak@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a
+    pull_policy: missing
     ports:
       - "18083:8080"
     environment:

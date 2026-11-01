@@ -1,0 +1,30 @@
+{
+  "scope": "Local-only gateway E2E Compose peers; no image pull, build, or deployment performed.",
+  "verification": "Anonymous HTTPS manifest GET; compare Docker-Content-Digest with raw body SHA-256; GET by digest and compare again.",
+  "images": [
+    {
+      "registry": "registry-1.docker.io",
+      "repository": "wiremock/wiremock",
+      "source_reference": "3.12.1",
+      "digest": "sha256:c3cf12f602139e3ffb4e042b246887ff6cadf3bcbb32625392d45f12e8f634d4",
+      "immutable": "wiremock/wiremock@sha256:c3cf12f602139e3ffb4e042b246887ff6cadf3bcbb32625392d45f12e8f634d4",
+      "verified": true
+    },
+    {
+      "registry": "registry-1.docker.io",
+      "repository": "kennethreitz/httpbin",
+      "source_reference": "latest",
+      "digest": "sha256:599fe5e5073102dbb0ee3dbb65f049dab44fa9fc251f6835c9990f8fb196a72b",
+      "immutable": "kennethreitz/httpbin@sha256:599fe5e5073102dbb0ee3dbb65f049dab44fa9fc251f6835c9990f8fb196a72b",
+      "verified": true
+    },
+    {
+      "registry": "quay.io",
+      "repository": "keycloak/keycloak",
+      "source_reference": "26.5.3",
+      "digest": "sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a",
+      "immutable": "quay.io/keycloak/keycloak@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a",
+      "verified": true
+    }
+  ]
+}

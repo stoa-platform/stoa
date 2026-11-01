@@ -58,6 +58,8 @@ while IFS= read -r f; do
     control-plane-api/*) HAS_PYTHON_API=true; ONLY_DOCS=false ;;
     control-plane-ui/*) HAS_CONSOLE=true; ONLY_DOCS=false ;;
     portal/*) HAS_PORTAL=true; ONLY_DOCS=false ;;
+    # This local test Compose changes peers, not Rust code.
+    stoa-gateway/tests/e2e/docker-compose-test.yml) ONLY_DOCS=false ;;
     stoa-gateway/*) HAS_GATEWAY=true; ONLY_DOCS=false ;;
     e2e/*) HAS_E2E=true; ONLY_DOCS=false ;;
     *.md|.claude/*|docs/*) ;; # docs-only, keep ONLY_DOCS=true

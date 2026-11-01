@@ -30,8 +30,16 @@ func TestRunInit_CreatesFiles(t *testing.T) {
 	if !strings.Contains(string(compose), "9090:8080") {
 		t.Error("docker-compose.yml missing port mapping")
 	}
-	if !strings.Contains(string(compose), "ghcr.io/stoa-platform/gateway:latest") {
-		t.Error("docker-compose.yml missing gateway image")
+	for _, reference := range []string{
+		"ghcr.io/stoa-platform/stoa-gateway@sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+		"nginx@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+	} {
+		if !strings.Contains(string(compose), reference) {
+			t.Errorf("docker-compose.yml missing pinned image %s", reference)
+		}
+	}
+	if strings.Count(string(compose), "pull_policy: missing") != 2 {
+		t.Error("docker-compose.yml missing pull policies")
 	}
 
 	// Check stoa.yaml exists

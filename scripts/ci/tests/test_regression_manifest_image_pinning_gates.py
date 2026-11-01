@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """CAB-2343: manifest-only edits keep code gates and live E2E scoped."""
+import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -38,6 +40,30 @@ class ManifestImagePinningGateRegressionTests(unittest.TestCase):
                 source = f"{component}/src/main.rs"
                 self.assertEqual(classified([source])[flag], "true")
                 self.assertEqual(classified([f"{component}/k8s/deployment.yaml", source])[flag], "true")
+
+    def test_regression_only_exact_gateway_e2e_compose_skips_rust(self):
+        compose = "stoa-gateway/tests/e2e/docker-compose-test.yml"
+        flags = classified([compose])
+        self.assertEqual(flags["HAS_GATEWAY"], "false")
+        self.assertEqual(flags["ONLY_DOCS"], "false")
+        for adjacent in ("run-e2e.sh", "local_mcp_sdk_smoke.py", "another-compose.yml", "runtime_test.rs"):
+            source = "stoa-gateway/tests/e2e/" + adjacent
+            with self.subTest(source=source):
+                self.assertEqual(classified([source])["HAS_GATEWAY"], "true")
+                self.assertEqual(classified([compose, source])["HAS_GATEWAY"], "true")
+        self.assertEqual(classified([compose, "stoa-gateway/src/main.rs"])["HAS_GATEWAY"], "true")
+
+    def test_regression_gateway_e2e_compose_matches_verified_peer_images(self):
+        source = (ROOT / "stoa-gateway/tests/e2e/docker-compose-test.yml").read_text()
+        images = re.findall(r"(?m)^    image: (.+)$", source)
+        proof = json.loads((ROOT / "docs/audits/2026-11-01-cab2343-digest-pinning/gateway-local-e2e-registry.json").read_text())
+        self.assertEqual(len(images), 3)
+        self.assertEqual(len(proof["images"]), 3)
+        for entry, reference in zip(proof["images"], images, strict=True):
+            self.assertTrue(entry["verified"])
+            self.assertEqual(reference, entry["immutable"])
+            self.assertTrue(reference.endswith("@" + entry["digest"]))
+        self.assertEqual(source.count("    pull_policy: missing"), 3)
 
     def test_regression_api_and_e2e_checks_remain_enabled(self):
         flags = classified(["control-plane-api/src/main.py", "e2e/features/smoke.feature"])

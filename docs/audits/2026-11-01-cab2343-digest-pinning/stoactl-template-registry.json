@@ -1,0 +1,35 @@
+{
+  "method": "Anonymous HTTPS GET with TLS verification; manifest header equals SHA-256 of raw body; GET by digest compared again. No image pull or deployment.",
+  "gateway_producer": ".github/workflows/stoa-gateway-ci.yml docker.with.image-name = stoa-gateway",
+  "legacy_gateway": {
+    "registry": "ghcr.io",
+    "repository": "stoa-platform/gateway",
+    "source_reference": "latest",
+    "http_status": 403,
+    "verified_at_utc": "2026-11-01T22:19:15.085576+00:00"
+  },
+  "images": [
+    {
+      "role": "gateway",
+      "registry": "ghcr.io",
+      "repository": "stoa-platform/stoa-gateway",
+      "source_reference": "latest",
+      "verified_at_utc": "2026-11-01T22:15:23.946464+00:00",
+      "digest": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+      "header_digest": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+      "body_sha256": "sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e",
+      "digest_get_verified": true
+    },
+    {
+      "role": "echo",
+      "registry": "registry-1.docker.io",
+      "repository": "library/nginx",
+      "source_reference": "alpine",
+      "verified_at_utc": "2026-11-01T22:19:15.565159+00:00",
+      "digest": "sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+      "header_digest": "sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+      "body_sha256": "sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606",
+      "digest_get_verified": true
+    }
+  ]
+}

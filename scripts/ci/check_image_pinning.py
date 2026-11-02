@@ -4,6 +4,7 @@
 
 Only changed allowlisted files are scanned; untouched debt remains for migration.
 Consumers need literal digests; split Helm image.digest is trusted lexically.
+SBOM actions may consume a pinned, earlier same-job build action's digest.
 Metadata semver/match require latest=false; raw latest aliases fail.
 This does not render templates, query registries, or change branch protection.
 """
@@ -43,8 +44,70 @@ def clean(value):
     return value.split(" #", 1)[0].strip().strip("\"'`").rstrip("\\").strip()
 
 
+def built_sbom_images(path, lines):
+    """Trust only direct SBOM inputs from immutable same-job build outputs.
+
+    Recognize the conventional workflow block layout only; unsupported YAML
+    layouts retain the normal literal-digest requirement (fail closed).
+    """
+    if PurePosixPath(path).parent.as_posix() != ".github/workflows" or not path.endswith((".yml", ".yaml")):
+        return set()
+    trusted = set()
+
+    def end(start, indent):
+        return next((i for i in range(start + 1, len(lines))
+                     if lines[i].strip() and not lines[i].lstrip().startswith("#")
+                     and len(lines[i]) - len(lines[i].lstrip()) <= indent), len(lines))
+
+    def fields(start, stop, indent, sequence=False):
+        result = {}
+        for i in range(start, stop):
+            match = KEY.match(lines[i])
+            if match and (len(match[1]) == indent or (sequence and i == start)):
+                if match[2] in result:
+                    return {}
+                result[match[2]] = (i, clean(match[3]))
+        return result
+
+    for root, line in enumerate(lines):
+        if line.strip() != "jobs:" or line != line.lstrip():
+            continue
+        root_end = end(root, 0)
+        for job in range(root + 1, root_end):
+            if not re.fullmatch(r"  [\w-]+:\s*(?:#.*)?", lines[job]):
+                continue
+            job_end = min(end(job, 2), root_end)
+            for step_list in range(job + 1, job_end):
+                if lines[step_list].rstrip() != "    steps:":
+                    continue
+                stop = min(end(step_list, 4), job_end)
+                starts = [i for i in range(step_list + 1, stop) if re.match(r"      - [\w-]+:", lines[i])]
+                steps = []
+                for start, finish in zip(starts, starts[1:] + [stop]):
+                    attrs = fields(start, finish, 8, sequence=True)
+                    with_index, with_value = attrs.get("with", (-1, ""))
+                    inputs = fields(with_index + 1, min(end(with_index, 8), finish), 10) if with_index >= 0 and not with_value else {}
+                    steps.append((attrs, inputs))
+                ids = [attrs["id"][1] for attrs, _ in steps if "id" in attrs]
+                producers = set()
+                for attrs, inputs in steps:
+                    action = attrs.get("uses", (-1, ""))[1]
+                    image_index, value = inputs.get("image", (-1, ""))
+                    digest = re.fullmatch(r"[^@]+@\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.digest\s*\}\}", value)
+                    if ("run" not in attrs and re.fullmatch(r"anchore/sbom-action@[0-9a-f]{40}", action)
+                            and digest and digest[1] in producers):
+                        trusted.add(image_index)
+                    identity = attrs.get("id", (-1, ""))[1]
+                    if ("run" not in attrs and re.fullmatch(r"docker/build-push-action@[0-9a-f]{40}", action)
+                            and re.fullmatch(r"[A-Za-z_][\w-]*", identity) and ids.count(identity) == 1
+                            and inputs.get("push", (-1, ""))[1] == "true"):
+                        producers.add(identity)
+    return trusted
+
+
 def findings(path, source):
     lines, found, stages, stack = source.splitlines(), [], set(), []
+    trusted_images = built_sbom_images(path, lines)
     markdown, fence = path.endswith((".md", ".mdx")), None
 
     def add(index, kind):
@@ -52,7 +115,7 @@ def findings(path, source):
 
     def image(index, value):
         value = clean(value)
-        if value and not DIGEST.fullmatch(value):
+        if value and not DIGEST.fullmatch(value) and index not in trusted_images:
             add(index, "image-interpolation" if "$" in value or "{{" in value else "image-unpinned")
 
     def block(index, indent, equal=True):

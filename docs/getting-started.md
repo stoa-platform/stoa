@@ -64,16 +64,16 @@ Follow the [gateway installation guide](./installation.md) to prepare values,
 install the chart and verify the gateway. Docker Compose and local development
 steps above have a different scope from the Helm release.
 
-## Default Test Credentials
+## Local Test Accounts
 
-For local development and testing:
+Create your own local test accounts in the separately configured Keycloak realm.
+Replace the placeholders below with unique users and passwords from your secret
+manager before testing; these are not accounts created by the Helm chart.
 
 | User | Password | Role |
 |------|----------|------|
-| admin@stoa.local | demo | CPI Admin |
-| viewer@stoa.local | demo | Viewer |
-
-> **Note**: These are test credentials only. In production, configure Keycloak with your identity provider.
+| `<YOUR_TEST_ADMIN_USER>` | `REPLACE_FROM_VAULT` | CPI Admin |
+| `<YOUR_TEST_VIEWER_USER>` | `REPLACE_FROM_VAULT` | Viewer |
 
 ## Next Steps
 

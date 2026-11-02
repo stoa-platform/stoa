@@ -33,6 +33,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
+  # Skip coverage steps, not the job: PR/merge queue still report Rust CI success.
+  RUN_COVERAGE: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule' }}
 
 jobs:
   ci:
@@ -57,6 +59,12 @@ jobs:
           components: clippy,rustfmt
           working-directory: ${{ inputs.component }}
 
+      # setup-rust-env restores Swatinem/rust-cache (Cargo registry + target).
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-nextest@0.9.150
+
       - name: Setup sccache
         id: sccache
         uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
@@ -68,8 +76,8 @@ jobs:
         if: steps.sccache.outcome == 'success'
         run: |
           if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
-            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+            echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+            echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
             echo "sccache available — compilation cache enabled"
           else
             echo "sccache not functional — proceeding without it"
@@ -90,34 +98,45 @@ jobs:
 
       # --- Step 1: Format check (no compilation, instant) ---
       - name: Check formatting
+        id: fmt
         run: cargo fmt --all -- --check
 
       # --- Step 2: Clippy (first compilation — cached by sccache across runs) ---
       - name: Clippy lint
+        id: clippy
         run: cargo clippy --all-targets ${{ inputs.cargo-features }} -- -D warnings
 
-      # --- Step 3: Tests (reuses clippy compilation artifacts) ---
+      # --- Step 3: Tests (isolated processes, parallel execution) ---
       - name: Run tests
-        run: cargo test ${{ inputs.cargo-features }}
+        id: tests
+        run: cargo nextest run --locked --no-fail-fast ${{ inputs.cargo-features }}
 
-      # --- Step 4: Coverage (reuses test artifacts via llvm-cov) ---
+      # Nextest does not run doctests; preserve cargo test's existing coverage.
+      - name: Run doctests
+        id: doctests
+        run: cargo test --locked --doc ${{ inputs.cargo-features }}
+
+      # --- Step 4: Instrumented coverage (main push + nightly only) ---
       - name: Cache cargo-llvm-cov binary
         id: cache-llvm-cov
+        if: env.RUN_COVERAGE == 'true'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-llvm-cov-${{ runner.os }}-v0.6
 
       - name: Install cargo-llvm-cov
-        if: steps.cache-llvm-cov.outputs.cache-hit != 'true'
+        if: env.RUN_COVERAGE == 'true' && steps.cache-llvm-cov.outputs.cache-hit != 'true'
         env:
           RUSTC_WRAPPER: ''
         run: cargo install cargo-llvm-cov --locked
 
       - name: Install llvm-tools-preview
+        if: env.RUN_COVERAGE == 'true'
         run: rustup component add llvm-tools-preview
 
       - name: Run coverage
+        if: env.RUN_COVERAGE == 'true'
         env:
           RUSTC_WRAPPER: ''
         shell: bash
@@ -126,15 +145,18 @@ jobs:
 
       - name: Extract coverage percentage
         id: extract-cov
+        if: env.RUN_COVERAGE == 'true'
         run: |
           if ! COV_PCT=$(jq -er '.data[0].totals.lines.percent | select(type == "number" and . >= 0 and . <= 100)' "${RUNNER_TEMP}/cov-summary.json") || [ -z "$COV_PCT" ]; then
             echo "::error::Missing or invalid line coverage percentage in LLVM coverage report"
             exit 1
           fi
-          echo "coverage_pct=$COV_PCT" >> $GITHUB_OUTPUT
+          echo "coverage_pct=$COV_PCT" >> "$GITHUB_OUTPUT"
           echo "Coverage: $COV_PCT%"
 
       - name: Enforce coverage threshold
+        id: coverage
+        if: env.RUN_COVERAGE == 'true'
         run: |
           COV_PCT="${{ steps.extract-cov.outputs.coverage_pct }}"
           THRESHOLD=${{ inputs.coverage-threshold }}
@@ -146,7 +168,8 @@ jobs:
 
       # --- Step 5: sccache stats ---
       - name: Show sccache stats
-        if: always()
+        if: always() && steps.sccache.outcome == 'success'
+        continue-on-error: true
         run: sccache --show-stats
 
       # --- Summary ---
@@ -154,27 +177,29 @@ jobs:
         if: always()
         run: |
           COV_PCT="${{ steps.extract-cov.outputs.coverage_pct }}"
-          THRESHOLD=${{ inputs.coverage-threshold }}
-          if [ "$(echo "$COV_PCT < $THRESHOLD" | bc -l 2>/dev/null || echo 0)" -eq 1 ]; then
-            COV_STATUS=":warning: BELOW THRESHOLD"
+          if [ "$RUN_COVERAGE" = 'true' ]; then
+            COV_STATUS="${{ steps.coverage.outcome }} (${COV_PCT:-unavailable}%, threshold: ${{ inputs.coverage-threshold }}%)"
           else
-            COV_STATUS=":white_check_mark:"
+            COV_STATUS="skipped (main push and nightly only)"
           fi
-          echo "## ${{ inputs.component }} Rust CI" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo fmt | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo clippy | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo test | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
-          echo "| coverage (${COV_PCT}%) | ${COV_STATUS} |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## ${{ inputs.component }} Rust CI"
+            echo "| Check | Status |"
+            echo "|-------|--------|"
+            echo "| cargo fmt | ${{ steps.fmt.outcome }} |"
+            echo "| cargo clippy | ${{ steps.clippy.outcome }} |"
+            echo "| cargo nextest | ${{ steps.tests.outcome }} |"
+            echo "| doctests | ${{ steps.doctests.outcome }} |"
+            echo "| coverage | ${COV_STATUS} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set result output
         id: set-result
         if: always()
-        run: echo "result=${{ job.status }}" >> $GITHUB_OUTPUT
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload coverage report
-        if: always()
+        if: always() && env.RUN_COVERAGE == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report

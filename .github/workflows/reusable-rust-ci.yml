@@ -25,7 +25,7 @@ on:
     outputs:
       test-result:
         description: 'Test result (success/failure)'
-        value: ${{ jobs.ci.result }}
+        value: ${{ jobs.ci.outputs.result }}
       coverage-pct:
         description: 'Line coverage percentage'
         value: ${{ jobs.ci.outputs.coverage_pct }}
@@ -267,7 +267,8 @@ jobs:
 
       - name: Set result output
         id: set-result
-        if: always()
+        # Matrice : la partie 2 n'écrit qu'en cas d'échec (sinon la partie 1 fait foi).
+        if: always() && (matrix.partition != 2 || job.status != 'success')
         run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload coverage report

@@ -25,8 +25,7 @@ Dynamic values (counts, timestamps) are masked via `data-testid` suffix conventi
 cd e2e
 
 # Run with Docker for pixel-consistent baselines
-docker run --rm -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy \
-  npx playwright test --grep @visual
+docker run --rm -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy@sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565 npx playwright test --grep @visual
 
 # Run natively (may differ from CI baselines on macOS)
 npx playwright test --grep @visual
@@ -38,8 +37,7 @@ When a visual change is intentional (new component, redesign):
 
 ```bash
 # 1. Run tests with --update-snapshots
-docker run --rm -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy \
-  npx playwright test --grep @visual --update-snapshots
+docker run --rm -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy@sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565 npx playwright test --grep @visual --update-snapshots
 
 # 2. Review the updated baselines
 git diff --stat e2e/golden/
@@ -92,10 +90,10 @@ Local macOS renders fonts differently, causing false positives.
 
 ```bash
 # Pull the exact CI image
-docker pull mcr.microsoft.com/playwright:v1.58.2-jammy
+docker pull mcr.microsoft.com/playwright:v1.58.2-jammy@sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565
 
 # Run interactive shell for debugging
-docker run --rm -it -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy bash
+docker run --rm -it -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy@sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565 bash
 
 # Inside container:
 npx playwright test --grep @visual --reporter=html

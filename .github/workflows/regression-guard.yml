@@ -3,6 +3,7 @@ name: Regression Guard
 on:
   pull_request:
     types: [opened, synchronize]
+  merge_group:
 
 permissions:
   contents: read
@@ -25,8 +26,16 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
+
+          # File de merge : la garde a déjà été évaluée sur la PR.
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "merge_group — check already enforced on the pull request"
+            echo "is_fix=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # --- Label bypass: skip-regression ---
           LABELS=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' 2>/dev/null || echo "")

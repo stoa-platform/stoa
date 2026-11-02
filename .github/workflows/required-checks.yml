@@ -21,6 +21,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  merge_group:
 
 permissions:
   contents: read
@@ -38,7 +39,7 @@ jobs:
         run: python3 -B -m unittest discover -s scripts/ci/tests -p 'test*image_pinning*.py'
       - name: Require pinned images in changed files
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 -B scripts/ci/check_image_pinning.py --base "$BASE_SHA" --head "$HEAD_SHA"
 

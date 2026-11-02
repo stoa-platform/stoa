@@ -56,16 +56,13 @@ cargo run
 
 ## Kubernetes Deployment
 
-For production deployment, see [Installation Guide](./installation.md).
+The Helm chart currently deploys the Rust STOA Gateway and supporting resources.
+The Control Plane API, console, Developer Portal, Keycloak and data services are
+**not yet provided by the chart** and must be managed separately.
 
-```bash
-# Apply CRDs
-kubectl apply -f charts/stoa-platform/crds/
-
-# Deploy with Helm
-helm upgrade --install stoa-platform ./charts/stoa-platform \
-  -n stoa-system --create-namespace
-```
+Follow the [gateway installation guide](./installation.md) to prepare values,
+install the chart and verify the gateway. Docker Compose and local development
+steps above have a different scope from the Helm release.
 
 ## Default Test Credentials
 

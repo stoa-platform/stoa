@@ -1,183 +1,134 @@
-# STOA Platform Installation Guide
+# STOA Gateway Installation Guide
 
-This guide covers production deployment of STOA Platform on Kubernetes.
+The `charts/stoa-platform` Helm chart currently deploys the **Rust STOA Gateway**
+and supporting Kubernetes resources. It does not install the full STOA Platform.
+Run the commands below from the repository root after replacing all placeholders.
+
+## What the Chart Installs
+
+The inventory below follows the [templates](../charts/stoa-platform/templates/)
+and [default values](../charts/stoa-platform/values.yaml):
+
+| Resource | Current behavior |
+|----------|------------------|
+| Gateway Deployment and ClusterIP Service | Enabled by default; two replicas, Service port **80** to container port **8080** |
+| Gateway policy ConfigMap | Enabled by default and mounted in the gateway |
+| Internal Secret and API configuration ConfigMaps | Created by the chart; configuration alone does not deploy the API |
+| ServiceMonitor objects | Enabled by default for the Rust gateway, legacy MCP gateway and Control Plane API; require an existing Prometheus Operator |
+| OpenAPI sync CronJob and post-install/upgrade Job | Enabled by default; require an existing Control Plane API, webMethods gateway and credentials |
+| Five CRDs in `crds/` | Tool, ToolSet, Skill, GatewayInstance and GatewayBinding definitions; Helm installs missing CRDs on initial installation |
+| Optional resources | Ingress, watcher RBAC, ExternalSecret, HPA/PDB, sidecar, bootstrap Jobs and other integration resources depend on their values |
+
+### Not Yet Provided by the Chart
+
+| Component or task | Installation responsibility |
+|-------------------|-----------------------------|
+| Control Plane API, console and Developer Portal | Not yet provided by the chart; deploy separately |
+| Keycloak and PostgreSQL | Not yet provided by the chart; supply separately for control-plane workflows |
+| Kafka/Redpanda, Vault and object storage | Not yet provided by the chart; provision separately when needed |
+| Prometheus/Grafana and their operators | Not yet provided by the chart; ServiceMonitor objects only describe scrape targets |
+| Ingress controller, certificates and External Secrets Operator | Not yet provided by the chart; supply before enabling the corresponding integrations |
+| Database migrations, realm configuration and tenant creation | Require separately deployed services; a gateway release does not complete these workflows |
+
+The chart has no dependency charts that install these services. Values for API
+monitoring, console autoscaling or bootstrap hooks do not create their workloads.
 
 ## Prerequisites
 
-### Infrastructure Requirements
+- An existing Kubernetes cluster (1.28+) with `kubectl` configured
+- Helm 3.12+ and access to the selected gateway container image
+- For an integrated gateway: reachable Control Plane API and Keycloak endpoints,
+  plus an existing gateway credential Secret managed by your operator
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| Kubernetes | 1.25+ | 1.28+ |
-| Nodes | 3 | 5+ |
-| CPU per node | 4 cores | 8 cores |
-| Memory per node | 8 GB | 16 GB |
-| Storage | 100 GB | 500 GB SSD |
+## Configure Values
 
-### Required Tools
-
-- `kubectl` v1.25+
-- `helm` v3.12+
-- `terraform` v1.5+ (for infrastructure provisioning)
-
-### External Dependencies
-
-- **Keycloak** - Identity Provider (OIDC)
-- **PostgreSQL** - Database (RDS or self-hosted)
-- **Kafka/Redpanda** - Event streaming
-- **GitLab** - GitOps source of truth
-- **Vault** (optional) - Secrets management
-
-## Installation Steps
-
-### 1. Provision Infrastructure (Optional)
-
-If using AWS EKS:
-
-```bash
-cd terraform/environments/dev
-terraform init
-terraform plan
-terraform apply
-```
-
-### 2. Configure Kubernetes Access
-
-```bash
-# For EKS
-aws eks update-kubeconfig --name stoa-cluster --region us-west-2
-
-# Verify access
-kubectl get nodes
-```
-
-### 3. Create Namespace
-
-```bash
-kubectl create namespace stoa-system
-```
-
-### 4. Apply Custom Resource Definitions
-
-```bash
-kubectl apply -f charts/stoa-platform/crds/
-```
-
-### 5. Configure Values
-
-Create a `values.yaml` file with your configuration:
+Create `my-values.yaml` using the following example. Replace every
+`REPLACE_WITH_...` value and URL placeholder with your own configuration. Keep
+credential values in your secret manager; only reference an existing Secret here.
 
 ```yaml
-global:
-  baseDomain: gostoa.dev
+stoa:
+  domain: REPLACE_WITH_YOUR_BASE_DOMAIN
+
+stoaGateway:
+  enabled: true
+  image:
+    tag: REPLACE_WITH_GATEWAY_IMAGE_TAG
+  controlPlaneUrl: "https://<YOUR_CONTROL_PLANE_HOST>"
+  keycloakUrl: "https://<YOUR_KEYCLOAK_HOST>"
+  secretName: REPLACE_WITH_EXISTING_GATEWAY_SECRET_NAME
+  ingress:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+  otelEndpoint: ""
+
+gateway:
+  edgeMcp:
+    enabled: false
+
+gatewaySync:
+  enabled: false
 
 controlPlaneApi:
-  replicas: 2
-  database:
-    host: control-plane-db.stoa-system.svc.cluster.local
-    port: 5432
-    name: stoa
-
-keycloak:
-  url: https://auth.gostoa.dev
-  realm: stoa
-
-kafka:
-  bootstrapServers: redpanda.stoa-system.svc.cluster.local:9092
+  serviceMonitor:
+    enabled: false
 ```
 
-### 6. Deploy with Helm
+This example disables the OpenAPI sync Jobs and the monitors for services absent
+from the release. It also disables the gateway ServiceMonitor so an existing
+Prometheus Operator is optional, and disables export to an external OTLP collector.
+`gateway.edgeMcp.enabled` controls the legacy ServiceMonitor; disabling it does
+not disable the Rust gateway, which uses `stoaGateway.enabled`.
+
+Enable integrations only after their external prerequisites are available. Setting
+`stoaGateway.ingress.enabled` requires your own hostname, ingress controller and
+TLS configuration. The example exposes the gateway through its ClusterIP Service.
+
+## Install with Helm
 
 ```bash
 helm upgrade --install stoa-platform ./charts/stoa-platform \
-  -n stoa-system \
-  -f values.yaml
+  -n stoa-system --create-namespace \
+  -f my-values.yaml
 ```
 
-### 7. Verify Deployment
+Helm installs missing CRDs from `crds/` on the first install; a separate
+`kubectl apply` is not required for that step. Helm does not upgrade existing CRDs
+on subsequent upgrades; review CRD changes separately before updating them.
+
+## Verify the Gateway
 
 ```bash
-# Check pods
-kubectl get pods -n stoa-system
-
-# Check services
-kubectl get svc -n stoa-system
-
-# Check ingress
-kubectl get ingress -n stoa-system
+kubectl rollout status deployment/stoa-gateway -n stoa-system
+kubectl get pods -n stoa-system -l app.kubernetes.io/name=stoa-gateway
+kubectl get service stoa-gateway -n stoa-system
+kubectl port-forward -n stoa-system service/stoa-gateway 8080:80
 ```
 
-## Post-Installation
-
-### Configure DNS
-
-Point your domain records to the load balancer:
-
-| Record | Type | Value |
-|--------|------|-------|
-| console.gostoa.dev | CNAME | <alb-hostname> |
-| portal.gostoa.dev | CNAME | <alb-hostname> |
-| api.gostoa.dev | CNAME | <alb-hostname> |
-| mcp.example.com | CNAME | <alb-hostname> |
-
-### Configure Keycloak
-
-1. Create the `stoa` realm
-2. Configure client applications
-3. Set up role mappings
-4. Configure identity federation (optional)
-
-### Initialize Demo Data (Optional)
+With the port-forward running, use another terminal:
 
 ```bash
-kubectl apply -f deploy/demo-tenants/
-kubectl apply -f deploy/demo-tools/
+curl --fail http://localhost:8080/health
+curl --fail http://localhost:8080/ready
 ```
 
-## Upgrading
+The expected application Service is `stoa-gateway` on port **80**. API, console,
+portal and Keycloak endpoints are only available if installed separately.
+The chart's current Helm test also checks API and Keycloak, so it is not a
+standalone gateway check. The URLs printed by Helm notes do not confirm that
+those services were deployed.
+
+## Upgrade and Troubleshooting
+
+Reuse your reviewed values file for upgrades:
 
 ```bash
-# Pull latest charts
-git pull origin main
-
-# Upgrade deployment
 helm upgrade stoa-platform ./charts/stoa-platform \
-  -n stoa-system \
-  -f values.yaml
+  -n stoa-system -f my-values.yaml
 ```
 
-## Uninstalling
-
-```bash
-# Remove Helm release
-helm uninstall stoa-platform -n stoa-system
-
-# Remove CRDs (optional - will delete all custom resources)
-kubectl delete -f charts/stoa-platform/crds/
-
-# Remove namespace
-kubectl delete namespace stoa-system
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Pods not starting**: Check resource limits and node capacity
-2. **Database connection failed**: Verify PostgreSQL connectivity and credentials
-3. **Authentication errors**: Check Keycloak configuration and realm settings
-
-### Useful Commands
-
-```bash
-# Check pod logs
-kubectl logs -n stoa-system <pod-name>
-
-# Describe pod for events
-kubectl describe pod -n stoa-system <pod-name>
-
-# Check secrets
-kubectl get secrets -n stoa-system
-```
-
-See [Runbooks](./runbooks/) for detailed troubleshooting procedures.
+If the gateway is not ready, inspect its pod events and logs, selected image,
+resource capacity and connectivity to the configured external services.
+See the [admin installation checklist](./admin/installation.md) and
+[runbook index](./runbooks/README.md) for operational context.

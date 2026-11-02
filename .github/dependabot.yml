@@ -17,7 +17,6 @@ updates:
     directory: "/control-plane-api"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 1
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
     groups:
@@ -36,7 +35,6 @@ updates:
       - "/e2e"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 1
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
     groups:
@@ -52,7 +50,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 1
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
     groups:
@@ -68,7 +65,6 @@ updates:
     directory: "/stoa-gateway"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 1
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
     groups:
@@ -89,7 +85,6 @@ updates:
       - "/stoa-go"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 1
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
     groups:

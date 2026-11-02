@@ -59,6 +59,9 @@ jobs:
         working-directory: ${{ inputs.component }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # CAB-2355 M4 : aucun jeton laissé dans .git sur l'hôte auto-hébergé.
+          persist-credentials: false
 
       - name: Install system dependencies for rdkafka
         # Auto-hébergé (CAB-2355) : dépendances préinstallées, runner sans sudo.
@@ -82,9 +85,15 @@ jobs:
           # Ne dépend pas du .path du runner (régénéré au redémarrage du service).
           export PATH="${HOME}/.cargo/bin:${PATH}"
           echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
-          rustup toolchain install stable --profile minimal -c clippy,rustfmt --no-self-update
-          rustup default stable
-          T="${HOME}/.cache/cargo-target/${RUNNER_NAME}/${{ inputs.component }}"
+          # CAB-2355 M4 : toolchain épinglée (version exacte en service au 2026-11-02).
+          rustup toolchain install 1.99.1 --profile minimal -c clippy,rustfmt --no-self-update
+          rustup default 1.99.1
+          # CAB-2355 M4 : caches séparés. Une PR n'écrit jamais dans le cache
+          # de main / merge_group (et inversement).
+          if [ "${{ github.event_name }}" = "pull_request" ]; then K="pr"; else K="trusted"; fi
+          echo "CI_CACHE_CLASS=$K" >> "$GITHUB_ENV"
+          echo "SCCACHE_DIR=${HOME}/.cache/sccache/${K}" >> "$GITHUB_ENV"
+          T="${HOME}/.cache/cargo-target/${RUNNER_NAME}/${K}/${{ inputs.component }}"
           mkdir -p "$T"
           if [ "$(du -s --block-size=1G "$T" | cut -f1)" -gt 40 ]; then
             echo "target dir > 40G: cargo clean"
@@ -122,6 +131,7 @@ jobs:
       - name: Enable local sccache (self-hosted)
         if: runner.environment == 'self-hosted'
         run: |
+          sccache --stop-server >/dev/null 2>&1 || true  # repartir avec le SCCACHE_DIR de la classe
           if command -v sccache >/dev/null && sccache --start-server 2>/dev/null; then
             echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
             echo "local sccache enabled"
@@ -143,7 +153,7 @@ jobs:
           if [ "${{ runner.environment }}" = "self-hosted" ]; then
             H=$(cat ../control-plane-api/requirements.txt | sha256sum | cut -c1-16)
             PV=$(python -c 'import platform; print(platform.python_version())')
-            V="${HOME}/.cache/cp-test-venv/${PV}-${H}"
+            V="${HOME}/.cache/cp-test-venv/${CI_CACHE_CLASS}/${PV}-${H}"
           else
             V="${RUNNER_TEMP}/cp-test"
           fi

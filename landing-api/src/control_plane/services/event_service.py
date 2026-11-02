@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from control_plane.models.prospect_event import EventType, ProspectEvent
+from control_plane.redaction import scrub_metadata
 from control_plane.schemas.event import EventCreate
 
 
@@ -27,7 +28,7 @@ async def record_event(
     event = ProspectEvent(
         invite_id=event_data.invite_id,
         event_type=event_data.event_type.value,
-        event_data=event_data.metadata,
+        event_data=scrub_metadata(event_data.metadata),
         timestamp=datetime.now(UTC),
     )
 
@@ -60,7 +61,7 @@ async def record_event_simple(
     event = ProspectEvent(
         invite_id=invite_id,
         event_type=event_type.value,
-        event_data=metadata or {},
+        event_data=scrub_metadata(metadata),
         timestamp=datetime.now(UTC),
     )
 

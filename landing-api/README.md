@@ -59,6 +59,12 @@ All settings use the `STOA_` environment variable prefix (via pydantic-settings)
 | `STOA_HOST` | `0.0.0.0` | Server bind address |
 | `STOA_PORT` | `8080` | Server port |
 | `STOA_LOG_LEVEL` | `INFO` | Log level |
+| `STOA_BOOTSTRAP_ADMIN_KEY_HASH` | *(empty)* | SHA-256 hex of a bootstrap admin key. Empty disables it. Never set the key itself. |
+| `STOA_BOOTSTRAP_ADMIN_TENANT` | `platform` | Tenant of the bootstrap admin |
+
+## Access
+
+List, read, and write routes for invites, events, and metrics require an API key (`X-API-Key` or `Authorization: Bearer`). The key is returned once, when it is created, and only its SHA-256 hash is stored. Later reads return metadata (prefix, role, tenant) and do not include the secret. Callers see records for their own tenant. `GET /welcome/{token}` stays available without an API key so a prospect can open an invite link.
 
 ## Development
 

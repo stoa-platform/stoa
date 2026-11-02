@@ -21,20 +21,29 @@ class InviteCreate(BaseModel):
 
 
 class InviteResponse(BaseModel):
-    """Response schema for invite operations."""
+    """Invite fields safe to return from list and read endpoints.
+
+    The invite token and link are omitted. They are delivered once, on create.
+    """
 
     id: UUID
     email: str
     company: str
-    token: str
+    tenant_id: str
     source: str | None
     status: InviteStatus
-    invite_link: str = Field(..., description="Full URL for the invite")
     created_at: datetime
     expires_at: datetime
     opened_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class InviteCreatedResponse(InviteResponse):
+    """Create response. Includes the token a single time."""
+
+    token: str
+    invite_link: str = Field(..., description="Full URL for the invite")
 
 
 class InviteListResponse(BaseModel):

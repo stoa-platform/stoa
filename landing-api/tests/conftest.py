@@ -9,7 +9,11 @@ from control_plane.api.v1.invites import limiter
 from control_plane.config import settings
 from control_plane.database import get_db
 from control_plane.main import app
+from control_plane.models import api_key as _api_key  # noqa: F401
+from control_plane.models import invite as _invite  # noqa: F401
+from control_plane.models import prospect_event as _prospect_event  # noqa: F401
 from control_plane.models.base import Base
+from control_plane.services.api_key_service import create_api_key
 
 # Test database URL (use a separate test database)
 TEST_DATABASE_URL = settings.database_url.replace("/stoa", "/stoa_test")
@@ -70,19 +74,41 @@ async def db_session(db_engine):
 
 
 @pytest.fixture(scope="function")
-async def client(db_session):
-    """Create an async test client with database override."""
+async def db_override(db_session):
+    """Point the app at the test session for the duration of the test."""
 
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    yield db_session
+    app.dependency_overrides.clear()
 
+
+@pytest.fixture(scope="function")
+async def client(db_override):
+    """Authenticated client for the default tenant (tenant-admin)."""
+    _record, raw_key = await create_api_key(
+        db_override,
+        name="test-tenant-admin",
+        role="tenant-admin",
+        tenant_id="tenant-a",
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": raw_key},
+    ) as ac:
+        yield ac
+
+
+@pytest.fixture(scope="function")
+async def anon_client(db_override):
+    """Client with no credentials."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture

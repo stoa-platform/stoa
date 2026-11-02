@@ -37,7 +37,9 @@ class Invite(Base):
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     company: Mapped[str] = mapped_column(String(100), nullable=False)
-    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # SHA-256 hex of the invite token. The plaintext is not stored.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

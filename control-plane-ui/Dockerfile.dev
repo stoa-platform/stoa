@@ -1,7 +1,7 @@
 # Dev Dockerfile — Vite dev server with HMR (no nginx)
 # Build context: repo root
 # Usage: docker build -f control-plane-ui/Dockerfile.dev -t stoa-platform/control-plane-ui:local .
-FROM node:20-alpine
+FROM node:26-alpine
 
 WORKDIR /app
 

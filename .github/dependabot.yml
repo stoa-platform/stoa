@@ -26,6 +26,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Router introspection changed; migrate the ordering regressions separately.
+      - dependency-name: "fastapi"
+        versions: ["0.162.0"]
 
   # NPM - Portal, Control Plane UI and E2E Tests
   - package-ecosystem: "npm"
@@ -44,6 +47,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # ESM-only release requires ESLint 9+; both apps still use ESLint 8.
+      - dependency-name: "eslint-plugin-react-refresh"
+        versions: ["0.5.7"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -74,6 +80,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Pingora 0.8.1 still constructs a zero-capacity Tokio buffer.
+      - dependency-name: "tokio"
+        versions: ["1.54.1"]
 
   # Docker - application build contexts (there is no root Dockerfile)
   - package-ecosystem: "docker"
@@ -94,3 +103,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # The 3.13 image introduces HIGH findings in bundled Python tooling.
+      - dependency-name: "python"
+        versions: ["3.13-slim"]

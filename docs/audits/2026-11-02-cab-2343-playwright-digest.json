@@ -1,0 +1,37 @@
+{
+  "ticket": "CAB-2343",
+  "method": "Anonymous HTTPS GET with TLS verification using existing verifier-registre-exec2.py (curl -q, no Docker or GitHub credentials). Source reference and digest are independently fetched; Docker-Content-Digest must equal SHA-256 of raw response bytes. HTTP 401/429 receive an initial attempt plus two retries at least 31 seconds apart.",
+  "manifests": [
+    {
+      "source": "mcr.microsoft.com/playwright:v1.58.2-jammy",
+      "registry": "mcr.microsoft.com",
+      "repository": "playwright",
+      "source_reference": "v1.58.2-jammy",
+      "consumer_paths": [
+        "docs/runbooks/visual-regression-testing.md"
+      ],
+      "verified_at_utc": "2026-11-02T07:07:45.418688+00:00",
+      "http_status": 200,
+      "digest": "sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565",
+      "header_digest": "sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565",
+      "body_sha256": "sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565",
+      "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "digest_get_verified": true,
+      "digest_get": {
+        "http_status": 200,
+        "digest": "sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565",
+        "header_digest": "sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565",
+        "body_sha256": "sha256:4698a73749c5848d3f5fcd42a2174d172fcad2b2283e087843b115424303a565",
+        "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+        "platforms": [
+          "linux/amd64",
+          "linux/arm64"
+        ]
+      }
+    }
+  ]
+}

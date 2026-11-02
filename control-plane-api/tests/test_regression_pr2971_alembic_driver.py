@@ -24,7 +24,9 @@ def test_regression_pr2971_alembic_selects_psycopg2(
         monkeypatch.delenv("DATABASE_URL", raising=False)
         monkeypatch.setattr(settings, "DATABASE_URL", database_url)
     api_root = Path(__file__).resolve().parents[1]
-    config = Config(str(api_root / "alembic.ini"))
+    # This test supplies every migration setting; loading alembic.ini would
+    # reconfigure global logging and disable loggers used by later tests.
+    config = Config()
     config.set_main_option("script_location", str(api_root / "alembic"))
     script = ScriptDirectory.from_config(config)
 

@@ -8,13 +8,12 @@ import hashlib
 import time
 from unittest.mock import patch
 
+import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
-from jose import jwt as jose_jwt
 
 from src.auth.sender_constrained import (
-    SenderConstrainedResult,
     _compute_ath,
     _compute_jwk_thumbprint,
     _extract_client_cert_fingerprint,
@@ -89,7 +88,7 @@ def _make_dpop_proof(
         NoEncryption(),
     )
 
-    return jose_jwt.encode(claims, private_pem, algorithm="ES256", headers=headers)
+    return jwt.encode(claims, private_pem, algorithm="ES256", headers=headers)
 
 
 # ============================================================
@@ -232,6 +231,35 @@ class TestDpopValidation:
             )
         assert result.valid is False
         assert "expired" in result.error.lower()
+
+    @pytest.mark.parametrize("offset, valid", [(-30, True), (30, True), (-300, False), (300, False)])
+    def test_regression_cab_2353_dpop_iat_clock_skew(self, offset: int, valid: bool):
+        """Preserve symmetric DPoP clock tolerance when replacing the JWT library."""
+        proof = _make_dpop_proof(iat=time.time() + offset)
+        with patch("src.auth.sender_constrained.settings") as mock_settings:
+            mock_settings.SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW = 60
+            result = _validate_dpop_binding(
+                {"jkt": _test_jkt}, {"dpop": proof}, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
+            )
+        assert result.valid is valid
+        if not valid:
+            assert "expired" in result.error.lower()
+
+    @pytest.mark.parametrize("algorithm, valid", [("RS256", True), ("PS256", False)])
+    def test_regression_cab_2353_dpop_rsa_algorithm_contract(self, algorithm: str, valid: bool):
+        """PyJWT must not expand the historically accepted DPoP algorithms."""
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        jwk = jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key(), as_dict=True)
+        claims = jwt.decode(_make_dpop_proof(), options={"verify_signature": False})
+        proof = jwt.encode(claims, key, algorithm=algorithm, headers={"typ": "dpop+jwt", "jwk": jwk})
+        result = _validate_dpop_binding(
+            {"jkt": _compute_jwk_thumbprint(jwk)},
+            {"dpop": proof},
+            "test-access-token",
+            "GET",
+            "https://api.gostoa.dev/v1/apis",
+        )
+        assert result.valid is valid
 
     def test_dpop_invalid_jwt(self):
         """Malformed DPoP proof JWT."""

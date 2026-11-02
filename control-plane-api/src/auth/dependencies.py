@@ -14,13 +14,15 @@ import hmac
 import time
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jwt import PyJWTError
 from pydantic import BaseModel
 
 from ..config import settings
 from ..logging_config import bind_request_context, get_logger
+from .jwt_claims import validate_legacy_claims
 from .sender_constrained import validate_sender_constrained_token
 
 logger = get_logger(__name__)
@@ -183,8 +185,9 @@ async def get_current_user(
             public_key,
             algorithms=["RS256"],
             issuer=expected_issuer,
-            options={"verify_aud": False, "verify_iss": True},
+            options={"verify_aud": False, "verify_iss": True, "verify_iat": False, "verify_exp": False},
         )
+        validate_legacy_claims(payload)
 
         # Debug: log payload structure (not values) for troubleshooting
         if settings.LOG_DEBUG_AUTH_PAYLOAD:
@@ -238,7 +241,7 @@ async def get_current_user(
                 azp=payload.get("azp"),
                 hint="Ensure Audience Mapper is configured in Keycloak for this client",
             )
-            raise JWTError(f"Invalid audience: {token_aud}. Expected: {list(valid_audiences)}")
+            raise PyJWTError(f"Invalid audience: {token_aud}. Expected: {list(valid_audiences)}")
 
         # Deprecation warning for legacy audiences (control-plane-ui, stoa-portal)
         # These clients should configure Audience Mappers in Keycloak to include
@@ -349,7 +352,7 @@ async def get_current_user(
             tenant_id=tenant_id,
         )
 
-    except JWTError as e:
+    except PyJWTError as e:
         logger.error(
             "JWT validation failed",
             error=str(e),

@@ -19,7 +19,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from jose import JWTError
+from jwt import PyJWTError
 
 from src.auth.dependencies import (
     User,
@@ -86,11 +86,11 @@ class TestIssuerValidation:
 
     @pytest.mark.asyncio
     async def test_invalid_issuer_rejected_as_401(self, mock_settings, mock_kc_key):
-        # Simulate python-jose raising on issuer mismatch (what happens for real
+        # Simulate PyJWT raising on issuer mismatch (what happens for real
         # when verify_iss=True and iss != expected).
         with patch(
             "src.auth.dependencies.jwt.decode",
-            side_effect=JWTError("Invalid issuer"),
+            side_effect=PyJWTError("Invalid issuer"),
         ):
             app = _make_app()
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:

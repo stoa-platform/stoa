@@ -18,7 +18,7 @@ RSA keypair (no ``jwt.decode`` mocking). If this passes, the demo runs Mode A.
 
 Boundary integrity
 ------------------
-- The JWT is signed by a real RSA keypair and decoded by the real ``jose``
+- The JWT is signed by a real RSA keypair and decoded by the real ``PyJWT``
   library. Only the public-key fetch is short-circuited (so we don't need a
   live Keycloak) and the sender-constrained validator is bypassed (it is
   disabled by default in ``Settings.SENDER_CONSTRAINED_ENABLED=False``).
@@ -32,12 +32,12 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-from jose import jwt as jose_jwt
 
 from src.auth.dependencies import User, get_current_user
 
@@ -65,8 +65,8 @@ def rsa_keypair() -> tuple[str, str]:
 
 
 def _sign(private_pem: str, claims: dict[str, Any]) -> str:
-    """Sign a JWT with RS256 using the private PEM key (real ``jose`` encode)."""
-    token: str = jose_jwt.encode(claims, private_pem, algorithm="RS256")
+    """Sign a JWT with RS256 using the private PEM key (real ``PyJWT`` encode)."""
+    token: str = jwt.encode(claims, private_pem, algorithm="RS256")
     return token
 
 

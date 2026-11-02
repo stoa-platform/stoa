@@ -17,10 +17,11 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 
-from jose import jwt as jose_jwt
+import jwt
 
 from ..config import settings
 from ..logging_config import get_logger
+from .jwt_claims import validate_legacy_claims
 
 logger = get_logger(__name__)
 
@@ -203,7 +204,7 @@ def _validate_dpop_binding(
 
     try:
         # Step 1-2: Decode proof header (unverified) to get JWK
-        proof_header = jose_jwt.get_unverified_header(dpop_proof)
+        proof_header = jwt.get_unverified_header(dpop_proof)
         if proof_header.get("typ", "").lower() != "dpop+jwt":
             return SenderConstrainedResult(
                 valid=False,
@@ -230,16 +231,17 @@ def _validate_dpop_binding(
             )
 
         # Decode proof claims (verify signature with embedded JWK)
-        from jose import jwk as jose_jwk
-
         algorithm = proof_header.get("alg", "ES256")
-        key = jose_jwk.construct(jwk, algorithm=algorithm)
-        proof_claims = jose_jwt.decode(
+        if algorithm not in {"ES256", "ES384", "ES512", "RS256", "RS384", "RS512"}:
+            raise jwt.InvalidAlgorithmError("Unsupported DPoP algorithm")
+        key = jwt.PyJWK.from_dict(jwk, algorithm=algorithm)
+        proof_claims = jwt.decode(
             dpop_proof,
             key,
             algorithms=[algorithm],
-            options={"verify_aud": False, "verify_sub": False},
+            options={"verify_aud": False, "verify_sub": False, "verify_iat": False, "verify_exp": False},
         )
+        validate_legacy_claims(proof_claims)
 
         # Step 4: Validate htm, htu, ath
         if proof_claims.get("htm", "").upper() != http_method.upper():

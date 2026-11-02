@@ -1,0 +1,122 @@
+"""Security scans select changed build contexts and fail closed on invalid diffs."""
+
+from __future__ import annotations
+
+import json
+import os
+import runpy
+import subprocess
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = ROOT / ".github/scripts/security-scan-changes.py"
+COMPONENTS = ("control-plane-api", "portal", "stoa-gateway", "control-plane-ui")
+
+
+def select(event: str, paths: list[str]) -> list[str]:
+    return runpy.run_path(str(SCRIPT))["select_components"](event, paths)
+
+
+@pytest.mark.parametrize(
+    ("paths", "expected"),
+    [
+        (["README.md", "docs/guide.mdx", "portal/README.md", "portal/docs/guide.mdx",
+          "portal/docs/diagram.png", "stoa-gateway/CLAUDE.md", "shared/README.md", ".claude/docs/ci.md"], []),
+        (["control-plane-api/src/app.py"], ["control-plane-api"]),
+        (["stoa-gateway/src/main.rs"], ["stoa-gateway"]),
+        (["portal/src/App.tsx"], ["portal"]),
+        (["control-plane-ui/nginx.conf.template"], ["control-plane-ui"]),
+        (["shared/package-lock.json"], ["portal", "control-plane-ui"]),
+        (["shared/src/index.ts", "tsconfig.base.json"], ["portal", "control-plane-ui"]),
+        (["other-component/Dockerfile"], []),
+    ],
+)
+def test_pr_context_selection(paths: list[str], expected: list[str]) -> None:
+    assert select("pull_request", paths) == expected
+
+
+@pytest.mark.parametrize("component", COMPONENTS)
+@pytest.mark.parametrize("file", ("Dockerfile", "package.json", "package-lock.json",
+                                  "Cargo.toml", "Cargo.lock", "requirements.txt"))
+def test_manifests_and_dockerfiles(component: str, file: str) -> None:
+    assert select("pull_request", [f"{component}/{file}"]) == [component]
+
+
+@pytest.mark.parametrize("path", (
+    "LICENSE", "NOTICE", ".dockerignore", "scripts/ci/release_legal.py",
+    ".github/workflows/security-scan.yml", ".github/scripts/security-scan-changes.py",
+    "scripts/ci/tests/test_security_scan_paths.py",
+))
+def test_global_build_inputs_select_all(path: str) -> None:
+    assert select("pull_request", [path]) == list(COMPONENTS)
+
+
+@pytest.mark.parametrize("event", ("merge_group", "push", "schedule", "workflow_dispatch"))
+def test_non_pr_events_scan_every_component(event: str) -> None:
+    assert select(event, ["docs/only.md"]) == list(COMPONENTS)
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", *args], cwd=repo, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def commit(repo: Path) -> str:
+    git(repo, "add", "-A")
+    git(repo, "-c", "user.name=CI", "-c", "user.email=ci@example.com",
+        "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
+    return git(repo, "rev-parse", "HEAD")
+
+
+def test_cli_diff_add_delete_rename_and_invalid_sha(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-b", "main")
+    for name in ("control-plane-api/src/old.py", "stoa-gateway/src/old.rs"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True)
+        path.write_text("seed\n", encoding="utf-8")
+    base = commit(tmp_path)
+    destination = tmp_path / "control-plane-ui/src/renamed.ts"
+    destination.parent.mkdir(parents=True)
+    git(tmp_path, "mv", "control-plane-api/src/old.py", str(destination))
+    (tmp_path / "stoa-gateway/src/old.rs").unlink()
+    added = tmp_path / "portal/src/café new.ts"
+    added.parent.mkdir(parents=True)
+    added.write_text("added\n", encoding="utf-8")
+    head = commit(tmp_path)
+    output = tmp_path / "outputs"
+    env = dict(os.environ, EVENT_NAME="pull_request", BASE_SHA=base, HEAD_SHA=head,
+               GITHUB_OUTPUT=str(output))
+    proc = subprocess.run(["python3", str(SCRIPT)], cwd=tmp_path, env=env,
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    flags = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert all(flags[name] == "true" for name in (*COMPONENTS, "container-scan"))
+    assert json.loads(flags["container-matrix"]) == {"image": [
+        {"name": name, "path": name,
+         "context": "." if name in ("portal", "control-plane-ui") else name}
+        for name in COMPONENTS]}
+    output.unlink()
+    env["BASE_SHA"] = "invalid-sha"
+    failed = subprocess.run(["python3", str(SCRIPT)], cwd=tmp_path, env=env,
+                            capture_output=True, text=True)
+    assert failed.returncode != 0
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(("flag", "detector", "scan", "success"), (
+    ("false", "success", "skipped", True), ("true", "success", "success", True),
+    ("false", "failure", "skipped", False), ("invalid", "success", "skipped", False),
+    ("true", "success", "failure", False), ("true", "success", "cancelled", False),
+    ("true", "success", "skipped", False),
+))
+def test_scan_summary(flag: str, detector: str, scan: str, success: bool) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["scan-summary"]
+    assert job["if"] == "always()"
+    needs = {"scan-changes": {"result": detector, "outputs": {"container-scan": flag}},
+             "dependency-scan": {"result": scan}, "container-scan": {"result": scan}}
+    proc = subprocess.run(["bash", "-c", job["steps"][0]["run"]], capture_output=True,
+                          env=dict(os.environ, RESULTS=json.dumps(needs)))
+    assert (proc.returncode == 0) is success

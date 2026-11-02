@@ -33,7 +33,8 @@ class TestAdminProspectsRouter:
         mock.id = uuid4()
         mock.email = email
         mock.company = company
-        mock.token = "test_token_" + str(uuid4())[:8]
+        mock.tenant_id = "tenant-a"
+        mock.token_hash = "b" * 64
         mock.source = "demo"
         mock.status = status
         mock.created_at = datetime.now(timezone.utc) - timedelta(days=1)

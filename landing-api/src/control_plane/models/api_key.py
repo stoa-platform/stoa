@@ -19,7 +19,7 @@ class ApiKey(Base, UUIDMixin, TimestampMixin):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    key_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     __table_args__ = (

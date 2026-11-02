@@ -142,11 +142,15 @@ class TestApiKeyDelivery:
         assert created.status_code == 201
         body = created.json()
         raw_key = body["api_key"]
+        prefix = body["key_prefix"]
         assert raw_key.startswith("stoa_sk_")
+        assert prefix == raw_key[: len("stoa_sk_") + 8]
+        assert len(prefix) == len("stoa_sk_") + 8
         assert "key_hash" not in body
 
         listed = await client.get("/api/v1/api-keys")
         assert listed.status_code == 200
+        assert prefix in listed.text
         assert raw_key not in listed.text
         assert "key_hash" not in listed.text
         assert all("api_key" not in item for item in listed.json()["api_keys"])
@@ -208,6 +212,28 @@ class TestApiKeyDelivery:
         assert SecretRedactionFilter().filter(record) is True
         assert raw_key not in record.getMessage()
         assert "stoa_sk_[redacted]" in record.getMessage()
+
+
+class TestMigrationDowngrade:
+    """Hashed invite tokens cannot be turned back into working links."""
+
+    def test_downgrade_is_refused(self):
+        import importlib.util
+        from pathlib import Path
+
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "003_api_keys_and_tenant_scope.py"
+        )
+        spec = importlib.util.spec_from_file_location("migration_003", path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with pytest.raises(RuntimeError, match="cannot be downgraded"):
+            module.downgrade()
 
 
 class TestBootstrapAdmin:

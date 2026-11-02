@@ -22,7 +22,8 @@ def generate_api_key() -> tuple[str, str, str]:
     The plaintext is shown to the caller once. Callers must not log it.
     """
     raw = KEY_PREFIX + secrets.token_hex(_SECRET_BYTES)
-    return raw, hash_key(raw), raw[:12]
+    # Fixed prefix plus 8 random characters, enough to tell keys apart.
+    return raw, hash_key(raw), raw[: len(KEY_PREFIX) + 8]
 
 
 async def create_api_key(

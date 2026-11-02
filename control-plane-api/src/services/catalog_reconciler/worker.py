@@ -19,10 +19,10 @@ import json
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 import yaml
 from sqlalchemy import select, text
 
-from src.logging_config import get_logger
 from src.services.catalog_api_definition import normalize_api_definition
 from src.services.catalog_deployment_reconciler import CatalogDeploymentReconciler
 from src.services.gitops_writer.advisory_lock import advisory_lock_key
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from ..catalog_git_client.models import RemoteFileMetadata
     from ..catalog_git_client.protocol import CatalogGitClient
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 _OPENAPI_FILENAMES = (
     "openapi.yaml",
@@ -91,8 +91,8 @@ class CatalogReconcilerWorker:
         while not self._shutdown.is_set():
             try:
                 await self._reconcile_iteration()
-            except Exception:
-                logger.exception("catalog_reconciler.iteration_failed")
+            except Exception as exc:
+                logger.error("catalog_reconciler.iteration_failed", error_type=type(exc).__name__)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._shutdown.wait(), timeout=self._interval_seconds)
         logger.info("catalog_reconciler.stopped")
@@ -133,16 +133,16 @@ class CatalogReconcilerWorker:
                     self._last_seen_blob_sha[git_path] = source_key
                 if key is not None:
                     seen_keys.add(key)
-            except Exception:
-                logger.exception(
+            except Exception as exc:
+                logger.error(
                     "catalog_reconciler.path_failed",
-                    git_path=git_path,
+                    error_type=type(exc).__name__,
                 )
 
         try:
             await self._detect_legacy_orphans(seen_keys)
-        except Exception:
-            logger.exception("catalog_reconciler.orphan_detection_failed")
+        except Exception as exc:
+            logger.error("catalog_reconciler.orphan_detection_failed", error_type=type(exc).__name__)
 
     @staticmethod
     def _source_cache_key(api_file: RemoteFileMetadata, openapi_file: RemoteFileMetadata | None) -> str:
@@ -239,8 +239,7 @@ class CatalogReconcilerWorker:
         except ValueError as exc:
             logger.warning(
                 "catalog_reconciler.non_canonical_path",
-                git_path=git_path,
-                error=str(exc),
+                error_type=type(exc).__name__,
             )
             return None
 
@@ -285,7 +284,7 @@ class CatalogReconcilerWorker:
                 git_path=git_path,
                 openapi_spec=openapi_spec,
             )
-        except ValueError as exc:
+        except ValueError:
             self._log_sync_status(
                 tenant_id=tenant_id,
                 api_id=api_name,
@@ -293,7 +292,7 @@ class CatalogReconcilerWorker:
                 git_commit_sha=commit_sha,
                 catalog_content_hash=content_hash,
                 git_path=git_path,
-                last_error=str(exc),
+                last_error="api.yaml or OpenAPI validation failed",
             )
             return (tenant_id, api_name)
 
@@ -365,7 +364,7 @@ class CatalogReconcilerWorker:
         """
         try:
             parsed = yaml.safe_load(content_bytes)
-        except yaml.YAMLError as exc:
+        except yaml.YAMLError:
             self._log_sync_status(
                 tenant_id=tenant_id,
                 api_id=api_name,
@@ -373,7 +372,7 @@ class CatalogReconcilerWorker:
                 git_commit_sha=commit_sha,
                 catalog_content_hash=content_hash,
                 git_path=git_path,
-                last_error=f"yaml parse error: {exc}",
+                last_error="api.yaml parse error",
             )
             return None
         if not isinstance(parsed, dict):
@@ -433,11 +432,7 @@ class CatalogReconcilerWorker:
                     git_commit_sha=commit_sha,
                     catalog_content_hash=content_hash,
                     git_path=git_path,
-                    last_error=(
-                        f"uuid hard drift: row api_id={actual_row.get('api_id') if actual_row else None!r} "
-                        f"row git_path={actual_row.get('git_path') if actual_row else None!r} "
-                        f"real_git_name={api_name!r}"
-                    ),
+                    last_error="uuid hard drift",
                 )
                 return
 

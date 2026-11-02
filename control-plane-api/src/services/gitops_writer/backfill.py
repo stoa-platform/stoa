@@ -12,10 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 import yaml
 from sqlalchemy import or_, select
 
-from src.logging_config import get_logger
 from src.models.catalog import APICatalog
 from src.services.catalog.write_api_yaml import render_api_yaml
 from src.services.catalog_reconciler.projection import (
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from ..catalog_git_client.protocol import CatalogGitClient
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -134,7 +134,9 @@ class GitOpsCatalogBackfill:
         limit: int | None = None,
         dry_run: bool = False,
     ) -> list[BackfillApiResult]:
-        stmt = select(APICatalog).where(APICatalog.deleted_at.is_(None)).order_by(APICatalog.tenant_id, APICatalog.api_id)
+        stmt = (
+            select(APICatalog).where(APICatalog.deleted_at.is_(None)).order_by(APICatalog.tenant_id, APICatalog.api_id)
+        )
         if tenant_id:
             stmt = stmt.where(APICatalog.tenant_id == tenant_id)
         if api_id:

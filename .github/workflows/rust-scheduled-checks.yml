@@ -1,6 +1,6 @@
 # =============================================================================
-# Scheduled Rust checks: cargo audit + bench compile
-# Runs daily — not needed on every PR (audit = advisory, bench = compile-only)
+# Scheduled Rust checks: coverage + cargo audit + bench compile
+# Runs daily — instrumented coverage is kept off the PR/merge queue path.
 # =============================================================================
 
 name: Rust Scheduled Checks
@@ -17,6 +17,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  coverage:
+    name: Gateway coverage
+    uses: ./.github/workflows/reusable-rust-ci.yml
+    with:
+      component: stoa-gateway
+      cargo-features: '--features kafka,pingora,phases'
+
   audit:
     name: Security Audit
     runs-on: ubuntu-latest

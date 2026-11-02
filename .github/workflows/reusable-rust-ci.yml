@@ -70,6 +70,9 @@ jobs:
       - name: Persistent toolchain and target dir (self-hosted)
         if: runner.environment == 'self-hosted'
         run: |
+          # Ne dépend pas du .path du runner (régénéré au redémarrage du service).
+          export PATH="${HOME}/.cargo/bin:${PATH}"
+          echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
           rustup toolchain install stable --profile minimal -c clippy,rustfmt --no-self-update
           rustup default stable
           T="${HOME}/.cache/cargo-target/${RUNNER_NAME}/${{ inputs.component }}"

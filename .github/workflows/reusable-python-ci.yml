@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ''
+      parallel-tests:
+        description: 'Run pytest with xdist auto workers, honoring xdist_group markers'
+        required: false
+        type: boolean
+        default: false
       runner:
         description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
         required: false
@@ -80,8 +85,9 @@ jobs:
       - name: Run tests
         working-directory: ${{ inputs.component }}
         run: |
-          pip install pytest pytest-asyncio pytest-cov
+          pip install pytest pytest-asyncio pytest-cov pytest-xdist
           pytest tests/ -v --tb=short \
+            ${{ inputs.parallel-tests && '-n auto --dist loadgroup' || '' }} \
             ${{ inputs.test-markers != '' && format('-m "{0}"', inputs.test-markers) || '' }} \
             --cov=src \
             --cov-report=xml:coverage.xml \

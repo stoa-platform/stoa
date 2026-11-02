@@ -68,6 +68,7 @@ jobs:
       python-version: '3.11'
       coverage-threshold: 70
       test-markers: not integration
+      parallel-tests: true
       runner: ubuntu-latest
     permissions:
       contents: read
@@ -81,7 +82,6 @@ jobs:
   # disappear at the cost of a few free CI minutes per PR.
   integration:
     name: Integration Tests
-    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 20  # A4
     permissions:

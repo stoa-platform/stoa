@@ -238,11 +238,7 @@ export interface APIResponse {
 
 // Security profile types (CAB-1744)
 export type SecurityProfile =
-  | 'api_key'
-  | 'oauth2_public'
-  | 'oauth2_confidential'
-  | 'fapi_baseline'
-  | 'fapi_advanced';
+  'api_key' | 'oauth2_public' | 'oauth2_confidential' | 'fapi_baseline' | 'fapi_advanced';
 
 // Consumer Application types (field names match backend ApplicationResponse — snake_case)
 export interface Application {
@@ -980,11 +976,7 @@ export interface MarketplaceStats {
 // ---------------------------------------------------------------------------
 
 export type NotificationType =
-  | 'api_update'
-  | 'subscription_expiry'
-  | 'key_rotation'
-  | 'system_alert'
-  | 'usage_threshold';
+  'api_update' | 'subscription_expiry' | 'key_rotation' | 'system_alert' | 'usage_threshold';
 
 export interface Notification {
   id: string;

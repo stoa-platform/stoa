@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/
@@ -34,7 +34,7 @@ COPY alembic/ ./alembic/
 RUN chown -R stoa:stoa /app
 
 # Environment variables with defaults
-# Override at runtime via docker run -e or Kubernetes ConfigMap/Secrets
+# Override at runtime with Docker environment flags or Kubernetes ConfigMap/Secrets
 
 # Python optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \

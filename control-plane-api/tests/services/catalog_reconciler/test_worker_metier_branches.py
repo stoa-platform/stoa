@@ -166,9 +166,8 @@ class TestNameMismatchYaml:
         statuses = _sync_status_records(cap_logs)
         failed = [r for r in statuses if r["status"] == "failed" and r["api_id"] == "petstore"]
         assert failed, f"expected status=failed on name mismatch; got {statuses}"
-        # The ``last_error`` quotes the §6.10 diagnostic; assertion stays loose
-        # to avoid coupling to the exact message string.
-        assert "name" in failed[0]["last_error"].lower()
+        # Validation diagnostics must not echo untrusted YAML values.
+        assert failed[0]["last_error"] == "api.yaml or OpenAPI validation failed"
 
         async with session_factory() as session:
             result = await session.execute(

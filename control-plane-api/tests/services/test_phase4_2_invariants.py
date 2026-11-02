@@ -9,6 +9,7 @@ hardcoded ON, etc.).
 
 from __future__ import annotations
 
+import ast
 import io
 import re
 import tokenize
@@ -253,32 +254,45 @@ def test_main_py_passes_session_factory_to_reconciler() -> None:
 
 
 def test_gitops_modules_use_structlog_only() -> None:
-    """CAB-2208: GitOps modules must wire on structlog via the central wrapper.
+    """CAB-2208: GitOps modules must use ``structlog.get_logger`` directly.
 
     Phase 4-1/4-2 introduced ``services/gitops_writer``, ``services/catalog_reconciler``,
     ``services/catalog_git_client`` and the ``services/catalog`` helper. These
-    modules emit ``catalog_sync_status`` and must use ``get_logger`` from
-    ``src.logging_config`` so ``extra=`` fields survive in production. stdlib
-    ``logging.getLogger`` was used during the Phase 4-1/4-2 scaffold and
-    silently drops kwargs, leaving only the bare event name in the JSON log
-    stream — masking ``status`` transitions from §7bis and Phase 7-9 smokes.
+    modules emit ``catalog_sync_status`` with structured keyword fields rather
+    than stdlib's ``extra=`` dictionary. AST inspection covers aliased imports,
+    combined imports and logging submodules without matching comments or strings.
     """
-    forbidden_patterns = [
-        (re.compile(r"\bimport\s+logging\b"), "import logging"),
-        (re.compile(r"\bfrom\s+logging\s+import\b"), "from logging import"),
-        (re.compile(r"\blogging\s*\.\s*getLogger\b"), "logging.getLogger"),
-    ]
+    log_methods = {"debug", "info", "warning", "warn", "error", "exception", "critical", "fatal", "log"}
     offenders: list[str] = []
     for d in GITOPS_MODULE_DIRS:
-        for f in d.rglob("*.py"):
-            code = _code_only(f.read_text())
-            for pat, label in forbidden_patterns:
-                if pat.search(code):
-                    offenders.append(f"{f}: {label}")
+        files = sorted(d.rglob("*.py"))
+        assert files, f"GitOps module {d} must contain Python files; logging invariant must not be vacuous."
+        for f in files:
+            for node in ast.walk(ast.parse(f.read_text(), filename=str(f))):
+                label = None
+                if (isinstance(node, ast.Import) and any(a.name.split(".")[0] == "logging" for a in node.names)) or (
+                    isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "logging"
+                ):
+                    label = "stdlib logging import"
+                elif (
+                    isinstance(node, ast.Attribute)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "logging"
+                    and node.attr == "getLogger"
+                ):
+                    label = "logging.getLogger"
+                elif (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in log_methods
+                    and any(keyword.arg == "extra" for keyword in node.keywords)
+                ):
+                    label = "extra= on logging call"
+                if label:
+                    offenders.append(f"{f}:{node.lineno}: {label}")
     assert not offenders, (
-        f"GitOps modules use stdlib logging: {offenders}. "
-        "Use ``from src.logging_config import get_logger`` instead "
-        "(structlog wrapper, CAB-2208)."
+        f"GitOps modules use stdlib logging patterns: {offenders}. "
+        "Use structlog.get_logger(__name__) and direct keyword fields (CAB-2208)."
     )
 
 

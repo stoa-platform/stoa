@@ -24,10 +24,10 @@ import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 
+import structlog
 import yaml
 from sqlalchemy import select, text, update
 
-from src.logging_config import get_logger
 from src.services.catalog.write_api_yaml import render_api_yaml
 from src.services.catalog_reconciler.classifier import LegacyCategory, classify_legacy
 from src.services.catalog_reconciler.metrics import CATALOG_SYNC_STATUS_TOTAL
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
     from ..catalog_git_client.protocol import CatalogGitClient
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 _MAX_RACE_RETRIES = 3
 """Spec §6.5 step 10: cap optimistic-CAS retry attempts at 3.
@@ -354,12 +354,12 @@ class GitOpsWriter:
             try:
                 remote = await self._catalog_git_client.get(row.git_path)
                 git_file_exists = remote is not None
-            except Exception:
-                logger.exception(
+            except Exception as exc:
+                logger.error(
                     "gitops_writer.collision_check_git_read_failed",
                     tenant_id=tenant_id,
                     api_id=api_name,
-                    git_path=row.git_path,
+                    error_type=type(exc).__name__,
                 )
                 git_file_exists = False
 
@@ -613,7 +613,7 @@ class GitOpsWriter:
             logger.warning(
                 "gitops_writer.advisory_unlock_failed",
                 lock_key=key,
-                error=str(exc),
+                error_type=type(exc).__name__,
             )
 
     @staticmethod

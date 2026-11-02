@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 import pytest
+from structlog.testing import capture_logs
 
 from src.services.catalog_reconciler.metrics import (
     CATALOG_SYNC_STATUS_TOTAL,
@@ -45,17 +46,24 @@ def test_writer_log_sync_status_increments_counter(status: str) -> None:
     tenant_id, api_id = "tenant-writer", f"api-{status}"
     before = _read_counter(tenant_id=tenant_id, api_id=api_id, status=status)
 
-    GitOpsWriter._log_sync_status(
-        tenant_id=tenant_id,
-        api_id=api_id,
-        status=status,
-        git_commit_sha=None,
-        catalog_content_hash=None,
-        git_path=None,
-    )
+    with capture_logs() as events:
+        GitOpsWriter._log_sync_status(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            status=status,
+            git_commit_sha=None,
+            catalog_content_hash=None,
+            git_path=None,
+        )
 
     after = _read_counter(tenant_id=tenant_id, api_id=api_id, status=status)
     assert after - before == pytest.approx(1.0)
+    assert len(events) == 1
+    assert (
+        events[0].items()
+        >= {"event": "catalog_sync_status", "tenant_id": tenant_id, "api_id": api_id, "status": status}.items()
+    )
+    assert "extra" not in events[0]
 
 
 @pytest.mark.parametrize("status", sorted(VALID_SYNC_STATUSES))
@@ -63,18 +71,25 @@ def test_reconciler_log_sync_status_increments_counter(status: str) -> None:
     tenant_id, api_id = "tenant-reconciler", f"api-{status}"
     before = _read_counter(tenant_id=tenant_id, api_id=api_id, status=status)
 
-    CatalogReconcilerWorker._log_sync_status(
-        tenant_id=tenant_id,
-        api_id=api_id,
-        status=status,
-        git_commit_sha="deadbeef",
-        catalog_content_hash="cafebabe",
-        git_path=f"tenants/tenant-reconciler/apis/api-{status}/api.yaml",
-        last_error=None,
-    )
+    with capture_logs() as events:
+        CatalogReconcilerWorker._log_sync_status(
+            tenant_id=tenant_id,
+            api_id=api_id,
+            status=status,
+            git_commit_sha="deadbeef",
+            catalog_content_hash="cafebabe",
+            git_path=f"tenants/tenant-reconciler/apis/api-{status}/api.yaml",
+            last_error=None,
+        )
 
     after = _read_counter(tenant_id=tenant_id, api_id=api_id, status=status)
     assert after - before == pytest.approx(1.0)
+    assert len(events) == 1
+    assert (
+        events[0].items()
+        >= {"event": "catalog_sync_status", "tenant_id": tenant_id, "api_id": api_id, "status": status}.items()
+    )
+    assert "extra" not in events[0]
 
 
 def test_emitted_status_literals_are_a_subset_of_valid_statuses() -> None:

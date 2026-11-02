@@ -46,6 +46,7 @@ jobs:
   test:
     name: Lint and Test (${{ inputs.component }})
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 20  # A4: default cap is 360 min
     outputs:
       result: ${{ steps.set-result.outputs.result }}
     permissions:

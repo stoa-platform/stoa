@@ -83,6 +83,7 @@ jobs:
     name: Integration Tests
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # A4
     permissions:
       contents: read
     services:
@@ -178,13 +179,19 @@ jobs:
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
       environment-url: ${{ github.event.inputs.environment == 'prod' && 'https://api.gostoa.dev' || 'https://dev-api.gostoa.dev' }}
-      verify-endpoint: ${{ github.event.inputs.environment == 'prod' && 'https://api.gostoa.dev/health' || 'https://dev-api.gostoa.dev/health' }}
+      # A2: dev-api.gostoa.dev has no DNS record -> the poll always burned
+      # 30s + verify-timeout before a warning. No verify in dev until a real
+      # dev URL exists (empty string skips the step in the reusable workflow).
+      verify-endpoint: ${{ github.event.inputs.environment == 'prod' && 'https://api.gostoa.dev/health' || '' }}
     secrets: inherit
 
   # === Smoke Test: health checks after deploy (Tier 1) ===
   smoke-test:
     needs: deploy
-    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
+    # A3: reusable-health-smoke.yml only probes production hosts
+    # (api/mcp/portal/console/auth.gostoa.dev). Run it for prod deploys only
+    # until dev endpoints exist; a dev deploy must not be judged on prod.
+    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' && github.event.inputs.environment == 'prod'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: control-plane-api

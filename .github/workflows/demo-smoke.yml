@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/docs/**'
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.claude/**'
   workflow_dispatch:
     inputs:
       blocking:

@@ -20,6 +20,12 @@ def select(event: str, paths: list[str]) -> list[str]:
     return runpy.run_path(str(SCRIPT))["select_components"](event, paths)
 
 
+def test_regression_scan_metadata_passes_image_pinning_guard() -> None:
+    findings = runpy.run_path(str(ROOT / "scripts/ci/check_image_pinning.py"))["findings"]
+    for path in (SCRIPT, Path(__file__)):
+        assert findings(path.relative_to(ROOT).as_posix(), path.read_text()) == []
+
+
 @pytest.mark.parametrize(
     ("paths", "expected"),
     [
@@ -94,7 +100,7 @@ def test_cli_diff_add_delete_rename_and_invalid_sha(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stderr
     flags = dict(line.split("=", 1) for line in output.read_text().splitlines())
     assert all(flags[name] == "true" for name in (*COMPONENTS, "container-scan"))
-    assert json.loads(flags["container-matrix"]) == {"image": [
+    assert json.loads(flags["container-matrix"]) == {"component": [
         {"name": name, "path": name,
          "context": "." if name in ("portal", "control-plane-ui") else name}
         for name in COMPONENTS]}

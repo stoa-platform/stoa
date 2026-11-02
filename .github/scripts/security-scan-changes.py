@@ -44,7 +44,7 @@ def main() -> None:
         )
         paths = [os.fsdecode(p) for p in diff.stdout.split(b"\0") if p]
     selected = select_components(event, paths)
-    matrix = {"image": [
+    matrix = {"component": [
         {"name": c, "path": c, "context": "." if c in WEB else c} for c in selected
     ]}
     outputs = {c: str(c in selected).lower() for c in COMPONENTS}

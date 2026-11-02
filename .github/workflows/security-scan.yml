@@ -355,11 +355,11 @@ jobs:
       - name: Check Dockerfile exists
         id: check
         run: |
-          if [ -f "${{ matrix.image.path }}/Dockerfile" ]; then
+          if [ -f "${{ matrix.component.path }}/Dockerfile" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No Dockerfile for ${{ matrix.image.name }}, skipping"
+            echo "::warning::No Dockerfile for ${{ matrix.component.name }}, skipping"
           fi
 
       - name: Cache Trivy DB
@@ -373,7 +373,7 @@ jobs:
       - name: Stage project license and notice
         if: steps.check.outputs.exists == 'true'
         env:
-          COMPONENT: ${{ matrix.image.path }}
+          COMPONENT: ${{ matrix.component.path }}
         run: python3 -B scripts/ci/release_legal.py --dest "$COMPONENT"
 
       - name: Set up Docker Buildx
@@ -384,21 +384,21 @@ jobs:
         if: steps.check.outputs.exists == 'true'
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
-          context: ${{ matrix.image.context }}
-          file: ${{ matrix.image.path }}/Dockerfile
+          context: ${{ matrix.component.context }}
+          file: ${{ matrix.component.path }}/Dockerfile
           load: true
           push: false
-          tags: stoa/${{ matrix.image.name }}:scan
-          cache-from: type=gha,scope=security-scan-${{ matrix.image.name }}
-          cache-to: type=gha,mode=max,scope=security-scan-${{ matrix.image.name }}
+          tags: stoa/${{ matrix.component.name }}:scan
+          cache-from: type=gha,scope=security-scan-${{ matrix.component.name }}
+          cache-to: type=gha,mode=max,scope=security-scan-${{ matrix.component.name }}
 
       - name: Run Trivy (SARIF)
         if: steps.check.outputs.exists == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
         with:
-          image-ref: 'stoa/${{ matrix.image.name }}:scan'
+          image-ref: 'stoa/${{ matrix.component.name }}:scan'
           format: 'sarif'
-          output: 'trivy-${{ matrix.image.name }}.sarif'
+          output: 'trivy-${{ matrix.component.name }}.sarif'
           severity: 'CRITICAL,HIGH'
           vuln-type: 'os,library'
           ignore-unfixed: true
@@ -408,14 +408,14 @@ jobs:
         continue-on-error: true  # Requires GitHub Advanced Security (private repos)
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
-          sarif_file: 'trivy-${{ matrix.image.name }}.sarif'
-          category: 'trivy-${{ matrix.image.name }}'
+          sarif_file: 'trivy-${{ matrix.component.name }}.sarif'
+          category: 'trivy-${{ matrix.component.name }}'
 
       - name: Run Trivy (fail on HIGH+)
         if: steps.check.outputs.exists == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
         with:
-          image-ref: 'stoa/${{ matrix.image.name }}:scan'
+          image-ref: 'stoa/${{ matrix.component.name }}:scan'
           format: 'table'
           severity: 'CRITICAL,HIGH'
           vuln-type: 'os,library'

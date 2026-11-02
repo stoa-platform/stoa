@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Rate limiting
     rate_limit_invites: str = "10/minute"
 
+    # Optional bootstrap admin. Value is a SHA-256 hex digest, never the key.
+    # Empty disables bootstrap authentication.
+    bootstrap_admin_key_hash: str = ""
+    bootstrap_admin_tenant: str = "platform"
+
     @property
     def database_url(self) -> str:
         """Construct async database URL."""

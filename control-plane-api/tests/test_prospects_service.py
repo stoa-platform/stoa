@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.models.invite import Invite
 from src.services.prospects_service import (
     _calculate_metrics,
     export_prospects_csv,
@@ -29,13 +30,22 @@ from src.services.prospects_service import (
 # =============================================================================
 
 
+def test_invite_maps_hashed_token_and_tenant():
+    """The shared invites table stores a hash and a tenant, not the plaintext token."""
+    names = {column.name for column in Invite.__table__.columns}
+    assert "token" not in names
+    assert "token_hash" in names
+    assert "tenant_id" in names
+
+
 def _make_invite(**overrides) -> MagicMock:
     """Build a mock Invite ORM object."""
     obj = MagicMock()
     obj.id = overrides.get("id", uuid.uuid4())
     obj.email = overrides.get("email", "prospect@example.com")
     obj.company = overrides.get("company", "Acme Corp")
-    obj.token = overrides.get("token", "tok-abc123")
+    obj.tenant_id = overrides.get("tenant_id", "tenant-a")
+    obj.token_hash = overrides.get("token_hash", "a" * 64)
     obj.source = overrides.get("source", "linkedin")
     obj.status = overrides.get("status", "opened")
     obj.created_at = overrides.get("created_at", datetime(2026, 1, 1, 10, 0, 0, tzinfo=UTC))

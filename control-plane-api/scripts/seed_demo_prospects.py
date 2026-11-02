@@ -18,6 +18,7 @@ Requirements:
 """
 
 import asyncio
+import hashlib
 import secrets
 import sys
 from datetime import datetime, timedelta, timezone
@@ -136,9 +137,10 @@ DEMO_PROSPECTS = [
 ]
 
 
-def generate_token() -> str:
-    """Generate a secure invite token."""
-    return secrets.token_urlsafe(32)
+def generate_token_hash() -> str:
+    """SHA-256 hex of a one-time invite token. The plaintext is discarded."""
+    raw = secrets.token_urlsafe(32)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 async def seed_prospects(database_url: str) -> None:
@@ -185,14 +187,21 @@ async def seed_prospects(database_url: str) -> None:
                 # Insert invite
                 await session.execute(
                     text("""
-                        INSERT INTO stoa.invites (id, email, company, token, source, status, created_at, expires_at, opened_at)
-                        VALUES (:id, :email, :company, :token, :source, :status, :created_at, :expires_at, :opened_at)
+                        INSERT INTO stoa.invites (
+                            id, email, company, tenant_id, token_hash, source, status,
+                            created_at, expires_at, opened_at
+                        )
+                        VALUES (
+                            :id, :email, :company, :tenant_id, :token_hash, :source, :status,
+                            :created_at, :expires_at, :opened_at
+                        )
                     """),
                     {
                         "id": invite_id,
                         "email": prospect["email"],
                         "company": prospect["company"],
-                        "token": generate_token(),
+                        "tenant_id": "demo",
+                        "token_hash": generate_token_hash(),
                         "source": "demo_seed",
                         "status": prospect["status"],
                         "created_at": created_at,

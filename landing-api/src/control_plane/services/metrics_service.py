@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from control_plane.models.invite import Invite, InviteStatus
 from control_plane.models.prospect_event import EventType, ProspectEvent
+from control_plane.redaction import scrub_metadata
 from control_plane.schemas.event import EventDetail
 from control_plane.schemas.metrics import InviteMetrics, MetricsResponse
 from control_plane.services import event_service
@@ -67,7 +68,7 @@ async def calculate_metrics(
             id=e.id,
             invite_id=e.invite_id,
             event_type=EventType(e.event_type),
-            metadata=e.event_data,
+            metadata=scrub_metadata(e.event_data),
             timestamp=e.timestamp,
         )
         for e in events

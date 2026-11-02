@@ -1,7 +1,8 @@
 name: Demo Smoke Observation
 
 on:
-  pull_request:
+  # Observation only: run after merge, nightly, or on demand.
+  push:
     branches:
       - main
     paths-ignore:
@@ -10,6 +11,8 @@ on:
       - '**/*.md'
       - '**/*.mdx'
       - '.claude/**'
+  schedule:
+    - cron: '17 3 * * *' # Daily at 03:17 UTC
   workflow_dispatch:
     inputs:
       blocking:

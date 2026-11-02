@@ -5,8 +5,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from control_plane.auth import (
+    PERM_LISTS_READ,
+    PERM_LISTS_WRITE,
+    Principal,
+    assert_same_tenant,
+    require_permission,
+)
 from control_plane.database import get_db
 from control_plane.models.prospect_event import EventType
+from control_plane.redaction import scrub_metadata
 from control_plane.schemas.event import (
     EventCreate,
     EventDetail,
@@ -27,6 +35,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 )
 async def record_event(
     event_data: EventCreate,
+    principal: Principal = Depends(require_permission(PERM_LISTS_WRITE)),
     db: AsyncSession = Depends(get_db),
 ) -> EventResponse:
     """Record a new prospect event.
@@ -48,6 +57,7 @@ async def record_event(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "invite_not_found", "message": "Invite not found"},
         )
+    assert_same_tenant(principal, invite.tenant_id)
 
     event = await event_service.record_event(db, event_data)
 
@@ -67,6 +77,7 @@ async def record_event(
 async def list_events(
     invite_id: UUID = Query(..., description="UUID of the invite"),
     event_type: EventType | None = Query(None, description="Filter by event type"),
+    principal: Principal = Depends(require_permission(PERM_LISTS_READ)),
     db: AsyncSession = Depends(get_db),
 ) -> EventListResponse:
     """List events for an invite.
@@ -86,6 +97,7 @@ async def list_events(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "invite_not_found", "message": "Invite not found"},
         )
+    assert_same_tenant(principal, invite.tenant_id)
 
     events = await event_service.get_events_for_invite(db, invite_id, event_type)
 
@@ -95,7 +107,7 @@ async def list_events(
                 id=e.id,
                 invite_id=e.invite_id,
                 event_type=EventType(e.event_type),
-                metadata=e.event_data,
+                metadata=scrub_metadata(e.event_data),
                 timestamp=e.timestamp,
             )
             for e in events

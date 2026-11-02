@@ -1,5 +1,6 @@
 """Invite service with business logic."""
 
+import hashlib
 import secrets
 from uuid import UUID
 
@@ -25,21 +26,35 @@ def build_invite_link(token: str) -> str:
     return f"{settings.invite_base_url}/welcome/{token}"
 
 
-async def create_invite(db: AsyncSession, invite_data: InviteCreate) -> Invite:
+def hash_invite_token(token: str) -> str:
+    """SHA-256 hex digest of an invite token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def create_invite(
+    db: AsyncSession,
+    invite_data: InviteCreate,
+    tenant_id: str,
+) -> tuple[Invite, str]:
     """Create a new invite.
+
+    The plaintext token is returned to the caller and is not stored.
 
     Args:
         db: Database session
         invite_data: Invite creation data
+        tenant_id: Tenant that owns the invite
 
     Returns:
-        Created invite instance
+        Created invite and the one-time plaintext token
     """
+    token = generate_invite_token()
     invite = Invite(
         email=invite_data.email,
         company=invite_data.company,
+        tenant_id=tenant_id,
         source=invite_data.source,
-        token=generate_invite_token(),
+        token_hash=hash_invite_token(token),
         status=InviteStatus.PENDING.value,
         expires_at=Invite.calculate_expires_at(),
     )
@@ -48,7 +63,7 @@ async def create_invite(db: AsyncSession, invite_data: InviteCreate) -> Invite:
     await db.flush()
     await db.refresh(invite)
 
-    return invite
+    return invite, token
 
 
 async def get_invite_by_id(db: AsyncSession, invite_id: UUID) -> Invite | None:
@@ -75,7 +90,9 @@ async def get_invite_by_token(db: AsyncSession, token: str) -> Invite | None:
     Returns:
         Invite instance or None if not found
     """
-    result = await db.execute(select(Invite).where(Invite.token == token))
+    result = await db.execute(
+        select(Invite).where(Invite.token_hash == hash_invite_token(token))
+    )
     return result.scalar_one_or_none()
 
 
@@ -84,6 +101,7 @@ async def list_invites(
     skip: int = 0,
     limit: int = 100,
     status: InviteStatus | None = None,
+    tenant_id: str | None = None,
 ) -> tuple[list[Invite], int]:
     """List invites with optional filtering.
 
@@ -92,19 +110,21 @@ async def list_invites(
         skip: Number of records to skip
         limit: Maximum number of records to return
         status: Optional status filter
+        tenant_id: When set, restrict the list to this tenant
 
     Returns:
         Tuple of (invites, total_count)
     """
     query = select(Invite)
+    count_query = select(Invite.id)
 
     if status:
         query = query.where(Invite.status == status.value)
-
-    # Get total count
-    count_query = select(Invite.id)
-    if status:
         count_query = count_query.where(Invite.status == status.value)
+    if tenant_id is not None:
+        query = query.where(Invite.tenant_id == tenant_id)
+        count_query = count_query.where(Invite.tenant_id == tenant_id)
+
     count_result = await db.execute(count_query)
     total = len(count_result.scalars().all())
 

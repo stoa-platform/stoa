@@ -14,7 +14,7 @@ from control_plane.config import settings
 from control_plane.models.base import Base
 
 # Import all models to ensure they're registered with metadata
-from control_plane.models import invite, prospect_event  # noqa: F401
+from control_plane.models import api_key, invite, prospect_event  # noqa: F401
 
 # Alembic Config object
 config = context.config

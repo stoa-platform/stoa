@@ -1,83 +1,83 @@
 version: 2
+
+# One weekly version-update PR across all configured ecosystems.
+# Security updates have a separate Dependabot limit.
+multi-ecosystem-groups:
+  weekly-dependencies:
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 1
+    update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+
 updates:
   # Python - Control Plane API
   - package-ecosystem: "pip"
     directory: "/control-plane-api"
     schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 5
+      interval: "weekly"
+    open-pull-requests-limit: 1
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
     groups:
-      python-deps:
+      minor-and-patch:
         patterns: ["*"]
-    commit-message:
-      prefix: "chore(deps)"
-
-  # NPM - Portal
-  - package-ecosystem: "npm"
-    directory: "/portal"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 3
-    # Block major bumps — too many breaking incidents (Vite 8, Tailwind 4, ESLint 10). Major upgrades via dedicated tickets.
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+
+  # NPM - Portal, Control Plane UI and E2E Tests
+  - package-ecosystem: "npm"
+    directories:
+      - "/portal"
+      - "/control-plane-ui"
+      - "/e2e"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 1
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
     groups:
-      npm-portal:
+      minor-and-patch:
         patterns: ["*"]
-    commit-message:
-      prefix: "chore(deps)"
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+    open-pull-requests-limit: 1
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
     groups:
-      gha-deps:
+      minor-and-patch:
         patterns: ["*"]
-    commit-message:
-      prefix: "chore(ci)"
-
-  # NPM - Control Plane UI
-  - package-ecosystem: "npm"
-    directory: "/control-plane-ui"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 3
-    # Block major bumps — too many breaking incidents (Vite 8, Tailwind 4, ESLint 10). Major upgrades via dedicated tickets.
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-    groups:
-      npm-ui:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(deps)"
-
-  # NPM - E2E Tests
-  - package-ecosystem: "npm"
-    directory: "/e2e"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 2
-    groups:
-      npm-e2e:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(deps)"
 
   # Cargo - STOA Gateway
   - package-ecosystem: "cargo"
     directory: "/stoa-gateway"
     schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 3
+      interval: "weekly"
+    open-pull-requests-limit: 1
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
     groups:
-      cargo-deps:
+      minor-and-patch:
         patterns: ["*"]
-    commit-message:
-      prefix: "chore(deps)"
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Docker - application build contexts (there is no root Dockerfile)
   - package-ecosystem: "docker"
@@ -88,6 +88,14 @@ updates:
       - "/stoa-gateway"
       - "/stoa-go"
     schedule:
-      interval: "monthly"
-    commit-message:
-      prefix: "chore(docker)"
+      interval: "weekly"
+    open-pull-requests-limit: 1
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

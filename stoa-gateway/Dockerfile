@@ -18,7 +18,7 @@
 # ==============================================================================
 
 # --- Stage 1: Plan dependencies -----------------------------------------------
-FROM rust:1.93-bookworm AS planner
+FROM rust:1.99-bookworm AS planner
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
@@ -30,7 +30,7 @@ COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Stage 2: Build -----------------------------------------------------------
-FROM rust:1.93-bookworm AS builder
+FROM rust:1.99-bookworm AS builder
 
 # Feature flags for community/enterprise image split (ADR-041 Phase 3)
 #   empty   = community (default — lean image, no optional deps)

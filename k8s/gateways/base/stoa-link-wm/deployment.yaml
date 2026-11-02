@@ -45,8 +45,15 @@ spec:
               value: "json"
             - name: STOA_INSTANCE_NAME
               value: "stoa-link-wm"
+            # The sidecar route profile does not imply a same-pod deployment.
             - name: STOA_GATEWAY_MODE
               value: "sidecar"
+            - name: STOA_DEPLOYMENT_MODE
+              value: "connect"
+            - name: STOA_TARGET_GATEWAY_TYPE
+              value: "webmethods"
+            - name: STOA_TOPOLOGY
+              value: "remote-agent"
             - name: STOA_AUTO_REGISTER
               value: "true"
             - name: STOA_CONTROL_PLANE_URL

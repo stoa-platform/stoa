@@ -182,10 +182,10 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
       # 3.13 introduces HIGH findings; other newer runtimes need separate validation.
-      # Keep the documented Python 3.11 runtime until that migration is validated.
+      # Keep Python 3.11 until validated; Docker ignores match numeric releases, not tag suffixes.
       - dependency-name: "python"
         versions:
-          - "3.12-slim"
-          - "3.13-slim"
-          - "3.14-slim"
-          - "3.15-slim"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.15"

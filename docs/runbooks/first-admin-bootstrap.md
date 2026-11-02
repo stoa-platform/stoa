@@ -103,7 +103,7 @@ stoa:
     firstAdmin:
       enabled: true
       existingSecret: first-admin-input
-      image: python:3.11.10-alpine
+      image: python:3.11.10-alpine@sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80
 controlPlaneApi:
   signupMode: invite
 ```
@@ -231,8 +231,8 @@ Restart the API after changing these inputs. Keycloak registration remains close
 in both modes. The default local Google broker is disabled; configure an
 approved-user broker flow before enabling a provider that can create accounts.
 
-For isolated installations, preload `python:3.11.10-alpine` and, when the realm
-hook is used, `curlimages/curl:8.7.1`, as well as the site's Keycloak and platform
+For isolated installations, preload `python:3.11.10-alpine@sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80` and, when the realm
+hook is used, `curlimages/curl:8.7.1@sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21`, as well as the site's Keycloak and platform
 images. Set all deployment endpoints and browser origins to on-site values;
 render and inspect the installation's private values before deployment. Neither
 first-administrator command downloads code, packages or action links. The Helm

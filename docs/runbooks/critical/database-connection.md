@@ -47,7 +47,7 @@ aws rds describe-db-instances \
 
 # 2. Test connectivity from a pod
 kubectl run pg-test --rm -it --restart=Never \
-  --image=postgres:15 -n stoa-system -- \
+  --image=postgres:15@sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786 -n stoa-system -- \
   pg_isready -h <RDS_ENDPOINT> -p 5432
 
 # 3. Check Keycloak logs
@@ -89,13 +89,13 @@ kubectl get secret -n keycloak keycloak-db-secret -o jsonpath='{.data.password}'
 ```bash
 # 1. Check if it's a max connections issue
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n stoa-system -- \
+  --image=postgres:15@sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT count(*), state FROM pg_stat_activity GROUP BY state;"
 
 # 2. If too many connections, kill idle connections
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n stoa-system -- \
+  --image=postgres:15@sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle' AND query_start < NOW() - INTERVAL '10 minutes';"
 
@@ -110,7 +110,7 @@ kubectl rollout restart deployment -n keycloak keycloak
 ```bash
 # View active connections by application
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n stoa-system -- \
+  --image=postgres:15@sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT application_name, count(*) FROM pg_stat_activity GROUP BY application_name ORDER BY count DESC;"
 
@@ -203,7 +203,7 @@ aws rds modify-db-instance \
 ```bash
 # Test DB connection
 kubectl run pg-test --rm -it --restart=Never \
-  --image=postgres:15 -n stoa-system -- \
+  --image=postgres:15@sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786 -n stoa-system -- \
   pg_isready -h <RDS_ENDPOINT> -p 5432
 
 # Test Keycloak
@@ -211,7 +211,7 @@ curl -s https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration | j
 
 # Check connection metrics
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n stoa-system -- \
+  --image=postgres:15@sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT count(*) as active_connections FROM pg_stat_activity;"
 ```

@@ -1,0 +1,121 @@
+{
+  "ticket": "CAB-2343",
+  "method": "Anonymous HTTPS GET with TLS verification using existing verifier-registre-exec2.py (curl -q, no Docker or GitHub credentials). Source reference and digest are independently fetched; Docker-Content-Digest must equal SHA-256 of raw response bytes. HTTP 401/429 receive an initial attempt plus two retries at least 31 seconds apart.",
+  "manifests": [
+    {
+      "source": "postgres:15",
+      "registry": "registry-1.docker.io",
+      "repository": "library/postgres",
+      "source_reference": "15",
+      "consumer_paths": [
+        "docs/runbooks/critical/database-connection.md"
+      ],
+      "verified_at_utc": "2026-11-02T07:07:48.213907+00:00",
+      "http_status": 200,
+      "digest": "sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786",
+      "header_digest": "sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786",
+      "body_sha256": "sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786",
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/riscv64",
+        "linux/s390x"
+      ],
+      "digest_get_verified": true,
+      "digest_get": {
+        "http_status": 200,
+        "digest": "sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786",
+        "header_digest": "sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786",
+        "body_sha256": "sha256:40e8c839f86c404f9bd1c456bb83f11b205f2cd95d753b34c2d074e89ecee786",
+        "media_type": "application/vnd.oci.image.index.v1+json",
+        "platforms": [
+          "linux/386",
+          "linux/amd64",
+          "linux/arm",
+          "linux/arm64",
+          "linux/ppc64le",
+          "linux/riscv64",
+          "linux/s390x"
+        ]
+      }
+    },
+    {
+      "source": "python:3.11.10-alpine",
+      "registry": "registry-1.docker.io",
+      "repository": "library/python",
+      "source_reference": "3.11.10-alpine",
+      "consumer_paths": [
+        "docs/runbooks/first-admin-bootstrap.md"
+      ],
+      "verified_at_utc": "2026-11-02T07:07:48.034928+00:00",
+      "http_status": 200,
+      "digest": "sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80",
+      "header_digest": "sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80",
+      "body_sha256": "sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80",
+      "media_type": "application/vnd.oci.image.index.v1+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm",
+        "linux/arm64",
+        "linux/ppc64le",
+        "linux/s390x"
+      ],
+      "digest_get_verified": true,
+      "digest_get": {
+        "http_status": 200,
+        "digest": "sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80",
+        "header_digest": "sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80",
+        "body_sha256": "sha256:65c34f59d896f939f204e64c2f098db4a4c235be425bd8f0804fd389b1e5fd80",
+        "media_type": "application/vnd.oci.image.index.v1+json",
+        "platforms": [
+          "linux/386",
+          "linux/amd64",
+          "linux/arm",
+          "linux/arm64",
+          "linux/ppc64le",
+          "linux/s390x"
+        ]
+      }
+    },
+    {
+      "source": "curlimages/curl:8.7.1",
+      "registry": "registry-1.docker.io",
+      "repository": "curlimages/curl",
+      "source_reference": "8.7.1",
+      "consumer_paths": [
+        "docs/runbooks/first-admin-bootstrap.md"
+      ],
+      "verified_at_utc": "2026-11-02T07:07:47.854031+00:00",
+      "http_status": 200,
+      "digest": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+      "header_digest": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+      "body_sha256": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+      "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+      "platforms": [
+        "linux/386",
+        "linux/amd64",
+        "linux/arm64",
+        "linux/ppc64le"
+      ],
+      "digest_get_verified": true,
+      "digest_get": {
+        "http_status": 200,
+        "digest": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+        "header_digest": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+        "body_sha256": "sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21",
+        "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+        "platforms": [
+          "linux/386",
+          "linux/amd64",
+          "linux/arm64",
+          "linux/ppc64le"
+        ]
+      }
+    }
+  ]
+}

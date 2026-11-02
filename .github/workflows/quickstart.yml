@@ -9,6 +9,9 @@ on:
       - "quickstart/**"
       - "stoa-gateway/Cargo.lock"
       - ".github/workflows/quickstart.yml"
+      - "!**/*.md"
+      - "!**/*.mdx"
+      - "!**/docs/**"
   push:
     branches: [main]
     paths:

@@ -15,12 +15,7 @@ import type { APISubscription } from '../types';
 // ============ Types ============
 
 export type APISubscriptionStatus =
-  | 'pending'
-  | 'active'
-  | 'suspended'
-  | 'revoked'
-  | 'expired'
-  | 'rejected';
+  'pending' | 'active' | 'suspended' | 'revoked' | 'expired' | 'rejected';
 
 export interface CreateAPISubscriptionRequest {
   application_id: string;

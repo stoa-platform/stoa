@@ -306,6 +306,8 @@ def test_grep_status_other_than_zero_or_one_fails(tmp_path: Path, code: int) -> 
         ".github/scripts/ci-gate-changes.sh",
         ".github/scripts/ci-gate-aggregate.sh",
         "scripts/ci/tests/test_ci_gate_contract.py",
+        ".github/scripts/security-scan-changes.py",
+        "scripts/ci/tests/test_security_scan_paths.py",
         ".github/workflows/notes.yml",
     ),
 )

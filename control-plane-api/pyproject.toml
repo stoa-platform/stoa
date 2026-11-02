@@ -19,6 +19,7 @@ dev = [
     "isort>=5.13.0",
     "mypy>=1.8.0",
     "pytest>=8.0.0",
+    "pytest-xdist>=3.6.0",
     "pytest-cov>=4.1.0",
     # Borne haute : pytest-asyncio 1.x ne crée plus implicitement de boucle
     # d'événements, et la suite (asyncio_mode = "auto") en dépend — d'où des

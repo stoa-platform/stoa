@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/docs/**'
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.claude/**'
   schedule:
     - cron: '17 3 * * *' # Daily at 03:17 UTC
   workflow_dispatch:

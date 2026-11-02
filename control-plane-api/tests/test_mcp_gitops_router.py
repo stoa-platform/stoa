@@ -107,6 +107,8 @@ class TestMCPGitOpsRouter:
                 response = client.post("/v1/mcp/gitops/sync")
 
         assert response.status_code == 500
+        assert "Git provider connection failed" not in response.text
+        assert response.json()["detail"] == "Sync failed. Check server logs for details."
 
     # ============== POST /sync/tenant/{tenant_id} ==============
 

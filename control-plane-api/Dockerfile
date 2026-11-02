@@ -14,11 +14,14 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 # Create non-root user for security (UID 1000 for k8s runAsNonRoot compatibility)
 RUN groupadd -r -g 1000 stoa && useradd -r -u 1000 -g stoa -d /app stoa
 
-# Install Python dependencies
+# Install Python dependencies (pip is removed afterwards: not needed at runtime,
+# and this keeps its vendored libraries out of the scanned image)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir --upgrade jaraco.context wheel && \
+RUN pip install --no-cache-dir --upgrade "pip>=26.2.0" "setuptools>=84.1.0" && \
+    pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir --upgrade jaraco.context wheel && \
     find /usr/local/lib -path '*/setuptools/_vendor/jaraco.context-*.dist-info' -exec rm -rf {} + && \
-    find /usr/local/lib -path '*/setuptools/_vendor/wheel-*.dist-info' -exec rm -rf {} +
+    find /usr/local/lib -path '*/setuptools/_vendor/wheel-*.dist-info' -exec rm -rf {} + && \
+    pip uninstall -y pip
 
 # Copy source code
 COPY src/ ./src/

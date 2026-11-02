@@ -151,9 +151,9 @@ async def trigger_full_sync(
             errors=result.errors,
         )
 
-    except Exception as e:
-        logger.error(f"Full sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {e!s}")
+    except Exception:
+        logger.exception("Full sync failed")
+        raise HTTPException(status_code=500, detail="Sync failed. Check server logs for details.")
 
 
 @router.post("/sync/tenant/{tenant_id}", response_model=SyncResponse)
@@ -189,9 +189,9 @@ async def trigger_tenant_sync(
             errors=result.errors,
         )
 
-    except Exception as e:
-        logger.error(f"Tenant sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {e!s}")
+    except Exception:
+        logger.exception("Tenant sync failed")
+        raise HTTPException(status_code=500, detail="Sync failed. Check server logs for details.")
 
 
 @router.post("/sync/server/{tenant_id}/{server_name}", response_model=SyncResponse)
@@ -230,9 +230,9 @@ async def trigger_server_sync(
                 errors=[f"Server {server_name} not found"],
             )
 
-    except Exception as e:
-        logger.error(f"Server sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {e!s}")
+    except Exception:
+        logger.exception("Server sync failed")
+        raise HTTPException(status_code=500, detail="Sync failed. Check server logs for details.")
 
 
 @router.get("/status", response_model=SyncStatusResponse)
@@ -348,6 +348,6 @@ async def list_git_servers(
             ],
         }
 
-    except Exception as e:
-        logger.error(f"Failed to list git servers: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list servers: {e!s}")
+    except Exception:
+        logger.exception("Failed to list git servers")
+        raise HTTPException(status_code=500, detail="Failed to list servers. Check server logs for details.")

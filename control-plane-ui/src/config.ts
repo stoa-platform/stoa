@@ -38,8 +38,7 @@
 // This allows a single Docker image to be deployed to any environment.
 const rt = (typeof window !== 'undefined' &&
   (window as unknown as Record<string, unknown>).__STOA_RUNTIME__) as
-  | Record<string, string>
-  | undefined;
+  Record<string, string> | undefined;
 
 /** Read a config value: runtime (container env) > build-time (Vite) > fallback */
 const env = (key: string, fallback: string): string =>

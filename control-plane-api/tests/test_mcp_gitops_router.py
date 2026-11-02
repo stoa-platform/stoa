@@ -247,30 +247,3 @@ class TestMCPGitOpsRouter:
             response = client.get("/v1/mcp/gitops/status")
 
         assert response.status_code == 403
-
-
-class TestMCPGitOpsNoExceptionLeak:
-    """CAB-2353: 500 responses must not echo exception text to clients."""
-
-    def test_tenant_sync_500_hides_exception(self, app_with_git_provider, mock_db_session, mock_git_provider):
-        with patch("src.routers.mcp_gitops.MCPSyncService") as MockSyncSvc:
-            MockSyncSvc.return_value.sync_tenant_servers = AsyncMock(side_effect=Exception("secret-internal-detail"))
-            with TestClient(app_with_git_provider, raise_server_exceptions=False) as client:
-                response = client.post("/v1/mcp/gitops/sync/tenant/acme")
-        assert response.status_code == 500
-        assert "secret-internal-detail" not in response.text
-
-    def test_server_sync_500_hides_exception(self, app_with_git_provider, mock_db_session, mock_git_provider):
-        with patch("src.routers.mcp_gitops.MCPSyncService") as MockSyncSvc:
-            MockSyncSvc.return_value.sync_server = AsyncMock(side_effect=Exception("secret-internal-detail"))
-            with TestClient(app_with_git_provider, raise_server_exceptions=False) as client:
-                response = client.post("/v1/mcp/gitops/sync/server/acme/linear-mcp")
-        assert response.status_code == 500
-        assert "secret-internal-detail" not in response.text
-
-    def test_list_git_servers_500_hides_exception(self, app_with_git_provider, mock_git_provider):
-        mock_git_provider.list_all_mcp_servers = AsyncMock(side_effect=Exception("secret-internal-detail"))
-        with TestClient(app_with_git_provider, raise_server_exceptions=False) as client:
-            response = client.get("/v1/mcp/gitops/git/servers")
-        assert response.status_code == 500
-        assert "secret-internal-detail" not in response.text

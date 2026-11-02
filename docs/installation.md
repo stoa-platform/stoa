@@ -53,7 +53,8 @@ stoa:
 stoaGateway:
   enabled: true
   image:
-    tag: REPLACE_WITH_GATEWAY_IMAGE_TAG
+    # Pin the gateway image by digest at install time:
+    # --set stoaGateway.image.tag=<release> --set stoaGateway.image.digest=sha256:<64-hex digest>
   controlPlaneUrl: "https://<YOUR_CONTROL_PLANE_HOST>"
   keycloakUrl: "https://<YOUR_KEYCLOAK_HOST>"
   secretName: REPLACE_WITH_EXISTING_GATEWAY_SECRET_NAME

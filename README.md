@@ -101,7 +101,7 @@ timeout 300 docker compose up --wait
 ./verify.sh
 ```
 
-`verify.sh` declares the API, expects 401 without a token, 401 with an invalid token, then 200 with a Keycloak token. Host ports are bound to `127.0.0.1`. The gateway image built here is `stoa-quickstart-gateway:0.9.25`.
+`verify.sh` declares the API, expects 401 without a token, 401 with an invalid token, then 200 with a Keycloak token. Host ports are bound to `127.0.0.1`. The gateway image built here is `stoa-quickstart-gateway`, tagged 0.9.25.
 
 ---
 

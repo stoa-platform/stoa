@@ -38,8 +38,17 @@ env:
 
 jobs:
   ci:
-    name: Rust CI
+    # CAB-2355 : sur le runner auto-hébergé (2 slots), tests répartis en 2 parties
+    # (nextest --partition). Hébergé : une seule partie (0 = tout), inchangé.
+    name: Rust CI${{ matrix.partition > 0 && format(' ({0}/2)', matrix.partition) || '' }}
     runs-on: ${{ inputs.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: ${{ fromJSON(inputs.runner == 'stoa-rust' && '[1,2]' || '[0]') }}
+    env:
+      # Couverture : jamais sur la partie 2 (la partie 1 la porte).
+      RUN_COVERAGE: ${{ matrix.partition != 2 && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') }}
     outputs:
       result: ${{ steps.set-result.outputs.result }}
       coverage_pct: ${{ steps.extract-cov.outputs.coverage_pct }}
@@ -143,28 +152,40 @@ jobs:
             B="${V}.build-${GITHUB_RUN_ID}"
             python -m venv "$B"
             "$B/bin/pip" install -r ../control-plane-api/requirements.txt aiosqlite
-            mv "$B" "$V" 2>/dev/null || true
+            # -T : jamais de déplacement DANS un venv existant. Échec visible.
+            if ! mv -T "$B" "$V"; then
+              if [ -x "$V/bin/python" ]; then
+                echo "::warning::venv ${V} créé entre-temps par un autre run ; copie ${B} supprimée"
+                rm -rf "$B"
+              else
+                echo "::error::impossible d'installer le venv ${V}"
+                exit 1
+              fi
+            fi
           fi
           echo "STOA_CP_TEST_PYTHON=${V}/bin/python" >> "$GITHUB_ENV"
 
       # --- Step 1: Format check (no compilation, instant) ---
       - name: Check formatting
         id: fmt
+        if: matrix.partition != 2
         run: cargo fmt --all -- --check
 
       # --- Step 2: Clippy (first compilation — cached by sccache across runs) ---
       - name: Clippy lint
         id: clippy
+        if: matrix.partition != 2
         run: cargo clippy --all-targets ${{ inputs.cargo-features }} -- -D warnings
 
       # --- Step 3: Tests (isolated processes, parallel execution) ---
       - name: Run tests
         id: tests
-        run: cargo nextest run --locked --no-fail-fast ${{ inputs.cargo-features }}
+        run: cargo nextest run --locked --no-fail-fast ${{ inputs.cargo-features }} ${{ matrix.partition > 0 && format('--partition count:{0}/2', matrix.partition) || '' }}
 
       # Nextest does not run doctests; preserve cargo test's existing coverage.
       - name: Run doctests
         id: doctests
+        if: matrix.partition != 1
         run: cargo test --locked --doc ${{ inputs.cargo-features }}
 
       # --- Step 4: Instrumented coverage (main push + nightly only) ---
@@ -246,7 +267,8 @@ jobs:
 
       - name: Set result output
         id: set-result
-        if: always()
+        # Matrice : la partie 2 n'écrit qu'en cas d'échec (sinon la partie 1 fait foi).
+        if: always() && (matrix.partition != 2 || job.status != 'success')
         run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload coverage report

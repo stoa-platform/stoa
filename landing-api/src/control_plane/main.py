@@ -15,6 +15,9 @@ from control_plane.api.v1.invites import limiter
 from control_plane.api.v1.router import router as api_router
 from control_plane.api.v1.router import welcome_router
 from control_plane.config import settings
+from control_plane.redaction import install_log_redaction
+
+install_log_redaction()
 
 
 @asynccontextmanager

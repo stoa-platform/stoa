@@ -7,10 +7,23 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from control_plane.auth import (
+    PERM_LISTS_READ,
+    PERM_LISTS_WRITE,
+    Principal,
+    assert_same_tenant,
+    require_permission,
+    resolve_tenant,
+)
 from control_plane.config import settings
 from control_plane.database import get_db
 from control_plane.models.invite import InviteStatus
-from control_plane.schemas.invite import InviteCreate, InviteListResponse, InviteResponse
+from control_plane.schemas.invite import (
+    InviteCreate,
+    InviteCreatedResponse,
+    InviteListResponse,
+    InviteResponse,
+)
 from control_plane.schemas.metrics import MetricsResponse
 from control_plane.services import invite_service, metrics_service
 
@@ -20,35 +33,44 @@ router = APIRouter(prefix="/invites", tags=["invites"])
 limiter = Limiter(key_func=get_remote_address)
 
 
-def _build_response(invite) -> InviteResponse:
-    """Build InviteResponse from Invite model."""
+def _public_response(invite) -> InviteResponse:
+    """Build a list/read response. The token is not included."""
     return InviteResponse(
         id=invite.id,
         email=invite.email,
         company=invite.company,
-        token=invite.token,
+        tenant_id=invite.tenant_id,
         source=invite.source,
         status=InviteStatus(invite.status),
-        invite_link=invite_service.build_invite_link(invite.token),
         created_at=invite.created_at,
         expires_at=invite.expires_at,
         opened_at=invite.opened_at,
     )
 
 
+def _created_response(invite, token: str) -> InviteCreatedResponse:
+    """Build the one-time create response, including the invite token."""
+    return InviteCreatedResponse(
+        **_public_response(invite).model_dump(),
+        token=token,
+        invite_link=invite_service.build_invite_link(token),
+    )
+
+
 @router.post(
     "",
-    response_model=InviteResponse,
+    response_model=InviteCreatedResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create an invite",
-    description="Create a new prospect invite and return the invite link.",
+    description="Create a new prospect invite and return the invite link once.",
 )
 @limiter.limit(settings.rate_limit_invites)
 async def create_invite(
     request: Request,
     invite_data: InviteCreate,
+    principal: Principal = Depends(require_permission(PERM_LISTS_WRITE)),
     db: AsyncSession = Depends(get_db),
-) -> InviteResponse:
+) -> InviteCreatedResponse:
     """Create a new invite.
 
     Rate limited to 10 requests per minute per IP address.
@@ -61,8 +83,9 @@ async def create_invite(
     Returns:
         Created invite with invite_link
     """
-    invite = await invite_service.create_invite(db, invite_data)
-    return _build_response(invite)
+    tenant_id = resolve_tenant(principal, None)
+    invite, token = await invite_service.create_invite(db, invite_data, tenant_id)
+    return _created_response(invite, token)
 
 
 @router.get(
@@ -79,6 +102,7 @@ async def list_invites(
         alias="status",
         description="Filter by status",
     ),
+    principal: Principal = Depends(require_permission(PERM_LISTS_READ)),
     db: AsyncSession = Depends(get_db),
 ) -> InviteListResponse:
     """List invites with optional filtering.
@@ -92,11 +116,12 @@ async def list_invites(
     Returns:
         List of invites with total count
     """
+    tenant_id = None if principal.is_platform_admin else principal.tenant_id
     invites, total = await invite_service.list_invites(
-        db, skip=skip, limit=limit, status=status_filter
+        db, skip=skip, limit=limit, status=status_filter, tenant_id=tenant_id
     )
     return InviteListResponse(
-        invites=[_build_response(inv) for inv in invites],
+        invites=[_public_response(inv) for inv in invites],
         total=total,
     )
 
@@ -109,6 +134,7 @@ async def list_invites(
 )
 async def get_invite(
     invite_id: UUID,
+    principal: Principal = Depends(require_permission(PERM_LISTS_READ)),
     db: AsyncSession = Depends(get_db),
 ) -> InviteResponse:
     """Get an invite by ID.
@@ -129,7 +155,8 @@ async def get_invite(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "invite_not_found", "message": "Invite not found"},
         )
-    return _build_response(invite)
+    assert_same_tenant(principal, invite.tenant_id)
+    return _public_response(invite)
 
 
 @router.get(
@@ -143,6 +170,7 @@ async def get_invite(
 )
 async def get_invite_metrics(
     invite_id: UUID,
+    principal: Principal = Depends(require_permission(PERM_LISTS_READ)),
     db: AsyncSession = Depends(get_db),
 ) -> MetricsResponse:
     """Get calculated metrics for an invite.
@@ -169,5 +197,6 @@ async def get_invite_metrics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "invite_not_found", "message": "Invite not found"},
         )
+    assert_same_tenant(principal, invite.tenant_id)
 
     return await metrics_service.calculate_metrics(db, invite)

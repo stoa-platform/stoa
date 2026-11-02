@@ -30,7 +30,9 @@ class Invite(Base, UUIDMixin, TimestampMixin):
 
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     company: Mapped[str] = mapped_column(String(100), nullable=False)
-    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # SHA-256 hex of the invite token. The plaintext is returned only on create.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20),
@@ -50,6 +52,7 @@ class Invite(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("idx_invites_email", "email"),
         Index("idx_invites_status", "status"),
+        Index("idx_invites_tenant", "tenant_id"),
     )
 
     @classmethod

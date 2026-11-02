@@ -71,12 +71,12 @@ async def welcome(
     # Mark as opened (idempotent - only updates if still pending)
     await invite_service.mark_invite_opened(db, invite)
 
-    # Record invite_opened event (always record for analytics)
+    # Record invite_opened event. Do not store the token.
     await event_service.record_event_simple(
         db,
         invite_id=invite.id,
         event_type=EventType.INVITE_OPENED,
-        metadata={"token": token},
+        metadata={"source": "welcome"},
     )
 
     # Validate token format (alphanumeric + hyphens only, prevent injection)

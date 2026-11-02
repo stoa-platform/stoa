@@ -321,6 +321,7 @@ func TestHeartbeat404ReturnsNotFound(t *testing.T) {
 func TestStartHeartbeat404ReRegisters(t *testing.T) {
 	var heartbeatCount atomic.Int32
 	var registerCount atomic.Int32
+	recoveredHeartbeat := make(chan struct{}, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/internal/gateways/register" {
@@ -332,7 +333,15 @@ func TestStartHeartbeat404ReRegisters(t *testing.T) {
 			})
 			return
 		}
-		// Heartbeat always returns 404
+		if r.URL.Path == "/v1/internal/gateways/new-id/heartbeat" {
+			select {
+			case recoveredHeartbeat <- struct{}{}:
+			default:
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// The purged ID returns 404; the newly registered ID is healthy.
 		heartbeatCount.Add(1)
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -348,15 +357,22 @@ func TestStartHeartbeat404ReRegisters(t *testing.T) {
 	agent.healthPort = "8090"
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	agent.StartHeartbeat(ctx)
 
-	// Wait for 3 heartbeat 404s + re-registration
-	time.Sleep(250 * time.Millisecond)
+	// Wait until the new ID is used, instead of cancelling during registration.
+	select {
+	case <-recoveredHeartbeat:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for heartbeat after re-registration")
+	}
 	cancel()
-	time.Sleep(50 * time.Millisecond)
 
 	if registerCount.Load() < 1 {
 		t.Errorf("expected at least 1 re-registration, got %d", registerCount.Load())
+	}
+	if got := heartbeatCount.Load(); got != reRegisterThreshold {
+		t.Errorf("expected %d failed heartbeats before re-registration, got %d", reRegisterThreshold, got)
 	}
 	if got := agent.state.GatewayID(); got != "new-id" {
 		t.Errorf("expected gatewayID=new-id after re-registration, got %s", got)

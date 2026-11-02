@@ -1,4 +1,5 @@
 """Alembic environment configuration"""
+
 import os
 import sys
 from logging.config import fileConfig
@@ -25,18 +26,21 @@ from src.models.subscription import Subscription
 config = context.config
 
 
-def get_database_url():
+def get_database_url() -> str:
     """Get sync database URL for migrations"""
     database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        # Convert async URL to sync URL (asyncpg → psycopg2)
-        url = database_url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
-        # psycopg2 uses 'sslmode' not 'ssl' (OVH managed PostgreSQL uses ?ssl=require)
-        url = url.replace("ssl=require", "sslmode=require")
-        return url
-    # Fallback to config
-    from src.config import settings
-    return settings.database_url_sync
+    if not database_url:
+        from src.config import settings
+
+        database_url = settings.database_url_sync
+
+    # SQLAlchemy 2.1 defaults PostgreSQL URLs to psycopg (v3), but our installed
+    # sync driver is psycopg2. Select it explicitly for migrations.
+    url = database_url.replace("+asyncpg", "")
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    # psycopg2 uses 'sslmode' not 'ssl' (OVH managed PostgreSQL uses ?ssl=require)
+    return url.replace("ssl=require", "sslmode=require")
 
 
 # Set the database URL

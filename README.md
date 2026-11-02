@@ -101,7 +101,7 @@ timeout 300 docker compose up --wait
 ./verify.sh
 ```
 
-`verify.sh` declares the API, expects 401 without a token, 401 with an invalid token, then 200 with a Keycloak token. Host ports are bound to `127.0.0.1`. The gateway image built here is `stoa-quickstart-gateway:0.9.25`.
+`verify.sh` declares the API, expects 401 without a token, 401 with an invalid token, then 200 with a Keycloak token. Host ports are bound to `127.0.0.1`. The gateway image built here is `stoa-quickstart-gateway`, tagged 0.9.25.
 
 ---
 
@@ -231,7 +231,7 @@ After seeding the demo stack, try these flows:
 | `stoactl` | Go, Cobra | CLI and GitOps-style operations |
 | Keycloak | OIDC, SAML, LDAP | Identity, federation, realms, authentication |
 | Kubernetes Operator | Python, Kopf | CRD controller for MCP resources |
-| Helm Chart | Helm 3 | Kubernetes installation and production deployment |
+| Helm Chart | Helm 3 | Kubernetes gateway installation and supporting resources |
 
 ---
 
@@ -266,15 +266,19 @@ See [`deploy/docker-compose/README.md`](deploy/docker-compose/README.md).
 
 ### Kubernetes
 
-Use Helm for Kubernetes deployments.
+The Helm chart currently installs the Rust STOA Gateway and supporting resources.
+The Control Plane API, console, Developer Portal, Keycloak and data services are
+**not yet provided by the chart**. Prepare `my-values.yaml` using the
+[gateway installation guide](docs/installation.md#configure-values).
 
 ```bash
 helm install stoa-platform ./charts/stoa-platform \
   -n stoa-system --create-namespace \
-  -f charts/stoa-platform/values.yaml
+  -f my-values.yaml
 ```
 
-See the deployment documentation for production and hybrid environments.
+See the [installation guide](docs/installation.md) for the chart inventory,
+external prerequisites and gateway checks.
 
 ---
 

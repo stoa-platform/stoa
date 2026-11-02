@@ -103,11 +103,7 @@ export type Application = Schemas['ApplicationResponse'] & {
 };
 
 export type SecurityProfile =
-  | 'api_key'
-  | 'oauth2_public'
-  | 'oauth2_confidential'
-  | 'fapi_baseline'
-  | 'fapi_advanced';
+  'api_key' | 'oauth2_public' | 'oauth2_confidential' | 'fapi_baseline' | 'fapi_advanced';
 
 export interface ApplicationCreate {
   name: string;
@@ -652,12 +648,7 @@ export interface APITransactionStats {
 export type ComponentHealth = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 export type GitOpsSyncStatus = 'Synced' | 'OutOfSync' | 'Unknown' | 'NotFound' | 'Error';
 export type GitOpsHealthStatus =
-  | 'Healthy'
-  | 'Degraded'
-  | 'Progressing'
-  | 'Suspended'
-  | 'Missing'
-  | 'Unknown';
+  'Healthy' | 'Degraded' | 'Progressing' | 'Suspended' | 'Missing' | 'Unknown';
 export type PlatformEventSeverity = 'info' | 'warning' | 'error';
 
 export interface ComponentStatus {
@@ -1059,12 +1050,7 @@ export type GatewayType =
 export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow' | 'connect';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 export type DeploymentSyncStatus =
-  | 'pending'
-  | 'syncing'
-  | 'synced'
-  | 'drifted'
-  | 'error'
-  | 'deleting';
+  'pending' | 'syncing' | 'synced' | 'drifted' | 'error' | 'deleting';
 
 // ---- GatewayInstance --------------------------------------------------------
 // Wire = `Schemas['GatewayInstanceResponse']`. Post-CAB-2159 the backend
@@ -1345,13 +1331,7 @@ export interface GatewayModeStats {
 // =============================================================================
 
 export type PolicyType =
-  | 'cors'
-  | 'rate_limit'
-  | 'jwt_validation'
-  | 'ip_filter'
-  | 'logging'
-  | 'caching'
-  | 'transform';
+  'cors' | 'rate_limit' | 'jwt_validation' | 'ip_filter' | 'logging' | 'caching' | 'transform';
 export type PolicyScope = 'api' | 'gateway' | 'tenant';
 
 export interface GatewayPolicy {
@@ -1443,10 +1423,7 @@ export type GuardrailsState =
   | 'stale_data';
 
 export type GuardrailsStaleReason =
-  | 'prom_unreachable'
-  | 'scrape_gap'
-  | 'producer_absent'
-  | 'stale_unknown';
+  'prom_unreachable' | 'scrape_gap' | 'producer_absent' | 'stale_unknown';
 
 export type GuardrailKey = 'pii' | 'injection' | 'prompt_guard' | 'content_filter' | 'rate_limit';
 
@@ -1523,18 +1500,10 @@ export interface DeploymentStatusSummary {
 
 // Workflow Engine types (CAB-593)
 export type WorkflowType =
-  | 'user_registration'
-  | 'consumer_registration'
-  | 'tenant_owner_onboarding';
+  'user_registration' | 'consumer_registration' | 'tenant_owner_onboarding';
 export type WorkflowMode = 'auto' | 'manual' | 'approval_chain';
 export type WorkflowStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'approved'
-  | 'rejected'
-  | 'provisioning'
-  | 'completed'
-  | 'failed';
+  'pending' | 'in_progress' | 'approved' | 'rejected' | 'provisioning' | 'completed' | 'failed';
 export type Sector = 'fintech' | 'startup' | 'enterprise';
 export type StepAction = 'approved' | 'rejected' | 'skipped';
 
@@ -1781,12 +1750,7 @@ export interface ConnectorCatalogResponse {
 // ============== Subscription Management (CAB-1635) ==============
 
 export type SubscriptionStatus =
-  | 'pending'
-  | 'active'
-  | 'suspended'
-  | 'revoked'
-  | 'expired'
-  | 'rejected';
+  'pending' | 'active' | 'suspended' | 'revoked' | 'expired' | 'rejected';
 
 export interface Subscription {
   id: string;

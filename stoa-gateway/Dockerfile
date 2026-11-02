@@ -18,7 +18,7 @@
 # ==============================================================================
 
 # --- Stage 1: Plan dependencies -----------------------------------------------
-FROM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS planner
+FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS planner
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
@@ -30,7 +30,7 @@ COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Stage 2: Build -----------------------------------------------------------
-FROM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS builder
+FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS builder
 
 # Feature flags for community/enterprise image split (ADR-041 Phase 3)
 #   empty   = community (default — lean image, no optional deps)

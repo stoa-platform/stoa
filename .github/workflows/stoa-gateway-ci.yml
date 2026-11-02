@@ -58,6 +58,7 @@ jobs:
       # configuré avec SCCACHE_GHA_ENABLED, c'est-à-dire le cache GitHub
       # Actions — conçu pour les runners hébergés, pas un cache disque local.
       # Le workflow a de plus un repli explicite si sccache est indisponible.
+      # Historique ci-dessus : situation au 2026-07-30, avant CAB-2355.
       # CAB-2355 : runner auto-hébergé `stoa-rust` (label propre au seul runner
       # auto-hébergé du dépôt) UNIQUEMENT pour la file de merge, les push sur
       # main et les PR internes. Les PR de forks restent sur ubuntu-latest :

@@ -57,9 +57,32 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake build-essential
 
       - uses: ./.github/actions/setup-rust-env
+        # Hébergé uniquement : rust-cache vide/restaure target/ à chaque run.
+        if: runner.environment == 'github-hosted'
         with:
           components: clippy,rustfmt
           working-directory: ${{ inputs.component }}
+
+      # Auto-hébergé (CAB-2355) : toolchain rustup du runner et target/ persistant
+      # entre les runs (un répertoire par runner et par composant : un runner
+      # n'exécute qu'un job à la fois, donc pas de runs concurrents sur un même
+      # répertoire). Purge complète au-delà de 40 Go.
+      - name: Persistent toolchain and target dir (self-hosted)
+        if: runner.environment == 'self-hosted'
+        run: |
+          # Ne dépend pas du .path du runner (régénéré au redémarrage du service).
+          export PATH="${HOME}/.cargo/bin:${PATH}"
+          echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
+          rustup toolchain install stable --profile minimal -c clippy,rustfmt --no-self-update
+          rustup default stable
+          T="${HOME}/.cache/cargo-target/${RUNNER_NAME}/${{ inputs.component }}"
+          mkdir -p "$T"
+          if [ "$(du -s --block-size=1G "$T" | cut -f1)" -gt 40 ]; then
+            echo "target dir > 40G: cargo clean"
+            cargo clean --target-dir "$T"
+          fi
+          echo "CARGO_TARGET_DIR=$T" >> "$GITHUB_ENV"
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
 
       # setup-rust-env restores Swatinem/rust-cache (Cargo registry + target).
       - name: Install cargo-nextest
@@ -106,9 +129,23 @@ jobs:
       - name: Prepare local control-plane test peer
         if: inputs.component == 'stoa-gateway'
         run: |
-          python -m venv "${RUNNER_TEMP}/cp-test"
-          "${RUNNER_TEMP}/cp-test/bin/pip" install -r ../control-plane-api/requirements.txt aiosqlite
-          echo "STOA_CP_TEST_PYTHON=${RUNNER_TEMP}/cp-test/bin/python" >> "$GITHUB_ENV"
+          # Auto-hébergé (CAB-2355) : venv persistant, clé = hash des requirements
+          # + version Python ; construit à côté puis renommé (jamais à moitié).
+          if [ "${{ runner.environment }}" = "self-hosted" ]; then
+            H=$(cat ../control-plane-api/requirements.txt | sha256sum | cut -c1-16)
+            PV=$(python -c 'import platform; print(platform.python_version())')
+            V="${HOME}/.cache/cp-test-venv/${PV}-${H}"
+          else
+            V="${RUNNER_TEMP}/cp-test"
+          fi
+          if [ ! -x "$V/bin/python" ]; then
+            mkdir -p "$(dirname "$V")"
+            B="${V}.build-${GITHUB_RUN_ID}"
+            python -m venv "$B"
+            "$B/bin/pip" install -r ../control-plane-api/requirements.txt aiosqlite
+            mv "$B" "$V" 2>/dev/null || true
+          fi
+          echo "STOA_CP_TEST_PYTHON=${V}/bin/python" >> "$GITHUB_ENV"
 
       # --- Step 1: Format check (no compilation, instant) ---
       - name: Check formatting
@@ -182,7 +219,7 @@ jobs:
 
       # --- Step 5: sccache stats ---
       - name: Show sccache stats
-        if: always() && steps.sccache.outcome == 'success'
+        if: always() && (steps.sccache.outcome == 'success' || runner.environment == 'self-hosted')
         continue-on-error: true
         run: sccache --show-stats
 

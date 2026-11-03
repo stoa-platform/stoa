@@ -30,7 +30,7 @@ use crate::metering::{
 };
 use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
-use crate::resilience::CircuitBreaker;
+use crate::resilience::{CircuitBreaker, FallbackAuthorizer, FallbackCaller};
 use crate::state::{AppState, PolicyCallerCtx};
 use crate::uac::Action;
 
@@ -181,6 +181,38 @@ fn require_admin_action(auth: &AuthContext, action: Action) -> Result<(), &'stat
             auth.admin_authorization
         }
         _ => Ok(()),
+    }
+}
+
+/// Applies the primary call's per-tool checks to each fallback target.
+struct FallbackRequestAuthorizer<'a> {
+    state: &'a AppState,
+    auth: &'a AuthContext,
+}
+
+#[async_trait::async_trait]
+impl FallbackAuthorizer for FallbackRequestAuthorizer<'_> {
+    async fn authorize(
+        &self,
+        requested: &str,
+        tool: &dyn Tool,
+        ctx: &ToolContext,
+    ) -> Result<(), String> {
+        // The requested name and the canonical name must both be allowed.
+        for name in [requested, tool.name()] {
+            if !self
+                .state
+                .guardrail_policy_store
+                .is_tool_allowed(&ctx.tenant_id, name)
+            {
+                return Err(format!("'{name}' is not permitted for this tenant"));
+            }
+        }
+        check_tool_permission(self.state, &ctx.tenant_id, requested, tool.name())
+            .await
+            .map_err(|status| format!("'{requested}' tenant permission {}", status.as_u16()))?;
+        require_admin_action(self.auth, tool.required_action()).map_err(str::to_string)?;
+        check_tool_policy(self.state, tool, ctx)
     }
 }
 
@@ -1245,14 +1277,21 @@ async fn mcp_tools_call_inner(
         Err(_) => tool_cb.record_failure(),
     }
 
-    // CAB-708: Fallback chain — try alternate providers if primary failed
+    // CAB-708: Fallback chain — try alternate providers if primary failed.
+    // Each target is authorized like the primary call before it runs.
     let result = crate::resilience::execute_or_direct(
         &state.fallback_chain,
         &state.circuit_breakers,
         &state.tool_registry,
         &request.name,
         arguments,
-        &ctx,
+        &FallbackCaller {
+            ctx: &ctx,
+            authorizer: &FallbackRequestAuthorizer {
+                state: &state,
+                auth: &auth,
+            },
+        },
         primary_result,
     )
     .await;

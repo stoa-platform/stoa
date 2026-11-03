@@ -2591,3 +2591,52 @@ async fn regression_alias_explicit_deny_wins_and_canonical_allow_still_works() {
         (StatusCode::OK, StatusCode::OK)
     );
 }
+
+#[tokio::test]
+async fn regression_fallback_targets_require_tenant_tool_permission() {
+    // An allowed alias must not let an explicitly denied canonical target run.
+    for allowed in [false, true] {
+        let fixture = Fixture::new(|config| {
+            config.fallback_enabled = true;
+            config.fallback_chains = Some(r#"{"echo_tool":["fallback_alias"]}"#.into());
+        })
+        .await;
+        let items = vec![
+            permission("echo_tool", true),
+            permission("fallback_alias", true),
+            permission("fallback_tool", allowed),
+        ];
+        override_permissions(&fixture, items).await;
+        Mock::given(method("GET"))
+            .and(path("/fallback"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("fallback ran"))
+            .mount(&fixture.server)
+            .await;
+        // The primary targets an unmocked path (404) so the chain is exercised.
+        for (name, path) in [("echo_tool", "/primary"), ("fallback_tool", "/fallback")] {
+            let url = format!("{}{path}", fixture.server.uri());
+            let tool = DynamicTool::new(name, "probe", url, "GET", empty_schema(), "tenant-a");
+            fixture.state.tool_registry.register(Arc::new(tool));
+        }
+        fixture
+            .state
+            .tool_registry
+            .register_alias("fallback_alias", "fallback_tool");
+        let token = fixture.token(json!({}));
+        let call = json!({"name": "echo_tool", "arguments": {}});
+        let (status, response) = fixture.post("/mcp/tools/call", Some(&token), call).await;
+        let requests = fixture.server.received_requests().await.unwrap();
+        let ran = requests
+            .iter()
+            .filter(|r| r.url.path() == "/fallback")
+            .count();
+        assert_eq!(ran, usize::from(allowed), "allowed={allowed}");
+        let text = response["content"][0]["text"].as_str().unwrap();
+        if allowed {
+            assert_eq!((status, text), (StatusCode::OK, "fallback ran"));
+        } else {
+            assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+            assert!(text.starts_with("Execution failed: HTTP 404"), "{text}");
+        }
+    }
+}

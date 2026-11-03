@@ -401,11 +401,11 @@ jobs:
           load: true
           push: false
           tags: stoa/${{ matrix.component.name }}:scan
-          # Reuse main's publication layers when the PR scan cache is cold.
-          # Keep writes in the scan scope, separate from publication builds.
+          # API publication and scan builds have matching inputs. Frontend and
+          # gateway publication args differ, so keep their scan caches isolated.
           cache-from: |
             type=gha,scope=security-scan-${{ matrix.component.name }}
-            type=gha,scope=${{ matrix.component.name }}
+            ${{ matrix.component.name == 'control-plane-api' && 'type=gha,scope=control-plane-api' || '' }}
           cache-to: type=gha,mode=max,scope=security-scan-${{ matrix.component.name }}
 
       - name: Run Trivy (SARIF)

@@ -859,19 +859,24 @@ async fn ready(
         }
     }
 
-    // Tool-permission unavailability is fail-closed on the DATA PLANE
-    // (`is_tool_allowed` denies); it does NOT gate pod readiness. Coupling it
-    // to `/ready` took the whole gateway out of rotation when the gateway
-    // could not authenticate to CP's tenant tool-permissions endpoint
-    // (CAB-2227 incident 2026-05-19 — endpoint requires a user JWT the
-    // gateway does not hold). Re-couple once the gateway authenticates
-    // properly (Option 1 follow-up). Still surfaced via admin `/health`.
+    // Readiness is gated on a real policy load (ADR-070 §4): until the
+    // startup loader has fetched a fresh tool policy from the Control Plane,
+    // the pod must not receive traffic. The gate needs startup tenants to
+    // load against (`STOA_POLICY_BOOT_TENANTS`); without them a fresh pod
+    // could never become ready, so readiness then relies on the Control
+    // Plane health check above while the data plane keeps denying.
     if let Some(ref perm_svc) = state.tool_permissions {
+        let gate_enabled = !state.config.policy_boot_tenants.is_empty();
+        if let Some(reason) = perm_svc.policy_readiness_failure().filter(|_| gate_enabled) {
+            warn!(reason = %reason, "Tool policy unavailable; not ready");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "NOT READY: tool policy unavailable",
+            )
+                .into_response();
+        }
         if let Some(reason) = perm_svc.readiness_failure_reason() {
-            warn!(
-                reason = %reason,
-                "Tool permission state degraded — data-plane fail-closed; not gating readiness"
-            );
+            warn!(reason = %reason, "Tool permission state degraded; data plane fail-closed");
         }
     }
 
@@ -1005,14 +1010,14 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    // regression for CAB-2227
-    // Incident 2026-05-19: tool-permission unavailability must NOT 503 the
-    // `/ready` probe — coupling it took the whole gateway out of rotation
-    // when the gateway could not authenticate to CP's tenant
-    // tool-permissions endpoint. The data plane still fail-closed-denies;
-    // pod readiness stays OK. (Supersedes the prior test that asserted 503.)
+    // Readiness is gated on a real startup policy load (ADR-070 §4): while
+    // the first load fails the pod must not receive traffic, and it becomes
+    // ready as soon as a fresh policy is fetched. Without startup tenants
+    // nothing could ever load a policy, so the gate stays inactive instead
+    // of deadlocking a fresh pod.
     #[tokio::test]
-    async fn regression_gateway_readiness_not_gated_by_tool_permission_state() {
+    async fn regression_gateway_readiness_fails_until_startup_policy_loaded() {
+        use control_plane::tool_permissions::tests::{authenticated_service, permissions_response};
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/health"))
@@ -1022,21 +1027,45 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/v1/tenants/tenant1/tool-permissions"))
             .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(1)
             .mount(&server)
             .await;
-
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant1/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "s1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
         let config = config::Config {
             control_plane_url: Some(server.uri()),
+            policy_boot_tenants: vec!["tenant1".into()],
             quota_enforcement_enabled: false,
             ..config::Config::default()
         };
-        let state = AppState::new(config);
-        let permissions = state.tool_permissions.as_ref().unwrap();
-        // Data-plane fail-closed still holds: unavailable permission state denies.
-        assert!(!permissions.is_tool_allowed("tenant1", "any_tool").await);
-        // ...but the pod stays ready — readiness is not gated on it.
-        let response = ready(axum::extract::State(state)).await;
+        let mut state = AppState::new(config.clone());
+        let permissions = std::sync::Arc::new(
+            authenticated_service(&server, std::time::Duration::from_secs(60)).await,
+        );
+        state.tool_permissions = Some(permissions.clone());
 
+        // First load fails: not ready, and the data plane denies.
+        assert!(permissions.load_policy("tenant1").await.is_err());
+        let response = ready(axum::extract::State(state.clone())).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        // The retried load succeeds: ready, and explicit allows apply.
+        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
+        let response = ready(axum::extract::State(state)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(permissions.is_tool_allowed("tenant1", "ok_tool").await);
+
+        // No startup tenants: nothing loaded, yet the pod stays ready.
+        let state = AppState::new(config::Config {
+            policy_boot_tenants: Vec::new(),
+            ..config
+        });
+        let response = ready(axum::extract::State(state)).await;
         assert_eq!(response.status(), StatusCode::OK);
     }
 }

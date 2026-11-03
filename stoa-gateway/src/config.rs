@@ -263,6 +263,13 @@ pub struct Config {
     #[serde(default = "default_policy_enabled")]
     pub policy_enabled: bool,
 
+    /// Tenants whose tool policy is loaded from the Control Plane at startup
+    /// and refreshed in the background. When set, `/ready` fails until a
+    /// fresh policy has been loaded (ADR-070 §4). Comma-separated or JSON array.
+    /// Env: STOA_POLICY_BOOT_TENANTS
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub policy_boot_tenants: Vec<String>,
+
     // === Observability ===
     /// Informational log level (tracing itself is driven by `RUST_LOG`).
     /// Env: STOA_LOG_LEVEL (values: trace | debug | info | warn | error)
@@ -1021,6 +1028,7 @@ impl fmt::Debug for Config {
             .field("ws_proxy_rate_limit_burst", &self.ws_proxy_rate_limit_burst)
             .field("policy_path", &self.policy_path)
             .field("policy_enabled", &self.policy_enabled)
+            .field("policy_boot_tenants", &self.policy_boot_tenants)
             .field("log_level", &self.log_level)
             .field("log_format", &self.log_format)
             .field("otel_endpoint", &self.otel_endpoint)

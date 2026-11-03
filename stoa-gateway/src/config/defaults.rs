@@ -361,6 +361,7 @@ impl Default for Config {
             websocket_enabled: false,
             policy_path: None,
             policy_enabled: default_policy_enabled(),
+            policy_boot_tenants: Vec::new(),
             log_level: default_log_level(),
             log_format: default_log_format(),
             otel_enabled: default_otel_enabled(),

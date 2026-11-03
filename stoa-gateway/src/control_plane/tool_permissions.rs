@@ -5,6 +5,8 @@
 //! was adding ~200-300ms of unnecessary latency per tool call.
 //!
 //! Only an explicit allow in a complete fresh policy permits a tool call.
+//! After boot nothing is allowed, and readiness stays down, until a first
+//! fresh policy has been loaded from the Control Plane (ADR-070 §1, §4).
 
 use super::ToolProxyClient;
 use moka::sync::Cache;
@@ -14,6 +16,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
+
+/// Hard cap shared by the permission cache TTL and the readiness window
+/// (ADR-070 §4 and A4): no policy older than this is ever treated as fresh.
+pub const MAX_POLICY_AGE: Duration = Duration::from_secs(3600);
+/// Retry interval while no policy has been loaded since boot.
+const BOOT_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// A single tool permission entry from CP-API.
 #[derive(Debug, Clone, Deserialize)]
@@ -108,6 +116,9 @@ pub struct ToolPermissionService {
     cache_ttl: Duration,
     cache: Arc<Cache<String, CachedPermissions>>,
     last_failure: Arc<RwLock<Option<PermissionDenyReason>>>,
+    /// Last successful complete policy load for any tenant since boot.
+    policy_loaded_at: Arc<RwLock<Option<Instant>>>,
+    max_policy_age: Duration,
 }
 
 impl ToolPermissionService {
@@ -115,21 +126,37 @@ impl ToolPermissionService {
     ///
     /// - `client`: shared HTTP client with connection pooling
     /// - `base_url`: Control Plane API base URL (e.g., `http://control-plane-api:8000`)
-    /// - `cache_ttl`: how long to cache permissions per tenant (default: 60s)
+    /// - `cache_ttl`: how long to cache permissions per tenant (default: 60s),
+    ///   capped at [`MAX_POLICY_AGE`]
     pub fn new(client: Client, base_url: &str, cache_ttl: Duration) -> Self {
+        if cache_ttl > MAX_POLICY_AGE {
+            warn!(
+                requested_secs = cache_ttl.as_secs(),
+                cap_secs = MAX_POLICY_AGE.as_secs(),
+                "Permission cache TTL above the hard cap; capping"
+            );
+        }
         Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
             auth: None,
-            cache_ttl,
+            cache_ttl: cache_ttl.min(MAX_POLICY_AGE),
             cache: Arc::new(Cache::builder().max_capacity(10_000).build()),
             last_failure: Arc::new(RwLock::new(None)),
+            policy_loaded_at: Arc::new(RwLock::new(None)),
+            max_policy_age: MAX_POLICY_AGE,
         }
     }
 
     /// Authenticate with the gateway service account.
     pub fn with_auth(mut self, auth: Arc<ToolProxyClient>) -> Self {
         self.auth = Some(auth);
+        self
+    }
+
+    #[cfg(test)]
+    fn with_max_policy_age(mut self, max_policy_age: Duration) -> Self {
+        self.max_policy_age = max_policy_age;
         self
     }
 
@@ -180,6 +207,54 @@ impl ToolPermissionService {
             .and_then(|reason| reason.map(PermissionDenyReason::as_str))
     }
 
+    /// Why `/ready` must fail: no policy has been loaded since boot, or the
+    /// last successful load is older than the hard cap (ADR-070 §4). One
+    /// tenant's missing permissions deny that tenant's calls; they never
+    /// trip this gateway-level gate.
+    pub fn policy_readiness_failure(&self) -> Option<&'static str> {
+        match self.policy_loaded_at.read().ok().and_then(|at| *at) {
+            None => Some("policy_not_loaded"),
+            Some(at) if at.elapsed() > self.max_policy_age => Some("policy_stale"),
+            Some(_) => None,
+        }
+    }
+
+    /// Load a tenant's policy now. Only a complete fresh policy counts as
+    /// loaded; every failure leaves the gateway fail-closed.
+    pub async fn load_policy(&self, tenant_id: &str) -> Result<(), PermissionDenyReason> {
+        let state = self.get_permission_state(tenant_id).await;
+        self.record_state(&state);
+        match state {
+            PermissionState::Fresh { .. } => Ok(()),
+            PermissionState::Stale { .. } => Err(PermissionDenyReason::PermissionCacheExpired),
+            PermissionState::Unavailable { reason } => Err(reason),
+        }
+    }
+
+    /// Load the given tenants' policies at startup and keep them refreshed,
+    /// so readiness reflects a real load before the first tool call and
+    /// recovers once the Control Plane is back. Nothing is carried over
+    /// from a previous process: the first load after boot is always a
+    /// fresh fetch (ADR-070 A7).
+    pub fn spawn_policy_refresher(self: &Arc<Self>, tenants: Vec<String>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                for tenant_id in &tenants {
+                    if let Err(reason) = service.load_policy(tenant_id).await {
+                        debug!(tenant_id = %tenant_id, reason = %reason.as_str(), "Startup policy load failed");
+                    }
+                }
+                let interval = if service.policy_readiness_failure().is_some() {
+                    BOOT_RETRY_INTERVAL
+                } else {
+                    service.cache_ttl
+                };
+                tokio::time::sleep(interval).await;
+            }
+        });
+    }
+
     /// Get (or fetch) the explicit permission state for a tenant.
     ///
     /// An expired cache entry does **not** deny on its own: while the
@@ -215,6 +290,9 @@ impl ToolPermissionService {
                     expires_at: fetched_at + self.cache_ttl,
                 };
                 self.cache.insert(cache_key, cached);
+                if let Ok(mut loaded_at) = self.policy_loaded_at.write() {
+                    *loaded_at = Some(fetched_at);
+                }
                 PermissionState::Fresh { rules, fetched_at }
             }
             Err(reason) => {
@@ -337,12 +415,15 @@ impl ToolPermissionService {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use wiremock::matchers::{method, path, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    async fn authenticated_service(server: &MockServer, ttl: Duration) -> ToolPermissionService {
+    pub(crate) async fn authenticated_service(
+        server: &MockServer,
+        ttl: Duration,
+    ) -> ToolPermissionService {
         Mock::given(method("POST"))
             .and(path("/token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -431,7 +512,7 @@ mod tests {
         assert!(!svc.is_tool_allowed("tenant1", "unlisted_tool").await);
     }
 
-    fn permissions_response(items: serde_json::Value) -> ResponseTemplate {
+    pub(crate) fn permissions_response(items: serde_json::Value) -> ResponseTemplate {
         let total = items.as_array().map_or(0, |items| items.len());
         ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "items": items,
@@ -772,5 +853,109 @@ mod tests {
                 .await
         );
         assert!(svc.is_tool_allowed("tenant1", "new_tool").await);
+    }
+
+    #[tokio::test]
+    async fn regression_startup_without_control_plane_denies_and_blocks_readiness() {
+        let server = MockServer::start().await;
+        let mut svc = authenticated_service(&server, Duration::from_secs(60)).await;
+        svc.base_url = "http://127.0.0.1:1".to_string();
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+        assert_eq!(
+            svc.load_policy("tenant1").await,
+            Err(PermissionDenyReason::CpUnreachable)
+        );
+        assert!(!svc.is_tool_allowed("tenant1", "any_tool").await);
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+    }
+
+    #[tokio::test]
+    async fn regression_first_policy_load_failure_then_success_opens_readiness() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("/v1/tenants/.*/tool-permissions"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex("/v1/tenants/.*/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
+        let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+
+        assert_eq!(
+            svc.load_policy("tenant1").await,
+            Err(PermissionDenyReason::CpUnreachable)
+        );
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+
+        assert_eq!(svc.load_policy("tenant1").await, Ok(()));
+        assert_eq!(svc.policy_readiness_failure(), None);
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("tenant1", "other_tool").await);
+    }
+
+    #[tokio::test]
+    async fn regression_stale_policy_denies_and_blocks_readiness() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("/v1/tenants/.*/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        let svc = authenticated_service(&server, Duration::from_millis(1))
+            .await
+            .with_max_policy_age(Duration::from_millis(1));
+
+        assert_eq!(svc.load_policy("tenant1").await, Ok(()));
+        assert_eq!(svc.policy_readiness_failure(), None);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Past the hard cap and the Control Plane no longer serves the
+        // policy: readiness fails and the call is denied as stale.
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_stale"));
+        assert!(!svc.is_tool_allowed("tenant1", "ok_tool").await);
+        assert_eq!(
+            svc.readiness_failure_reason(),
+            Some("permission_cache_expired")
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_startup_refresher_loads_policy_before_first_call() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex("/v1/tenants/.*/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let svc = Arc::new(authenticated_service(&server, Duration::from_secs(60)).await);
+        svc.spawn_policy_refresher(vec!["tenant1".into()]);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while svc.policy_readiness_failure().is_some() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("startup loader must load the policy");
+        // The first call is served from the warmed cache: still one fetch.
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+    }
+
+    #[test]
+    fn regression_cache_ttl_is_capped_at_hard_limit() {
+        let svc =
+            ToolPermissionService::new(Client::new(), "http://127.0.0.1:1", MAX_POLICY_AGE * 2);
+        assert_eq!(svc.cache_ttl, MAX_POLICY_AGE);
     }
 }

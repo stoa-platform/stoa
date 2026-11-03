@@ -671,6 +671,18 @@ impl AppState {
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
+        // Startup tool-policy load and refresh (ADR-070 §4 readiness gate)
+        match &self.tool_permissions {
+            Some(permissions) if !self.config.policy_boot_tenants.is_empty() => {
+                permissions.spawn_policy_refresher(self.config.policy_boot_tenants.clone());
+            }
+            Some(_) if is_regulated_profile(self.config.environment) => tracing::error!(
+                reason = "policy_boot_tenants_missing",
+                "No startup policy tenants configured; readiness is not gated on a policy load"
+            ),
+            _ => {}
+        }
+
         // Start memory budget polling (CAB-1829)
         self.memory_monitor.start_polling();
 

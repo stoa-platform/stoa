@@ -1,13 +1,16 @@
 """Library-independent access-token, DPoP and gateway assertion contracts."""
 
-import ast
 import base64
 import hashlib
+import importlib.util
 import json
+import os
+import sys
 import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
+from unittest import mock
 from urllib.parse import urlencode
 
 import pytest
@@ -236,22 +239,19 @@ def test_dpop_corrupted_signature(signing_key: Any) -> None:
     assert result.error.startswith("DPoP validation failed: ")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def gateway_endpoint(signing_key: Any) -> Any:
-    """Reuse the real fixture endpoint without running socket or database setup."""
+    """Import the real fixture module; its environment, path and socket setup do not leak."""
     path = Path(__file__).resolve().parents[2] / "stoa-gateway/tests/fixtures/permission_control_plane.py"
-    nodes = []
-    for node in ast.parse(path.read_text()).body:
-        if isinstance(node, ast.Import | ast.ImportFrom) and any((a.asname or a.name) == "jwt" for a in node.names):
-            nodes.append(node)
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "token":
-            node.decorator_list = []
-            nodes.append(node)
-    namespace = {"Request": Request, "issuer": ISSUER, "client_public_pem": _public(signing_key).decode()}
-    namespace.update(CLIENT_ASSERTION_TYPE="urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
-    namespace["pem"] = signing_key.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()).decode()
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(path), "exec"), namespace)  # noqa: S102
-    return namespace["token"]
+    spec = importlib.util.spec_from_file_location("permission_control_plane", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    with mock.patch.dict(os.environ), mock.patch.object(sys, "path", list(sys.path)):
+        spec.loader.exec_module(module)
+    module.listener.close()
+    pem = signing_key.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()).decode()
+    vars(module).update(issuer=ISSUER, client_public_pem=_public(signing_key).decode(), pem=pem)
+    return module.token
 
 
 @pytest.mark.parametrize("case", ["valid", "aud", "iss", "sub", "jti", "signature", "grant"])

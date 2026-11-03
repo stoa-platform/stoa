@@ -4,7 +4,7 @@
 //! Eliminates the circular proxy pattern where gateway → CP-API → gateway
 //! was adding ~200-300ms of unnecessary latency per tool call.
 //!
-//! Missing or stale policy denies. A complete fresh policy carries the CP default explicitly.
+//! Only an explicit allow in a complete fresh policy permits a tool call.
 
 use super::ToolProxyClient;
 use moka::sync::Cache;
@@ -37,15 +37,11 @@ struct PermissionListResponse {
 #[derive(Debug, Clone)]
 pub struct PermissionRules {
     overrides: HashMap<String, bool>,
-    default_allowed: bool,
 }
 
 impl PermissionRules {
     fn allows(&self, tool: &str) -> bool {
-        self.overrides
-            .get(tool)
-            .copied()
-            .unwrap_or(self.default_allowed)
+        self.overrides.get(tool).copied().unwrap_or(false)
     }
 }
 
@@ -137,8 +133,8 @@ impl ToolPermissionService {
 
     /// Check if a tool is allowed for a tenant.
     ///
-    /// Uses only a complete fresh policy, including the CP default and overrides.
-    /// Missing, stale, or unavailable policy denies.
+    /// Requires an explicit allow in a complete fresh policy.
+    /// Missing permissions and stale or unavailable policy deny.
     pub async fn is_tool_allowed(&self, tenant_id: &str, tool_name: &str) -> bool {
         let state = self.get_permission_state(tenant_id).await;
         self.record_state(&state);
@@ -311,10 +307,7 @@ impl ToolPermissionService {
             }
             if received == list.total {
                 debug!(tenant_id = %tenant_id, total = received, "Loaded complete tool permissions");
-                return Ok(PermissionRules {
-                    overrides,
-                    default_allowed: list.default_allowed,
-                });
+                return Ok(PermissionRules { overrides });
             }
             page += 1;
             if page > 1000 {
@@ -568,21 +561,79 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn permissions_pagination_reads_all_pages_and_default() {
+    async fn regression_permissions_pagination_requires_explicit_allow() {
         use wiremock::matchers::{header, query_param};
         let server = MockServer::start().await;
         let service = authenticated_service(&server, Duration::from_secs(60)).await;
         for (page, server_id, allowed) in [(1, "first", true), (2, "second", false)] {
-            Mock::given(method("GET")).and(path("/v1/tenants/tenant-a/tool-permissions"))
+            let mut items = vec![serde_json::json!({
+                "mcp_server_id": server_id, "tool_name": "blocked", "allowed": allowed
+            })];
+            if page == 1 {
+                items.push(serde_json::json!({
+                    "mcp_server_id": server_id, "tool_name": "allowed", "allowed": true
+                }));
+            }
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants/tenant-a/tool-permissions"))
                 .and(query_param("page", page.to_string()))
                 .and(header("Authorization", "Bearer fixture-service-access"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "items": [{"mcp_server_id": server_id, "tool_name": "blocked", "allowed": allowed}],
-                    "total": 2, "page": page, "default_allowed": true
-                }))).expect(1).mount(&server).await;
+                    "items": items,
+                    "total": 3, "page": page, "default_allowed": true
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
         }
         assert!(!service.is_tool_allowed("tenant-a", "blocked").await);
-        assert!(service.is_tool_allowed("tenant-a", "ordinary_read").await);
+        assert!(service.is_tool_allowed("tenant-a", "allowed").await);
+        assert!(!service.is_tool_allowed("tenant-a", "ordinary_read").await);
+    }
+
+    #[tokio::test]
+    async fn regression_empty_permissions_deny_despite_cp_default_allow() {
+        let server = MockServer::start().await;
+        let service = authenticated_service(&server, Duration::from_secs(60)).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [], "total": 0, "page": 1, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        assert!(!service.is_tool_allowed("tenant-a", "unlisted").await);
+    }
+
+    #[tokio::test]
+    async fn regression_incomplete_permissions_deny_partial_allow() {
+        use wiremock::matchers::query_param;
+        let server = MockServer::start().await;
+        let service = authenticated_service(&server, Duration::from_secs(60)).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(query_param("page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [{"mcp_server_id": "first", "tool_name": "allowed", "allowed": true}],
+                "total": 2, "page": 1, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(query_param("page", "2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [], "total": 2, "page": 2, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        assert!(!service.is_tool_allowed("tenant-a", "allowed").await);
+        assert_eq!(service.readiness_failure_reason(), Some("cp_unreachable"));
     }
 
     #[tokio::test]

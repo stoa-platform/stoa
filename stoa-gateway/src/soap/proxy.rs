@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn client_tenant_headers_never_reach_soap_backend() {
+    async fn regression_client_tenant_headers_never_reach_soap_backend() {
         let fixture = Fixture::new().await;
         let token = fixture.token(json!({}));
         let header_cases = [
@@ -318,7 +318,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn soap_requires_verified_identity_and_matching_route_tenant() {
+    async fn regression_soap_requires_verified_identity_and_matching_route_tenant() {
         let fixture = Fixture::new().await;
         let cases =
             [

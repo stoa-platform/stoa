@@ -176,6 +176,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"  # dev, staging, production
     STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)
 
+    # Any default above 900 seconds requires a new security review (CAB-2222 C8).
+    TOOL_PERMISSION_POLICY_TTL_SECONDS: int = Field(default=900, gt=0, le=3600)
+
     # Base domain for URL construction. Drives the derived URL fields below
     # (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR, CORS_ORIGINS) via the
     # `_derive_urls_from_base_domain` validator. Explicit env overrides for

@@ -36,8 +36,10 @@ def _claims() -> dict:
     return {"htm": "GET", "htu": URI, "ath": _compute_ath(ACCESS_TOKEN), "jti": "cab-2361", "iat": int(time.time())}
 
 
-def _compact(header: dict, key: bytes = b"") -> str:
-    signing_input = f"{_b64(json.dumps(header).encode())}.{_b64(json.dumps(_claims()).encode())}"
+def _compact(header: dict, key: bytes = b"", claims: dict | None = None) -> str:
+    signing_input = (
+        f"{_b64(json.dumps(header).encode())}.{_b64(json.dumps(_claims() if claims is None else claims).encode())}"
+    )
     signature = hmac.new(key, signing_input.encode(), hashlib.sha256).digest() if key else b""
     return f"{signing_input}.{_b64(signature)}"
 
@@ -93,19 +95,47 @@ def test_regression_cab_2361_dpop_key_type_must_match_algorithm(algorithm: str, 
     assert result.error == "DPoP proof algorithm does not match JWK key type"
 
 
-@pytest.mark.parametrize("algorithm", ["ES256", "ES384"])
-def test_regression_cab_2361_dpop_signed_ec_algorithm_policy(algorithm: str) -> None:
-    curve = ec.SECP256R1() if algorithm == "ES256" else ec.SECP384R1()
+@pytest.mark.parametrize("member", ["d", "p", "q", "dp", "dq", "qi"])
+def test_regression_cab_2361_dpop_private_member_rejected_before_thumbprint(
+    member: str, rsa_key: rsa.RSAPrivateKey
+) -> None:
+    numbers = rsa_key.public_key().public_numbers()
+    jwk = {"kty": "RSA", "n": _integer(numbers.n), "e": _integer(numbers.e), member: ""}
+    header = {"typ": "dpop+jwt", "alg": "RS256", "jwk": jwk}
+    result = _validate_dpop_binding({"jkt": "unused"}, {"dpop": _compact(header)}, ACCESS_TOKEN, "GET", URI)
+    assert result.valid is False
+    assert result.error == "DPoP proof JWK must contain only public key material"
+
+
+@pytest.mark.parametrize(
+    ("algorithm", "curve_name", "iat_offset", "error"),
+    [
+        ("ES256", "P-256", 0, None),
+        ("ES384", "P-384", 0, "DPoP proof algorithm is not supported"),
+        ("ES256", "P-384", 0, "DPoP proof algorithm does not match JWK curve"),
+        ("ES256", "P-256", None, "DPoP proof expired"),
+        ("ES256", "P-256", -3600, "DPoP proof expired"),
+    ],
+)
+def test_regression_cab_2361_dpop_signed_ec_algorithm_policy(
+    algorithm: str, curve_name: str, iat_offset: int | None, error: str | None
+) -> None:
+    curve = ec.SECP256R1() if curve_name == "P-256" else ec.SECP384R1()
     private_key = ec.generate_private_key(curve)
     numbers = private_key.public_key().public_numbers()
     width = (curve.key_size + 7) // 8
     jwk = {
         "kty": "EC",
-        "crv": "P-256" if algorithm == "ES256" else "P-384",
+        "crv": curve_name,
         "x": _b64(numbers.x.to_bytes(width, "big")),
         "y": _b64(numbers.y.to_bytes(width, "big")),
     }
-    signing_input = _compact({"typ": "dpop+jwt", "alg": algorithm, "jwk": jwk}).rsplit(".", 1)[0]
+    claims = _claims()
+    if iat_offset is None:
+        del claims["iat"]
+    else:
+        claims["iat"] += iat_offset
+    signing_input = _compact({"typ": "dpop+jwt", "alg": algorithm, "jwk": jwk}, claims=claims).rsplit(".", 1)[0]
     digest = hashes.SHA256() if algorithm == "ES256" else hashes.SHA384()
     r, s = decode_dss_signature(private_key.sign(signing_input.encode(), ec.ECDSA(digest)))
     signature = r.to_bytes(width, "big") + s.to_bytes(width, "big")
@@ -113,9 +143,9 @@ def test_regression_cab_2361_dpop_signed_ec_algorithm_policy(algorithm: str) -> 
 
     result = _validate(proof, jwk)
 
-    assert result.valid is (algorithm == "ES256")
+    assert result.valid is (error is None)
     assert result.mode == "dpop"
-    assert result.error == (None if algorithm == "ES256" else "DPoP proof algorithm is not supported")
+    assert result.error is None if error is None else result.error.startswith(error)
 
 
 def test_regression_cab_2361_dpop_rs256_accepted(rsa_key: rsa.RSAPrivateKey) -> None:

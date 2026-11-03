@@ -29,6 +29,7 @@ _jti_cache: dict[str, float] = {}
 _JTI_CACHE_MAX_SIZE = 10000
 _JTI_TTL_SECONDS = 300  # 5 minutes
 _DPOP_ALGORITHM_KEY_TYPES = {"ES256": "EC", "PS256": "RSA", "RS256": "RSA", "EdDSA": "OKP"}
+_DPOP_ALGORITHM_CURVES = {"ES256": "P-256", "EdDSA": "Ed25519"}
 
 
 @dataclass
@@ -235,6 +236,20 @@ def _validate_dpop_binding(
                 error="DPoP proof algorithm does not match JWK key type",
             )
 
+        if any(member in jwk for member in ("d", "p", "q", "dp", "dq", "qi")):
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof JWK must contain only public key material",
+            )
+
+        if algorithm in _DPOP_ALGORITHM_CURVES and jwk.get("crv") != _DPOP_ALGORITHM_CURVES[algorithm]:
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof algorithm does not match JWK curve",
+            )
+
         # Step 3: Compute JWK thumbprint and compare to cnf.jkt
         thumbprint = _compute_jwk_thumbprint(jwk)
         expected_jkt = cnf["jkt"]
@@ -252,7 +267,7 @@ def _validate_dpop_binding(
         proof_claims = jose_jwt.decode(
             dpop_proof,
             key,
-            algorithms=list(_DPOP_ALGORITHM_KEY_TYPES),
+            algorithms=[algorithm],
             options={"verify_aud": False, "verify_sub": False},
         )
 

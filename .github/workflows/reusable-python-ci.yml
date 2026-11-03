@@ -224,6 +224,19 @@ jobs:
           test -f coverage-shards/1/.coverage.shard-1
           test -f coverage-shards/2/.coverage.shard-2
           python -m pip install 'coverage==7.17.0'
+          # Combine can skip unusable inputs, so validate every shard independently.
+          python - <<'PY'
+          from coverage import CoverageData
+
+          for shard in (1, 2):
+              path = f"coverage-shards/{shard}/.coverage.shard-{shard}"
+              data = CoverageData(basename=path)
+              data.read()
+              recorded_lines = [data.lines(filename) for filename in data.measured_files()]
+              data.close()
+              if not any(recorded_lines):
+                  raise SystemExit(f"No recorded coverage in {path}")
+          PY
           # Normalize runner checkout paths while retaining the project's coverage policy.
           printf '[paths]\nsource =\n    src\n    */%s/src\n' "$COMPONENT" > coverage-paths.ini
           coverage combine --keep --rcfile=coverage-paths.ini coverage-shards/1 coverage-shards/2

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from coverage import CoverageData
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/reusable-python-ci.yml").read_text())
@@ -91,4 +92,24 @@ def test_missing_coverage_shard_fails(tmp_path: Path, missing: int) -> None:
     directory = tmp_path / f"coverage-shards/{other}"
     directory.mkdir(parents=True)
     (directory / f".coverage.shard-{other}").write_text("not a coverage database")
+    assert aggregate(tmp_path).returncode != 0
+
+
+@pytest.mark.parametrize("invalid_shard", (1, 2))
+@pytest.mark.parametrize("invalid_data", ("malformed", "empty-file", "empty-database"))
+def test_unusable_coverage_shard_fails(tmp_path: Path, invalid_shard: int, invalid_data: str) -> None:
+    source = tmp_path / "src/sample.py"
+    source.parent.mkdir()
+    source.write_text("answer = 42\n")
+    (tmp_path / "pyproject.toml").write_text("[tool.coverage.report]\nfail_under = 70\n")
+    for shard in (1, 2):
+        path = tmp_path / f"coverage-shards/{shard}/.coverage.shard-{shard}"
+        path.parent.mkdir(parents=True)
+        if shard == invalid_shard and invalid_data != "empty-database":
+            path.write_text("not a coverage database" if invalid_data == "malformed" else "")
+        else:
+            data = CoverageData(basename=str(path))
+            data.add_lines({str(source): set() if shard == invalid_shard else {1}})
+            data.write()
+            data.close()
     assert aggregate(tmp_path).returncode != 0

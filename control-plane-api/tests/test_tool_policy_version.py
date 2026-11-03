@@ -112,11 +112,14 @@ async def test_concurrent_mutations_get_distinct_versions(policy_db, tenant: str
 
 
 @pytest.mark.parametrize(
-    "operation", ["decrement", "rekey", "delete", "truncate", "truncate_permissions", "move_permission"]
+    "operation",
+    ["increment", "insert", "decrement", "rekey", "delete", "truncate", "truncate_permissions", "move_permission"],
 )
 async def test_no_counter_reset_or_decrement_path(policy_db, operation: str) -> None:
     tenant = ToolPolicyVersion.tenant_id == "tenant-a"
     statements = {
+        "increment": update(ToolPolicyVersion).where(tenant).values(version=100),
+        "insert": ToolPolicyVersion.__table__.insert().values(tenant_id="other", version=500),
         "decrement": update(ToolPolicyVersion).where(tenant).values(version=1),
         "rekey": update(ToolPolicyVersion).where(tenant).values(tenant_id="other"),
         "delete": delete(ToolPolicyVersion).where(tenant),
@@ -131,6 +134,7 @@ async def test_no_counter_reset_or_decrement_path(policy_db, operation: str) -> 
             await session.execute(statements[operation])
         await session.rollback()
         assert await version(session) == 2
+        assert await version(session, "other") == 1
     assert "version" not in TenantToolPermissionCreate.model_fields
 
 

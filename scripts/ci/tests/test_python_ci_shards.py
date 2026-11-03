@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,21 @@ def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     env = {key: value for key, value in os.environ.items() if not key.startswith("COV_CORE_")}
     env["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
     return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def shard_identities(report: ET.Element) -> set[str]:
+    # Pytest versions differ in whether JUnit names include xdist's group suffix.
+    identities = [c.attrib["name"].partition("@")[0] for c in report.iter("testcase")]
+    counts = Counter(identities)
+    assert all(count == 1 for count in counts.values()), f"Repeated test identities: {counts}"
+    return set(identities)
+
+
+@pytest.mark.parametrize("duplicate", ("test_0", "test_0@group0"))
+def test_repeated_identity_within_one_shard_fails(duplicate: str) -> None:
+    report = ET.fromstring(f'<testsuite><testcase name="test_0"/><testcase name="{duplicate}"/></testsuite>')
+    with pytest.raises(AssertionError):
+        shard_identities(report)
 
 
 def aggregate(cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -68,11 +84,7 @@ def test_real_shards_are_disjoint_complete_and_combined_coverage_is_enforced(tmp
                     "--splits", "2", "--group", str(shard), "--splitting-algorithm", "least_duration",
                     "--cov=src", "--cov-fail-under=0", f"--junitxml=results-{shard}.xml"], runner)
         assert proc.returncode == 0, proc.stdout + proc.stderr
-        # Pytest versions differ in whether JUnit names include xdist's group suffix.
-        selected.append({
-            c.attrib["name"].partition("@")[0]
-            for c in ET.parse(runner / f"results-{shard}.xml").iter("testcase")
-        })
+        selected.append(shard_identities(ET.parse(runner / f"results-{shard}.xml").getroot()))
         assert run([sys.executable, "-m", "coverage", "report", "--fail-under=70"], runner).returncode != 0
         destination = project / f"coverage-shards/{shard}"
         destination.mkdir(parents=True)

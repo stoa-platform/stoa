@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, Role, User, get_current_user, require_permission
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from ..repositories.tenant import TenantRepository
@@ -74,8 +75,7 @@ async def get_tenant_usage(
     git: GitProvider = Depends(get_git_provider),
 ):
     """Get tenant resource usage and limits."""
-    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     repo = TenantRepository(db)
     tenant = await repo.get_by_id(tenant_id)
@@ -114,11 +114,15 @@ async def list_tenants(user: User = Depends(get_current_user), db: AsyncSession 
     - CPI Admin: See all tenants
     - Others: See only their own tenant
     """
+    is_admin = Role.CPI_ADMIN in user.roles
+    tenant_id = (
+        decide_tenant_access(user, mode="global")
+        if is_admin
+        else decide_tenant_access(user, user.tenant_id, mode="resource")
+    )
     try:
         repo = TenantRepository(db)
-        is_admin = Role.CPI_ADMIN in user.roles
-
-        tenants = await repo.list_for_user(tenant_id=user.tenant_id, is_admin=is_admin)
+        tenants = await repo.list_for_user(tenant_id=tenant_id, is_admin=is_admin)
 
         return [_tenant_to_response(t) for t in tenants]
 
@@ -131,8 +135,7 @@ async def list_tenants(user: User = Depends(get_current_user), db: AsyncSession 
 async def get_tenant(tenant_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get tenant by ID from database (cached, TTL 30s)."""
     # Check access
-    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     # Check cache first
     cache_key = f"tenant:{tenant_id}"
@@ -165,8 +168,7 @@ async def get_provisioning_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Get tenant provisioning status."""
-    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     repo = TenantRepository(db)
     tenant = await repo.get_by_id(tenant_id)
@@ -200,6 +202,7 @@ async def provision_tenant_endpoint(
     CPI Admin only.
     """
     tenant_id = request.name.lower().replace(" ", "-")
+    decide_tenant_access(user, tenant_id, mode="resource")
     realm_name = tenant_id
 
     repo = TenantRepository(db)
@@ -282,8 +285,7 @@ async def export_tenant(
     Requires: tenant-admin (own tenant) or cpi-admin (any tenant).
     """
     # Access control: own tenant or admin
-    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     try:
         export_service = TenantExportService(db)
@@ -333,6 +335,7 @@ async def import_tenant(
     # CPI Admin only for import
     if Role.CPI_ADMIN not in user.roles:
         raise HTTPException(status_code=403, detail="Import requires cpi-admin role")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     try:
         import_service = TenantImportService(db)
@@ -384,6 +387,7 @@ async def create_tenant(
     3. Return immediately — poll provisioning-status for progress
     """
     tenant_id = tenant_data.name.lower().replace(" ", "-")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     try:
         repo = TenantRepository(db)
@@ -396,10 +400,7 @@ async def create_tenant(
             # Recreate is safe: hard-purge the old row then create fresh. Archived
             # rows that DID provision (kc_group_id set) stay 409 — those are real
             # decommissioned tenants and re-using the ID is a compliance concern.
-            if (
-                existing.status == TenantStatus.ARCHIVED.value
-                and existing.kc_group_id is None
-            ):
+            if existing.status == TenantStatus.ARCHIVED.value and existing.kc_group_id is None:
                 await repo.delete(existing)
                 await kafka_service.emit_audit_event(
                     tenant_id=tenant_id,
@@ -479,6 +480,7 @@ async def update_tenant(
     db: AsyncSession = Depends(get_db),
 ):
     """Update tenant in database"""
+    decide_tenant_access(user, tenant_id, mode="resource")
     try:
         repo = TenantRepository(db)
 
@@ -541,6 +543,7 @@ async def delete_tenant(tenant_id: str, user: User = Depends(get_current_user), 
     Triggers async deprovisioning saga: disables policies, deletes KC group,
     emits namespace cleanup event, archives tenant.
     """
+    decide_tenant_access(user, tenant_id, mode="resource")
     try:
         repo = TenantRepository(db)
 

@@ -280,7 +280,7 @@ def test_detect_non_ascii_name(tmp_path: Path) -> None:
         "deploy/keycloak/tenant-id-mapper.json",
         "deploy/docker-compose/init/keycloak-realm.json",
         "deploy/platform-bootstrap/scopes/stoa-scopes.yaml",
-        "scripts/security/test_tenant_claim.py",
+        "scripts/security/test_regression_cab_2262_tenant_claim.py",
         "scripts/security/helm_contract_support.py",
         "scripts/security/keycloak_audit_lib/common.py",
     ),

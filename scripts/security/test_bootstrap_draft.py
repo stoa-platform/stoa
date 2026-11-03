@@ -1,6 +1,7 @@
 """Régressions sur les fichiers du brouillon, jamais sur un serveur Keycloak."""
 
 import json
+import shlex
 import subprocess
 import unittest
 from pathlib import Path
@@ -74,16 +75,27 @@ class DraftTests(unittest.TestCase):
         result = kc.Audit()
         source = load(name)
         result.audit_text(name, source)
+        # Remove shell quoting without executing substitutions or losing nested JSON escapes.
+        script = source.split("  bootstrap.sh: |\n", 1)[1].split("\n---\n", 1)[0]
+        objects = [
+            obj
+            for token in shlex.split(script, comments=True)
+            for obj, _ in kc.json_objects(token.replace("\\$", "$"))
+        ]
+        for obj in objects:
+            result.audit_text(name + ".json", json.dumps(obj))
         self.assertEqual([], [f.rule for f in result.findings if f.severity in {"HIGH", "ERROR"}])
-        objects = list(kc.json_objects(source))
-        realm = next(o for o, _ in objects if "realm" in o)
+        realms = [obj for obj in objects if "realm" in obj]
+        self.assertEqual(1, len(realms))
+        realm = realms[0]
         self.assertIn("length(16)", realm["passwordPolicy"])
         clients = [
             o
-            for o, _ in objects
+            for o in objects
             if o.get("publicClient") is True and o.get("standardFlowEnabled") is True
         ]
         self.assertEqual(2, len(clients))
+        self.assertEqual({"control-plane-ui", "stoa-portal"}, {c["clientId"] for c in clients})
         for client in clients:
             self.assertEqual("S256", client["attributes"]["pkce.code.challenge.method"])
             self.assertTrue(

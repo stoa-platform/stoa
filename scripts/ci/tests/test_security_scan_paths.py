@@ -172,3 +172,49 @@ def test_workflow_enforces_selected_sast_and_keeps_unconditional_scans() -> None
     install = next(s for s in jobs["dependency-scan"]["steps"] if s["name"] == "Install cargo-audit")
     assert install["with"] == {"tool": "cargo-audit@0.22.2", "fallback": "none"}
     assert install["uses"].startswith("taiki-e/install-action@")
+
+
+def test_web_filters_share_all_sast_inputs_and_exclude_prose() -> None:
+    module = runpy.run_path(str(SCRIPT))
+    filters = module["web_filters"]()
+    assert set(filters) == {"portal", "control-plane-ui"}
+    for component, rules in filters.items():
+        assert rules[0].startswith("{") and rules[0].endswith("}")
+        paths = set(rules[0][1:-1].split(","))
+        assert paths == {
+            f"{component}/**", "shared/**", "tsconfig.base.json", ".cargo/**",
+            *module["COMMON"], *module["SAST_COMMON"],
+        }
+        assert rules[1:] == ["!**/*.{md,mdx}", "!.claude/**"]
+
+
+def test_web_scans_keep_check_names_and_full_non_pr_runs() -> None:
+    jobs = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]
+    detector = jobs["scan-changes"]
+    web = next(step for step in detector["steps"] if step.get("id") == "web")
+    assert web["uses"] == "dorny/paths-filter@15192bc058cc28a13dbf6cde61f19e18988b7af6"
+    assert web["if"] == "github.event_name == 'pull_request'"
+    assert web["with"]["token"] == ""
+    assert web["with"]["predicate-quantifier"] == "every"
+    assert web["with"]["filters"] == "${{ steps.diff.outputs.web-filters }}"
+    for component in ("portal", "control-plane-ui"):
+        assert detector["outputs"][f"sast-{component}"] == f"${{{{ steps.web.outputs.{component} }}}}"
+    validation = next(step for step in detector["steps"]
+                      if step["name"] == "Validate JavaScript filter outputs")
+    for value, success in (("true", True), ("false", True), ("", False), ("invalid", False)):
+        proc = subprocess.run(["bash", "-c", validation["run"]],
+                              env=dict(os.environ, UI_CHANGED=value, PORTAL_CHANGED=value))
+        assert (proc.returncode == 0) is success
+    scan = jobs["sast-javascript"]
+    assert scan["name"] == "SAST JavaScript (ESLint)"
+    assert scan["strategy"]["matrix"]["project"] == ["control-plane-ui", "portal"]
+    check = next(step for step in scan["steps"] if step.get("id") == "check")
+    assert check["if"] == (
+        "github.event_name != 'pull_request' || "
+        "needs.scan-changes.outputs[format('sast-{0}', matrix.project)] == 'true'"
+    )
+    for name in ("Install dependencies", "Install ESLint security plugin",
+                 "Run ESLint security report (non-blocking)", "Run ESLint security gate (blocking)"):
+        assert next(step for step in scan["steps"] if step["name"] == name)["if"] == (
+            "steps.check.outputs.exists == 'true'"
+        )

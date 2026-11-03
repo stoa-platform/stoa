@@ -81,11 +81,15 @@ spec:
         - name: tenant_id
           protocol: openid-connect
           protocolMapper: oidc-usermodel-attribute-mapper
+          consentRequired: false
           config:
             user.attribute: tenant_id
             claim.name: tenant_id
+            jsonType.label: String
+            multivalued: "false"
             id.token.claim: "true"
             access.token.claim: "true"
+            userinfo.token.claim: "true"
 
         - name: roles
           protocol: openid-connect

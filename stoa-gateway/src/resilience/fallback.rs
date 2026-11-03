@@ -3,6 +3,10 @@
 //! When a tool execution fails, the fallback chain tries alternate providers
 //! in order, skipping providers with open circuit breakers.
 //!
+//! Each fallback target is resolved within the caller's tenant scope and must
+//! pass the same authorization as the primary call. A denied target is skipped
+//! without running; when none is allowed, the primary error is returned.
+//!
 //! # Configuration
 //!
 //! ```text
@@ -11,13 +15,14 @@
 //! STOA_FALLBACK_TIMEOUT_MS=5000
 //! ```
 
+use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 
-use crate::mcp::tools::{ToolContext, ToolError, ToolRegistry, ToolResult};
+use crate::mcp::tools::{Tool, ToolContext, ToolError, ToolRegistry, ToolResult};
 use crate::metrics;
 use crate::resilience::CircuitBreakerRegistry;
 
@@ -72,10 +77,33 @@ impl FallbackChain {
     }
 }
 
+/// Authorization gate applied to every fallback target before it executes.
+///
+/// Implementations apply the same checks as the primary call. `requested` is
+/// the name listed in the chain; `tool` is the registered tool it resolved to
+/// (its canonical name differs from `requested` when an alias was used).
+#[async_trait]
+pub trait FallbackAuthorizer: Send + Sync {
+    /// Return `Err(reason)` to skip the target without executing it.
+    async fn authorize(
+        &self,
+        requested: &str,
+        tool: &dyn Tool,
+        ctx: &ToolContext,
+    ) -> Result<(), String>;
+}
+
+/// The caller's context and the authorization gate applied to fallback targets.
+pub struct FallbackCaller<'a> {
+    pub ctx: &'a ToolContext,
+    pub authorizer: &'a dyn FallbackAuthorizer,
+}
+
 /// Execute a tool with fallback chain support.
 ///
 /// If the primary tool fails and has configured fallbacks, tries each alternate
-/// provider in order, skipping those with open circuit breakers.
+/// provider in order, skipping those with open circuit breakers, those outside
+/// the caller's tenant scope and those the authorizer denies.
 /// Returns the first successful result or the last error if all providers fail.
 pub async fn execute_or_direct(
     fallback_chain: &FallbackChain,
@@ -83,9 +111,10 @@ pub async fn execute_or_direct(
     tool_registry: &Arc<ToolRegistry>,
     tool_name: &str,
     arguments: Value,
-    ctx: &ToolContext,
+    caller: &FallbackCaller<'_>,
     primary_result: Result<ToolResult, ToolError>,
 ) -> Result<ToolResult, ToolError> {
+    let ctx = caller.ctx;
     // Fast path: if primary succeeded or no fallbacks configured, return as-is
     if primary_result.is_ok() || !fallback_chain.has_fallbacks(tool_name) {
         return primary_result;
@@ -117,14 +146,29 @@ pub async fn execute_or_direct(
             continue;
         }
 
-        // Look up fallback tool in registry
-        let fallback_tool = match tool_registry.get(fallback_name) {
+        // Resolve within the caller's tenant scope, exactly like the primary lookup
+        let fallback_tool = match tool_registry.get_for_tenant(fallback_name, &ctx.tenant_id) {
             Some(t) => t,
             None => {
-                warn!(fallback = %fallback_name, "Fallback tool not found in registry");
+                warn!(fallback = %fallback_name, "Fallback tool not found for tenant");
                 continue;
             }
         };
+
+        // A fallback target never bypasses the primary call's authorization
+        if let Err(reason) = caller
+            .authorizer
+            .authorize(fallback_name, fallback_tool.as_ref(), ctx)
+            .await
+        {
+            warn!(
+                fallback = %fallback_name,
+                tool = %fallback_tool.name(),
+                reason = %reason,
+                "Skipping fallback — not authorized"
+            );
+            continue;
+        }
 
         // Execute with timeout
         let timeout = fallback_chain.timeout();
@@ -208,6 +252,7 @@ mod tests {
     struct SuccessTool {
         tool_name: String,
         response: String,
+        owner: Option<String>,
     }
 
     #[async_trait]
@@ -228,6 +273,9 @@ mod tests {
         fn required_action(&self) -> Action {
             Action::Read
         }
+        fn tenant_id(&self) -> Option<&str> {
+            self.owner.as_deref()
+        }
         async fn execute(&self, _: Value, _: &ToolContext) -> Result<ToolResult, ToolError> {
             Ok(ToolResult {
                 content: vec![ToolContent::Text {
@@ -235,6 +283,37 @@ mod tests {
                 }],
                 is_error: None,
             })
+        }
+    }
+
+    fn success_tool(name: &str, owner: Option<&str>) -> Arc<SuccessTool> {
+        Arc::new(SuccessTool {
+            tool_name: name.into(),
+            response: "must not run".into(),
+            owner: owner.map(str::to_string),
+        })
+    }
+
+    /// Allows a target only when its requested and canonical names are both
+    /// listed; the explicit `"*"` entry allows everything.
+    struct AllowList(&'static [&'static str]);
+
+    const ALLOW_ALL: AllowList = AllowList(&["*"]);
+
+    #[async_trait]
+    impl FallbackAuthorizer for AllowList {
+        async fn authorize(
+            &self,
+            requested: &str,
+            tool: &dyn Tool,
+            _: &ToolContext,
+        ) -> Result<(), String> {
+            let listed = |name: &str| self.0.contains(&"*") || self.0.contains(&name);
+            if listed(requested) && listed(tool.name()) {
+                Ok(())
+            } else {
+                Err(format!("'{requested}' is not allowed"))
+            }
         }
     }
 
@@ -256,6 +335,18 @@ mod tests {
 
     fn test_cb_registry() -> Arc<CircuitBreakerRegistry> {
         Arc::new(CircuitBreakerRegistry::new(CircuitBreakerConfig::default()))
+    }
+
+    fn caller<'a>(ctx: &'a ToolContext, gate: &'a dyn FallbackAuthorizer) -> FallbackCaller<'a> {
+        FallbackCaller {
+            ctx,
+            authorizer: gate,
+        }
+    }
+
+    fn assert_primary_error(result: Result<ToolResult, ToolError>) {
+        let err = result.unwrap_err().to_string();
+        assert_eq!(err, "Execution failed: primary failed");
     }
 
     #[test]
@@ -295,10 +386,19 @@ mod tests {
         let cb = test_cb_registry();
         let registry = Arc::new(ToolRegistry::new());
         let ctx = test_ctx();
+        let gate = caller(&ctx, &ALLOW_ALL);
 
         let ok_result = Ok(ToolResult::text("primary ok"));
-        let result =
-            execute_or_direct(&chain, &cb, &registry, "tool_a", json!({}), &ctx, ok_result).await;
+        let result = execute_or_direct(
+            &chain,
+            &cb,
+            &registry,
+            "tool_a",
+            json!({}),
+            &gate,
+            ok_result,
+        )
+        .await;
 
         assert!(result.is_ok());
         let text = match &result.unwrap().content[0] {
@@ -322,7 +422,7 @@ mod tests {
             &registry,
             "tool_a",
             json!({}),
-            &ctx,
+            &caller(&ctx, &ALLOW_ALL),
             err_result,
         )
         .await;
@@ -338,6 +438,7 @@ mod tests {
         registry.register(Arc::new(SuccessTool {
             tool_name: "tool_b".into(),
             response: "fallback ok".into(),
+            owner: None,
         }));
         let ctx = test_ctx();
 
@@ -348,7 +449,7 @@ mod tests {
             &registry,
             "tool_a",
             json!({}),
-            &ctx,
+            &caller(&ctx, &ALLOW_ALL),
             err_result,
         )
         .await;
@@ -381,7 +482,7 @@ mod tests {
             &registry,
             "tool_a",
             json!({}),
-            &ctx,
+            &caller(&ctx, &ALLOW_ALL),
             err_result,
         )
         .await;
@@ -397,6 +498,7 @@ mod tests {
         registry.register(Arc::new(SuccessTool {
             tool_name: "tool_c".into(),
             response: "second fallback ok".into(),
+            owner: None,
         }));
         let ctx = test_ctx();
 
@@ -407,7 +509,7 @@ mod tests {
             &registry,
             "tool_a",
             json!({}),
-            &ctx,
+            &caller(&ctx, &ALLOW_ALL),
             err_result,
         )
         .await;
@@ -423,6 +525,7 @@ mod tests {
         registry.register(Arc::new(SuccessTool {
             tool_name: "tool_b".into(),
             response: "should not reach".into(),
+            owner: None,
         }));
         let ctx = test_ctx();
 
@@ -433,11 +536,89 @@ mod tests {
             &registry,
             "tool_a",
             json!({}),
-            &ctx,
+            &caller(&ctx, &ALLOW_ALL),
             err_result,
         )
         .await;
 
         assert!(result.is_err());
+    }
+
+    // The targets below always succeed when run: the primary error proves they never ran.
+
+    // regression for CAB-2401
+    #[tokio::test]
+    async fn regression_denied_fallback_tool_is_not_executed() {
+        let chain = FallbackChain::new(true, Some(r#"{"tool_a":["tool_b"]}"#), 5000);
+        let cb = test_cb_registry();
+        let registry = Arc::new(ToolRegistry::new());
+        registry.register(success_tool("tool_b", None));
+        let ctx = test_ctx();
+        let gate = caller(&ctx, &AllowList(&["tool_a"]));
+
+        let err_result = Err(ToolError::ExecutionFailed("primary failed".into()));
+        let result = execute_or_direct(
+            &chain,
+            &cb,
+            &registry,
+            "tool_a",
+            json!({}),
+            &gate,
+            err_result,
+        )
+        .await;
+
+        assert_primary_error(result);
+    }
+
+    // regression for CAB-2401
+    #[tokio::test]
+    async fn regression_denied_canonical_target_behind_allowed_alias_is_not_executed() {
+        let chain = FallbackChain::new(true, Some(r#"{"tool_a":["tool_b_alias"]}"#), 5000);
+        let cb = test_cb_registry();
+        let registry = Arc::new(ToolRegistry::new());
+        registry.register(success_tool("tool_b", None));
+        registry.register_alias("tool_b_alias", "tool_b");
+        let ctx = test_ctx();
+        let gate = caller(&ctx, &AllowList(&["tool_a", "tool_b_alias"]));
+
+        let err_result = Err(ToolError::ExecutionFailed("primary failed".into()));
+        let result = execute_or_direct(
+            &chain,
+            &cb,
+            &registry,
+            "tool_a",
+            json!({}),
+            &gate,
+            err_result,
+        )
+        .await;
+
+        assert_primary_error(result);
+    }
+
+    // regression for CAB-2401
+    #[tokio::test]
+    async fn regression_other_tenant_fallback_tool_is_not_executed() {
+        let chain = FallbackChain::new(true, Some(r#"{"tool_a":["tool_b"]}"#), 5000);
+        let cb = test_cb_registry();
+        let registry = Arc::new(ToolRegistry::new());
+        registry.register(success_tool("tool_b", Some("other-tenant")));
+        let ctx = test_ctx();
+        let gate = caller(&ctx, &ALLOW_ALL);
+
+        let err_result = Err(ToolError::ExecutionFailed("primary failed".into()));
+        let result = execute_or_direct(
+            &chain,
+            &cb,
+            &registry,
+            "tool_a",
+            json!({}),
+            &gate,
+            err_result,
+        )
+        .await;
+
+        assert_primary_error(result);
     }
 }

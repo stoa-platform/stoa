@@ -200,6 +200,18 @@ make test
 
 ## Coding Standards
 
+### Language
+
+STOA is an open source project with an international audience, so English is the default for everything that lands in this repository or is published from it:
+
+- pull request titles, descriptions and review comments;
+- commit messages;
+- code comments, log messages and error messages;
+- documentation, runbooks, changelogs and release notes;
+- issues and public communication about the project.
+
+Private, internal discussions may use another language, but anything committed or published must be in English. When you touch a file that still contains non-English text, translating it in the same change is welcome but not required.
+
 ### Branch Naming
 
 Use prefixes to categorize your branches:
@@ -314,7 +326,7 @@ make help
 ## Documentation
 
 - Update relevant docs when changing functionality
-- Use clear, concise language
+- Write in English (see [Language](#language)), using clear, concise wording
 - Include code examples where helpful
 - Keep the README up to date
 

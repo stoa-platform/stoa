@@ -546,7 +546,6 @@ mod tests {
 
     // The targets below always succeed when run: the primary error proves they never ran.
 
-    // regression for CAB-2401
     #[tokio::test]
     async fn regression_denied_fallback_tool_is_not_executed() {
         let chain = FallbackChain::new(true, Some(r#"{"tool_a":["tool_b"]}"#), 5000);
@@ -571,7 +570,6 @@ mod tests {
         assert_primary_error(result);
     }
 
-    // regression for CAB-2401
     #[tokio::test]
     async fn regression_denied_canonical_target_behind_allowed_alias_is_not_executed() {
         let chain = FallbackChain::new(true, Some(r#"{"tool_a":["tool_b_alias"]}"#), 5000);
@@ -597,7 +595,6 @@ mod tests {
         assert_primary_error(result);
     }
 
-    // regression for CAB-2401
     #[tokio::test]
     async fn regression_other_tenant_fallback_tool_is_not_executed() {
         let chain = FallbackChain::new(true, Some(r#"{"tool_a":["tool_b"]}"#), 5000);

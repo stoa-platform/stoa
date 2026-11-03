@@ -2592,26 +2592,21 @@ async fn regression_alias_explicit_deny_wins_and_canonical_allow_still_works() {
     );
 }
 
-// regression for CAB-2401
 #[tokio::test]
 async fn regression_fallback_targets_require_tenant_tool_permission() {
     // An allowed alias must not let an explicitly denied canonical target run.
-    for (canonical_allowed, expect_ran) in [(false, false), (true, true)] {
+    for allowed in [false, true] {
         let fixture = Fixture::new(|config| {
             config.fallback_enabled = true;
             config.fallback_chains = Some(r#"{"echo_tool":["fallback_alias"]}"#.into());
         })
         .await;
-        Mock::given(method("GET"))
-            .and(path("/v1/tenants/tenant-a/tool-permissions"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"items": [
-                {"mcp_server_id": "s", "tool_name": "echo_tool", "allowed": true},
-                {"mcp_server_id": "s", "tool_name": "fallback_alias", "allowed": true},
-                {"mcp_server_id": "s", "tool_name": "fallback_tool", "allowed": canonical_allowed}
-            ], "total": 3})))
-            .with_priority(1)
-            .mount(&fixture.server)
-            .await;
+        let items = vec![
+            permission("echo_tool", true),
+            permission("fallback_alias", true),
+            permission("fallback_tool", allowed),
+        ];
+        override_permissions(&fixture, items).await;
         Mock::given(method("GET"))
             .and(path("/fallback"))
             .respond_with(ResponseTemplate::new(200).set_body_string("fallback ran"))
@@ -2635,13 +2630,9 @@ async fn regression_fallback_targets_require_tenant_tool_permission() {
             .iter()
             .filter(|r| r.url.path() == "/fallback")
             .count();
-        assert_eq!(
-            ran,
-            usize::from(expect_ran),
-            "canonical_allowed={canonical_allowed}"
-        );
+        assert_eq!(ran, usize::from(allowed), "allowed={allowed}");
         let text = response["content"][0]["text"].as_str().unwrap();
-        if expect_ran {
+        if allowed {
             assert_eq!((status, text), (StatusCode::OK, "fallback ran"));
         } else {
             assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);

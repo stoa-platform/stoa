@@ -63,6 +63,31 @@ def test_global_build_inputs_select_all(path: str) -> None:
 @pytest.mark.parametrize("event", ("merge_group", "push", "schedule", "workflow_dispatch"))
 def test_non_pr_events_scan_every_component(event: str) -> None:
     assert select(event, ["docs/only.md"]) == list(COMPONENTS)
+    assert runpy.run_path(str(SCRIPT))["select_components"](
+        event, ["docs/only.md"], sast=True) == list(COMPONENTS)
+
+
+@pytest.mark.parametrize(("path", "expected"), (
+    ("README.md", []), ("portal/docs/guide.mdx", []),
+    ("stoa-gateway/docs/example.rs", ["stoa-gateway"]),
+    ("control-plane-api/docs/example.py", ["control-plane-api"]),
+    ("portal/src/App.tsx", ["portal"]),
+    ("shared/src/index.ts", ["portal", "control-plane-ui"]),
+))
+def test_sast_preserves_executable_documentation(path: str, expected: list[str]) -> None:
+    assert runpy.run_path(str(SCRIPT))["select_components"](
+        "pull_request", [path], sast=True) == expected
+
+
+@pytest.mark.parametrize("path", (
+    ".github/workflows/ci-gate.yml", ".github/workflows/security-scan.yml",
+    ".github/scripts/security-scan-changes.py", "scripts/ci/tests/test_security_scan_paths.py",
+    "pyproject.toml", ".bandit", ".eslintrc.cjs", "eslint.config.mjs",
+    ".cargo/config.toml", "rust-toolchain.toml", "Cargo.lock", ".clippy.toml",
+))
+def test_sast_configuration_changes_scan_all(path: str) -> None:
+    assert runpy.run_path(str(SCRIPT))["select_components"](
+        "pull_request", [path], sast=True) == list(COMPONENTS)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -99,7 +124,8 @@ def test_cli_diff_add_delete_rename_and_invalid_sha(tmp_path: Path) -> None:
                           capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
     flags = dict(line.split("=", 1) for line in output.read_text().splitlines())
-    assert all(flags[name] == "true" for name in (*COMPONENTS, "container-scan"))
+    assert all(flags[name] == "true" for name in (
+        *COMPONENTS, "container-scan", "sast-rust", "sast-python", "sast-javascript"))
     assert json.loads(flags["container-matrix"]) == {"component": [
         {"name": name, "path": name,
          "context": "." if name in ("portal", "control-plane-ui") else name}
@@ -112,17 +138,37 @@ def test_cli_diff_add_delete_rename_and_invalid_sha(tmp_path: Path) -> None:
     assert not output.exists()
 
 
+@pytest.mark.parametrize("target", (
+    "dependency-scan", "container-scan", "sast-rust", "sast-python", "sast-javascript",
+))
 @pytest.mark.parametrize(("flag", "detector", "scan", "success"), (
     ("false", "success", "skipped", True), ("true", "success", "success", True),
     ("false", "failure", "skipped", False), ("invalid", "success", "skipped", False),
     ("true", "success", "failure", False), ("true", "success", "cancelled", False),
     ("true", "success", "skipped", False),
 ))
-def test_scan_summary(flag: str, detector: str, scan: str, success: bool) -> None:
+def test_scan_summary(target: str, flag: str, detector: str, scan: str, success: bool) -> None:
     job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["scan-summary"]
     assert job["if"] == "always()"
-    needs = {"scan-changes": {"result": detector, "outputs": {"container-scan": flag}},
-             "dependency-scan": {"result": scan}, "container-scan": {"result": scan}}
+    scans = ("dependency-scan", "container-scan", "sast-rust", "sast-python", "sast-javascript")
+    needs = {name: {"result": "success" if flag == "true" else "skipped"} for name in scans}
+    needs["scan-changes"] = {"result": detector, "outputs": {
+        name: flag for name in scans if name != "dependency-scan"}}
+    needs[target]["result"] = scan
     proc = subprocess.run(["bash", "-c", job["steps"][0]["run"]], capture_output=True,
                           env=dict(os.environ, RESULTS=json.dumps(needs)))
     assert (proc.returncode == 0) is success
+
+
+def test_workflow_enforces_selected_sast_and_keeps_unconditional_scans() -> None:
+    jobs = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]
+    for scan in ("sast-rust", "sast-python", "sast-javascript"):
+        assert jobs[scan]["needs"] == "scan-changes"
+        assert jobs[scan]["if"] == f"needs.scan-changes.outputs.{scan} == 'true'"
+        assert scan in jobs["scan-summary"]["needs"]
+        assert jobs["scan-changes"]["outputs"][scan] == f"${{{{ steps.diff.outputs.{scan} }}}}"
+    for scan in ("secret-scan", "opsec-scan"):
+        assert "if" not in jobs[scan]
+    install = next(s for s in jobs["dependency-scan"]["steps"] if s["name"] == "Install cargo-audit")
+    assert install["with"] == {"tool": "cargo-audit@0.22.2", "fallback": "none"}
+    assert install["uses"].startswith("taiki-e/install-action@")

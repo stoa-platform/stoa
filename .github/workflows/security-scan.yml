@@ -40,6 +40,9 @@ jobs:
       control-plane-ui: ${{ steps.diff.outputs.control-plane-ui }}
       container-scan: ${{ steps.diff.outputs.container-scan }}
       container-matrix: ${{ steps.diff.outputs.container-matrix }}
+      sast-rust: ${{ steps.diff.outputs.sast-rust }}
+      sast-python: ${{ steps.diff.outputs.sast-python }}
+      sast-javascript: ${{ steps.diff.outputs.sast-javascript }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -59,6 +62,8 @@ jobs:
   # ==========================================================================
   sast-rust:
     name: SAST Rust (Clippy)
+    needs: scan-changes
+    if: needs.scan-changes.outputs.sast-rust == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -103,6 +108,8 @@ jobs:
   # ==========================================================================
   sast-python:
     name: SAST Python (Bandit)
+    needs: scan-changes
+    if: needs.scan-changes.outputs.sast-python == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -144,6 +151,8 @@ jobs:
   # ==========================================================================
   sast-javascript:
     name: SAST JavaScript (ESLint)
+    needs: scan-changes
+    if: needs.scan-changes.outputs.sast-javascript == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -228,7 +237,10 @@ jobs:
 
       - name: Install cargo-audit
         if: needs.scan-changes.outputs.stoa-gateway == 'true'
-        run: cargo install cargo-audit
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-audit@0.22.2
+          fallback: none
 
       - name: Cargo audit
         if: needs.scan-changes.outputs.stoa-gateway == 'true'
@@ -425,7 +437,7 @@ jobs:
   scan-summary:
     name: Scan results
     if: always()
-    needs: [scan-changes, dependency-scan, container-scan]
+    needs: [scan-changes, dependency-scan, container-scan, sast-rust, sast-python, sast-javascript]
     runs-on: ubuntu-latest
     steps:
       - name: Require selected scans or accept ignored paths
@@ -434,9 +446,16 @@ jobs:
         run: |
           echo "$RESULTS" | jq -e '
             .["scan-changes"].result == "success" and
-            (.["scan-changes"].outputs["container-scan"] as $run |
-              [.["dependency-scan"].result, .["container-scan"].result] |
-              if $run == "true" then all(. == "success")
-              elif $run == "false" then all(. == "skipped")
-              else false end)
+            (. as $results | [
+              ["dependency-scan", "container-scan"],
+              ["container-scan", "container-scan"],
+              ["sast-rust", "sast-rust"],
+              ["sast-python", "sast-python"],
+              ["sast-javascript", "sast-javascript"]
+            ] | all(.[];
+              $results["scan-changes"].outputs[.[1]] as $run |
+              $results[.[0]].result as $result |
+              if $run == "true" then $result == "success"
+              elif $run == "false" then $result == "skipped"
+              else false end))
           '

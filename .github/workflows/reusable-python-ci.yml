@@ -37,6 +37,11 @@ on:
         required: false
         type: boolean
         default: false
+      test-shards:
+        description: 'Number of test shards (1 or 2); combined coverage remains mandatory'
+        required: false
+        type: number
+        default: 1
       runner:
         description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
         required: false
@@ -45,13 +50,17 @@ on:
     outputs:
       test-result:
         description: 'Test job result (success/failure)'
-        value: ${{ jobs.test.outputs.result }}
+        value: ${{ inputs.test-shards == 1 && jobs.test.outputs.result || jobs.coverage.outputs.result }}
 
 jobs:
   test:
-    name: Lint and Test (${{ inputs.component }})
+    name: Lint and Test (${{ inputs.component }})${{ inputs.test-shards == 2 && format(' ({0}/2)', matrix.shard) || '' }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20  # A4: default cap is 360 min
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.test-shards == 2 && '[1,2]' || '[1]') }}
     outputs:
       result: ${{ steps.set-result.outputs.result }}
     permissions:
@@ -61,6 +70,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Validate shard count
+        env:
+          TEST_SHARDS: ${{ inputs.test-shards }}
+        run: case "$TEST_SHARDS" in 1|2) ;; *) exit 1 ;; esac
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
@@ -85,20 +99,37 @@ jobs:
       - name: Run tests
         working-directory: ${{ inputs.component }}
         run: |
-          pip install pytest pytest-asyncio pytest-cov pytest-xdist
+          pip install pytest pytest-asyncio pytest-cov pytest-xdist ${{ inputs.test-shards == 2 && 'pytest-split==0.11.0 coverage==7.17.0' || '' }}
           pytest tests/ -v --tb=short \
             ${{ inputs.parallel-tests && '-n auto --dist loadgroup' || '' }} \
+            ${{ inputs.test-shards == 2 && format('--splits 2 --group {0} --splitting-algorithm least_duration', matrix.shard) || '' }} \
             ${{ inputs.test-markers != '' && format('-m "{0}"', inputs.test-markers) || '' }} \
             --cov=src \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            --cov-fail-under=${{ inputs.test-shards == 2 && '0' || inputs.coverage-threshold }} \
             --junitxml=test-results.xml
+
+      # Each shard covers only part of the suite; the combined job enforces the threshold.
+      - name: Prepare coverage shard
+        if: always() && inputs.test-shards == 2
+        working-directory: ${{ inputs.component }}
+        run: cp .coverage .coverage.shard-${{ matrix.shard }}
+
+      - name: Upload coverage shard
+        if: always() && inputs.test-shards == 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-${{ inputs.component }}-${{ matrix.shard }}
+          path: ${{ inputs.component }}/.coverage.shard-${{ matrix.shard }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: test-results-${{ inputs.component }}
+          name: test-results-${{ inputs.component }}${{ inputs.test-shards == 2 && format('-{0}', matrix.shard) || '' }}
           path: |
             ${{ inputs.component }}/test-results.xml
             ${{ inputs.component }}/coverage.xml
@@ -108,7 +139,7 @@ jobs:
         uses: dorny/test-reporter@29672c52a8220c09bd9f79b5b6cf6315f1763996 # v1
         if: always()
         with:
-          name: '${{ inputs.component }} Tests'
+          name: "${{ inputs.component }} Tests${{ inputs.test-shards == 2 && format(' ({0}/2)', matrix.shard) || '' }}"
           path: '${{ inputs.component }}/test-results.xml'
           reporter: java-junit
           fail-on-error: false
@@ -141,3 +172,74 @@ jobs:
         id: set-result
         if: always()
         run: echo "result=${{ job.status }}" >> $GITHUB_OUTPUT
+
+  coverage:
+    name: Combined coverage (${{ inputs.component }})
+    if: always() && inputs.test-shards == 2
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.set-result.outputs.result }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.component }}
+    steps:
+      - name: Require every test shard to succeed
+        working-directory: .
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      # Exact artifact names make a missing shard an error instead of partial coverage.
+      - name: Download coverage shard 1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: coverage-${{ inputs.component }}-1
+          path: ${{ inputs.component }}/coverage-shards/1
+
+      - name: Download coverage shard 2
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: coverage-${{ inputs.component }}-2
+          path: ${{ inputs.component }}/coverage-shards/2
+
+      - name: Combine coverage and enforce threshold
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+        run: |
+          mapfile -t files < <(find coverage-shards -type f)
+          test "${#files[@]}" -eq 2
+          test -f coverage-shards/1/.coverage.shard-1
+          test -f coverage-shards/2/.coverage.shard-2
+          python -m pip install 'coverage==7.17.0'
+          # Normalize runner checkout paths while retaining the project's coverage policy.
+          printf '[paths]\nsource =\n    src\n    */%s/src\n' "$COMPONENT" > coverage-paths.ini
+          coverage combine --keep --rcfile=coverage-paths.ini coverage-shards/1 coverage-shards/2
+          coverage report --rcfile=pyproject.toml --fail-under=${{ inputs.coverage-threshold }}
+          coverage xml --rcfile=pyproject.toml --fail-under=${{ inputs.coverage-threshold }} -o coverage.xml
+
+      - name: Upload combined coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-${{ inputs.component }}
+          path: ${{ inputs.component }}/coverage.xml
+          retention-days: 30
+
+      - name: Set result output
+        id: set-result
+        if: always()
+        working-directory: .
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"

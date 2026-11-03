@@ -26,7 +26,7 @@ class TestRegressionCAB1908:
 
         with (
             patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="no fallback credentials"),
+            pytest.raises(ValueError, match="operation refused"),
         ):
             await resolve_gateway_auth_config(auth)
 
@@ -38,21 +38,21 @@ class TestRegressionCAB1908:
 
         with (
             patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="no fallback credentials"),
+            pytest.raises(ValueError, match="operation refused"),
         ):
             await resolve_gateway_auth_config(auth)
 
-    async def test_hybrid_config_falls_back_to_direct_creds(self):
-        """vault_path + direct creds with Vault unavailable must use fallback."""
+    async def test_hybrid_config_refuses_direct_creds(self):
+        """CAB-2282: vault_path plus direct credentials must fail closed."""
         auth = {"vault_path": "gateways/kong-prod", "api_key": "direct-fallback-key"}
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(return_value=None)
 
-        with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
-            result = await resolve_gateway_auth_config(auth)
-
-        assert result == {"api_key": "direct-fallback-key"}
-        assert "vault_path" not in result
+        with (
+            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
+            pytest.raises(ValueError, match="operation refused"),
+        ):
+            await resolve_gateway_auth_config(auth)
 
     async def test_create_adapter_propagates_error(self):
         """create_adapter_with_credentials raises ValueError on vault-only failure."""
@@ -62,6 +62,6 @@ class TestRegressionCAB1908:
 
         with (
             patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="no fallback credentials"),
+            pytest.raises(ValueError, match="operation refused"),
         ):
             await create_adapter_with_credentials("kong", "http://kong:8001", auth)

@@ -3,9 +3,8 @@
 Provides secure storage and retrieval of credentials for external MCP servers.
 Uses Kubernetes authentication in cluster, token auth for development.
 
-Graceful degradation: when Vault is unavailable or disabled, credential operations
-return None/False instead of crashing. The MCP server feature works without Vault
-(credentials just won't be persisted securely).
+Disabled or missing credential reads may return None; callers must reject operations
+that require those credentials. Failed seal-status checks raise an availability error.
 """
 
 import logging
@@ -35,7 +34,7 @@ class VaultClient:
     """HashiCorp Vault client for external MCP server credentials.
 
     Stores credentials at: secret/data/external-mcp-servers/{server_id}
-    Gracefully degrades when Vault is unavailable (returns None instead of crashing).
+    Required seal-status checks fail closed when Vault is unavailable.
     """
 
     def __init__(
@@ -88,8 +87,8 @@ class VaultClient:
                     )
                     logger.info("Authenticated with Vault using Kubernetes auth")
                     return self._client
-            except Exception as e:
-                logger.warning(f"Kubernetes auth failed, falling back to token: {e}")
+            except Exception:
+                logger.warning("Kubernetes auth failed, falling back to token")
 
         # Fall back to token auth (development)
         if self._vault_token:
@@ -110,8 +109,9 @@ class VaultClient:
                 raise VaultSealedException()
         except VaultSealedException:
             raise
-        except Exception as e:
-            logger.warning(f"Could not verify Vault seal status: {e}")
+        except Exception:
+            logger.warning("Could not verify Vault seal status; refusing credential operation")
+            raise VaultUnavailableError("Secret store is unavailable") from None
 
     async def store_credential(
         self,
@@ -200,7 +200,7 @@ class VaultClient:
         Unlike retrieve_credential(), accepts any path (not just external-mcp-servers/).
         """
         if not self.enabled:
-            logger.debug("Vault disabled — cannot read secret at %s", path)
+            logger.debug("Vault disabled — cannot read secret")
             return None
 
         self._ensure_unsealed()
@@ -213,17 +213,17 @@ class VaultClient:
             )
 
             if response and "data" in response and "data" in response["data"]:
-                logger.info("Read secret from Vault", extra={"path": path})
+                logger.info("Read secret from Vault")
                 return cast(dict[str, Any], response["data"]["data"])
 
             return None
 
         except InvalidPath:
-            logger.warning("Secret not found in Vault", extra={"path": path})
+            logger.warning("Secret not found in Vault")
             return None
 
-        except VaultError as e:
-            logger.error("Failed to read secret from Vault", extra={"path": path, "error": str(e)})
+        except VaultError:
+            logger.error("Failed to read secret from Vault")
             return None
 
     async def delete_credential(self, server_id: str) -> bool:

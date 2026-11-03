@@ -21,6 +21,7 @@ from src.schemas.gateway import (
 )
 from src.schemas.gateway_import import ImportPreviewResponse, ImportResultResponse
 from src.schemas.gateway_overview import GatewayOverviewResponse
+from src.services.credential_resolver import CredentialResolutionError
 from src.services.gateway_import_service import GatewayImportService
 from src.services.gateway_instance_service import GatewayInstanceService
 from src.services.gateway_overview_service import GatewayOverviewService
@@ -269,6 +270,8 @@ async def check_gateway_health(
         result = await svc.health_check(gateway_id)
         await db.commit()
         return result
+    except CredentialResolutionError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -286,6 +289,8 @@ async def preview_import(
     svc = GatewayImportService(db)
     try:
         return await svc.preview_import(gateway_id)
+    except CredentialResolutionError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -304,5 +309,7 @@ async def import_from_gateway(
     try:
         result = await svc.import_from_gateway(gateway_id)
         return result
+    except CredentialResolutionError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

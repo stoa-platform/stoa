@@ -8,6 +8,7 @@ Required credential reads and seal checks must succeed before callers proceed.
 
 import logging
 import os
+from contextvars import ContextVar, copy_context
 from typing import Any, cast
 
 import hvac
@@ -16,6 +17,16 @@ from hvac.exceptions import InvalidPath, VaultError
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+_vault_request: ContextVar[bool] = ContextVar("vault_request", default=False)
+for _name in ("connectionpool", "connection", "poolmanager", "util.retry"):  # These loggers emit request paths.
+    logging.getLogger(f"urllib3.{_name}").addFilter(lambda _record: not _vault_request.get())
+
+
+class _PrivateAdapter(hvac.adapters.JSONAdapter):  # Flags Vault requests so the filter above drops transport records.
+    def request(self, *args: Any, **kwargs: Any) -> Any:
+        context = copy_context()
+        context.run(_vault_request.set, True)
+        return context.run(super().request, *args, **kwargs)
 
 
 class VaultUnavailableError(Exception):
@@ -70,7 +81,7 @@ class VaultClient:
         if self._client is not None and self._client.is_authenticated():
             return self._client
 
-        self._client = hvac.Client(url=self.vault_addr)
+        self._client = hvac.Client(url=self.vault_addr, adapter=_PrivateAdapter)
 
         # Try Kubernetes auth first (in-cluster)
         if self._kubernetes_role:

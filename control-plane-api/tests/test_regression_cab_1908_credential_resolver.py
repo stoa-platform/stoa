@@ -48,10 +48,8 @@ class TestRegressionCAB1908:
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(return_value=None)
 
-        with (
-            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
-        ):
+        patched = patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault)
+        with patched, pytest.raises(ValueError, match="operation refused"):
             await resolve_gateway_auth_config(auth)
 
     async def test_create_adapter_propagates_error(self):

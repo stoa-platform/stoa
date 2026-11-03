@@ -762,7 +762,6 @@ async def test_regression_cab_2282_gateway_admin_refuses_unavailable_secret_stor
     vault = VaultClient(vault_addr="https://vault.example.test", enabled=False)
     monkeypatch.setattr(credential_resolver, "get_vault_client", lambda: vault)
     monkeypatch.setattr(ErrorSnapshotMiddleware, "_should_skip_path", lambda *_: True)
-
     monkeypatch.setattr(credential_resolver.AdapterRegistry, "create", lambda *_, **__: pytest.fail("Adapter created"))
     caplog.clear()
     with caplog.at_level(logging.DEBUG):

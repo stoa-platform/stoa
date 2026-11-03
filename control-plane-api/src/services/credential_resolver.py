@@ -14,7 +14,8 @@ from src.services.vault_client import get_vault_client
 logger = logging.getLogger(__name__)
 
 AGENT_MANAGED_MESSAGE = (
-    "Gateway is agent-managed (source=self_register, type=stoa). " "Use the agent's heartbeat/sync-ack for status."
+    "Gateway is agent-managed (source=self_register, type=stoa). "
+    "Use the agent's heartbeat/sync-ack for status."
 )
 
 # Pure "stoa" gateways use the pull model. STOA Link/Connect registrations may

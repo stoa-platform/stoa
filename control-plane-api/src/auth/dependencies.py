@@ -56,8 +56,21 @@ class User(BaseModel):
     tenant_id: str | None = None
 
 
+def _normalize_tenant_claim(value: object) -> str | None:
+    """Match the gateway wire contract without coercing ambiguous identities."""
+    if value is None:
+        return None
+    if isinstance(value, list) and len(value) == 1:
+        value = value[0]
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise JWTError("invalid_tenant_claim")
+    return value
+
+
 def _demo_auth_bypass_enabled(request: Request) -> bool:
-    return bool(getattr(settings, "STOA_DISABLE_AUTH", False)) and request.headers.get("X-Demo-Mode", "").lower() == "true"
+    return (
+        bool(getattr(settings, "STOA_DISABLE_AUTH", False)) and request.headers.get("X-Demo-Mode", "").lower() == "true"
+    )
 
 
 def _demo_bypass_user(request: Request) -> User:
@@ -282,9 +295,11 @@ async def get_current_user(
         from .rbac import normalize_roles
 
         roles = normalize_roles(payload.get("realm_access", {}).get("roles", []))
-        # Handle tenant_id as either string or list (from group membership mapper)
-        raw_tenant_id = payload.get("tenant_id")
-        tenant_id = (raw_tenant_id[0] if raw_tenant_id else None) if isinstance(raw_tenant_id, list) else raw_tenant_id
+        tenant_id = _normalize_tenant_claim(payload.get("tenant_id"))
+        legacy_tenant = _normalize_tenant_claim(payload.get("tenant"))
+        if tenant_id is not None and legacy_tenant is not None and tenant_id != legacy_tenant:
+            raise JWTError("conflicting_tenant_claims")
+        # Legacy claims never establish identity; missing tenants remain valid for bootstrap.
 
         # Get user ID from 'sub' claim (Keycloak UUID)
         # The 'sub' claim is mandatory in OIDC access tokens — if missing, the

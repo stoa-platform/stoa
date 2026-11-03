@@ -1351,7 +1351,7 @@ async fn mcp_audience_is_configurable() {
 }
 
 #[tokio::test]
-async fn tenant_headers_are_ignored_across_http_forms() {
+async fn regression_tenant_headers_are_ignored_across_http_forms() {
     let fixture = Fixture::new(|_| {}).await;
     let token = fixture.token(json!({}));
     let request = json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",

@@ -103,7 +103,7 @@ fn assert_denied(response: CheckResponse, status: i32) {
 }
 
 #[tokio::test]
-async fn valid_token_overwrites_identity_headers() {
+async fn regression_valid_token_overwrites_identity_headers() {
     let (service, _server, issuer) = fixture().await;
     let mut req = request(&claims(&issuer));
     for (k, v) in [

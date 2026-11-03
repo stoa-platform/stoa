@@ -62,7 +62,7 @@ jobs:
       - name: Filter JavaScript scan components
         if: github.event_name == 'pull_request'
         id: web
-        uses: dorny/paths-filter@15192bc058cc28a13dbf6cde61f19e18988b7af6 # v3.0.2
+        uses: dorny/paths-filter@15192bc058cc28a13dbf6cde61f19e18988b7af6 # v3
         with:
           # Use the checked-out Git history without adding PR API permissions.
           token: ''

@@ -176,8 +176,10 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"  # dev, staging, production
     STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)
 
-    # Any default above 900 seconds requires a new security review (CAB-2222 C8).
-    TOOL_PERMISSION_POLICY_TTL_SECONDS: int = Field(default=900, gt=0, le=3600)
+    # Deployed issuance is limited to 15 minutes; payload validation retains its hard cap.
+    TOOL_PERMISSION_POLICY_TTL_SECONDS: int = Field(default=900, gt=0, le=900)
+    STOA_POLICY_SIGNING_KEY_FILE: str = Field(default="", repr=False)
+    STOA_POLICY_SIGNING_KID: str = ""
 
     # Base domain for URL construction. Drives the derived URL fields below
     # (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR, CORS_ORIGINS) via the

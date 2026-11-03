@@ -120,7 +120,7 @@ def test_invalid_timestamp_rejected(field: str, value: object) -> None:
         ToolPermissionPolicy.model_validate(payload(**{field: value}))
 
 
-@pytest.mark.parametrize("seconds", [0, -1, 3601])
+@pytest.mark.parametrize("seconds", [0, -1, 901, 3600, 3601])
 def test_invalid_configured_duration_rejected(seconds: int) -> None:
     with pytest.raises(ValidationError):
         Settings(TOOL_PERMISSION_POLICY_TTL_SECONDS=seconds)
@@ -128,7 +128,7 @@ def test_invalid_configured_duration_rejected(seconds: int) -> None:
 
 def test_default_duration_and_configurable_issuance(monkeypatch: pytest.MonkeyPatch) -> None:
     assert Settings.model_fields["TOOL_PERMISSION_POLICY_TTL_SECONDS"].default == 900
-    for seconds in (900, 300, 3600):
+    for seconds in (900, 300, 1):
         monkeypatch.setattr(settings, "TOOL_PERMISSION_POLICY_TTL_SECONDS", seconds)
         policy = ToolPermissionPolicy.issue(
             tenant_id="tenant-a", version=1, permissions=[ToolPermissionPolicyEntry(**entry())], issued_at=ISSUED_AT

@@ -75,7 +75,7 @@ data:
     AUTH="Authorization: Bearer ${TOKEN}"
 
     # ---------------------------------------------------------------
-    # Create realm (idempotent)
+    # Create realm and built-in user profile atomically (idempotent)
     # ---------------------------------------------------------------
     log "Creating realm '${REALM}'..."
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${KEYCLOAK_URL}/admin/realms" \
@@ -103,7 +103,19 @@ data:
         \"actionTokenGeneratedByAdminLifespan\": 3600,
         \"loginWithEmailAllowed\": true,
         \"duplicateEmailsAllowed\": false,
-        \"sslRequired\": \"external\"
+        \"sslRequired\": \"external\",
+        \"components\": {
+          \"org.keycloak.userprofile.UserProfileProvider\": [
+            {
+              \"providerId\": \"declarative-user-profile\",
+              \"config\": {
+                \"kc.user.profile.config\": [
+                  \"{\\\"attributes\\\": [{\\\"name\\\": \\\"username\\\", \\\"displayName\\\": \\\"\\\\u0024{username}\\\", \\\"validations\\\": {\\\"length\\\": {\\\"min\\\": 3, \\\"max\\\": 255}, \\\"username-prohibited-characters\\\": {}, \\\"up-username-not-idn-homograph\\\": {}}, \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\", \\\"user\\\"], \\\"edit\\\": [\\\"admin\\\", \\\"user\\\"]}, \\\"multivalued\\\": false}, {\\\"name\\\": \\\"email\\\", \\\"displayName\\\": \\\"\\\\u0024{email}\\\", \\\"validations\\\": {\\\"email\\\": {}, \\\"length\\\": {\\\"max\\\": 255}}, \\\"required\\\": {\\\"roles\\\": [\\\"user\\\"]}, \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\", \\\"user\\\"], \\\"edit\\\": [\\\"admin\\\", \\\"user\\\"]}, \\\"multivalued\\\": false}, {\\\"name\\\": \\\"firstName\\\", \\\"displayName\\\": \\\"\\\\u0024{firstName}\\\", \\\"validations\\\": {\\\"length\\\": {\\\"max\\\": 255}, \\\"person-name-prohibited-characters\\\": {}}, \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\", \\\"user\\\"], \\\"edit\\\": [\\\"admin\\\", \\\"user\\\"]}, \\\"multivalued\\\": false}, {\\\"name\\\": \\\"lastName\\\", \\\"displayName\\\": \\\"\\\\u0024{lastName}\\\", \\\"validations\\\": {\\\"length\\\": {\\\"max\\\": 255}, \\\"person-name-prohibited-characters\\\": {}}, \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\", \\\"user\\\"], \\\"edit\\\": [\\\"admin\\\", \\\"user\\\"]}, \\\"multivalued\\\": false}, {\\\"name\\\": \\\"tenant\\\", \\\"displayName\\\": \\\"Tenant ID\\\", \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\"], \\\"edit\\\": [\\\"admin\\\"]}, \\\"multivalued\\\": false}, {\\\"name\\\": \\\"tenant_id\\\", \\\"displayName\\\": \\\"Tenant ID\\\", \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\"], \\\"edit\\\": [\\\"admin\\\"]}, \\\"multivalued\\\": false}, {\\\"name\\\": \\\"avatar\\\", \\\"displayName\\\": \\\"Avatar\\\", \\\"permissions\\\": {\\\"view\\\": [\\\"admin\\\", \\\"user\\\"], \\\"edit\\\": [\\\"admin\\\"]}, \\\"multivalued\\\": false}], \\\"groups\\\": [{\\\"name\\\": \\\"user-metadata\\\", \\\"displayHeader\\\": \\\"User metadata\\\", \\\"displayDescription\\\": \\\"Attributes for user metadata\\\"}], \\\"unmanagedAttributePolicy\\\": \\\"ADMIN_EDIT\\\"}\"
+                ]
+              }
+            }
+          ]
+        }
       }")
     case $STATUS in
       201) log "Realm created" ;;
@@ -413,7 +425,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: bootstrap
-          image: curlimages/curl:8.7.1
+          image: curlimages/curl:8.7.1@sha256:25d29daeb9b14b89e2fa8cc17c70e4b188bca1466086907c2d9a4b56b59d8e21
           command: ["/bin/sh", "/scripts/bootstrap.sh"]
           env:
             - name: KC_ADMIN_USER

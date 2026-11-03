@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.credential_mapping import CredentialAuthType, CredentialMapping
 from ..repositories.credential_mapping import CredentialMappingRepository
@@ -29,9 +30,11 @@ router = APIRouter(
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to a tenant."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
+    try:
+        decide_tenant_access(user, tenant_id, mode="resource")
+    except HTTPException:
+        return False
+    return True
 
 
 def _require_write_access(user: User, tenant_id: str) -> None:
@@ -150,6 +153,7 @@ async def sync_credential_mappings(
 ):
     """Bulk export active credential mappings for gateway sync (admin-only, decrypted)."""
     _require_admin_access(user)
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     repo = CredentialMappingRepository(db)
     sync_items = await repo.list_active_for_sync(tenant_id)

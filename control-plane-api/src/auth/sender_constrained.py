@@ -28,6 +28,7 @@ logger = get_logger(__name__)
 _jti_cache: dict[str, float] = {}
 _JTI_CACHE_MAX_SIZE = 10000
 _JTI_TTL_SECONDS = 300  # 5 minutes
+_DPOP_ALGORITHM_KEY_TYPES = {"ES256": "EC", "PS256": "RSA", "RS256": "RSA", "EdDSA": "OKP"}
 
 
 @dataclass
@@ -211,12 +212,27 @@ def _validate_dpop_binding(
                 error=f"DPoP proof has wrong typ: {proof_header.get('typ')}",
             )
 
+        algorithm = proof_header.get("alg")
+        if not isinstance(algorithm, str) or algorithm not in _DPOP_ALGORITHM_KEY_TYPES:
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof algorithm is not supported",
+            )
+
         jwk = proof_header.get("jwk")
         if not jwk:
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
                 error="DPoP proof missing jwk in header",
+            )
+
+        if jwk.get("kty") != _DPOP_ALGORITHM_KEY_TYPES[algorithm]:
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof algorithm does not match JWK key type",
             )
 
         # Step 3: Compute JWK thumbprint and compare to cnf.jkt
@@ -232,12 +248,11 @@ def _validate_dpop_binding(
         # Decode proof claims (verify signature with embedded JWK)
         from jose import jwk as jose_jwk
 
-        algorithm = proof_header.get("alg", "ES256")
         key = jose_jwk.construct(jwk, algorithm=algorithm)
         proof_claims = jose_jwt.decode(
             dpop_proof,
             key,
-            algorithms=[algorithm],
+            algorithms=list(_DPOP_ALGORITHM_KEY_TYPES),
             options={"verify_aud": False, "verify_sub": False},
         )
 

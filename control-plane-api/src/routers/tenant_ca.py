@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.signed_certificate import SignedCertificate
 from ..models.tenant import Tenant
@@ -101,19 +102,19 @@ class IssuedCertificateListResponse(BaseModel):
 
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
-    """Check if user has access to the given tenant."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
+    """Preserve the boolean facade over the central resource decision."""
+    try:
+        decide_tenant_access(user, tenant_id, mode="resource")
+    except HTTPException:
+        return False
+    return True
 
 
 def _require_admin_or_tenant_admin(user: User, tenant_id: str) -> None:
     """Require cpi-admin or tenant-admin role with tenant access."""
-    if "cpi-admin" in user.roles:
-        return
-    if "tenant-admin" in user.roles and user.tenant_id == tenant_id:
-        return
-    raise HTTPException(status_code=403, detail="Requires cpi-admin or tenant-admin role")
+    decide_tenant_access(user, tenant_id, mode="resource")
+    if "cpi-admin" not in user.roles and "tenant-admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="Requires cpi-admin or tenant-admin role")
 
 
 # --- Endpoints ---
@@ -392,6 +393,7 @@ async def revoke_tenant_ca(
     """
     if "cpi-admin" not in user.roles:
         raise HTTPException(status_code=403, detail="Only cpi-admin can revoke a tenant CA")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
     result = await db.execute(select(TenantCA).where(TenantCA.tenant_id == tenant_id, TenantCA.status == "active"))
     ca = result.scalar_one_or_none()

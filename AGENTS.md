@@ -21,6 +21,14 @@ AI agents working in this repository must:
    path is a naming convention, not a tool lock-in; any AI agent is expected
    to honor the rules defined there.
 
+## Language
+
+Write in English by default: pull request titles and descriptions, review
+comments, commit messages, code comments, docs and any public communication.
+See the [Language section of CONTRIBUTING.md](CONTRIBUTING.md#language).
+Conversations with the maintainer outside the repository may use another
+language; what is committed or published stays in English.
+
 ## Architecture (quick reference)
 
 ```

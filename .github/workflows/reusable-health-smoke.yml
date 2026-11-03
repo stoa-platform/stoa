@@ -22,6 +22,13 @@ on:
         required: false
         type: string
         default: 'dev'
+    secrets:
+      cf-access-client-id:
+        description: 'Cloudflare Access service token id (console is behind Access)'
+        required: false
+      cf-access-client-secret:
+        description: 'Cloudflare Access service token secret'
+        required: false
 
 permissions: {}
 
@@ -66,13 +73,26 @@ jobs:
           echo "::warning::$url not ready after 5 min — running checks anyway"
 
       - name: Health checks
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.cf-access-client-id }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.cf-access-client-secret }}
         run: |
           set -euo pipefail
           PASS=0; FAIL=0
 
           check() {
-            local name="$1" url="$2" expected="${3:-200}"
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
+            local name="$1" url="$2" expected="${3:-200}" access="${4:-}"
+            if [ -n "$access" ]; then
+              if [ -z "${CF_ACCESS_CLIENT_ID:-}" ] || [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+                echo "  $name: missing Cloudflare Access service token secrets"
+                FAIL=$((FAIL+1)); return
+              fi
+              # Headers go through stdin (-H @-) so the token never shows in argv.
+              status=$(printf 'CF-Access-Client-Id: %s\nCF-Access-Client-Secret: %s\n' "$CF_ACCESS_CLIENT_ID" "$CF_ACCESS_CLIENT_SECRET" \
+                | curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 -H @- "$url") || status="000"
+            else
+              status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
+            fi
             if [ "$status" = "$expected" ]; then
               echo "  $name: $status"
               PASS=$((PASS+1))
@@ -88,7 +108,7 @@ jobs:
           check "API Health"      "https://api.gostoa.dev/health"
           check "Gateway Health"  "https://mcp.gostoa.dev/health/ready"
           check "Portal"          "https://portal.gostoa.dev"
-          check "Console"         "https://console.gostoa.dev"
+          check "Console"         "https://console.gostoa.dev" 200 access
           check "Keycloak OIDC"   "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
 
           echo "---"

@@ -117,6 +117,9 @@ jobs:
     with:
       component: stoa-portal
       environment: dev
+    secrets:
+      cf-access-client-id: ${{ secrets.CF_ACCESS_E2E_CLIENT_ID }}
+      cf-access-client-secret: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
     permissions:
       contents: read
 

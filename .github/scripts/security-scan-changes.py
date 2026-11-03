@@ -13,20 +13,28 @@ COMMON = {
     ".github/workflows/security-scan.yml", ".github/scripts/security-scan-changes.py",
     "scripts/ci/tests/test_security_scan_paths.py",
 }
+SAST_COMMON = {
+    ".github/workflows/ci-gate.yml", "pyproject.toml", ".bandit",
+    ".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.cjs",
+    "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs",
+    "Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml",
+    "clippy.toml", ".clippy.toml",
+}
 
 
-def select_components(event: str, paths: list[str]) -> list[str]:
+def select_components(event: str, paths: list[str], *, sast: bool = False) -> list[str]:
     if event in {"merge_group", "push", "schedule", "workflow_dispatch"}:
         return list(COMPONENTS)
     if event != "pull_request":
         raise ValueError(f"Unsupported scan event: {event}")
-    # Documentation never needs an image, even inside a component build context.
+    # SAST still scans executable files under docs/; prose needs neither scan.
     paths = [p for p in paths if not (
-        p.endswith((".md", ".mdx")) or "docs" in Path(p).parts
+        p.endswith((".md", ".mdx")) or (not sast and "docs" in Path(p).parts)
         or p.startswith(".claude/")
     )]
     return [component for component in COMPONENTS if any(
         p in COMMON or p.startswith(f"{component}/")
+        or (sast and (p in SAST_COMMON or p.startswith(".cargo/")))
         or (component in WEB and (p.startswith("shared/") or p == "tsconfig.base.json"))
         for p in paths
     )]
@@ -44,12 +52,16 @@ def main() -> None:
         )
         paths = [os.fsdecode(p) for p in diff.stdout.split(b"\0") if p]
     selected = select_components(event, paths)
+    sast = select_components(event, paths, sast=True)
     matrix = {"component": [
         {"name": c, "path": c, "context": "." if c in WEB else c} for c in selected
     ]}
     outputs = {c: str(c in selected).lower() for c in COMPONENTS}
     outputs.update({"container-scan": str(bool(selected)).lower(),
-                    "container-matrix": json.dumps(matrix, separators=(",", ":"))})
+                    "container-matrix": json.dumps(matrix, separators=(",", ":")),
+                    "sast-rust": str("stoa-gateway" in sast).lower(),
+                    "sast-python": str("control-plane-api" in sast).lower(),
+                    "sast-javascript": str(bool(WEB.intersection(sast))).lower()})
     text = "".join(f"{key}={value}\n" for key, value in outputs.items())
     print(text, end="")
     if os.environ.get("GITHUB_OUTPUT"):

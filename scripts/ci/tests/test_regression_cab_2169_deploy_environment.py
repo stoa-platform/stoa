@@ -53,16 +53,19 @@ def _control_plane_target(value: str, selected: str | None) -> str:
 
 
 @pytest.mark.parametrize(
-    ("selected", "expected_environment", "expected_url"),
+    ("selected", "expected_environment", "expected_url", "expected_verify_endpoint"),
     [
-        (None, "dev", "https://dev-api.gostoa.dev"),  # push or absent input
-        ("", "dev", "https://dev-api.gostoa.dev"),
-        ("dev", "dev", "https://dev-api.gostoa.dev"),
-        ("prod", "prod", "https://api.gostoa.dev"),
+        (None, "dev", "https://dev-api.gostoa.dev", ""),  # push or absent input
+        ("", "dev", "https://dev-api.gostoa.dev", ""),
+        ("dev", "dev", "https://dev-api.gostoa.dev", ""),
+        ("prod", "prod", "https://api.gostoa.dev", "https://api.gostoa.dev/health"),
     ],
 )
 def test_control_plane_api_environment_is_consistent(
-    selected: str | None, expected_environment: str, expected_url: str
+    selected: str | None,
+    expected_environment: str,
+    expected_url: str,
+    expected_verify_endpoint: str,
 ) -> None:
     workflow = _load_workflow((ROOT / ".github/workflows/control-plane-api-ci.yml").read_text())
     jobs = workflow["jobs"]
@@ -73,7 +76,8 @@ def test_control_plane_api_environment_is_consistent(
         ), job
     deploy = jobs["deploy"]["with"]
     assert _control_plane_target(deploy["environment-url"], selected) == expected_url
-    assert _control_plane_target(deploy["verify-endpoint"], selected) == expected_url + "/health"
+    # CAB-2084: dev has no health endpoint; production verification stays required.
+    assert _control_plane_target(deploy["verify-endpoint"], selected) == expected_verify_endpoint
 
 
 def test_control_plane_api_environment_choices_remain_explicit() -> None:
@@ -96,6 +100,10 @@ def test_control_plane_api_environment_safety_boundary_is_unchanged() -> None:
     assert (
         caller["deploy"]["if"]
         == "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"
+    )
+    assert caller["smoke-test"]["if"] == (
+        "needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' "
+        "&& github.event.inputs.environment == 'prod'"
     )
     assert caller["deploy"]["with"]["image-tag"] == "${{ needs.docker.outputs.image-tag }}"
     assert reusable["if"] == "vars.GITOPS_DEPLOY_ENABLED == 'true'"

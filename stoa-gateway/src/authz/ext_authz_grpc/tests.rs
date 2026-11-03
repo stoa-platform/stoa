@@ -107,7 +107,10 @@ async fn valid_token_overwrites_identity_headers() {
     let (service, _server, issuer) = fixture().await;
     let mut req = request(&claims(&issuer));
     for (k, v) in [
-        ("X-Stoa-Tenant-Id", "acme"),
+        ("X-Stoa-Tenant-Id", "other"),
+        ("x-stoa-tenant", "other"),
+        ("x-tenant-id", "other"),
+        ("x-tenant", "other"),
         ("x-stoa-api-id", "forged"),
         ("x-stoa-admin", "true"),
         ("x-ext-authz-user", "root"),
@@ -137,7 +140,13 @@ async fn valid_token_overwrites_identity_headers() {
     assert_eq!(headers["x-tenant-id"], "acme");
     assert_eq!(headers["x-stoa-tenant-id"], "acme");
     assert_eq!(headers["x-stoa-api-id"], "orders");
-    for k in ["x-stoa-admin", "x-ext-authz-user", "x-user-roles"] {
+    for k in [
+        "x-stoa-admin",
+        "x-ext-authz-user",
+        "x-user-roles",
+        "x-stoa-tenant",
+        "x-tenant",
+    ] {
         assert!(ok.headers_to_remove.contains(&k.to_string()));
     }
     assert!(!ok.headers_to_remove.contains(&"authorization".into()));
@@ -164,18 +173,6 @@ async fn trust_and_tenant_failures_are_closed() {
     c["tenant_id"] = Value::Null;
     c["realm_access"] = json!({"roles":["cpi-admin"]});
     assert_denied(service.authorize(request(&c)).await, 403);
-    for key in [
-        "x-stoa-tenant",
-        "x-stoa-tenant-id",
-        "x-tenant-id",
-        "x-tenant",
-    ] {
-        let mut req = request(&claims(&issuer));
-        http_mut(&mut req)
-            .headers
-            .insert(key.into(), "other".into());
-        assert_denied(service.authorize(req).await, 403);
-    }
     for tenant in [None, Some(""), Some("other")] {
         let mut req = request(&claims(&issuer));
         let context = &mut req.attributes.as_mut().unwrap().context_extensions;
@@ -267,9 +264,86 @@ async fn tonic_roundtrip_preserves_allow_and_business_denials() {
         .unwrap()
         .into_inner();
     assert_eq!(response.status.unwrap().code, 0);
+    for raw in [false, true] {
+        let mut req = request(&claims(&issuer));
+        for key in [
+            "X-Stoa-Tenant",
+            "X-Stoa-Tenant-Id",
+            "X-Tenant-Id",
+            "X-Tenant",
+        ] {
+            http_mut(&mut req)
+                .headers
+                .insert(key.into(), "other".into());
+        }
+        if raw {
+            let http = http_mut(&mut req);
+            http.header_map = Some(envoy::config::core::v3::HeaderMap {
+                headers: std::mem::take(&mut http.headers)
+                    .into_iter()
+                    .map(|(key, value)| HeaderValue {
+                        key,
+                        raw_value: value.into_bytes(),
+                        ..Default::default()
+                    })
+                    .collect(),
+            });
+        }
+        let response = client.check(req).await.unwrap().into_inner();
+        assert_eq!(response.status.unwrap().code, 0);
+        let Some(HttpResponse::OkResponse(ok)) = response.http_response else {
+            panic!("expected allow");
+        };
+        for (key, expected) in [
+            ("x-tenant-id", "acme"),
+            ("x-stoa-tenant-id", "acme"),
+            ("x-user-id", "alice"),
+            ("x-stoa-api-id", "orders"),
+        ] {
+            let emitted: Vec<_> = ok
+                .headers
+                .iter()
+                .filter(|h| h.header.as_ref().unwrap().key == key)
+                .collect();
+            assert_eq!(emitted.len(), 1);
+            assert_eq!(emitted[0].header.as_ref().unwrap().value, expected);
+            assert_eq!(
+                emitted[0].append_action,
+                HeaderAppendAction::OverwriteIfExistsOrAdd as i32
+            );
+            assert!(!ok.headers_to_remove.contains(&key.into()));
+        }
+        for key in ["x-stoa-tenant", "x-tenant"] {
+            assert!(ok.headers_to_remove.contains(&key.into()));
+        }
+    }
+    for tenant in [None, Some(""), Some("other")] {
+        let mut req = request(&claims(&issuer));
+        let context = &mut req.attributes.as_mut().unwrap().context_extensions;
+        context.remove("tenant_id");
+        if let Some(tenant) = tenant {
+            context.insert("tenant_id".into(), tenant.into());
+        }
+        http_mut(&mut req)
+            .headers
+            .insert("x-tenant-id".into(), tenant.unwrap_or("acme").into());
+        assert_denied(client.check(req).await.unwrap().into_inner(), 403);
+    }
     let mut req = request(&claims(&issuer));
     http_mut(&mut req).headers.clear();
+    http_mut(&mut req)
+        .headers
+        .insert("x-tenant-id".into(), "acme".into());
     assert_denied(client.check(req).await.unwrap().into_inner(), 401);
+    for tenant in [Value::Null, json!("other")] {
+        let mut c = claims(&issuer);
+        c["tenant_id"] = tenant;
+        let mut req = request(&c);
+        http_mut(&mut req)
+            .headers
+            .insert("x-tenant-id".into(), "acme".into());
+        assert_denied(client.check(req).await.unwrap().into_inner(), 403);
+    }
     let mut c = claims(&issuer);
     c["aud"] = json!("wrong");
     assert_denied(client.check(request(&c)).await.unwrap().into_inner(), 401);

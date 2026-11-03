@@ -274,6 +274,26 @@ def test_detect_non_ascii_name(tmp_path: Path) -> None:
     _assert_selected(_detect(repo, base, head), "portal")
 
 
+@pytest.mark.parametrize(
+    "rel",
+    (
+        "deploy/keycloak/tenant-id-mapper.json",
+        "deploy/docker-compose/init/keycloak-realm.json",
+        "deploy/platform-bootstrap/scopes/stoa-scopes.yaml",
+        "scripts/security/test_tenant_claim.py",
+        "scripts/security/helm_contract_support.py",
+        "scripts/security/keycloak_audit_lib/common.py",
+    ),
+)
+def test_tenant_claim_inputs_select_helm_contracts(tmp_path: Path, rel: str) -> None:
+    repo, base = _repo(tmp_path)
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("tenant claim\n", encoding="utf-8")
+    head = _commit(repo, "tenant claim")
+    _assert_selected(_detect(repo, base, head), "helm")
+
+
 @pytest.mark.parametrize("code", (2, 3))
 def test_grep_status_other_than_zero_or_one_fails(tmp_path: Path, code: int) -> None:
     repo, base = _repo(tmp_path)

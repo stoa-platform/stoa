@@ -14,8 +14,7 @@ from src.services.vault_client import get_vault_client
 logger = logging.getLogger(__name__)
 
 AGENT_MANAGED_MESSAGE = (
-    "Gateway is agent-managed (source=self_register, type=stoa). "
-    "Use the agent's heartbeat/sync-ack for status."
+    "Gateway is agent-managed (source=self_register, type=stoa). " "Use the agent's heartbeat/sync-ack for status."
 )
 
 # Pure "stoa" gateways use the pull model. STOA Link/Connect registrations may
@@ -45,7 +44,7 @@ class CredentialResolutionError(ValueError):
     """A required secret-store read failed; safe to expose to callers."""
 
     def __init__(self) -> None:
-        super().__init__("Secret store is unavailable or credentials are missing; operation refused.")
+        super().__init__("Required read failed; no fallback credentials allowed; operation refused.")
 
 
 async def resolve_gateway_auth_config(auth_config: dict[str, Any] | None) -> dict[str, Any]:

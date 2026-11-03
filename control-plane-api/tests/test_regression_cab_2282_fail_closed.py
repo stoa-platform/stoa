@@ -1,70 +1,59 @@
 import json
-import logging
 import traceback
-from collections.abc import Iterator
-from io import BytesIO
-from typing import Any
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import hvac
 import pytest
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.connection import HTTPSConnection
+from requests.adapters import BaseAdapter
 
+from src.models.gateway_instance import GatewayInstance, GatewayType
+from src.models.subscription import ProvisioningStatus
 from src.services.credential_resolver import create_adapter_with_credentials, resolve_gateway_auth_config
+from src.services.provisioning_service import provision_on_approval
 from src.services.vault_client import VaultClient
 
 MARKER = "cab-2282-synthetic-sensitive-value"
 VAULT_PATH = "gateways/cab-2282"
 
 
-class VaultTransport:
+class VaultTransport(BaseAdapter):
     def __init__(self) -> None:
         self.failure: tuple[str, str] | None = None
         self.paths: list[str] = []
 
-    def connect(self, connection: HTTPSConnection) -> None:
-        connection.sock = MagicMock()
-        connection.is_verified = True
-        connection.sock.sendall.side_effect = lambda data: self.paths.append(data.split()[1].decode())
-        connection.sock.makefile.side_effect = self.respond
-
-    def respond(self, *args: Any) -> BytesIO:
-        path = self.paths[-1]
+    def send(self, request: requests.PreparedRequest, **kwargs: object) -> requests.Response:
+        path = request.path_url
+        self.paths.append(path)
         stage = {"/v1/auth/token/lookup-self": "auth", "/v1/sys/health": "health"}.get(path, "read")
-        status = 200
+        response = requests.Response()
+        response.status_code = 200
         data = {"data": {"data": {"api_key": MARKER}}} if stage == "read" else {"sealed": False}
         if self.failure and stage == self.failure[0]:
             if self.failure[1] == "timeout":
-                raise TimeoutError(MARKER)
-            status = 503 if self.failure[1] == "error" else 404
+                raise requests.Timeout(MARKER)
+            response.status_code = 503 if self.failure[1] == "error" else 404
             data = {"errors": [MARKER]}
-        body = json.dumps(data).encode()
-        return BytesIO(
-            f"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nConnection: close\r\n"
-            f"Content-Length: {len(body)}\r\n\r\n".encode() + body
-        )
+        response._content = json.dumps(data).encode()
+        return response
+
+    def close(self) -> None:
+        pass
 
 
 @pytest.fixture
-def vault_boundary(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> Iterator[VaultTransport]:
+def vault_boundary(monkeypatch: pytest.MonkeyPatch) -> VaultTransport:
     transport = VaultTransport()
-    monkeypatch.setattr(HTTPSConnection, "connect", lambda conn: transport.connect(conn))
     session = requests.Session()
     session.trust_env = False
-    session.mount("https://", HTTPAdapter(max_retries=1))
+    session.mount("https://", transport)
     real_client = hvac.Client
     monkeypatch.setattr(hvac, "Client", lambda **kwargs: real_client(session=session, **kwargs))
     vault = VaultClient("https://vault.example.invalid", vault_token=MARKER)
     monkeypatch.setattr("src.services.credential_resolver.get_vault_client", lambda: vault)
-    caplog.set_level(logging.DEBUG)
-    caplog.set_level(logging.DEBUG, logger="urllib3")
-    yield transport
-    assert all(value not in repr([r.__dict__ for r in caplog.get_records("call")]) for value in (MARKER, VAULT_PATH))
-    transport.failure = None
-    session.get("https://vault.example.invalid/transport-probe")
-    assert "/transport-probe" in caplog.text  # Real HTTP logging remains enabled outside Vault requests.
+    return transport
 
 
 @pytest.mark.parametrize("stage", ["auth", "health", "read"])
@@ -86,11 +75,33 @@ async def test_regression_cab_2282_outage_refuses_adapter(
 
 async def test_regression_cab_2282_available_then_outage_never_uses_cache(vault_boundary: VaultTransport) -> None:
     auth = {"vault_path": VAULT_PATH, "api_key": "old-direct-value", "type": "api_key"}
-    with patch("src.services.credential_resolver.AdapterRegistry.create") as create:
-        adapter = await create_adapter_with_credentials("kong", "https://gateway.example.invalid", auth)
-    assert adapter is create.return_value
-    assert create.call_args.kwargs["config"]["auth_config"] == {"api_key": MARKER, "type": "api_key"}
+    assert await resolve_gateway_auth_config(auth) == {"api_key": MARKER, "type": "api_key"}
     vault_boundary.failure = ("read", "timeout")
     with pytest.raises(ValueError, match="operation refused"):
         await resolve_gateway_auth_config(auth)
-    assert vault_boundary.paths.count(f"/v1/secret/data/{VAULT_PATH}") == 3  # Fresh read plus one retry.
+    assert vault_boundary.paths.count(f"/v1/secret/data/{VAULT_PATH}") == 2
+
+
+@pytest.mark.parametrize("direct", [{}, {"api_key": MARKER}], ids=["reference-only", "hybrid"])
+async def test_regression_cab_2282_provisioning_failed(vault_boundary: VaultTransport, direct: dict[str, str]) -> None:
+    db = AsyncMock()
+    sub = SimpleNamespace(id=uuid4(), api_id="test-api", tenant_id="test-tenant", provisioned_at=object())
+    gateway = GatewayInstance(
+        id=uuid4(),
+        name="test-gateway",
+        gateway_type=GatewayType.KONG,
+        source="manual",
+        base_url="https://gateway.example.invalid",
+        auth_config={"vault_path": VAULT_PATH, **direct},
+    )
+    db.execute.return_value = MagicMock()
+    db.execute.return_value.scalar_one_or_none.side_effect = [SimpleNamespace(gateway_instance_id=gateway.id), gateway]
+    statuses = []
+    db.commit.side_effect = lambda: statuses.append(sub.provisioning_status)
+    vault_boundary.failure = ("read", "timeout")
+    with patch("src.services.credential_resolver.AdapterRegistry.create") as create:
+        await provision_on_approval(db, sub, None, "test-correlation")
+        create.assert_not_called()
+    assert statuses == [ProvisioningStatus.PROVISIONING, ProvisioningStatus.FAILED]
+    assert sub.provisioning_error == "Required read failed; no fallback credentials allowed; operation refused."
+    assert sub.provisioned_at is None

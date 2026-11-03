@@ -769,7 +769,7 @@ async def test_regression_cab_2282_gateway_admin_refuses_unavailable_secret_stor
         response = await client.post(f"/v1/admin/gateways/{gateway.id}/{operation}")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Secret store is unavailable or credentials are missing; operation refused."}
+    assert response.json() == {"detail": "Required read failed; no fallback credentials allowed; operation refused."}
     assert marker not in caplog.text
     await session.refresh(gateway)
     assert {c.name: getattr(gateway, c.name) for c in GatewayInstance.__table__.columns} == original_state

@@ -26,7 +26,7 @@ class TestRegressionCAB1908:
 
         with (
             patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
+            pytest.raises(ValueError, match="no fallback credentials"),
         ):
             await resolve_gateway_auth_config(auth)
 
@@ -38,7 +38,7 @@ class TestRegressionCAB1908:
 
         with (
             patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
+            pytest.raises(ValueError, match="no fallback credentials"),
         ):
             await resolve_gateway_auth_config(auth)
 
@@ -62,6 +62,6 @@ class TestRegressionCAB1908:
 
         with (
             patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
+            pytest.raises(ValueError, match="no fallback credentials"),
         ):
             await create_adapter_with_credentials("kong", "http://kong:8001", auth)
